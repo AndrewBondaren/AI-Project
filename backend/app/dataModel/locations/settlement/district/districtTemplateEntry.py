@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     ECONOMIC_TIER,
@@ -50,18 +50,18 @@ class DistrictTemplateEntry(BaseModel):
     system_name: StrictOnWire[RegistryKey[WorldDistrictTemplateRegistry]]
     display_name: StrictOnWire[str]
     district_type: StrictOnWire[str]
-    district_subtype: DefaultOnWire[str | None] = None
-    placement_conditions: DefaultOnWire[list[PlacementCondition]] = Field(default_factory=list)
-    max_per_city: DefaultOnWire[int | None] = None
-    size_pct: DefaultOnWire[SizePct | None] = None
-    allowed_structure_types: DefaultOnWire[list[AllowedToken] | None] = None
-    allowed_match: DefaultOnWire[BuildingPurposeMatch] = DEFAULT_PURPOSE_MATCH
+    district_subtype: DefaultWhenMissing[str | None] = None
+    placement_conditions: DefaultWhenMissing[list[PlacementCondition]] = Field(default_factory=list)
+    max_per_city: DefaultWhenMissing[int | None] = None
+    size_pct: DefaultWhenMissing[SizePct | None] = None
+    allowed_structure_types: DefaultWhenMissing[list[AllowedToken] | None] = None
+    allowed_match: DefaultWhenMissing[BuildingPurposeMatch] = DEFAULT_PURPOSE_MATCH
     # District-level RANGE channel for `economic_tier`. Both district
     # edges (to district/settlement NL) are declared on the NL side —
     # NamedLocation already transitively imports this template, the
     # reverse would cycle (tz_cascade_context §2).
     economic_tier_range: Annotated[
-        DefaultOnWire[EconomicTierRange | None],
+        DefaultWhenMissing[EconomicTierRange | None],
         CascadeChannel(
             ECONOMIC_TIER, ScopeLevel.DISTRICT, kind=ChannelKind.RANGE,
         ),
@@ -70,23 +70,23 @@ class DistrictTemplateEntry(BaseModel):
     # chain top (district-first): edges are declared on the NL side,
     # same import constraint as `economic_tier_range` (§2).
     density: Annotated[
-        DefaultOnWire[DistrictDensity | None],
+        DefaultWhenMissing[DistrictDensity | None],
         CascadeChannel(SETTLEMENT_DENSITY, ScopeLevel.DISTRICT),
     ] = None
-    street_layout: DefaultOnWire[StreetLayout] = StreetLayout.GRID
-    connections: DefaultOnWire[list[DistrictConnection] | None] = None
-    required_structures: DefaultOnWire[list[RequiredStructure] | None] = None
-    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = None
-    plot_counts: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
+    street_layout: DefaultWhenMissing[StreetLayout] = StreetLayout.GRID
+    connections: DefaultWhenMissing[list[DistrictConnection] | None] = None
+    required_structures: DefaultWhenMissing[list[RequiredStructure] | None] = None
+    frontage_type_order: DefaultWhenMissing[list[ConnectionTypeKey] | None] = None
+    plot_counts: DefaultWhenMissing[dict[DrawingKey, int] | None] = Field(
         default=None,
         validation_alias=AliasChoices("plot_counts", "structure_counts"),
     )
-    plot_priority: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
+    plot_priority: DefaultWhenMissing[dict[DrawingKey, int] | None] = Field(
         default=None,
         validation_alias=AliasChoices("plot_priority", "structure_priority"),
     )
-    perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None
-    deck: DefaultOnWire[int] = 0
+    perimeter_barrier: DefaultWhenMissing[PerimeterBarrier | None] = None
+    deck: DefaultWhenMissing[int] = 0
 
     @field_validator("allowed_structure_types", mode="before")
     @classmethod
@@ -99,5 +99,5 @@ class DistrictTemplateEntry(BaseModel):
     @classmethod
     def _coerce_allowed_match(cls, value: Any) -> Any:
         if value is None:
-            return DEFAULT_PURPOSE_MATCH
+            return value
         return coerce_purpose_match(value)

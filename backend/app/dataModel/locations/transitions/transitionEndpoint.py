@@ -7,7 +7,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
-from app.dataModel.annotationPolicy import DefaultEnumOnWire, DefaultOnWire, StrictEnumOnWire
+from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing, StrictEnumOnWire
 
 
 class TransitionSpace(StrEnum):
@@ -34,13 +34,13 @@ class EndpointIdentityGeometry(BaseModel):
 class TransitionEndpoint(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    space: DefaultEnumOnWire[TransitionSpace] = TransitionSpace.SURFACE
-    level_uid: DefaultOnWire[EndpointRef | None] = None
-    host_location_uid: DefaultOnWire[EndpointRef | None] = None
-    node_uid: DefaultOnWire[EndpointRef | None] = None
-    x: DefaultOnWire[StrictInt | None] = None
-    y: DefaultOnWire[StrictInt | None] = None
-    z: DefaultOnWire[StrictInt | None] = None
+    space: DefaultEnumWhenMissing[TransitionSpace] = TransitionSpace.SURFACE
+    level_uid: DefaultWhenMissing[EndpointRef | None] = None
+    host_location_uid: DefaultWhenMissing[EndpointRef | None] = None
+    node_uid: DefaultWhenMissing[EndpointRef | None] = None
+    x: DefaultWhenMissing[StrictInt | None] = None
+    y: DefaultWhenMissing[StrictInt | None] = None
+    z: DefaultWhenMissing[StrictInt | None] = None
 
     @model_validator(mode="after")
     def _space_and_geometry(self) -> Self:

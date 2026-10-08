@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.locations.structure.building.structureTemplate import StructureKey
 
@@ -25,12 +25,12 @@ class BuildingBodyTemplate(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     structure: StrictOnWire[StructureKey]
-    foundation_type: DefaultOnWire[str] = DEFAULT_FOUNDATION_TYPE
-    roof_type: DefaultOnWire[str] = DEFAULT_ROOF_TYPE
-    foundation_depth: DefaultOnWire[int] = constrained_field(
+    foundation_type: DefaultWhenMissing[str] = DEFAULT_FOUNDATION_TYPE
+    roof_type: DefaultWhenMissing[str] = DEFAULT_ROOF_TYPE
+    foundation_depth: DefaultWhenMissing[int] = constrained_field(
         default=DEFAULT_FOUNDATION_DEPTH, greater_equals=0,
     )
-    foundation_material: DefaultOnWire[str | None] = None
-    roof_material: DefaultOnWire[str | None] = None
-    porch_material: DefaultOnWire[str | None] = None
-    porch_has_roof: DefaultOnWire[bool] = False
+    foundation_material: DefaultWhenMissing[str | None] = None
+    roof_material: DefaultWhenMissing[str | None] = None
+    porch_material: DefaultWhenMissing[str | None] = None
+    porch_has_roof: DefaultWhenMissing[bool] = False

@@ -1,5 +1,6 @@
 """P3: transition registry uses the shared WorldSlice import/runtime policies."""
 
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 from types import SimpleNamespace
 
@@ -75,26 +76,19 @@ class TransitionRegistryWireTest(unittest.TestCase):
                 normalize_world({"transition_type_registry": value}, partial=True)
             self.assertTrue(any(error.path == path for error in caught.exception.errors))
 
-    def test_runtime_invalid_row_warns_and_preserves_valid_rows(self) -> None:
+    def test_runtime_invalid_row_rejects_whole_registry(self):
         for bad in (_row("bad", "unknown"), {"system_type": "bad", "display_name": "Bad"}):
-            with self.subTest(bad=bad), self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
-                registry = transition_types(SimpleNamespace(
-                    world_uid="world", transition_type_registry=[_row("valid"), bad],
-                ))
-            self.assertEqual(registry.keys(), {"valid"})
-            self.assertIs(registry.type_for("valid"), TransitionType.DOOR)
+            with self.subTest(bad=bad), self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+                transition_types(SimpleNamespace(world_uid="world", transition_type_registry=[_row("valid"), bad]))
 
     def test_builtin_behavior_cannot_be_reassigned_through_facade(self) -> None:
         with self.assertRaises(ImportValidationError) as caught:
             normalize_world({"transition_type_registry": [_row("main_entrance", "door")]}, partial=True)
         self.assertTrue(any(error.path == ("transition_type_registry", 0) for error in caught.exception.errors))
 
-    def test_runtime_reassigned_builtin_is_skipped(self) -> None:
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
-            registry = transition_types(SimpleNamespace(
-                world_uid="world", transition_type_registry=[_row("valid"), _row("main_entrance", "door")],
-            ))
-        self.assertEqual(registry.keys(), {"valid"})
+    def test_runtime_reassigned_builtin_rejects_whole_registry(self):
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+            transition_types(SimpleNamespace(world_uid="world", transition_type_registry=[_row("valid"), _row("main_entrance", "door")]))
 
     def test_deferred_portal_registry_is_not_converted(self) -> None:
         data = {"connection_type_registry": [{"system_connection_type": "portal", "display_name": "Портал"}],

@@ -2,7 +2,7 @@
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.dataModel.annotationPolicy import (
-    DefaultEnumOnWire, DefaultOnWire, StrictEnumOnWire, StrictOnWire,
+    DefaultEnumWhenMissing, DefaultWhenMissing, StrictEnumOnWire, StrictOnWire,
 )
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
@@ -15,11 +15,11 @@ class EntryPoint(BaseModel):
 
     wall: StrictOnWire[Facing]
     passage_type: StrictEnumOnWire[TransitionType]
-    width: DefaultOnWire[int] = constrained_field(default=1, greater_equals=1)
-    door_height: DefaultOnWire[int | None] = None
-    frame_material: DefaultOnWire[str | None] = None
-    panel_material: DefaultOnWire[str | None] = None
-    access_type: DefaultEnumOnWire[EntryAccessType] = EntryAccessType.AUTO
+    width: DefaultWhenMissing[int] = constrained_field(default=1, greater_equals=1)
+    door_height: DefaultWhenMissing[int | None] = None
+    frame_material: DefaultWhenMissing[str | None] = None
+    panel_material: DefaultWhenMissing[str | None] = None
+    access_type: DefaultEnumWhenMissing[EntryAccessType] = EntryAccessType.AUTO
 
     @field_validator("wall")
     @classmethod

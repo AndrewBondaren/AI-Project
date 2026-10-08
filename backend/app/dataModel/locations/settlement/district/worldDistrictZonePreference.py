@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire
 from app.dataModel.locations.settlement.district.cellZone import CellZone
 
 
@@ -14,7 +14,7 @@ class DistrictZonePreferenceEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     zone: StrictEnumOnWire[CellZone]
-    district_types: DefaultOnWire[list[str]] = Field(default_factory=list)
+    district_types: DefaultWhenMissing[list[str]] = Field(default_factory=list)
 
 
 _CANONICAL_ENTRIES: tuple[DistrictZonePreferenceEntry, ...] = (

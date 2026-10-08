@@ -1,6 +1,7 @@
 """Wall-opening wire fallbacks and authored runtime overrides."""
 import json
 import tempfile
+from app.application.worldData.generators.structure.errors import GenerationError
 import unittest
 from copy import deepcopy
 from random import Random
@@ -39,7 +40,7 @@ class WallOpeningSpecTests(unittest.TestCase):
         for element in WALL_OPENING_ELEMENTS:
             self.assertIs(WallOpeningSpec(opening_type=element.value).opening_type, element)
 
-    def test_invalid_known_parameters_degrade_without_mutating_wire(self):
+    def test_invalid_parameters_reject_without_mutating_wire(self):
         for name, values in dict(opening_type=["door", "bad", [], 7],
                                  window_z=[-1, "bad", 1.5, True, "2"],
                                  frame_material=[[], 7, ""], glass_material=[{}, ""]).items():
@@ -47,12 +48,9 @@ class WallOpeningSpecTests(unittest.TestCase):
                 with self.subTest(name=name, value=value):
                     wire = {name: value}
                     original = deepcopy(wire)
-                    spec = WallOpeningSpec.model_validate(wire)
-                    self.assertIsNone(getattr(spec, name))
-                    self.assertEqual(spec.substitutions, ((name, repr(value)),))
+                    with self.assertRaises(ValidationError):
+                        WallOpeningSpec.model_validate(wire)
                     self.assertEqual(wire, original)
-        with self.assertRaises(ValidationError):
-            WallOpeningSpec(opening_type="bad", placement="edges")
 
     def generate(self, specs):
         world, building = test_world_building()
@@ -63,16 +61,11 @@ class WallOpeningSpecTests(unittest.TestCase):
         self.assertEqual(template.model_dump(), before)
         return layout
 
-    def test_substitutions_reach_generation_transcript(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with generation_world_log("openings-test", mode="test", root=directory) as path:
+    def test_invalid_opening_stops_generation_with_warning(self):
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+            with self.assertRaises(GenerationError):
                 self.generate([dict(opening_type="door", window_z=-1, glass_material=[])])
-            records = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
-        errors = [r for r in records if r["level"] == "ERROR"]
-        self.assertEqual(len(errors), 3)
-        self.assertTrue(all(r["logger"] == FACTORY_LOGGER for r in errors))
-        for field in ("opening_type", "window_z", "glass_material"):
-            self.assertTrue(any(field in r["msg"] and "auto-resolve" in r["msg"] for r in errors))
+        self.assertTrue(any("WarningError" in line for line in logs.output))
 
     def test_empty_spec_is_quiet_and_identical_to_auto(self):
         with self.assertNoLogs(level="ERROR"):

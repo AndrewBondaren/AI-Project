@@ -1,4 +1,4 @@
-"""Import / CRUD normalize facade — strict → ``ImportValidationError``, grace → log only."""
+"""Import / CRUD facade: collect unresolved facts and reject before persistence."""
 
 from __future__ import annotations
 

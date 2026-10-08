@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 
 
 class ReliefGradeSystem(BaseModel):
@@ -23,5 +23,5 @@ class ReliefGradeSystem(BaseModel):
     world_uid: str
     grade_instance_uids: list[str] = Field(min_length=2)
     # Ribbon owner: connection edge uid or context token (open_land / shore)
-    owner_uid: DefaultOnWire[str | None] = None
-    display_name: DefaultOnWire[str | None] = None
+    owner_uid: DefaultWhenMissing[str | None] = None
+    display_name: DefaultWhenMissing[str | None] = None

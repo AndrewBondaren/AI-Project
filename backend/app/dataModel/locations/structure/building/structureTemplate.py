@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
@@ -55,23 +55,23 @@ class StructureTemplate(BaseModel):
 
     system_name: StrictOnWire[RegistryKey[StructureTemplate]]
     display_name: StrictOnWire[str]
-    description: DefaultOnWire[str | None] = None
-    version: DefaultOnWire[str] = "1.0"
-    structure_types: DefaultOnWire[list[BuildingPurpose]] = Field(
+    description: DefaultWhenMissing[str | None] = None
+    version: DefaultWhenMissing[str] = "1.0"
+    structure_types: DefaultWhenMissing[list[BuildingPurpose]] = Field(
         default_factory=lambda: coerce_purpose_list(None),
     )
-    default_z_height: DefaultOnWire[int] = constrained_field(
+    default_z_height: DefaultWhenMissing[int] = constrained_field(
         default=DEFAULT_Z_HEIGHT, greater_equals=1,
     )
-    door_height_ratio: DefaultOnWire[float] = constrained_field(
+    door_height_ratio: DefaultWhenMissing[float] = constrained_field(
         default=DEFAULT_DOOR_HEIGHT_RATIO, greater=0, lesser_equals=1,
     )
-    door_height_max: DefaultOnWire[int] = constrained_field(
+    door_height_max: DefaultWhenMissing[int] = constrained_field(
         default=DEFAULT_DOOR_HEIGHT_MAX, greater_equals=1,
     )
-    levels: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
-    staircases: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
-    connections: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
+    levels: DefaultWhenMissing[list[dict[str, Any]]] = Field(default_factory=list)
+    staircases: DefaultWhenMissing[list[dict[str, Any]]] = Field(default_factory=list)
+    connections: DefaultWhenMissing[list[dict[str, Any]]] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -79,6 +79,8 @@ class StructureTemplate(BaseModel):
         if not isinstance(data, dict):
             return data
         payload = dict(data)
+        if "structure_types" in payload and payload["structure_types"] is None:
+            raise ValueError("structure_types cannot be null")
         raw = payload.get("structure_types")
         if raw is None:
             raw = payload.get("structure_type")
@@ -120,7 +122,8 @@ class StructureTemplate(BaseModel):
             try:
                 parsed.append(LevelDef.model_validate(level))
             except ValidationError as exc:
-                raise ValueError(f"levels[{index}]: {exc}") from exc
+                room_ids = [room.get("room_id") for room in level.get("rooms", []) if isinstance(room, dict)] if isinstance(level, dict) else []
+                raise ValueError(f"levels[{index}] rooms={room_ids}: {exc}") from exc
         validate_room_ids(parsed)
         return self
 

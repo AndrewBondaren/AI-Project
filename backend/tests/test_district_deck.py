@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 
 from app.application.jsonValidation.resolve import resolve_model
@@ -52,14 +53,12 @@ class TestDistrictDeck(unittest.TestCase):
         entry = resolve_model(DistrictTemplateEntry, _wire(deck=2))
         self.assertEqual(entry.deck, 2)
 
-    def test_resolve_invalid_defaults_zero_and_warns(self) -> None:
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
-            entry = resolve_model(DistrictTemplateEntry, _wire(deck="surface"))
-        self.assertEqual(entry.deck, 0)
-        text = "\n".join(captured.output)
-        self.assertIn("deck", text)
-        self.assertIn("using field default", text)
+    def test_resolve_invalid_rejects(self):
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+            result = resolve_result(DistrictTemplateEntry, _wire(deck="surface"))
+        self.assertFalse(result.resolved)
+        self.assertEqual(result.issues[0].path, ("deck",))
+        self.assertIn("WarningError", logs.output[0])
 
 
 if __name__ == "__main__":

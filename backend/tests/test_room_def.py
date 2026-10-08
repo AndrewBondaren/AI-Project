@@ -1,6 +1,7 @@
 """Room/level wire boundaries, fallbacks, references and generation diagnostics."""
 import json
 import tempfile
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -29,49 +30,34 @@ def template_wire(*rooms):
 
 
 class RoomDefTests(unittest.TestCase):
-    def test_attach_wall_is_strict_enum_with_typed_fallback(self):
+    def test_attach_wall_missing_defaults_and_invalid_rejects(self):
         annotation = RoomDef.__annotations__["attach_wall"]
-        self.assertEqual(field_policy(annotation), WireFieldPolicy.STRICT_ON_WIRE)
         self.assertIs(wire_enum_class(annotation), AttachWall)
         for member in AttachWall:
-            room = RoomDef.model_validate(room_wire(attach_to="host", attach_wall=member.value))
-            self.assertIs(room.attach_wall, member)
-            self.assertFalse(room.substitutions)
-        for fields in ({}, {"attach_wall": None}, {"attach_wall": ""},
-                       {"attach_wall": "bad"}, {"attach_wall": []}, {"attach_wall": 5}):
-            with self.subTest(fields=fields):
-                room = RoomDef.model_validate(room_wire(attach_to="host", **fields))
-                self.assertIs(room.attach_wall, AttachWall.BOTH)
-                self.assertEqual(len(room.substitutions), 1)
-        self.assertFalse(RoomDef.model_validate(room_wire()).substitutions)
+            self.assertIs(RoomDef.model_validate(room_wire(attach_wall=member.value)).attach_wall, member)
+        self.assertIs(RoomDef.model_validate(room_wire(attach_to="host")).attach_wall, AttachWall.BOTH)
+        for invalid in (None, "", "bad", [], 5):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                RoomDef.model_validate(room_wire(attach_wall=invalid))
 
-    def test_import_keeps_wire_and_runtime_logs_each_substitution_once(self):
-        for fields in ({}, {"attach_wall": "invalid"}):
-            wire = template_wire(room_wire(room_id="host"), room_wire(attach_to="host", **fields))
-            original = deepcopy(wire)
-            template = StructureTemplate.model_validate(wire)
-            self.assertEqual(wire, original)
-            self.assertEqual(template.levels, original["levels"])
-            with self.assertLogs(LOGGER, level="ERROR") as captured:
-                levels = StructureGeneratorService._resolve_levels(template, "building-test")
-            self.assertEqual(len(captured.records), 1)
-            self.assertIn("building-test", captured.output[0])
-            self.assertIn("hall", captured.output[0])
-            self.assertIn("both", captured.output[0])
-            self.assertIs(levels[0].rooms[1].attach_wall, AttachWall.BOTH)
+    def test_import_keeps_valid_wire_and_rejects_invalid_attachment(self):
+        wire = template_wire(room_wire(room_id="host"), room_wire(attach_to="host"))
+        original = deepcopy(wire)
+        template = StructureTemplate.model_validate(wire)
+        self.assertEqual(wire, original)
+        self.assertEqual(template.levels, original["levels"])
+        self.assertIs(StructureGeneratorService._resolve_levels(template)[0].rooms[1].attach_wall, AttachWall.BOTH)
+        wire["levels"][0]["rooms"][1]["attach_wall"] = "invalid"
+        with self.assertRaises(ValidationError):
+            StructureTemplate.model_validate(wire)
 
-    def test_substitution_reaches_central_generation_transcript(self):
-        template = StructureTemplate.model_validate(template_wire(
-            room_wire(room_id="host"), room_wire(attach_to="host", attach_wall="bad")))
-        with tempfile.TemporaryDirectory() as directory:
-            with generation_world_log("rooms-test", mode="test", root=directory) as path:
-                StructureGeneratorService._resolve_levels(template, "building-test")
-            records = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
-        errors = [record for record in records if record["level"] == "ERROR"]
-        self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0]["logger"], LOGGER)
-        self.assertIn("attach_wall", errors[0]["msg"])
-        self.assertIn("both", errors[0]["msg"])
+    def test_invalid_attachment_reaches_central_warning_without_default(self):
+        raw = room_wire(attach_wall="bad")
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+            result = resolve_result(RoomDef, raw)
+        self.assertFalse(result.resolved)
+        self.assertIn("WarningError", logs.output[0])
+        self.assertEqual(result.issues[0].path, ("attach_wall",))
 
     def test_valid_and_inapplicable_defaults_are_quiet(self):
         template = StructureTemplate.model_validate(template_wire(
@@ -156,15 +142,12 @@ class RoomDefTests(unittest.TestCase):
             with self.subTest(wire=wire), self.assertRaises(ValidationError):
                 StructureTemplate.model_validate(wire)
 
-    def test_runtime_missing_host_skips_room_and_dependents(self):
+    def test_runtime_missing_host_rejects_complete_level(self):
         template = StructureTemplate.model_validate(template_wire(
-            room_wire(room_id="host"), room_wire(attach_to="host", attach_wall="both"),
-            room_wire(room_id="child", attach_to="hall", attach_wall="both")))
+            room_wire(room_id="host"), room_wire(attach_to="host")))
         template.levels[0]["rooms"][1]["attach_to"] = "missing"
-        with self.assertLogs(LOGGER, level="ERROR") as captured:
-            levels = StructureGeneratorService._resolve_levels(template)
-        self.assertEqual([room.room_id for room in levels[0].rooms], ["host"])
-        self.assertEqual(len(captured.records), 2)
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(GenerationError):
+            StructureGeneratorService._resolve_levels(template)
 
     def test_runtime_missing_required_field_raises_contextual_generation_error(self):
         template = StructureTemplate.model_validate(template_wire(room_wire()))
@@ -174,21 +157,18 @@ class RoomDefTests(unittest.TestCase):
         for expected in (UID, "building-test", "hall", "size"):
             self.assertIn(expected, str(error.exception))
 
-    def test_invalid_height_falls_back_with_error_but_omission_is_quiet(self):
-        for value in (0, -1, "bad"):
+    def test_invalid_height_rejects_and_omission_is_quiet(self):
+        for invalid in (0, -1, "bad"):
             template = StructureTemplate.model_validate(template_wire(room_wire()))
-            template.levels[0]["z_height"] = value
-            with self.assertLogs(LOGGER, level="ERROR"):
-                levels = StructureGeneratorService._resolve_levels(template)
-            self.assertIsNone(levels[0].z_height)
-        with self.assertNoLogs(LOGGER, level="WARNING"):
-            StructureGeneratorService._resolve_levels(StructureTemplate.model_validate(template_wire(room_wire())))
+            template.levels[0]["z_height"] = invalid
+            with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(GenerationError):
+                StructureGeneratorService._resolve_levels(template)
+        self.assertIsNone(StructureGeneratorService._resolve_levels(
+            StructureTemplate.model_validate(template_wire(room_wire())))[0].z_height)
 
-    def test_generation_continues_after_broken_attachment(self):
+    def test_generation_rejects_broken_attachment(self):
         template = simple_structure()
-        template.levels[0]["rooms"].append(room_wire(room_id="orphan", attach_to="absent", attach_wall="both"))
+        template.levels[0]["rooms"].append(room_wire(room_id="orphan", attach_to="absent"))
         world, building = test_world_building()
-        with self.assertLogs(LOGGER, level="ERROR"):
-            layout = StructureGeneratorService().generate_from_template(world, building, template)
-        self.assertTrue(layout.cells)
-        self.assertEqual(len(layout.rooms), 1)
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(GenerationError):
+            StructureGeneratorService().generate_from_template(world, building, template)

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.locations.transitions.transitionType import (
     TransitionType,
     TransitionTypeSpec,
@@ -28,7 +28,7 @@ class TransitionTypeEntry(BaseModel):
     system_type: StrictOnWire[RegistryKey[WorldTransitionTypeRegistry]]
     display_name: StrictOnWire[str]
     behaves_as: StrictEnumOnWire[TransitionType]
-    glossary_ref: DefaultOnWire[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None
 
     @model_validator(mode="after")
     def _builtin_behavior(self) -> Self:

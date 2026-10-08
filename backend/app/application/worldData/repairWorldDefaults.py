@@ -17,6 +17,7 @@ from app.application.jsonValidation import (
     materials,
 )
 from app.application.jsonValidation.facade import normalize_world
+from app.application.jsonValidation.worldSlices import world_wire_from_row
 from app.db.models.world import World
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ class WorldClimateDefaultsError(RuntimeError):
 
 
 def world_row_as_wire(world: World) -> dict:
-    return dataclasses.asdict(world)
+    return world_wire_from_row(world)
 
 
 def _prepare_wire_for_repair(data: dict[str, Any]) -> dict[str, Any]:

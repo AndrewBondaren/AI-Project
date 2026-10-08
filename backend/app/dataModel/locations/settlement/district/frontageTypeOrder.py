@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
     WorldConnectionTypeRegistry,
@@ -28,7 +28,7 @@ class FrontageTypeOrder(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    order: DefaultOnWire[list[ConnectionTypeKey]] = Field(
+    order: DefaultWhenMissing[list[ConnectionTypeKey]] = Field(
         default_factory=_engine_frontage_order,
     )
 

@@ -13,19 +13,16 @@ import math
 import logging
 
 from app.dataModel.spatial.facing import Facing
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.dataModel.locations.structure.room.shapeParams import ResolvedStemWall
 
 logger = logging.getLogger(__name__)
 
 
 def resolve_stem_wall(value: object, *, context: str) -> Facing:
-    """Recover an unresolved internal direction without losing generation."""
-    resolved = ResolvedStemWall.model_validate({"stem_wall": value})
-    if resolved.substituted:
-        logger.error(
-            "%s: unresolved/invalid stem_wall=%r — fallback to %s; generation continues",
-            context, value, resolved.stem_wall.value,
-        )
+    """Internal direction must be resolved before geometry generation."""
+    resolved = resolve_model(ResolvedStemWall, {"stem_wall": value},
+        ctx=ResolveContext(path_prefix=(context,)))
     return resolved.stem_wall
 
 

@@ -192,7 +192,7 @@ def coerce_purpose_list(
     elif isinstance(raw, (list, tuple)):
         items = list(raw)
     else:
-        return list(DEFAULT_BUILDING_PURPOSES) if empty_as_house else []
+        raise ValueError("structure_types must be a purpose or a list of purposes")
     out: list[BuildingPurpose] = []
     seen: set[BuildingPurpose] = set()
     for item in items:
@@ -201,7 +201,9 @@ def coerce_purpose_list(
         ):
             continue
         purpose = BuildingPurpose.from_wire(item)
-        if purpose is None or purpose in seen:
+        if purpose is None:
+            raise ValueError(f"unknown structure purpose: {item!r}")
+        if purpose in seen:
             continue
         seen.add(purpose)
         out.append(purpose)
@@ -222,7 +224,7 @@ def coerce_allowed_list(raw: object) -> list[AllowedToken]:
     elif isinstance(raw, (list, tuple)):
         items = list(raw)
     else:
-        return []
+        raise ValueError("allowed_structure_types must be a purpose or a list")
     out: list[AllowedToken] = []
     seen: set[str] = set()
     for item in items:
@@ -235,7 +237,7 @@ def coerce_allowed_list(raw: object) -> list[AllowedToken]:
             continue
         purpose = item if isinstance(item, BuildingPurpose) else BuildingPurpose.from_wire(item)
         if purpose is None:
-            continue
+            raise ValueError(f"unknown allowed purpose: {item!r}")
         key = str(purpose)
         if key in seen:
             continue
@@ -245,8 +247,12 @@ def coerce_allowed_list(raw: object) -> list[AllowedToken]:
 
 
 def coerce_purpose_match(raw: object) -> BuildingPurposeMatch:
+    if raw is None:
+        return DEFAULT_PURPOSE_MATCH
     parsed = BuildingPurposeMatch.from_wire(raw)
-    return parsed if parsed is not None else DEFAULT_PURPOSE_MATCH
+    if parsed is None:
+        raise ValueError(f"unknown purpose match: {raw!r}")
+    return parsed
 
 
 def union_plot_purposes(

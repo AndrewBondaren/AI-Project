@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.locations.structure.building.levelDef import LevelDef
+from app.dataModel.locations.structure.building.levelDef import LevelDef, validate_room_ids
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.structureOrientation import entry_orientation, validate_facing
+from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 from app.application.jsonValidation import materials
 from app.application.worldData.context.locationScope import (
     debug_building_context,
@@ -391,47 +393,25 @@ class StructureGeneratorService:
 
     @staticmethod
     def _resolve_levels(template: StructureTemplate, building_uid: str | None = None) -> list[LevelDef]:
-        """Runtime boundary: parse again; broken attachment references degrade with ERROR."""
-        resolved: list[LevelDef] = []
-        seen: set[str] = set()
+        """Complete level validation; invalid rooms never become skipped rows."""
+        resolved = []
         for index, raw in enumerate(template.levels):
+            ctx = ResolveContext(path_prefix=("structures", str(template.system_name), "levels", index))
             try:
-                level = LevelDef.model_validate(raw)
-            except ValidationError as exc:
+                resolved.append(resolve_model(LevelDef, raw, ctx=ctx))
+            except UnresolvedModelError as exc:
+                room_ids = [room.get("room_id") for room in raw.get("rooms", []) if isinstance(room, dict)] if isinstance(raw, dict) else []
                 raise GenerationError(
-                    f"Structure '{template.system_name}' building '{building_uid}' levels[{index}]: {exc}"
+                    f"Structure '{template.system_name}' building '{building_uid}' levels[{index}] rooms={room_ids}: {exc}"
                 ) from exc
-            if level.height_substitution is not None:
-                logger.error(
-                    "Structure '%s' building '%s' level %s: z_height=%s — fallback to template default %s",
-                    template.system_name, building_uid, level.z_offset,
-                    level.height_substitution, template.default_z_height,
-                )
-            for room in level.rooms:
-                if room.room_id in seen:
-                    raise GenerationError(f"Structure '{template.system_name}': duplicate room_id '{room.room_id}'")
-                seen.add(room.room_id)
-                for field, original in room.substitutions:
-                    logger.error(
-                        "Structure '%s' building '%s' room '%s': %s=%s — fallback to %r",
-                        template.system_name, building_uid, room.room_id,
-                        field, original, getattr(room, field).value,
-                    )
-            rooms = list(level.rooms)
-            # Repeat to remove dependent attachments whose host was skipped as well.
-            while True:
-                local_ids = {room.room_id for room in rooms}
-                invalid = [room for room in rooms if room.attach_to is not None and room.attach_to not in local_ids]
-                if not invalid:
-                    break
-                for room in invalid:
-                    logger.error(
-                        "Structure '%s' building '%s' room '%s': attach_to=%r missing on level %s — skipping room",
-                        template.system_name, building_uid, room.room_id, room.attach_to, level.z_offset,
-                    )
-                invalid_ids = {room.room_id for room in invalid}
-                rooms = [room for room in rooms if room.room_id not in invalid_ids]
-            resolved.append(level.model_copy(update={"rooms": rooms}))
+        try:
+            validate_room_ids(resolved)
+        except ValueError as exc:
+            ctx = ResolveContext(path_prefix=("structures", str(template.system_name), "levels"))
+            try:
+                reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, str(exc), code="ROOM_REFERENCE")])
+            except UnresolvedModelError as unresolved:
+                raise GenerationError(str(unresolved)) from unresolved
         return resolved
 
     @staticmethod
@@ -439,21 +419,10 @@ class StructureGeneratorService:
         """Runtime boundary: wire dicts → RoomConnection (GenerationError on bad wire)."""
         resolved: list[RoomConnection] = []
         for index, raw in enumerate(template.connections):
-            if isinstance(raw, dict) and "passage_type" in raw:
-                try:
-                    parsed = TransitionType(raw["passage_type"])
-                except (ValueError, TypeError):
-                    parsed = None
-                if parsed not in (TransitionType.DOORWAY, TransitionType.ARCHWAY):
-                    logger.error(
-                        "Structure '%s' connections[%d]: passage_type %r is not "
-                        "doorway/archway — fallback to doorway "
-                        "(stairs belong in staircases[])",
-                        template.system_name, index, raw["passage_type"],
-                    )
             try:
-                resolved.append(RoomConnection.model_validate(raw))
-            except ValidationError as exc:
+                resolved.append(resolve_model(RoomConnection, raw,
+                    ctx=ResolveContext(path_prefix=("structures", str(template.system_name), "connections", index))))
+            except UnresolvedModelError as exc:
                 raise GenerationError(
                     f"Structure '{template.system_name}' connections[{index}]: {exc}"
                 ) from exc

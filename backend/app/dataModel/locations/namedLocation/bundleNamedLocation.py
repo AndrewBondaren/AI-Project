@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, IgnoreOnWire, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     ECONOMIC_TIER,
@@ -49,30 +49,30 @@ class BundleNamedLocation(BaseModel):
     display_name: StrictOnWire[str]
     system_location_type: StrictOnWire[str]
 
-    parent_location_uid: DefaultOnWire[str | None] = None
-    system_location_subtype: DefaultOnWire[str | None] = None
+    parent_location_uid: DefaultWhenMissing[str | None] = None
+    system_location_subtype: DefaultWhenMissing[str | None] = None
     system_description: IgnoreOnWire[str | None] = Field(
         default=None,
         validation_alias=AliasChoices("system_description", "description"),
     )
     display_description: IgnoreOnWire[str | None] = None
-    glossary_ref: DefaultOnWire[str | None] = None
-    tag_refs: DefaultOnWire[list[str] | None] = None
-    is_discovered: DefaultOnWire[bool] = False
-    is_accessible: DefaultOnWire[bool] = True
-    entry_difficulty: DefaultOnWire[int | None] = None
-    guard_level: DefaultOnWire[int | None] = None
-    system_location_mood: DefaultOnWire[LocationMoodKey | None] = None
-    display_location_mood: DefaultOnWire[str | None] = None
-    owner_uid: DefaultOnWire[str | None] = None
-    system_climate_zone: DefaultOnWire[str | None] = None
-    state_uid: DefaultOnWire[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None
+    tag_refs: DefaultWhenMissing[list[str] | None] = None
+    is_discovered: DefaultWhenMissing[bool] = False
+    is_accessible: DefaultWhenMissing[bool] = True
+    entry_difficulty: DefaultWhenMissing[int | None] = None
+    guard_level: DefaultWhenMissing[int | None] = None
+    system_location_mood: DefaultWhenMissing[LocationMoodKey | None] = None
+    display_location_mood: DefaultWhenMissing[str | None] = None
+    owner_uid: DefaultWhenMissing[str | None] = None
+    system_climate_zone: DefaultWhenMissing[str | None] = None
+    state_uid: DefaultWhenMissing[str | None] = None
     # Cascade channels for `economic_tier` — the stamped/authored node at
     # four levels; each edge declared once, where imports allow
     # (tz_cascade_context §2). Neighbours on the other side of an edge
     # are materialized by the contract verifier.
     system_economic_tier: Annotated[
-        DefaultOnWire[EconomyTierKey | None],
+        DefaultWhenMissing[EconomyTierKey | None],
         CascadeChannel(
             ECONOMIC_TIER, ScopeLevel.ROOM,
             above=CascadeLink(_ROOM_DEF_ECONOMIC_TIER, ScopeLevel.ROOM),
@@ -93,28 +93,28 @@ class BundleNamedLocation(BaseModel):
             below=CascadeLink(_SETTLEMENT_SKELETON_ECONOMIC_TIER, ScopeLevel.SETTLEMENT),
         ),
     ] = None
-    is_public: DefaultOnWire[bool] = False
-    is_forbidden: DefaultOnWire[bool] = False
-    is_selectable: DefaultOnWire[bool] = True
-    map_x: DefaultOnWire[int | None] = None
-    map_y: DefaultOnWire[int | None] = None
-    map_z: DefaultOnWire[int | None] = None
-    is_mobile: DefaultOnWire[bool] = False
-    system_template_uid: DefaultOnWire[str | None] = None
+    is_public: DefaultWhenMissing[bool] = False
+    is_forbidden: DefaultWhenMissing[bool] = False
+    is_selectable: DefaultWhenMissing[bool] = True
+    map_x: DefaultWhenMissing[int | None] = None
+    map_y: DefaultWhenMissing[int | None] = None
+    map_z: DefaultWhenMissing[int | None] = None
+    is_mobile: DefaultWhenMissing[bool] = False
+    system_template_uid: DefaultWhenMissing[str | None] = None
     # Repeat one NL field on each tag of the declared context scope path.
     parent_wall_material: Annotated[
-        DefaultOnWire[MaterialKey | None],
+        DefaultWhenMissing[MaterialKey | None],
         CascadeChannel(WALL_MATERIAL, RepeatScope.EVERY_TAG),
     ] = None
     parent_floor_material: Annotated[
-        DefaultOnWire[MaterialKey | None],
+        DefaultWhenMissing[MaterialKey | None],
         CascadeChannel(FLOOR_MATERIAL, RepeatScope.EVERY_TAG),
     ] = None
-    is_outdoor: DefaultOnWire[bool | None] = None
-    is_sheltered: DefaultOnWire[bool] = False
-    is_transit: DefaultOnWire[bool] = False
-    created_at: DefaultOnWire[str | None] = None
-    location_payload: DefaultOnWire[SettlementPayload | DistrictPayload | None] = None
+    is_outdoor: DefaultWhenMissing[bool | None] = None
+    is_sheltered: DefaultWhenMissing[bool] = False
+    is_transit: DefaultWhenMissing[bool] = False
+    created_at: DefaultWhenMissing[str | None] = None
+    location_payload: DefaultWhenMissing[SettlementPayload | DistrictPayload | None] = None
 
     @model_validator(mode="before")
     @classmethod

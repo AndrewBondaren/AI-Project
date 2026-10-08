@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
+from typing import Annotated
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
 
@@ -20,11 +22,11 @@ class TerrainRegistryEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_terrain: StrictOnWire[RegistryKey[WorldTerrainRegistry]]
-    glossary_ref: DefaultOnWire[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None
     terrain_category: StrictOnWire[str]
-    travel_modifier: DefaultOnWire[float | None] = None
-    danger_level: DefaultOnWire[str] = "none"
-    has_state: DefaultOnWire[bool] = False
-    default_state: DefaultOnWire[str | None] = None
-    default_material: DefaultOnWire[str | None] = None
-    gap_width: DefaultOnWire[int | None] = constrained_field(default=None, greater_equals=1)
+    travel_modifier: DefaultWhenMissing[float | None] = None
+    danger_level: DefaultWhenMissing[str] = "none"
+    has_state: DefaultWhenMissing[bool] = False
+    default_state: DefaultWhenMissing[str | None] = None
+    default_material: DefaultWhenMissing[str | None] = None
+    gap_width: DefaultWhenMissing[Annotated[int, Field(ge=1)] | None] = constrained_field(default=None)

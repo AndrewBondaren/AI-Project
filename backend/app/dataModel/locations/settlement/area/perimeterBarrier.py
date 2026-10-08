@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing, parse_facing
@@ -64,12 +64,12 @@ class PerimeterBarrier(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    template: DefaultOnWire[RegistryKey[WorldBarrierTemplateRegistry] | None] = None
-    probability: DefaultOnWire[float] = constrained_field(
+    template: DefaultWhenMissing[RegistryKey[WorldBarrierTemplateRegistry] | None] = None
+    probability: DefaultWhenMissing[float] = constrained_field(
         default=0.0, greater_equals=0.0, lesser_equals=1.0,
     )
     # None / [] = all four cardinals of this host bbox.
-    sides: DefaultOnWire[CardinalBarrierSides] = None
+    sides: DefaultWhenMissing[CardinalBarrierSides] = None
 
     @field_validator("template", mode="before")
     @classmethod

@@ -1,8 +1,18 @@
 # Runtime и worldEdit — общая политика разрешения и диагностики
 
-**Статус (2026-10-08):** базовое требование к последующим планам. Реализованы общая основа, два пилотных поля и read-only import preview (E0–E5); остальные legacy-поля/consumers перечислены в E6 плана и ещё не мигрированы. Соответствие всего существующего кода не утверждается.
+**Статус (2026-10-08):** базовое требование к последующим планам. Реализованы общая основа, два пилотных поля и read-only import preview (E0–E5). В E6 мигрированы 578 legacy-default полей и общий resolver; оставшиеся consumer/ref boundaries перечислены в плане. Соответствие всего существующего кода не утверждается.
 
 ## Назначение
+
+Миграция полей E6: declared defaults/default_factory применяются только при
+отсутствии; nullable null и штатные auto-сентинелы сохраняются. Ошибка типа,
+enum, ограничения или model invariant отвергает объект/коллекцию целиком.
+Полный объект проходит исходные Pydantic validators, включая поддерживаемые
+wire aliases; нельзя обходить их предварительной подстановкой defaults.
+Patch сохраняет отсутствие и явно переданный null, затем проверяется полное
+состояние после merge. Invalid repair validators и фильтрация ошибочных строк
+на read adapters удаляются. Каноническое дополнение отсутствующих библиотечных
+записей остаётся штатным отдельным контрактом. Scope и приёмка — E6 плана.
 
 Один доменный resolver и одинаковые ограничения для runtime и редактора мира. Режим исполнения определяет обработку результата и представление диагностики, но не меняет геометрию, приоритеты или критерии допустимости.
 
@@ -146,8 +156,28 @@ HTTP: `POST /worlds/import?validate_only=true` возвращает 200 с `{val
 
 `ResolveContext.for_import(validate_only=...)` — единственное место выбора request policy. `validate_only` наследуется children; ResolveReport владеет диагностикой, reference index передаётся отдельно. Существующий ResolveMode сохранён для совместимости wire interpretation: оба bundle-сценария используют IMPORT, поэтому legacy enum/strict проверки не меняют решение между preview/apply. Он не определяет пользовательский сценарий. Новые facts централизованно логируются только без validate_only; preview отдаёт их в ответе.
 
-`resolve_patch` возвращает mapping только supplied полей, а не неполную POJO. WorldService объединяет JSON blob patch с текущим миром и повторяет полную проверку до update. Supplied registry collections являются полными заменами. Временная совместимость DefaultOnWire и старого fieldwise construct/row skip не применяется к новым contracts и явно остаётся долгом E6.
+`resolve_patch` возвращает mapping только supplied полей, а не неполную POJO. WorldService объединяет JSON blob patch с текущим миром и повторяет полную проверку до update. Supplied registry collections являются полными заменами. После миграции полей fieldwise construct/row skip и invalid defaults удалены из общего resolver. Deprecated DefaultOnWire/DefaultEnumOnWire exports означают ту же DefaultWhenMissing policy. ResolveMode не выбирает решение поля. Общий engine не имеет legacy error-default ветки.
 
 Все девять handlers поддерживают read-only preflight и используют те же consumer prepare/check функции, что обычная запись. Preflight обнаруживает wire/domain failures до transaction; ordinary вызов в таком случае отвечает 422. Ошибки записи сохраняют atomic rollback/207. Preview не гарантирует успешный будущий commit и не резервирует идентификаторы: текущие данные/ограничения хранения повторно проверяются при применении.
 
 Приёмка реализации: 196 tests, OK; все восемь import/export fixtures, включая переименованный `world_test_002`. Typecheck cascade и frontend build прошли. Defaults применяются без изменения authored field presence: модельные ограничения вроде `count`/`count_range` не получают ложное явно заданное поле. Результаты и оставшийся scope E6 — в [плане](../.cursor/plans/runtime-world-edit-policy.md#проверки-реализации).
+
+## Миграция полей E6
+
+Перечень и границы — [runtime_policy_field_migration.md](./runtime_policy_field_migration.md).
+556 полей dataModel и 22 поля bundle DTO используют missing-only default. Полный
+resolve делегирует исходной Pydantic-модели; patch переиспользует compiled field
+schemas с field validators без default factories отсутствующих полей. Межполевые
+инварианты проверяются на полном состоянии после merge. Partial patch не является POJO.
+
+SQL NULL ненастроенной scalar-колонки означает отсутствие; JSON mapping сохраняет
+явно переданный null для проверки nullable. Реестры World хранят list metadata;
+NULL/исторический пустой map hydrate в пустой list, остальные malformed значения
+не исправляются. SQL schema не меняется. Типы/ограничения/defaults остаются в dataModel.
+Каноническое дополнение отсутствующих библиотечных записей и явно разрешённые
+доменные blank pin/template sentinels сохраняются; они не являются error defaults.
+
+Room/opening/height/stem invalid repair удалены. Ошибочная строка отклоняет реестр
+целиком; битая attachment-ссылка останавливает уровень через общую диагностику.
+Остальные cascade membership и доменные repair/placement/material boundaries
+не объявлены закрытыми; остаток E6 указан в плане.

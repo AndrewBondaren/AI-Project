@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.spatial.facing import (
     CARDINAL_FACINGS,
     Facing,
@@ -23,9 +23,9 @@ class ShaftSize(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    size_type:   DefaultOnWire[str | None] = None
-    width_range: DefaultOnWire[list[int] | None] = None
-    depth_range: DefaultOnWire[list[int] | None] = None
+    size_type:   DefaultWhenMissing[str | None] = None
+    width_range: DefaultWhenMissing[list[int] | None] = None
+    depth_range: DefaultWhenMissing[list[int] | None] = None
 
     @model_validator(mode="after")
     def _single_form(self) -> "ShaftSize":
@@ -44,26 +44,26 @@ class StaircaseSpec(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    stops:           DefaultOnWire[list[str]] = Field(default_factory=list)
-    staircase_id:    DefaultOnWire[str | None] = None
-    staircase_type:  DefaultOnWire[StaircaseType] = Field(
+    stops:           DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    staircase_id:    DefaultWhenMissing[str | None] = None
+    staircase_type:  DefaultWhenMissing[StaircaseType] = Field(
         default_factory=StaircaseType.generator_default,
     )
-    step_material:   DefaultOnWire[str | None] = None
-    size:            DefaultOnWire[ShaftSize | None] = None
-    facing:          DefaultOnWire[Facing | None] = None
+    step_material:   DefaultWhenMissing[str | None] = None
+    size:            DefaultWhenMissing[ShaftSize | None] = None
+    facing:          DefaultWhenMissing[Facing | None] = None
     # ТЗ §3.7b/§2 декларирует default true; status quo — решение мастера 2026-09-30.
-    has_walls:       DefaultOnWire[bool] = False
-    outside:         DefaultOnWire[bool] = False
-    in_a_room:       DefaultOnWire[bool] = False
-    embed_in:        DefaultOnWire[str | None] = None
-    embed_at:        DefaultOnWire[str | None] = None
-    on_the_edge:     DefaultOnWire[bool] = False
-    is_movable:      DefaultOnWire[bool] = False
-    has_trapdoor:    DefaultOnWire[bool] = False
-    near_wall:       DefaultOnWire[bool] = False
-    open_wall_shaft: DefaultOnWire[str | None] = None
-    closed_exit:     DefaultOnWire[bool] = False
+    has_walls:       DefaultWhenMissing[bool] = False
+    outside:         DefaultWhenMissing[bool] = False
+    in_a_room:       DefaultWhenMissing[bool] = False
+    embed_in:        DefaultWhenMissing[str | None] = None
+    embed_at:        DefaultWhenMissing[str | None] = None
+    on_the_edge:     DefaultWhenMissing[bool] = False
+    is_movable:      DefaultWhenMissing[bool] = False
+    has_trapdoor:    DefaultWhenMissing[bool] = False
+    near_wall:       DefaultWhenMissing[bool] = False
+    open_wall_shaft: DefaultWhenMissing[str | None] = None
+    closed_exit:     DefaultWhenMissing[bool] = False
 
     @field_validator("staircase_type", mode="before")
     @classmethod

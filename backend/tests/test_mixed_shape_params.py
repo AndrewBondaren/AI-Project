@@ -1,4 +1,5 @@
 """Chosen L/T parameters, preserved RNG order and defensive degradation."""
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 from copy import deepcopy
 from random import Random
@@ -85,26 +86,13 @@ class MixedShapeParamsTests(unittest.TestCase):
                     self.assertEqual(instance.shape_params, expected)
                     self.assertEqual(rng.getstate(), reference.getstate())
 
-    def test_incomplete_specs_after_validation_bypass_log_and_use_footprint_defaults(self):
-        for shape, params in ((ShapeType.L_SHAPE, dict(arm_width_range=[2, 3], arm_depth_range=[2, 3])),
-                              (ShapeType.T_SHAPE, dict(stem_width_range=[2, 3]))):
+    def test_incomplete_specs_after_validation_bypass_reject_before_cascade(self):
+        for shape, params in ((ShapeType.L_SHAPE, dict(arm_width_range=[2, 3], arm_depth_range=[2, 3])), (ShapeType.T_SHAPE, dict(stem_width_range=[2, 3]))):
             complete = self.definition(shape.value, **params)
-            partial = complete.shape_params.model_copy(update={
-                "arm_depth_range" if shape is ShapeType.L_SHAPE else "stem_width_range": None})
+            partial = complete.shape_params.model_copy(update={"arm_depth_range" if shape is ShapeType.L_SHAPE else "stem_width_range": None})
             for broken in (None, partial):
-                with self.subTest(shape=shape, broken=broken):
-                    definition = complete.model_copy(update={"shape_params": broken})
-                    with self.assertLogs(FACTORY, "ERROR") as captured:
-                        instance = self.instantiate(definition)
-                    self.assertEqual(len(captured.records), 1)
-                    self.assertIn("footprint defaults", captured.output[0])
-                    self.assertEqual(instance.shape_params, {})
-                    if shape is ShapeType.T_SHAPE:
-                        with self.assertLogs("app.application.worldData.generators.structure.shapes", "ERROR"):
-                            footprint = instance.get_footprint()
-                        self.assertEqual(footprint, footprint_t_shape(0, 0, 6, 4, 2, Facing.SOUTH))
-                    else:
-                        self.assertEqual(instance.get_footprint(), room_footprint(shape.value, 0, 0, 6, 4))
+                with self.subTest(shape=shape, broken=broken), self.assertRaises(UnresolvedModelError):
+                    self.instantiate(complete.model_copy(update={"shape_params": broken}))
 
     def test_mixed_generation_is_deterministic_and_template_immutable(self):
         world, building = test_world_building()

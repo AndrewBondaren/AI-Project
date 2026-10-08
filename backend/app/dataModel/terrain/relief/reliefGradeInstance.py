@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultEnumOnWire, DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 
 
@@ -22,22 +22,22 @@ class ReliefGradeInstance(BaseModel):
 
     grade_uid: str
     world_uid: str
-    kind: DefaultEnumOnWire[ReliefSideKind]
+    kind: DefaultEnumWhenMissing[ReliefSideKind]
     height_cells: int = Field(ge=1)
     length_cells: int = Field(ge=1)
     # light-grid (lx, ly) membership — omit empty not allowed (must have cells)
     cell_refs: list[tuple[int, int]] = Field(min_length=1)
-    angle_deg: DefaultOnWire[float | None] = None
-    facing: DefaultOnWire[str | None] = None
-    earthen_canal: DefaultOnWire[bool] = False
+    angle_deg: DefaultWhenMissing[float | None] = None
+    facing: DefaultWhenMissing[str | None] = None
+    earthen_canal: DefaultWhenMissing[bool] = False
     # Resolved canal attachments (R28/R36q); BAR-1 consumes structure_refs
-    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
-    structure_canal: DefaultOnWire[str | None] = None
-    template_uid: DefaultOnWire[str | None] = None
+    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    structure_canal: DefaultWhenMissing[str | None] = None
+    template_uid: DefaultWhenMissing[str | None] = None
     # Ribbon owner: connection edge uid. Omit when the front has no graph owner.
-    owner_uid: DefaultOnWire[str | None] = None
-    site_id: DefaultOnWire[str | None] = None
-    grade_system_uid: DefaultOnWire[str | None] = None
+    owner_uid: DefaultWhenMissing[str | None] = None
+    site_id: DefaultWhenMissing[str | None] = None
+    grade_system_uid: DefaultWhenMissing[str | None] = None
 
     @model_validator(mode="after")
     def _kind_angle_facing(self) -> ReliefGradeInstance:

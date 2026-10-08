@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.locations.structure.enums.buildingPurpose.family import BuildingPurposeFamily
@@ -25,15 +25,15 @@ class SettlementSpecializationEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_specialization: StrictOnWire[RegistryKey[WorldSettlementSpecializationRegistry]]
-    display_specialization: DefaultOnWire[str | None] = None
+    display_specialization: DefaultWhenMissing[str | None] = None
     # N+1 kind label(s), not a closed enum: resource, material, crop, product, domain, …
     # Wire: string, list, or alias ``subject_kinds``.
     # TODO(specialization-subjects): extract → resource_type_registry;
     # farm → crops_registry (building ``crop_kind`` is ENUM-E);
     # livestock → livestock_registry (building ``livestock_kind`` is ENUM-E).
     # Product / domain catalogs are not wired yet. See SettlementSpecializationBind.
-    subject_kind: DefaultOnWire[str | list[str] | None] = None
-    typical_districts: DefaultOnWire[list[TypicalDistrictRef]] = Field(default_factory=list)
+    subject_kind: DefaultWhenMissing[str | list[str] | None] = None
+    typical_districts: DefaultWhenMissing[list[TypicalDistrictRef]] = Field(default_factory=list)
     allowed_family: StrictEnumOnWire[BuildingPurposeFamily]
 
     @model_validator(mode="before")

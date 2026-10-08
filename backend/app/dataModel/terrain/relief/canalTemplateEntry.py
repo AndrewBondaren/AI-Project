@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.terrain.relief.canal import EarthenCanal, StructureCanal
 
 
@@ -16,7 +16,7 @@ class CanalStructureSpec(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
 
 
 class CanalTemplateEntry(BaseModel):
@@ -25,8 +25,8 @@ class CanalTemplateEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_type: StrictOnWire[str]
-    earthen_canal: DefaultOnWire[bool | None] = None
-    structure: DefaultOnWire[CanalStructureSpec | None] = None
+    earthen_canal: DefaultWhenMissing[bool | None] = None
+    structure: DefaultWhenMissing[CanalStructureSpec | None] = None
 
     @model_validator(mode="after")
     def _xor_earthen_or_structure(self) -> CanalTemplateEntry:

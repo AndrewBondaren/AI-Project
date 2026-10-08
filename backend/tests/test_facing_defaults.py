@@ -1,6 +1,8 @@
 """Internal facing fallback keeps geometry and reports degraded generation."""
 import json
 import tempfile
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
+from pydantic import ValidationError
 import unittest
 from pathlib import Path
 from random import Random
@@ -27,55 +29,29 @@ class FacingDefaultsTests(unittest.TestCase):
                                 Facing.WEST: (6, 21), Facing.EAST: (19, 21)}[wall]
                 self.assertIn(expected_tip, result)
 
-    def test_invalid_or_unresolved_direction_uses_south_and_logs(self):
-        expected = footprint_t_shape(0, 0, 6, 4, 2, Facing.SOUTH)
+    def test_invalid_internal_direction_rejects_without_south_default(self):
         for value in (None, "", "bad", "any", "northeast", Facing.NORTHEAST, [], 12):
-            with self.subTest(value=value), self.assertLogs(LOGGER, level="ERROR") as captured:
-                result = footprint_t_shape(0, 0, 6, 4, 2, value)
-            self.assertEqual(result, expected)
-            self.assertEqual(len(captured.records), 1)
-            self.assertIn("south", captured.output[0])
+            with self.subTest(value=value), self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+                footprint_t_shape(0, 0, 6, 4, 2, value)
 
     def test_dispatch_does_not_hide_missing_direction(self):
-        with self.assertLogs(LOGGER, level="ERROR"):
-            result = room_footprint("t_shape", 0, 0, 6, 4)
-        self.assertEqual(result, footprint_t_shape(0, 0, 6, 4, 2, Facing.SOUTH))
+        with self.assertRaises(UnresolvedModelError):
+            room_footprint("t_shape", 0, 0, 6, 4)
 
-    def test_pojo_marks_fallback_without_logging(self):
+    def test_pojo_missing_defaults_without_logging_and_invalid_rejects(self):
         with self.assertNoLogs(level="WARNING"):
-            missing = ResolvedStemWall.model_validate({})
-            invalid = ResolvedStemWall.model_validate({"stem_wall": "bad"})
-            valid = ResolvedStemWall.model_validate({"stem_wall": "south"})
-        self.assertIs(missing.stem_wall, Facing.SOUTH)
-        self.assertTrue(missing.substituted)
-        self.assertTrue(invalid.substituted)
-        self.assertFalse(valid.substituted)
+            self.assertIs(ResolvedStemWall.model_validate({}).stem_wall, Facing.SOUTH)
+            self.assertIs(ResolvedStemWall.model_validate({"stem_wall": "south"}).stem_wall, Facing.SOUTH)
+            with self.assertRaises(ValidationError):
+                ResolvedStemWall.model_validate({"stem_wall": "bad"})
 
-    def test_invalid_internal_stem_logs_once_before_repeated_footprints(self):
+    def test_corrupted_shape_source_rejects_before_room_generation(self):
         template = simple_structure()
-        wire = template.levels[0]["rooms"][0]
-        wire.update(shape_type=["t_shape", "t_shape"],
-                    shape_params={"stem_width_range": [2, 3]},
-                    size={"width_range": [6, 6], "depth_range": [4, 4]})
+        template.levels[0]["rooms"][0].update(shape_type="t_shape", shape_params={"stem_width_range": [2, 3]}, size={"width_range": [6, 6], "depth_range": [4, 4]})
         level = StructureGeneratorService._resolve_levels(template)[0]
-        world, _ = test_world_building()
-        # Bypass the wire validator to exercise the defensive facing boundary.
         definition = level.rooms[0]
-        invalid_params = definition.shape_params.model_copy(update={"stem_wall": "bad"})
-        level = level.model_copy(update={"rooms": [definition.model_copy(update={"shape_params": invalid_params})]})
-        rng = Random(42)
-        with tempfile.TemporaryDirectory() as directory:
-            with generation_world_log(world.world_uid, mode="test", root=directory) as path:
-                instances = instantiate_level_rooms(level, template, 5, 0, world, rng)
-                instance = instances[0]
-                self.assertIs(instance.shape_params["stem_wall"], Facing.SOUTH)
-                self.assertIn(instance.shape_params["stem_width"], (2, 3))
-                instance.origin_x = instance.origin_y = 0
-                footprint = instance.get_footprint()
-                self.assertEqual(footprint, instance.get_footprint())
-            records = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
-        errors = [r for r in records if r["level"] == "ERROR" and r["logger"] == LOGGER]
-        self.assertEqual(len(errors), 1)
-        self.assertIn(str(template.system_name), errors[0]["msg"])
-        self.assertIn("hall", errors[0]["msg"])
-        self.assertEqual(footprint, footprint_t_shape(0, 0, 6, 4, instance.shape_params["stem_width"], Facing.SOUTH))
+        invalid = definition.model_copy(update={"shape_params": definition.shape_params.model_copy(update={"stem_wall": "bad"})})
+        level = level.model_copy(update={"rooms": [invalid]})
+        world, _ = test_world_building()
+        with self.assertRaises(UnresolvedModelError):
+            instantiate_level_rooms(level, template, 5, 0, world, Random(42))

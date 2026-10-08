@@ -526,31 +526,19 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         self.assertIn(BuildingPurposeFamily.FACTORY, steam.allowed)
         self.assertIn(BuildingPurposeFamily.UTILITY, steam.allowed)
 
-    def test_custom_pack_overlay_and_unknown_leaf(self) -> None:
-        world = SimpleNamespace(
-            world_uid="w1",
-            purpose_pack_registry=[{
-                "system_pack": "ironhold",
-                "allowed": ["culture", "tavern", "guild", "not_a_leaf"],
-            }],
-            purpose_packs=["ironhold"],
-        )
-        recipes = purpose_pack_registry(world)
-        custom = recipes.entry_for("ironhold")
-        self.assertIsNotNone(custom)
-        assert custom is not None
+    def test_custom_pack_unknown_leaf_rejects_without_dropping_it(self):
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        from pydantic import ValidationError
+        world = SimpleNamespace(world_uid="w1", purpose_pack_registry=[{
+            "system_pack": "ironhold", "allowed": ["culture", "tavern", "guild", "not_a_leaf"]}], purpose_packs=["ironhold"])
+        with self.assertRaises(UnresolvedModelError):
+            purpose_pack_registry(world)
+        with self.assertRaises(ValidationError):
+            PurposePackEntry(system_pack="ironhold", allowed=["temple", "not_a_leaf"])
+        world.purpose_pack_registry[0]["allowed"].remove("not_a_leaf")
+        custom = purpose_pack_registry(world).entry_for("ironhold")
         self.assertIn(BuildingPurposeFamily.CULTURE, custom.allowed)
-        self.assertNotIn("not_a_leaf", [str(token) for token in custom.allowed])
-        live = enabled_building_purposes(world)
-        self.assertIn(BuildingPurpose.HOUSE, live)
-        self.assertIn(BuildingPurpose.TEMPLE, live)
-        self.assertIn(BuildingPurpose.TAVERN, live)
-        self.assertNotIn(BuildingPurpose.PORTAL, live)
-        dropped = PurposePackEntry(
-            system_pack="ironhold",
-            allowed=["temple", "not_a_leaf"],
-        )
-        self.assertEqual(dropped.allowed, [BuildingPurpose.TEMPLE])
+        self.assertIn(BuildingPurpose.TAVERN, enabled_building_purposes(world))
 
     def test_world_overlay_cannot_replace_base(self) -> None:
         world = SimpleNamespace(

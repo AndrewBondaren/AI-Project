@@ -6,7 +6,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 
 WEIGHT_SUM_EPS = 1e-6
@@ -136,11 +136,11 @@ class ReliefGradeKnobs(BaseModel):
         greater_equals=0.0, lesser_equals=1.0,
     )
     # R36b Geom — neither → default L; invalid → generate coerce (C31)
-    slope_length_cells: DefaultOnWire[int | None] = None
-    target_angle_deg: DefaultOnWire[float | None] = None
-    earthen_canal: DefaultOnWire[bool | None] = None
-    structure_canal: DefaultOnWire[str | None] = None
-    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    slope_length_cells: DefaultWhenMissing[int | None] = None
+    target_angle_deg: DefaultWhenMissing[float | None] = None
+    earthen_canal: DefaultWhenMissing[bool | None] = None
+    structure_canal: DefaultWhenMissing[str | None] = None
+    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

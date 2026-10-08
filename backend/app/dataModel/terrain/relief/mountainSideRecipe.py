@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.terrain.relief.enums import MountainSideRecipeMode, ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeKnobs import require_weights_pair
 
@@ -20,10 +20,10 @@ class MountainSideRecipe(BaseModel):
     EMPTY_SLOPE_WEIGHT: ClassVar[float] = 0.5
     EMPTY_SHEER_WEIGHT: ClassVar[float] = 0.5
 
-    slope_weight: DefaultOnWire[float | None] = None
-    sheer_weight: DefaultOnWire[float | None] = None
-    side_kinds: DefaultOnWire[list[ReliefSideKind] | None] = None
-    default_side_kind: DefaultOnWire[ReliefSideKind | None] = None
+    slope_weight: DefaultWhenMissing[float | None] = None
+    sheer_weight: DefaultWhenMissing[float | None] = None
+    side_kinds: DefaultWhenMissing[list[ReliefSideKind] | None] = None
+    default_side_kind: DefaultWhenMissing[ReliefSideKind | None] = None
 
     @model_validator(mode="after")
     def _xor_modes(self) -> MountainSideRecipe:

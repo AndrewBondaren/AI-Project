@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.locations.transitions.transitionEndpoint import EndpointRef
 
 
@@ -20,9 +20,9 @@ class TransitionSideId(StrEnum):
 class TransitionSide(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    owner_location_uid: DefaultOnWire[EndpointRef | None] = None
-    is_discovered: DefaultOnWire[bool] = True
-    is_accessible: DefaultOnWire[bool] = True
-    entry_difficulty_override: DefaultOnWire[SideOverride | None] = None
-    guard_level_override: DefaultOnWire[SideOverride | None] = None
-    display_name: DefaultOnWire[str | None] = None
+    owner_location_uid: DefaultWhenMissing[EndpointRef | None] = None
+    is_discovered: DefaultWhenMissing[bool] = True
+    is_accessible: DefaultWhenMissing[bool] = True
+    entry_difficulty_override: DefaultWhenMissing[SideOverride | None] = None
+    guard_level_override: DefaultWhenMissing[SideOverride | None] = None
+    display_name: DefaultWhenMissing[str | None] = None

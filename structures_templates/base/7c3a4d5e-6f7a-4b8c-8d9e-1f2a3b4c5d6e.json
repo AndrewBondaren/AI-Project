@@ -1,7 +1,7 @@
 {
   "system_name": "7c3a4d5e-6f7a-4b8c-8d9e-1f2a3b4c5d6e",
   "display_name": "Манор тип 1",
-  "structure_type": "manor",
+  "structure_type": "house",
   "description": "Двухэтажный манор. Две u_shape лестницы: facing=south и facing=east. rect_standard shaft (5×5 экстерьер, 3×3 интерьер).",
   "version": "1.0",
   "default_z_height": 15,

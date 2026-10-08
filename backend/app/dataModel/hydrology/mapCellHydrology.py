@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from typing import Annotated
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
@@ -23,11 +25,11 @@ class MapCellHydrology(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    liquid_candidate: DefaultOnWire[bool] = False
-    role: DefaultOnWire[HydrologyCellRole | None] = None
-    deepening_index: DefaultOnWire[int | None] = constrained_field(default=None, greater_equals=0)
-    connection_edge_uid: DefaultOnWire[str | None] = None
-    shore_kind: DefaultOnWire[HydrologyShoreKind | None] = None
+    liquid_candidate: DefaultWhenMissing[bool] = False
+    role: DefaultWhenMissing[HydrologyCellRole | None] = None
+    deepening_index: DefaultWhenMissing[Annotated[int, Field(ge=0)] | None] = constrained_field(default=None)
+    connection_edge_uid: DefaultWhenMissing[str | None] = None
+    shore_kind: DefaultWhenMissing[HydrologyShoreKind | None] = None
 
     @classmethod
     def shore(

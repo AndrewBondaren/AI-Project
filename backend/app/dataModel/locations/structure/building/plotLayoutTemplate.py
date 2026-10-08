@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.cascade.cascadeSpec import (
@@ -55,48 +55,48 @@ class PlotLayoutTemplate(BaseModel):
 
     system_name: StrictOnWire[RegistryKey[PlotLayoutTemplate]]
     display_name: StrictOnWire[str]
-    plot_type: DefaultOnWire[BuildingPurposeFamily] = BuildingPurposeFamily.DWELLING
+    plot_type: DefaultWhenMissing[BuildingPurposeFamily] = BuildingPurposeFamily.DWELLING
     # Area-level cascade channels for `economic_tier`, chained by edges
     # tier → band → range; deferred FieldRef suppliers bind self-links
     # (tz_cascade_context §2). Outer neighbours (building NL above, district NL below) are
     # declared on the NL side — this module may not import NamedLocation.
     economic_tier: Annotated[
-        DefaultOnWire[EconomyTierKey | None],
+        DefaultWhenMissing[EconomyTierKey | None],
         CascadeChannel(
             ECONOMIC_TIER, ScopeLevel.AREA,
             below=CascadeLink(_PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_BAND, ScopeLevel.AREA),
         ),
     ] = None
     economic_tier_band: Annotated[
-        DefaultOnWire[str | None],
+        DefaultWhenMissing[str | None],
         CascadeChannel(
             ECONOMIC_TIER, ScopeLevel.AREA, kind=ChannelKind.BAND,
             below=CascadeLink(_PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_RANGE, ScopeLevel.AREA),
         ),
     ] = None
     economic_tier_range: Annotated[
-        DefaultOnWire[EconomicTierRange | None],
+        DefaultWhenMissing[EconomicTierRange | None],
         CascadeChannel(ECONOMIC_TIER, ScopeLevel.AREA, kind=ChannelKind.RANGE),
     ] = None
-    perimeter_barrier: DefaultOnWire[PerimeterBarrier] = Field(
+    perimeter_barrier: DefaultWhenMissing[PerimeterBarrier] = Field(
         default_factory=PerimeterBarrier,
     )
-    occupied_footprint: DefaultOnWire[OccupiedFootprintSpec | None] = None
-    main_building: DefaultOnWire[BuildingBodyTemplate | None] = None
-    secondary_buildings: DefaultOnWire[list[BuildingBodyTemplate]] = Field(
+    occupied_footprint: DefaultWhenMissing[OccupiedFootprintSpec | None] = None
+    main_building: DefaultWhenMissing[BuildingBodyTemplate | None] = None
+    secondary_buildings: DefaultWhenMissing[list[BuildingBodyTemplate]] = Field(
         default_factory=list,
     )
     # Extract drawings: ENUM-E class of resource this layout extracts (ore mine vs timber camp).
-    resource_kind: DefaultOnWire[ResourceKind | None] = None
+    resource_kind: DefaultWhenMissing[ResourceKind | None] = None
     # Farm drawings: ENUM-E how this farm grows (grain field vs orchard).
-    crop_kind: DefaultOnWire[CropKind | None] = None
+    crop_kind: DefaultWhenMissing[CropKind | None] = None
     # Livestock drawings: ENUM-E husbandry purpose (meat vs dairy vs mount). Not a structure_type.
-    livestock_kind: DefaultOnWire[LivestockKind | None] = None
+    livestock_kind: DefaultWhenMissing[LivestockKind | None] = None
     # N+1 tags: iron_ore, wheat, cow, religion, knowledge, … Filter when the settlement names subjects.
     # If resource_kind is set, extract tags must be keys in worlds.resource_type_registry of that kind.
     # If crop_kind is set, farm tags must be keys in worlds.crops_registry of that kind.
     # If livestock_kind is set, livestock tags must be keys in worlds.livestock_registry of that kind.
-    subjects: DefaultOnWire[list[str]] = Field(default_factory=list)
+    subjects: DefaultWhenMissing[list[str]] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

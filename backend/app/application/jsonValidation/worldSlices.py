@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
+from dataclasses import asdict
 
 from app.application.jsonValidation.resolve import (
     resolve_model,
@@ -84,7 +85,18 @@ from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCateg
 WireKind = Literal["multi_column", "registry_list", "registry_dict", "json_blob"]
 
 
-def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
+def world_wire_from_row(world: Any) -> dict[str, Any]:
+    """Persisted SQL NULL scalar columns represent absence, unlike JSON null."""
+    out = asdict(world)
+    for item in WORLD_SLICES:
+        if item.wire_kind == "multi_column":
+            for key in item.world_keys:
+                out.pop(key, None)
+            out.update(item.wire_from_mapping(world))
+    return out
+
+
+def climate_zone_wire_from_raw(raw: Any) -> Any:
     """Normalize ``climate_zone_registry`` wire (array or legacy dict map).
 
     ``None`` → absent (caller may skip or use empty_factory).
@@ -94,7 +106,7 @@ def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
     if raw is None:
         return None
     if isinstance(raw, list):
-        return [entry for entry in raw if isinstance(entry, dict)]
+        return raw
     if isinstance(raw, dict):
         if not raw:
             return []
@@ -102,27 +114,29 @@ def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
         if values and all(isinstance(value, dict) for value in values):
             return values
         return [raw]
-    return None
+    return raw
 
 
-def registry_map_to_list(raw: Any, *, id_field: str) -> list[dict] | None:
+def registry_map_to_list(raw: Any, *, id_field: str) -> Any:
     """Normalize legacy registry wire map ``{id: row}`` → list with ``id_field`` injected."""
-    if not raw:
+    if raw is None:
         return None
     if isinstance(raw, list):
-        return [entry for entry in raw if isinstance(entry, dict)]
+        return raw
     if isinstance(raw, dict):
-        rows: list[dict] = []
+        rows: list[Any] = []
         for key, value in raw.items():
             if isinstance(value, dict):
                 row = dict(value)
                 row.setdefault(id_field, key)
                 rows.append(row)
+            else:
+                rows.append(value)
         return rows
-    return None
+    return raw
 
 
-def location_type_wire_from_raw(raw: Any) -> list[dict] | None:
+def location_type_wire_from_raw(raw: Any) -> Any:
     return registry_map_to_list(raw, id_field="system_type")
 
 
@@ -176,7 +190,7 @@ def canonical_registry_wire(world_slice: WorldSlice, raw: Any) -> Any:
     id_field = world_slice.canonical_overlay_id_field
     if not id_field or world_slice.empty_factory is None:
         return raw
-    if raw and not isinstance(raw, list):
+    if raw is not None and not isinstance(raw, list):
         return raw
     canonical = {
         getattr(entry, id_field): entry.model_dump(mode="json")
@@ -539,7 +553,7 @@ def resolve_json_blob_world(
     world_slice = _require_slice(pojo_cls, "json_blob")
     key = world_slice.world_keys[0]
     raw = getattr(world, key, None)
-    if not raw:
+    if raw is None:
         if world_slice.empty_factory is None:
             raise RuntimeError(
                 f"empty json_blob {pojo_cls.__name__} without empty_factory",

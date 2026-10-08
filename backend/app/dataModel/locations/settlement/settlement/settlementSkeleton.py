@@ -6,7 +6,7 @@ from typing import Annotated
 
 from pydantic import ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     ECONOMIC_TIER,
@@ -29,7 +29,7 @@ class SettlementSkeleton(SettlementPayloadFields):
     # Bottom of the `economic_tier` chain — the `above` edge from
     # NamedLocation.system_economic_tier is materialized by the verifier.
     economic_tier: Annotated[
-        DefaultOnWire[EconomyTierKey | None],
+        DefaultWhenMissing[EconomyTierKey | None],
         CascadeChannel(ECONOMIC_TIER, ScopeLevel.SETTLEMENT),
     ] = None
-    system_location_mood: DefaultOnWire[LocationMoodKey | None] = None
+    system_location_mood: DefaultWhenMissing[LocationMoodKey | None] = None

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from app.dataModel.annotationPolicy import DefaultEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, StrictOnWire
 from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 from app.dataModel.locations.transitions.transitionType import TransitionType
 
@@ -20,7 +20,7 @@ class GateTransitionParams(PhysicalTransitionParams):
 
 
 class StaircaseTransitionParams(PhysicalTransitionParams):
-    staircase_type: DefaultEnumOnWire[StaircaseType] = Field(
+    staircase_type: DefaultEnumWhenMissing[StaircaseType] = Field(
         default_factory=StaircaseType.generator_default,
     )
 

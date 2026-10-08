@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
     WorldConnectionTypeRegistry,
@@ -36,9 +36,9 @@ class DistrictConnection(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     connection_type: StrictOnWire[ConnectionTypeKey]
-    role: DefaultOnWire[str | None] = None
-    sidewalk: DefaultOnWire[bool | None] = None
-    lanes_per_side: DefaultOnWire[int | None] = None
+    role: DefaultWhenMissing[str | None] = None
+    sidewalk: DefaultWhenMissing[bool | None] = None
+    lanes_per_side: DefaultWhenMissing[int | None] = None
 
     @classmethod
     def street_default(cls) -> DistrictConnection:

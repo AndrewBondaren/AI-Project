@@ -10,7 +10,7 @@ from pydantic import (
 )
 
 from app.dataModel.annotationPolicy import (
-    DefaultEnumOnWire, DefaultOnWire, StrictOnWire,
+    DefaultEnumWhenMissing, DefaultWhenMissing, StrictOnWire,
 )
 from app.dataModel.locations.enums.accessMechanic import AccessMechanic
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
@@ -52,20 +52,20 @@ class Transition(BaseModel):
     system_transition_type: StrictOnWire[TransitionTypeKey]
     source: StrictOnWire[TransitionEndpoint]
     destination: StrictOnWire[TransitionEndpoint]
-    source_side: DefaultOnWire[TransitionSide] = Field(default_factory=TransitionSide)
-    destination_side: DefaultOnWire[TransitionSide] = Field(default_factory=TransitionSide)
-    origin: DefaultEnumOnWire[TransitionOrigin] = TransitionOrigin.GENERATED
-    is_bidirectional: DefaultOnWire[bool] = True
-    is_active: DefaultOnWire[bool] = True
-    access_mechanic: DefaultOnWire[list[AccessMechanic]] = Field(default_factory=list)
-    type_params: DefaultOnWire[SerializeAsAny[
+    source_side: DefaultWhenMissing[TransitionSide] = Field(default_factory=TransitionSide)
+    destination_side: DefaultWhenMissing[TransitionSide] = Field(default_factory=TransitionSide)
+    origin: DefaultEnumWhenMissing[TransitionOrigin] = TransitionOrigin.GENERATED
+    is_bidirectional: DefaultWhenMissing[bool] = True
+    is_active: DefaultWhenMissing[bool] = True
+    access_mechanic: DefaultWhenMissing[list[AccessMechanic]] = Field(default_factory=list)
+    type_params: DefaultWhenMissing[SerializeAsAny[
         PhysicalTransitionParams | GateTransitionParams | StaircaseTransitionParams
     ]] = Field(
         default_factory=PhysicalTransitionParams,
     )
-    display_name: DefaultOnWire[str | None] = None
-    glossary_ref: DefaultOnWire[str | None] = None
-    tag_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    display_name: DefaultWhenMissing[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None
+    tag_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _type_contract(self, info: ValidationInfo) -> Self:

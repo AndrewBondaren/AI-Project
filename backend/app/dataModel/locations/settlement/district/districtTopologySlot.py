@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
@@ -27,7 +27,7 @@ class DistrictTopologyEntry(BaseModel):
     role: StrictOnWire[DistrictEntryRole]
     facing: StrictOnWire[Facing]
     connection_type: StrictOnWire[ConnectionTypeKey]
-    paired_exit_uid: DefaultOnWire[str | None] = None
+    paired_exit_uid: DefaultWhenMissing[str | None] = None
 
 
 class DistrictTopologySlot(BaseModel):
@@ -48,4 +48,4 @@ class DistrictTopologySlot(BaseModel):
     ground_z: StrictOnWire[int]
     template_system_name: StrictOnWire[DistrictTemplateKey]
     slot_index: StrictOnWire[int]
-    entries: DefaultOnWire[tuple[DistrictTopologyEntry, ...]] = ()
+    entries: DefaultWhenMissing[tuple[DistrictTopologyEntry, ...]] = ()

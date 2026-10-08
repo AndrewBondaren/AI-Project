@@ -12,6 +12,7 @@ _WIRE_ALIAS_NAMES = frozenset({
     "DefaultWhenMissing",
     "StrictEnumOnWire",
     "DefaultEnumOnWire",
+    "DefaultEnumWhenMissing",
 })
 
 
@@ -25,20 +26,24 @@ class WireFieldPolicy(StrEnum):
     """Wire only when present — no ``Field`` default fill."""
 
     DEFAULT = "default"
-    """Missing or invalid wire → ``Field`` default + log."""
+    """Deprecated metadata value; no error-default execution path remains."""
 
     DEFAULT_WHEN_MISSING = "default_when_missing"
     """Missing wire → schema default; supplied invalid value → unresolved."""
 
 
 class EnumWire:
-    """Marker: wire value must be a member of annotated ``StrEnum`` (``parse_enum``)."""
+    """Closed StrEnum wire contract; invalid enum diagnostics use UNKNOWN_ENUM."""
 
 
 type StrictOnWire[T] = Annotated[T, WireFieldPolicy.STRICT_ON_WIRE]
 type IgnoreOnWire[T] = Annotated[T, WireFieldPolicy.IGNORE_ON_WIRE]
-type DefaultOnWire[T] = Annotated[T, WireFieldPolicy.DEFAULT]
+# Deprecated import names retain source compatibility, with the migrated policy.
+type DefaultOnWire[T] = Annotated[T, WireFieldPolicy.DEFAULT_WHEN_MISSING]
 type DefaultWhenMissing[T] = Annotated[T, WireFieldPolicy.DEFAULT_WHEN_MISSING]
+type DefaultEnumWhenMissing[E] = Annotated[
+    E, WireFieldPolicy.DEFAULT_WHEN_MISSING, EnumWire(),
+]
 
 type StrictEnumOnWire[E: StrEnum] = Annotated[
     E,
@@ -47,7 +52,7 @@ type StrictEnumOnWire[E: StrEnum] = Annotated[
 ]
 type DefaultEnumOnWire[E: StrEnum] = Annotated[
     E,
-    WireFieldPolicy.DEFAULT,
+    WireFieldPolicy.DEFAULT_WHEN_MISSING,
     EnumWire(),
 ]
 
@@ -101,12 +106,12 @@ def unwrap_wire_type(annotation: Any) -> Any:
 
 
 def field_policy(annotation: Any) -> WireFieldPolicy:
-    """Extract per-field wire policy; unannotated fields → ``DEFAULT``."""
+    """Extract policy; unannotated fields use the schema's missing contract."""
     _inner, meta = _annotation_parts(annotation)
     for item in meta:
         if isinstance(item, WireFieldPolicy):
             return item
-    return WireFieldPolicy.DEFAULT
+    return WireFieldPolicy.DEFAULT_WHEN_MISSING
 
 
 def wire_enum_class(annotation: Any) -> type[StrEnum] | None:
@@ -124,4 +129,7 @@ def wire_enum_class(annotation: Any) -> type[StrEnum] | None:
     inner = unwrap_wire_type(annotation)
     if isinstance(inner, type) and issubclass(inner, StrEnum):
         return inner
+    for candidate in get_args(inner):
+        if isinstance(candidate, type) and issubclass(candidate, StrEnum):
+            return candidate
     return None

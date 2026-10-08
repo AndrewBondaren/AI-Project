@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.settlement.enums.requiredStructurePosition import (
     POSITION_ANY,
     POSITION_CENTER,
@@ -31,16 +31,19 @@ class RequiredStructure(BaseModel):
     plot_template: StrictOnWire[DrawingKey] = Field(
         validation_alias=AliasChoices("plot_template", "building_template"),
     )
-    structure_type: DefaultOnWire[BuildingPurpose | None] = None
-    count: DefaultOnWire[int] = 1
-    position: DefaultOnWire[RequiredStructurePosition] = POSITION_ANY
+    structure_type: DefaultWhenMissing[BuildingPurpose | None] = None
+    count: DefaultWhenMissing[int] = 1
+    position: DefaultWhenMissing[RequiredStructurePosition] = POSITION_ANY
 
     @field_validator("structure_type", mode="before")
     @classmethod
     def _coerce_purpose(cls, value: Any) -> Any:
-        if value is None or value == "":
+        if value is None:
             return None
-        return BuildingPurpose.from_wire(value)
+        parsed = BuildingPurpose.from_wire(value)
+        if parsed is None:
+            raise ValueError("unknown structure_type")
+        return parsed
 
     @field_validator("position", mode="before")
     @classmethod
@@ -48,4 +51,6 @@ class RequiredStructure(BaseModel):
         if value is None:
             return None
         parsed = RequiredStructurePosition.from_wire(value)
-        return parsed if parsed is not None else POSITION_ANY
+        if parsed is None:
+            raise ValueError("unknown position")
+        return parsed

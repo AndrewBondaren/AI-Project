@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from app.api.schemas.imports import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at, prepare_import_row
 from app.application.jsonValidation.facade import normalize_world, merge_world_patch
+from app.application.jsonValidation.worldSlices import world_wire_from_row
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
@@ -60,7 +61,7 @@ class WorldService:
 
         patch = {key: value for key, value in data.items()
                  if hasattr(world, key) and key not in self._IMMUTABLE}
-        merged = merge_world_patch(dataclasses.asdict(world), patch)
+        merged = merge_world_patch(world_wire_from_row(world), patch)
         try:
             world = self.prepare_import(_normalize_world_data(merged))
         except ValueError as exc:

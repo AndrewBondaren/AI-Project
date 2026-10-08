@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, resolve_model
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -30,12 +30,12 @@ class ConnectionNodeImportRow(BaseModel):
     z: StrictOnWire[int]
     node_type: StrictEnumOnWire[ConnectionNodeType]
     graph_level: StrictEnumOnWire[GraphLevel]
-    location_uid: DefaultOnWire[str | None] = None
-    portal_type: DefaultOnWire[str | None] = None
-    portal_destinations: DefaultOnWire[list[Any] | None] = None
-    portal_bidirectional: DefaultOnWire[int | None] = None
-    portal_is_active: DefaultOnWire[int | None] = None
-    portal_blocked_behavior_override: DefaultOnWire[str | None] = None
+    location_uid: DefaultWhenMissing[str | None] = None
+    portal_type: DefaultWhenMissing[str | None] = None
+    portal_destinations: DefaultWhenMissing[list[Any] | None] = None
+    portal_bidirectional: DefaultWhenMissing[int | None] = None
+    portal_is_active: DefaultWhenMissing[int | None] = None
+    portal_blocked_behavior_override: DefaultWhenMissing[str | None] = None
 
 
 class ConnectionEdgeImportRow(BaseModel):
@@ -50,22 +50,22 @@ class ConnectionEdgeImportRow(BaseModel):
     to_node_uid: StrictOnWire[str]
     connection_type: StrictOnWire[str]
     graph_level: StrictEnumOnWire[GraphLevel]
-    bidirectional: DefaultOnWire[bool] = True
-    lanes_per_side: DefaultOnWire[int] = 1
-    width_cells: DefaultOnWire[int | None] = None
-    bridge_subtype: DefaultOnWire[str | None] = None
-    parent_edge_uid: DefaultOnWire[str | None] = None
-    side: DefaultOnWire[str | None] = None
-    material: DefaultOnWire[str | None] = None
-    condition: DefaultOnWire[int] = 100
-    features: DefaultOnWire[list[Any] | None] = None
-    lighting_type: DefaultOnWire[str | None] = None
-    danger_level: DefaultOnWire[str] = "none"
-    has_sidewalk: DefaultOnWire[bool] = False
-    under_construction: DefaultOnWire[bool] = False
-    under_repair: DefaultOnWire[bool] = False
-    street_objects: DefaultOnWire[list[Any] | None] = None
-    traversal_conditions: DefaultOnWire[dict[str, Any] | None] = None
+    bidirectional: DefaultWhenMissing[bool] = True
+    lanes_per_side: DefaultWhenMissing[int] = 1
+    width_cells: DefaultWhenMissing[int | None] = None
+    bridge_subtype: DefaultWhenMissing[str | None] = None
+    parent_edge_uid: DefaultWhenMissing[str | None] = None
+    side: DefaultWhenMissing[str | None] = None
+    material: DefaultWhenMissing[str | None] = None
+    condition: DefaultWhenMissing[int] = 100
+    features: DefaultWhenMissing[list[Any] | None] = None
+    lighting_type: DefaultWhenMissing[str | None] = None
+    danger_level: DefaultWhenMissing[str] = "none"
+    has_sidewalk: DefaultWhenMissing[bool] = False
+    under_construction: DefaultWhenMissing[bool] = False
+    under_repair: DefaultWhenMissing[bool] = False
+    street_objects: DefaultWhenMissing[list[Any] | None] = None
+    traversal_conditions: DefaultWhenMissing[dict[str, Any] | None] = None
 
 
 def _allowed_connection_types(world_wire: dict[str, Any]) -> set[str]:

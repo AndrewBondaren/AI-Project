@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     SettlementSpecializationKey,
 )
@@ -50,9 +50,9 @@ class SettlementSpecializationBind(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_specialization: StrictOnWire[SettlementSpecializationKey]
-    subjects: DefaultOnWire[list[str]] = Field(default_factory=list)
+    subjects: DefaultWhenMissing[list[str]] = Field(default_factory=list)
     # Filled when wire ``subjects`` is a kind → tokens map; omitted on dump.
-    subject_groups: DefaultOnWire[dict[str, list[str]]] = Field(default_factory=dict)
+    subject_groups: DefaultWhenMissing[dict[str, list[str]]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

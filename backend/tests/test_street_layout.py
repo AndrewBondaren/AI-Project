@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 
 from app.application.jsonValidation.resolve import resolve_model
@@ -58,18 +59,12 @@ class TestStreetLayoutWire(unittest.TestCase):
         entry = resolve_model(DistrictTemplateEntry, _wire(street_layout="grid"))
         self.assertIs(entry.street_layout, StreetLayout.GRID)
 
-    def test_resolve_unknown_defaults_grid_and_warns(self) -> None:
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
-            entry = resolve_model(
-                DistrictTemplateEntry,
-                _wire(street_layout="spiral"),
-            )
-        self.assertIs(entry.street_layout, StreetLayout.GRID)
-        text = "\n".join(captured.output)
-        self.assertIn("street_layout", text)
-        self.assertIn("invalid", text)
-        self.assertIn("using field default", text)
+    def test_resolve_unknown_rejects(self):
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+            result = resolve_result(DistrictTemplateEntry, _wire(street_layout="spiral"))
+        self.assertFalse(result.resolved)
+        self.assertEqual(result.issues[0].path, ("street_layout",))
+        self.assertIn("WarningError", logs.output[0])
 
     def test_for_generator_consumes_enum(self) -> None:
         self.assertIs(

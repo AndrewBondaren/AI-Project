@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrainMasks.hillShape import HillShape
 
@@ -19,10 +19,10 @@ class HillPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    min_spacing: DefaultOnWire[int] = constrained_field(default=500, greater_equals=1)
-    radius: DefaultOnWire[int] = constrained_field(default=40, greater_equals=1)
-    height: DefaultOnWire[int] = constrained_field(default=2, greater_equals=1)
-    shapes: DefaultOnWire[tuple[HillShape, ...]] = Field(default_factory=tuple)
+    min_spacing: DefaultWhenMissing[int] = constrained_field(default=500, greater_equals=1)
+    radius: DefaultWhenMissing[int] = constrained_field(default=40, greater_equals=1)
+    height: DefaultWhenMissing[int] = constrained_field(default=2, greater_equals=1)
+    shapes: DefaultWhenMissing[tuple[HillShape, ...]] = Field(default_factory=tuple)
 
     @field_validator("shapes", mode="before")
     @classmethod

@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire
 from app.dataModel.terrain.relief.enums import ReliefSlopePolicy
 from app.dataModel.terrain.relief.reliefDeltaBand import ReliefDeltaBand
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
@@ -31,16 +31,16 @@ class ReliefRoleCase(BaseModel):
 
     policy: StrictEnumOnWire[ReliefSlopePolicy]
     # Mode A threshold + flat knobs (wire); knobs SoT = ``mode_a_grade_knobs()``
-    delta_z: DefaultOnWire[int | None] = None
-    slope_weight: DefaultOnWire[float | None] = None
-    sheer_weight: DefaultOnWire[float | None] = None
-    slope_length_cells: DefaultOnWire[int | None] = None
-    target_angle_deg: DefaultOnWire[float | None] = None
-    earthen_canal: DefaultOnWire[bool | None] = None
-    structure_canal: DefaultOnWire[str | None] = None
-    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    delta_z: DefaultWhenMissing[int | None] = None
+    slope_weight: DefaultWhenMissing[float | None] = None
+    sheer_weight: DefaultWhenMissing[float | None] = None
+    slope_length_cells: DefaultWhenMissing[int | None] = None
+    target_angle_deg: DefaultWhenMissing[float | None] = None
+    earthen_canal: DefaultWhenMissing[bool | None] = None
+    structure_canal: DefaultWhenMissing[str | None] = None
+    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
     # Mode B
-    bands: DefaultOnWire[list[ReliefDeltaBand] | None] = None
+    bands: DefaultWhenMissing[list[ReliefDeltaBand] | None] = None
 
     @model_validator(mode="before")
     @classmethod

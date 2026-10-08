@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 
@@ -16,12 +18,10 @@ class ResourceTypeEntry(BaseModel):
 
     system_resource: StrictOnWire[str]
     resource_kind: StrictEnumOnWire[ResourceKind]
-    display_name: DefaultOnWire[str | None] = None
-    glossary_ref: DefaultOnWire[str | None] = None
-    is_renewable: DefaultOnWire[bool] = False
-    base_regen_per_tick: DefaultOnWire[int | None] = constrained_field(
-        default=None, greater_equals=0,
-    )
-    default_yield: DefaultOnWire[int] = constrained_field(default=10, greater_equals=0)
-    yield_item_uid: DefaultOnWire[str | None] = None
-    tag_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    display_name: DefaultWhenMissing[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None
+    is_renewable: DefaultWhenMissing[bool] = False
+    base_regen_per_tick: DefaultWhenMissing[Annotated[int, Field(ge=0)] | None] = constrained_field(default=None)
+    default_yield: DefaultWhenMissing[int] = constrained_field(default=10, greater_equals=0)
+    yield_item_uid: DefaultWhenMissing[str | None] = None
+    tag_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)

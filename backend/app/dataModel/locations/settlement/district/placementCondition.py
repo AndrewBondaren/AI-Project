@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.locations.settlement.district.cellZone import CellZone
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
@@ -35,9 +35,9 @@ class PlacementCondition(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     type: StrictEnumOnWire[PlacementConditionType]
-    terrain_types: DefaultOnWire[list[TerrainKey] | None] = None
-    min_adjacent_cells: DefaultOnWire[int | None] = None
-    size: DefaultOnWire[SettlementSizeKey | None] = None
-    tier: DefaultOnWire[EconomyTierKey | None] = None
-    district_type: DefaultOnWire[str | None] = None
-    zone: DefaultOnWire[CellZone | None] = None
+    terrain_types: DefaultWhenMissing[list[TerrainKey] | None] = None
+    min_adjacent_cells: DefaultWhenMissing[int | None] = None
+    size: DefaultWhenMissing[SettlementSizeKey | None] = None
+    tier: DefaultWhenMissing[EconomyTierKey | None] = None
+    district_type: DefaultWhenMissing[str | None] = None
+    zone: DefaultWhenMissing[CellZone | None] = None

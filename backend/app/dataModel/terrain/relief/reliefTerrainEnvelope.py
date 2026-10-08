@@ -11,7 +11,7 @@ from typing import ClassVar, Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
 from app.dataModel.terrain.relief.gradeLeftoverPair import (
@@ -149,25 +149,25 @@ class ReliefTerrainEnvelope(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    plateau_z_band_factor: DefaultOnWire[int] = constrained_field(
+    plateau_z_band_factor: DefaultWhenMissing[int] = constrained_field(
         default=0, greater_equals=0,
     )
-    slope_max_angle_deg: DefaultOnWire[float | None] = None
-    slope_min_angle_deg: DefaultOnWire[float | None] = None
-    slope_length_min_cells: DefaultOnWire[int | None] = None
-    slope_length_max_cells: DefaultOnWire[int | None] = None
-    sheer_allowed: DefaultOnWire[bool] = True
-    slope_preferred: DefaultOnWire[bool] = False
-    allow_l_gt_h: DefaultOnWire[bool] = False
-    sheer_min_abs_dz: DefaultOnWire[int] = constrained_field(
+    slope_max_angle_deg: DefaultWhenMissing[float | None] = None
+    slope_min_angle_deg: DefaultWhenMissing[float | None] = None
+    slope_length_min_cells: DefaultWhenMissing[int | None] = None
+    slope_length_max_cells: DefaultWhenMissing[int | None] = None
+    sheer_allowed: DefaultWhenMissing[bool] = True
+    slope_preferred: DefaultWhenMissing[bool] = False
+    allow_l_gt_h: DefaultWhenMissing[bool] = False
+    sheer_min_abs_dz: DefaultWhenMissing[int] = constrained_field(
         default=0, greater_equals=0,
     )
-    sheer_terrace_min_cells: DefaultOnWire[int | None] = None
-    grades_channel_bed: DefaultOnWire[bool] = False
-    stamp_min_abs_dz: DefaultOnWire[int] = constrained_field(
+    sheer_terrace_min_cells: DefaultWhenMissing[int | None] = None
+    grades_channel_bed: DefaultWhenMissing[bool] = False
+    stamp_min_abs_dz: DefaultWhenMissing[int] = constrained_field(
         default=1, greater_equals=1,
     )
-    apply_in_contexts: DefaultOnWire[tuple[ReliefContext, ...] | None] = None
+    apply_in_contexts: DefaultWhenMissing[tuple[ReliefContext, ...] | None] = None
 
     @model_validator(mode="after")
     def _bounds(self) -> ReliefTerrainEnvelope:
@@ -404,28 +404,28 @@ class ReliefOntologyEnvelopes(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    plains: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    plains: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_plains_canonical,
     )
-    forest: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    forest: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_forest_canonical,
     )
-    mountain: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    mountain: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=ReliefTerrainEnvelope,
     )
-    ravine: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    ravine: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_ravine_canonical,
     )
-    shore_river: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    shore_river: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_shore_river_canonical,
     )
-    shore_mountain_river: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    shore_mountain_river: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_shore_mountain_river_canonical,
     )
-    shore_lake: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    shore_lake: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_shore_lake_canonical,
     )
-    shore_sea: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+    shore_sea: DefaultWhenMissing[ReliefTerrainEnvelope] = Field(
         default_factory=_shore_sea_canonical,
     )
 

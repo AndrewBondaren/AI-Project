@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire, DefaultWhenMissing
+from app.dataModel.annotationPolicy import DefaultWhenMissing, DefaultEnumWhenMissing, DefaultWhenMissing
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -43,34 +43,34 @@ def _road_connection_types() -> tuple[str, ...]:
 class MountainsCategoryPolicy(MaskCategoryPolicy):
     """Declare + autoresolve mountain massifs — Spec pipeline (not location disk)."""
 
-    system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("mountain"))
-    threshold: DefaultOnWire[float] = constrained_field(
+    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("mountain"))
+    threshold: DefaultWhenMissing[float] = constrained_field(
         default=0.82, greater_equals=0.0, lesser_equals=2.0,
     )
-    elevation_bias_weight: DefaultOnWire[float] = constrained_field(default=0.04, greater_equals=0.0)
-    relief_weight: DefaultOnWire[float] = constrained_field(default=0.05, greater_equals=0.0)
-    ridge_cell_m: DefaultOnWire[int] = Field(default=250, ge=1)
-    default_kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
+    elevation_bias_weight: DefaultWhenMissing[float] = constrained_field(default=0.04, greater_equals=0.0)
+    relief_weight: DefaultWhenMissing[float] = constrained_field(default=0.05, greater_equals=0.0)
+    ridge_cell_m: DefaultWhenMissing[int] = Field(default=250, ge=1)
+    default_kind: DefaultEnumWhenMissing[MountainKind] = MountainKind.ROCKY
     default_form: MountainForm = Field(default_factory=MountainFormBySides)
-    default_radius_m: DefaultOnWire[int] = Field(default=500, ge=1)
-    sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
-    default_range_style: DefaultEnumOnWire[MountainRangeStyle] = MountainRangeStyle.BROKEN
-    hybrid_smooth_edge_factor: DefaultOnWire[float] = constrained_field(
+    default_radius_m: DefaultWhenMissing[int] = Field(default=500, ge=1)
+    sides: DefaultWhenMissing[list[MountainSideSpec]] = Field(default_factory=list)
+    default_range_style: DefaultEnumWhenMissing[MountainRangeStyle] = MountainRangeStyle.BROKEN
+    hybrid_smooth_edge_factor: DefaultWhenMissing[float] = constrained_field(
         default=1.5, greater_equals=0.0,
     )
-    range_gap_length_fraction: DefaultOnWire[float] = constrained_field(
+    range_gap_length_fraction: DefaultWhenMissing[float] = constrained_field(
         default=0.25, greater_equals=0.0,
     )
-    range_gap_height_factor: DefaultOnWire[float] = constrained_field(
+    range_gap_height_factor: DefaultWhenMissing[float] = constrained_field(
         default=1.0, greater_equals=0.0,
     )
-    range_gap_spread: DefaultOnWire[float] = constrained_field(
+    range_gap_spread: DefaultWhenMissing[float] = constrained_field(
         default=1.4, greater_equals=1.0,
     )
-    range_gap_other_radius_factor: DefaultOnWire[float] = constrained_field(
+    range_gap_other_radius_factor: DefaultWhenMissing[float] = constrained_field(
         default=0.25, greater_equals=0.0,
     )
-    enable_secondary_ridges: DefaultOnWire[bool] = True
+    enable_secondary_ridges: DefaultWhenMissing[bool] = True
 
     def resolved_sides(self) -> list[MountainSideSpec]:
         """Assemble Spec.sides — empty → N× MountainSideSpec(); wrong len → raise."""
@@ -88,9 +88,9 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
 class ForestsCategoryPolicy(MaskCategoryPolicy):
     """Climate rainfall → forest (cold biomes stay on climate_zone_id, not terrain)."""
 
-    system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("forest"))
+    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("forest"))
     forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)
-    hills: DefaultOnWire[HillPolicy] = Field(
+    hills: DefaultWhenMissing[HillPolicy] = Field(
         default_factory=HillPolicy.canonical_forest,
     )
 
@@ -98,8 +98,8 @@ class ForestsCategoryPolicy(MaskCategoryPolicy):
 class PlainsCategoryPolicy(MaskCategoryPolicy):
     """Background land where higher-rank masks absent."""
 
-    system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("plains"))
-    hills: DefaultOnWire[HillPolicy] = Field(
+    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("plains"))
+    hills: DefaultWhenMissing[HillPolicy] = Field(
         default_factory=HillPolicy.canonical_plains,
     )
 
@@ -107,19 +107,19 @@ class PlainsCategoryPolicy(MaskCategoryPolicy):
 class RavinesCategoryPolicy(MaskCategoryPolicy):
     """Local depression → ravine."""
 
-    system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("ravine"))
-    min_drop: DefaultOnWire[int] = Field(default=1, ge=1)
-    min_neighbors: DefaultOnWire[int] = Field(default=3, ge=1)
-    drop_z: DefaultOnWire[int] = Field(default=1, ge=1)
+    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("ravine"))
+    min_drop: DefaultWhenMissing[int] = Field(default=1, ge=1)
+    min_neighbors: DefaultWhenMissing[int] = Field(default=3, ge=1)
+    drop_z: DefaultWhenMissing[int] = Field(default=1, ge=1)
 
 
 class RoadsCategoryPolicy(MaskCategoryPolicy):
     """Structure edges → road terrain (no edges ⇒ empty mask)."""
 
-    system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("road"))
-    connection_types: DefaultOnWire[tuple[str, ...]] = Field(default_factory=_road_connection_types)
-    graph_levels: DefaultOnWire[tuple[str, ...]] = ("world",)
-    dilate_radius_light: DefaultOnWire[int] = Field(default=0, ge=0)
+    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("road"))
+    connection_types: DefaultWhenMissing[tuple[str, ...]] = Field(default_factory=_road_connection_types)
+    graph_levels: DefaultWhenMissing[tuple[str, ...]] = ("world",)
+    dilate_radius_light: DefaultWhenMissing[int] = Field(default=0, ge=0)
 
 
 class WorldTerrainMasks(BaseModel):
@@ -129,21 +129,21 @@ class WorldTerrainMasks(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    enabled: DefaultOnWire[bool] = True
-    default_mountains: DefaultOnWire[MountainsCategoryPolicy] = Field(
+    enabled: DefaultWhenMissing[bool] = True
+    default_mountains: DefaultWhenMissing[MountainsCategoryPolicy] = Field(
         default_factory=MountainsCategoryPolicy,
     )
-    declared_mountains: DefaultOnWire[list[MountainDeclareEntry]] = Field(default_factory=list)
-    default_forests: DefaultOnWire[ForestsCategoryPolicy] = Field(
+    declared_mountains: DefaultWhenMissing[list[MountainDeclareEntry]] = Field(default_factory=list)
+    default_forests: DefaultWhenMissing[ForestsCategoryPolicy] = Field(
         default_factory=ForestsCategoryPolicy,
     )
-    default_plains: DefaultOnWire[PlainsCategoryPolicy] = Field(
+    default_plains: DefaultWhenMissing[PlainsCategoryPolicy] = Field(
         default_factory=PlainsCategoryPolicy,
     )
-    default_ravines: DefaultOnWire[RavinesCategoryPolicy] = Field(
+    default_ravines: DefaultWhenMissing[RavinesCategoryPolicy] = Field(
         default_factory=RavinesCategoryPolicy,
     )
-    default_roads: DefaultOnWire[RoadsCategoryPolicy] = Field(
+    default_roads: DefaultWhenMissing[RoadsCategoryPolicy] = Field(
         default_factory=RoadsCategoryPolicy,
     )
 

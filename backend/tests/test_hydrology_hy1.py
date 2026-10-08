@@ -1,5 +1,6 @@
 """Unit tests for hydrology pure helpers — D HY-1."""
 
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 from types import SimpleNamespace
 
@@ -57,18 +58,11 @@ class TestHydrologyBands(unittest.TestCase):
 
 class TestRiverTypeClassify(unittest.TestCase):
 
-    def test_null_fields_use_schema_defaults(self):
-        w = _world(hydrology={
-            "default_rivers": {
-                "type_classify": {
-                    "mountain_min_source_z": None,
-                    "foothill_gradient_threshold": None,
-                },
-            },
-        })
-        tc = resolve_river_type_classify(w)
-        self.assertEqual(tc.mountain_min_source_z, 40)
-        self.assertAlmostEqual(tc.foothill_gradient_threshold, 0.12)
+    def test_null_fields_do_not_use_schema_defaults(self):
+        w = _world(hydrology={"default_rivers": {"type_classify": {
+            "mountain_min_source_z": None, "foothill_gradient_threshold": None}}})
+        with self.assertRaises(UnresolvedModelError):
+            resolve_river_type_classify(w)
 
 
 class TestGeographicLocations(unittest.TestCase):

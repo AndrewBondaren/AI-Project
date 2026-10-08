@@ -2,7 +2,7 @@
 
 The cascade contract is a **doubly-linked list of fields**, declared on
 the source POJO fields themselves in the same style as wire policies
-(``DefaultOnWire``):
+(``DefaultWhenMissing``):
 
 - ``Cascade`` — the parameter object, declared once in ``cascadeParams``;
   context fields and source channels reference it by **identity**;

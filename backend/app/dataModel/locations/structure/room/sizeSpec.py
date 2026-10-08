@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.locations.structure.enums.roomSize import RoomSize, RoomSizePreset
 from app.dataModel.locations.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
 
@@ -22,10 +22,10 @@ PositiveRange = Annotated[list[int], Field(min_length=2, max_length=2), AfterVal
 class SizeSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    size_type: DefaultOnWire[str | None] = None
-    width_range: DefaultOnWire[PositiveRange | None] = None
-    depth_range: DefaultOnWire[PositiveRange | None] = None
-    z_range: DefaultOnWire[PositiveRange | None] = None
+    size_type: DefaultWhenMissing[str | None] = None
+    width_range: DefaultWhenMissing[PositiveRange | None] = None
+    depth_range: DefaultWhenMissing[PositiveRange | None] = None
+    z_range: DefaultWhenMissing[PositiveRange | None] = None
 
     @model_validator(mode="after")
     def _single_form(self) -> "SizeSpec":

@@ -359,7 +359,7 @@ class CatalogAndRngTest(unittest.TestCase):
             display_name="override",
             main_building={"structure": str(b_inn.main_building.structure)},
         )
-        catalog = _catalog(b_inn, _layout("a_hall", "civic"), override)
+        catalog = _catalog(b_inn, _layout("a_hall", "town_hall"), override)
         self.assertEqual([row.system_name for row in catalog.layouts], ["a_hall", "b_inn"])
         self.assertEqual(catalog.by_system_name("b_inn").display_name, "override")
         self.assertEqual(

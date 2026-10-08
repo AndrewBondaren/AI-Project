@@ -667,7 +667,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertEqual(
             field_policy(TypicalDistrictRef.model_fields["system_name"].annotation),
-            WireFieldPolicy.DEFAULT,
+            WireFieldPolicy.DEFAULT_WHEN_MISSING,
         )
         self.assertIs(
             registry_key_target(
@@ -686,18 +686,11 @@ class TestRegistryKey(unittest.TestCase):
         whitespace = TypicalDistrictRef(district_type="civic", system_name="   ")
         self.assertIsNone(whitespace.system_name)
 
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
-            resolved = resolve_model(
-                TypicalDistrictRef,
-                {"district_type": "industrial", "system_name": ""},
-            )
+        # Blank pin is an explicitly supported domain sentinel, not an error.
+        with self.assertNoLogs("app.application.jsonValidation.resolve", "WARNING"):
+            resolved = resolve_model(TypicalDistrictRef, {"district_type": "industrial", "system_name": ""})
         self.assertIsNone(resolved.system_name)
         self.assertEqual(resolved.district_type, "industrial")
-        text = "\n".join(captured.output)
-        self.assertIn("system_name", text)
-        self.assertIn("invalid", text)
-        self.assertIn("using field default", text)
 
         nested = resolve_model(
             SettlementSpecializationEntry,
@@ -787,7 +780,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIsNone(omitted.template)
         self.assertEqual(
             field_policy(PerimeterBarrier.model_fields["template"].annotation),
-            WireFieldPolicy.DEFAULT,
+            WireFieldPolicy.DEFAULT_WHEN_MISSING,
         )
         self.assertIs(
             registry_key_target(
@@ -803,14 +796,10 @@ class TestRegistryKey(unittest.TestCase):
         whitespace = PerimeterBarrier(template="   ")
         self.assertIsNone(whitespace.template)
 
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
+        with self.assertNoLogs("app.application.jsonValidation.resolve", "WARNING"):
             resolved = resolve_model(PerimeterBarrier, {"template": ""})
         self.assertIsNone(resolved.template)
-        text = "\n".join(captured.output)
-        self.assertIn("template", text)
-        self.assertIn("invalid", text)
-        self.assertIn("using field default", text)
+
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
-from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, IgnoreOnWire, StrictOnWire
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
 from app.dataModel.locations.payloadKind import PayloadKind
 
@@ -21,12 +21,12 @@ class LocationTypeEntry(BaseModel):
     display_type: StrictOnWire[str] = Field(
         validation_alias=AliasChoices("display_type", "display_name"),
     )
-    parent_types: DefaultOnWire[list[str | None]] = Field(default_factory=list)
-    is_outdoor: DefaultOnWire[bool | None] = None
-    payload_kind: DefaultOnWire[PayloadKind | None] = None
+    parent_types: DefaultWhenMissing[list[str | None]] = Field(default_factory=list)
+    is_outdoor: DefaultWhenMissing[bool | None] = None
+    payload_kind: DefaultWhenMissing[PayloadKind | None] = None
     # Keep omission distinct from an explicit False in world overlays.
     is_inhabited: IgnoreOnWire[bool] = False
-    subtypes: DefaultOnWire[list[LocationTypeSubtypeEntry]] = Field(default_factory=list)
+    subtypes: DefaultWhenMissing[list[LocationTypeSubtypeEntry]] = Field(default_factory=list)
 
     @model_serializer(mode="wrap")
     def serialize_overrides(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:

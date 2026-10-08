@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, DefaultEnumWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrain.relief.specs import ReliefSideSpec
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
@@ -34,15 +34,15 @@ class MountainFormBySides(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     form_type: Literal["by_sides"] = MountainFormType.BY_SIDES.value
-    side_count: DefaultOnWire[int] = Field(default=6, ge=3)
+    side_count: DefaultWhenMissing[int] = Field(default=6, ge=3)
 
 
 class StarForm(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     form_type: Literal["star"] = MountainFormType.STAR.value
-    rays: DefaultOnWire[int] = Field(default=5, ge=3)
-    inner_ratio: DefaultOnWire[float] = constrained_field(
+    rays: DefaultWhenMissing[int] = Field(default=5, ge=3)
+    inner_ratio: DefaultWhenMissing[float] = constrained_field(
         default=0.45, greater_equals=0.05, lesser_equals=0.95,
     )
 
@@ -51,15 +51,15 @@ class PeakForm(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     form_type: Literal["peak"] = MountainFormType.PEAK.value
-    side_count: DefaultOnWire[int] = Field(default=3, ge=3)
+    side_count: DefaultWhenMissing[int] = Field(default=3, ge=3)
 
 
 class PlateauForm(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     form_type: Literal["plateau"] = MountainFormType.PLATEAU.value
-    side_count: DefaultOnWire[int] = Field(default=6, ge=3)
-    hat_fraction: DefaultOnWire[float] = constrained_field(
+    side_count: DefaultWhenMissing[int] = Field(default=6, ge=3)
+    hat_fraction: DefaultWhenMissing[float] = constrained_field(
         default=0.45, greater_equals=0.05, lesser_equals=1.0,
     )
 
@@ -93,11 +93,11 @@ class MountainSpec(BaseModel):
     entry_type: Literal["mountain"] = "mountain"
     origin_x_m: int
     origin_y_m: int
-    radius_m: DefaultOnWire[int] = Field(default_factory=_policy_default_radius_m, ge=1)
-    kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
+    radius_m: DefaultWhenMissing[int] = Field(default_factory=_policy_default_radius_m, ge=1)
+    kind: DefaultEnumWhenMissing[MountainKind] = MountainKind.ROCKY
     form: MountainForm = Field(default_factory=MountainFormBySides)
-    sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
-    relief_pick_policy: DefaultOnWire[ObjectReliefPickPolicy | None] = None
+    sides: DefaultWhenMissing[list[MountainSideSpec]] = Field(default_factory=list)
+    relief_pick_policy: DefaultWhenMissing[ObjectReliefPickPolicy | None] = None
     location_uid: str | None = None
 
     def resolved_sides(self) -> list[MountainSideSpec]:
@@ -152,7 +152,7 @@ class MountainSaddleSpec(BaseModel):
 
     peak_a_index: int = Field(ge=0)
     peak_b_index: int = Field(ge=0)
-    t: DefaultOnWire[float] = constrained_field(
+    t: DefaultWhenMissing[float] = constrained_field(
         default=0.5, greater_equals=0.0, lesser_equals=1.0,
     )
     rise_fraction: float | None = None
@@ -165,15 +165,15 @@ class MountainRangeSpec(BaseModel):
 
     entry_type: Literal["range"] = "range"
     spine: list[tuple[int, int]] = Field(min_length=2)
-    width_m: DefaultOnWire[int] = Field(default_factory=_policy_default_radius_m, ge=1)
-    kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
-    sides: DefaultOnWire[MountainRangeSides] = Field(default_factory=MountainRangeSides)
-    peaks: DefaultOnWire[list[MountainSpec]] = Field(default_factory=list)
-    style: DefaultEnumOnWire[MountainRangeStyle] = MountainRangeStyle.BROKEN
+    width_m: DefaultWhenMissing[int] = Field(default_factory=_policy_default_radius_m, ge=1)
+    kind: DefaultEnumWhenMissing[MountainKind] = MountainKind.ROCKY
+    sides: DefaultWhenMissing[MountainRangeSides] = Field(default_factory=MountainRangeSides)
+    peaks: DefaultWhenMissing[list[MountainSpec]] = Field(default_factory=list)
+    style: DefaultEnumWhenMissing[MountainRangeStyle] = MountainRangeStyle.BROKEN
     peak_spacing_m: int | None = Field(default=None, ge=1)
-    peak_spacings_m: DefaultOnWire[list[int]] = Field(default_factory=list)
+    peak_spacings_m: DefaultWhenMissing[list[int]] = Field(default_factory=list)
     saddle_rise_fraction: float | None = None
-    saddles: DefaultOnWire[list[MountainSaddleSpec]] = Field(default_factory=list)
+    saddles: DefaultWhenMissing[list[MountainSaddleSpec]] = Field(default_factory=list)
     location_uid: str | None = None
 
     def identity_key(self) -> tuple[object, ...]:

@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.locations.transitions.transitionType import TransitionType
 
@@ -17,27 +17,27 @@ class RoomConnection(BaseModel):
     from_room:        StrictOnWire[str]
     to_room:          StrictOnWire[str]
     passage_type:     StrictEnumOnWire[TransitionType]
-    required:         DefaultOnWire[bool] = False
-    width:            DefaultOnWire[int] = constrained_field(
+    required:         DefaultWhenMissing[bool] = False
+    width:            DefaultWhenMissing[int] = constrained_field(
         default=DEFAULT_DOORWAY_WIDTH, greater_equals=1,
     )
-    door_height:      DefaultOnWire[int | None] = None
-    frame_material:   DefaultOnWire[str | None] = None
-    panel_material:   DefaultOnWire[str | None] = None
-    step_material:    DefaultOnWire[str | None] = None
-    railing_material: DefaultOnWire[str | None] = None
+    door_height:      DefaultWhenMissing[int | None] = None
+    frame_material:   DefaultWhenMissing[str | None] = None
+    panel_material:   DefaultWhenMissing[str | None] = None
+    step_material:    DefaultWhenMissing[str | None] = None
+    railing_material: DefaultWhenMissing[str | None] = None
 
     @field_validator("passage_type", mode="before")
     @classmethod
     def _horizontal_type(cls, value: Any) -> Any:
-        """Non-horizontal wire falls back to doorway (§3.7); boundary logs ERROR."""
+        """Only horizontal passage types belong to this contract."""
         try:
             parsed = TransitionType(value)
         except (ValueError, TypeError):
             parsed = None
         if parsed in (TransitionType.DOORWAY, TransitionType.ARCHWAY):
             return parsed
-        return TransitionType.DOORWAY
+        raise ValueError("passage_type must be doorway or archway")
 
     @model_validator(mode="after")
     def _resolve_width_default(self) -> "RoomConnection":

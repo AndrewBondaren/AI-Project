@@ -49,13 +49,10 @@ class RoomConnectionTests(unittest.TestCase):
             with self.subTest(wire=wire), self.assertRaises(ValidationError):
                 RoomConnection.model_validate(wire)
 
-    def test_non_horizontal_passage_type_falls_back_to_doorway(self):
-        for raw in ("staircase", "main_entrance", "service_entrance",
-                    "bogus", None, TransitionType.STAIRCASE):
-            with self.subTest(raw=raw):
-                conn = RoomConnection.model_validate({**_VALID, "passage_type": raw})
-            self.assertIs(conn.passage_type, TransitionType.DOORWAY)
-            self.assertEqual(conn.width, DEFAULT_DOORWAY_WIDTH)
+    def test_non_horizontal_passage_type_rejects(self):
+        for raw in ("staircase", "main_entrance", "service_entrance", "bogus", None, TransitionType.STAIRCASE):
+            with self.subTest(raw=raw), self.assertRaises(ValidationError):
+                RoomConnection.model_validate({**_VALID, "passage_type": raw})
 
     def test_full_wire_roundtrip_and_immutability(self):
         wire = dict(from_room="a", to_room="b", passage_type="doorway",
@@ -82,20 +79,10 @@ class RoomConnectionTests(unittest.TestCase):
             StructureTemplate.model_validate(wire)
         self.assertIn("connections[0]", str(error.exception))
 
-    def test_staircase_conn_survives_import_as_doorway(self):
-        wire = {"system_name": _UID, "display_name": "Test",
-                "connections": [{"from_room": "hall", "to_room": "kitchen",
-                                 "passage_type": "staircase"}]}
-        template = StructureTemplate.model_validate(wire)
-        self.assertEqual(template.connections, wire["connections"])
-        with self.assertLogs(
-            "app.application.worldData.generators.structure."
-            "structureGeneratorService", "ERROR",
-        ) as capture:
-            resolved = StructureGeneratorService._resolve_connections(template)
-        self.assertIs(resolved[0].passage_type, TransitionType.DOORWAY)
-        self.assertIn("staircase", capture.output[0])
-        self.assertIn("connections[0]", capture.output[0])
+    def test_staircase_connection_is_rejected_at_import(self):
+        wire = {"system_name": _UID, "display_name": "Test", "connections": [{**_VALID, "passage_type": "staircase"}]}
+        with self.assertRaises(ValidationError):
+            StructureTemplate.model_validate(wire)
 
     def test_runtime_boundary_raises_generation_error(self):
         template = StructureTemplate.model_construct(

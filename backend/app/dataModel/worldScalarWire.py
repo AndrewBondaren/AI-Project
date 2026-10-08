@@ -26,8 +26,10 @@ def scalar_wire_from_mapping(
 ) -> dict[str, Any]:
     """Project ``worlds`` row or wire dict → slice for ``resolve_model``."""
     if isinstance(source, dict):
-        return {key: source.get(key) for key in keys}
-    return {key: getattr(source, key, None) for key in keys}
+        return {key: source[key] for key in keys if key in source}
+    # SQL optional columns use None for an unconfigured scalar. An authored
+    # JSON mapping keeps explicit null above, so it is checked against schema.
+    return {key: value for key in keys if (value := getattr(source, key, None)) is not None}
 
 
 def scalar_wire_from_pojo(

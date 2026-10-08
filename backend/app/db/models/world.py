@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from app.dataModel.terrain.worldTerrainScalars import TERRAIN_CHUNK_COLUMNS_DEFAULT
 from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
-from app.db.mapper import bool_col, json_col, json_nullable_col
+from app.db.mapper import bool_col, json_list_col, json_col, json_nullable_col
 
 
 @dataclass
@@ -65,34 +65,34 @@ class World:
     respawn_type_registry:      dict = json_col(default_factory=dict)
 
     # location registries
-    terrain_category_registry:      dict = json_col(default_factory=dict)
-    terrain_registry:               list = json_col(default_factory=list)
+    terrain_category_registry:      list = json_list_col()
+    terrain_registry:               list = json_list_col()
     material_category_registry:     dict = json_col(default_factory=dict)
     material_use_type_registry:     dict = json_col(default_factory=dict)
-    material_registry:              list = json_col(default_factory=list)
+    material_registry:              list = json_list_col()
     cell_state_registry:            dict = json_col(default_factory=dict)
     danger_level_registry:          dict = json_col(default_factory=dict)
     road_type_registry:             dict = json_col(default_factory=dict)
-    transition_type_registry:       list = json_col(default_factory=list)
-    location_type_registry:         dict = json_col(default_factory=dict)
-    settlement_specialization_registry: list = json_col(default_factory=list)
+    transition_type_registry:       list = json_list_col()
+    location_type_registry:         list = json_list_col()
+    settlement_specialization_registry: list = json_list_col()
     location_state_registry:        dict = json_col(default_factory=dict)
-    climate_zone_registry:          dict = json_col(default_factory=dict)
-    weather_type_registry:          dict = json_col(default_factory=dict)
-    resource_type_registry:         list = json_col(default_factory=list)
-    crops_registry:                 list = json_col(default_factory=list)
-    livestock_registry:             list = json_col(default_factory=list)
-    city_size_registry:             list = json_col(default_factory=list)
-    district_zone_preference:       list = json_col(default_factory=list)
-    economic_tier_registry:         list = json_col(default_factory=list)
-    building_template_registry:     dict = json_col(default_factory=dict)
-    purpose_packs:                  list = json_col(default_factory=list)
-    purpose_pack_registry:          list = json_col(default_factory=list)
-    room_type_registry:             dict = json_col(default_factory=dict)
-    barrier_template_registry:      dict = json_col(default_factory=dict)
-    connection_type_registry:       list = json_col(default_factory=list)
-    relief_template_registry:       list = json_col(default_factory=list)
-    canal_template_registry:        list = json_col(default_factory=list)  # R36q
+    climate_zone_registry:          list = json_list_col()
+    weather_type_registry:          list = json_list_col()
+    resource_type_registry:         list = json_list_col()
+    crops_registry:                 list = json_list_col()
+    livestock_registry:             list = json_list_col()
+    city_size_registry:             list = json_list_col()
+    district_zone_preference:       list = json_list_col()
+    economic_tier_registry:         list = json_list_col()
+    building_template_registry:     list = json_list_col()
+    purpose_packs:                  list = json_list_col()
+    purpose_pack_registry:          list = json_list_col()
+    room_type_registry:             list = json_list_col()
+    barrier_template_registry:      list = json_list_col()
+    connection_type_registry:       list = json_list_col()
+    relief_template_registry:       list = json_list_col()
+    canal_template_registry:        list = json_list_col()  # R36q
     relief_pick_policy:             dict = json_col(default_factory=dict)
     relief_grade_obstacle_policy:   str | None = None  # R36n; NULL → POJO default
     race_template_registry:         list = json_col(default_factory=list)

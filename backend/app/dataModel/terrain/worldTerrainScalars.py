@@ -11,7 +11,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.worldScalarWire import (
     pojo_wire_keys,
@@ -35,23 +35,23 @@ class WorldTerrainScalars(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    terrain_chunk_columns: DefaultOnWire[int] = constrained_field(
+    terrain_chunk_columns: DefaultWhenMissing[int] = constrained_field(
         default=TERRAIN_CHUNK_COLUMNS_DEFAULT, greater_equals=CHUNK_COLUMNS_MIN,
     )
-    terrain_parallel_workers: DefaultOnWire[int | None] = None
-    map_subsurface_depth: DefaultOnWire[int] = constrained_field(
+    terrain_parallel_workers: DefaultWhenMissing[int | None] = None
+    map_subsurface_depth: DefaultWhenMissing[int] = constrained_field(
         default=0, greater_equals=SUBSURFACE_DEPTH_MIN,
     )
-    z_min: DefaultOnWire[int | None] = None
-    z_max: DefaultOnWire[int | None] = None
+    z_min: DefaultWhenMissing[int | None] = None
+    z_max: DefaultWhenMissing[int | None] = None
     # NULL в БД → POJO None (не материализовано); fallback в resolved_* / canonical_defaults.
     # constrained_field(greater_equals=…) здесь ломает terrain_scalars(): resolve кладёт явный None,
     # Pydantic падает на bound. Плюс: отрицательные значения не режутся на model_validate — долг;
     # при необходимости — import strict (GV-3) или проверка в resolved_*.
-    elevation_lapse_rate: DefaultOnWire[float | None] = None
-    g: DefaultOnWire[float] = constrained_field(default=1.0, greater=0.0)
-    closed_planet_grid: DefaultOnWire[bool] = False
-    magma_band_thickness: DefaultOnWire[int | None] = None  # см. elevation_lapse_rate
+    elevation_lapse_rate: DefaultWhenMissing[float | None] = None
+    g: DefaultWhenMissing[float] = constrained_field(default=1.0, greater=0.0)
+    closed_planet_grid: DefaultWhenMissing[bool] = False
+    magma_band_thickness: DefaultWhenMissing[int | None] = None  # см. elevation_lapse_rate
 
     @classmethod
     def canonical_defaults(cls) -> WorldTerrainScalars:

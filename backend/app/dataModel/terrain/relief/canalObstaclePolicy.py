@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.terrain.relief.enums import CanalObstacleEntity
 
 
@@ -15,7 +15,7 @@ class CanalObstaclePolicyRule(BaseModel):
 
     to_canal_cut_enable: StrictOnWire[bool]
     entities: StrictOnWire[list[CanalObstacleEntity]] = Field(min_length=1)
-    canal_ref: DefaultOnWire[str | None] = None
+    canal_ref: DefaultWhenMissing[str | None] = None
 
     @model_validator(mode="after")
     def _ref_only_when_enable(self) -> CanalObstaclePolicyRule:

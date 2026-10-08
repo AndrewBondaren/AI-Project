@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.mountainSideRecipe import MountainSideRecipe
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
@@ -29,17 +29,17 @@ class ReliefTemplate(BaseModel):
     system_name: StrictOnWire[str]
     display_name: StrictOnWire[str]
     context: StrictEnumOnWire[ReliefContext]
-    conditions: DefaultOnWire[list[ReliefTerrainCondition]] = Field(default_factory=list)
-    side_recipe: DefaultOnWire[MountainSideRecipe | None] = None
+    conditions: DefaultWhenMissing[list[ReliefTerrainCondition]] = Field(default_factory=list)
+    side_recipe: DefaultWhenMissing[MountainSideRecipe | None] = None
     # root defaults when conditions empty / case does not override (R36b Geom XOR)
-    slope_length_cells: DefaultOnWire[int | None] = None
-    target_angle_deg: DefaultOnWire[float | None] = None
-    slope_weight: DefaultOnWire[float | None] = None
-    sheer_weight: DefaultOnWire[float | None] = None
-    earthen_canal: DefaultOnWire[bool | None] = None
-    structure_canal: DefaultOnWire[str | None] = None
-    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
-    version: DefaultOnWire[str] = "1.0"
+    slope_length_cells: DefaultWhenMissing[int | None] = None
+    target_angle_deg: DefaultWhenMissing[float | None] = None
+    slope_weight: DefaultWhenMissing[float | None] = None
+    sheer_weight: DefaultWhenMissing[float | None] = None
+    earthen_canal: DefaultWhenMissing[bool | None] = None
+    structure_canal: DefaultWhenMissing[str | None] = None
+    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    version: DefaultWhenMissing[str] = "1.0"
 
     @model_validator(mode="before")
     @classmethod

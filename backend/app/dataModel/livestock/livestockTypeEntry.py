@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 
 
@@ -15,5 +15,5 @@ class LivestockTypeEntry(BaseModel):
 
     system_livestock: StrictOnWire[str]
     livestock_kind: StrictEnumOnWire[LivestockKind]
-    display_name: DefaultOnWire[str | None] = None
-    glossary_ref: DefaultOnWire[str | None] = None
+    display_name: DefaultWhenMissing[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None

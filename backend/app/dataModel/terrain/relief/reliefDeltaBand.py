@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import ConfigDict, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 
@@ -15,7 +15,7 @@ class ReliefDeltaBand(ReliefGradeKnobs):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     delta_z_min: StrictOnWire[int] = constrained_field(greater_equals=1)
-    delta_z_max: DefaultOnWire[int | None] = None
+    delta_z_max: DefaultWhenMissing[int | None] = None
 
     @model_validator(mode="after")
     def _max_ge_min(self) -> ReliefDeltaBand:

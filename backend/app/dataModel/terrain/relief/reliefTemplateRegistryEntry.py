@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.terrain.relief.enums import ReliefContext
 
 
@@ -14,6 +14,6 @@ class ReliefTemplateRegistryEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_template_uid: StrictOnWire[str]
-    display_template_name: DefaultOnWire[str | None] = None
+    display_template_name: DefaultWhenMissing[str | None] = None
     context: StrictEnumOnWire[ReliefContext]
-    imported_at: DefaultOnWire[str | None] = None
+    imported_at: DefaultWhenMissing[str | None] = None

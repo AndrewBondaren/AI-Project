@@ -1,9 +1,9 @@
 """Typed room boundary; StructureTemplate retains original room dictionaries."""
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, DefaultWhenMissing, StrictOnWire, StrictEnumOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire, StrictEnumOnWire
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
@@ -27,9 +27,9 @@ class RoomDef(BaseModel):
     is_forbidden: StrictOnWire[bool]
     required: StrictOnWire[bool]
     size: StrictOnWire[SizeSpec]
-    shape_type: DefaultOnWire[str | list[str] | None] = None
-    count: DefaultOnWire[int] = Field(default=1, ge=1)
-    count_range: DefaultOnWire[PositiveRange | None] = None
+    shape_type: DefaultWhenMissing[str | list[str] | None] = None
+    count: DefaultWhenMissing[int] = Field(default=1, ge=1)
+    count_range: DefaultWhenMissing[PositiveRange | None] = None
     # Top of the `economic_tier` chain — the `below` edge to the room NL
     # is declared on the NL side (NamedLocation may import RoomDef,
     # not vice versa — tz_cascade_context §2).
@@ -37,42 +37,22 @@ class RoomDef(BaseModel):
         DefaultWhenMissing[EconomyTierKey | None],
         CascadeChannel(ECONOMIC_TIER, ScopeLevel.ROOM),
     ] = None
-    attach_to: DefaultOnWire[str | None] = None
+    attach_to: DefaultWhenMissing[str | None] = None
     attach_wall: StrictEnumOnWire[AttachWall] = AttachWall.BOTH
-    perimeter_required: DefaultOnWire[bool] = False
-    underground_fallback: DefaultOnWire[bool] = False
-    staircase_type: DefaultOnWire[str | None] = None
-    facing: DefaultOnWire[str | None] = None
-    shape_params: DefaultOnWire[ShapeParams | None] = None
-    entry_point: DefaultOnWire[EntryPoint | None] = None
-    back_entry_point: DefaultOnWire[EntryPoint | None] = None
-    purpose: DefaultOnWire[BuildingPurpose | None] = None
+    perimeter_required: DefaultWhenMissing[bool] = False
+    underground_fallback: DefaultWhenMissing[bool] = False
+    staircase_type: DefaultWhenMissing[str | None] = None
+    facing: DefaultWhenMissing[str | None] = None
+    shape_params: DefaultWhenMissing[ShapeParams | None] = None
+    entry_point: DefaultWhenMissing[EntryPoint | None] = None
+    back_entry_point: DefaultWhenMissing[EntryPoint | None] = None
+    purpose: DefaultWhenMissing[BuildingPurpose | None] = None
     # Wire contract only; consuming these is outside the POJO migration.
-    passage_type: DefaultOnWire[TransitionType] = TransitionType.DOORWAY
-    max_overhang: DefaultOnWire[int] = Field(default=0, ge=0)
-    has_column: DefaultOnWire[bool] = False
-    wall_openings: DefaultOnWire[list[WallOpeningSpec]] = Field(default_factory=list)
+    passage_type: DefaultWhenMissing[TransitionType] = TransitionType.DOORWAY
+    max_overhang: DefaultWhenMissing[int] = Field(default=0, ge=0)
+    has_column: DefaultWhenMissing[bool] = False
+    wall_openings: DefaultWhenMissing[list[WallOpeningSpec]] = Field(default_factory=list)
     _attach_wall_substitution: tuple[str, str] | None = PrivateAttr(default=None)
-
-    @model_validator(mode="wrap")
-    @classmethod
-    def _attach_wall_fallback(cls, value, handler):
-        substitution = None
-        if isinstance(value, dict):
-            raw = value.get("attach_wall")
-            if not isinstance(raw, str) or raw not in AttachWall:
-                # Missing field is meaningful only for an attached room.
-                if "attach_wall" in value or value.get("attach_to") is not None:
-                    substitution = ("attach_wall", repr(raw) if "attach_wall" in value else "<missing>")
-                value = {**value, "attach_wall": AttachWall.BOTH}
-        try:
-            result = handler(value)
-        except ValidationError as exc:
-            room_id = value.get("room_id") if isinstance(value, dict) else None
-            raise ValueError(f"room '{room_id}': {exc}") from exc
-        if substitution is not None:
-            result._attach_wall_substitution = substitution
-        return result
 
     @property
     def substitutions(self) -> tuple[tuple[str, str], ...]:

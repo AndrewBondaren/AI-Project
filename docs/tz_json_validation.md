@@ -1,6 +1,6 @@
 # JSON Validation — Technical Specification
 
-**Состояние реализации 2026-10-08:** DefaultWhenMissing + ResolveReport/ResolveResult/UnresolvedModelError реализованы в существующем resolver. Подключены `forest_min_rainfall` и source `RoomDef.economic_tier`; membership проверяется до extend через WorldRegistryIndex. Import preview/apply используют один preflight и одинаковую wire interpretation; request flag определяет только обработку новой диагностики и отсутствие writes. Partial blob patch проверяется после merge с текущим миром. Нижеследующие исторические описания error defaults не отменяют новую политику; остающиеся legacy consumers перечислены в E6 [плана](../.cursor/plans/runtime-world-edit-policy.md).
+**Состояние реализации 2026-10-08:** DefaultWhenMissing + ResolveReport/ResolveResult/UnresolvedModelError реализованы в существующем resolver. После pilots мигрированы 578 legacy-default полей; membership проверяется до extend через WorldRegistryIndex. Import preview/apply используют один preflight и одинаковую wire interpretation; request flag определяет только обработку новой диагностики и отсутствие writes. Partial blob patch проверяется после merge с текущим миром. Нижеследующие исторические описания error defaults не отменяют новую политику; остающиеся legacy consumers перечислены в E6 [плана](../.cursor/plans/runtime-world-edit-policy.md).
 
 **Базовое требование последующих планов (2026-10-08):** общая политика [runtime/worldEdit](./tz_runtime_world_edit_policy.md): единый доменный resolver, runtime WarningError без error defaults, та же диагностика в worldEdit. Штатные defaults при отсутствии optional-поля отличаются от подстановок при ошибке; прежние error fallback ниже требуют явной миграции E6 [общего плана](../.cursor/plans/runtime-world-edit-policy.md), а не переноса в новые consumers. Некорректный wire и неразрешённый preflight останавливают import до записи; runtime domain conflicts имеют свой контракт операции.
 
@@ -10,7 +10,7 @@
 
 **Централизованное применение:** API-флаг разрешается один раз в общем request context. Существующий policy resolver автоматически применяет typed контракты полей/моделей dataModel с их индивидуальными ограничениями, field policies, refs и специфичными reason codes. Missing/null/empty/invalid/unresolved различаются. Вложенные handlers наследуют context/path и не выбирают политику самостоятельно. Межполевые и доменные проверки возвращают диагностику в тот же механизм. Параллельный field registry или новая локальная политика поверх resolve запрещены; актуальная реализация требует аудита/миграции.
 
-**Утверждённый и реализованный pilot contract (2026-10-08):** `DefaultWhenMissing[T]` заменяет объединённую missing/invalid default-семантику при явной миграции полей. Эталон: `ForestsCategoryPolicy.forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)`. При полном вводе missing→45, 60→60, -1/"abc"/null→ошибка без 45; при partial update missing→не изменять. POJO не содержит выбора runtime/validation и logging. Ограничения проверяет Pydantic; общий resolver возвращает unresolved/report и централизует реакцию. Ошибка не превращается в unchecked POJO через model_construct или пропуск поля. Полный контракт — [общая политика](./tz_runtime_world_edit_policy.md#default-только-при-отсутствии-эталон-pojo-утверждено-2026-10-08). Историческое описание DefaultOnWire ниже сохраняется только для явно немигрированных полей.
+**Утверждённый и реализованный pilot contract (2026-10-08):** `DefaultWhenMissing[T]` заменяет объединённую missing/invalid default-семантику при явной миграции полей. Эталон: `ForestsCategoryPolicy.forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)`. При полном вводе missing→45, 60→60, -1/"abc"/null→ошибка без 45; при partial update missing→не изменять. POJO не содержит выбора runtime/validation и logging. Ограничения проверяет Pydantic; общий resolver возвращает unresolved/report и централизует реакцию. Ошибка не превращается в unchecked POJO через model_construct или пропуск поля. Полный контракт — [общая политика](./tz_runtime_world_edit_policy.md#default-только-при-отсутствии-эталон-pojo-утверждено-2026-10-08). Исторические error-default нормы ниже не являются действующим контрактом общего resolver после миграции полей E6.
 
 **Версия документа: 1.2** (2026-07)
 
@@ -21,7 +21,7 @@
 |------|----------|
 | Код | `backend/app/application/jsonValidation/` |
 | Покрытие import | `world` slice: climate scalars, tiers, materials, terrain, hydrology, climate_zones |
-| Покрытие runtime | `worldRow` — те же POJO через `resolve` (warn-only) |
+| Покрытие runtime | `worldRow` — те же POJO через `resolve`; invalid → WarningError + unresolved |
 | Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ (**LOC-T-1** type←subtype; **LOC-T-3** AABB occupancy — не 422, не `normalize_world`) |
 | JV-0 ENUM gate | JV-0a ✅; JV-0b ✅ bundle connections |
 | REF-W index | ✅ (MVP) |
@@ -107,7 +107,7 @@ class DistrictTemplateEntry:
     system_name: StrictOnWire[RegistryKey[WorldDistrictTemplateRegistry]]
 
 class TypicalDistrictRef:
-    system_name: DefaultOnWire[DistrictTemplateKey | None]  # pin чертежа; omit/null/blank → None
+    system_name: DefaultWhenMissing[DistrictTemplateKey | None]  # pin чертежа; omit/null/blank → None
 
 class DistrictTopologySlot:
     template_system_name: StrictOnWire[DistrictTemplateKey]
@@ -116,32 +116,32 @@ class BarrierTemplateEntry:
     system_type: StrictOnWire[RegistryKey[WorldBarrierTemplateRegistry]]
 
 class PerimeterBarrier:
-    template: DefaultOnWire[BarrierTemplateKey | None]  # omit/null/blank → None (скип)
+    template: DefaultWhenMissing[BarrierTemplateKey | None]  # omit/null/blank → None (скип)
 
 class BundleNamedLocation:
-    system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
-    system_economic_tier: DefaultOnWire[EconomyTierKey | None]
-    parent_wall_material: DefaultOnWire[MaterialKey | None]  # omit/null → None; "" → reject
-    parent_floor_material: DefaultOnWire[MaterialKey | None]
+    system_settlement_size: DefaultWhenMissing[SettlementSizeKey | None]  # код до rename: system_city_size
+    system_economic_tier: DefaultWhenMissing[EconomyTierKey | None]
+    parent_wall_material: DefaultWhenMissing[MaterialKey | None]  # omit/null → None; "" → reject
+    parent_floor_material: DefaultWhenMissing[MaterialKey | None]
 
 class SettlementSkeleton:
-    economic_tier: DefaultOnWire[EconomyTierKey | None]
-    system_city_size: DefaultOnWire[SettlementSizeKey | None]
-    dominant_material: DefaultOnWire[MaterialKey | None]
-    settlement_density: DefaultOnWire[DistrictDensity | None]
-    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None]
-    system_location_mood: DefaultOnWire[LocationMoodKey | None]
+    economic_tier: DefaultWhenMissing[EconomyTierKey | None]
+    system_city_size: DefaultWhenMissing[SettlementSizeKey | None]
+    dominant_material: DefaultWhenMissing[MaterialKey | None]
+    settlement_density: DefaultWhenMissing[DistrictDensity | None]
+    frontage_type_order: DefaultWhenMissing[list[ConnectionTypeKey] | None]
+    system_location_mood: DefaultWhenMissing[LocationMoodKey | None]
 
 class EconomicTierRange:
     min: StrictOnWire[EconomyTierKey]
     max: StrictOnWire[EconomyTierKey]
 
 class PlacementCondition:
-    size: DefaultOnWire[SettlementSizeKey | None]
-    terrain_types: DefaultOnWire[list[TerrainKey] | None]
-    tier: DefaultOnWire[EconomyTierKey | None]
-    zone: DefaultOnWire[CellZone | None]  # ENUM-E, не RegistryKey
-    district_type: DefaultOnWire[str | None]  # нет реестра типов ткани
+    size: DefaultWhenMissing[SettlementSizeKey | None]
+    terrain_types: DefaultWhenMissing[list[TerrainKey] | None]
+    tier: DefaultWhenMissing[EconomyTierKey | None]
+    zone: DefaultWhenMissing[CellZone | None]  # ENUM-E, не RegistryKey
+    district_type: DefaultWhenMissing[str | None]  # нет реестра типов ткани
 ```
 
 JSON на проводе — строка (`"small"`). Тип — номинальный: `RegistryKey[WorldSettlementSizeRegistry]` ≠ `str` ≠ `RegistryKey[WorldLocationTypeRegistry]`.
@@ -158,7 +158,7 @@ JSON на проводе — строка (`"small"`). Тип — номинал
 | Wire на city/settlement | Import persist | Generate / `resolve_settlement_size_key` |
 |---|---|---|
 | omit / SQL NULL | NULL | канон **medium**, без warning |
-| не строка, `""` (type fail) | `DefaultOnWire`: WARNING `json_validation \| … invalid; using field default` + NULL | **medium** |
+| не строка, `""` (type fail) | DefaultWhenMissing: unresolved без NULL/default | **medium** |
 | строка не из реестра мира (`hamlet`, `nope`) | строка как есть (N+1 identity) | **medium** + WARNING `json_validation \| settlement_size invalid`; sink [`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve` |
 
 Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
@@ -254,16 +254,15 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 
 | Annotation | Import (facade) | Runtime (worldRow) |
 |------------|-----------------|---------------------|
-| `StrictOnWire[T]` / `StrictEnumOnWire[E]` | **422**, запись не идёт | warning, поле/строка пропускается |
-| `DefaultOnWire[T]` / `DefaultEnumOnWire[E]` | `Field(default)` + **log** | то же |
+| `StrictOnWire[T]` / `StrictEnumOnWire[E]` | **422**, запись не идёт | WarningError + unresolved объекта/операции |
+| `DefaultWhenMissing[T]` / `DefaultEnumWhenMissing[E]` | missing → schema default; invalid → reject | missing → schema default; invalid → WarningError + unresolved |
 | `IgnoreOnWire[T]` | wire as-is, без автозаполнения | то же |
 
-**Policy enum:** `WireFieldPolicy` — `strict_on_wire` | `ignore_on_wire` | `default` (`annotationPolicy.py`).  
-Три alias-типа на поле: `StrictOnWire`, `DefaultOnWire`, `IgnoreOnWire`. Без alias → resolve трактует как `default`.
+**Policy enum:** `strict_on_wire` | `ignore_on_wire` | `default_when_missing`. Старый `default` — deprecated metadata, error-default execution path удалён. Типы/required/nullable/constraints/defaults проверяет исходная Pydantic-модель; unannotated поле также не получает error default.
 
-**ENUM-E:** `StrictEnumOnWire[E]` / `DefaultEnumOnWire[E]` + маркер `EnumWire` → `parse_enum()`.
+**ENUM-E:** `StrictEnumOnWire[E]` / `DefaultEnumWhenMissing[E]` сохраняют EnumWire; исходная модель проверяет closed StrEnum, invalid → UNKNOWN_ENUM. Deprecated alias exports означают новую missing-only policy.
 
-**Ядерный fallback запрещён:** одна ошибка в registry **не** заменяет весь POJO на `canonical_defaults()`.
+**Ошибка registry:** unresolved всей коллекции; ни canonical fallback, ни пропуск строки не разрешены. Каноническое дополнение штатно отсутствующих библиотечных записей сохраняется.
 
 **Пустой registry `[]` / отсутствие ключа:**
 
@@ -630,29 +629,32 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 | `wire.parse_enum` | ✅; вызывается из `resolve` на IMPORT (JV-0a) |
 | `MaterialCategory` на `material_registry[]` | ✅ `parse_enum` → 422 `UNKNOWN_ENUM` (JV-0a) |
 
-### Целевой поток
+### Целевой поток после миграции полей E6
 
 ```
-WRITE (strict)                         READ (permissive)
+WRITE                                  READ
 JSON → facade / bundle normalize       DB → worldRow → resolve (RUNTIME)
-     → resolve + parse_enum (IMPORT)         → warn + canonical_* on gaps
-     → 422 UNKNOWN_ENUM                      generators НЕ вызывают facade
-     → persist
+     → исходная typed модель                 → исходная typed модель
+     → invalid: 422 / preview report          → invalid: WarningError + unresolved
+     → valid: persist / preview no-write      → valid: typed POJO
 ```
 
 **Правила:**
 
-- ENUM-E **reject** только на import (`ResolveMode.IMPORT`); runtime — warn + skip/default.
+- ENUM-E reject в обоих сценариях: runtime WarningError + unresolved, preview те же facts без runtime warning. Коллекция не теряет ошибочные строки.
 - Defaults и wire-контракт — **только** `dataModel`; не дублировать в `jsonValidation`.
 - `generators/registries/wireEnums.py` — re-export barrel **для jsonValidation**; generators не импортируют (HY-5).
 - N1-W registry keys — `RegistryKey[R]` на POJO + REF-W (JV-2), не `parse_enum` и не голый `StrictOnWire[str]` на identity/ref.
 - Settlement size: type/membership miss на generate → канон `medium` + WARNING фасада (`json_validation \| settlement_size invalid`), не 422 и не голый `getLogger` в planner.
 - Preset keys в fixtures (`temperate`, `water`) — N1-W, не ENUM-E.
 
-### Интеграция `parse_enum` (вариант A)
+### EnumWire и enum validation после E6
 
-Поле ENUM-E на POJO — **только** `StrictEnumOnWire[E]` / `OptionalEnumOnWire[E]` (`EnumWire` marker в `annotationPolicy.py`).  
-`resolve` вызывает `wire_enum_class(annotation)` → `parse_enum(E, wire)`; `StrictOnWire[SomeEnum]` без маркера — **не** ENUM gate.
+Enum aliases `StrictEnumOnWire[E]` / `DefaultEnumWhenMissing[E]` сохраняют
+EnumWire для introspection. Полная проверка делегируется исходной Pydantic-модели,
+включая обычный StrEnum внутри другой typed annotation. Ошибка enum становится
+UNKNOWN_ENUM; runtime не получает skip/default. `parse_enum` остаётся standalone
+wire helper, общий resolver не имеет отдельной enum-fallback ветки.
 
 В `resolve._resolve_field` на IMPORT:
 
@@ -798,3 +800,13 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | **1.1.4** | 2026-07 | JV-2 MVP: `jsonValidation/index/` — `WorldRegistryIndex`, REF-W на import (`precipitation_liquid`, climate zone, hydrology shore, material tier) |
 | **1.2.7** | 2026-07 | GV-3: все оставшиеся world registry slices (`location_type`, `lore`, `weather`, `terrain_category`, `room_type`, `location_mood`, `building_template_registry`); `registry_dict` wire kind; `worldRow` accessors; explicit JSON `null` на optional constrained fields |
 | **1.2.6** | 2026-07 | `connection_type_registry` — `facade=True` (import normalize symmetry) |
+
+## Приёмка миграции полей E6 (2026-10-08)
+
+[Перечень полей и границы](./runtime_policy_field_migration.md),
+[план и результаты тестов](../.cursor/plans/runtime-world-edit-policy.md#приёмка-миграции-полей-e6-2026-10-08).
+Full model validation сохраняет исходные validators и authored presence.
+Patch переиспользует compiled field schemas, затем полное состояние проверяется
+после merge. Не существует fieldwise model_construct/invalid default/row skip.
+Остальные доменные runtime fallback и cascade-source membership требуют
+отдельной миграции consumers; field migration не объявляет весь E6 завершённым.

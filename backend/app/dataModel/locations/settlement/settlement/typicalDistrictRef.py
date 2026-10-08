@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     DistrictTemplateKey,
@@ -19,8 +19,8 @@ class TypicalDistrictRef(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     district_type: StrictOnWire[str]
-    district_subtype: DefaultOnWire[str | None] = None
-    system_name: DefaultOnWire[DistrictTemplateKey | None] = None
+    district_subtype: DefaultWhenMissing[str | None] = None
+    system_name: DefaultWhenMissing[DistrictTemplateKey | None] = None
 
     @field_validator("system_name", mode="before")
     @classmethod

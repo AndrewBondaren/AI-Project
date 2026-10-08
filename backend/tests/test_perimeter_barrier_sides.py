@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 
 from app.application.jsonValidation.resolve import resolve_model
@@ -66,18 +67,12 @@ class TestPerimeterBarrierSides(unittest.TestCase):
         barrier = PerimeterBarrier(sides=["east", "north", "east"])
         self.assertEqual(barrier.sides, [Facing.EAST, Facing.NORTH])
 
-    def test_resolve_non_list_defaults_none_and_warns(self) -> None:
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
-            barrier = resolve_model(
-                PerimeterBarrier,
-                {"template": "stone_fence", "sides": "north"},
-            )
-        self.assertIsNone(barrier.sides)
-        text = "\n".join(captured.output)
-        self.assertIn("sides", text)
-        self.assertIn("invalid", text)
-        self.assertIn("using field default", text)
+    def test_resolve_non_list_rejects(self):
+        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+            result = resolve_result(PerimeterBarrier, {"template": "stone_fence", "sides": "north"})
+        self.assertFalse(result.resolved)
+        self.assertEqual(result.issues[0].path, ("sides",))
+        self.assertIn("WarningError", logs.output[0])
 
     def test_resolve_mixed_list_keeps_cardinals(self) -> None:
         barrier = resolve_model(

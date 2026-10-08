@@ -130,7 +130,7 @@ def _merge_json_blob(
         return
 
     raw = out.get(key)
-    if not raw:
+    if raw is None:
         return
 
     if ctx.partial:

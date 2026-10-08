@@ -6,7 +6,7 @@ import math
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.dataModel.hydrology.enums.riverSystemRole import RiverSystemRole
 from app.dataModel.hydrology.enums.riverSystemTopology import RiverSystemTopology
@@ -20,10 +20,10 @@ class HydrologyMouth(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    location_uid: DefaultOnWire[str | None] = None
-    x: DefaultOnWire[int | None] = None
-    y: DefaultOnWire[int | None] = None
-    z: DefaultOnWire[int | None] = None
+    location_uid: DefaultWhenMissing[str | None] = None
+    x: DefaultWhenMissing[int | None] = None
+    y: DefaultWhenMissing[int | None] = None
+    z: DefaultWhenMissing[int | None] = None
 
     @model_validator(mode="after")
     def _location_or_coords(self) -> HydrologyMouth:
@@ -43,7 +43,7 @@ class DeclaredRiverSegment(BaseModel):
     from_wp: HydrologyWaypoint = Field(alias="from")
     to_wp: HydrologyWaypoint = Field(alias="to")
     connection_type: StrictOnWire[str]
-    width_cells: DefaultOnWire[int] = 1
+    width_cells: DefaultWhenMissing[int] = 1
 
 
 class DeclaredRiver(BaseModel):
@@ -52,14 +52,14 @@ class DeclaredRiver(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     location_uid: StrictOnWire[str]
-    system_role: DefaultOnWire[RiverSystemRole] = RiverSystemRole.STEM
-    river_system_topology: DefaultOnWire[RiverSystemTopology | None] = None
-    parent_location_uid: DefaultOnWire[str | None] = None
-    declare_mode: DefaultOnWire[RiverDeclareMode | None] = None
-    source: DefaultOnWire[HydrologyWaypoint | None] = None
-    mouth: DefaultOnWire[HydrologyMouth | None] = None
-    route_location_uids: DefaultOnWire[list[str]] = Field(default_factory=list)
-    segments: DefaultOnWire[list[DeclaredRiverSegment]] = Field(default_factory=list)
+    system_role: DefaultWhenMissing[RiverSystemRole] = RiverSystemRole.STEM
+    river_system_topology: DefaultWhenMissing[RiverSystemTopology | None] = None
+    parent_location_uid: DefaultWhenMissing[str | None] = None
+    declare_mode: DefaultWhenMissing[RiverDeclareMode | None] = None
+    source: DefaultWhenMissing[HydrologyWaypoint | None] = None
+    mouth: DefaultWhenMissing[HydrologyMouth | None] = None
+    route_location_uids: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    segments: DefaultWhenMissing[list[DeclaredRiverSegment]] = Field(default_factory=list)
 
     @field_validator("system_role", mode="before")
     @classmethod
