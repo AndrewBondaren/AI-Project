@@ -1,6 +1,6 @@
 # Runtime и worldEdit — общая политика разрешения и диагностики
 
-**Статус:** базовое требование к последующим планам, утверждено мастером 2026-10-08. Нормативная политика отделена от состояния реализации: этот документ не утверждает, что существующий код уже ей соответствует.
+**Статус (2026-10-08):** базовое требование к последующим планам. Реализованы общая основа, два пилотных поля и read-only import preview (E0–E5); остальные legacy-поля/consumers перечислены в E6 плана и ещё не мигрированы. Соответствие всего существующего кода не утверждается.
 
 ## Назначение
 
@@ -132,4 +132,22 @@ WarningError — семантика доменной диагностики, н�
 
 В существующих ТЗ присутствуют прежние domain-specific error defaults: [JSON validation](./tz_json_validation.md), [world bundle](./tz_world_bundle.md), [logging](./tz_logging.md). Для новых/пересматриваемых планов базовым требованием является настоящий контракт. Старые fallback при ошибке требуют инвентаризации и явно запланированной миграции; наличие старой нормы не разрешает добавлять новые error defaults. Штатные schema defaults при отсутствии поля не отменяются. Массовая миграция и изменение кода не выполняются правкой этого ТЗ.
 
-Общие реализация diagnostic/result API, связь WarningError с существующим logging и перечень мигрируемых потребителей — следующий архитектурный этап. Не создавать локальную альтернативную политику только для wilderness.
+Общие diagnostic/result API и WarningError в resolve sink реализованы для pilots; следующие consumers подключаются через ту же основу. Не создавать локальную альтернативную политику только для wilderness.
+
+## Технический контракт реализации (2026-10-08)
+
+`DefaultWhenMissing[T]` хранит только wire metadata; default/constraints остаются в Pydantic Field. Existing `resolve_model` сохраняет успешный return type; при неразрешённом новом контракте бросает `UnresolvedModelError`, содержащий структурированные FieldPathError, и никогда не возвращает unchecked POJO. `resolve_result` представляет этот исход как typed result. Partial resolve возвращает typed patch со supplied fields, а полная POJO проверяется после merge. Runtime логирует WarningError в существующем resolve sink; validation собирает те же facts. Legacy DefaultOnWire явно сохраняет прежнюю семантику до миграции.
+
+Membership использует отдельную зависимость resolver — существующий WorldRegistryIndex с lookup по классу RegistryKey target, не поле context/POJO. Недоступный индекс для явно проверяемой ссылки — отдельная ошибка, а не пустой реестр/канон. Room source строит lookup только из проверенного исходного tier registry.
+
+Import application entry создаёт один request context из validate_only. До transaction/remap выполняется общий preflight: world normalization и checks, connection normalization, подготовка entity/library bodies и domain refs на incoming world. Handlers используют те же prepare/check методы при обычном импорте. Preview не вызывает import_section, repositories, Pack writer, version allocation/remap или tasks. Обычный импорт повторяет preflight при каждом запросе и сохраняет bundle transaction/rollback.
+
+HTTP: `POST /worlds/import?validate_only=true` возвращает 200 с `{validate_only: true, valid: boolean, issues: [{loc, msg, code, schema_id?}]}` для завершённой проверки. Нечитаемый upload/неверный request остаётся HTTP 422. Инфраструктурные ошибки не превращаются в valid=false. Обычный ответ импорта и 207 rollback сохраняются.
+
+`ResolveContext.for_import(validate_only=...)` — единственное место выбора request policy. `validate_only` наследуется children; ResolveReport владеет диагностикой, reference index передаётся отдельно. Существующий ResolveMode сохранён для совместимости wire interpretation: оба bundle-сценария используют IMPORT, поэтому legacy enum/strict проверки не меняют решение между preview/apply. Он не определяет пользовательский сценарий. Новые facts централизованно логируются только без validate_only; preview отдаёт их в ответе.
+
+`resolve_patch` возвращает mapping только supplied полей, а не неполную POJO. WorldService объединяет JSON blob patch с текущим миром и повторяет полную проверку до update. Supplied registry collections являются полными заменами. Временная совместимость DefaultOnWire и старого fieldwise construct/row skip не применяется к новым contracts и явно остаётся долгом E6.
+
+Все девять handlers поддерживают read-only preflight и используют те же consumer prepare/check функции, что обычная запись. Preflight обнаруживает wire/domain failures до transaction; ordinary вызов в таком случае отвечает 422. Ошибки записи сохраняют atomic rollback/207. Preview не гарантирует успешный будущий commit и не резервирует идентификаторы: текущие данные/ограничения хранения повторно проверяются при применении.
+
+Приёмка реализации: 196 tests, OK; все восемь import/export fixtures, включая переименованный `world_test_002`. Typecheck cascade и frontend build прошли. Defaults применяются без изменения authored field presence: модельные ограничения вроде `count`/`count_range` не получают ложное явно заданное поле. Результаты и оставшийся scope E6 — в [плане](../.cursor/plans/runtime-world-edit-policy.md#проверки-реализации).

@@ -115,9 +115,10 @@ def _normalize_rows(
         before_errors = len(ctx.errors)
         row_ctx = ResolveContext(
             mode=ctx.mode,
+            validate_only=ctx.validate_only,
             partial=ctx.partial,
             path_prefix=(section, index),
-            errors=ctx.errors,
+            report=ctx.report,
             schema_id=schema_id,
         )
         resolved = resolve_model(
@@ -177,9 +178,10 @@ def normalize_connection_edges(
         before_errors = len(ctx.errors)
         row_ctx = ResolveContext(
             mode=ctx.mode,
+            validate_only=ctx.validate_only,
             partial=ctx.partial,
             path_prefix=(BundleSection.CONNECTION_EDGES, index),
-            errors=ctx.errors,
+            report=ctx.report,
             schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
         )
         resolved = resolve_model(
@@ -203,11 +205,11 @@ def normalize_connection_edges(
     return out
 
 
-def normalize_bundle_connections(data: dict[str, Any]) -> dict[str, Any]:
+def normalize_bundle_connections(data: dict[str, Any], *, ctx: ResolveContext | None = None) -> dict[str, Any]:
     """Normalize bundle connection graph sections after ``normalize_world``."""
     out = dict(data)
-    errors: list[FieldPathError] = []
-    ctx = ResolveContext(mode=ResolveMode.IMPORT, errors=errors)
+    ctx = ctx if ctx is not None else ResolveContext(mode=ResolveMode.IMPORT)
+    errors = ctx.errors
     world_wire = out.get(BundleSection.WORLD) if isinstance(out.get(BundleSection.WORLD), dict) else {}
 
     if BundleSection.CONNECTION_NODES in out:

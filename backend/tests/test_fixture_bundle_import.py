@@ -49,7 +49,7 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
     async def test_all_eight_bundles_import_and_export_every_section(self):
         names = (
             "world_defaults_test", "world_template", "world_terrain_test", "world_test",
-            "world_test_all", "world_test_gen", "world_test_gen_003", "world_test_gen_noloc",
+            "world_test_all", "world_test_002", "world_test_gen_003", "world_test_gen_noloc",
         )
         for name in names:
             with self.subTest(fixture=name):
@@ -105,7 +105,7 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(recipe.required_structure_types, canonical.required_structure_types)
                         for size, footprint in canonical.footprint_by_size.items():
                             self.assertEqual(recipe.footprint_by_size[size], footprint)
-                        if name in ("world_test_all", "world_test_gen"):
+                        if name in ("world_test_all", "world_test_002"):
                             self.assertEqual(recipe.footprint_by_size["huge"], 0.9 if subtype == "village" else 8.0)
                             self.assertIn("huge", {row["system_size"] for row in world.city_size_registry})
                     locations = {row["location_uid"]: row for row in exported["locations"]}

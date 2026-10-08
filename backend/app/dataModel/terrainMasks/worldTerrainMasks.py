@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire, DefaultWhenMissing
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -89,7 +89,7 @@ class ForestsCategoryPolicy(MaskCategoryPolicy):
     """Climate rainfall → forest (cold biomes stay on climate_zone_id, not terrain)."""
 
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("forest"))
-    forest_min_rainfall: DefaultOnWire[int] = Field(default=45, ge=0)
+    forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)
     hills: DefaultOnWire[HillPolicy] = Field(
         default_factory=HillPolicy.canonical_forest,
     )

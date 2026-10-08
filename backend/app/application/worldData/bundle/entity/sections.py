@@ -14,6 +14,8 @@ from app.application.worldData.worldService import WorldService
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.db.models.world import World
 from app.utils.graph import topo_sort
+from app.application.jsonValidation.bundle.preflight import validate_rows
+from app.application.jsonValidation.resolve import ResolveContext
 
 
 class WorldSectionHandler:
@@ -33,6 +35,9 @@ class WorldSectionHandler:
             raise BundleValidationError("world section must be an object")
         return await self._worlds.import_from_json(data)
 
+    def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
+        self._worlds.prepare_import(data)
+
 
 class StatesSectionHandler:
     key = BundleSection.STATES
@@ -49,6 +54,9 @@ class StatesSectionHandler:
         if not isinstance(data, list):
             raise BundleValidationError("states section must be an array")
         return await self._states.import_from_json(world_uid, data)
+
+    def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
+        validate_rows(data, lambda row: self._states.prepare_import(world.world_uid, row), ctx=ctx)
 
 
 class LocationsSectionHandler:
@@ -68,6 +76,10 @@ class LocationsSectionHandler:
         section_data = topo_sort(data, "location_uid", "parent_location_uid")
         return await self._locations.import_from_json(world_uid, section_data)
 
+    def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
+        validate_rows(data, lambda row: self._locations._from_wire(row, world_uid=world.world_uid, world=world), ctx=ctx)
+        topo_sort(data, "location_uid", "parent_location_uid")
+
 
 class ConnectionNodesSectionHandler:
     key = BundleSection.CONNECTION_NODES
@@ -85,6 +97,9 @@ class ConnectionNodesSectionHandler:
             raise BundleValidationError("connection_nodes section must be an array")
         return await self._connections.import_nodes(world_uid, data)
 
+    def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
+        validate_rows(data, lambda row: self._connections.prepare_node(world.world_uid, row), ctx=ctx)
+
 
 class ConnectionEdgesSectionHandler:
     key = BundleSection.CONNECTION_EDGES
@@ -101,3 +116,6 @@ class ConnectionEdgesSectionHandler:
         if not isinstance(data, list):
             raise BundleValidationError("connection_edges section must be an array")
         return await self._connections.import_edges(world_uid, data)
+
+    def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
+        validate_rows(data, lambda row: self._connections.prepare_edge(world.world_uid, row), ctx=ctx)

@@ -9,6 +9,7 @@ _WIRE_ALIAS_NAMES = frozenset({
     "StrictOnWire",
     "IgnoreOnWire",
     "DefaultOnWire",
+    "DefaultWhenMissing",
     "StrictEnumOnWire",
     "DefaultEnumOnWire",
 })
@@ -26,6 +27,9 @@ class WireFieldPolicy(StrEnum):
     DEFAULT = "default"
     """Missing or invalid wire → ``Field`` default + log."""
 
+    DEFAULT_WHEN_MISSING = "default_when_missing"
+    """Missing wire → schema default; supplied invalid value → unresolved."""
+
 
 class EnumWire:
     """Marker: wire value must be a member of annotated ``StrEnum`` (``parse_enum``)."""
@@ -34,6 +38,7 @@ class EnumWire:
 type StrictOnWire[T] = Annotated[T, WireFieldPolicy.STRICT_ON_WIRE]
 type IgnoreOnWire[T] = Annotated[T, WireFieldPolicy.IGNORE_ON_WIRE]
 type DefaultOnWire[T] = Annotated[T, WireFieldPolicy.DEFAULT]
+type DefaultWhenMissing[T] = Annotated[T, WireFieldPolicy.DEFAULT_WHEN_MISSING]
 
 type StrictEnumOnWire[E: StrEnum] = Annotated[
     E,
@@ -81,7 +86,8 @@ def _annotation_parts(annotation: Any) -> tuple[Any, tuple[Any, ...]]:
             if rest and not all(
                 isinstance(item, (WireFieldPolicy, EnumWire)) for item in rest
             ):
-                break
+                nested, nested_meta = _annotation_parts(args[0])
+                return Annotated[nested, *rest], tuple(meta) + nested_meta
             inner = args[0]
             continue
         break

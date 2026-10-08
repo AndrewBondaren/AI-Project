@@ -1,9 +1,23 @@
 from datetime import datetime
 from typing import Awaitable, Callable, TypeVar
+from inspect import signature
 
 from app.application.importResult import ImportError, ImportResult
 
 T = TypeVar("T")
+
+
+def prepare_import_row(model: type[T], row: dict) -> T:
+    """Validate constructor shape before persistence, without changing wire types.
+
+    DB dataclass annotations are storage metadata; wire POJOs own field types.
+    In particular some legacy registry columns accept list wire in dict columns.
+    """
+    try:
+        signature(model).bind(**row)
+    except TypeError as exc:
+        raise ValueError(str(exc)) from exc
+    return model(**row)
 
 
 def with_default_created_at(row: dict) -> dict:

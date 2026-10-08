@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportError, ImportResult
-from app.application.import_helpers import with_default_created_at
-from app.application.jsonValidation.facade import normalize_world
+from app.application.import_helpers import with_default_created_at, prepare_import_row
+from app.application.jsonValidation.facade import normalize_world, merge_world_patch
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
@@ -51,17 +51,20 @@ class WorldService:
     _IMMUTABLE = frozenset({"world_uid", "created_at"})
 
     async def update(self, world_uid: str, data: dict) -> WorldUpdateResult:
+        data = dict(data)
         force = bool(data.pop("force", False))
         data = _normalize_world_data(data, partial=True)
         world = await self.get_by_id(world_uid)
         original = dataclasses.replace(world)  # snapshot before mutations
         old_map_cell_size = world.fine_cells_per_map_cell
 
-        for key, value in data.items():
-            if hasattr(world, key) and key not in self._IMMUTABLE:
-                setattr(world, key, value)
-
-        self._validate(world)
+        patch = {key: value for key, value in data.items()
+                 if hasattr(world, key) and key not in self._IMMUTABLE}
+        merged = merge_world_patch(dataclasses.asdict(world), patch)
+        try:
+            world = self.prepare_import(_normalize_world_data(merged))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         map_size_changed = old_map_cell_size != world.fine_cells_per_map_cell
 
@@ -99,8 +102,7 @@ class WorldService:
     async def import_from_json(self, data: dict) -> ImportResult:
         data = _normalize_world_data(with_default_created_at(data))
         try:
-            world = World(**data)
-            self._validate(world)
+            world = self.prepare_import(data)
             await self._repo.upsert(world)
             return ImportResult(total=1, succeeded=1, failed=0)
         except HTTPException:
@@ -110,6 +112,19 @@ class WorldService:
                 total=1, succeeded=0, failed=1,
                 errors=[ImportError(index=0, message=str(e))],
             )
+
+    @classmethod
+    def prepare_import(cls, data: dict) -> World:
+        world = prepare_import_row(World, with_default_created_at(data))
+        try:
+            cls._validate(world)
+        except HTTPException as exc:
+            # Existing CRUD adapter uses HTTPException; bundle preflight exposes
+            # a domain failure without importing HTTP machinery into handlers.
+            if exc.status_code != 422:
+                raise
+            raise ValueError(str(exc.detail)) from exc
+        return world
 
     # ------------------------------------------------------------------
     # Versioning

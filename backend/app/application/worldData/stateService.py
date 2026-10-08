@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportResult
-from app.application.import_helpers import import_list, with_default_created_at
+from app.application.import_helpers import import_list, with_default_created_at, prepare_import_row
 from app.db.models.state import State
 from app.db.repositories.iStateRepository import IStateRepository
 
@@ -24,6 +24,8 @@ class StateService:
         return await self._repo.get_by_uids(uids)
 
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
-        def prepare(row: dict) -> State:
-            return State(**{**with_default_created_at(row), "world_uid": world_uid})
-        return await import_list(data, prepare, self._repo.upsert, id_key="state_uid")
+        return await import_list(data, lambda row: self.prepare_import(world_uid, row), self._repo.upsert, id_key="state_uid")
+
+    @staticmethod
+    def prepare_import(world_uid: str, row: dict) -> State:
+        return prepare_import_row(State, {**with_default_created_at(row), "world_uid": world_uid})

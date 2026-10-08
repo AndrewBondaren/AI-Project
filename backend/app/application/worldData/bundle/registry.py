@@ -68,6 +68,7 @@ def build_bundle_handlers(
                 import_bodies=lambda wid, bodies: import_relief_templates_section(
                     wid, bodies, relief_import,
                 ),
+                prepare_body=relief_import.prepare_body,
             ),
         ),
         BundleSection.BUILDING_TEMPLATES: LibraryTemplateSectionHandler(
@@ -75,6 +76,7 @@ def build_bundle_handlers(
                 section_key=BundleSection.BUILDING_TEMPLATES,
                 export_bodies=building_library.export_bodies_for_world,
                 import_bodies=building_library.import_bodies_into_world,
+                prepare_body=building_library.prepare_body,
             ),
         ),
         BundleSection.RACE_TEMPLATES: LibraryTemplateSectionHandler(
@@ -82,6 +84,7 @@ def build_bundle_handlers(
                 section_key=BundleSection.RACE_TEMPLATES,
                 export_bodies=race_service.export_bodies_for_world,
                 import_bodies=race_service.import_bodies,
+                prepare_body=lambda world, row: race_service.prepare_body(row),
             ),
         ),
         BundleSection.PERK_TEMPLATES: LibraryTemplateSectionHandler(
@@ -89,6 +92,7 @@ def build_bundle_handlers(
                 section_key=BundleSection.PERK_TEMPLATES,
                 export_bodies=perk_service.export_bodies_for_world,
                 import_bodies=perk_service.import_bodies,
+                prepare_body=lambda world, row: perk_service.prepare_body(row),
             ),
         ),
     }

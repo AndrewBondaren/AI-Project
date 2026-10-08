@@ -9,7 +9,9 @@ from typing import Any
 
 from app.application.jsonValidation.resolve import (
     ResolveContext,
+    UnresolvedModelError,
     resolve_model,
+    resolve_patch,
     resolve_root_dict,
     resolve_root_list,
 )
@@ -23,9 +25,10 @@ from app.application.jsonValidation.worldSlices import (
 def _slice_ctx(ctx: ResolveContext, world_slice: WorldSlice) -> ResolveContext:
     return ResolveContext(
         mode=ctx.mode,
+        validate_only=ctx.validate_only,
         partial=ctx.partial,
         path_prefix=ctx.path_prefix,
-        errors=ctx.errors,
+        report=ctx.report,
         schema_id=world_slice.schema_id,
     )
 
@@ -44,6 +47,9 @@ def _merge_multi_column(
     wire = world_slice.wire_from_mapping(out)
     if ctx.partial:
         wire = {key: wire[key] for key in present_keys}
+    if ctx.partial:
+        out.update(resolve_patch(world_slice.pojo_cls, wire, ctx=ctx))
+        return
     resolved = resolve_model(
         world_slice.pojo_cls,
         wire,
@@ -127,6 +133,10 @@ def _merge_json_blob(
     if not raw:
         return
 
+    if ctx.partial:
+        out[key] = resolve_patch(world_slice.pojo_cls, raw, ctx=ctx.child(key))
+        return
+
     resolved = resolve_model(
         world_slice.pojo_cls,
         raw,
@@ -157,4 +167,9 @@ def merge_world_slice(
 
 def merge_facade_slices(out: dict[str, Any], ctx: ResolveContext) -> None:
     for world_slice in facade_world_slices():
-        merge_world_slice(out, world_slice, ctx)
+        try:
+            merge_world_slice(out, world_slice, ctx)
+        except UnresolvedModelError:
+            # Keep the report and inspect independent slices. No invalid POJO
+            # is returned; facade rejects the operation before persistence.
+            continue

@@ -1,6 +1,7 @@
 """POJO resolve/normalize — single engine for import validator and runtime reads.
 
-Field policy: ``WireFieldPolicy`` — ``StrictOnWire`` / ``IgnoreOnWire`` / ``DefaultOnWire``.
+Field policy: ``WireFieldPolicy`` — ``StrictOnWire`` / ``IgnoreOnWire`` /
+``DefaultOnWire`` (legacy) / ``DefaultWhenMissing``.
 Contract: ``docs/tz_json_validation.md``.
 """
 
@@ -11,7 +12,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Annotated, Any, get_args, get_origin
+from typing import Annotated, Any, NoReturn, TYPE_CHECKING, get_args, get_origin
 
 from pydantic import BaseModel, RootModel, TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
@@ -22,8 +23,12 @@ from app.dataModel.annotationPolicy import (
     unwrap_wire_type,
     wire_enum_class,
 )
-from app.application.jsonValidation.types import FieldPathError
+from app.application.jsonValidation.types import FieldPathError, ResolveReport
 from app.application.jsonValidation.wire import WireEnumError, parse_enum
+from app.dataModel.registryKey import registry_key_target
+
+if TYPE_CHECKING:
+    from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +43,29 @@ class ResolveContext:
     mode: ResolveMode = ResolveMode.RUNTIME
     partial: bool = False
     path_prefix: tuple[str | int, ...] = ()
-    errors: list[FieldPathError] = field(default_factory=list)
+    report: ResolveReport = field(default_factory=ResolveReport)
     schema_id: str | None = None
+    validate_only: bool = False
+
+    @property
+    def errors(self) -> list[FieldPathError]:
+        """Compatibility view for existing aggregators; the report owns facts."""
+        return self.report.issues
+
+    @classmethod
+    def for_import(cls, *, validate_only: bool = False) -> ResolveContext:
+        """The application entry owns the request policy; children inherit it."""
+        # IMPORT is the legacy wire interpretation, identical for preview/apply.
+        # Only the explicit flag controls the reaction to new-contract facts.
+        return cls(mode=ResolveMode.IMPORT, validate_only=validate_only)
 
     def child(self, segment: str | int) -> ResolveContext:
         return ResolveContext(
             mode=self.mode,
+            validate_only=self.validate_only,
             partial=self.partial,
             path_prefix=self.path_prefix + (segment,),
-            errors=self.errors,
+            report=self.report,
             schema_id=self.schema_id,
         )
 
@@ -58,6 +77,174 @@ class StrictFieldError(ValueError):
         super().__init__(
             f"{'.'.join(str(part) for part in path)}: {detail}" if path else detail,
         )
+
+
+class UnresolvedModelError(StrictFieldError):
+    """No valid POJO exists. Never substitute this outcome with None/default."""
+
+    def __init__(self, issues: list[FieldPathError]) -> None:
+        self.issues = issues
+        super().__init__(issues[0].path, issues[0].message)
+
+
+@dataclass(frozen=True)
+class ResolveResult:
+    value: BaseModel | None
+    issues: tuple[FieldPathError, ...] = ()
+
+    @property
+    def resolved(self) -> bool:
+        return self.value is not None
+
+
+def reject_unresolved(ctx: ResolveContext, issues: list[FieldPathError]) -> NoReturn:
+    """One reaction point for structured facts from wire/domain checks."""
+    ctx.errors.extend(issues)
+    if not ctx.validate_only:
+        for issue in issues:
+            logger.warning("json_validation | WarningError | path=%s code=%s | %s",
+                           issue.path, issue.code, issue.message)
+    raise UnresolvedModelError(issues)
+
+
+def _field_adapter(field_info: Any) -> TypeAdapter:
+    # Reuse Pydantic's Field constraints (ge, length, validators, etc.).
+    annotation = field_info.annotation
+    if field_info.metadata:
+        annotation = Annotated[annotation, *field_info.metadata]
+    return TypeAdapter(annotation)
+
+
+def _has_missing_contract(annotation: Any, seen: frozenset[int] = frozenset()) -> bool:
+    if id(annotation) in seen:
+        return False
+    seen = seen | {id(annotation)}
+    if field_policy(annotation) == WireFieldPolicy.DEFAULT_WHEN_MISSING:
+        return True
+    inner = unwrap_wire_type(annotation)
+    if isinstance(inner, type) and issubclass(inner, BaseModel):
+        return any(_has_missing_contract(info.annotation, seen) for info in inner.model_fields.values())
+    return any(_has_missing_contract(arg, seen) for arg in get_args(inner))
+
+
+def _contract_issues(
+    annotation: Any, raw: Any, ctx: ResolveContext,
+    references: WorldRegistryIndex | None,
+) -> list[FieldPathError]:
+    """Inspect new contracts before any legacy parent can repair invalid input.
+
+    This is the same field engine's preflight, including nested collections;
+    old wire policies keep their explicitly unmigrated behavior.
+    """
+    inner = unwrap_wire_type(annotation)
+    origin = get_origin(inner)
+    if origin is Annotated:
+        return _contract_issues(get_args(inner)[0], raw, ctx, references)
+    if isinstance(inner, type) and issubclass(inner, BaseModel):
+        if issubclass(inner, RootModel):
+            return _contract_issues(inner.model_fields["root"].annotation, raw, ctx, references)
+        if not isinstance(raw, dict):
+            return ([_validation_issue(ctx, ctx.path_prefix, "expected object", code="EXPECTED_OBJECT")]
+                    if _has_missing_contract(inner) else [])
+        issues: list[FieldPathError] = []
+        for name, info in inner.model_fields.items():
+            value, present = _read_wire_field(raw, name, info)
+            child = ctx.child(name)
+            if field_policy(info.annotation) == WireFieldPolicy.DEFAULT_WHEN_MISSING:
+                if not present and ctx.partial:
+                    continue
+                if not present:
+                    value = _field_default(info)
+                    if value is PydanticUndefined:
+                        issues.append(_validation_issue(child, child.path_prefix, "field required", code="missing"))
+                        continue
+                try:
+                    value = _field_adapter(info).validate_python(value)
+                except ValidationError as exc:
+                    target = registry_key_target(info.annotation)
+                    issues.extend(_validation_issue(child, child.path_prefix + tuple(
+                                  part for part in e["loc"] if target is None or isinstance(part, int)),
+                                  e["msg"], code=e["type"]) for e in exc.errors())
+                    continue
+                target = registry_key_target(info.annotation)
+                if value is not None and target is not None and references is not None:
+                    keys = references.keys_for_registry(target)
+                    values = list(enumerate(value)) if isinstance(value, list) else [(None, value)]
+                    for index, token in values:
+                        if keys is None or str(token) not in keys:
+                            path = child.path_prefix if index is None else child.path_prefix + (index,)
+                            issues.append(_validation_issue(child, path,
+                                "reference index unavailable" if keys is None else f"unknown reference: {token!r}",
+                                code="REF_W_UNAVAILABLE" if keys is None else "REF_W_UNKNOWN"))
+            if present and value is not None:
+                issues.extend(_contract_issues(info.annotation, value, child, references))
+        return issues
+    if origin is list and isinstance(raw, list):
+        return [issue for i, item in enumerate(raw)
+                for issue in _contract_issues(get_args(inner)[0], item, ctx.child(i), references)]
+    if origin is dict and isinstance(raw, dict):
+        return [issue for key, item in raw.items()
+                for issue in _contract_issues(get_args(inner)[1], item, ctx.child(key), references)]
+    if origin in (list, dict) and _has_missing_contract(inner):
+        return [_validation_issue(ctx, ctx.path_prefix, f"expected {origin.__name__}",
+                                  code="EXPECTED_LIST" if origin is list else "EXPECTED_OBJECT")]
+    # Optional model and PEP 695 domain aliases, without reinterpreting null.
+    if type(inner).__name__ == "TypeAliasType":
+        return _contract_issues(inner.__value__, raw, ctx, references)
+    if raw is not None:
+        for arg in get_args(inner):
+            if arg is not type(None):
+                found = _contract_issues(arg, raw, ctx, references)
+                if found:
+                    return found
+    return []
+
+
+def validate_contracts(model_cls: type[BaseModel], raw: Any, *, ctx: ResolveContext,
+                       references: WorldRegistryIndex | None = None) -> None:
+    issues = _contract_issues(model_cls, raw, ctx, references)
+    if issues:
+        reject_unresolved(ctx, issues)
+
+
+def resolve_result(model_cls: type[BaseModel], raw: Any, *, ctx: ResolveContext | None = None,
+                   references: WorldRegistryIndex | None = None) -> ResolveResult:
+    ctx = ctx if ctx is not None else ResolveContext()
+    before = len(ctx.errors)
+    try:
+        validate_contracts(model_cls, raw, ctx=ctx, references=references)
+        value = resolve_model(model_cls, raw, ctx=ctx)
+        if len(ctx.errors) > before:
+            return ResolveResult(None, tuple(ctx.errors[before:]))
+        # Legacy resolve_model may construct an unchecked object. The typed
+        # result boundary never advertises such a value as a resolved POJO.
+        if not _has_missing_contract(model_cls):
+            try:
+                value = model_cls.model_validate(value.model_dump(exclude_unset=True), by_name=True)
+            except ValidationError as exc:
+                reject_unresolved(ctx, [_validation_issue(ctx, ctx.path_prefix + tuple(e["loc"]),
+                                  e["msg"], code=e["type"]) for e in exc.errors()])
+        return ResolveResult(value)
+    except UnresolvedModelError as exc:
+        return ResolveResult(None, tuple(exc.issues))
+
+
+def resolve_patch(model_cls: type[BaseModel], raw: dict[str, Any], *, ctx: ResolveContext) -> dict[str, Any]:
+    """Validate supplied fields only; a patch is deliberately not a full POJO."""
+    validate_contracts(model_cls, raw, ctx=ctx)
+    payload: dict[str, Any] = {}
+    for name, info in model_cls.model_fields.items():
+        value, present = _read_wire_field(raw, name, info)
+        if not present:
+            continue
+        inner = unwrap_wire_type(info.annotation)
+        if _is_base_model_type(info.annotation) and isinstance(value, dict):
+            payload[name] = resolve_patch(inner, value, ctx=ctx.child(name))
+        else:
+            resolved = _resolve_field(info, value, field_name=name, label=model_cls.__name__, present=True, ctx=ctx)
+            if resolved is not PydanticUndefined:
+                payload[name] = resolved.model_dump(mode="json") if isinstance(resolved, BaseModel) else resolved
+    return payload
 
 
 def _unwrap_annotation(annotation: Any) -> Any:
@@ -195,6 +382,15 @@ def _resolve_field(
     if ctx is not None and ctx.partial and not present:
         return PydanticUndefined
 
+    if policy == WireFieldPolicy.DEFAULT_WHEN_MISSING:
+        value = raw_value if present else _field_default(field_info)
+        try:
+            return _field_adapter(field_info).validate_python(value)
+        except ValidationError as exc:
+            active_ctx = ctx if ctx is not None else ResolveContext()
+            reject_unresolved(active_ctx, [_validation_issue(active_ctx, field_path + tuple(e["loc"]),
+                              e["msg"], code=e["type"]) for e in exc.errors()])
+
     if policy == WireFieldPolicy.IGNORE_ON_WIRE:
         if not present:
             return PydanticUndefined
@@ -312,12 +508,20 @@ def resolve_model(
     ctx: ResolveContext | None = None,
 ) -> BaseModel:
     """Build POJO from wire dict using per-field annotation policy."""
+    if ctx is not None and ctx.partial and _has_missing_contract(model_cls):
+        raise TypeError("partial input is a patch; use resolve_patch and validate the merged object")
+    validate_contracts(model_cls, raw, ctx=ctx if ctx is not None else ResolveContext())
     if not isinstance(raw, dict):
         raw = {}
 
+    has_new_contract = _has_missing_contract(model_cls)
     payload: dict[str, Any] = {}
     for name, field_info in model_cls.model_fields.items():
         raw_value, present = _read_wire_field(raw, name, field_info)
+        if has_new_contract and not present and not field_info.is_required():
+            # Let Pydantic apply the declared default while preserving authored
+            # field presence for model invariants (e.g. count vs count_range).
+            continue
         value = _resolve_field(
             field_info,
             raw_value,
@@ -335,16 +539,21 @@ def resolve_model(
                     continue
             payload[name] = value
 
-    if ctx is not None and ctx.mode == ResolveMode.IMPORT and ctx.errors:
+    if ctx is not None and ctx.mode == ResolveMode.IMPORT and ctx.errors and not has_new_contract:
         result = model_cls.model_construct(**payload)
         _log_resolve_transform(label or model_cls.__name__, raw, result, ctx)
         return result
 
     try:
-        result = model_cls.model_validate(payload)
+        result = model_cls.model_validate(payload, by_name=True)
         _log_resolve_transform(label or model_cls.__name__, raw, result, ctx)
         return result
     except ValidationError as exc:
+        if has_new_contract:
+            active_ctx = ctx if ctx is not None else ResolveContext()
+            reject_unresolved(active_ctx, [_validation_issue(active_ctx,
+                active_ctx.path_prefix + tuple(e["loc"]), e["msg"], code=e["type"])
+                for e in exc.errors()])
         # Cross-field POJO invariants cannot be repaired by constructing an
         # unchecked instance. Preserve import paths / runtime row rejection.
         model_errors = [error for error in exc.errors() if not error["loc"]]
@@ -385,6 +594,8 @@ def _resolve_fieldwise(
                 if value is None and name not in raw:
                     continue
                 payload[name] = value
+        except UnresolvedModelError:
+            raise
         except StrictFieldError as exc:
             logger.warning(
                 "json_validation | %s strict field failed (%s); field omitted",
@@ -495,6 +706,8 @@ def resolve_root_list(
         before_errors = len(ctx.errors) if ctx is not None else 0
         try:
             entry = resolve_model(entry_cls, item, label=f"{label}[{index}]", ctx=row_ctx)
+        except UnresolvedModelError:
+            raise
         except StrictFieldError as exc:
             logger.warning(
                 "json_validation | world=%s %s[%s] invalid row (%s); skipped",

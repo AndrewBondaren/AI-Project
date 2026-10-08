@@ -13,6 +13,11 @@ from app.application.worldData.locationPayloadAccess import settlement_payload
 from random import Random
 
 from app.application.jsonValidation import economic_tiers, location_types
+from app.application.jsonValidation.resolve import ResolveContext, validate_contracts, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
+from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
+from pydantic import ValidationError
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
@@ -126,8 +131,25 @@ def room_context(
     room_def: RoomDef,
     *,
     room_uid: str,
+    resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """Building ctx + room_def link → room-scope ctx."""
+    # Validate the persisted vocabulary directly: an invalid registry must not
+    # be repaired to canonical keys before source membership is checked.
+    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("rooms", room_def.room_id))
+    references = WorldRegistryIndex()
+    if room_def.economic_tier is not None and world.economic_tier_registry is not None:
+        try:
+            registry = WorldEconomyTierRegistry.model_validate(world.economic_tier_registry)
+        except ValidationError:
+            reject_unresolved(active_ctx, [FieldPathError(active_ctx.path_prefix + ("economic_tier",),
+                "reference index unavailable: invalid economic tier registry", code="REF_W_UNAVAILABLE")])
+        references = WorldRegistryIndex(economic_tiers=frozenset(str(e.system_tier) for e in registry.root))
+    validate_contracts(
+        RoomDef, room_def.model_dump(mode="python", exclude_unset=True),
+        ctx=active_ctx,
+        references=references,
+    )
     return extend(
         ctx,
         Link(ScopeLevel.ROOM, room_def),

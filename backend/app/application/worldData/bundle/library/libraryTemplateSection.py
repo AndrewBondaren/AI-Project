@@ -9,6 +9,8 @@ from typing import Any
 from app.application.importResult import ImportResult
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.db.models.world import World
+from app.application.jsonValidation.bundle.preflight import validate_rows
+from app.application.jsonValidation.resolve import ResolveContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +18,7 @@ class LibrarySectionAdapter:
     section_key: str
     export_bodies: Callable[[str], Awaitable[list[dict]]]
     import_bodies: Callable[[str, list[dict]], Awaitable[ImportResult]]
+    prepare_body: Callable[[World, dict], Any]
 
 
 class LibraryTemplateSectionHandler:
@@ -38,3 +41,6 @@ class LibraryTemplateSectionHandler:
         if not isinstance(data, list):
             raise BundleValidationError(f"{self.key} section must be an array")
         return await self._adapter.import_bodies(world_uid, data)
+
+    def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
+        validate_rows(data, lambda row: self._adapter.prepare_body(world, row), ctx=ctx)

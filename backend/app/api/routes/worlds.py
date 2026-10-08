@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
-from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
+from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, import_validation_http_detail
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 
@@ -79,14 +79,16 @@ async def import_world(
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
     level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
+    validate_only: bool = Query(default=False),
     container=Depends(get_container),
 ) -> JSONResponse:
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
     try:
-        results, rolled_back = await container.world_bundle_service().import_bundle(
+        result = await container.world_bundle_service().import_bundle(
             data, level=level,  # type: ignore[arg-type]
+            validate_only=validate_only,
         )
     except BundleValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
@@ -96,6 +98,9 @@ async def import_world(
         ) from exc
     except (ReliefValidationError, ReliefNotFoundError) as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
+    if isinstance(result, ImportValidationReport):
+        return JSONResponse(status_code=200, content=result.to_dict())
+    results, rolled_back = result
     content = {k: v.to_dict() for k, v in results.items()}
     if rolled_back:
         failed_sections = [k for k, v in results.items() if v.failed > 0]

@@ -39,6 +39,8 @@ def _to_race(row: dict) -> Race:
 
 class RaceService:
 
+    prepare_body = staticmethod(_to_race)
+
     def __init__(self, repo: IRaceRepository, world_service: WorldService) -> None:
         self._repo = repo
         self._worlds = world_service
@@ -83,7 +85,7 @@ class RaceService:
             await self._repo.upsert(race)
             await self._ensure_registry(world_uid, race)
 
-        return await import_list(data, _to_race, upsert_one, id_key=_ID_KEY)
+        return await import_list(data, self.prepare_body, upsert_one, id_key=_ID_KEY)
 
     async def export_bodies_for_world(self, world_uid: str) -> list[dict]:
         races = await self.get_all(world_uid)

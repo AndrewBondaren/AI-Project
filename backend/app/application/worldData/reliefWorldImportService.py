@@ -48,22 +48,23 @@ class ReliefWorldImportService:
     ) -> dict:
         """Upsert bodies to library, add registry pointers, R34 terrain sync."""
         world = await self._worlds.get_by_id(world_uid)
-        barrier_keys = {
-            e.system_type for e in barrier_templates(world).root
-        } if barrier_templates(world).root else set()
-
         imported_uids: list[str] = []
         for raw in outlines:
-            outline = ReliefTemplate.model_validate(raw)
-            warn_template_invalid_geom(outline)
-            self._validate_structure_refs(outline, barrier_keys)
-            self._validate_structure_canal(outline, world)
+            outline = self.prepare_body(world, raw)
             row = await self._library.upsert_outline(outline, source_file="bundle")
             imported_uids.append(row.template_uid)
             await self._ensure_registry_pointer(world_uid, row.template_uid, outline)
             await self._sync_terrain_from_outline(world_uid, outline, row.template_uid)
 
         return {"imported": len(imported_uids), "uids": imported_uids}
+
+    def prepare_body(self, world, raw: dict) -> ReliefTemplate:
+        outline = ReliefTemplate.model_validate(raw)
+        warn_template_invalid_geom(outline)
+        barrier_keys = {e.system_type for e in barrier_templates(world).root}
+        self._validate_structure_refs(outline, barrier_keys)
+        self._validate_structure_canal(outline, world)
+        return outline
 
     async def import_library_uid_into_world(
         self,

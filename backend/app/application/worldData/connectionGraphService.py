@@ -3,7 +3,7 @@
 from dataclasses import asdict
 
 from app.api.schemas.imports import ImportResult
-from app.application.import_helpers import import_list
+from app.application.import_helpers import import_list, prepare_import_row
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
@@ -33,13 +33,17 @@ class ConnectionGraphService:
         return [asdict(e) for e in await self.get_edges(world_uid)]
 
     async def import_nodes(self, world_uid: str, data: list[dict]) -> ImportResult:
-        def prepare(row: dict) -> ConnectionNode:
-            return ConnectionNode(**{**row, "world_uid": world_uid})
-        return await import_list(data, prepare, self._node_repo.upsert, id_key="node_uid")
+        return await import_list(data, lambda row: self.prepare_node(world_uid, row), self._node_repo.upsert, id_key="node_uid")
+
+    @staticmethod
+    def prepare_node(world_uid: str, row: dict) -> ConnectionNode:
+        return prepare_import_row(ConnectionNode, {**row, "world_uid": world_uid})
 
     async def import_edges(self, world_uid: str, data: list[dict]) -> ImportResult:
-        def prepare(row: dict) -> ConnectionEdge:
-            # C4: location_uid on edge is draft-only; names live on waypoint nodes.
-            cleaned = {k: v for k, v in row.items() if k != "location_uid"}
-            return ConnectionEdge(**{**cleaned, "world_uid": world_uid})
-        return await import_list(data, prepare, self._edge_repo.upsert, id_key="edge_uid")
+        return await import_list(data, lambda row: self.prepare_edge(world_uid, row), self._edge_repo.upsert, id_key="edge_uid")
+
+    @staticmethod
+    def prepare_edge(world_uid: str, row: dict) -> ConnectionEdge:
+        # C4: location_uid on edge is draft-only; names live on waypoint nodes.
+        cleaned = {k: v for k, v in row.items() if k != "location_uid"}
+        return prepare_import_row(ConnectionEdge, {**cleaned, "world_uid": world_uid})

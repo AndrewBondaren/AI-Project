@@ -125,31 +125,11 @@ class BuildingTemplateLibraryService:
         if not isinstance(bodies, list):
             raise BundleValidationError("building_templates section must be an array")
         world = await self._worlds.get_by_id(world_uid)
-        registry = resource_types(world)
         succeeded = 0
         errors = []
         for i, raw in enumerate(bodies):
             try:
-                outline = BuildingTemplateOutline.model_validate(raw)
-                issues = registry.check_template_subjects(
-                    outline.resource_kind, outline.subjects,
-                )
-                if not issues:
-                    issues = crops(world).check_template_subjects(
-                        outline.crop_kind, outline.subjects,
-                    )
-                if not issues:
-                    issues = livestock(world).check_template_subjects(
-                        outline.livestock_kind, outline.subjects,
-                    )
-                if issues:
-                    from app.application.importResult import ImportError
-                    token, code = issues[0]
-                    errors.append(ImportError(
-                        index=i,
-                        message=f"{code}: extract/farm/livestock subject {token!r}",
-                    ))
-                    continue
+                outline = self.prepare_body(world, raw)
                 row = await self.upsert_outline(outline, source_file="bundle")
                 await self._ensure_registry(world_uid, row)
                 succeeded += 1
@@ -162,6 +142,19 @@ class BuildingTemplateLibraryService:
             failed=len(errors),
             errors=errors,
         )
+
+    @staticmethod
+    def prepare_body(world, raw: dict) -> BuildingTemplateOutline:
+        outline = BuildingTemplateOutline.model_validate(raw)
+        issues = resource_types(world).check_template_subjects(outline.resource_kind, outline.subjects)
+        if not issues:
+            issues = crops(world).check_template_subjects(outline.crop_kind, outline.subjects)
+        if not issues:
+            issues = livestock(world).check_template_subjects(outline.livestock_kind, outline.subjects)
+        if issues:
+            token, code = issues[0]
+            raise ValueError(f"{code}: extract/farm/livestock subject {token!r}")
+        return outline
 
     async def export_bodies_for_world(self, world_uid: str) -> list[dict]:
         world = await self._worlds.get_by_id(world_uid)

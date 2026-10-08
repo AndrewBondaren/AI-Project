@@ -10,7 +10,7 @@ SoT: ``docs/tz_json_validation.md`` §0 RegistryKey.
 from __future__ import annotations
 
 from types import UnionType
-from typing import Any, Union, get_args, get_origin
+from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
@@ -59,6 +59,9 @@ def _peel_aliases(annotation: Any) -> Any:
             inner = inner.__value__
             continue
         origin = get_origin(inner)
+        if origin is Annotated:
+            inner = get_args(inner)[0]
+            continue
         if origin is Union or origin is UnionType:
             args = [a for a in get_args(inner) if a is not type(None)]
             if len(args) == 1:

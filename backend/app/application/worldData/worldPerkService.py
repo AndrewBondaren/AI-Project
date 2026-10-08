@@ -39,6 +39,8 @@ def _to_perk(row: dict) -> WorldPerk:
 
 class WorldPerkService:
 
+    prepare_body = staticmethod(_to_perk)
+
     def __init__(self, repo: IWorldPerkRepository, world_service: WorldService) -> None:
         self._repo = repo
         self._worlds = world_service
@@ -81,7 +83,7 @@ class WorldPerkService:
             await self._repo.upsert(perk)
             await self._ensure_registry(world_uid, perk)
 
-        return await import_list(data, _to_perk, upsert_one, id_key=_ID_KEY)
+        return await import_list(data, self.prepare_body, upsert_one, id_key=_ID_KEY)
 
     async def export_bodies_for_world(self, world_uid: str) -> list[dict]:
         perks = await self.get_all(world_uid)

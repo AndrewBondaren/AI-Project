@@ -1,8 +1,10 @@
 # ТЗ: JSON-импорт и CRUD для игровых сущностей
 
-## Базовый контракт выбора политики (2026-10-08, target)
+## Базовый контракт выбора политики (2026-10-08)
 
-SoT: [runtime/worldEdit policy](./tz_runtime_world_edit_policy.md). Контекст определяет frontend. Обычный импорт мира выполняется без дополнительной политики; валидация использует тот же API с необязательным boolean-флагом `validate_only=true`. Отсутствие/false — обычный импорт с существующей bundle transaction/rollback семантикой; true — те же проверки/разрешение и диагностика для frontend **без записи в БД/Pack и без запуска изменяющих мир задач**. Проверка не выполняется через запись и последующий rollback. После неё frontend вызывает обычный импорт, заново проверяющий актуальные данные; reservation не создаётся. Разбор wire и проверки целостности обязательны в обоих случаях. Флаг разрешается один раз в context и не сохраняется как настройка мира. Отдельные worldEdit endpoint/mode/pipeline и частичный persist не вводятся. Текущий код автоматически выбирает IMPORT-policy в normalize facade и требует миграции по [общему плану](../.cursor/plans/runtime-world-edit-policy.md); данный текст фиксирует target, не готовую реализацию.
+**Реализация:** `POST /worlds/import?validate_only=true` подключён к общему preflight всех bundle handlers, возвращает 200 `{validate_only: true, valid, issues}` без записи. Без флага/false выполняются те же проверки, затем существующая transaction; wire/preflight errors → 422, write failures → rollback/207. Frontend helper `importWorld({file, path, level, validateOnly})` передаёт контекст вызывающего UI. Новый field contract подключён к двум pilots; массовая миграция legacy-полей остаётся E6 [плана](../.cursor/plans/runtime-world-edit-policy.md).
+
+SoT: [runtime/worldEdit policy](./tz_runtime_world_edit_policy.md). Контекст определяет frontend. Отсутствие/false `validate_only` — обычный импорт; true — те же проверки и диагностика **без DB/Pack writes и изменяющих мир задач**. Preview не выполняет запись с rollback и не создаёт reservation. Frontend применяет результат новым обычным импортом, который повторяет проверки. Флаг разрешается один раз в application context, наследуется и не сохраняется в мир. Отдельные worldEdit endpoint/mode/pipeline и partial persist не вводятся. Legacy ResolveMode.IMPORT используется в обоих bundle-сценариях только для одинакового разбора wire; пользовательскую policy определяет флаг.
 
 ## 1. Scope
 
