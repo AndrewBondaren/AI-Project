@@ -7,7 +7,7 @@ Template: ``fixtures/world_template.json`` ``terrain_masks.default_*.hills``.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
@@ -23,13 +23,6 @@ class HillPolicy(BaseModel):
     radius: DefaultWhenMissing[int] = constrained_field(default=40, greater_equals=1)
     height: DefaultWhenMissing[int] = constrained_field(default=2, greater_equals=1)
     shapes: DefaultWhenMissing[tuple[HillShape, ...]] = Field(default_factory=tuple)
-
-    @field_validator("shapes", mode="before")
-    @classmethod
-    def _shapes_tuple(cls, value: object) -> object:
-        if value is None:
-            return ()
-        return value
 
     def resolved_shapes(self) -> tuple[HillShape, ...]:
         """Palette for one hill. Empty wire → full catalog (hash from world uid)."""

@@ -400,7 +400,8 @@ class StructureGeneratorService:
             try:
                 resolved.append(resolve_model(LevelDef, raw, ctx=ctx))
             except UnresolvedModelError as exc:
-                room_ids = [room.get("room_id") for room in raw.get("rooms", []) if isinstance(room, dict)] if isinstance(raw, dict) else []
+                rooms = raw.get("rooms") if isinstance(raw, dict) else None
+                room_ids = [room.get("room_id") for room in rooms if isinstance(room, dict)] if isinstance(rooms, list) else []
                 raise GenerationError(
                     f"Structure '{template.system_name}' building '{building_uid}' levels[{index}] rooms={room_ids}: {exc}"
                 ) from exc

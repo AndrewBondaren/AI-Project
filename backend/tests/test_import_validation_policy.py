@@ -131,6 +131,24 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 422)
         self.assertEqual((await self.worlds.get_by_id(uid)).terrain_masks, world.terrain_masks)
 
+    async def test_union_patch_persists_star_changes_and_invalid_merge_never_writes(self):
+        fixture = self.fixture("world_defaults_test")
+        fixture["world"]["terrain_masks"] = {"default_mountains": {"default_form": {
+            "form_type": "star", "rays": 5, "inner_ratio": 0.45}}}
+        await self.service.import_bundle(fixture)
+        uid = fixture["world"]["world_uid"]
+        await self.worlds.update(uid, {"terrain_masks": {"default_mountains": {
+            "default_form": {"rays": 7}}}})
+        world = await self.worlds.get_by_id(uid)
+        self.assertEqual(world.terrain_masks["default_mountains"]["default_form"],
+                         {"form_type": "star", "rays": 7, "inner_ratio": 0.45})
+        for change in ({"default_mountains": {"default_form": {"rays": 1}}},
+                       {"default_forests": {"hills": {"shapes": None}}}):
+            with self.assertRaises(HTTPException) as caught:
+                await self.worlds.update(uid, {"terrain_masks": change})
+            self.assertEqual(caught.exception.status_code, 422)
+            self.assertEqual((await self.worlds.get_by_id(uid)).terrain_masks, world.terrain_masks)
+
     async def test_http_flag_default_false_true_and_invalid(self):
         app = FastAPI()
         app.include_router(router)

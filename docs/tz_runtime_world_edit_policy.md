@@ -181,3 +181,20 @@ Room/opening/height/stem invalid repair удалены. Ошибочная ст�
 целиком; битая attachment-ссылка останавливает уровень через общую диагностику.
 Остальные cascade membership и доменные repair/placement/material boundaries
 не объявлены закрытыми; остаток E6 указан в плане.
+
+
+### Уточнение partial patch после E6-R1–R3
+
+Patch без discriminator не выбирает первую ветку union и не удаляет authored keys.
+Выбор ветки model union и проверка отложенных полей выполняются при обязательной
+полной валидации после merge с существующим состоянием, до persistence. Явный
+string discriminator проверяется по исходному tagged-union contract уже на patch.
+Nested field before-validators и aliases сохраняются; after/wrap field validators,
+потребляющие полные nested POJO, и model validators выполняются после merge.
+Patch не вызывает defaults отсутствующих полей и не является валидной полной POJO.
+
+`HillPolicy.shapes` допускает массив: missing/[] означают весь каталог, повторения
+задают веса. Explicit null и ошибочные элементы дают unresolved, без repair.
+Ошибочный тип `levels[].rooms` даёт штатный report/GenerationError, а не TypeError
+при построении диагностики. Приёмка исправлений: 188 synchronous + 10 import/API
+tests, OK; полный suite заново не запускался. Остаток E6 сохраняется в плане.

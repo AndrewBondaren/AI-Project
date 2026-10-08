@@ -122,7 +122,8 @@ class StructureTemplate(BaseModel):
             try:
                 parsed.append(LevelDef.model_validate(level))
             except ValidationError as exc:
-                room_ids = [room.get("room_id") for room in level.get("rooms", []) if isinstance(room, dict)] if isinstance(level, dict) else []
+                rooms = level.get("rooms") if isinstance(level, dict) else None
+                room_ids = [room.get("room_id") for room in rooms if isinstance(room, dict)] if isinstance(rooms, list) else []
                 raise ValueError(f"levels[{index}] rooms={room_ids}: {exc}") from exc
         validate_room_ids(parsed)
         return self

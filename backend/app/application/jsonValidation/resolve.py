@@ -11,16 +11,12 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Annotated, Any, NoReturn, TYPE_CHECKING, Union, get_args, get_origin
-from types import UnionType
+from typing import Any, NoReturn, TYPE_CHECKING
 
 from pydantic import BaseModel, RootModel, ValidationError
 from pydantic_core import SchemaValidator, core_schema
 from functools import lru_cache
 
-from app.dataModel.annotationPolicy import (
-    unwrap_wire_type,
-)
 from app.application.jsonValidation.types import FieldPathError, ResolveReport
 from app.dataModel.registryKey import registry_key_target
 
@@ -104,34 +100,88 @@ def reject_unresolved(ctx: ResolveContext, issues: list[FieldPathError]) -> NoRe
     raise UnresolvedModelError(issues)
 
 
-@lru_cache
-def _patch_validator(model_cls: type[BaseModel]) -> SchemaValidator:
-    """Reuse compiled field schemas, including @field_validator and constraints.
-
-    Model invariants run on the full merged object. A patch must neither require
-    missing fields nor invoke their default factories. No second field registry.
-    """
-    schema = model_cls.__pydantic_core_schema__
-    definitions = schema.get("definitions", []) if schema["type"] == "definitions" else []
-    if definitions:
-        schema = schema["schema"]
+def _model_fields_schema(schema: dict, definitions: list[dict]) -> dict:
     while schema["type"] != "model-fields":
         if schema["type"] == "definition-ref":
             schema = next(item for item in definitions if item.get("ref") == schema["schema_ref"])
         else:
             schema = schema["schema"]
+    return schema
+
+
+def _patch_fields(schema: dict, definitions: list[dict], *, aliases: bool) -> dict:
     fields = {}
     for name, info in schema["fields"].items():
-        field_schema = info["schema"]
-        if field_schema["type"] == "default":
-            field_schema = field_schema["schema"]
-        # Nested objects are recursively checked as patches below, not as full
-        # objects. Complete collections still validate their complete rows.
-        if _nested_model(model_cls.model_fields[name].annotation) is not None:
-            field_schema = core_schema.any_schema()
-        fields[name] = core_schema.typed_dict_field(field_schema, required=False)
-    patch_schema = core_schema.typed_dict_schema(fields,
-        extra_behavior=model_cls.model_config.get("extra", "ignore"))
+        options = {}
+        if aliases and "validation_alias" in info:
+            options["validation_alias"] = info["validation_alias"]
+        fields[name] = core_schema.typed_dict_field(
+            _patch_field_schema(info["schema"], definitions), required=False, **options)
+    return core_schema.typed_dict_schema(fields,
+        extra_behavior=schema.get("extra_behavior", "ignore"), config={"populate_by_name": True})
+
+
+def _contains_patch_model(schema: dict) -> bool:
+    if schema["type"] in ("model", "definition-ref"):
+        return True
+    if "schema" in schema:
+        return _contains_patch_model(schema["schema"])
+    if schema["type"] in ("union", "tagged-union"):
+        choices = schema["choices"]
+        return any(_contains_patch_model(c[0] if isinstance(c, tuple) else c)
+                   for c in (choices.values() if isinstance(choices, dict) else choices))
+    return False
+
+
+def _patch_field_schema(schema: dict, definitions: list[dict]) -> dict:
+    kind = schema["type"]
+    if kind == "default":
+        return _patch_field_schema(schema["schema"], definitions)
+    if kind == "model" and not schema.get("root_model"):
+        fields = dict(_model_fields_schema(schema, definitions))
+        fields["extra_behavior"] = schema.get("config", {}).get("extra_fields_behavior", "ignore")
+        return _patch_fields(fields, definitions, aliases=True)
+    if kind == "definition-ref":
+        target = next(item for item in definitions if item.get("ref") == schema["schema_ref"])
+        return _patch_field_schema(target, definitions)
+    if kind in ("nullable", "function-before"):
+        return {**schema, "schema": _patch_field_schema(schema["schema"], definitions)}
+    if kind in ("function-after", "function-wrap") and _contains_patch_model(schema):
+        # These validators consume complete POJOs; run them after merge.
+        return _patch_field_schema(schema["schema"], definitions)
+    if kind == "tagged-union" and _contains_patch_model(schema):
+        patched = {**schema, "choices": {k: _patch_field_schema(v, definitions)
+                                        for k, v in schema["choices"].items()}}
+        discriminator = schema["discriminator"]
+        def validate(value, handler):
+            if isinstance(value, dict) and isinstance(discriminator, str) and discriminator not in value:
+                # The existing object's tag is available only after merge. Keep
+                # every authored key, then validate against that selected branch.
+                return dict(value)
+            return handler(value)
+        return core_schema.no_info_wrap_validator_function(validate, patched)
+    if kind == "union" and _contains_patch_model(schema):
+        def validate(value, handler):
+            if isinstance(value, dict):
+                return dict(value)  # branch selection belongs to merged validation
+            return handler(value)
+        return core_schema.no_info_wrap_validator_function(validate, schema)
+    # Collections contain complete rows, so retain their full original schemas.
+    return schema
+
+
+@lru_cache
+def _patch_validator(model_cls: type[BaseModel]) -> SchemaValidator:
+    """Validate supplied fields; union patches without tags await merged validation.
+
+    Before field validators are retained. Validators consuming complete nested
+    POJOs and model invariants run on the full merged object, without patch defaults.
+    """
+    schema = model_cls.__pydantic_core_schema__
+    definitions = schema.get("definitions", []) if schema["type"] == "definitions" else []
+    fields = dict(_model_fields_schema(schema, definitions))
+    fields["extra_behavior"] = model_cls.model_config.get("extra", "ignore")
+    patch_schema = _patch_fields(fields, definitions, aliases=False)
     if definitions:
         patch_schema = core_schema.definitions_schema(patch_schema, definitions)
     return SchemaValidator(patch_schema)
@@ -204,37 +254,7 @@ def resolve_patch(model_cls: type[BaseModel], raw: dict[str, Any], *, ctx: Resol
             ("unknown wire value; " if e["type"] == "enum" else "") + e["msg"],
             code="UNKNOWN_ENUM" if e["type"] == "enum" else e["type"])
             for e in exc.errors()])
-    for name, value in list(payload.items()):
-        info = model_cls.model_fields.get(name)
-        if info is None:
-            continue
-        inner = _nested_model(info.annotation)
-        if inner is not None and isinstance(value, dict):
-            payload[name] = resolve_patch(inner, value, ctx=ctx.child(name))
-        elif inner is not None:
-            # In particular, explicit null must respect nullable, and a scalar
-            # must not evade the nested-object check through the patch adapter.
-            from pydantic import TypeAdapter
-            try:
-                TypeAdapter(info.annotation).validate_python(value)
-            except ValidationError as exc:
-                reject_unresolved(ctx, [_validation_issue(ctx, ctx.path_prefix + (name,) + tuple(e["loc"]),
-                    e["msg"], code=e["type"]) for e in exc.errors()])
     return payload
-
-
-def _nested_model(annotation: Any) -> type[BaseModel] | None:
-    inner = unwrap_wire_type(annotation)
-    if isinstance(inner, type) and issubclass(inner, BaseModel) and not issubclass(inner, RootModel):
-        return inner
-    origin = get_origin(inner)
-    args = get_args(inner)
-    candidates = args[:1] if origin is Annotated else args if origin in (Union, UnionType) else ()
-    for arg in candidates:
-        found = _nested_model(arg)
-        if found is not None:
-            return found
-    return None
 
 
 def _wire_snapshot(raw: Any) -> Any:
