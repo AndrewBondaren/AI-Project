@@ -340,13 +340,14 @@ def _read_wire_field(
     return None, False
 
 
-def resolve_model(
-    model_cls: type[BaseModel],
+def resolve_model[ModelT: BaseModel](
+    model_cls: type[ModelT],
     raw: Any,
     *,
     label: str = "",
     ctx: ResolveContext | None = None,
-) -> BaseModel:
+    validation_context: dict | None = None,
+) -> ModelT:
     """Validate the complete authored object; never construct an unchecked POJO.
 
     Pydantic owns aliases, field/model validators, presence and declared defaults.
@@ -358,7 +359,7 @@ def resolve_model(
     if active_ctx.partial:
         raise TypeError("partial input is a patch; use resolve_patch and validate the merged object")
     try:
-        result = model_cls.model_validate(raw, by_name=True)
+        result = model_cls.model_validate(raw, by_name=True, context=validation_context)
     except ValidationError as exc:
         reject_unresolved(active_ctx, [_validation_issue(active_ctx,
             active_ctx.path_prefix + tuple(part for part in e["loc"]

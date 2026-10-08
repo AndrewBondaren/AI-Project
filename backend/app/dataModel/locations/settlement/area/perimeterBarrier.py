@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def coerce_cardinal_barrier_sides(value: Any) -> list[Facing] | None:
-    """Keep host cardinals; skip intercardinal / unknown. Non-list raises (resolve → default)."""
+    """Validate host cardinals; preserve aliases and deduplicate valid values."""
     if value is None:
         return None
     if not isinstance(value, (list, tuple)):
@@ -34,18 +34,10 @@ def coerce_cardinal_barrier_sides(value: Any) -> list[Facing] | None:
         facing: Facing | None
         try:
             facing = parse_facing(item) if not isinstance(item, Facing) else item
-        except (TypeError, ValueError):
-            logger.warning(
-                "perimeter_barrier | sides skip %r; not a host cardinal",
-                item,
-            )
-            continue
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid host cardinal: {item!r}") from exc
         if facing is None or facing not in CARDINAL_FACINGS:
-            logger.warning(
-                "perimeter_barrier | sides skip %r; not a host cardinal",
-                item if facing is None else facing.value,
-            )
-            continue
+            raise ValueError(f"invalid host cardinal: {item!r}")
         if facing in seen:
             continue
         seen.add(facing)
@@ -80,29 +72,9 @@ class PerimeterBarrier(BaseModel):
 
 
 def resolved_host_sides(barrier: PerimeterBarrier) -> tuple[frozenset[Facing], list[str]]:
-    """
-    None / [] = four cardinals of this host bbox.
-    Unknown and intercardinal keys are skipped (not an error).
-    Empty after skip → four cardinals (same as []).
-    """
-    raw = barrier.sides
-    if not raw:
-        return CARDINAL_FACINGS, []
-    kept: set[Facing] = set()
-    skipped: list[str] = []
-    for item in raw:
-        try:
-            facing = parse_facing(item)
-        except ValueError:
-            skipped.append(str(item))
-            continue
-        if facing is None or facing not in CARDINAL_FACINGS:
-            skipped.append(str(item) if facing is None else facing.value)
-            continue
-        kept.add(facing)
-    if not kept:
-        return CARDINAL_FACINGS, skipped
-    return frozenset(kept), skipped
+    """None / [] = all host cardinals; invalid values never become all sides."""
+    sides = coerce_cardinal_barrier_sides(barrier.sides)
+    return (frozenset(sides) if sides else CARDINAL_FACINGS), []
 
 
 def perimeter_barrier_from_template(

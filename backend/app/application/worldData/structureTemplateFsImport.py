@@ -5,6 +5,8 @@ Separated from SQL CRUD in ``StructureTemplateLibraryService``.
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model, UnresolvedModelError
+
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -118,8 +120,8 @@ def load_structure_stdlib(root: Path | None = None) -> list[StructureTemplate]:
             logger.warning("structure | stdlib reject %s: %s", msg, exc)
             raise StructureTemplateValidationError(msg) from exc
         try:
-            outline = StructureTemplate.model_validate(raw)
-        except Exception as exc:
+            outline = resolve_model(StructureTemplate, raw, label="StructureTemplate")
+        except UnresolvedModelError as exc:
             msg = f"Invalid structure template JSON: {file}"
             logger.warning("structure | stdlib reject %s: %s", msg, exc)
             raise StructureTemplateValidationError(msg) from exc

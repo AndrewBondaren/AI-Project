@@ -1,11 +1,9 @@
-"""Import/library WARN for invalid relief geom knobs (C31) — not reject."""
+"""Shared rejection of invalid relief geometry (legacy function name retained)."""
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.log.events import (
-    EVENT_INVALID_GEOM,
-)
-from app.application.worldData.generators.terrain.relief.log.log import relief_warning
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
 
@@ -15,13 +13,9 @@ def warn_template_invalid_geom(
     template_uid: str | None = None,
     source_file: str | None = None,
 ) -> None:
-    """Log each invalid L/θ site; generate still applies 20° fallback."""
-    for where, reason in template.invalid_geom_hits():
-        relief_warning(
-            EVENT_INVALID_GEOM,
-            why=reason,
-            where=where,
-            system_name=template.system_name,
-            template_uid=template_uid,
-            source_file=source_file,
-        )
+    """Reject invalid L/θ; no geometry repair (E6)."""
+    issues = [FieldPathError(("relief_templates", template_uid or template.system_name, where),
+                             f"invalid relief geometry: {reason}", code="DOMAIN_GEOMETRY")
+              for where, reason in template.invalid_geom_hits()]
+    if issues:
+        reject_unresolved(ResolveContext(), issues)

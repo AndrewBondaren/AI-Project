@@ -1,6 +1,8 @@
 """Shared entry/connection door-height contract (§3.7)."""
 import logging
 from math import floor
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.dataModel.locations.structure.building.structureTemplate import (
@@ -19,14 +21,12 @@ def resolve_door_height(
     context: str,
 ) -> int:
     uid = template.system_name if template is not None else "<unspecified>"
-    if explicit is not None and explicit >= passage_height:
+    if explicit is not None:
+        if explicit < passage_height:
+            ctx = ResolveContext(path_prefix=("structures", str(uid), context, "door_height"))
+            reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, f"door_height must be >= passage_height={passage_height}", code="DOMAIN_HEIGHT")])
         height = explicit
     else:
-        if explicit is not None:
-            logger.error(
-                "Structure '%s', %s: door_height=%d below passage_height=%d — auto-resolve",
-                uid, context, explicit, passage_height,
-            )
         ratio = template.door_height_ratio if template is not None else DEFAULT_DOOR_HEIGHT_RATIO
         cap = template.door_height_max if template is not None else DEFAULT_DOOR_HEIGHT_MAX
         height = z_height - 1 if z_height <= 3 else min(floor(z_height * ratio), cap)

@@ -140,6 +140,7 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored.system_economic_tier, "custom-tier")
         self.assertEqual(settlement_skeleton_pojo(stored).architectural_style, "gothic")
         world = World(world_uid="world", name="World", created_at="2026-10-06")
+        world.economic_tier_registry = [{"system_tier": "custom-tier", "display_tier": "Custom", "base_value": 10}]
         ctx = settlement_context(world, stored)
         self.assertEqual(ctx.system_city_size, "large")
         self.assertEqual(ctx.settlement_density, payload.settlement_density)
@@ -249,6 +250,8 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_runtime_binds_payload_for_settlement_and_complex(self):
         world = World(world_uid="world", name="World", created_at="2026-10-07")
+        world.economic_tier_registry = [{"system_tier": "custom-tier", "display_tier": "Custom", "base_value": 10}]
+        world.material_registry = [{"system_material": "marble", "display_name": "Marble", "material_category": "solid"}]
         for kind in ("settlement", "location_complex"):
             row = self.location(kind, {"system_city_size": "large", "settlement_density": "dense",
                                        "dominant_material": "marble"})

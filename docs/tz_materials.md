@@ -278,3 +278,13 @@ None для liquid/gas остаётся допустимым, требовани
 worldMaterialRegistry.py §entry_for, generators/utils/materialResolver.py
 §resolve_material, jsonValidation/resolve.py §_resolve_field,
 generators/road/roadTravelResolver.py §effective_degradation_rate.
+# Runtime/worldEdit — миграция consumers E6 (2026-10-08)
+
+Основа — [общая политика](tz_runtime_world_edit_policy.md). Неизвестный авторский
+economic_tier/material ref и отсутствие кандидатов вместе с неизвестным default
+дают unresolved; error fallback не создаёт несуществующий material key.
+Штатный подбор по tier вниз → любой подходящий construction-кандидат → объявленный
+terminal default сохраняется. Terminal defaults `window_glass`, `porthole_glass`,
+`vent_mesh`, `dirt_road` включены в canonical material registry и fixture мира.
+Они не имеют тега construction: возврат default при штатном отсутствии кандидатов
+не расходует RNG; авторские construction-кандидаты сохраняют прежний алгоритм выбора.

@@ -162,7 +162,7 @@ default UID/membership, не заменяет тела/`source_file` и не м�
 
 `slope_weight + sheer_weight == 1` (±eps), иначе **reject** шаблона (**R27**).
 
-Geom knobs на case/band: `slope_length_cells` XOR `target_angle_deg` (omit L → 1). Невалидный geom → WARN + 20°, не reject import (архив **R36b**). Политика задаёт порог/knobs, не высоту карты (`h` = measured `|dz|`). Пресеты UI — не backend (**R30**).
+Geom knobs на root/case/band: `slope_length_cells` XOR `target_angle_deg` (оба отсутствуют → L=1). Длина < 1, не конечный угол, угол вне `(0, 90)` или одновременное задание L и угла — unresolved по [общей политике](tz_runtime_world_edit_policy.md): runtime пишет WarningError и прекращает зависимую операцию; validate_only возвращает диагностику без runtime-лога. Прежний C31 WARN + подстановка 20° отменён миграцией E6 (2026-10-08). Политика задаёт порог/knobs, не высоту карты (`h` = measured `|dz|`). Пресеты UI — не backend (**R30**).
 
 **Mountain:** `side_recipe` XOR weights \| pattern \| fixed kind; пусто → seeded random per side (**R33**). Непустые Mode A/B `conditions` на `context: mountain` → **reject**. Не-mountain + `side_recipe` → **reject**. `MountainKind` ≠ grade preset.
 

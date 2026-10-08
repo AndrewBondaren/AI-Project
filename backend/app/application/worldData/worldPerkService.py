@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict, fields
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
+from app.application.jsonValidation.worldSlices import resolve_registry_list_world
+from app.dataModel.perks.worldPerkTemplateRegistry import WorldPerkTemplateRegistry
+from app.dataModel.perks.perkTemplateOutline import PerkTemplateOutline
 from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
 from app.application.import_helpers import import_list
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
-from app.dataModel.perks.normalizePerkTemplateWire import normalize_perk_template_body
 from app.dataModel.perks.perkTemplateRegistryEntry import PerkTemplateRegistryEntry
 from app.db.models.world_perk import WorldPerk
 from app.db.repositories.iWorldPerkRepository import IWorldPerkRepository
@@ -19,21 +22,15 @@ _ID_KEY = WorldPerk.__pk__
 
 
 def _registry_entries(world) -> list[PerkTemplateRegistryEntry]:
-    out: list[PerkTemplateRegistryEntry] = []
-    for raw in getattr(world, "perk_template_registry", None) or []:
-        try:
-            out.append(PerkTemplateRegistryEntry.model_validate(raw))
-        except Exception:
-            continue
-    return out
+    return list(resolve_registry_list_world(world, WorldPerkTemplateRegistry).root)
 
 
 def _registry_uids(world) -> list[str]:
     return [e.system_template_uid for e in _registry_entries(world)]
 
 
-def _to_perk(row: dict) -> WorldPerk:
-    canonical = normalize_perk_template_body(row)
+def _to_perk(row: dict, *, ctx: ResolveContext | None = None) -> WorldPerk:
+    canonical = resolve_model(PerkTemplateOutline, row, ctx=ctx).model_dump(mode="json")
     return WorldPerk(**{k: v for k, v in canonical.items() if k in _PERK_FIELD_NAMES})
 
 
@@ -68,9 +65,8 @@ class WorldPerkService:
 
     async def update(self, world_uid: str, template_uid: str, data: dict) -> WorldPerk:
         perk = await self.get_by_id(world_uid, template_uid)
-        for key, value in data.items():
-            if hasattr(perk, key) and key not in self._IMMUTABLE:
-                setattr(perk, key, value)
+        changes = {key: value for key, value in data.items() if key not in self._IMMUTABLE}
+        perk = _to_perk({**asdict(perk), **changes})
         await self._repo.update(perk)
         return perk
 

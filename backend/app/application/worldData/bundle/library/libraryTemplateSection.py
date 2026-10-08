@@ -18,7 +18,7 @@ class LibrarySectionAdapter:
     section_key: str
     export_bodies: Callable[[str], Awaitable[list[dict]]]
     import_bodies: Callable[[str, list[dict]], Awaitable[ImportResult]]
-    prepare_body: Callable[[World, dict], Any]
+    prepare_body: Callable[..., Any]
 
 
 class LibraryTemplateSectionHandler:
@@ -43,4 +43,5 @@ class LibraryTemplateSectionHandler:
         return await self._adapter.import_bodies(world_uid, data)
 
     def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
-        validate_rows(data, lambda row: self._adapter.prepare_body(world, row), ctx=ctx)
+        validate_rows(data, lambda row, row_ctx: self._adapter.prepare_body(
+            world, row, ctx=row_ctx), ctx=ctx, contextual=True)

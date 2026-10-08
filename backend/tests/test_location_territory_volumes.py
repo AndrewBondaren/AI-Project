@@ -35,9 +35,11 @@ class TestLocationTerritoryVolumes(unittest.TestCase):
 
     def test_settlement_uses_footprint_side_from_assembler(self):
         world = _world()
-        loc = _location(system_location_type="settlement", location_payload={"system_city_size": "hamlet"})
+        # This test compares territory geometry, so declare the medium rank
+        # that the legacy unknown-key fallback previously supplied implicitly.
+        loc = _location(system_location_type="settlement", location_payload={"system_city_size": "medium"})
         side = settlement_footprint_side_fine(world, loc)
-        self.assertEqual(side, footprint_side_fine(world, "hamlet"))
+        self.assertEqual(side, footprint_side_fine(world, "medium"))
         vol = territory_volume_for_location(world, loc)
         assert vol is not None
         self.assertEqual(vol.x0, 100)

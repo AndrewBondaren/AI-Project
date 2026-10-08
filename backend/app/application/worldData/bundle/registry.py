@@ -84,7 +84,7 @@ def build_bundle_handlers(
                 section_key=BundleSection.RACE_TEMPLATES,
                 export_bodies=race_service.export_bodies_for_world,
                 import_bodies=race_service.import_bodies,
-                prepare_body=lambda world, row: race_service.prepare_body(row),
+                prepare_body=lambda world, row, *, ctx=None: race_service.prepare_body(row, ctx=ctx),
             ),
         ),
         BundleSection.PERK_TEMPLATES: LibraryTemplateSectionHandler(
@@ -92,7 +92,7 @@ def build_bundle_handlers(
                 section_key=BundleSection.PERK_TEMPLATES,
                 export_bodies=perk_service.export_bodies_for_world,
                 import_bodies=perk_service.import_bodies,
-                prepare_body=lambda world, row: perk_service.prepare_body(row),
+                prepare_body=lambda world, row, *, ctx=None: perk_service.prepare_body(row, ctx=ctx),
             ),
         ),
     }

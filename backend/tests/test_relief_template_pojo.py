@@ -148,45 +148,12 @@ class ReliefTemplatePojoTest(unittest.TestCase):
         self.assertEqual(tpl.outward_length_cells(), 2)
         self.assertEqual(tpl.conditions[0].cases[0].outward_length_cells(), 3)
 
-    def test_geom_xor_both_accepted_as_invalid(self) -> None:
-        tpl = ReliefTemplate.model_validate({
-            "system_name": "both",
-            "display_name": "Both",
-            "context": "road_shoulder",
-            "slope_length_cells": 2,
-            "target_angle_deg": 30.0,
-            "conditions": [],
-        })
-        self.assertEqual(
-            tpl.invalid_geom_hits(),
-            (("root", "geom_both"),),
-        )
-
-    def test_geom_l_zero_accepted_as_invalid(self) -> None:
-        tpl = ReliefTemplate.model_validate({
-            "system_name": "zero",
-            "display_name": "Zero",
-            "context": "road_shoulder",
-            "slope_length_cells": 0,
-            "conditions": [],
-        })
-        self.assertEqual(
-            tpl.invalid_geom_hits(),
-            (("root", "geom_l_lt_1"),),
-        )
-
-    def test_geom_bad_angle_accepted_as_invalid(self) -> None:
-        tpl = ReliefTemplate.model_validate({
-            "system_name": "steep",
-            "display_name": "Steep",
-            "context": "road_shoulder",
-            "target_angle_deg": 95.0,
-            "conditions": [],
-        })
-        self.assertEqual(
-            tpl.invalid_geom_hits(),
-            (("root", "geom_angle"),),
-        )
+    def test_invalid_root_geometry_rejects(self):
+        for knobs in ({"slope_length_cells": 2, "target_angle_deg": 30},
+                      {"slope_length_cells": 0}, {"target_angle_deg": 95}):
+            with self.subTest(knobs=knobs), self.assertRaises(ValidationError):
+                ReliefTemplate.model_validate({"system_name": "invalid", "display_name": "Invalid",
+                    "context": "road_shoulder", "conditions": [], **knobs})
 
     def test_weights_sum_still_reject(self) -> None:
         with self.assertRaises(ValidationError):

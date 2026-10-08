@@ -6,6 +6,7 @@ API/routes stay thin; this service owns catalog sync and validation.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
 from app.application.worldData.generators.terrain.relief.log.log import relief_warning
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
@@ -58,8 +59,8 @@ class ReliefWorldImportService:
 
         return {"imported": len(imported_uids), "uids": imported_uids}
 
-    def prepare_body(self, world, raw: dict) -> ReliefTemplate:
-        outline = ReliefTemplate.model_validate(raw)
+    def prepare_body(self, world, raw: dict, *, ctx: ResolveContext | None = None) -> ReliefTemplate:
+        outline = resolve_model(ReliefTemplate, raw, ctx=ctx)
         warn_template_invalid_geom(outline)
         barrier_keys = {e.system_type for e in barrier_templates(world).root}
         self._validate_structure_refs(outline, barrier_keys)
@@ -72,7 +73,7 @@ class ReliefWorldImportService:
         template_uid: str,
     ) -> dict:
         row = await self._library.get_by_uid(template_uid)
-        outline = ReliefTemplate.model_validate(row.data)
+        outline = resolve_model(ReliefTemplate, row.data, label=template_uid)
         warn_template_invalid_geom(outline, template_uid=template_uid)
         world = await self._worlds.get_by_id(world_uid)
         barrier_keys = {

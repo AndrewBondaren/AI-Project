@@ -6,10 +6,8 @@ Runtime DX accessors. Slice-backed resolve → ``worldSlices.resolve_*_world``
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from pydantic import ValidationError
 
 from app.application.jsonValidation.worldSlices import (
     resolve_json_blob_world,
@@ -86,7 +84,6 @@ _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipi
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
 _ENGINE_MATERIALS = WorldMaterialRegistry.canonical_engine()
 
-logger = logging.getLogger(__name__)
 
 
 def _uid(world: Any) -> str:
@@ -253,25 +250,26 @@ def world_building_layout_overrides(world: Any) -> list[PlotLayoutTemplate]:
     )
 
     col = slice_column_key(WorldBuildingTemplateRegistry)
-    raw = getattr(world, col, None) or []
+    from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, resolve_model
+    from app.application.jsonValidation.types import FieldPathError
+    from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import BuildingTemplateRegistryEntry
+
+    raw = getattr(world, col, None)
+    raw = [] if raw is None else raw
     if isinstance(raw, dict):
         raw = list(raw.values())
+    ctx = ResolveContext(path_prefix=(col,))
+    if not isinstance(raw, list):
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "expected list", code="EXPECTED_LIST")])
     out: list[PlotLayoutTemplate] = []
-    for row in raw:
+    for index, row in enumerate(raw):
+        row_ctx = ctx.child(index)
         if not isinstance(row, dict):
-            continue
+            reject_unresolved(row_ctx, [FieldPathError(row_ctx.path_prefix, "expected object", code="EXPECTED_OBJECT")])
         if "system_template_uid" in row:
+            resolve_model(BuildingTemplateRegistryEntry, row, ctx=row_ctx)
             continue
-        try:
-            layout = PlotLayoutTemplate.model_validate(row)
-        except ValidationError:
-            logger.warning(
-                "world | building_template_registry row not a PlotLayoutTemplate"
-                " world=%s keys=%s",
-                _uid(world),
-                sorted(row.keys()),
-            )
-            continue
+        layout = resolve_model(PlotLayoutTemplate, row, ctx=row_ctx)
         if plot_type_defaulted(layout):
             packing_warning(
                 PackingStep.CACHE,

@@ -110,7 +110,7 @@ class WallMaterialCellsTests(unittest.TestCase):
     def test_missing_strength_region_falls_back_to_building_material(self):
         world, building = self._world_building()
         world.material_registry = [
-            dict(row) for row in _WORLD_MATERIALS if row["system_material"] == "oak"
+            dict(row) for row in _WORLD_MATERIALS if row["system_material"] in ("oak", "iron")
         ] + [{"system_material": "granite", "display_name": "Granite",
               "material_category": "solid", "tags": ["construction"],
               "use_type": ["wall", "floor"], "economic_tier": "standard"}]

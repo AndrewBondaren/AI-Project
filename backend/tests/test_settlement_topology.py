@@ -321,7 +321,11 @@ class TopologySkipTest(unittest.TestCase):
         )
         self.assertTrue(should_skip_topology([district], [gate]))
         self.assertFalse(should_skip_topology([district], []))
-        self.assertFalse(should_skip_topology([incomplete], [gate]))
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        # A corrupt authored freeze must not be treated as absent topology and
+        # regenerated. Valid absence remains a separate ordinary case.
+        with self.assertRaises(UnresolvedModelError):
+            should_skip_topology([incomplete], [gate])
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.application.jsonValidation.index.refKinds import RefKind
 
@@ -11,6 +11,7 @@ from app.application.jsonValidation.index.refKinds import RefKind
 class WorldRegistryIndex:
     """Import-time vocabulary index built after ``facade`` normalize."""
 
+    registry_vocabularies: dict[type, frozenset[str]] = field(default_factory=dict)
     materials: frozenset[str] | None = None
     liquids: frozenset[str] | None = None
     terrains: frozenset[str] | None = None
@@ -36,6 +37,8 @@ class WorldRegistryIndex:
 
     def keys_for_registry(self, registry: type) -> frozenset[str] | None:
         """RegistryKey's nominal target → the existing REF-W vocabulary."""
+        if registry in self.registry_vocabularies:
+            return self.registry_vocabularies[registry]
         from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
         from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
         from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry

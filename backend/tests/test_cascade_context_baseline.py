@@ -69,6 +69,9 @@ def fixture():
         )
         for entry in tiers.root for use in ("wall", "floor", "window_glass")
     ])
+    materials.root.extend(MaterialRegistryEntry(
+        system_material=name, display_name=name, material_category=MaterialCategory.SOLID,
+    ) for name in ("test_parent_wall_material", "test_parent_floor_material", "marble"))
     world = World(
         world_uid="cascade-baseline-world", name="Cascade baseline", created_at="2026-10-03",
         economic_tier_registry=tiers.model_dump(mode="json"),
@@ -77,8 +80,8 @@ def fixture():
     building = NamedLocation(
         location_uid="cascade-baseline-building", world_uid=world.world_uid,
         display_name="Building", system_location_type="building", created_at=world.created_at,
-        map_x=20, map_y=30, map_z=7, parent_wall_material="parent_wall",
-        parent_floor_material="parent_floor",
+        map_x=20, map_y=30, map_z=7, parent_wall_material="test_parent_wall_material",
+        parent_floor_material="test_parent_floor_material",
     )
     structure = StructureTemplate(
         system_name="00000000-0000-4000-8000-000000000021", display_name="Cascade baseline",
@@ -234,7 +237,7 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # no `or parent_wall_material` chain remains.
         world, building, _ = fixture()
         loc_ctx = _building_ctx(world, building)
-        self.assertEqual(loc_ctx.wall_material, "parent_wall")
+        self.assertEqual(loc_ctx.wall_material, "test_parent_wall_material")
         for explicit in (False, True):
             context = StructureContext(
                 "slab", "flat",
@@ -243,14 +246,14 @@ class CascadeContextBaselineTests(unittest.TestCase):
                 location_ctx=loc_ctx,
             )
             self.assertEqual(FoundationBuilder(world, building, context, {}, 7).mat,
-                             "foundation" if explicit else "parent_wall")
+                             "foundation" if explicit else "test_parent_wall_material")
             self.assertEqual(RoofBuilder(world, building, context, 7).mat,
-                             "roof" if explicit else "parent_wall")
+                             "roof" if explicit else "test_parent_wall_material")
         # A context without a chain still resolves through the building
         # NL link (the debug fallback — §8.4).
         context = StructureContext("slab", "flat")
         self.assertEqual(FoundationBuilder(world, building, context, {}, 7).mat,
-                         "parent_wall")
+                         "test_parent_wall_material")
         settlement = replace(building, system_location_type="settlement", system_economic_tier="t1")
         skeleton = SettlementAssembler()._build_skeleton(world, settlement)
         self.assertEqual(skeleton.economic_tier, "t1")

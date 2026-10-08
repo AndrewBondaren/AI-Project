@@ -48,6 +48,7 @@ class ReliefTemplate(BaseModel):
 
     @model_validator(mode="after")
     def _context_body_rules(self) -> ReliefTemplate:
+        coerce_geom_knobs(self.slope_length_cells, self.target_angle_deg)
         if self.context == ReliefContext.MOUNTAIN:
             if self.conditions:
                 raise ValueError(
@@ -79,7 +80,7 @@ class ReliefTemplate(BaseModel):
         return resolved_slope_length_cells(self.slope_length_cells)
 
     def invalid_geom_hits(self) -> tuple[tuple[str, str], ...]:
-        """``(where, reason)`` for C31 WARN; empty if geom knobs are valid."""
+        """``(where, reason)`` for shared rejection; empty for valid geometry."""
         hits: list[tuple[str, str]] = []
         why = geom_invalid_reason(self.slope_length_cells, self.target_angle_deg)
         if why is not None:

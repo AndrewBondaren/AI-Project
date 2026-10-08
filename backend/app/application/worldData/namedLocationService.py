@@ -1,5 +1,7 @@
 from fastapi import HTTPException
 from dataclasses import asdict
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
+from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.jsonValidation.worldRow import location_types
 
 from app.application.importResult import ImportError, ImportResult
@@ -49,11 +51,17 @@ class NamedLocationService:
     _IMMUTABLE = frozenset({"location_uid", "world_uid"})
 
     @staticmethod
-    def _from_wire(row: dict, *, world_uid: str, world: World | None = None) -> NamedLocation:
-        wire = BundleNamedLocation.model_validate(
+    def _from_wire(row: dict, *, world_uid: str, world: World | None = None, ctx: ResolveContext | None = None) -> NamedLocation:
+        active_ctx = ctx if ctx is not None else ResolveContext(path_prefix=("locations", row.get("location_uid", "?") if isinstance(row, dict) else "?"))
+        wire = resolve_model(BundleNamedLocation,
             with_default_created_at(row),
-            context={"location_type_registry": location_types(world)} if world is not None else None,
+            ctx=active_ctx,
+            validation_context={"location_type_registry": location_types(world)} if world is not None else None,
         )
+        if world is not None:
+            validate_source(world, wire, ctx=active_ctx)
+            if wire.location_payload is not None:
+                validate_source(world, wire.location_payload, ctx=active_ctx.child("location_payload"))
         return NamedLocation(**{**wire.to_db_fields(), "world_uid": world_uid})
 
     async def create(self, world_uid: str, data: dict) -> NamedLocation:
@@ -89,7 +97,7 @@ class NamedLocationService:
         for index, row in enumerate(data):
             try:
                 prepared.append((index, self._from_wire(row, world_uid=world_uid, world=world)))
-            except Exception as exc:
+            except ValueError as exc:
                 errors.append(ImportError(
                     index=index,
                     message=str(exc),
@@ -106,7 +114,7 @@ class NamedLocationService:
             try:
                 await self._repo.upsert(loc)
                 succeeded += 1
-            except Exception as exc:
+            except ValueError as exc:
                 errors.append(ImportError(
                     index=index,
                     message=str(exc),

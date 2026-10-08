@@ -77,7 +77,8 @@ class LocationsSectionHandler:
         return await self._locations.import_from_json(world_uid, section_data)
 
     def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
-        validate_rows(data, lambda row: self._locations._from_wire(row, world_uid=world.world_uid, world=world), ctx=ctx)
+        validate_rows(data, lambda row, row_ctx: self._locations._from_wire(
+            row, world_uid=world.world_uid, world=world, ctx=row_ctx), ctx=ctx, contextual=True)
         topo_sort(data, "location_uid", "parent_location_uid")
 
 

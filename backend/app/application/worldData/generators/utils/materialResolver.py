@@ -2,6 +2,8 @@ import logging
 from random import Random
 
 from app.application.jsonValidation import economic_tiers, materials
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
@@ -44,7 +46,21 @@ def resolve_material(
     """
     registry = materials(world).root
     tiers = tiers_sorted(economic_tiers(world).root)
-    tier = effective_tier or median_system_tier(tiers) or ""
+    ctx = ResolveContext(path_prefix=("materials", context or use_type))
+    if effective_tier is not None and not any(e.system_tier == effective_tier for e in tiers):
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + ("economic_tier",),
+            f"unknown reference: {effective_tier!r}", code="REF_W_UNKNOWN")])
+    # Canonical completion is a catalog contract; validate authored row refs,
+    # not builtin rows whose tier vocabulary may differ from a custom world.
+    by_key = {entry.system_material: entry for entry in registry}
+    for index, raw in enumerate(world.material_registry or []):
+        # The accessor above validated canonical overlays. Read effective rows
+        # for authored keys rather than revalidating partial overlay rows.
+        entry = by_key[raw["system_material"]]
+        if entry.economic_tier is not None and not any(t.system_tier == entry.economic_tier for t in tiers):
+            reject_unresolved(ctx, [FieldPathError(("material_registry", index, "economic_tier"),
+                f"unknown reference: {entry.economic_tier!r}", code="REF_W_UNKNOWN")])
+    tier = effective_tier if effective_tier is not None else median_system_tier(tiers) or ""
 
     found = _construction_candidates(registry, use_type, tier)
 
@@ -67,9 +83,13 @@ def resolve_material(
         ]
 
     if not found:
-        logger.warning("resolve_material: no %r material found%s, using default %r",
-                       use_type, f" (room={context})" if context else "", default)
-        return default
+        # A declared default for ordinary absence is legal only if it names
+        # a material in this world's valid vocabulary. Never invent a key.
+        if any(entry.system_material == default for entry in registry):
+            return default
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, f"no {use_type!r} material candidates or declared default {default!r}",
+                                               code="DOMAIN_NO_CANDIDATE")])
+
 
     return rng.choice(found)
 

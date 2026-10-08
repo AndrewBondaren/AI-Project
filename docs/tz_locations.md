@@ -488,7 +488,7 @@ building → room`) — одно дерево; комплекс может ви�
 
 Omit ранга на settlement → канон **`medium`** (обычный для этой морфологии). Не выводить ранг из subtype.
 
-Невалидный ранг на **городе/поселении** (не строка, пусто, ключ не из `settlement_size_registry` мира — в т.ч. legacy `hamlet`/`town`): generate ставит **`medium`** и пишет **WARNING** в продуктовый фасад логов ([`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve`, сообщение `json_validation | settlement_size invalid`). Omit (поля нет / SQL NULL) — тот же `medium` **без** warning. Не 422. Дубль subtype==size — 422, не этот fallback.
+Невалидный ранг на **городе/поселении** (не строка или неизвестный ключ) — unresolved по [общей политике](tz_runtime_world_edit_policy.md): WarningError без подстановки `medium` в runtime; диагностика без runtime-лога при validate_only. Omit/SQL NULL/пустая строка — штатный `medium` без warning (E6, 2026-10-08). Дубль subtype==size остаётся ошибкой контракта.
 
 ### `worlds.settlement_size_registry` (N+1)
 
@@ -1373,7 +1373,7 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 `perimeter_barrier.template` — ref → `barrier_template_registry.system_type` (`BarrierTemplateKey`, [POJO-C-6](./tz_pojo_city_typing.md)). **Нет поля**, или поле есть и `template` **null** / `""` — инстанса нет (скип как нет поля).  
 `perimeter_barrier.probability` — поле **класса**; читает только владелец-участок (roll 0.0–1.0). Владельцы поселение и район не крутят.  
-`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: кардиналы `north`/`south`/`east`/`west` (`Facing`, [POJO-C-9](./tz_pojo_city_typing.md)). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — skip ключа + warning. Не синглтон: три хоста — три объекта, зоны не пересекаются.
+`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: кардиналы `north`/`south`/`east`/`west` (`Facing`, [POJO-C-9](./tz_pojo_city_typing.md)). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — unresolved всей операции по общей runtime/worldEdit политике; элементы не фильтруются (E6). Не синглтон: три хоста — три объекта, зоны не пересекаются.
 
 **Класс один:** `PerimeterBarrier`. Владельцы — **разные инстансы**, не shared object. Толщина прямой — `barrier_template_registry.width_cells` (дефолт **1**).
 
@@ -1851,5 +1851,5 @@ repositories = {
 | Ранги доступа в `is_forbidden`-зонах | `location_faction_access.min_rank` — не реализовано; отложено до системы рангов фракций |
 | Fallback для бездомного + hometown при пустых детях | Если все дочерние `system_home_settlement_uid.depth+1` отфильтрованы `can_start()` — `NoLocationsAvailableError`. Нет fallback на глубину+2 или другой settlement. Требует решения совместно с UI-флоу. |
 | **LOC-T-1** Infer `system_location_type` из уникального subtype | Контракт locked (этот §). Код ⬜: omit type + `subtype=city` сейчас 422 (`BundleNamedLocation` StrictOnWire). Не CITY-T-5. |
-| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit → medium; type/unknown rank на generate → medium + WARNING фасада. Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size-done.md`](../.cursor/plans/loc-t-2-settlement-size-done.md). |
+| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit/blank → medium; type/unknown rank → unresolved по общей политике (E6). Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size-done.md`](../.cursor/plans/loc-t-2-settlement-size-done.md). |
 | **LOC-T-3** Разведение поселений (объём + запас) | Контракт locked (§ Разведение поселений): AABB + запас; import **200** + ERROR лог; occupancy: больше `footprint_side_fine`, иначе раньше в `locations[]`. Не 422. Код ⬜. План: [`.cursor/plans/loc-t-3-settlement-volume-separation-done.md`](../.cursor/plans/loc-t-3-settlement-volume-separation-done.md). Команда: [`/impl-loc-t-3`](../.cursor/commands/impl-loc-t-3.md). |

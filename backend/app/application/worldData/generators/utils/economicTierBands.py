@@ -5,6 +5,8 @@ from __future__ import annotations
 from random import Random
 
 from app.application.jsonValidation import economic_tiers
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
 from app.dataModel.cascade.cascadeSpec import ChannelKind
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand
@@ -64,7 +66,8 @@ def _materialize_tier_range(world, raw, anchor, rng):
         if lo <= index <= hi
     ]
     if not candidates:
-        return None
+        ctx = ResolveContext(path_prefix=("economic_tier",))
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "no tiers satisfy authored band/range", code="DOMAIN_NO_CANDIDATE")])
     if anchor is None:
         if rng is None:
             raise ValueError(
@@ -92,10 +95,14 @@ def materialize_band(
     Разворачивает economic_tier_band в один system_tier из registry мира.
     anchor_tier (обычно tier города) — предпочтение ближайшего тира в band.
     """
+    if not isinstance(band, str) or EconomicTierBand.from_wire(band) is None:
+        ctx = ResolveContext(path_prefix=("economic_tier_band",))
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, f"unknown economic tier band: {band!r}", code="DOMAIN_BAND")])
     registry = economic_tiers(world).root
     candidates = tiers_for_band(world, band)
     if not candidates:
-        return None
+        ctx = ResolveContext(path_prefix=("economic_tier",))
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "no tiers satisfy authored band/range", code="DOMAIN_NO_CANDIDATE")])
     if anchor_tier is None:
         return rng.choice(candidates)
 

@@ -6,6 +6,8 @@ Domain errors — RELIEF-T-3 (no FastAPI here).
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model, UnresolvedModelError
+
 import logging
 import os
 from dataclasses import asdict
@@ -87,8 +89,8 @@ class ReliefTemplateLibraryService:
         expected_stem: str | None = None,
     ) -> ReliefTemplateRow:
         try:
-            outline = ReliefTemplate.model_validate(raw)
-        except Exception as exc:
+            outline = resolve_model(ReliefTemplate, raw, label="ReliefTemplate")
+        except UnresolvedModelError as exc:
             logger.warning("relief | library reject invalid outline source=%s err=%s", source_file, exc)
             raise ReliefValidationError(str(exc)) from exc
         if expected_stem is not None and outline.system_name != expected_stem:

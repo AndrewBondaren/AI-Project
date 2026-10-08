@@ -5,7 +5,7 @@ Lives in application (not generators): typed boundary before bake consumers.
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.log.log import relief_warning
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 
 
@@ -14,16 +14,7 @@ def parse_object_relief_pick_policy(
     *,
     owner_uid: str = "?",
 ) -> ObjectReliefPickPolicy | None:
-    if not raw:
+    if raw is None:
         return None
-    if isinstance(raw, ObjectReliefPickPolicy):
-        return raw
-    try:
-        return ObjectReliefPickPolicy.model_validate(raw)
-    except Exception as exc:
-        relief_warning(
-            "object_policy_invalid",
-            owner_uid=owner_uid,
-            reason=str(exc),
-        )
-        return None
+    return resolve_model(ObjectReliefPickPolicy, raw,
+                         ctx=ResolveContext(path_prefix=("objects", owner_uid, "relief_pick_policy")))

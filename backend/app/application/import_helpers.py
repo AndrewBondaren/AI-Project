@@ -40,7 +40,7 @@ async def import_list(
             obj = prepare(row)
             await upsert(obj)
             succeeded += 1
-        except Exception as e:
-            entity_id = row.get(id_key) if id_key else None
+        except ValueError as e:
+            entity_id = row.get(id_key) if id_key and isinstance(row, dict) else None
             errors.append(ImportError(index=i, message=str(e), entity_id=entity_id))
     return ImportResult(total=len(rows), succeeded=succeeded, failed=len(errors), errors=errors)

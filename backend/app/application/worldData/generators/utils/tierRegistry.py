@@ -8,7 +8,8 @@
 """
 from __future__ import annotations
 
-from app.application.worldData.generators.climate.loggingHelpers import warn_once
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 
 Registry = list[EconomyTierEntry]
@@ -33,20 +34,14 @@ def tier_rank(
     *,
     world_uid: str | None = None,
 ) -> int:
-    """Порядковый индекс по base_value ASC; null → 0; unknown → warn + 0 (JV-7)."""
-    if not system_tier:
+    """Порядковый индекс по base_value ASC; null → 0; unknown → unresolved (E6)."""
+    if system_tier is None:
         return 0
     for index, entry in enumerate(tiers_sorted(registry)):
         if entry.system_tier == system_tier:
             return index
-    if world_uid:
-        warn_once(
-            world_uid,
-            f"unknown_tier:{system_tier}",
-            "tier_rank | world=%s unknown system_tier=%r; treating as rank 0",
-            system_tier,
-        )
-    return 0
+    ctx = ResolveContext(path_prefix=("world", world_uid or "?", "economic_tier"))
+    reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, f"unknown reference: {system_tier!r}", code="REF_W_UNKNOWN")])
 
 
 def tier_at_least(

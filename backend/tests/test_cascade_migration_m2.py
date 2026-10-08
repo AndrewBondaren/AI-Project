@@ -71,10 +71,12 @@ from app.dataModel.locations.structure.building.structureTemplate import (
 from app.dataModel.spatial.facing import Facing
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
 
 
 def _world() -> World:
     return World(
+        economic_tier_registry=WorldEconomyTierRegistry.canonical_defaults().model_dump(mode="json"),
         world_uid="m2-world",
         name="M2",
         created_at="2026-01-01T00:00:00",

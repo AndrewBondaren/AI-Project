@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict, fields
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
+from app.application.jsonValidation.worldSlices import resolve_registry_list_world
+from app.dataModel.races.worldRaceTemplateRegistry import WorldRaceTemplateRegistry
+from app.dataModel.races.raceTemplateOutline import RaceTemplateOutline
 from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
 from app.application.import_helpers import import_list, with_default_created_at
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
-from app.dataModel.races.normalizeRaceTemplateWire import normalize_race_template_body
 from app.dataModel.races.raceTemplateRegistryEntry import RaceTemplateRegistryEntry
 from app.db.models.race import Race
 from app.db.repositories.iRaceRepository import IRaceRepository
@@ -19,21 +22,15 @@ _ID_KEY = Race.__pk__
 
 
 def _registry_entries(world) -> list[RaceTemplateRegistryEntry]:
-    out: list[RaceTemplateRegistryEntry] = []
-    for raw in getattr(world, "race_template_registry", None) or []:
-        try:
-            out.append(RaceTemplateRegistryEntry.model_validate(raw))
-        except Exception:
-            continue
-    return out
+    return list(resolve_registry_list_world(world, WorldRaceTemplateRegistry).root)
 
 
 def _registry_uids(world) -> list[str]:
     return [e.system_template_uid for e in _registry_entries(world)]
 
 
-def _to_race(row: dict) -> Race:
-    canonical = normalize_race_template_body(with_default_created_at(row))
+def _to_race(row: dict, *, ctx: ResolveContext | None = None) -> Race:
+    canonical = resolve_model(RaceTemplateOutline, with_default_created_at(row), ctx=ctx).model_dump(mode="json")
     return Race(**{k: v for k, v in canonical.items() if k in _RACE_FIELD_NAMES})
 
 
@@ -68,9 +65,8 @@ class RaceService:
 
     async def update(self, world_uid: str, template_uid: str, data: dict) -> Race:
         race = await self.get_by_id(world_uid, template_uid)
-        for key, value in data.items():
-            if hasattr(race, key) and key not in self._IMMUTABLE:
-                setattr(race, key, value)
+        changes = {key: value for key, value in data.items() if key not in self._IMMUTABLE}
+        race = _to_race({**asdict(race), **changes})
         await self._repo.update(race)
         return race
 

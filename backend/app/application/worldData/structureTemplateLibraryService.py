@@ -8,6 +8,8 @@ Domain errors — ``structureTemplateErrors`` (no FastAPI here).
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model, UnresolvedModelError
+
 import logging
 import os
 from dataclasses import asdict
@@ -94,8 +96,8 @@ class StructureTemplateLibraryService:
         expected_stem: str | None = None,
     ) -> StructureTemplateRow:
         try:
-            outline = StructureTemplate.model_validate(raw)
-        except Exception as exc:
+            outline = resolve_model(StructureTemplate, raw, label="StructureTemplate")
+        except UnresolvedModelError as exc:
             logger.warning(
                 "structure | library reject invalid outline source=%s err=%s",
                 source_file,

@@ -133,7 +133,9 @@ class BundleNamedLocation(BaseModel):
             LocationPayload.validate(None, nested)
             return values
         model = LocationPayload.model_for(kind)
-        payload = nested.model_dump() if isinstance(nested, BaseModel) else dict(nested or {})
+        if nested is not None and not isinstance(nested, (BaseModel, dict)):
+            raise ValueError("location_payload must be an object or null")
+        payload = nested.model_dump() if isinstance(nested, BaseModel) else dict(nested if nested is not None else {})
         # Flat import keys and aliases remain the wire API. Pick only fields
         # declared by the chosen POJO, not a parallel list in the importer.
         for name, field in model.model_fields.items():

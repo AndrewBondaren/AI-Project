@@ -40,7 +40,9 @@ class EntryPointRuntimeTests(unittest.TestCase):
         self.assertEqual(_resolve_entry_height(instance, ep, 4, custom), 4)
         explicit = ep.model_copy(update={"door_height": 7})
         self.assertEqual(_resolve_entry_height(instance, explicit, 2, custom), 7)
-        self.assertEqual(_resolve_entry_height(instance, ep.model_copy(update={"door_height": 1}), 3, custom), 3)
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        with self.assertRaises(UnresolvedModelError):
+            _resolve_entry_height(instance, ep.model_copy(update={"door_height": 1}), 3, custom)
 
     def test_height_at_or_above_ceiling_fails_with_context(self):
         instance = room()
@@ -103,7 +105,7 @@ class EntryPointRuntimeTests(unittest.TestCase):
         instance = room()
         instance.z_height = 8
         level = LocationLevel("level", "building", 0, 8, "Ground")
-        for height, expected in ((None, 5), (1, 5), (4, 4)):
+        for height, expected in ((None, 5), (4, 4)):
             for material in (None, "stone"):
                 entry = EntryPoint(wall="east", passage_type="service_entrance",
                                    width=2, door_height=height, frame_material=material)

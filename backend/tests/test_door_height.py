@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
+from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.core.generationLogging import generation_world_log
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
@@ -24,16 +25,13 @@ DOORWAY = "app.application.worldData.generators.structure.passages.doorway"
 
 
 class DoorHeightTests(unittest.TestCase):
-    def test_entry_low_explicit_resolves_formula_with_error(self):
+    def test_entry_low_explicit_rejects_without_formula(self):
         r = room()
         r.z_height = 8
         for explicit in (0, 1, -1):
-            with self.subTest(explicit=explicit), self.assertLogs(LOGGER, "ERROR") as captured:
-                height = _resolve_entry_height(r, EntryPoint(wall="east", passage_type="main_entrance",
-                                               door_height=explicit), 2, simple_structure())
-            self.assertEqual(height, 5)
-            self.assertEqual(len(captured.records), 1)
-            self.assertIn("auto-resolve", captured.output[0])
+            with self.subTest(explicit=explicit), self.assertRaises(UnresolvedModelError):
+                _resolve_entry_height(r, EntryPoint(wall="east", passage_type="main_entrance",
+                                                   door_height=explicit), 2, simple_structure())
 
     def test_auto_floor_only_and_valid_explicit_bypasses_cap(self):
         custom = simple_structure().model_copy(update={"door_height_ratio": 0.2, "door_height_max": 1})
@@ -63,8 +61,8 @@ class DoorHeightTests(unittest.TestCase):
     def test_connection_uses_minimum_height_and_template_settings(self):
         for heights in ((10, 6), (6, 10)):
             self.assertEqual(self.connection(None, heights), 4)
-            with self.assertLogs(LOGGER, "ERROR"):
-                self.assertEqual(self.connection(1, heights), 4)
+            with self.assertRaises(UnresolvedModelError):
+                self.connection(1, heights)
             self.assertEqual(self.connection(5, heights), 5)
             for explicit in (6, 7):
                 with self.assertRaises(GenerationError):
@@ -78,10 +76,10 @@ class DoorHeightTests(unittest.TestCase):
         template.levels[0]["z_height"] = 10
         definition = template.levels[0]["rooms"][0]
         definition["size"]["z_range"] = [10, 10]
-        definition["entry_point"]["door_height"] = 1
+        definition["entry_point"]["door_height"] = None
         template.levels[0]["rooms"].append(room_wire(room_id="guest",
             size={"width_range": [5, 5], "depth_range": [5, 5], "z_range": [8, 8]}))
-        template.connections.append(dict(from_room="hall", to_room="guest", passage_type="doorway", door_height=1))
+        template.connections.append(dict(from_room="hall", to_room="guest", passage_type="doorway", door_height=None))
         before = deepcopy(template.model_dump())
         with tempfile.TemporaryDirectory() as directory:
             with generation_world_log(world.world_uid, mode="test", root=directory) as path:
@@ -96,5 +94,4 @@ class DoorHeightTests(unittest.TestCase):
             self.assertEqual(call.args[0], 8)
             self.assertIs(call.args[3], template)
         errors = [r for r in records if r["level"] == "ERROR"]
-        self.assertEqual(len(errors), 4)
-        self.assertTrue(all(r["logger"] == LOGGER and "auto-resolve" in r["msg"] for r in errors))
+        self.assertEqual(errors, [])

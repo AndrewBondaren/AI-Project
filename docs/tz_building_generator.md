@@ -517,11 +517,12 @@ Wire-ключ высоты — **`door_height`**. Прежнее чтение `h
 `room.z_height`. Поля `StructureTemplate`: `door_height_ratio` (default `0.75`,
 `0 < ratio <= 1`) и `door_height_max` (default `5`, `>= 1`). Явная высота не
 ограничивается cap и не clamp'ится к пределу мира: значение ниже
-`world.default_passage_height` — ошибка автора, оно отбрасывается и заменяется
-авто-резолвом (решение мастера 2026-09-30).
+`world.default_passage_height` — ошибка автора, unresolved по общей runtime/worldEdit
+политике (E6, 2026-10-08). Авто-резолв разрешён только при отсутствии высоты.
 
 ```
-если door_height задан явно и door_height >= world.default_passage_height:
+если door_height задан явно:
+    если door_height < world.default_passage_height: unresolved
     использовать door_height
 иначе:
     если z_height <= 3:
@@ -539,7 +540,7 @@ Wire-ключ высоты — **`door_height`**. Прежнее чтение `h
   z=20 → max(5, 2) = 5    (cap)
 ```
 
-`world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение. Явное `door_height` ниже предела мира — не валидно и заменяется авто-резолвом, а не поднимается до предела (автор задал ошибочную высоту → комната получает пропорциональный проём, а не минимальную щель).
+`world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение. Явное `door_height` ниже предела мира — unresolved: runtime пишет WarningError и прекращает зависимую операцию; validate_only возвращает диагностику без runtime-лога. Авто-формула не заменяет ошибочное авторское значение.
 
 Runtime-валидация: `door_height >= world.default_passage_height` и
 `door_height < room.z_height` → иначе `GenerationError` с uid структуры и room_id.
@@ -626,7 +627,7 @@ porch_material = context.porch_material ?? building.parent_floor_material
 | `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. Любое значение вне `{doorway, archway}` (включая `staircase` и мусор) не валит импорт: `RoomConnection` коерсит в `doorway`; ERROR-лог — на границе генератора (`_resolve_connections`), попадает в generation-транскрипт — толерантность к битым шаблонам (решение мастера 2026-09-29) |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
 | `width` | int | optional. Ширина проёма в ячейках. Default: `1` |
-| `door_height` | int | optional. Явная высота проёма. Если не задана или ниже `world.default_passage_height` — тот же авто-резолв что в `entry_point`, но `z_height` берётся `min(from_room.z_height, to_room.z_height)` — проём живёт в стене обеих комнат, формула высокой комнаты не должна пробить потолок низкой (решение мастера 2026-09-30). Финальное значение всегда `>= world.default_passage_height` |
+| `door_height` | int | optional. Явная высота проёма. Если не задана — тот же авто-резолв; явное значение ниже `world.default_passage_height` — unresolved. Авто-формула та же что в `entry_point`, но `z_height` берётся `min(from_room.z_height, to_room.z_height)` — проём живёт в стене обеих комнат, формула высокой комнаты не должна пробить потолок низкой (решение мастера 2026-09-30). Финальное значение всегда `>= world.default_passage_height` |
 | `frame_material` | string\|null | optional. Материал дверной коробки / арки. Fallback: `wall_material` from_room |
 | `panel_material` | string\|null | optional. Только для `doorway`. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = проём без двери |
 

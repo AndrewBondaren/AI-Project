@@ -109,11 +109,13 @@ purpose tokens больше не теряются. Room/opening/height/stem inva
 удалены, horizontal passage должен быть doorway/archway. Identity race/perk
 заполняется для None-auto; пустая строка отвергается.
 
-Границы остатка E6: остальные cascade source refs, standalone library/CRUD,
-domain-specific sides/placement/material repair. Эти consumers не объявлены
-соответствующими политике только на основании смены annotation.
+На этапе миграции полей оставались cascade source refs, standalone library/CRUD
+и domain-specific sides/placement/material repair. Последующий consumer-срез
+и точные границы завершённого аудита указаны в плане runtime-world-edit-policy.
+Смена annotation сама по себе не подтверждает соответствие consumer политике.
 
 Приёмка: 140 целевых tests OK; исходные 196 контрактных tests OK (наборы
-пересекаются). Итоговый широкий прогон: 1631 tests, 32 существующие errors,
-1 expected failure; новых регрессий относительно изолированного HEAD нет.
+пересекаются). Итоговый широкий прогон: 1631 tests, 32 errors,
+1 expected failure. Все 32 идентификатора ошибок встречались в baseline;
+совпадение имён само по себе не доказывает отсутствие регрессий поведения.
 Typecheck cascade: 0 errors/warnings, 4 negative contracts подтверждены.

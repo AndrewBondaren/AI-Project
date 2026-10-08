@@ -6,7 +6,6 @@ from app.application.worldData.locationPayloadAccess import district_payload
 
 import logging
 
-from pydantic import ValidationError
 
 from app.application.jsonValidation.worldRow import district_templates, enabled_building_purposes
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
@@ -62,10 +61,7 @@ def has_city_settlement_gates(nodes: list[ConnectionNode]) -> bool:
 
 
 def _frozen_topology_slot(row: NamedLocation) -> DistrictTopologySlot | None:
-    try:
-        return district_payload(row).district_topology
-    except ValidationError:
-        return None
+    return district_payload(row).district_topology
 
 
 def has_frozen_c23_districts(children: list[NamedLocation]) -> bool:

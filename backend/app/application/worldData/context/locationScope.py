@@ -13,11 +13,8 @@ from app.application.worldData.locationPayloadAccess import settlement_payload
 from random import Random
 
 from app.application.jsonValidation import economic_tiers, location_types
-from app.application.jsonValidation.resolve import ResolveContext, validate_contracts, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
-from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
-from pydantic import ValidationError
-from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model
+from app.application.jsonValidation.sourceValidation import validate_source
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
@@ -38,10 +35,11 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def named_location_pojo(location: NamedLocation, *, world: World | None = None) -> BundleNamedLocation:
+def named_location_pojo(location: NamedLocation, *, world: World | None = None, resolve_ctx: ResolveContext | None = None) -> BundleNamedLocation:
     """Persist/runtime ``NamedLocation`` → its source POJO (§2)."""
-    return BundleNamedLocation.model_validate(asdict(location),
-        context={"location_type_registry": location_types(world)} if world is not None else None)
+    return resolve_model(BundleNamedLocation, asdict(location),
+        ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("locations", location.location_uid)),
+        validation_context={"location_type_registry": location_types(world)} if world is not None else None)
 
 
 def scope_rng(world_uid: str, scope_uid: str, param: str) -> Random:
@@ -60,13 +58,16 @@ def root_context(world: World) -> LocationContext:
 def settlement_context(
     world: World,
     settlement: NamedLocation,
+    *, resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """World root + settlement links → resolved settlement-scope ctx."""
+    sources = (named_location_pojo(settlement, world=world, resolve_ctx=resolve_ctx), settlement_payload(settlement, ctx=resolve_ctx),
+               settlement_skeleton_pojo(settlement, ctx=resolve_ctx))
+    for source in sources:
+        validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("locations", settlement.location_uid)))
     return extend(
         root_context(world),
-        Link(ScopeLevel.SETTLEMENT, named_location_pojo(settlement, world=world)),
-        Link(ScopeLevel.SETTLEMENT, settlement_payload(settlement)),
-        Link(ScopeLevel.SETTLEMENT, settlement_skeleton_pojo(settlement)),
+        *(Link(ScopeLevel.SETTLEMENT, source) for source in sources),
         rng=scope_rng(world.world_uid, settlement.location_uid, "tier"),
     )
 
@@ -78,6 +79,7 @@ def district_context(
     *,
     district: NamedLocation | None = None,
     district_uid: str,
+    resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """Settlement ctx + district links → district-scope ctx (§8.4).
 
@@ -88,8 +90,10 @@ def district_context(
     if district is not None:
         links.insert(
             0,
-            Link(ScopeLevel.DISTRICT, named_location_pojo(district, world=world)),
+            Link(ScopeLevel.DISTRICT, named_location_pojo(district, world=world, resolve_ctx=resolve_ctx)),
         )
+    for link in links:
+        validate_source(world, link.obj, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("districts", district_uid)))
     return extend(
         ctx,
         *links,
@@ -103,8 +107,10 @@ def area_context(
     plot: PlotLayoutTemplate,
     *,
     area_uid: str,
+    resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """District ctx + plot link → area-scope ctx."""
+    validate_source(world, plot, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("areas", area_uid)))
     return extend(
         ctx,
         Link(ScopeLevel.AREA, plot),
@@ -116,11 +122,14 @@ def building_context(
     world: World,
     ctx: LocationContext,
     building: NamedLocation,
+    *, resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """Area ctx + building NL link → building-scope ctx."""
+    source = named_location_pojo(building, world=world, resolve_ctx=resolve_ctx)
+    validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("locations", building.location_uid)))
     return extend(
         ctx,
-        Link(ScopeLevel.BUILDING, named_location_pojo(building, world=world)),
+        Link(ScopeLevel.BUILDING, source),
         rng=scope_rng(world.world_uid, building.location_uid, "tier"),
     )
 
@@ -134,22 +143,8 @@ def room_context(
     resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """Building ctx + room_def link → room-scope ctx."""
-    # Validate the persisted vocabulary directly: an invalid registry must not
-    # be repaired to canonical keys before source membership is checked.
     active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("rooms", room_def.room_id))
-    references = WorldRegistryIndex()
-    if room_def.economic_tier is not None and world.economic_tier_registry is not None:
-        try:
-            registry = WorldEconomyTierRegistry.model_validate(world.economic_tier_registry)
-        except ValidationError:
-            reject_unresolved(active_ctx, [FieldPathError(active_ctx.path_prefix + ("economic_tier",),
-                "reference index unavailable: invalid economic tier registry", code="REF_W_UNAVAILABLE")])
-        references = WorldRegistryIndex(economic_tiers=frozenset(str(e.system_tier) for e in registry.root))
-    validate_contracts(
-        RoomDef, room_def.model_dump(mode="python", exclude_unset=True),
-        ctx=active_ctx,
-        references=references,
-    )
+    validate_source(world, room_def, ctx=active_ctx)
     return extend(
         ctx,
         Link(ScopeLevel.ROOM, room_def),

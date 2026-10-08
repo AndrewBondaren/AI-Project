@@ -1,9 +1,11 @@
-"""Unit: C31 invalid geom → WARN + θ=20° / L≥1; SHEER still L=1."""
+"""E6: invalid geometry rejects; no C31 fallback."""
 
 from __future__ import annotations
 
 import math
 import unittest
+from pydantic import ValidationError
+from app.application.jsonValidation.resolve import resolve_result, ResolveContext, UnresolvedModelError
 from unittest.mock import patch
 
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
@@ -109,106 +111,35 @@ class InvalidGeomPojoTest(unittest.TestCase):
         })
         self.assertIsNone(knobs.geom_invalid_reason())
 
-    def test_l_negative_invalid(self) -> None:
-        knobs = ReliefGradeKnobs.model_validate({
-            "slope_weight": 1.0,
-            "sheer_weight": 0.0,
-            "slope_length_cells": -1,
-        })
-        self.assertEqual(knobs.geom_invalid_reason(), GEOM_INVALID_LENGTH)
+    def test_invalid_knobs_reject_without_fallback(self):
+        for knobs in ({"slope_length_cells": -1}, {"slope_length_cells": 0},
+                      {"slope_length_cells": 2, "target_angle_deg": 30},
+                      {"target_angle_deg": 95}, {"target_angle_deg": float("nan")}):
+            with self.subTest(knobs=knobs):
+                result = resolve_result(ReliefGradeKnobs, {"slope_weight": 1, "sheer_weight": 0, **knobs},
+                                        ctx=ResolveContext(validate_only=True))
+                self.assertFalse(result.resolved)
 
 
 class InvalidGeomGenerateTest(unittest.TestCase):
-    def test_l_zero_slope_uses_20deg_length(self) -> None:
-        tpl = _shoulder(slope_length=0)
-        with patch(
-            "app.application.worldData.generators.terrain.relief.pick.gradePass.relief_warning",
-        ) as warn:
-            d = grade_from_template(
-                template=tpl,
-                template_uid="uid",
-                terrain_key="plains",
-                dz=4,
-                world_seed="s",
-                site_id="site",
-            )
-        self.assertFalse(d.skipped)
-        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
-        want = length_from_target_angle(
-            4, ReliefGradeKnobs.INVALID_GEOM_FALLBACK_ANGLE_DEG,
-        )
-        self.assertEqual(want, 11)
-        self.assertEqual(d.requested_length, want)
-        assert d.geom is not None
-        self.assertEqual(d.geom.L, want)
-        self.assertAlmostEqual(
-            d.geom.angle_deg or 0.0,
-            math.degrees(math.atan(4 / want)),
-            places=5,
-        )
-        warn.assert_called()
-        self.assertEqual(warn.call_args.args[0], EVENT_INVALID_GEOM)
-        self.assertEqual(warn.call_args.kwargs["why"], GEOM_INVALID_LENGTH)
+    def test_invalid_nested_wire_rejects_before_generate(self):
+        for knobs in ({"slope_length": 0}, {"slope_length": 2, "target_angle": 30},
+                      {"slope_length": 0, "sheer_weight": 1}):
+            with self.subTest(knobs=knobs), self.assertRaises(ValidationError):
+                _shoulder(**knobs)
+        with self.assertRaises(ValidationError):
+            _open_land(slope_length=0)
 
-    def test_facade_pass_through_l_zero_same_as_inner(self) -> None:
-        tpl = _shoulder(slope_length=0)
-        d = grade_constrained(
-            template=tpl,
-            template_uid="uid",
-            terrain_key="plains",
-            dz=4,
-            world_seed="s",
-            site_id="site",
-        )
-        want = length_from_target_angle(
-            4, ReliefGradeKnobs.INVALID_GEOM_FALLBACK_ANGLE_DEG,
-        )
-        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
-        self.assertEqual(d.requested_length, want)
+    def test_runtime_copy_cannot_bypass_geometry_rejection(self):
+        template = _shoulder().model_copy(update={"slope_length_cells": 0})
+        for grade in (grade_from_template, grade_constrained):
+            with self.subTest(grade=grade.__name__), self.assertRaises(UnresolvedModelError):
+                grade(template=template, template_uid="uid", terrain_key="plains", dz=4,
+                      world_seed="s", site_id="site")
 
-    def test_both_keys_same_fallback(self) -> None:
-        tpl = _shoulder(slope_length=2, target_angle=30.0)
-        d = grade_from_template(
-            template=tpl,
-            template_uid="uid",
-            terrain_key="plains",
-            dz=4,
-            world_seed="s",
-            site_id="site",
-        )
-        want = length_from_target_angle(
-            4, ReliefGradeKnobs.INVALID_GEOM_FALLBACK_ANGLE_DEG,
-        )
-        self.assertEqual(d.requested_length, want)
-
-    def test_sheer_ignores_invalid_l(self) -> None:
-        tpl = _shoulder(slope_length=0, sheer_weight=1.0)
-        d = grade_constrained(
-            template=tpl,
-            template_uid="uid",
-            terrain_key="plains",
-            dz=4,
-            world_seed="s",
-            site_id="site",
-        )
-        self.assertEqual(d.kind, ReliefSideKind.SHEER)
-        self.assertEqual(d.requested_length, 1)
-        assert d.geom is not None
-        self.assertEqual(d.geom.L, 1)
-
-    def test_plains_envelope_still_clamps_after_fallback(self) -> None:
-        tpl = _open_land(slope_length=0)
-        d = grade_constrained(
-            template=tpl,
-            template_uid="uid",
-            terrain_key="plains",
-            dz=4,
-            world_seed="s",
-            site_id="site",
-        )
-        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
-        self.assertEqual(d.requested_length, 20)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_valid_geometry_remains_deterministic(self):
+        template = _shoulder()
+        kwargs = dict(template=template, template_uid="uid", terrain_key="plains", dz=4,
+                      world_seed="s", site_id="site")
+        self.assertEqual(grade_from_template(**kwargs), grade_from_template(**kwargs))
+        self.assertFalse(grade_constrained(**kwargs).skipped)

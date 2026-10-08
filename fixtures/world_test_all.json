@@ -756,6 +756,52 @@
         "hardness": 1,
         "density": 90,
         "flammable": false
+      },
+      {
+        "system_material": "window_glass",
+        "display_name": "Оконное стекло",
+        "material_category": "solid",
+        "tags": [
+          "glass"
+        ],
+        "use_type": [
+          "window_glass"
+        ],
+        "transparent": true
+      },
+      {
+        "system_material": "porthole_glass",
+        "display_name": "Стекло иллюминатора",
+        "material_category": "solid",
+        "tags": [
+          "glass"
+        ],
+        "use_type": [
+          "porthole_glass"
+        ],
+        "transparent": true
+      },
+      {
+        "system_material": "vent_mesh",
+        "display_name": "Вентиляционная сетка",
+        "material_category": "solid",
+        "tags": [
+          "metal"
+        ],
+        "use_type": [
+          "vent_mesh"
+        ]
+      },
+      {
+        "system_material": "dirt_road",
+        "display_name": "Грунтовое покрытие дороги",
+        "material_category": "solid",
+        "tags": [
+          "raw"
+        ],
+        "use_type": [
+          "road"
+        ]
       }
     ],
     "hydrology": {

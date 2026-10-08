@@ -39,6 +39,8 @@ _BASELINE_TEMPLATE_ID = "00000000-0000-4000-8000-000000000021"
 # Wire rows for world.material_registry — canonical fixture rows carry no
 # "construction" tags, so without these every resolve falls back to defaults.
 _WORLD_MATERIALS = [
+    {"system_material": "iron", "display_name": "Iron",
+     "material_category": "solid", "tags": ["metal"]},
     {"system_material": "oak", "display_name": "Oak",
      "material_category": "solid", "tags": ["construction"],
      "use_type": ["wall", "floor"], "economic_tier": "basic",

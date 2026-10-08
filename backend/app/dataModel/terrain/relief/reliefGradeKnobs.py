@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, ClassVar
+from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,7 +13,7 @@ from app.dataModel.constrainedField import constrained_field
 WEIGHT_SUM_EPS = 1e-6
 DEFAULT_SLOPE_LENGTH_CELLS = 1
 _REMOVED_SHOULDER_WIDTH = "shoulder_width_cells"
-# C31: invalid geom → WARN + Geom-B fallback (not reject).
+# Legacy compatibility constant; E6 rejects invalid geometry without using it.
 INVALID_GEOM_FALLBACK_ANGLE_DEG = 20.0
 GEOM_INVALID_BOTH = "geom_both"
 GEOM_INVALID_LENGTH = "geom_l_lt_1"
@@ -58,7 +59,7 @@ def geom_invalid_reason(
     slope_length_cells: int | None,
     target_angle_deg: float | None,
 ) -> str | None:
-    """C31: invalid geom is WARN+fallback, not reject. ``None`` = valid (incl. omit)."""
+    """Return the geometry error; ``None`` means valid, including omission."""
     has_l = slope_length_cells is not None
     has_a = target_angle_deg is not None
     if has_l and has_a:
@@ -67,7 +68,7 @@ def geom_invalid_reason(
         return GEOM_INVALID_LENGTH
     if has_a:
         angle = float(target_angle_deg)  # type: ignore[arg-type]
-        if angle <= 0.0 or angle >= 90.0:
+        if not isfinite(angle) or angle <= 0.0 or angle >= 90.0:
             return GEOM_INVALID_ANGLE
     return None
 
@@ -76,11 +77,11 @@ def coerce_geom_knobs(
     slope_length_cells: int | None,
     target_angle_deg: float | None,
 ) -> tuple[int | None, float | None, str | None]:
-    """Valid knobs unchanged. Invalid → omit L + fallback θ (C31)."""
+    """Valid knobs unchanged; invalid geometry is rejected (E6)."""
     reason = geom_invalid_reason(slope_length_cells, target_angle_deg)
     if reason is None:
         return slope_length_cells, target_angle_deg, None
-    return None, INVALID_GEOM_FALLBACK_ANGLE_DEG, reason
+    raise ValueError(f"invalid relief geometry: {reason}")
 
 
 def validate_canal_xor(
@@ -135,7 +136,7 @@ class ReliefGradeKnobs(BaseModel):
     sheer_weight: StrictOnWire[float] = constrained_field(
         greater_equals=0.0, lesser_equals=1.0,
     )
-    # R36b Geom — neither → default L; invalid → generate coerce (C31)
+    # Neither → default L; invalid → unresolved (E6 supersedes C31).
     slope_length_cells: DefaultWhenMissing[int | None] = None
     target_angle_deg: DefaultWhenMissing[float | None] = None
     earthen_canal: DefaultWhenMissing[bool | None] = None
@@ -150,6 +151,7 @@ class ReliefGradeKnobs(BaseModel):
     @model_validator(mode="after")
     def _weights_and_geom(self) -> ReliefGradeKnobs:
         require_weights_sum(self.slope_weight, self.sheer_weight)
+        coerce_geom_knobs(self.slope_length_cells, self.target_angle_deg)
         validate_canal_xor(self.earthen_canal, self.structure_canal)
         validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         return self
@@ -158,7 +160,7 @@ class ReliefGradeKnobs(BaseModel):
         return geom_invalid_reason(self.slope_length_cells, self.target_angle_deg)
 
     def coerced_geom(self) -> tuple[ReliefGradeKnobs, str | None]:
-        """Copy with invalid L/θ replaced by fallback θ (C31)."""
+        """Compatibility API: valid knobs unchanged, invalid knobs rejected."""
         length, angle, reason = coerce_geom_knobs(
             self.slope_length_cells, self.target_angle_deg,
         )

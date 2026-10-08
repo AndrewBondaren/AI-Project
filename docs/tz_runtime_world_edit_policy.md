@@ -198,3 +198,36 @@ Patch не вызывает defaults отсутствующих полей и н
 Ошибочный тип `levels[].rooms` даёт штатный report/GenerationError, а не TypeError
 при построении диагностики. Приёмка исправлений: 188 synchronous + 10 import/API
 tests, OK; полный suite заново не запускался. Остаток E6 сохраняется в плане.
+
+
+### Consumers E6: источники, библиотеки, доменное разрешение
+
+Перед extend валидируются все переданные source channels, включая затенённые authored
+значения: ошибочная ссылка не становится None и не скрывается override ребёнка.
+Membership использует RegistryKey/CascadeChannel и существующий WorldSlice; отсутствие
+нужного vocabulary отличается от неизвестного ключа. Nullable None наследуется.
+Неверный band или перевёрнутый tier range — unresolved; допустимый band без
+представленных тиров также не заменяется наследованием.
+Library CRUD ловит только ожидаемые data errors; инфраструктурные исключения
+не маскируются validation report. Коллекция ошибочных registry rows не сокращается.
+Outline-only building library запись остаётся разрешённым видом записи и не является
+ошибочным plot. Missing материал разрешается штатным selection contract; ошибочный
+authored material/tier и невозможный selection не подменяются литералом.
+Недопустимые стороны ограды не фильтруются; None/[] и валидные cardinal aliases
+сохраняют прежний смысл. Placement-height применяет declared absence defaults,
+но не чинит неверное значение на runtime boundary.
+
+Consumer-срез 2026-10-08 повторно проверяет model invariants до source membership,
+сохраняя authored presence и location_type_registry конкретного мира для NL.
+Это необходимо и для typed объектов, изменённых через model_copy/model_construct.
+Race/perk library pointers используют WorldSlice и list metadata без SQL-миграции.
+Inline plot registry и library export также не отбрасывают повреждённые строки.
+Точный завершённый охват и оставшиеся доменные проверки указаны в плане; смена
+annotation не означает автоматической миграции всех R21/coordinate consumers.
+
+Повреждённый authored district_topology freeze — unresolved, а не отсутствие
+topology: ошибка не разрешает регенерацию поверх авторских данных. Canonical overlay
+может дополнять отсутствующие поля объявленной записи, но сохраняет supplied
+invalid/null для общей проверки. Приёмка consumer-среза: 236 synchronous и 38
+import/API/fixture tests OK; полный suite 1650 tests с 21 незакрытой ошибкой baseline
+и одной expected failure (подробности и границы — в плане).

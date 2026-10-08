@@ -6,6 +6,10 @@ import logging
 from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
+from app.application.jsonValidation.resolve import ResolveContext, resolve_model, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
+from app.application.jsonValidation.worldRow import building_template_registry
+from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.worldData.ids import LibraryKind, library_uid
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
@@ -22,6 +26,13 @@ from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
 
 logger = logging.getLogger(__name__)
+_PLOT_ONLY_FIELDS = frozenset(PlotLayoutTemplate.model_fields) - frozenset(BuildingTemplateOutline.model_fields)
+
+
+def _library_body(data, ctx: ResolveContext):
+    """Use declared plot fields to distinguish the two supported wire shapes."""
+    model = PlotLayoutTemplate if isinstance(data, dict) and _PLOT_ONLY_FIELDS.intersection(data) else BuildingTemplateOutline
+    return resolve_model(model, data, ctx=ctx)
 
 
 def building_template_uid(system_name: str) -> str:
@@ -29,18 +40,7 @@ def building_template_uid(system_name: str) -> str:
 
 
 def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:
-    reg = getattr(world, "building_template_registry", None)
-    if isinstance(reg, dict):
-        raw_list = list(reg.values()) if reg else []
-    else:
-        raw_list = list(reg or [])
-    out: list[BuildingTemplateRegistryEntry] = []
-    for raw in raw_list:
-        try:
-            out.append(BuildingTemplateRegistryEntry.model_validate(raw))
-        except Exception:
-            continue
-    return out
+    return list(building_template_registry(world).root)
 
 
 class BuildingTemplateLibraryService:
@@ -54,8 +54,7 @@ class BuildingTemplateLibraryService:
         self._worlds = world_service
 
     async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
-        """Hydrate uid registry rows to plot layouts. Outline-only → warning, skip."""
-        from pydantic import ValidationError
+        """Hydrate plot bodies; valid outline-only bodies have no packing layout."""
 
         from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
             PackingReason,
@@ -67,24 +66,14 @@ class BuildingTemplateLibraryService:
         world_uid = getattr(world, "world_uid", "?")
         for entry in _registry_entries(world):
             row = await self._repo.get_by_uid(entry.system_template_uid)
+            ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
             if row is None:
-                logger.warning(
-                    "building | library miss template_uid=%s world=%s",
-                    entry.system_template_uid,
-                    world_uid,
-                )
+                reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "library reference unavailable", code="REF_W_UNKNOWN")])
+            body = _library_body(row.data, ctx)
+            if isinstance(body, BuildingTemplateOutline):
                 continue
-            data = row.data if isinstance(row.data, dict) else {}
-            try:
-                layout = PlotLayoutTemplate.model_validate(data)
-            except ValidationError:
-                logger.warning(
-                    "building | outline-only skip template_uid=%s system_name=%s world=%s",
-                    entry.system_template_uid,
-                    row.system_name,
-                    world_uid,
-                )
-                continue
+            layout = body
+            validate_source(world, layout, ctx=ctx)
             if plot_type_defaulted(layout):
                 packing_warning(
                     PackingStep.CACHE,
@@ -133,7 +122,7 @@ class BuildingTemplateLibraryService:
                 row = await self.upsert_outline(outline, source_file="bundle")
                 await self._ensure_registry(world_uid, row)
                 succeeded += 1
-            except Exception as exc:
+            except ValueError as exc:
                 from app.application.importResult import ImportError
                 errors.append(ImportError(index=i, message=str(exc)))
         return ImportResult(
@@ -144,8 +133,9 @@ class BuildingTemplateLibraryService:
         )
 
     @staticmethod
-    def prepare_body(world, raw: dict) -> BuildingTemplateOutline:
-        outline = BuildingTemplateOutline.model_validate(raw)
+    def prepare_body(world, raw: dict, *, ctx: ResolveContext | None = None) -> BuildingTemplateOutline:
+        active_ctx = ctx if ctx is not None else ResolveContext(path_prefix=("building_templates",))
+        outline = resolve_model(BuildingTemplateOutline, raw, ctx=active_ctx)
         issues = resource_types(world).check_template_subjects(outline.resource_kind, outline.subjects)
         if not issues:
             issues = crops(world).check_template_subjects(outline.crop_kind, outline.subjects)
@@ -153,7 +143,8 @@ class BuildingTemplateLibraryService:
             issues = livestock(world).check_template_subjects(outline.livestock_kind, outline.subjects)
         if issues:
             token, code = issues[0]
-            raise ValueError(f"{code}: extract/farm/livestock subject {token!r}")
+            reject_unresolved(active_ctx, [FieldPathError(active_ctx.path_prefix + ("subjects",),
+                f"{code}: extract/farm/livestock subject {token!r}", code=code)])
         return outline
 
     async def export_bodies_for_world(self, world_uid: str) -> list[dict]:
@@ -162,12 +153,12 @@ class BuildingTemplateLibraryService:
         for entry in _registry_entries(world):
             row = await self._repo.get_by_uid(entry.system_template_uid)
             if row is None:
-                logger.warning(
-                    "building | bundle export miss template_uid=%s world=%s",
-                    entry.system_template_uid,
-                    world_uid,
-                )
-                continue
+                ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
+                reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "library reference unavailable", code="REF_W_UNKNOWN")])
+            ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
+            body = _library_body(row.data, ctx)
+            if isinstance(body, PlotLayoutTemplate):
+                validate_source(world, body, ctx=ctx)
             bodies.append(dict(row.data))
         return bodies
 

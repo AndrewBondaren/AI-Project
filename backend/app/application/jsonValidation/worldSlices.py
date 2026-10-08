@@ -5,6 +5,9 @@ Catalog + runtime ``resolve_*_world``. Import merge → ``worldSliceMerge`` (T-2
 
 from __future__ import annotations
 
+from app.dataModel.races.worldRaceTemplateRegistry import WorldRaceTemplateRegistry
+from app.dataModel.perks.worldPerkTemplateRegistry import WorldPerkTemplateRegistry
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -377,6 +380,8 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         world_key="location_mood_registry",
         facade=True,
     ),
+    _registry_slice(pojo_cls=WorldRaceTemplateRegistry, world_key="race_template_registry", facade=True),
+    _registry_slice(pojo_cls=WorldPerkTemplateRegistry, world_key="perk_template_registry", facade=True),
     _registry_slice(
         pojo_cls=WorldBuildingTemplateRegistry,
         world_key="building_template_registry",

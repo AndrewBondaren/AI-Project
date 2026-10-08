@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+
 from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.relief.pick.conditionNormalize import (
@@ -9,15 +11,11 @@ from app.application.worldData.generators.terrain.relief.pick.conditionNormalize
 )
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
     ResolvedGeom,
-    angle_from_height_length,
     geom_resolve,
-    length_from_target_angle,
-    partition_height,
 )
 from app.application.worldData.generators.terrain.relief.pick.kindRoll import kind_roll
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_SKIP,
-    EVENT_INVALID_GEOM,
     EVENT_RESOLVE_FALLBACK,
     REASON_SCHEDULE_HOLE_SAFE_SLOPE,
     WHY_SCHEDULE_HOLE,
@@ -30,7 +28,6 @@ from app.application.worldData.generators.terrain.relief.pick.slopeClassify impo
 from app.dataModel.terrain.relief.enums import ReliefSideKind, ReliefSlopePolicy
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
     ReliefGradeKnobs,
-    coerce_geom_knobs,
 )
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
@@ -97,35 +94,6 @@ class RibbonGradeDecision:
         )
 
 
-def _warn_invalid_geom(*, reason: str, site_id: str, template_uid: str, **fields: object) -> None:
-    relief_warning(
-        EVENT_INVALID_GEOM,
-        why=reason,
-        site_id=site_id,
-        template_uid=template_uid,
-        **fields,
-    )
-
-
-def _fallback_slope_length(h: int) -> int:
-    return length_from_target_angle(
-        max(1, int(h)),
-        ReliefGradeKnobs.INVALID_GEOM_FALLBACK_ANGLE_DEG,
-    )
-
-
-def _slope_geom_for_length(h: int, length: int) -> ResolvedGeom:
-    length_i = max(1, int(length))
-    h_i = max(0, int(h))
-    return ResolvedGeom(
-        kind=ReliefSideKind.SLOPE,
-        h=h_i,
-        L=length_i,
-        angle_deg=angle_from_height_length(h_i, length_i),
-        steps=partition_height(h_i, length_i),
-    )
-
-
 def grade_from_template(
     *,
     template: ReliefTemplate,
@@ -136,21 +104,10 @@ def grade_from_template(
     site_id: str,
 ) -> RibbonGradeDecision:
     """Classify + kindRoll + geom for one ribbon site."""
+    warn_template_invalid_geom(template, template_uid=template_uid)
     h = abs(int(dz))
     earthen_default, canal_default, refs_default = attachment_defaults()
-    _root_l, _root_a, root_why = coerce_geom_knobs(
-        template.slope_length_cells, template.target_angle_deg,
-    )
-    if root_why is not None:
-        _warn_invalid_geom(
-            reason=root_why,
-            site_id=site_id,
-            template_uid=template_uid,
-            where="root",
-        )
-        root_length = _fallback_slope_length(h) if h >= 1 else 1
-    else:
-        root_length = template.outward_length_cells()
+    root_length = template.outward_length_cells()
 
     cond = template.condition_for(terrain_key)
     if cond is None:
@@ -187,8 +144,6 @@ def grade_from_template(
         geom = geom_resolve(
             h=h, kind=ReliefSideKind.SLOPE, slope_length_cells=root_length,
         )
-        if root_why is not None and h >= 1:
-            geom = _slope_geom_for_length(h, root_length)
         return RibbonGradeDecision(
             template_uid=template_uid,
             policy=None,
@@ -223,14 +178,7 @@ def grade_from_template(
         )
 
     assert hit.knobs is not None
-    knobs, geom_why = hit.knobs.coerced_geom()
-    if geom_why is not None:
-        _warn_invalid_geom(
-            reason=geom_why,
-            site_id=site_id,
-            template_uid=template_uid,
-            policy=hit.policy.value,
-        )
+    knobs = hit.knobs
     kind = kind_roll(
         world_seed=world_seed,
         context=template.context.value,
@@ -240,8 +188,6 @@ def grade_from_template(
         sheer_weight=knobs.sheer_weight,
     )
     geom = geom_resolve(h=h, kind=kind, knobs=knobs)
-    if geom_why is not None and kind is ReliefSideKind.SLOPE and h >= 1:
-        geom = _slope_geom_for_length(h, _fallback_slope_length(h))
     relief_info(
         "grade_apply",
         template_uid=template_uid,

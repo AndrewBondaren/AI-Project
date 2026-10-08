@@ -1,4 +1,4 @@
-"""PerimeterBarrier.sides — cardinal Facing list + skip unknown."""
+"""PerimeterBarrier.sides — cardinal Facing list; invalid entries reject atomically."""
 
 from __future__ import annotations
 
@@ -38,30 +38,13 @@ class TestPerimeterBarrierSides(unittest.TestCase):
         barrier = PerimeterBarrier(sides=["N", "W"])
         self.assertEqual(barrier.sides, [Facing.NORTH, Facing.WEST])
 
-    def test_skip_intercardinal_and_unknown_keeps_rest(self) -> None:
-        log = "app.dataModel.locations.settlement.area.perimeterBarrier"
-        with self.assertLogs(log, level="WARNING") as captured:
-            barrier = PerimeterBarrier(
-                sides=["north", "north_east", "nope", "south"],
-            )
-        self.assertEqual(barrier.sides, [Facing.NORTH, Facing.SOUTH])
-        text = "\n".join(captured.output)
-        self.assertIn("skip", text)
-        self.assertIn("north_east", text)
-        self.assertIn("nope", text)
-        sides, skipped = resolved_host_sides(barrier)
-        self.assertEqual(sides, frozenset({Facing.NORTH, Facing.SOUTH}))
-        self.assertEqual(skipped, [])
-
-    def test_skip_all_means_all_cardinals(self) -> None:
-        log = "app.dataModel.locations.settlement.area.perimeterBarrier"
-        with self.assertLogs(log, level="WARNING") as captured:
-            barrier = PerimeterBarrier(sides=["north_east", "nope"])
-        self.assertEqual(barrier.sides, [])
-        text = "\n".join(captured.output)
-        self.assertIn("skip", text)
-        sides, skipped = resolved_host_sides(barrier)
-        self.assertEqual(sides, CARDINAL_FACINGS)
+    def test_intercardinal_and_unknown_reject_whole_field(self):
+        for sides in (["north", "north_east", "south"], ["north", "nope"], ["north_east", "nope"]):
+            with self.subTest(sides=sides):
+                result = resolve_result(PerimeterBarrier, {"sides": sides},
+                                        ctx=ResolveContext(validate_only=True))
+                self.assertFalse(result.resolved)
+                self.assertEqual(result.issues[0].path, ("sides",))
 
     def test_dedupe_preserves_order(self) -> None:
         barrier = PerimeterBarrier(sides=["east", "north", "east"])
@@ -74,12 +57,9 @@ class TestPerimeterBarrierSides(unittest.TestCase):
         self.assertEqual(result.issues[0].path, ("sides",))
         self.assertIn("WarningError", logs.output[0])
 
-    def test_resolve_mixed_list_keeps_cardinals(self) -> None:
-        barrier = resolve_model(
-            PerimeterBarrier,
-            {"sides": ["west", "nope", "south"]},
-        )
-        self.assertEqual(barrier.sides, [Facing.WEST, Facing.SOUTH])
+    def test_resolve_mixed_list_rejects_without_filtering(self):
+        with self.assertRaises(UnresolvedModelError):
+            resolve_model(PerimeterBarrier, {"sides": ["west", "nope", "south"]})
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ when the envelope requires a gentle slope (R36i tails).
 
 from __future__ import annotations
 
+from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+
 from dataclasses import replace
 
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
@@ -254,6 +256,7 @@ def grade_constrained(
     may still apply ``L_min`` (plains unit ``dz=1`` → L=20). ``slope_fits``
     is θ-band only and does not veto short L.
     """
+    warn_template_invalid_geom(template, template_uid=template_uid)
     h = abs(int(dz))
     table = envelopes or ReliefOntologyEnvelopes.canonical_defaults()
     mapped = map_system_terrain(terrain_key)
