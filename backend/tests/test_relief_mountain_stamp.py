@@ -68,8 +68,8 @@ class MountainReliefStampTest(unittest.TestCase):
         )
         self.assertTrue(all(s.kind.value == "sheer" for s in stamped.sides))
 
-    def test_r21_missing_template_all_slope(self) -> None:
-        """RELIEF-T-2: empty registry → R21 all-SLOPE, not Mode D 50/50."""
+    def test_r21_missing_template_rejects(self) -> None:
+        """E6-R21: empty registry cannot manufacture all-SLOPE sides."""
         world = World(world_uid="w1", name="W", created_at="2026-01-01T00:00:00Z")
         spec = MountainSpec(
             origin_x_m=0,
@@ -78,11 +78,10 @@ class MountainReliefStampTest(unittest.TestCase):
             form=MountainFormBySides(side_count=4),
             sides=[],
         )
-        stamped = stamp_mountain_sides_from_relief(
-            spec, world=world, world_seed="w1", templates_by_uid={},
-        )
-        self.assertEqual(len(stamped.sides), 4)
-        self.assertTrue(all(s.kind == ReliefSideKind.SLOPE for s in stamped.sides))
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        with self.assertRaises(UnresolvedModelError):
+            stamp_mountain_sides_from_relief(spec, world=world, world_seed="w1", templates_by_uid={})
+        self.assertEqual(spec.sides, [])
 
 
 if __name__ == "__main__":

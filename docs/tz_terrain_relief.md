@@ -111,9 +111,9 @@ default по факту наличия на диске. Global autoattach доб
 default UID/membership, не заменяет тела/`source_file` и не меняет pointers/policy
 мира. Effective candidates строятся по доступным пакам, не по всем SQL-строкам
 и не только по индивидуальным pointers. `fixed` UID проверяется на доступность.
-Неразрешимая template-ссылка или неподключённая зависимость → доменный default/
-существующий R21 soft fallback + `relief_warning`; исходный ref не переписывается.
-Будущий master-mode вместо warning/fallback выдаёт конкретную ошибку.
+Неразрешимая template-ссылка или неподключённая зависимость → общий unresolved:
+runtime пишет WarningError и останавливает операцию; validate_only возвращает
+те же факты без runtime-лога. Исходный ref не переписывается (E6-R21).
 Новые параллельные UID/log-хелперы не вводятся.
 
 Как здания: глобальная библиотека + per-world pointers (**R11**). Тела **не** внутри `world` JSON (**R35**).
@@ -135,7 +135,7 @@ default UID/membership, не заменяет тела/`source_file` и не м�
 В текущем pointer-пути `fixed` требует `default_template_uid` в registry.
 После pack-owned миграции UID должен быть в эффективном каталоге мира
 (defaults + явно подключённые паки); индивидуальный registry pointer не является
-обязательным для каждого члена пака. Недоступный fixed UID → R21 fallback + warning.
+обязательным для каждого члена пака. Недоступный fixed UID → общий отказ R21.
 
 | Уровень | Wire | Роль |
 |---|---|---|
@@ -145,7 +145,7 @@ default UID/membership, не заменяет тела/`source_file` и не м�
 
 `effective = merge(world, object?)`; для гор target ещё `side[i]?`. Нет policy на объекте → мир.
 
-Шум pick/kind **детерминирован**: `world_seed` + `(context, template_uid, x, y [, edge])` (**R15**). Пустой candidates / битый `fixed` / дыра schedule → **warn + soft fallback**, не abort (**R21**). Не путать с **R34 skip**.
+Шум pick/kind **детерминирован**: `world_seed` + `(context, template_uid, x, y [, edge])` (**R15**). E6-R21: пустой candidates, недоступный `fixed` UID/body и дыра schedule → unresolved через общую runtime/worldEdit политику. Runtime: WarningError и прекращение зависимой операции; validate_only: те же facts без runtime-лога. First-template/SLOPE подстановки запрещены. **R34 skip** (нет condition) и `slope_none` сохраняются.
 
 ### Conditions (местность в шаблоне)
 
@@ -218,7 +218,7 @@ else:
 
 Canal-cut при укорочении — исключение «не мутировать якорь», когда земля упирается в footprint (**R36t**). Не T-15. Нормальный path якоря не трогает. **Запрещено:** silent canal без match; читать policy когда вмещается.
 
-Unknown canal/barrier ref на generate → R21 warn+fallback; на import unknown → reject.
+Unknown canal/barrier ref не разрешает подмену/пропуск требуемого объекта. E6-R21 для canal: unknown ref и конфликтующие enabled rules → unresolved; пустой StructureCanal не создаётся. Explicit disable, отсутствие канала и отсутствие места для cut по R36p остаются штатными доменными результатами. Проверка refs импорта и runtime использует общую политику, без отдельного master-mode.
 
 ### Obstacle clearance (R36m / R36n)
 

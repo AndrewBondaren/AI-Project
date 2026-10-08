@@ -24,6 +24,12 @@ from app.dataModel.terrainMasks import (
 )
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from types import SimpleNamespace
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+
+
+def _relief_templates():
+    return {"test-mountain": ReliefTemplate(system_name="test-mountain", display_name="Test mountain",
+        context="mountain", side_recipe={"default_side_kind": "slope"})}
 
 
 def _world(**overrides):
@@ -41,6 +47,7 @@ def _world(**overrides):
         ],
         climate_zone_registry=None,
         hydrology={"enabled": False},
+        relief_template_registry=[{"system_template_uid": "test-mountain", "context": "mountain"}],
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -95,6 +102,7 @@ class TestMountainMaterialize(unittest.TestCase):
             locations_index=LocationsIndexWire(locations=[]),
             tiles=[(0, 0)],
             scale=scale,
+            relief_templates_by_uid=_relief_templates(),
         )
         n = run_mask_domain(compose, ctx, MountainMaskMaterializer())
         self.assertEqual(n, 1)
@@ -140,6 +148,7 @@ class TestSpecSourcesP0(unittest.TestCase):
             locations_index=LocationsIndexWire(locations=[]),
             tiles=[(0, 0)],
             scale=scale,
+            relief_templates_by_uid=_relief_templates(),
         )
         mat = MountainMaskMaterializer()
         declared = mat.load_declared(ctx)

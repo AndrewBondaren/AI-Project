@@ -12,10 +12,11 @@ def warn_template_invalid_geom(
     *,
     template_uid: str | None = None,
     source_file: str | None = None,
+    ctx: ResolveContext | None = None,
 ) -> None:
     """Reject invalid L/θ; no geometry repair (E6)."""
     issues = [FieldPathError(("relief_templates", template_uid or template.system_name, where),
                              f"invalid relief geometry: {reason}", code="DOMAIN_GEOMETRY")
               for where, reason in template.invalid_geom_hits()]
     if issues:
-        reject_unresolved(ResolveContext(), issues)
+        reject_unresolved(ctx if ctx is not None else ResolveContext(), issues)

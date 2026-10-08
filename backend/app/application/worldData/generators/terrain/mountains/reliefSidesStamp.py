@@ -5,18 +5,14 @@ from __future__ import annotations
 from app.application.worldData.generators.terrain.relief.mountain.mountainSideMaterialize import (
     resolve_sides_with_declare,
 )
-from app.application.worldData.generators.terrain.relief.log.events import (
-    EVENT_RESOLVE_FALLBACK,
-)
-from app.application.worldData.generators.terrain.relief.log.log import relief_info, relief_warning
+from app.application.worldData.generators.terrain.relief.log.log import relief_info
 from app.application.worldData.generators.terrain.relief.pick.templatePick import (
     pick_template,
     resolve_picked_template,
 )
 from app.application.jsonValidation.worldRow import relief_pick_policy, relief_template_registry
-from app.dataModel.terrain.relief.enums import ReliefContext, ReliefSideKind
+from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.terrain.relief.specs import ReliefSideSpec
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 from app.dataModel.terrainMasks.mountain.specs import (
     MountainRangeSpec,
@@ -35,8 +31,8 @@ def stamp_mountain_sides_from_relief(
 ) -> MountainSpec:
     """Empty sides → pick mountain template + materialize; declare wins.
 
-    R21 (RELIEF-T-2): missing candidates / missing body → all-SLOPE via
-    ``fallback_kind``. Mode D (seeded 50/50) only when a live template has
+    E6-R21: missing candidates / missing body → shared unresolved.
+    Mode D (seeded 50/50) only when a live template has
     empty ``side_recipe``.
     """
     if spec.sides:
@@ -66,28 +62,6 @@ def stamp_mountain_sides_from_relief(
     )
 
     template = resolve_picked_template(pick, templates_by_uid)
-    if pick.template_uid and template is None:
-        relief_warning(
-            EVENT_RESOLVE_FALLBACK,
-            context=ReliefContext.MOUNTAIN.value,
-            why=f"missing_body={pick.template_uid}",
-            chosen_fallback=ReliefSideKind.SLOPE.value,
-            site_id=mountain_id,
-        )
-
-    if template is None:
-        # R21: no template / no body — not Mode D
-        kind = pick.fallback_kind or ReliefSideKind.SLOPE
-        sides = [ReliefSideSpec(kind=kind) for _ in range(n)]
-        relief_info(
-            "mountain_sides",
-            template_uid=pick.template_uid,
-            recipe_mode=EVENT_RESOLVE_FALLBACK,
-            N=n,
-            kinds=",".join(s.kind.value for s in sides),
-            reason=pick.reason,
-        )
-        return spec.model_copy(update={"sides": sides})
 
     sides = resolve_sides_with_declare(
         n=n,

@@ -22,8 +22,6 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
 )
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RIBBON_GRADE_APPLY,
-    EVENT_RIBBON_SKIP_GRADE,
-    WHY_NO_TEMPLATE_BODY,
 )
 from app.application.worldData.generators.terrain.relief.log.log import relief_info
 from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
@@ -79,15 +77,6 @@ def grade_ribbon_segments(
         )
         seq += 1
         template = resolve_picked_template(pick, templates_by_uid)
-        if template is None:
-            relief_info(
-                EVENT_RIBBON_SKIP_GRADE,
-                context=context.value,
-                site_id=segment.site_id,
-                why=WHY_NO_TEMPLATE_BODY,
-                template_uid=pick.template_uid,
-            )
-            continue
         decision = grade_constrained(
             template=template,
             template_uid=pick.template_uid or template.system_name,

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,
@@ -124,21 +126,30 @@ def resolve_knobs_canal(
     structure_canal: str | None,
     structure_refs: tuple[str, ...],
     registry: WorldCanalTemplateRegistry,
+    resolve_ctx: ResolveContext | None = None,
 ) -> Canal | None:
     """Normal-path canal from grade knobs (pure; no R21 warn).
 
-    ``structure_canal`` → registry. Unknown → StructureCanal empty refs (audit).
+    ``structure_canal`` → registry. Unknown → shared unresolved error.
     Earthen knobs may carry flat ``structure_refs`` (fence) via ``build_canal`` later.
     """
     ref = normalize_structure_canal_ref(structure_canal)
     if ref is not None:
-        found = canal_from_registry_ref(ref, registry)
-        if found is None:
-            return StructureCanal(system_type=ref, structure_refs=[])
-        return found
+        return require_canal_from_registry_ref(ref, registry, resolve_ctx=resolve_ctx)
     if earthen_canal is True:
         return EarthenCanal()
     return None
+
+
+def require_canal_from_registry_ref(canal_ref: str, registry: WorldCanalTemplateRegistry,
+                                    *, resolve_ctx: ResolveContext | None = None) -> Canal:
+    """Resolve a required authored reference without synthesizing a canal."""
+    found = canal_from_registry_ref(canal_ref, registry)
+    if found is None:
+        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("canal_template_registry",))
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (canal_ref,),
+            "canal reference unavailable", code="REF_W_UNKNOWN")])
+    return found
 
 
 def knobs_extra_structure_refs(

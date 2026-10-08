@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
+
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 
 from dataclasses import dataclass
@@ -16,15 +19,11 @@ from app.application.worldData.generators.terrain.relief.geom.geomResolve import
 from app.application.worldData.generators.terrain.relief.pick.kindRoll import kind_roll
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_SKIP,
-    EVENT_RESOLVE_FALLBACK,
-    REASON_SCHEDULE_HOLE_SAFE_SLOPE,
-    WHY_SCHEDULE_HOLE,
 )
 from app.application.worldData.generators.terrain.relief.log.log import (
     relief_info,
-    relief_warning,
 )
-from app.application.worldData.generators.terrain.relief.pick.slopeClassify import classify
+from app.application.worldData.generators.terrain.relief.pick.slopeClassify import ClassifyResult, classify
 from app.dataModel.terrain.relief.enums import ReliefSideKind, ReliefSlopePolicy
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
     ReliefGradeKnobs,
@@ -94,6 +93,20 @@ class RibbonGradeDecision:
         )
 
 
+def require_schedule_hit(template: ReliefTemplate, *, template_uid: str, terrain_key: str,
+                         dz: int, site_id: str, resolve_ctx: ResolveContext | None = None) -> ClassifyResult | None:
+    """No condition is an ordinary skip; a hole in a supplied schedule is an error."""
+    condition = template.condition_for(terrain_key)
+    if condition is None:
+        return None
+    hit = classify(dz, normalize_condition(condition))
+    if hit is None:
+        active = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_templates", template_uid, site_id))
+        reject_unresolved(active, [FieldPathError(active.path_prefix + ("conditions", terrain_key),
+            f"no schedule interval for dz={dz}", code="DOMAIN_SCHEDULE_HOLE")])
+    return hit
+
+
 def grade_from_template(
     *,
     template: ReliefTemplate,
@@ -102,9 +115,10 @@ def grade_from_template(
     dz: int,
     world_seed: str,
     site_id: str,
+    resolve_ctx: ResolveContext | None = None,
 ) -> RibbonGradeDecision:
     """Classify + kindRoll + geom for one ribbon site."""
-    warn_template_invalid_geom(template, template_uid=template_uid)
+    warn_template_invalid_geom(template, template_uid=template_uid, ctx=resolve_ctx)
     h = abs(int(dz))
     earthen_default, canal_default, refs_default = attachment_defaults()
     root_length = template.outward_length_cells()
@@ -128,35 +142,9 @@ def grade_from_template(
             structure_canal=canal_default,
         )
 
-    schedule = normalize_condition(cond)
-    hit = classify(dz, schedule)
-    if hit is None:
-        # RELIEF-T-14 / R21: schedule hole → safe SLOPE (not silent skip)
-        relief_warning(
-            EVENT_RESOLVE_FALLBACK,
-            context=template.context.value,
-            why=WHY_SCHEDULE_HOLE,
-            dz=dz,
-            terrain=terrain_key,
-            chosen_fallback=ReliefSideKind.SLOPE.value,
-            site_id=site_id,
-        )
-        geom = geom_resolve(
-            h=h, kind=ReliefSideKind.SLOPE, slope_length_cells=root_length,
-        )
-        return RibbonGradeDecision(
-            template_uid=template_uid,
-            policy=None,
-            kind=ReliefSideKind.SLOPE,
-            requested_length=geom.L,
-            h=h,
-            geom=geom if geom.L >= 1 else None,
-            earthen_canal=earthen_default,
-            structure_refs=refs_default,
-            reason=REASON_SCHEDULE_HOLE_SAFE_SLOPE,
-            skipped=False,
-            structure_canal=canal_default,
-        )
+    hit = require_schedule_hit(template, template_uid=template_uid, terrain_key=terrain_key,
+                               dz=dz, site_id=site_id, resolve_ctx=resolve_ctx)
+    assert hit is not None  # condition exists above
 
     if hit.policy == ReliefSlopePolicy.SLOPE_NONE:
         relief_info(

@@ -1,4 +1,4 @@
-"""Unit: RELIEF-T-7 domain root reject; T-14 schedule hole → SLOPE."""
+"""Unit: domain root and E6-R21 schedule hole rejection."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ class ReliefDebtFollowupTest(unittest.IsolatedAsyncioTestCase):
         root = resolve_relief_domain_root()
         self.assertEqual(root.name, "relief_templates")
 
-    def test_schedule_hole_safe_slope(self) -> None:
-        """Mode B with gap between bands → SLOPE fallback (RELIEF-T-14)."""
+    def test_schedule_hole_rejects(self) -> None:
+        """Mode B gap rejects without manufacturing a slope (E6-R21)."""
         tpl = ReliefTemplate.model_validate({
             "system_name": "gappy",
             "display_name": "Gappy",
@@ -76,17 +76,11 @@ class ReliefDebtFollowupTest(unittest.IsolatedAsyncioTestCase):
                 ],
             }],
         })
-        decision = grade_from_template(
-            template=tpl,
-            template_uid="uid",
-            terrain_key="plains",
-            dz=3,
-            world_seed="s",
-            site_id="site",
-        )
-        self.assertFalse(decision.skipped)
-        self.assertEqual(decision.kind, ReliefSideKind.SLOPE)
-        self.assertEqual(decision.reason, "schedule_hole_safe_slope")
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        with self.assertRaises(UnresolvedModelError) as caught:
+            grade_from_template(template=tpl, template_uid="uid", terrain_key="plains",
+                dz=3, world_seed="s", site_id="site")
+        self.assertEqual(caught.exception.issues[0].code, "DOMAIN_SCHEDULE_HOLE")
 
 
 if __name__ == "__main__":

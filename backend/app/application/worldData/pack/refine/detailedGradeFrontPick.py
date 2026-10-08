@@ -58,14 +58,6 @@ def pick_front_grade(
         occurrence_seq=occurrence_seq,
     )
     template = resolve_picked_template(pick, templates)
-    if template is None:
-        relief_debug(
-            "grade_front_skip",
-            why="no_template",
-            site_id=identity.site_id,
-            context=front.context.value,
-        )
-        return None
     decision = grade_constrained(
         template=template,
         template_uid=pick.template_uid or template.system_name,

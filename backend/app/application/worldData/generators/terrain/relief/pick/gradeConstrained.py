@@ -10,6 +10,7 @@ from __future__ import annotations
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 
 from dataclasses import replace
+from app.application.jsonValidation.resolve import ResolveContext
 
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
     ResolvedGeom,
@@ -27,6 +28,7 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
     attachment_defaults,
     grade_from_template,
+    require_schedule_hit,
 )
 from app.application.worldData.generators.terrain.relief.sample.terrainMap import (
     map_system_terrain,
@@ -248,6 +250,7 @@ def grade_constrained(
     envelopes: ReliefOntologyEnvelopes | None = None,
     z_band: int | None = None,
     path_length: int | None = None,
+    resolve_ctx: ResolveContext | None = None,
 ) -> RibbonGradeDecision:
     """Clamp template knobs to ontology envelope, then ``grade_from_template``.
 
@@ -256,7 +259,9 @@ def grade_constrained(
     may still apply ``L_min`` (plains unit ``dz=1`` → L=20). ``slope_fits``
     is θ-band only and does not veto short L.
     """
-    warn_template_invalid_geom(template, template_uid=template_uid)
+    warn_template_invalid_geom(template, template_uid=template_uid, ctx=resolve_ctx)
+    require_schedule_hit(template, template_uid=template_uid, terrain_key=terrain_key,
+                         dz=dz, site_id=site_id, resolve_ctx=resolve_ctx)
     h = abs(int(dz))
     table = envelopes or ReliefOntologyEnvelopes.canonical_defaults()
     mapped = map_system_terrain(terrain_key)
@@ -277,6 +282,7 @@ def grade_constrained(
                 dz=dz,
                 world_seed=world_seed,
                 site_id=site_id,
+                resolve_ctx=resolve_ctx,
             ),
         )
 
@@ -322,6 +328,7 @@ def grade_constrained(
         dz=dz,
         world_seed=world_seed,
         site_id=site_id,
+        resolve_ctx=resolve_ctx,
     )
     return _force_sheer_length(
         _restore_l_gt_h(
