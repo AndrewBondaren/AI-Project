@@ -1,5 +1,15 @@
 # JSON Validation — Technical Specification
 
+**Базовое требование последующих планов (2026-10-08):** общая политика [runtime/worldEdit](./tz_runtime_world_edit_policy.md): единый доменный resolver, runtime WarningError без error defaults, та же диагностика в worldEdit. Это не новый import 422 gate. Штатные defaults при отсутствии optional-поля отличаются от подстановок при ошибке; прежние error fallback ниже требуют инвентаризации/миграции по [общему плану](../.cursor/plans/runtime-world-edit-policy.md), а не автоматического переноса в новые consumers. Существующий код этой правкой не изменён.
+
+**Выбор policy:** frontend определяет сценарий и включает дополнительную валидационную policy флагом в том же import API. По умолчанию флаг/policy отсутствует; обычный импорт и загрузка относятся к runtime. Ниже описанный текущий `IMPORT` на write-path не является целевым автоматическим выбором авторской политики. Разбор wire/целостность остаются обязательными; отдельный backend worldEdit-mode не вводится.
+
+**Флаг утверждён:** `validate_only=true` запускает тот же pipeline проверки/разрешения без DB/Pack writes и изменяющих мир задач. Без флага/false — обычный импорт с прежней bundle transaction/rollback. После проверки обычный импорт повторяет проверки по актуальному состоянию. Проверочный вызов не является write с rollback и не добавляет partial persist.
+
+**Централизованное применение:** API-флаг разрешается один раз в общем request context. Существующий policy resolver автоматически применяет typed контракты полей/моделей dataModel с их индивидуальными ограничениями, field policies, refs и специфичными reason codes. Missing/null/empty/invalid/unresolved различаются. Вложенные handlers наследуют context/path и не выбирают политику самостоятельно. Межполевые и доменные проверки возвращают диагностику в тот же механизм. Параллельный field registry или новая локальная политика поверх resolve запрещены; актуальная реализация требует аудита/миграции.
+
+**Утверждённый target field contract (2026-10-08):** `DefaultWhenMissing[T]` заменяет объединённую missing/invalid default-семантику при явной миграции полей. Эталон: `ForestsCategoryPolicy.forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)`. При полном вводе missing→45, 60→60, -1/"abc"/null→ошибка без 45; при partial update missing→не изменять. POJO не содержит выбора runtime/validation и logging. Стандартные ограничения проверяет Pydantic; общий resolver возвращает unresolved/report и централизует реакцию. Не использовать model_construct/пропуск ошибочного поля для получения якобы валидного объекта. Полный контракт и границы контекста — [общая политика](./tz_runtime_world_edit_policy.md#default-только-при-отсутствии-эталон-pojo-утверждено-2026-10-08). Нижеследующее описание текущего DefaultOnWire и error defaults не является новой целевой нормой; текущая реализация этой правкой не меняется.
+
 **Версия документа: 1.2** (2026-07)
 
 **Статус кода:** v1 vertical slice — POJO-first `application/jsonValidation/`.  
