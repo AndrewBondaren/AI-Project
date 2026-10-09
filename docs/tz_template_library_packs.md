@@ -339,6 +339,90 @@ UID применяется ко всем refs, manifests/bindings добавля
   Без явного режима импорт при коллизии не выполняется; чужие записи не перезаписываются побочным эффектом.
 - Различие форматов зафиксировано в §4: world bundle несёт только world-owned manifests; engine-библиотеки переносятся отдельным архивом `kind:"library_pack"` (§4.2), не секциями world bundle.
 
+### 4.2 Формат архива (zip-конверт)
+
+Экспорт/импорт мира и library-паков — один zip-архив с файловой
+структурой, читаемой мастером стандартным архиватором (решение
+2026-10-09). Архив — транспортный конверт над моделью секций §4;
+handlers и модель `dict {section_key: payload}` не меняются, codec —
+тонкая граница сериализации.
+
+- **Контейнер:** zip (расширение `.wpack`), ZIP64. JSON-секции —
+  DEFLATED; `*.zst` и уже-сжатые блобы — STORED. Порядок entries
+  детерминирован, переменных метаданных нет — хеш архива
+  воспроизводим.
+- **Структура архива мира** (`kind:"world"`):
+
+```text
+{name}.wpack
+  bundle.manifest.json        # метаданные упаковки — не доменные данные
+  skeleton/
+    world.json                # world row + реестры + pin-набор
+    states.json
+    locations.json
+    connection_nodes.json
+    connection_edges.json
+    {section_key}.json        # transitional: плоские body-секции —
+                              # до переезда world-owned тел в library/;
+                              # pack-owned тела плоскими не дублируются
+  library/                    # библиотеки мира — self-contained
+    {domain_root}/
+      {pack_name}/
+        pack.manifest.json    # схема §4: members, deps, provenance
+        {system_name}.json    # тела членов, stem == system_name
+  pack/                       # запечённый World Pack — только уровень full:
+                              # verbatim зеркало pack_root; layout SoT —
+                              # WorldPackPaths, здесь не перечисляется;
+                              # debug `*.grade_rays.json` не входят
+```
+
+- **`bundle.manifest.json`:** `kind`, `format_version`, `source`,
+  индекс `section key → path`. Доменные настройки живут в секционных
+  файлах, манифест их не дублирует.
+- **`source` — владелец-источник:** `{kind:"world", world_uid,
+  world_name, exporter, exported_at, content_hash?}`; по
+  `source.world_uid` импорт обнаруживает коллизию → двухфазный контракт
+  §4.1. Per-pack provenance (`source_pack_uid`/`source_template_uid`)
+  остаётся в `pack.manifest.json`.
+- **Уровни экспорта:** `registry` → manifest + `skeleton/world.json`;
+  `skeleton` → + `skeleton/*` + `library/`; `full` → + `pack/`.
+  `full` на мире без запечённого pack — явная ошибка уровня.
+- **`library/` subtree повторяет FS-layout** (`template-pack-layout`):
+  тела членов лежат внутри папки своего пака; плоские body-секции §4 для
+  pack-owned тел в архиве **не дублируются** — секция `library_packs`
+  разворачивается в subtree. Тело вне папки пака — ошибка структуры
+  (аналог lone files).
+- **Строгость входа:** неизвестные файлы, битый zip, отсутствующий или
+  невалидный manifest — reject до разбора секций. Секция ↔ path — явная
+  таблица, не вывод из имени файла.
+- **World archive несёт только world-owned manifests** (§4.1); engine
+  library-пак экспортируется тем же контейнером с `kind:"library_pack"`,
+  корень = domain layout (`pack.manifest.json` + member-файлы).
+- **UID при импорте архива — carry / attach / mint** (решение
+  2026-10-09). Три операции над идентичностью, не смешиваются: **carry**
+  — uid тянется из источника без изменений (повторный импорт того же
+  объекта = тот же uid); **attach** — uid перевычисляется по центральной
+  формуле §2 при смене владельца (новый `pack_uid`, member
+  `template_uid` от нового владельца, `source_*` фиксирует исходные);
+  **mint** — новый uid по uid_map ремапа мира. По артефактам:
+  `world_uid` и entity uids — carry при `update`, mint при `copy`
+  (§4.1); world-owned `pack_uid` / `template_uid` членов — carry при
+  `update`, attach при `copy` (владелец сменился ⇒ идентичность новая,
+  исходный в provenance); refs в телах и world-side refs переписываются
+  по карте членов — internal refs того же пака, чужие не трогаются;
+  pin-набор мира по `local_uid` переживает remap и не переписывается;
+  `pack/` subtree — uid-поля `manifest.json`/`locations_index.json` и
+  имена `locations/l.{uid}.*` переписываются по тому же uid_map, тела
+  блобов verbatim (хеши тел валидны, `content_hash` манифеста
+  пересчитывается), `terrain_pack_path` сбрасывается на pack_root
+  импортированного мира. Для `kind:"library_pack"` — только carry: uid
+  пака и членов из архива пишутся в engine-каталог как есть, повторный
+  импорт = update той же идентичности; attach/mint — операции
+  `instantiate_pack`/`copy_pack` §2, не разбор архива.
+- **Legacy:** flat-JSON bundle остаётся допустимым входом импорта
+  (transitional read, карта старых/новых UID — §4 legacy-этап); запись —
+  только архив.
+
 ## 5. Разрешение ссылок и fallback
 
 Движок получает только UID из ссылки, находит тело и единственного пак-владельца

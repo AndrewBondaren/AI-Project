@@ -49,6 +49,13 @@ Remap мира не меняет глобальные pack/template UID. Self-co
 остаются только UID шаблонов. Текущие allowlists/order/handlers ниже требуют
 расширения отдельным этапом, до него новый формат не считается реализованным.
 
+Транспортный формат — zip-архив `.wpack` с файловой структурой
+(`bundle.manifest.json` + `skeleton/` + `library/` + `pack/`):
+[tz_template_library_packs.md §4.2](./tz_template_library_packs.md).
+Секции bundle становятся файлами архива; модель `dict {key: payload}` и
+handlers не меняются. World archive несёт только world-owned manifests —
+engine-библиотеки идут отдельным архивом `kind:"library_pack"`.
+
 ---
 
 ## Критерий: library vs entity
