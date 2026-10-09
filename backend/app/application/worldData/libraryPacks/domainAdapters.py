@@ -20,11 +20,8 @@ from typing import Any, ClassVar
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.application.jsonValidation.worldRow import (
     building_template_registry,
-    crops,
-    livestock,
     relief_pick_policy,
     relief_template_registry,
-    resource_types,
 )
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.reliefErrors import ReliefValidationError
@@ -51,12 +48,6 @@ from app.db.models.world import World
 from app.ids import LibraryKind
 
 logger = logging.getLogger(__name__)
-
-_PLOT_ONLY_FIELDS = (
-    frozenset(PlotLayoutTemplate.model_fields)
-    - frozenset(BuildingTemplateOutline.model_fields)
-)
-
 
 class PackDomainAdapter(ABC):
     """Body/pointer contract of one ``library_kind`` for the pack service.
@@ -332,15 +323,16 @@ class BuildingPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
             )
         ctx = ResolveContext(path_prefix=("building_templates", local_uid))
         try:
-            model = (
-                PlotLayoutTemplate
-                if _PLOT_ONLY_FIELDS.intersection(raw)
-                else BuildingTemplateOutline
-            )
-            body = resolve_model(model, raw, ctx=ctx)
-            self._check_world_subjects(world, body, local_uid)
+            body = self._library.parse_body(raw, ctx=ctx)
         except ValueError as exc:
             raise LibraryPackValidationError(str(exc)) from exc
+        if world is not None:
+            issues = self._library.subject_issues(world, body)
+            if issues:
+                token, code = issues[0]
+                raise LibraryPackValidationError(
+                    f"{local_uid}: {code}: extract/farm/livestock subject {token!r}"
+                )
         if str(body.system_name) != local_uid:
             raise LibraryPackValidationError(
                 f"building body system_name '{body.system_name}' != "
@@ -350,25 +342,6 @@ class BuildingPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
             body, source_file=source_file, pack_uid=pack.pack_uid
         )
         return body
-
-    @staticmethod
-    def _check_world_subjects(world, body, local_uid: str) -> None:
-        if world is None:
-            return
-        issues = resource_types(world).check_template_subjects(
-            body.resource_kind, body.subjects
-        )
-        if not issues:
-            issues = crops(world).check_template_subjects(body.crop_kind, body.subjects)
-        if not issues:
-            issues = livestock(world).check_template_subjects(
-                body.livestock_kind, body.subjects
-            )
-        if issues:
-            token, code = issues[0]
-            raise LibraryPackValidationError(
-                f"{local_uid}: {code}: extract/farm/livestock subject {token!r}"
-            )
 
     async def read_body(self, template_uid: str) -> dict | None:
         row = await self._library.find_by_uid(template_uid)

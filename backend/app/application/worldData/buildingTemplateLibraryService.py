@@ -36,12 +36,6 @@ logger = logging.getLogger(__name__)
 _PLOT_ONLY_FIELDS = frozenset(PlotLayoutTemplate.model_fields) - frozenset(BuildingTemplateOutline.model_fields)
 
 
-def _library_body(data, ctx: ResolveContext):
-    """Use declared plot fields to distinguish the two supported wire shapes."""
-    model = PlotLayoutTemplate if isinstance(data, dict) and _PLOT_ONLY_FIELDS.intersection(data) else BuildingTemplateOutline
-    return resolve_model(model, data, ctx=ctx)
-
-
 def building_template_uid(system_name: str) -> str:
     return library_uid(LibraryKind.BUILDING_TEMPLATES, system_name)
 
@@ -91,7 +85,7 @@ class BuildingTemplateLibraryService:
             ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
             if row is None:
                 reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "library reference unavailable", code="REF_W_UNKNOWN")])
-            body = _library_body(row.data, ctx)
+            body = self.parse_body(row.data, ctx=ctx)
             if isinstance(body, BuildingTemplateOutline):
                 continue
             layout = body
@@ -180,14 +174,26 @@ class BuildingTemplateLibraryService:
         )
 
     @staticmethod
+    def parse_body(raw: dict, *, ctx: ResolveContext) -> BuildingTemplateOutline | PlotLayoutTemplate:
+        """Use declared plot fields to distinguish the two supported wire shapes."""
+        model = PlotLayoutTemplate if isinstance(raw, dict) and _PLOT_ONLY_FIELDS.intersection(raw) else BuildingTemplateOutline
+        return resolve_model(model, raw, ctx=ctx)
+
+    @staticmethod
+    def subject_issues(world, body) -> list:
+        """resource/crops/livestock subject violations of a template body."""
+        issues = resource_types(world).check_template_subjects(body.resource_kind, body.subjects)
+        if not issues:
+            issues = crops(world).check_template_subjects(body.crop_kind, body.subjects)
+        if not issues:
+            issues = livestock(world).check_template_subjects(body.livestock_kind, body.subjects)
+        return issues
+
+    @staticmethod
     def prepare_body(world, raw: dict, *, ctx: ResolveContext | None = None) -> BuildingTemplateOutline:
         active_ctx = ctx if ctx is not None else ResolveContext(path_prefix=("building_templates",))
         outline = resolve_model(BuildingTemplateOutline, raw, ctx=active_ctx)
-        issues = resource_types(world).check_template_subjects(outline.resource_kind, outline.subjects)
-        if not issues:
-            issues = crops(world).check_template_subjects(outline.crop_kind, outline.subjects)
-        if not issues:
-            issues = livestock(world).check_template_subjects(outline.livestock_kind, outline.subjects)
+        issues = BuildingTemplateLibraryService.subject_issues(world, outline)
         if issues:
             token, code = issues[0]
             reject_unresolved(active_ctx, [FieldPathError(active_ctx.path_prefix + ("subjects",),
@@ -203,7 +209,7 @@ class BuildingTemplateLibraryService:
                 ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
                 reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "library reference unavailable", code="REF_W_UNKNOWN")])
             ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
-            body = _library_body(row.data, ctx)
+            body = self.parse_body(row.data, ctx=ctx)
             if isinstance(body, PlotLayoutTemplate):
                 validate_source(world, body, ctx=ctx)
             bodies.append(dict(row.data))
