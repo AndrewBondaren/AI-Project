@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     relief_grade_obstacle_policy TEXT,  -- truncate_skip | allow_flush (R36n); NULL → POJO default
     race_template_registry      TEXT,
     perk_template_registry      TEXT,
+    library_pins                TEXT,  -- pin-набор мира: пары library_kind/local_uid (tz_template_library_packs §1.1)
 
     -- generation policy (hydrology / caves / terrain masks — tz_terrain_hydrology.md, tz_map_light_bake.md)
     hydrology                   TEXT,
@@ -628,7 +629,7 @@ CREATE INDEX IF NOT EXISTS idx_states_world ON states (world_uid);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS building_templates (
     template_uid   TEXT PRIMARY KEY,
-    system_name    TEXT NOT NULL UNIQUE,
+    system_name    TEXT NOT NULL,  -- не глобально UNIQUE (tz_template_library_packs §3): локальный ключ, уникальность — в library_pack_members
     display_name   TEXT NOT NULL,
     structure_type TEXT NOT NULL,
     version        TEXT NOT NULL DEFAULT '1.0',
@@ -641,7 +642,7 @@ CREATE TABLE IF NOT EXISTS building_templates (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS relief_templates (
     template_uid   TEXT PRIMARY KEY,
-    system_name    TEXT NOT NULL UNIQUE,
+    system_name    TEXT NOT NULL,  -- не глобально UNIQUE (tz_template_library_packs §3): локальный ключ, уникальность — в library_pack_members
     display_name   TEXT NOT NULL,
     context        TEXT NOT NULL,
     version        TEXT NOT NULL DEFAULT '1.0',
@@ -659,6 +660,51 @@ CREATE TABLE IF NOT EXISTS structure_templates (
     version        TEXT NOT NULL DEFAULT '1.0',
     data           TEXT NOT NULL,
     source_file    TEXT
+);
+
+-- ============================================================
+-- library_packs  (каталог паков библиотек — tz_template_library_packs §3)
+-- Ровно один владелец: owner_world_uid NULL = библиотека движка,
+-- NOT NULL = библиотека мира (mutable, каскадно умирает с миром).
+-- source_pack_uid — provenance remap-операции, не enforced FK: удаление
+-- engine-пака безопасно всегда (миры держат инстансы-копии); dangling
+-- значение читается как статус «source deleted». Таблицы bindings нет —
+-- доступность = owner_world_uid либо default-статус.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS library_packs (
+    pack_uid         TEXT PRIMARY KEY,
+    system_name      TEXT NOT NULL UNIQUE,
+    pack_name        TEXT NOT NULL,
+    display_name     TEXT NOT NULL,
+    version          TEXT NOT NULL DEFAULT '1.0',
+    owner_world_uid  TEXT REFERENCES worlds(world_uid) ON DELETE CASCADE,
+    source_pack_uid  TEXT              -- provenance: пак-источник; может ссылаться на удалённый пак
+);
+
+-- ============================================================
+-- library_pack_members  (состав паков; тела — в доменных таблицах)
+-- Одна строка = единственный владелец члена. source_template_uid —
+-- provenance remap-операции, не FK-integrity (ТЗ §3): источник может
+-- быть удалён, dangling допустим как у required_pack_uid.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS library_pack_members (
+    template_uid        TEXT PRIMARY KEY,
+    pack_uid            TEXT NOT NULL REFERENCES library_packs(pack_uid) ON DELETE CASCADE,
+    library_kind        TEXT NOT NULL,
+    local_uid           TEXT NOT NULL,
+    source_template_uid TEXT,          -- provenance: член-источник; может ссылаться на удалённого члена
+    UNIQUE (pack_uid, library_kind, local_uid)
+);
+
+-- ============================================================
+-- library_pack_dependencies  (явные зависимости паков)
+-- required_pack_uid не FK: допускает ещё не импортированный пак —
+-- неполнота диагностируется, не блокируется (ТЗ §3, §5).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS library_pack_dependencies (
+    pack_uid          TEXT NOT NULL REFERENCES library_packs(pack_uid) ON DELETE CASCADE,
+    required_pack_uid TEXT NOT NULL,
+    PRIMARY KEY (pack_uid, required_pack_uid)
 );
 
 -- ============================================================
@@ -1339,3 +1385,8 @@ CREATE INDEX IF NOT EXISTS idx_conn_edges_to            ON connection_edges (to_
 CREATE INDEX IF NOT EXISTS idx_conn_edges_level         ON connection_edges (world_uid, graph_level);
 
 CREATE INDEX IF NOT EXISTS idx_conn_edge_cells_edge     ON connection_edge_cells (edge_uid);
+
+CREATE INDEX IF NOT EXISTS idx_library_packs_owner       ON library_packs (owner_world_uid);
+CREATE INDEX IF NOT EXISTS idx_library_packs_source      ON library_packs (source_pack_uid);
+CREATE INDEX IF NOT EXISTS idx_library_pack_members_pack ON library_pack_members (pack_uid);
+CREATE INDEX IF NOT EXISTS idx_library_pack_deps_required ON library_pack_dependencies (required_pack_uid);

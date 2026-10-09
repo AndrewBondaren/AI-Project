@@ -33,6 +33,9 @@ def make_lifespan(db: Database):
     from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
     from app.db.models.buildingTemplate import BuildingTemplateRow
     from app.db.models.structureTemplate import StructureTemplateRow
+    from app.db.models.libraryPack import LibraryPackRow
+    from app.db.models.libraryPackMember import LibraryPackMemberRow
+    from app.db.models.libraryPackDependency import LibraryPackDependencyRow
     from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
     _models = [
@@ -42,6 +45,7 @@ def make_lifespan(db: Database):
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
         State, SessionPending, ReliefTemplateRow, BuildingTemplateRow,
         ReliefGradeSystemRow, ReliefGradeInstanceRow, StructureTemplateRow,
+        LibraryPackRow, LibraryPackMemberRow, LibraryPackDependencyRow,
     ]
 
     @asynccontextmanager

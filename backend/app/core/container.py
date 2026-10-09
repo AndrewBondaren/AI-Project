@@ -55,6 +55,12 @@ from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRep
 from app.db.repositories.sqlite.buildingTemplateRepository import SqliteBuildingTemplateRepository
 from app.db.repositories.iStructureTemplateRepository import IStructureTemplateRepository
 from app.db.repositories.sqlite.structureTemplateRepository import SqliteStructureTemplateRepository
+from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
+from app.db.repositories.sqlite.libraryPackRepository import SqliteLibraryPackRepository
+from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
+from app.db.repositories.sqlite.libraryPackMemberRepository import SqliteLibraryPackMemberRepository
+from app.db.repositories.iLibraryPackDependencyRepository import ILibraryPackDependencyRepository
+from app.db.repositories.sqlite.libraryPackDependencyRepository import SqliteLibraryPackDependencyRepository
 from app.application.worldData.worldService import WorldService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
@@ -162,6 +168,9 @@ class Container:
         self._relief_grade_repository: IReliefGradeRepository | None = None
         self._building_template_repository: IBuildingTemplateRepository | None = None
         self._structure_template_repository: IStructureTemplateRepository | None = None
+        self._library_pack_repository: ILibraryPackRepository | None = None
+        self._library_pack_member_repository: ILibraryPackMemberRepository | None = None
+        self._library_pack_dependency_repository: ILibraryPackDependencyRepository | None = None
 
         # DOMAIN SERVICES
         self._player_service: PlayerService | None = None
@@ -508,6 +517,21 @@ class Container:
         if self._structure_template_repository is None:
             self._structure_template_repository = SqliteStructureTemplateRepository(db=self._db)
         return self._structure_template_repository
+
+    def library_pack_repository(self) -> ILibraryPackRepository:
+        if self._library_pack_repository is None:
+            self._library_pack_repository = SqliteLibraryPackRepository(db=self._db)
+        return self._library_pack_repository
+
+    def library_pack_member_repository(self) -> ILibraryPackMemberRepository:
+        if self._library_pack_member_repository is None:
+            self._library_pack_member_repository = SqliteLibraryPackMemberRepository(db=self._db)
+        return self._library_pack_member_repository
+
+    def library_pack_dependency_repository(self) -> ILibraryPackDependencyRepository:
+        if self._library_pack_dependency_repository is None:
+            self._library_pack_dependency_repository = SqliteLibraryPackDependencyRepository(db=self._db)
+        return self._library_pack_dependency_repository
 
     def perk_repository(self) -> IWorldPerkRepository:
         if self._perk_repository is None:

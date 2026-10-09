@@ -13,7 +13,12 @@ class IReliefTemplateRepository(ABC):
     async def get_by_uid(self, template_uid: str) -> ReliefTemplateRow | None: ...
 
     @abstractmethod
-    async def get_by_system_name(self, system_name: str) -> ReliefTemplateRow | None: ...
+    async def get_by_system_name(self, system_name: str) -> ReliefTemplateRow | None:
+        """Transitional / deprecated until plan step 5b: ``system_name`` is no
+        longer globally UNIQUE (tz_template_library_packs §3); raises on
+        ambiguity instead of returning an arbitrary row. Callers migrate to
+        template_uid or the effective catalog."""
+        ...
 
     @abstractmethod
     async def list_all(self) -> list[ReliefTemplateRow]: ...

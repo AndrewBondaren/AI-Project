@@ -17,7 +17,16 @@ class SqliteReliefTemplateRepository(BaseRepository[ReliefTemplateRow], IReliefT
         return await self.fetch_one("template_uid = ?", [template_uid])
 
     async def get_by_system_name(self, system_name: str) -> ReliefTemplateRow | None:
-        return await self.fetch_one("system_name = ?", [system_name])
+        """Transitional (deprecated until plan step 5b): since the global
+        UNIQUE on ``system_name`` is dropped (tz_template_library_packs §3),
+        more than one row is an error — never an arbitrary pick."""
+        rows = await self.fetch_all("system_name = ?", [system_name], order="template_uid ASC")
+        if len(rows) > 1:
+            raise RuntimeError(
+                f"ambiguous system_name {system_name!r}: "
+                f"{len(rows)} relief_templates rows — resolve by template_uid or owner pack",
+            )
+        return rows[0] if rows else None
 
     async def list_all(self) -> list[ReliefTemplateRow]:
         return await self.fetch_all("1=1", [], order="system_name ASC")

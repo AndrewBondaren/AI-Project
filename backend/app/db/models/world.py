@@ -97,6 +97,7 @@ class World:
     relief_grade_obstacle_policy:   str | None = None  # R36n; NULL → POJO default
     race_template_registry:         list = json_list_col()
     perk_template_registry:         list = json_list_col()
+    library_pins:                   list = json_list_col()  # pin-набор мира: пары library_kind/local_uid (tz_template_library_packs §1.1)
 
     # generation policy (world template — tz_terrain_hydrology.md / tz_map_light_bake.md)
     hydrology:                      dict = json_col(default_factory=dict)
