@@ -17,8 +17,9 @@ Two operations over domain-declared ``CanonicalLibrarySpec``:
   leave no rows; a failed attach marks nothing and may be retried.
 
 Concurrent attaches serialize on a per-``spec.name`` in-process lock;
-cross-process safety comes from the atomic SQL conflict (``INSERT OR
-IGNORE`` never replaces a row). Completeness is defined by presence of
+cross-process safety comes from the atomic SQL conflict
+(``ON CONFLICT (uid) DO NOTHING`` never replaces a row). Completeness is
+defined by presence of
 all canonical UIDs — see ``CanonicalCachePolicy`` in ``spec.py`` for the
 fixed cache contract.
 

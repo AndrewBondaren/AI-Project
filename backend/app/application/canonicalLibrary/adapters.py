@@ -11,7 +11,9 @@ domain supplies:
 - ``CanonicalPersistenceAdapter.insert_missing`` — atomically adds the
   missing canonical UIDs inside its own transaction contract. Existing
   rows are never replaced, including user overrides of canonical UIDs
-  (``INSERT OR IGNORE`` / ``ON CONFLICT DO NOTHING`` semantics). A write
+  (``ON CONFLICT(identity) DO NOTHING`` — only the identity conflict is
+  ignored; plain ``INSERT OR IGNORE`` is unsafe: it also silently skips
+  NOT NULL/CHECK violations). A write
   error rolls the whole attach back; inside a caller transaction the
   adapter participates without a nested BEGIN or a hidden commit of
   foreign work.

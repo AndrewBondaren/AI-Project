@@ -162,3 +162,8 @@ class CanonicalLibrarySpec:
                 )
             if self.world_canonical_rows is not None:
                 raise CanonicalSpecError(f"{self.name}: global spec forbids world_canonical_rows")
+            if self.identity_field:
+                raise CanonicalSpecError(
+                    f"{self.name}: global spec forbids identity_field — "
+                    "identity lives on CanonicalEntry.uid",
+                )

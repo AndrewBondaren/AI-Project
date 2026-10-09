@@ -44,6 +44,9 @@ class SqlCanonicalPersistence:
     uid_column: str | None = None
     row_of: Callable[[CanonicalEntry], Any] = _identity_row
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_uid_col", self.uid_column or pk_col(self.model))
+
     async def insert_missing(
         self,
         snapshot: CanonicalSnapshot,
@@ -52,53 +55,54 @@ class SqlCanonicalPersistence:
         declared = [entry.uid for entry in snapshot.entries]
         if not declared:
             return CanonicalAttachResult()
-        db = context
-        conn = db.main_conn
+        conn = context.main_conn
+        if _in_transaction.get():
+            # Caller transaction: participate — no nested BEGIN, no commit
+            # of foreign work.
+            return await self._attach(conn, snapshot, declared)
+        async with context.transaction_on(conn):
+            return await self._attach(conn, snapshot, declared)
+
+    async def _attach(
+        self,
+        conn: Any,
+        snapshot: CanonicalSnapshot,
+        declared: list[str],
+    ) -> CanonicalAttachResult:
+        # Check + insert in one transaction: the missing-set cannot go stale
+        # between the read and the write.
         existing = await self._existing_uids(conn, declared)
         missing = [entry for entry in snapshot.entries if entry.uid not in existing]
         if missing:
-            await self._insert_missing_rows(db, conn, missing)
+            await self._insert_rows(conn, missing)
         return CanonicalAttachResult(
             added=tuple(entry.uid for entry in missing),
             existing=tuple(uid for uid in declared if uid in existing),
         )
 
     async def _existing_uids(self, conn: Any, declared: list[str]) -> set[str]:
-        uid_col = self.uid_column or pk_col(self.model)
         found: set[str] = set()
         for batch in iter_batches(declared):
             placeholders = ", ".join("?" * len(batch))
             sql = (
-                f"SELECT {uid_col} FROM {self.model.__table__} "
-                f"WHERE {uid_col} IN ({placeholders})"
+                f"SELECT {self._uid_col} FROM {self.model.__table__} "
+                f"WHERE {self._uid_col} IN ({placeholders})"
             )
             async with conn.execute(sql, list(batch)) as cur:
                 for row in await cur.fetchall():
                     found.add(row[0])
         return found
 
-    async def _insert_missing_rows(
-        self,
-        db: Any,
-        conn: Any,
-        missing: list[CanonicalEntry],
-    ) -> None:
+    async def _insert_rows(self, conn: Any, missing: list[CanonicalEntry]) -> None:
         rows = [self.row_of(entry) for entry in missing]
         cols, _ = to_row(rows[0])
         placeholders = ", ".join("?" * len(cols))
-        uid_col = self.uid_column or pk_col(self.model)
         # ON CONFLICT(uid) DO NOTHING: a concurrent attach or a user override
         # of a canonical UID is never replaced (TZ §6). Other constraint
         # violations raise — not silently skipped — and roll the attach back.
         sql = (
             f"INSERT INTO {self.model.__table__} ({', '.join(cols)}) "
             f"VALUES ({placeholders}) "
-            f"ON CONFLICT ({uid_col}) DO NOTHING"
+            f"ON CONFLICT ({self._uid_col}) DO NOTHING"
         )
-        if _in_transaction.get():
-            # Caller transaction: participate — no nested BEGIN, no commit
-            # of foreign work.
-            await executemany_rows(conn, sql, rows)
-            return
-        async with db.transaction_on(conn):
-            await executemany_rows(conn, sql, rows)
+        await executemany_rows(conn, sql, rows)

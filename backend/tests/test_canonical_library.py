@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sqlite3
 import tempfile
 import unittest
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from unittest import IsolatedAsyncioTestCase
 
 from app.application.canonicalLibrary import (
     CanonicalAttachPolicy,
+    CanonicalAttachResult,
     CanonicalCachePolicy,
     CanonicalContractError,
     CanonicalEntry,
@@ -273,7 +275,7 @@ class EnsureCanonicalTests(IsolatedAsyncioTestCase):
             fingerprint="v1",
         )
         spec = _global_spec(_StaticSource(snapshot))
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlite3.IntegrityError):
             await ensure_canonical(spec, self._db)
         # Rollback: rows inserted before the failing one are gone.
         self.assertEqual(await self._rows(), {})
@@ -318,7 +320,6 @@ class EnsureCanonicalTests(IsolatedAsyncioTestCase):
     async def test_persistence_must_partition_declared_uids(self):
         class BadPersistence:
             async def insert_missing(self, snapshot, context):
-                from app.application.canonicalLibrary import CanonicalAttachResult
                 return CanonicalAttachResult(added=(), existing=("foreign",))
 
         spec = CanonicalLibrarySpec(
