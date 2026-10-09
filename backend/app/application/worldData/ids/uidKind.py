@@ -49,5 +49,7 @@ class LibraryKind(StrEnum):
 
     BUILDING_TEMPLATES = "building_templates"
     RELIEF_TEMPLATES = "relief_templates"
+    STRUCTURE_TEMPLATES = "structure_templates"
     PERK_TEMPLATES = "perk_templates"
     RACE_TEMPLATES = "race_templates"
+    LIBRARY_PACKS = "library_packs"

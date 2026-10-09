@@ -122,6 +122,58 @@ class DetIdsContractTests(unittest.TestCase):
         )
         UUID(a)
 
+    def test_library_uid_legacy_form_bit_compatible(self):
+        self.assertEqual(
+            library_uid(LibraryKind.BUILDING_TEMPLATES, "house"),
+            str(uuid5(NAMESPACE_DNS, "building_templates|house")),
+        )
+        self.assertEqual(
+            library_uid(LibraryKind.LIBRARY_PACKS, "engine.structures.base"),
+            str(uuid5(NAMESPACE_DNS, "library_packs|engine.structures.base")),
+        )
+
+    def test_library_uid_pack_owned(self):
+        pack = library_uid(LibraryKind.LIBRARY_PACKS, "engine.structures.base")
+        UUID(pack)
+        uid = library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house", pack_uid=pack)
+        self.assertEqual(
+            uid,
+            str(uuid5(NAMESPACE_DNS, f"{pack}|structure_templates|local_uid=house")),
+        )
+        self.assertEqual(
+            uid,
+            library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house", pack_uid=pack),
+        )
+
+    def test_library_uid_owner_and_domain_isolation(self):
+        pack_a = library_uid(LibraryKind.LIBRARY_PACKS, "pack.a")
+        pack_b = library_uid(LibraryKind.LIBRARY_PACKS, "pack.b")
+        uid_a = library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house", pack_uid=pack_a)
+        self.assertNotEqual(
+            uid_a,
+            library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house", pack_uid=pack_b),
+        )
+        self.assertNotEqual(
+            uid_a,
+            library_uid(LibraryKind.RELIEF_TEMPLATES, "house", pack_uid=pack_a),
+        )
+        self.assertNotEqual(
+            uid_a,
+            library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house"),
+        )
+
+    def test_library_uid_rejects_ambiguous_inputs(self):
+        pack = library_uid(LibraryKind.LIBRARY_PACKS, "pack.a")
+        forged = f"{pack}|structure_templates|local_uid=house"
+        with self.assertRaises(ValueError):
+            library_uid(LibraryKind.STRUCTURE_TEMPLATES, forged)
+        with self.assertRaises(ValueError):
+            library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house", pack_uid="x|y")
+        with self.assertRaises(ValueError):
+            library_uid(LibraryKind.STRUCTURE_TEMPLATES, "house", pack_uid="")
+        with self.assertRaises(ValueError):
+            library_uid("not-a-library", "x")
+
     def test_runtime_uid(self):
         a, b = runtime_uid(), runtime_uid()
         self.assertNotEqual(a, b)

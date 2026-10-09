@@ -7,7 +7,9 @@ Three roots, one canonical string ``"{root}|{kind}|{k}={v}"`` hashed by
   (named locations, levels, passages, nodes, cascade rng).
 - ``seed_*`` — ``world_seed`` root: bake reproducibility (pack job uid,
   grade catalog uid, relief pick rng).
-- ``library_uid`` — no world root: global template libraries.
+- ``library_uid`` — no world root: global template libraries; pack-owned
+  members use the owner ``pack_uid`` as the canonical root
+  (tz_template_library_packs §2).
 
 ``world_seed`` today = ``seed_root(world)`` = ``str(world.world_uid)``
 (interim until a ``World.seed`` column — tz_terrain_relief §334);
@@ -74,9 +76,26 @@ def seed_rng(world_seed: str, kind: UidKind, **keys: Any) -> Random:
     return Random(seed_uid(world_seed, kind, **keys))
 
 
-def library_uid(library: LibraryKind, system_name: str) -> str:
-    """Uid of a global library template — no world root."""
-    return _hash(f"{LibraryKind(library).value}{_SEP}{system_name}")
+def library_uid(
+    library: LibraryKind, system_name: str, *, pack_uid: str | None = None
+) -> str:
+    """Uid of a global library template — no world root.
+
+    ``pack_uid=None`` keeps the owner-less canonical
+    ``"{library}|{system_name}"`` (bit-compatible, for domains not yet
+    migrated to packs). Pack-owned identity puts the owner in the root
+    slot of the canonical form: ``"{pack_uid}|{library}|local_uid={system_name}"``.
+    ``_SEP`` is rejected in inputs so the serialization cannot be ambiguous.
+    """
+    lib = LibraryKind(library).value
+    if _SEP in system_name:
+        raise ValueError(f"det-id system_name must not contain {_SEP!r}")
+    if pack_uid is None:
+        return _hash(f"{lib}{_SEP}{system_name}")
+    pack = str(pack_uid)
+    if not pack or _SEP in pack:
+        raise ValueError(f"det-id pack_uid must be a non-empty uid without {_SEP!r}")
+    return _hash(f"{pack}{_SEP}{lib}{_SEP}local_uid={system_name}")
 
 
 def runtime_uid() -> str:
