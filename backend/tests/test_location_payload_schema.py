@@ -12,7 +12,7 @@ from app.db.models.world import World
 from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.locationPayloadAccess import settlement_payload, district_payload, payload_field_names
-from app.application.worldData.context.locationScope import settlement_context
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.settlementSkeletonAccess import settlement_skeleton_pojo, resolved_settlement_skeleton
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.locations.namedLocation import BundleNamedLocation

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     debug_building_context,
 )
 from app.application.worldData.generators.structure.cellFactory import _roof_cell

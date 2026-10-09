@@ -28,7 +28,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import (
     SettlementAssembler,
 )
-from app.application.worldData.context.locationScope import settlement_context
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )

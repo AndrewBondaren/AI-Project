@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 
-from app.application.worldData.context.locationScope import empty_location_chain
+from app.application.cascade.locationScope import empty_location_chain
 from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 from app.application.worldData.generators.coordinates.columnSurface import column_surface

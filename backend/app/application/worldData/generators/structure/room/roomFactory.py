@@ -6,7 +6,7 @@
 import logging
 from random import Random
 
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     empty_location_chain,
     room_context,
 )

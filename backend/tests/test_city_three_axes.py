@@ -51,7 +51,7 @@ from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
     settlement_cell_rng,
 )
-from app.application.worldData.context.locationScope import settlement_context
+from app.application.cascade.locationScope import settlement_context
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import (
     LocationTypeSubtypeEntry,
 )

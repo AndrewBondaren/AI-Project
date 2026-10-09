@@ -23,7 +23,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementGeneratorService,
 )
 from app.application.worldData.generators.coordinates import map_cell_fine_span, settlement_origin_fine
-from app.application.worldData.context.locationScope import settlement_context
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_topology,
 )

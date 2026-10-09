@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
-from app.application.worldData.context.locationScope import debug_building_context
+from app.application.cascade.locationScope import debug_building_context
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )

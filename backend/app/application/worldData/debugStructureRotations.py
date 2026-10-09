@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 import logging
 
-from app.application.worldData.context.locationScope import debug_building_context
+from app.application.cascade.locationScope import debug_building_context
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels

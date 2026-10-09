@@ -32,11 +32,12 @@ from __future__ import annotations
 from typing import Mapping
 
 from app.ids import LibraryKind, library_uid
+from app.application.worldData.libraryPacks.defaults import STRUCTURES_BASE_SYSTEM_NAME
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 
 # Globally stable pack keys (TZ §2): system_name is the author's global key;
-# pack_name is only the FS folder name.
-STRUCTURES_BASE_SYSTEM_NAME = "engine.structures.base"
+# pack_name is only the FS folder name. ``STRUCTURES_BASE_SYSTEM_NAME`` lives
+# in ``defaults`` — the trusted default-pack declaration (TZ §3).
 SMOKE_003_SYSTEM_NAME = "user.relief.smoke_003"
 
 # Old authored structure UUID (former ``system_name``/file stem) → member

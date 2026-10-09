@@ -10,7 +10,7 @@ Trapdoor staircases: no shaft needed — vertical-only, no shaft footprint.
 import logging
 from random import Random
 
-from app.application.worldData.context.locationScope import empty_location_chain
+from app.application.cascade.locationScope import empty_location_chain
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.dataModel.locations.context.locationContext import LocationContext

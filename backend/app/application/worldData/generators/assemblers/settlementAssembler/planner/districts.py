@@ -41,7 +41,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     column_surface,
     resolve_district_pin_z,
 )
-from app.application.worldData.context.locationScope import district_context
+from app.application.cascade.locationScope import district_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     district_location_uid,
 )

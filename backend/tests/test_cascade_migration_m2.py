@@ -17,7 +17,7 @@ import unittest
 from dataclasses import replace
 from unittest.mock import patch
 
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     area_context,
     building_context,
     district_context,

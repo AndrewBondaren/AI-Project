@@ -19,7 +19,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     resolve_settlement_specialization,
     slot_allowed_for_template,
 )
-from app.application.worldData.context.locationScope import district_context
+from app.application.cascade.locationScope import district_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
     is_district_location,
 )

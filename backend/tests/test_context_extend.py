@@ -8,10 +8,10 @@ from typing import Annotated
 
 from pydantic import BaseModel, create_model
 
-from app.application.worldData.context.cascadeLink import EmptyLink, Link
-from app.application.worldData.context.contextResolver import extend, scope_sequence
-from app.application.worldData.context.runtimeChain import bind_chain
-from app.application.worldData.context.locationScope import empty_location_chain, root_context
+from app.application.cascade.cascadeLink import EmptyLink, Link
+from app.application.cascade.contextResolver import extend, scope_sequence
+from app.application.cascade.runtimeChain import bind_chain
+from app.application.cascade.locationScope import empty_location_chain, root_context
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
     WorldEconomyTierRegistry,
@@ -409,7 +409,7 @@ class RuntimeLinkedListTests(unittest.TestCase):
         self.assertEqual(root._node_results, {})
 
     def test_materialize_is_called_once_per_new_scope_node(self):
-        from app.application.worldData.context import contextResolver
+        from app.application.cascade import contextResolver
 
         resolver = Mock(wraps=contextResolver._MATERIALIZE["economic_tier"])
         with patch.dict(contextResolver._MATERIALIZE,
@@ -900,7 +900,7 @@ class ExtendResolutionTests(unittest.TestCase):
         self.assertEqual(ctx.economic_tier, "t5")
 
     def test_median_warns_once_at_first_empty_scope(self):
-        module = "app.application.worldData.context.cascadeLog"
+        module = "app.application.cascade.cascadeLog"
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),

@@ -42,7 +42,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_city_graph_for_slots,
     plan_slots_and_city_graph,
 )
-from app.application.worldData.context.locationScope import settlement_context
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,

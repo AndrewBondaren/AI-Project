@@ -5,7 +5,7 @@ from dataclasses import replace
 from random import Random
 from unittest.mock import patch
 
-from app.application.worldData.context.locationScope import empty_location_chain
+from app.application.cascade.locationScope import empty_location_chain
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY

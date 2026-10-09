@@ -41,7 +41,7 @@ from app.application.worldData.generators.assemblers.buildingAssembler.buildingA
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     area_context,
     building_context,
     empty_location_chain,

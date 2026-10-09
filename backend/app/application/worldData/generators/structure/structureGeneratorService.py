@@ -19,7 +19,7 @@ from app.application.worldData.generators.structure.structureOrientation import 
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model, reject_unresolved
 from app.application.jsonValidation.types import FieldPathError
 from app.application.jsonValidation import materials
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     debug_building_context,
 )
 from app.application.worldData.generators.utils.economicTierBands import band_of

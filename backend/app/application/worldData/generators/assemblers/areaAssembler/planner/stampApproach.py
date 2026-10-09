@@ -11,7 +11,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     ApproachForm,
     StreetApproach,
 )
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     debug_building_context,
 )
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton

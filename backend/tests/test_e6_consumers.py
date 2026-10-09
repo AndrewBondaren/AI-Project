@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_source
-from app.application.worldData.context.locationScope import (
+from app.application.cascade.locationScope import (
     area_context, building_context, district_context, settlement_context, empty_location_chain)
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.generators.utils.materialResolver import resolve_material
@@ -53,7 +53,7 @@ class SourceConsumerTests(unittest.TestCase):
         before = parent.model_dump()
         for field in ("system_economic_tier", "parent_wall_material", "parent_floor_material"):
             invalid = replace(location, **{field: "unknown"})
-            with patch("app.application.worldData.context.locationScope.extend") as extend:
+            with patch("app.application.cascade.locationScope.extend") as extend:
                 with self.assertRaises(UnresolvedModelError):
                     building_context(world, parent, invalid)
                 extend.assert_not_called()
@@ -63,7 +63,7 @@ class SourceConsumerTests(unittest.TestCase):
         world, location, _ = fixture()
         settlement = replace(location, system_location_type="settlement",
                              location_payload={"dominant_material": "unknown"})
-        with patch("app.application.worldData.context.locationScope.extend") as extend:
+        with patch("app.application.cascade.locationScope.extend") as extend:
             with self.assertRaises(UnresolvedModelError):
                 settlement_context(world, settlement)
             extend.assert_not_called()
@@ -75,7 +75,7 @@ class SourceConsumerTests(unittest.TestCase):
                       {"economic_tier_range": {"min": "t9", "max": "t1"}},
                       {"economic_tier_band": "unknown"}):
             plot = PlotLayoutTemplate(system_name="plot", display_name="Plot", economic_tier="t2", **extra)
-            with patch("app.application.worldData.context.locationScope.extend") as extend:
+            with patch("app.application.cascade.locationScope.extend") as extend:
                 with self.assertRaises(UnresolvedModelError):
                     area_context(world, parent, plot, area_uid="plot")
                 extend.assert_not_called()

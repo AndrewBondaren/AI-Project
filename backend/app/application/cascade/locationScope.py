@@ -16,8 +16,8 @@ from app.application.jsonValidation import economic_tiers, location_types
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.application.jsonValidation.sourceValidation import validate_source
 
-from app.application.worldData.context.cascadeLink import EmptyLink, Link
-from app.application.worldData.context.contextResolver import extend, scope_sequence
+from app.application.cascade.cascadeLink import EmptyLink, Link
+from app.application.cascade.contextResolver import extend, scope_sequence
 from app.ids import UidKind, entity_rng
 from app.application.worldData.settlementSkeletonAccess import settlement_skeleton_pojo
 from app.dataModel.locations.context.locationContext import LocationContext

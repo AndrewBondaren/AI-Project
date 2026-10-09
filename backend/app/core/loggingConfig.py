@@ -95,7 +95,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "climateLog",
             ),
             (
-                "app.application.worldData.context",
+                "app.application.cascade",
                 "cascade",
                 "cascadeLog",
             ),
