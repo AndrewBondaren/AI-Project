@@ -18,6 +18,8 @@ Canonical defaults и общий resolver — отдельная ответст�
   продолжается. Детект unknown-ключей — обязанность слоя resolve
   (сравнение wire-ключей с полями модели), а не `extra` POJO: целевой
   режим един для всех wire-моделей и не требует `extra="forbid"`.
+  Доменный контракт слоя — [`tz_json_validation.md` § Unknown wire
+  keys](./tz_json_validation.md#unknown-wire-keys).
 - **Агрегация ошибок валидации:** отчёт собирает ошибки всех полей и
   секций за один проход — возвращается полный список `FieldPathError`,
   не первая ошибка.

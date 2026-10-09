@@ -276,6 +276,34 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 
 **Instance-каталоги extract/farm/livestock** (`resource_type_registry`, `crops_registry`, `livestock_registry`) — не T-29 union. Runtime: пусто → канон POJO; непустой список мира → **только** он (канонический `iron_ore` не дописывать, если мастер завёл свои руды). Overlay по id (canonical⊕world) остаётся для чертежей района / барьеров. SoT packing — [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1.
 
+### Unknown wire keys
+
+Поле присутствует на wire и отсутствует в модели — общий двухконтурный
+контракт для всех wire-моделей (решение
+[паков §0](./tz_template_library_packs.md), перенесено в доменный ТЗ
+слоя 2026-10-09):
+
+| Контур | Реакция |
+|--------|---------|
+| validation / импорт | `FieldPathError` per key, `code="UNKNOWN_FIELD"`; собирается вместе со всеми остальными ошибками полей за один проход — возвращается полный список, не первая ошибка |
+| runtime | WarningError-лог через sink `jsonValidation/resolve` (одна строка: модель + список ключей), ключ отбрасывается, resolve продолжается |
+
+- **Детект** — обязанность слоя `resolve`: diff wire-ключей против
+  `model_fields` с учётом `alias`/`validation_alias`, до
+  `model_validate`. `extra="forbid"`/`"ignore"` конфиг модели поведение
+  **не** определяет — режим един для всех wire-моделей и не требует
+  `extra="forbid"`.
+- **Coverage:** входные точки `resolve_model`, `resolve_patch`,
+  `resolve_root_list`/`resolve_root_dict` + один уровень внутрь
+  root-контейнеров (строки `RootModel[list[Entry]]`, значения
+  `RootModel[dict[str, Entry]]`; ключи dict-реестра — N+1 identity, не
+  unknown). Более глубокая вложенность — только там, где домен резолвит
+  её отдельным `resolve_model`.
+- `validate_only` — тот же import-контур: те же факты без записи.
+- Не путать с «корректное имя, ошибочное значение» — это field policy
+  таблица выше (strict → 422 / default → reject при invalid), а не
+  unknown-ключ.
+
 ---
 
 ## SCH-* ↔ dataModel
@@ -422,6 +450,7 @@ instance-каталоги (resource/crops/livestock) spec не объявляю�
 | JSON не парсится | 422 | `JSON parse failed: …` (`JsonResolver`) |
 | `StrictOnWire` | 422 | `detail: [{ "loc": [...], "msg": "..." }]` |
 | ENUM-E unknown (JV-0) | 422 | `code: "UNKNOWN_ENUM"` + список допустимых wire values |
+| Unknown wire key | 422 | `code: "UNKNOWN_FIELD"` — см. § Field policy → Unknown wire keys |
 | Normalize warnings | 200/201 | **не в HTTP** — только server log |
 | Technical (`fine_cells_per_map_cell`, …) | 422 | `WorldService._validate` |
 
