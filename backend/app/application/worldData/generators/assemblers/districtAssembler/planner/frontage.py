@@ -28,7 +28,7 @@ from app.dataModel.locations.settlement.district.frontageTypeOrder import resolv
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 

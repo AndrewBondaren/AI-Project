@@ -4,7 +4,7 @@ from random import Random
 from app.application.jsonValidation import economic_tiers, materials
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.db.models.world import World

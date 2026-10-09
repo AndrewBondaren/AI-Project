@@ -18,7 +18,7 @@ from app.application.jsonValidation.sourceValidation import validate_source
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.application.worldData.settlementSkeletonAccess import settlement_skeleton_pojo
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults

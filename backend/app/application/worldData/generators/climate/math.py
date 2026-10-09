@@ -2,7 +2,7 @@
 
 import math
 
-from app.application.worldData.ids import seed_int
+from app.ids import seed_int
 from app.db.models.world import World
 
 

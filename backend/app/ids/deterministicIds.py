@@ -24,7 +24,7 @@ from random import Random
 from typing import Any
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
-from app.application.worldData.ids.uidKind import LibraryKind, UidKind
+from app.ids.uidKind import LibraryKind, UidKind
 
 _SEP = "|"
 

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 
 # Globally stable pack keys (TZ §2): system_name is the author's global key;

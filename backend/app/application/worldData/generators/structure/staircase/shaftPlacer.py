@@ -15,7 +15,7 @@ from app.dataModel.spatial.facing import (
 )
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec, EMBED_AT_CENTER
 from app.application.worldData.generators.structure.cellBuilder import _interior
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.application.worldData.generators.structure.layoutEngine import (
     _try_adjacent, _place_next_to_any, _DIRECTIONS,
 )

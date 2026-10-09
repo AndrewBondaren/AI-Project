@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.application.worldData.ids import LibraryKind
+from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.defaults import default_pack_names
 from app.application.worldData.libraryPacks.manifest import (
     LoadedMember,

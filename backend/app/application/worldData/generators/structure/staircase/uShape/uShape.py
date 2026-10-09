@@ -5,7 +5,7 @@ U-shape staircase.
 from __future__ import annotations
 import logging
 
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 
 from app.dataModel.spatial.facing import Facing, parse_facing
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement

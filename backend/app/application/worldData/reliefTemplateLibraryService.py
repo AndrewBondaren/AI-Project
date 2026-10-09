@@ -16,7 +16,7 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.application.worldData.libraryPacks.packCatalog import attach_pack_catalog
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom

@@ -23,7 +23,7 @@ from app.application.worldData.context.locationScope import (
     debug_building_context,
 )
 from app.application.worldData.generators.utils.economicTierBands import band_of
-from app.application.worldData.ids import UidKind, entity_rng, entity_uid
+from app.ids import UidKind, entity_rng, entity_uid
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     level_uid as _level_uid,
 )

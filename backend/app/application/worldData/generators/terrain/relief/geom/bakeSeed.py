@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.worldData.ids import seed_root
+from app.ids import seed_root
 
 
 def bake_seed(world: Any) -> str:

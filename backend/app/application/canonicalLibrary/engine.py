@@ -23,7 +23,7 @@ defined by presence of
 all canonical UIDs — see ``CanonicalCachePolicy`` in ``spec.py`` for the
 fixed cache contract.
 
-UIDs are minted only via ``app.application.worldData.ids`` (DET-1);
+UIDs are minted only via ``app.ids`` (DET-1);
 logging goes through ``app.core.loggingConfig`` (this logger routes to
 the ``core/runtime`` sink).
 """

@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from app.application.worldData.ids import runtime_uid
+from app.ids import runtime_uid
 from app.dataModel.worldBundle.bundleSections import BundleSection
 
 

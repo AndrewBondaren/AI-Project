@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from app.application.worldData.ids import LibraryKind
+from app.ids import LibraryKind
 
 DEFAULT_LIBRARY_PACKS: Mapping[LibraryKind, tuple[str, ...]] = {
     LibraryKind.STRUCTURE_TEMPLATES: ("base",),

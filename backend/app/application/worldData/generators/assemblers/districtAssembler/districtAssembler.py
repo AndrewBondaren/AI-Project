@@ -1,4 +1,4 @@
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 import time
 
 from app.application.jsonValidation import connection_types

@@ -9,7 +9,7 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.attachWall import AttachWall
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from tests.structureWire import room_wire, level_wire
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building

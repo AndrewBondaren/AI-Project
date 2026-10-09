@@ -35,7 +35,7 @@ from app.application.worldData.generators.coordinates import (
     map_cell_fine_span,
     settlement_origin_fine,
 )
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode

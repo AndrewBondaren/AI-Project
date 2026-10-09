@@ -19,7 +19,7 @@ from app.application.canonicalLibrary import (
     CanonicalSnapshot,
     SqlCanonicalPersistence,
 )
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.db.database import Database
 from app.db.models.buildingTemplate import BuildingTemplateRow

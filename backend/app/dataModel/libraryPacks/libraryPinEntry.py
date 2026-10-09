@@ -11,7 +11,7 @@ class LibraryPinEntry(BaseModel):
     """Author pin: pair ``(library_kind, local_uid)`` — survives member remap.
 
     ``library_kind`` carries a ``LibraryKind`` value; the enum itself lives
-    in ``app.application.worldData.ids`` — dataModel never imports the
+    in ``app.ids`` — dataModel never imports the
     application layer, so membership is validated at the consumer boundary.
     """
 

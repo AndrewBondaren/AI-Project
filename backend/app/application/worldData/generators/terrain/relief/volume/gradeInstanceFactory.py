@@ -10,7 +10,7 @@ from app.application.worldData.generators.terrain.relief.log.log import (
 from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     RibbonVolumePlan,
 )
-from app.application.worldData.ids import UidKind, entity_uid, seed_uid
+from app.ids import UidKind, entity_uid, seed_uid
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem

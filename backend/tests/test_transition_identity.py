@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 from uuid import UUID
 
-from app.application.worldData.ids import UidKind, entity_uid, runtime_uid
+from app.ids import UidKind, entity_uid, runtime_uid
 from app.application.worldData.transitions.transitionIdentity import transition_uid
 from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint

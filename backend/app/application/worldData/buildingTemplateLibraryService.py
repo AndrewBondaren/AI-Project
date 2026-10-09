@@ -10,7 +10,7 @@ from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.application.jsonValidation.types import FieldPathError
 from app.application.jsonValidation.worldRow import building_template_registry
 from app.application.jsonValidation.sourceValidation import validate_source
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService

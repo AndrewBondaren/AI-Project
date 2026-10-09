@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import random
 
-from app.application.worldData.ids import UidKind, seed_rng
+from app.ids import UidKind, seed_rng
 from app.dataModel.terrainMasks.mountain.enums import mountain_kind_profile
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
 from app.dataModel.terrainMasks.worldTerrainMasks import MountainsCategoryPolicy

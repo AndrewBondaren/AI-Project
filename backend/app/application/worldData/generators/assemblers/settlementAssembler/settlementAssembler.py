@@ -34,7 +34,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import (
     plan_settlement_barriers,
 )
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
     resolve_dominant_material,
 )

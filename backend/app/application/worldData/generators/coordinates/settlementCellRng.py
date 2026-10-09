@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from enum import StrEnum
 
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 
 
 class SettlementCellRngRole(StrEnum):

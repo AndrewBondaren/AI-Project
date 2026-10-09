@@ -1,6 +1,6 @@
 """Physical transition identity — transitions §2 invariant 10, storage DET-1."""
 
-from app.application.worldData.ids import UidKind, entity_uid
+from app.ids import UidKind, entity_uid
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
 from app.dataModel.locations.transitions.transitionSide import TransitionSideId
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import TransitionTypeKey

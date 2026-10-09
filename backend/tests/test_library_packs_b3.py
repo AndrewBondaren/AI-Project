@@ -20,7 +20,7 @@ from unittest import IsolatedAsyncioTestCase
 from app.application.worldData.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
 )
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.application.worldData.libraryPacks.defaults import default_pack_names
 from app.application.worldData.libraryPacks.legacyPack import (
     LEGACY_PACK_NAME,

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.worldData.ids import UidKind, entity_uid
+from app.ids import UidKind, entity_uid
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 

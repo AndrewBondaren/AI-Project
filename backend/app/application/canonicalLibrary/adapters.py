@@ -30,7 +30,7 @@ class CanonicalEntry:
     """One canonical member of a global library.
 
     ``uid`` — canonical identity, minted only via
-    ``app.application.worldData.ids`` (DET-1); no uuid/hash/manual
+    ``app.ids`` (DET-1); no uuid/hash/manual
     concatenation in adapters or consumers.
     ``body`` — domain-typed, already validated payload; opaque to the
     engine, consumed by the domain persistence adapter.

@@ -13,7 +13,7 @@ from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSp
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.dataModel.spatial.facing import Facing, INTERCARDINAL_FACINGS, CARDINAL_FACINGS
-from app.application.worldData.ids import UidKind, entity_rng, entity_uid
+from app.ids import UidKind, entity_rng, entity_uid
 from tests.structureWire import room_wire, level_wire
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room

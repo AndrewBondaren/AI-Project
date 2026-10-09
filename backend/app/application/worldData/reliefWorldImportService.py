@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
 from app.application.worldData.generators.terrain.relief.log.log import relief_warning
-from app.application.worldData.ids import LibraryKind
+from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.legacyPack import (
     ensure_legacy_pack,
     legacy_member_row,

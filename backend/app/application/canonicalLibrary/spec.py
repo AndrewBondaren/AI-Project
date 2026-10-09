@@ -111,7 +111,7 @@ class CanonicalLibrarySpec:
       canonical rows; the domain reads it from the POJO
       ``CANONICAL_OVERLAY_ID_FIELD`` — never a duplicated literal.
       Global scope: canonical identity lives on ``CanonicalEntry.uid``
-      (minted only via ``app.application.worldData.ids``).
+      (minted only via ``app.ids``).
     - ``world_canonical_rows`` — world scope: provider of canonical wire
       rows (``Mapping`` with ``identity_field``), e.g. POJO
       ``canonical_defaults()`` dumped to wire. Explicit declaration —

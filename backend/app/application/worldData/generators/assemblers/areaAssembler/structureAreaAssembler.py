@@ -46,7 +46,7 @@ from app.application.worldData.context.locationScope import (
     building_context,
     empty_location_chain,
 )
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     area_uid as _area_uid,
     building_location_uid as _building_location_uid,

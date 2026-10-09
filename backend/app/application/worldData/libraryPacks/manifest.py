@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from app.application.jsonValidation.resolve import UnresolvedModelError, resolve_model
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.dataModel.libraryPacks.packManifest import (
     LibraryPackManifest,
     LibraryPackManifestMember,

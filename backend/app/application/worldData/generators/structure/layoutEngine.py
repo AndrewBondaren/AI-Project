@@ -24,7 +24,7 @@ from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng
 
 logger = logging.getLogger(__name__)
 

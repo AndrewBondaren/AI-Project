@@ -17,7 +17,7 @@ from app.dataModel.locations.structure.enums.buildingElement import StructureEle
 from tests import test_embedded_shaft
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
-from app.application.worldData.ids import UidKind, entity_uid
+from app.ids import UidKind, entity_uid
 
 LOGGER = "app.application.worldData.generators.structure.staircase.embeddedUpperLayout"
 

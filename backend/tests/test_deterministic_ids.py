@@ -20,7 +20,7 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_fr_anchor, _compute_u_params
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.application.worldData.ids import (
+from app.ids import (
     LibraryKind,
     UidKind,
     entity_rng,
@@ -210,7 +210,7 @@ class SourceGateTests(unittest.TestCase):
         violations: dict[str, list[str]] = {}
         for path in sorted(app_root.rglob("*.py")):
             rel = path.relative_to(app_root).as_posix()
-            if rel.startswith("application/worldData/ids/"):
+            if rel.startswith("ids/"):
                 continue
             text = path.read_text(encoding="utf-8")
             hits = sorted(

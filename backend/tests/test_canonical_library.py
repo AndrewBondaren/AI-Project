@@ -31,7 +31,7 @@ from app.application.canonicalLibrary import (
     canonical_merge,
     ensure_canonical,
 )
-from app.application.worldData.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid
 from app.db.database import Database
 
 _CANONICAL_ROWS = (

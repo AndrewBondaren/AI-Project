@@ -7,7 +7,7 @@ interpret it as a template body. ``source_pack_uid`` of the pack and
 packs — an FS-author manifest declares no provenance (§4).
 
 ``library_kind`` carries a ``LibraryKind`` value; the enum itself lives in
-``app.application.worldData.ids`` — dataModel never imports the application
+``app.ids`` — dataModel never imports the application
 layer, so kind membership is validated at the consumer boundary (same rule as
 ``LibraryPinEntry``).
 """

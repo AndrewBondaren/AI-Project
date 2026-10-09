@@ -1,4 +1,4 @@
-from app.application.worldData.ids.deterministicIds import (
+from app.ids.deterministicIds import (
     entity_rng,
     entity_uid,
     library_uid,
@@ -8,7 +8,7 @@ from app.application.worldData.ids.deterministicIds import (
     seed_root,
     seed_uid,
 )
-from app.application.worldData.ids.uidKind import LibraryKind, UidKind
+from app.ids.uidKind import LibraryKind, UidKind
 
 __all__ = [
     "LibraryKind",

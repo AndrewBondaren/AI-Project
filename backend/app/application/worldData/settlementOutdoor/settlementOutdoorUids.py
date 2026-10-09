@@ -6,7 +6,7 @@ they fix *which* keys are required; the formula lives in the helper only.
 
 from __future__ import annotations
 
-from app.application.worldData.ids import UidKind, entity_uid
+from app.ids import UidKind, entity_uid
 from app.dataModel.spatial.facing import Facing
 
 
