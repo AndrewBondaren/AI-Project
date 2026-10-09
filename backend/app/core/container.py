@@ -65,6 +65,10 @@ from app.application.worldData.worldService import WorldService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
+from app.application.worldData.libraryPacks.domainAdapters import (
+    build_pack_domain_adapters,
+)
+from app.application.worldData.libraryPacks.packService import LibraryPackService
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
@@ -180,6 +184,7 @@ class Container:
         self._relief_world_import_service: ReliefWorldImportService | None = None
         self._building_template_library_service: BuildingTemplateLibraryService | None = None
         self._structure_template_library_service: StructureTemplateLibraryService | None = None
+        self._library_pack_service: LibraryPackService | None = None
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
@@ -679,6 +684,25 @@ class Container:
                 deps=self.library_pack_dependency_repository(),
             )
         return self._structure_template_library_service
+
+    def library_pack_service(self) -> LibraryPackService:
+        """Step-4a CRUD boundary over packs/members (+ dual-write pointers)."""
+        if self._library_pack_service is None:
+            self._library_pack_service = LibraryPackService(
+                db=self._db,
+                packs=self.library_pack_repository(),
+                members=self.library_pack_member_repository(),
+                deps=self.library_pack_dependency_repository(),
+                world_service=self.world_service(),
+                adapters=build_pack_domain_adapters(
+                    relief_library=self.relief_template_library_service(),
+                    structure_library=self.structure_template_library_service(),
+                    building_library=self.building_template_library_service(),
+                    world_service=self.world_service(),
+                    relief_world_import=self.relief_world_import_service(),
+                ),
+            )
+        return self._library_pack_service
 
     def location_service(self) -> NamedLocationService:
         if self._location_service is None:

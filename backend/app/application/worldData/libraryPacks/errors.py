@@ -28,6 +28,10 @@ class LibraryPackReadOnlyError(LibraryPackError):
     """Write attempted on a declared default pack (TZ §1.1, §6)."""
 
 
+class LibraryPackOwnershipError(LibraryPackError):
+    """Caller world does not match the pack's owning world (TZ §1.1)."""
+
+
 class LibraryPackInUseError(LibraryPackError):
     """Delete refused: the pack/member is referenced (§0.2 delete policy)."""
 

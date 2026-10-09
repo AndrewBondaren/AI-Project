@@ -50,6 +50,14 @@ def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:
     return list(building_template_registry(world).root)
 
 
+def _body_structure_type(body) -> str:
+    """Row denorm: outline's primary purpose, or the plot's family (plot bodies)."""
+    value = getattr(body, "structure_type", None)
+    if value is None:
+        value = getattr(body, "plot_type", "")
+    return str(getattr(value, "value", value))
+
+
 class BuildingTemplateLibraryService:
 
     def __init__(
@@ -113,7 +121,7 @@ class BuildingTemplateLibraryService:
             template_uid=uid,
             system_name=outline.system_name,
             display_name=outline.display_name,
-            structure_type=outline.structure_type,
+            structure_type=_body_structure_type(outline),
             version=outline.version,
             data=outline.model_dump(mode="json"),
             source_file=source_file,
