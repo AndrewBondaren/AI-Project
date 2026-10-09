@@ -13,6 +13,12 @@ from dataclasses import dataclass
 from typing import Any, Literal
 from dataclasses import asdict
 
+from app.application.canonicalLibrary import (
+    CanonicalAttachPolicy,
+    CanonicalLibrarySpec,
+    CanonicalScope,
+    canonical_merge,
+)
 from app.application.jsonValidation.resolve import (
     resolve_model,
     resolve_root_dict,
@@ -184,32 +190,40 @@ def _registry_slice(
     )
 
 
+_WORLD_OVERLAY_SPECS: dict[str, CanonicalLibrarySpec] = {}
+
+
+def _overlay_spec(world_slice: WorldSlice) -> CanonicalLibrarySpec | None:
+    """World-scope spec — identity/canonical source stay on the POJO declaration."""
+    id_field = world_slice.canonical_overlay_id_field
+    if not id_field or world_slice.empty_factory is None:
+        return None
+    spec = _WORLD_OVERLAY_SPECS.get(world_slice.schema_id)
+    if spec is None:
+        factory = world_slice.empty_factory
+        spec = CanonicalLibrarySpec(
+            name=world_slice.schema_id,
+            scope=CanonicalScope.WORLD,
+            attach_policy=CanonicalAttachPolicy.WORLD_WIRE_OVERLAY,
+            identity_field=id_field,
+            world_canonical_rows=lambda: (
+                entry.model_dump(mode="json") for entry in factory().root
+            ),
+        )
+        _WORLD_OVERLAY_SPECS[world_slice.schema_id] = spec
+    return spec
+
+
 def canonical_registry_wire(world_slice: WorldSlice, raw: Any) -> Any:
     """Complete declared libraries before policy resolve, on import and read.
 
     Keep world rows first so validation errors retain their input row indices.
     Invalid shapes/identities go through the ordinary resolver unchanged.
     """
-    id_field = world_slice.canonical_overlay_id_field
-    if not id_field or world_slice.empty_factory is None:
+    spec = _overlay_spec(world_slice)
+    if spec is None:
         return raw
-    if raw is not None and not isinstance(raw, list):
-        return raw
-    canonical = {
-        getattr(entry, id_field): entry.model_dump(mode="json")
-        for entry in world_slice.empty_factory().root
-    }
-    rows: list[Any] = []
-    present: set[str] = set()
-    for row in raw or []:
-        key = row.get(id_field) if isinstance(row, dict) else None
-        if isinstance(key, str):
-            rows.append({**canonical.get(key, {}), **row})
-            present.add(key)
-        else:
-            rows.append(row)
-    rows.extend(row for key, row in canonical.items() if key not in present)
-    return rows
+    return canonical_merge(spec, raw)
 
 
 def _registry_dict_slice(
