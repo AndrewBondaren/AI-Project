@@ -37,7 +37,9 @@ _STRUCTURES = _REPO / "structures_templates"
 def _stdlib() -> StructureCatalog:
     return StructureCatalog(load_structure_stdlib(_STRUCTURES))
 
-TAVERN_1_UID = "5a1f2b3c-4d5e-4f6a-8b7c-9d0e1f2a3b4c"
+# Pack-owned uid of the shared tavern structure (pack ``base``, member
+# ``tavern_1`` — library_packs uidMap, plan B-3).
+TAVERN_1_UID = "a58938ca-cd12-5d02-9884-7057cbcde3a8"
 
 
 def _world() -> World:
@@ -118,7 +120,7 @@ class PlotLayoutContractTest(unittest.TestCase):
 
     def test_structure_accepts_uuid_and_normalizes_lower(self) -> None:
         template = StructureTemplate.model_validate({
-            "system_name": "5A1F2B3C-4D5E-4F6A-8B7C-9D0E1F2A3B4C",
+            "system_name": "A58938CA-CD12-5D02-9884-7057CBCDE3A8",
             "display_name": "Tavern",
         })
         self.assertEqual(str(template.system_name), TAVERN_1_UID)

@@ -1,17 +1,35 @@
-"""FS / pack import for structure templates — model A uid files.
+"""FS / pack import for structure templates — pack-owned identity (model A).
 
 Separated from SQL CRUD in ``StructureTemplateLibraryService``.
+
+Pack import requires ``pack.manifest.json`` (TZ §4): bodies come from the
+manifest's member list, the manifest file itself is never scanned as a body,
+and lone ``*.json`` files directly under the domain root are rejected —
+a template exists only as a declared pack member (decision 2026-10-08).
+
+``load_structure_stdlib`` reads only the declared default packs
+(``DEFAULT_LIBRARY_PACKS``), never a wildcard scan of the domain root.
 """
 
 from __future__ import annotations
 
-from app.application.jsonValidation.resolve import ResolveContext, resolve_model, UnresolvedModelError
+from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 
+from app.application.worldData.ids import LibraryKind
+from app.application.worldData.libraryPacks.defaults import default_pack_names
+from app.application.worldData.libraryPacks.manifest import (
+    LoadedMember,
+    LoadedPack,
+    PackManifestError,
+    load_pack_manifest,
+    member_file_stem,
+)
 from app.application.worldData.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
@@ -21,11 +39,21 @@ from app.application.worldData.structureTemplateLibraryService import (
     resolve_structures_domain_root,
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.libraryPacks.packManifest import LibraryPackManifest
 from app.db.models.structureTemplate import StructureTemplateRow
 
 logger = logging.getLogger(__name__)
 
 UpsertFromDict = Callable[..., Awaitable[StructureTemplateRow]]
+_LIBRARY_KIND = LibraryKind.STRUCTURE_TEMPLATES
+
+
+@dataclass(frozen=True)
+class StructurePackImport:
+    """Outcome of a filesystem import: the owning pack manifest + body rows."""
+
+    manifest: LibraryPackManifest
+    rows: list[StructureTemplateRow]
 
 
 async def import_structure_templates_path(
@@ -34,8 +62,8 @@ async def import_structure_templates_path(
     upsert_from_dict: UpsertFromDict,
     domain_root: Path | None = None,
     enforce_domain_root: bool = True,
-) -> list[StructureTemplateRow]:
-    """Import a single JSON file or a pack directory under structures_templates/."""
+) -> StructurePackImport:
+    """Import a pack directory or a single declared member file."""
     root = (domain_root or resolve_structures_domain_root()).resolve()
     p = Path(path)
     if not p.is_absolute():
@@ -54,41 +82,60 @@ async def import_structure_templates_path(
     if not p.exists():
         raise StructureTemplateNotFoundError(f"Path not found: {path}")
     if p.is_file():
-        return [await _import_file(p, domain_root=root, upsert=upsert_from_dict)]
+        loaded = _load_owning_pack(p, domain_root=root)
+        member = _declared_member(loaded, p)
+        rows = [await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)]
+        return StructurePackImport(manifest=loaded.manifest, rows=rows)
     if p.is_dir():
-        return await _import_pack_dir(p, domain_root=root, upsert=upsert_from_dict)
+        loaded = _load_pack_dir(p, domain_root=root)
+        rows = [
+            await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)
+            for member in loaded.members
+        ]
+        return StructurePackImport(manifest=loaded.manifest, rows=rows)
     raise StructureTemplateValidationError(f"Not a file or directory: {path}")
 
 
-async def _import_pack_dir(
-    pack_dir: Path,
-    *,
-    domain_root: Path,
-    upsert: UpsertFromDict,
-) -> list[StructureTemplateRow]:
-    pack_name = pack_dir.name
-    if pack_dir.parent.resolve() != domain_root.resolve():
+def _load_pack_dir(pack_dir: Path, *, domain_root: Path) -> LoadedPack:
+    try:
+        return load_pack_manifest(
+            pack_dir, domain_root=domain_root, library_kind=_LIBRARY_KIND
+        )
+    except PackManifestError as exc:
+        logger.warning("structure | library reject %s", exc)
+        raise StructureTemplateValidationError(str(exc)) from exc
+
+
+def _load_owning_pack(file: Path, *, domain_root: Path) -> LoadedPack:
+    """The pack owning ``file`` — its parent dir under the domain root."""
+    if file.parent.resolve() == domain_root.resolve():
         msg = (
-            f"pack folder must be direct child of {domain_root.name}/ "
-            f"(got {pack_dir})"
+            f"lone file '{file.name}' in domain root is not imported — "
+            "templates arrive as members of a pack with pack.manifest.json"
         )
         logger.warning("structure | library reject %s", msg)
         raise StructureTemplateValidationError(msg)
-    rows: list[StructureTemplateRow] = []
-    for file in sorted(pack_dir.glob("*.json")):
-        rows.append(await _import_file(file, domain_root=domain_root, upsert=upsert))
-    if not rows:
-        raise StructureTemplateValidationError(f"No JSON files in pack {pack_dir}")
-    return rows
+    return _load_pack_dir(file.parent, domain_root=domain_root)
+
+
+def _declared_member(loaded: LoadedPack, file: Path) -> LoadedMember:
+    member = loaded.member_for_file(file)
+    if member is None:
+        msg = f"file '{file.name}' is not a declared member of pack '{loaded.manifest.system_name}'"
+        logger.warning("structure | library reject %s", msg)
+        raise StructureTemplateValidationError(msg)
+    return member
 
 
 async def _import_file(
-    file: Path,
+    loaded: LoadedMember,
+    manifest: LibraryPackManifest,
     *,
     domain_root: Path,
     upsert: UpsertFromDict,
 ) -> StructureTemplateRow:
-    stem = file.stem
+    file = loaded.file
+    member = loaded.member
     try:
         raw = json.loads(file.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -96,41 +143,57 @@ async def _import_file(
         raise StructureTemplateValidationError(f"Invalid JSON: {file}") from exc
     if not isinstance(raw, dict):
         raise StructureTemplateValidationError(f"Template JSON must be object: {file}")
-    try:
-        rel = file.resolve().relative_to(domain_root.resolve())
-        source = f"{DOMAIN_ROOT}/{rel.as_posix()}"
-    except ValueError:
-        source = f"{DOMAIN_ROOT}/{file.name}"
-    return await upsert(raw, source_file=source, expected_stem=stem)
+    rel = file.relative_to(domain_root.resolve())
+    source = f"{DOMAIN_ROOT}/{rel.as_posix()}"
+    return await upsert(
+        raw,
+        source_file=source,
+        expected_stem=member_file_stem(member),
+        pack_uid=manifest.pack_uid,
+        local_uid=member.local_uid,
+    )
 
 
 def load_structure_stdlib(root: Path | None = None) -> list[StructureTemplate]:
-    """Scan ``{root}/*.json`` and ``{root}/*/*.json`` → POJOs, uid-keyed."""
+    """Read the declared default packs — each via its ``pack.manifest.json``.
+
+    Only ``DEFAULT_LIBRARY_PACKS[structure_templates]`` is read; other pack
+    folders under the domain root are never touched (TZ §6).
+    """
     base = (root or resolve_structures_domain_root()).resolve()
     if not base.is_dir():
         return []
-    files = sorted(base.glob("*.json")) + sorted(base.glob("*/*.json"))
     out: dict[str, StructureTemplate] = {}
     paths: dict[str, Path] = {}
-    for file in files:
-        try:
-            raw = json.loads(file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            msg = f"Invalid JSON: {file}"
-            logger.warning("structure | stdlib reject %s: %s", msg, exc)
-            raise StructureTemplateValidationError(msg) from exc
-        try:
-            outline = resolve_model(StructureTemplate, raw, label="StructureTemplate")
-        except UnresolvedModelError as exc:
-            msg = f"Invalid structure template JSON: {file}"
-            logger.warning("structure | stdlib reject %s: %s", msg, exc)
-            raise StructureTemplateValidationError(msg) from exc
-        key = str(outline.system_name)
-        prev = paths.get(key)
-        if prev is not None:
-            msg = f"duplicate structure uid '{key}': {prev} and {file}"
-            logger.warning("structure | stdlib reject %s", msg)
-            raise StructureTemplateValidationError(msg)
-        out[key] = outline
-        paths[key] = file
+    for pack_name in default_pack_names(_LIBRARY_KIND):
+        loaded = _load_pack_dir(base / pack_name, domain_root=base)
+        for loaded_member in loaded.members:
+            file = loaded_member.file
+            try:
+                raw = json.loads(file.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                msg = f"Invalid JSON: {file}"
+                logger.warning("structure | stdlib reject %s: %s", msg, exc)
+                raise StructureTemplateValidationError(msg) from exc
+            try:
+                outline = resolve_model(StructureTemplate, raw, label="StructureTemplate")
+            except UnresolvedModelError as exc:
+                msg = f"Invalid structure template JSON: {file}"
+                logger.warning("structure | stdlib reject %s: %s", msg, exc)
+                raise StructureTemplateValidationError(msg) from exc
+            key = str(outline.system_name)
+            prev = paths.get(key)
+            if prev is not None:
+                msg = f"duplicate structure uid '{key}': {prev} and {file}"
+                logger.warning("structure | stdlib reject %s", msg)
+                raise StructureTemplateValidationError(msg)
+            if key != loaded_member.member.template_uid:
+                msg = (
+                    f"body system_name '{key}' != member template_uid "
+                    f"'{loaded_member.member.template_uid}': {file}"
+                )
+                logger.warning("structure | stdlib reject %s", msg)
+                raise StructureTemplateValidationError(msg)
+            out[key] = outline
+            paths[key] = file
     return [out[key] for key in sorted(out)]

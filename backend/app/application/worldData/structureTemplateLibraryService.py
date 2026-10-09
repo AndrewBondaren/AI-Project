@@ -1,26 +1,35 @@
 """Global structure template library — SQL upsert CRUD (5o split, model A).
 
-``template_uid`` == ``StructureTemplate.system_name`` (uuid from the JSON body —
-**not** uuid5 of a name). One global set; worlds point into it.
-FS/pack import — ``structureTemplateFsImport``.
+``template_uid`` == ``StructureTemplate.system_name`` — the pack-owned
+``library_uid(STRUCTURE_TEMPLATES, local_uid, pack_uid=…)`` carried inside the
+JSON body (TZ §2 wire contract). One global set; worlds point into it.
+FS/pack import — ``structureTemplateFsImport`` (packs only, manifest required).
 Domain errors — ``structureTemplateErrors`` (no FastAPI here).
 """
 
 from __future__ import annotations
 
-from app.application.jsonValidation.resolve import ResolveContext, resolve_model, UnresolvedModelError
+from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 
 import logging
 import os
 from dataclasses import asdict
 from pathlib import Path
 
+from app.application.worldData.libraryPacks.packCatalog import attach_pack_catalog
 from app.application.worldData.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.libraryPacks.packManifest import LibraryPackManifest
+from app.db.database import Database, _in_transaction
 from app.db.models.structureTemplate import StructureTemplateRow
+from app.db.repositories.iLibraryPackDependencyRepository import (
+    ILibraryPackDependencyRepository,
+)
+from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
+from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.db.repositories.iStructureTemplateRepository import IStructureTemplateRepository
 
 logger = logging.getLogger(__name__)
@@ -39,8 +48,20 @@ def resolve_structures_domain_root() -> Path:
 
 class StructureTemplateLibraryService:
 
-    def __init__(self, repo: IStructureTemplateRepository) -> None:
+    def __init__(
+        self,
+        repo: IStructureTemplateRepository,
+        *,
+        db: Database | None = None,
+        packs: ILibraryPackRepository | None = None,
+        members: ILibraryPackMemberRepository | None = None,
+        deps: ILibraryPackDependencyRepository | None = None,
+    ) -> None:
         self._repo = repo
+        self._db = db
+        self._packs = packs
+        self._members = members
+        self._deps = deps
 
     async def find_by_uid(self, template_uid: str) -> StructureTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
@@ -94,6 +115,8 @@ class StructureTemplateLibraryService:
         *,
         source_file: str | None = None,
         expected_stem: str | None = None,
+        pack_uid: str | None = None,
+        local_uid: str | None = None,
     ) -> StructureTemplateRow:
         try:
             outline = resolve_model(StructureTemplate, raw, label="StructureTemplate")
@@ -120,15 +143,41 @@ class StructureTemplateLibraryService:
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
     ) -> list[StructureTemplateRow]:
+        if self._db is not None and not _in_transaction.get():
+            async with self._db.transaction():
+                return await self._import(path, domain_root=domain_root,
+                                          enforce_domain_root=enforce_domain_root)
+        return await self._import(path, domain_root=domain_root,
+                                  enforce_domain_root=enforce_domain_root)
+
+    async def _import(
+        self,
+        path: str | Path,
+        *,
+        domain_root: Path | None,
+        enforce_domain_root: bool,
+    ) -> list[StructureTemplateRow]:
         from app.application.worldData.structureTemplateFsImport import (
             import_structure_templates_path,
         )
 
-        return await import_structure_templates_path(
+        outcome = await import_structure_templates_path(
             path,
             upsert_from_dict=self.upsert_from_dict,
             domain_root=domain_root,
             enforce_domain_root=enforce_domain_root,
+        )
+        await self._attach_pack(outcome.manifest)
+        return outcome.rows
+
+    async def _attach_pack(self, manifest: LibraryPackManifest) -> None:
+        """Bodies + membership land in the same unit of work (TZ §3)."""
+        if self._packs is None or self._members is None or self._deps is None:
+            raise RuntimeError(
+                "StructureTemplateLibraryService: pack catalog repositories are not wired"
+            )
+        await attach_pack_catalog(
+            manifest, packs=self._packs, members=self._members, deps=self._deps,
         )
 
     async def delete(self, template_uid: str) -> None:

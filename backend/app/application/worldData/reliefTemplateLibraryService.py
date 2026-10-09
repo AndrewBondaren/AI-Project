@@ -1,12 +1,15 @@
 """Global relief template library — SQL upsert CRUD (R11).
 
-FS/pack import — ``reliefTemplateFsImport`` (RELIEF-T-12).
+FS/pack import — ``reliefTemplateFsImport`` (RELIEF-T-12; packs only,
+manifest required). ``upsert_outline(pack_uid=None)`` keeps the ownerless
+uid for the transitional direct-CRUD path; pack-scoped flows always pass
+the owner ``pack_uid`` (step 4a will close the ownerless path).
 Domain errors — RELIEF-T-3 (no FastAPI here).
 """
 
 from __future__ import annotations
 
-from app.application.jsonValidation.resolve import ResolveContext, resolve_model, UnresolvedModelError
+from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 
 import logging
 import os
@@ -14,10 +17,18 @@ from dataclasses import asdict
 from pathlib import Path
 
 from app.application.worldData.ids import LibraryKind, library_uid
+from app.application.worldData.libraryPacks.packCatalog import attach_pack_catalog
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+from app.dataModel.libraryPacks.packManifest import LibraryPackManifest
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.db.database import Database, _in_transaction
 from app.db.models.reliefTemplate import ReliefTemplateRow
+from app.db.repositories.iLibraryPackDependencyRepository import (
+    ILibraryPackDependencyRepository,
+)
+from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
+from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
 
 logger = logging.getLogger(__name__)
@@ -27,6 +38,8 @@ _ENV_ROOT = "RELIEF_TEMPLATES_ROOT"
 
 
 def relief_template_uid(system_name: str) -> str:
+    """Ownerless library uid — transitional helper for in-memory/test callers;
+    pack-owned writes go through ``library_uid(…, pack_uid=…)``."""
     return library_uid(LibraryKind.RELIEF_TEMPLATES, system_name)
 
 
@@ -40,8 +53,20 @@ def resolve_relief_domain_root() -> Path:
 
 class ReliefTemplateLibraryService:
 
-    def __init__(self, repo: IReliefTemplateRepository) -> None:
+    def __init__(
+        self,
+        repo: IReliefTemplateRepository,
+        *,
+        db: Database | None = None,
+        packs: ILibraryPackRepository | None = None,
+        members: ILibraryPackMemberRepository | None = None,
+        deps: ILibraryPackDependencyRepository | None = None,
+    ) -> None:
         self._repo = repo
+        self._db = db
+        self._packs = packs
+        self._members = members
+        self._deps = deps
 
     async def find_by_uid(self, template_uid: str) -> ReliefTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
@@ -60,8 +85,9 @@ class ReliefTemplateLibraryService:
         outline: ReliefTemplate,
         *,
         source_file: str | None = None,
+        pack_uid: str | None = None,
     ) -> ReliefTemplateRow:
-        uid = relief_template_uid(outline.system_name)
+        uid = library_uid(LibraryKind.RELIEF_TEMPLATES, outline.system_name, pack_uid=pack_uid)
         row = ReliefTemplateRow(
             template_uid=uid,
             system_name=outline.system_name,
@@ -87,6 +113,8 @@ class ReliefTemplateLibraryService:
         *,
         source_file: str | None = None,
         expected_stem: str | None = None,
+        pack_uid: str | None = None,
+        local_uid: str | None = None,
     ) -> ReliefTemplateRow:
         try:
             outline = resolve_model(ReliefTemplate, raw, label="ReliefTemplate")
@@ -100,7 +128,7 @@ class ReliefTemplateLibraryService:
             logger.warning("relief | library reject %s", msg)
             raise ReliefValidationError(msg)
         warn_template_invalid_geom(outline, source_file=source_file)
-        return await self.upsert_outline(outline, source_file=source_file)
+        return await self.upsert_outline(outline, source_file=source_file, pack_uid=pack_uid)
 
     async def import_path(
         self,
@@ -109,13 +137,39 @@ class ReliefTemplateLibraryService:
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
     ) -> list[ReliefTemplateRow]:
+        if self._db is not None and not _in_transaction.get():
+            async with self._db.transaction():
+                return await self._import(path, domain_root=domain_root,
+                                          enforce_domain_root=enforce_domain_root)
+        return await self._import(path, domain_root=domain_root,
+                                  enforce_domain_root=enforce_domain_root)
+
+    async def _import(
+        self,
+        path: str | Path,
+        *,
+        domain_root: Path | None,
+        enforce_domain_root: bool,
+    ) -> list[ReliefTemplateRow]:
         from app.application.worldData.reliefTemplateFsImport import import_relief_path
 
-        return await import_relief_path(
+        outcome = await import_relief_path(
             path,
             upsert_from_dict=self.upsert_from_dict,
             domain_root=domain_root,
             enforce_domain_root=enforce_domain_root,
+        )
+        await self._attach_pack(outcome.manifest)
+        return outcome.rows
+
+    async def _attach_pack(self, manifest: LibraryPackManifest) -> None:
+        """Bodies + membership land in the same unit of work (TZ §3)."""
+        if self._packs is None or self._members is None or self._deps is None:
+            raise RuntimeError(
+                "ReliefTemplateLibraryService: pack catalog repositories are not wired"
+            )
+        await attach_pack_catalog(
+            manifest, packs=self._packs, members=self._members, deps=self._deps,
         )
 
     async def delete(self, template_uid: str) -> None:

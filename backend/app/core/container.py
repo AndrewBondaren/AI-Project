@@ -635,6 +635,10 @@ class Container:
         if self._relief_template_library_service is None:
             self._relief_template_library_service = ReliefTemplateLibraryService(
                 repo=self.relief_template_repository(),
+                db=self._db,
+                packs=self.library_pack_repository(),
+                members=self.library_pack_member_repository(),
+                deps=self.library_pack_dependency_repository(),
             )
         return self._relief_template_library_service
 
@@ -659,6 +663,9 @@ class Container:
             self._building_template_library_service = BuildingTemplateLibraryService(
                 repo=self.building_template_repository(),
                 world_service=self.world_service(),
+                db=self._db,
+                packs=self.library_pack_repository(),
+                members=self.library_pack_member_repository(),
             )
         return self._building_template_library_service
 
@@ -666,6 +673,10 @@ class Container:
         if self._structure_template_library_service is None:
             self._structure_template_library_service = StructureTemplateLibraryService(
                 repo=self.structure_template_repository(),
+                db=self._db,
+                packs=self.library_pack_repository(),
+                members=self.library_pack_member_repository(),
+                deps=self.library_pack_dependency_repository(),
             )
         return self._structure_template_library_service
 
@@ -863,6 +874,9 @@ class Container:
             self._relief_world_import_service = ReliefWorldImportService(
                 world_service=self.world_service(),
                 library=self.relief_template_library_service(),
+                packs=self.library_pack_repository(),
+                members=self.library_pack_member_repository(),
+                db=self._db,
             )
         return self._relief_world_import_service
 

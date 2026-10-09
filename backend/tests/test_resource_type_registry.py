@@ -136,7 +136,10 @@ class BuildingTemplateImportTest(unittest.IsolatedAsyncioTestCase):
         )
         worlds = MagicMock()
         worlds.get_by_id = AsyncMock(return_value=world)
-        service = BuildingTemplateLibraryService(repo=MagicMock(), world_service=worlds)
+        service = BuildingTemplateLibraryService(
+            repo=MagicMock(), world_service=worlds,
+            packs=AsyncMock(), members=AsyncMock(),
+        )
         result = await service.import_bodies_into_world("w1", [{
             "system_name": "confused_mine",
             "structure_type": "mine",

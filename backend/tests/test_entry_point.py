@@ -66,8 +66,9 @@ class EntryPointTests(unittest.TestCase):
             self.assertIn(field, str(error.exception))
 
     def test_all_stdlib_structures_validate(self):
+        from app.application.worldData.libraryPacks.manifest import PACK_MANIFEST_FILENAME
         root = Path(__file__).resolve().parents[2] / "structures_templates/base"
-        paths = list(root.glob("*.json"))
+        paths = [p for p in root.glob("*.json") if p.name != PACK_MANIFEST_FILENAME]
         self.assertTrue(paths)
         for path in paths:
             with self.subTest(path=path.name):

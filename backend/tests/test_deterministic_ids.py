@@ -249,7 +249,8 @@ class StaircaseReplayTests(unittest.TestCase):
         self.assertEqual(previous, selected)
 
     def test_generate_replays_u_shape_anchors_and_cells(self):
-        path = Path(__file__).resolve().parents[2] / "structures_templates/base/7c3a4d5e-6f7a-4b8c-8d9e-1f2a3b4c5d6e.json"
+        from app.application.worldData.libraryPacks.uidMap import base_member_uid
+        path = Path(__file__).resolve().parents[2] / f"structures_templates/base/{base_member_uid('manor_1')}.json"
         structure = StructureTemplate.model_validate(json.loads(path.read_text(encoding="utf-8")))
         original = structure.model_dump()
         world = World(world_uid="rng-world", name="RNG", created_at="2026-09-29")

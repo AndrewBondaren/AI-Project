@@ -22,8 +22,15 @@ from app.dataModel.locations.structure.building.buildingTemplateOutline import B
 from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import (
     BuildingTemplateRegistryEntry,
 )
+from app.application.worldData.libraryPacks.legacyPack import (
+    ensure_legacy_pack,
+    legacy_member_row,
+)
+from app.db.database import Database, _in_transaction
 from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
+from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
+from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 
 logger = logging.getLogger(__name__)
 _PLOT_ONLY_FIELDS = frozenset(PlotLayoutTemplate.model_fields) - frozenset(BuildingTemplateOutline.model_fields)
@@ -49,9 +56,16 @@ class BuildingTemplateLibraryService:
         self,
         repo: IBuildingTemplateRepository,
         world_service: WorldService,
+        *,
+        db: Database | None = None,
+        packs: ILibraryPackRepository | None = None,
+        members: ILibraryPackMemberRepository | None = None,
     ) -> None:
         self._repo = repo
         self._worlds = world_service
+        self._db = db
+        self._packs = packs
+        self._members = members
 
     async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
         """Hydrate plot bodies; valid outline-only bodies have no packing layout."""
@@ -92,8 +106,9 @@ class BuildingTemplateLibraryService:
         outline: BuildingTemplateOutline,
         *,
         source_file: str | None = None,
+        pack_uid: str | None = None,
     ) -> BuildingTemplateRow:
-        uid = building_template_uid(outline.system_name)
+        uid = library_uid(LibraryKind.BUILDING_TEMPLATES, outline.system_name, pack_uid=pack_uid)
         row = BuildingTemplateRow(
             template_uid=uid,
             system_name=outline.system_name,
@@ -113,13 +128,37 @@ class BuildingTemplateLibraryService:
     ) -> ImportResult:
         if not isinstance(bodies, list):
             raise BundleValidationError("building_templates section must be an array")
+        if self._db is not None and not _in_transaction.get():
+            async with self._db.transaction():
+                return await self._import_bodies(world_uid, bodies)
+        return await self._import_bodies(world_uid, bodies)
+
+    async def _import_bodies(
+        self,
+        world_uid: str,
+        bodies: list[dict],
+    ) -> ImportResult:
+        """Manifest-less bodies → world-owned ``legacy`` pack members (plan step 3)."""
+        if self._packs is None or self._members is None:
+            raise RuntimeError(
+                "BuildingTemplateLibraryService: pack catalog repositories are not wired"
+            )
         world = await self._worlds.get_by_id(world_uid)
+        legacy = await ensure_legacy_pack(world_uid, self._packs)
         succeeded = 0
         errors = []
         for i, raw in enumerate(bodies):
             try:
                 outline = self.prepare_body(world, raw)
-                row = await self.upsert_outline(outline, source_file="bundle")
+                row = await self.upsert_outline(
+                    outline, source_file="bundle", pack_uid=legacy.pack_uid
+                )
+                await self._members.insert_missing([
+                    legacy_member_row(
+                        LibraryKind.BUILDING_TEMPLATES, outline.system_name,
+                        world_uid=world_uid,
+                    ),
+                ])
                 await self._ensure_registry(world_uid, row)
                 succeeded += 1
             except ValueError as exc:
