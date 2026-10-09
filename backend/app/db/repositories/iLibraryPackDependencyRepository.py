@@ -37,6 +37,17 @@ class ILibraryPackDependencyRepository(ABC):
     async def required_uids(self, pack_uid: str) -> set[str]: ...
 
     @abstractmethod
+    async def list_dependents(
+        self,
+        required_pack_uid: str,
+    ) -> list[LibraryPackDependencyRow]:
+        """Reverse lookup — packs that declare *required_pack_uid* as a
+        dependency. Serves ``idx_library_pack_deps_required``: delete-impact
+        diagnostics when a pack is still required by others (the column is
+        not an FK, so rows may outlive the referenced pack)."""
+        ...
+
+    @abstractmethod
     async def delete(self, pack_uid: str, required_pack_uid: str) -> None: ...
 
     @abstractmethod

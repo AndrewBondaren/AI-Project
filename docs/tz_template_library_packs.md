@@ -234,7 +234,11 @@ Structures сохраняют wire-контракт `system_name == template_uid
 
 - `library_packs`: `pack_uid` (PK), `system_name` (UNIQUE), `pack_name`,
   `display_name`, `version`, `owner_world_uid` (NULL → worlds FK),
-  `source_pack_uid` (NULL → packs FK, диагностика инстанцирования).
+  `source_pack_uid` (NULL; provenance-ключ remap-операции, не
+  FK-integrity — как у `required_pack_uid` / `source_template_uid`:
+  пак-источник может быть удалён, dangling читается как статус
+  «source deleted»; enforced FK блокировал бы удаление engine-пака,
+  которое по этому разделу всегда безопасно).
   Non-null `owner_world_uid` = библиотека мира (§1.1): mutable, каскадно
   умирает с миром. Default-статус определяется доверенной декларацией
   движка по UID; пользовательский manifest не может назначить себе этот статус.

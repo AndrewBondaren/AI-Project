@@ -115,6 +115,12 @@ class SqliteLibraryPackMemberRepository(
             await self._db.conn.commit()
         return cur.rowcount
 
+    async def save(self, member: LibraryPackMemberRow) -> None:
+        raise NotImplementedError(
+            "library_pack_members has no mutable fields — "
+            "identity change is a new row, not a mutation (TZ §2, §3)",
+        )
+
     async def upsert(self, member: LibraryPackMemberRow) -> None:
         raise NotImplementedError(
             "library_pack_members forbids replace semantics — "

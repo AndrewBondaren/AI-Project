@@ -72,6 +72,14 @@ class SqliteLibraryPackDependencyRepository(
         ) as cur:
             return {row[0] for row in await cur.fetchall()}
 
+    async def list_dependents(
+        self,
+        required_pack_uid: str,
+    ) -> list[LibraryPackDependencyRow]:
+        return await self.fetch_all(
+            "required_pack_uid = ?", [required_pack_uid], order="pack_uid ASC",
+        )
+
     async def delete(self, pack_uid: str, required_pack_uid: str) -> None:
         await self._db.conn.execute(
             f"DELETE FROM {self._table} WHERE pack_uid = ? AND required_pack_uid = ?",
@@ -87,6 +95,12 @@ class SqliteLibraryPackDependencyRepository(
         if not _in_transaction.get():
             await self._db.conn.commit()
         return cur.rowcount
+
+    async def save(self, dependency: LibraryPackDependencyRow) -> None:
+        raise NotImplementedError(
+            "library_pack_dependencies has no mutable fields — "
+            "identity change is a new row, not a mutation (TZ §3)",
+        )
 
     async def upsert(self, dependency: LibraryPackDependencyRow) -> None:
         raise NotImplementedError(

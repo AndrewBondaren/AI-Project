@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from app.db.bulkSql import executemany_rows, iter_batches
 from app.db.database import Database, _in_transaction
-from app.db.mapper import from_row, to_row
+from app.db.mapper import to_row
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.db.repositories.sqlite.base import BaseRepository

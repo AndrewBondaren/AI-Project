@@ -20,6 +20,7 @@ from app.application.canonicalLibrary import (
     SqlCanonicalPersistence,
 )
 from app.application.worldData.ids import LibraryKind, library_uid
+from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.db.database import Database
 from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.models.libraryPack import LibraryPackRow
@@ -105,8 +106,14 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
         world = World(
             world_uid="world-pins", name="pins", created_at="2026-10-09",
             library_pins=[
-                {"library_kind": "relief_templates", "local_uid": "smoke_003"},
-                {"library_kind": "structure_templates", "local_uid": "inn_small"},
+                LibraryPinEntry(
+                    library_kind=LibraryKind.RELIEF_TEMPLATES,
+                    local_uid="smoke_003",
+                ).model_dump(mode="json"),
+                LibraryPinEntry(
+                    library_kind=LibraryKind.STRUCTURE_TEMPLATES,
+                    local_uid="inn_small",
+                ).model_dump(mode="json"),
             ],
         )
         await repo.create(world)
@@ -442,8 +449,13 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
         self.assertEqual(await self.deps.insert_missing([dep]), 0)
         self.assertEqual(await self.deps.required_uids(pack.pack_uid), {required.pack_uid})
         self.assertEqual(len(await self.deps.list_for_packs([pack.pack_uid])), 1)
+        self.assertEqual(
+            [d.pack_uid for d in await self.deps.list_dependents(required.pack_uid)],
+            [pack.pack_uid],
+        )
         self.assertEqual(await self.deps.delete_for_pack(pack.pack_uid), 1)
         self.assertEqual(await self.deps.list_for_pack(pack.pack_uid), [])
+        self.assertEqual(await self.deps.list_dependents(required.pack_uid), [])
 
     async def test_update_metadata_never_rewrites_identity(self):
         pack = _pack("engine.meta", source="src-keep")
@@ -460,6 +472,43 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
             ("renamed", "Renamed", "2.0"),
         )
         self.assertEqual(stored.system_name, "engine.meta")
+        self.assertIsNone(stored.owner_world_uid)
+        self.assertEqual(stored.source_pack_uid, "src-keep")
+
+    async def test_save_and_upsert_are_not_mutation_paths(self):
+        pack = _pack("engine.immut")
+        await self.packs.insert(pack)
+        member = _member(pack, "m")
+        dep = LibraryPackDependencyRow(pack.pack_uid, "req")
+        with self.assertRaises(NotImplementedError):
+            await self.members.save(member)
+        with self.assertRaises(NotImplementedError):
+            await self.members.upsert(member)
+        with self.assertRaises(NotImplementedError):
+            await self.deps.save(dep)
+        with self.assertRaises(NotImplementedError):
+            await self.deps.upsert(dep)
+        with self.assertRaises(NotImplementedError):
+            await self.packs.upsert(pack)
+
+    async def test_pack_save_degrades_to_metadata_update(self):
+        pack = _pack("engine.savex", source="src-keep")
+        await self.packs.insert(pack)
+        forged = LibraryPackRow(
+            pack_uid=pack.pack_uid, system_name="forged", pack_name="via-save",
+            display_name="Via Save", version="3.0",
+            owner_world_uid="world-a", source_pack_uid="forged",
+        )
+        # BaseRepository.save is reachable on the concrete class; identity
+        # and provenance are excluded by __update_exclude__ — only mutable
+        # metadata lands, same contract as update_metadata.
+        await self.packs.save(forged)
+        stored = await self.packs.get_by_uid(pack.pack_uid)
+        self.assertEqual(
+            (stored.pack_name, stored.display_name, stored.version),
+            ("via-save", "Via Save", "3.0"),
+        )
+        self.assertEqual(stored.system_name, "engine.savex")
         self.assertIsNone(stored.owner_world_uid)
         self.assertEqual(stored.source_pack_uid, "src-keep")
 

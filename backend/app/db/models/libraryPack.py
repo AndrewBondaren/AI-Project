@@ -15,6 +15,11 @@ from dataclasses import dataclass
 class LibraryPackRow:
     __table__ = "library_packs"
     __pk__ = "pack_uid"
+    # Identity + provenance are immutable: save() degrades to the
+    # metadata-only update (update_metadata is the declared path).
+    __update_exclude__ = frozenset({
+        "system_name", "owner_world_uid", "source_pack_uid",
+    })
 
     pack_uid: str
     system_name: str
