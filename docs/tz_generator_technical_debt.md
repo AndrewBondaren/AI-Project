@@ -2091,6 +2091,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | **LIBPACK-T-4** | low | **open** | P3 | производительность | `_swap_pointer` O(реестр) на член → `delete_pack` O(members × registry); pointer-write идёт через полный `worlds.update` (normalize+merge всей строки мира) | Принято: реестры умирают в 5b, оптимизировать не нужно |
 | **LIBPACK-T-5** | medium | **open** | P1 | used-member policy | `member_usages` покрывает pins (`library_pins`) + `relief_pick_policy.*.default_template_uid`; refs **внутри тел** (`main_building.structure` и прочие cross-template ссылки) не сканируются — удаление члена может оставить битый ref | Referenced-set — **шаг 4c** (`member_usages` — точка расширения адаптера) |
 | **LIBPACK-T-6** | info | **open** | P3 | конвенция | `from app.db.database import _in_transaction` — приватный ContextVar на ~15 файлах (repos, library services, canonicalLibrary) | Отдельная тема: публичный флаг транзакции на `Database` |
+| **LIBPACK-T-7** | low | **open** | P2 | ТЗ семантика / overlay | `terrain(world)` резолвит `canonical_defaults ⊕ world rows` (T-29) — resolved-scan делает R34-upsert мёртвым: `added` всегда пуст. `merge_missing_terrain_entries` (libpack-t2 шаг 1) читает **сырую** колонку и теперь реально дописывает canonical-ряды в stored `terrain_registry` (legacy import + instantiate). Побочки выбранного persist-прочтения: canonical-дубли в stored/bundle; `terrain_registry` — write-колонка двух писателей (учесть в W2 `COLUMN_INVALIDATES`) | Решение к ТЗ `tz_terrain_relief` R34: оставить persist-семантику (зафиксировать в ТЗ) или удалить upsert как рудимент — overlay гарантирует resolved-полноту. При «удалить» — убрать helper + вызов в `ReliefPackAdapter.remap_world_refs` |
 
 **Related (info):** member identity иммутабельна (update = замена тела) и `source_pack_uid`/`source_template_uid` колонки заведены, но не пишутся — это контракт, не долг; remap заполняет их в 4b.
 
@@ -2111,6 +2112,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-11 | **LIBPACK-T-7** open: R34-upsert был мёртв под T-29 overlay (resolved-scan всегда полон); шаг 1 libpack-t2 ввёл raw-scan и реальный persist. Открытый вопрос к R34: persist vs удалить рудимент. |
 | 2026-10-11 | **LIBPACK-T-2** → план `libpack-t2-relief-import-instantiate.md` (2 шага: R34→adapter, роут→instantiate). Решения: `template_uid`→member→pack→`instantiate_pack`; member-level engine→world отклонён по ТЗ §0.1; R34 в `remap_world_refs`. |
 | 2026-10-10 | **LIBPACK-T** open: шаг 4a `library-packs-model` — ownerless write-paths (T-1), interim `import_library_uid_into_world` → 4b (T-2), `get_by_system_name` deprecated → 5b (T-3), `_swap_pointer` O(members×registry) accepted (T-4), referenced-set used-check → 4c (T-5), `_in_transaction` convention (T-6). Code smells шага — `library-packs-4a-review-debt.md`. |
 | 2026-10-06 | **NC-10** гидрология ✅: loader fine, coarse view в `build_hydrology_master_input`, `resolve_declared_river_intents(space=)`, rename `*_meter*` → `*_fine*`; `tz_terrain_hydrology` U20/U21/C1. Остались горы, pack, locals. |
