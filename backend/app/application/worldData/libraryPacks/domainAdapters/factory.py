@@ -1,0 +1,56 @@
+"""Container seam — one domain adapter per supported ``library_kind``."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from app.application.worldData.libraryPacks.domainAdapters.building import (
+    BuildingPackAdapter,
+)
+from app.application.worldData.libraryPacks.domainAdapters.relief import (
+    ReliefPackAdapter,
+)
+from app.application.worldData.libraryPacks.domainAdapters.structure import (
+    StructurePackAdapter,
+)
+from app.ids import LibraryKind
+
+if TYPE_CHECKING:
+    from app.application.worldData.buildingTemplateLibraryService import (
+        BuildingTemplateLibraryService,
+    )
+    from app.application.worldData.libraryPacks.domainAdapters.contract import (
+        PackDomainAdapter,
+    )
+    from app.application.worldData.reliefTemplateLibraryService import (
+        ReliefTemplateLibraryService,
+    )
+    from app.application.worldData.reliefWorldImportService import (
+        ReliefWorldImportService,
+    )
+    from app.application.worldData.structureTemplateLibraryService import (
+        StructureTemplateLibraryService,
+    )
+    from app.db.repositories.iWorldRepository import IWorldRepository
+
+
+def build_pack_domain_adapters(
+    *,
+    relief_library: ReliefTemplateLibraryService,
+    structure_library: StructureTemplateLibraryService,
+    building_library: BuildingTemplateLibraryService,
+    world_repository: IWorldRepository,
+    relief_world_import: ReliefWorldImportService | None = None,
+) -> dict[LibraryKind, PackDomainAdapter]:
+    """Container seam — one adapter per supported ``library_kind``."""
+    return {
+        LibraryKind.RELIEF_TEMPLATES: ReliefPackAdapter(
+            relief_library, world_repository, relief_world_import
+        ),
+        LibraryKind.STRUCTURE_TEMPLATES: StructurePackAdapter(
+            structure_library, world_repository
+        ),
+        LibraryKind.BUILDING_TEMPLATES: BuildingPackAdapter(
+            building_library, world_repository
+        ),
+    }

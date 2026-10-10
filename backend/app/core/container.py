@@ -66,7 +66,7 @@ from app.application.worldData.reliefTemplateLibraryService import ReliefTemplat
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.domainAdapters import (
+from app.application.worldData.libraryPacks.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
 from app.application.worldData.libraryPacks.packService import LibraryPackService

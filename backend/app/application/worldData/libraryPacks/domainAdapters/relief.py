@@ -1,0 +1,142 @@
+"""Relief domain adapter — name-keyed bodies + ``relief_template_registry``
+pointers + ``relief_pick_policy`` world-side ref field (TZ §0.2/§2)."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from app.application.jsonValidation.resolve import resolve_model
+from app.application.jsonValidation.worldRow import relief_pick_policy
+from app.application.worldData.libraryPacks.domainAdapters.contract import (
+    PackDomainAdapter,
+    RemappedMember,
+)
+from app.application.worldData.libraryPacks.domainAdapters.mixins import (
+    _LibraryBodyMixin,
+    _RegistryPointerMixin,
+)
+from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
+    _remap_relief_pick_policy,
+)
+from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldData.reliefErrors import ReliefValidationError
+from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+from app.application.worldData.reliefTemplateLibraryService import (
+    ReliefTemplateLibraryService,
+)
+from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
+    ReliefTemplateRegistryEntry,
+)
+from app.dataModel.terrain.relief.worldReliefPickPolicy import (
+    ReliefContextPickPolicy,
+    WorldReliefPickPolicy,
+)
+from app.db.models.libraryPack import LibraryPackRow
+from app.db.models.libraryPackMember import LibraryPackMemberRow
+from app.db.models.world import World
+from app.db.repositories.iWorldRepository import IWorldRepository
+from app.ids import LibraryKind
+
+if TYPE_CHECKING:
+    from app.application.worldData.reliefTemplateFsImport import ReliefPackImport
+
+
+class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
+    """Name-keyed relief bodies; ``relief_template_registry`` pointers."""
+
+    library_kind = LibraryKind.RELIEF_TEMPLATES
+    registry_field: ClassVar[str] = "relief_template_registry"
+
+    def __init__(
+        self,
+        library: ReliefTemplateLibraryService,
+        world_repository: IWorldRepository,
+        world_import: ReliefWorldImportService | None = None,
+    ) -> None:
+        self._library = library
+        self._world_repo = world_repository
+        self._world_import = world_import
+
+    async def write_body(
+        self,
+        raw: dict,
+        *,
+        local_uid: str,
+        template_uid: str,
+        pack: LibraryPackRow,
+        world: World | None,
+        source_file: str | None = None,
+    ) -> ReliefTemplate:
+        if not isinstance(raw, dict):
+            raise LibraryPackValidationError(
+                f"relief body for '{local_uid}' must be a JSON object"
+            )
+        try:
+            if world is not None and self._world_import is not None:
+                outline = self._world_import.prepare_body(world, raw)  # warns geom
+            else:
+                outline = resolve_model(ReliefTemplate, raw, label=local_uid)
+                warn_template_invalid_geom(outline, source_file=source_file)
+        except (ValueError, ReliefValidationError) as exc:
+            raise LibraryPackValidationError(str(exc)) from exc
+        if outline.system_name != local_uid:
+            raise LibraryPackValidationError(
+                f"relief body system_name '{outline.system_name}' != "
+                f"member local_uid '{local_uid}'"
+            )
+        await self._library.upsert_outline(
+            outline, source_file=source_file, pack_uid=pack.pack_uid
+        )
+        return outline
+
+    async def import_fs_pack(
+        self, path: str | Path, *, domain_root: Path | None = None
+    ) -> ReliefPackImport:
+        from app.application.worldData.reliefTemplateFsImport import import_relief_path
+
+        return await import_relief_path(
+            path,
+            upsert_from_dict=self._library.upsert_from_dict,
+            domain_root=domain_root,
+        )
+
+    def _pointer_entry(
+        self, member: LibraryPackMemberRow, outline: ReliefTemplate
+    ) -> ReliefTemplateRegistryEntry:
+        return ReliefTemplateRegistryEntry(
+            system_template_uid=member.template_uid,
+            display_template_name=outline.display_name,
+            context=outline.context,
+            imported_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def member_usages(
+        self, world: World, member: LibraryPackMemberRow
+    ) -> list[str]:
+        usages: list[str] = []
+        policy = relief_pick_policy(world)
+        for name in WorldReliefPickPolicy.model_fields:
+            entry = getattr(policy, name)
+            if (
+                isinstance(entry, ReliefContextPickPolicy)
+                and entry.default_template_uid == member.template_uid
+            ):
+                usages.append(f"relief_pick_policy.{name}.default_template_uid")
+        return usages
+
+    async def remap_world_refs(
+        self,
+        world: World,
+        uid_map: Mapping[str, str],
+        members: Sequence[RemappedMember],
+    ) -> None:
+        self._rebuild_registry_field(world, uid_map, members)
+        policy = _remap_relief_pick_policy(world, uid_map)
+        if policy is not None:
+            world.relief_pick_policy = policy
+        await self._world_repo.update(world)
