@@ -480,6 +480,53 @@ instance-каталоги (resource/crops/livestock) spec не объявляю�
 - peak `-40/45` explicit on import (`canonical_defaults` только на import)
 - `precipitation_liquid` ∈ `material_registry` liquid rows — **✅ import** (`index/validate.py`); runtime fallback в generators до JV-7
 
+### Scoped column write (internal)
+
+Две write-модели над колонками `worlds` — не смешивать:
+
+| Модель | Caller | Семантика |
+|--------|--------|-----------|
+| **Master-PATCH / import** | `PUT /worlds/{uid}`, `POST /worlds`, `import_from_json`, bundle | Full/partial normalize **всего** документа (все facade-слайсы + REF-W). Полная когерентность намеренна — мастер трогает документ, весь документ остаётся валидным |
+| **Scoped single-column** | Внутренние писатели `worldData`: registry-bind (`_ensure_registry`-паттерн), pack-адаптеры remap | Валидация **только пишущейся колонки** через её `WorldSlice`; чужие колонки не резолвятся |
+
+Внутренний писатель **не** вызывает `worlds.update` для maintenance-записи одной
+колонки — полная ревалидация вне его контракта, и невалидная чужая колонка
+обязана не блокировать scoped-запись (прецедент: `building_template_registry` с
+mixed-строками ломал любой PATCH до union-POJO).
+
+**Примитивы (два явных, не один вызов):**
+
+| Функция | Слой | Роль |
+|---------|------|------|
+| `resolve_world_column(key, raw, ctx) -> dict[str, Any]` | `jsonValidation` (рядом с `worldSliceMerge`) | Чистый resolve одного слайса через `merge_world_slice` → materialized dump по `world_keys`. Без I/O |
+| `apply_world_column(world, key, raw, ctx) -> frozenset[str]` | `worldData/worldColumnWrite.py` — module-level функция, **не** сервис | resolve → `setattr` на `World` → возвращает имена инвалидированных таблиц |
+
+**Инварианты:**
+
+- **Supplied = atomic**: caller передаёт колонку целиком (`partial=False`);
+  `resolve_root_list` материализует canonical overlay + dump — та же семантика,
+  что у facade-merge. `wire_adapter` (legacy формы) работает на общем пути.
+- **Шов не владеет транзакцией** и не делает `repo.update` сам — как
+  `PackDomainAdapter`: все методы внутри транзакции caller'а. Одиночная колонка:
+  `apply` → `repo.update`; мультиколонка (relief: registry + pick-policy):
+  `apply` ×N → **один** `repo.update`.
+- **Только facade-колонки**: ключ вне `WORLD_SLICES` facade → отказ. Контракт
+  колонки расширяется только через dataModel + `WorldSlice` (см. чеклист нового
+  POJO). Raw `repo.update` на колонках мира — вне пути, исключение только
+  repair-путь.
+- **Invalid rows never disappear** — reject с индексом строки, как на импорте.
+- **`COLUMN_INVALIDATES`** — реестр `dict[str, frozenset[str]]` в `worldData`
+  (не на `WorldSlice`: jsonValidation не именует domain-таблицы). Колонка →
+  доменные таблицы, которые её запись инвалидирует (`fine_cells_per_map_cell` →
+  `map_cells`). `apply_world_column` возвращает их caller'у — тот решает, что
+  чистить (как route решает `map_cells_invalidated` сегодня). Мастер-путь
+  `worlds.update` читает тот же реестр — один источник политики инвалидаций.
+
+**Не через шов:** мастер-PATCH, `import_from_json`, bundle — full-doc семантика
+сохраняется. Состояние внутри мира (клетки, здания, дороги, флора, поселения) —
+не колонки `worlds`: пишут доменные persist-сервисы своих таблиц, шов к ним
+неприменим.
+
 ---
 
 ## Runtime path (read)
