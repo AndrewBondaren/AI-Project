@@ -1348,6 +1348,25 @@ WHERE template_uid=?` после валидации UID и неизменног�
 может выбирать подходящий шаблон из любого подключённого миру пака.
 Дочерняя структура разрешается тем же механизмом по `main_building.structure`.
 
+Колонка **гетерогенная** — два вида строк, дискриминатор = наличие
+`system_template_uid`:
+
+| Вид | Признак | Семантика | Потребитель |
+|---|---|---|---|
+| uid-pointer | `system_template_uid` | подключённый член библиотеки (`BuildingTemplateRegistryEntry`) | каталог шаблонов мира |
+| embedded layout | `system_name` + `display_name` (+ `main_building`/`secondary_buildings`) | world-override чертёж участка — `PlotLayoutTemplate` (поля §3.1) | packing overrides поверх builtin каталога по `system_name` |
+
+Layout-строки — **interim-хранилище** world-override чертежей участка
+(CITY-T-2b/5o, overlay до целевого pack-механизма). Это не uid-ссылки и не
+подключение паков — правила §6.2 касаются только pointer-вида.
+
+Контракт колонки — один union-POJO `WorldBuildingTemplateRegistry`
+(`BuildingTemplateRegistryEntry | PlotLayoutTemplate`, дискриминатор
+`system_template_uid`); ручная дискриминация потребителями запрещена.
+Строка с обоими ключами — pointer (то же правило, что в `worldRow` и
+pack-remap). Строка ни одного вида — ошибка валидации с `path` к индексу,
+не silent drop.
+
 ---
 
 ## 6. Загрузка и импорт шаблонов

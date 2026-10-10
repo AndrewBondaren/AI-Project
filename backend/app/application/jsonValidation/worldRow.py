@@ -14,7 +14,6 @@ from app.application.jsonValidation.worldSlices import (
     resolve_multi_column_world,
     resolve_registry_dict_world,
     resolve_registry_list_world,
-    slice_column_key,
 )
 from app.dataModel import (
     WorldClimateZoneRegistry,
@@ -249,27 +248,8 @@ def world_building_layout_overrides(world: Any) -> list[PlotLayoutTemplate]:
         packing_warning,
     )
 
-    col = slice_column_key(WorldBuildingTemplateRegistry)
-    from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, resolve_model
-    from app.application.jsonValidation.types import FieldPathError
-    from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import BuildingTemplateRegistryEntry
-
-    raw = getattr(world, col, None)
-    raw = [] if raw is None else raw
-    if isinstance(raw, dict):
-        raw = list(raw.values())
-    ctx = ResolveContext(path_prefix=(col,))
-    if not isinstance(raw, list):
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "expected list", code="EXPECTED_LIST")])
     out: list[PlotLayoutTemplate] = []
-    for index, row in enumerate(raw):
-        row_ctx = ctx.child(index)
-        if not isinstance(row, dict):
-            reject_unresolved(row_ctx, [FieldPathError(row_ctx.path_prefix, "expected object", code="EXPECTED_OBJECT")])
-        if "system_template_uid" in row:
-            resolve_model(BuildingTemplateRegistryEntry, row, ctx=row_ctx)
-            continue
-        layout = resolve_model(PlotLayoutTemplate, row, ctx=row_ctx)
+    for layout in building_template_registry(world).layouts:
         if plot_type_defaulted(layout):
             packing_warning(
                 PackingStep.CACHE,

@@ -40,7 +40,8 @@ def building_template_uid(system_name: str) -> str:
 
 
 def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:
-    return list(building_template_registry(world).root)
+    """Pointer rows only — embedded plot-layout rows are not bindings (§5.2)."""
+    return list(building_template_registry(world).pointers)
 
 
 def _body_structure_type(body: BuildingTemplateOutline | PlotLayoutTemplate) -> str:
@@ -216,21 +217,19 @@ class BuildingTemplateLibraryService:
 
     async def _ensure_registry(self, world_uid: str, row: BuildingTemplateRow) -> None:
         world = await self._worlds.get_by_id(world_uid)
-        entries = _registry_entries(world)
-        if any(e.system_template_uid == row.template_uid for e in entries):
+        reg = building_template_registry(world)
+        if any(e.system_template_uid == row.template_uid for e in reg.pointers):
             return
+        # The patch replaces the whole column — dump the full mixed root so
+        # embedded layout rows survive the pointer append (§5.2).
+        entries = [e.model_dump(mode="json") for e in reg.root]
         entries.append(
             BuildingTemplateRegistryEntry(
                 system_template_uid=row.template_uid,
                 display_template_name=row.display_name,
                 imported_at=datetime.now(timezone.utc).isoformat(),
-            )
+            ).model_dump(mode="json")
         )
         await self._worlds.update(
-            world_uid,
-            {
-                "building_template_registry": [
-                    e.model_dump(mode="json") for e in entries
-                ],
-            },
+            world_uid, {"building_template_registry": entries}
         )
