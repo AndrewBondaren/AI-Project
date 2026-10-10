@@ -11,7 +11,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
-from app.application.worldData.generators.terrain.relief.log.log import relief_warning
+from app.application.worldData.reliefTerrainSync import (
+    merge_missing_terrain_entries,
+)
 from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.legacyPack import (
     ensure_legacy_pack,
@@ -27,12 +29,10 @@ from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
     ReliefTemplateRegistryEntry,
 )
-from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.application.jsonValidation.worldRow import (
     barrier_templates,
     canal_templates,
     relief_template_registry,
-    terrain,
 )
 from app.application.worldData.generators.terrain.relief.canal.outlineCollect import (
     collect_outline_structure_canal_refs,
@@ -252,33 +252,14 @@ class ReliefWorldImportService:
         if not needed:
             return
         world = await self._worlds.get_by_id(world_uid)
-        current = terrain(world)
-        have = {e.system_terrain for e in current.root}
-        canon = {
-            e.system_terrain: e
-            for e in WorldTerrainRegistry.canonical_engine().root
-        }
-        added: list[str] = []
-        new_rows = list(current.root)
-        for key in sorted(needed):
-            if key in have:
-                continue
-            entry = canon.get(key)
-            if entry is None:
-                # closed ReliefConditionTerrain should always be in engine set
-                continue
-            new_rows.append(entry)
-            added.append(key)
-            relief_warning(
-                "r34_terrain_upsert",
-                world_uid=world_uid,
-                system_terrain=key,
-                source="relief_import",
-                template_uid=template_uid,
-                system_name=outline.system_name,
-            )
+        added = merge_missing_terrain_entries(
+            world,
+            needed,
+            source="relief_import",
+            template_uid=template_uid,
+            system_name=outline.system_name,
+        )
         if added:
             await self._worlds.update(
-                world_uid,
-                {"terrain_registry": [e.model_dump(mode="json") for e in new_rows]},
+                world_uid, {"terrain_registry": world.terrain_registry}
             )

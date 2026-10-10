@@ -25,6 +25,7 @@ from app.application.worldData.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
 from app.core.container import Container
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.database import Database
 from app.db.models.world import World
 from app.db.repositories.sqlite.buildingTemplateRepository import (
@@ -142,6 +143,58 @@ class InstantiateTests(_ServiceCase):
 
         # Source pack/members untouched.
         self.assertEqual(len(await self.members.list_by_pack(src.pack_uid)), 2)
+
+    async def test_instantiate_upserts_terrain_registry_keys(self):
+        """R34: member conditions upsert missing canonical terrain keys."""
+        await self._world("w1")
+        plains = next(
+            e.model_dump(mode="json")
+            for e in WorldTerrainRegistry.canonical_engine().root
+            if e.system_terrain == "plains"
+        )
+        world = await self.worlds.get_by_id("w1")
+        world.terrain_registry = [plains]
+        await self.worlds.update(world)
+
+        cases = [
+            {"policy": "slope_down", "delta_z": 1,
+             "slope_weight": 1.0, "sheer_weight": 0.0},
+            {"policy": "slope_up", "delta_z": 1,
+             "slope_weight": 1.0, "sheer_weight": 0.0},
+            {"policy": "slope_none", "delta_z": 0,
+             "slope_weight": 1.0, "sheer_weight": 0.0},
+        ]
+        src = await self.service.create_pack(system_name="user.relief.terrain")
+        await self.service.create_member(
+            src.pack_uid, library_kind=_RELIEF, local_uid="seaside",
+            body=_relief_body(
+                "seaside",
+                conditions=[
+                    {"terrain": "forest", "cases": cases},
+                    {"terrain": "shore_sea", "cases": cases},
+                ],
+            ),
+        )
+        # Member without conditions — no-op for the registry.
+        await self.service.create_member(
+            src.pack_uid, library_kind=_RELIEF, local_uid="flat",
+            body=_relief_body("flat"),
+        )
+
+        await self.service.instantiate_pack(src.pack_uid, world_uid="w1")
+
+        world = await self.worlds.get_by_id("w1")
+        by_key = {
+            e["system_terrain"]: e for e in world.terrain_registry
+        }
+        self.assertEqual(set(by_key), {"plains", "forest", "shore_sea"})
+        canon = {
+            e.system_terrain: e.model_dump(mode="json")
+            for e in WorldTerrainRegistry.canonical_engine().root
+        }
+        self.assertEqual(by_key["plains"], plains)
+        self.assertEqual(by_key["forest"], canon["forest"])
+        self.assertEqual(by_key["shore_sea"], canon["shore_sea"])
 
     async def test_instantiate_pointer_targets_instance_not_source(self):
         await self._world("w1")

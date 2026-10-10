@@ -27,6 +27,9 @@ from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
+from app.application.worldData.reliefTerrainSync import (
+    merge_missing_terrain_entries,
+)
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
@@ -139,4 +142,14 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
         policy = _remap_relief_pick_policy(world, uid_map)
         if policy is not None:
             world.relief_pick_policy = policy
+        for rm in members:
+            if not isinstance(rm.outline, ReliefTemplate):
+                continue
+            merge_missing_terrain_entries(
+                world,
+                (c.terrain.value for c in rm.outline.conditions),
+                source="pack_instantiate",
+                template_uid=rm.member.template_uid,
+                system_name=rm.outline.system_name,
+            )
         await self._world_repo.update(world)
