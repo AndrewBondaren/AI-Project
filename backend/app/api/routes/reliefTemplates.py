@@ -9,6 +9,15 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
+from app.application.worldData.libraryPacks.errors import (
+    LibraryPackConflictError,
+    LibraryPackError,
+    LibraryPackInUseError,
+    LibraryPackNotFoundError,
+    LibraryPackOwnershipError,
+    LibraryPackReadOnlyError,
+    LibraryPackValidationError,
+)
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
@@ -23,6 +32,34 @@ def _http_from_relief(exc: Exception) -> HTTPException:
     if isinstance(exc, ReliefValidationError):
         return HTTPException(status_code=422, detail=exc.message)
     raise exc
+
+
+def _http_from_pack(exc: LibraryPackError) -> HTTPException:
+    if isinstance(exc, LibraryPackNotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, (LibraryPackConflictError, LibraryPackInUseError)):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, (LibraryPackOwnershipError, LibraryPackReadOnlyError)):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, LibraryPackValidationError):
+        return HTTPException(status_code=422, detail=str(exc))
+    return HTTPException(status_code=500, detail=str(exc))
+
+
+async def _instantiate_member_pack(
+    container, world_uid: str, template_uid: str
+) -> dict:
+    """``template_uid`` → owning engine pack → ``instantiate_pack`` (TZ §1.1)."""
+    packs = container.library_pack_service()
+    member = await packs.get_member(template_uid)
+    res = await packs.instantiate_pack(member.pack_uid, world_uid=world_uid)
+    return {
+        "pack_uid": res.pack.pack_uid,
+        "created": res.created,
+        "imported": len(res.members),
+        "uids": [m.template_uid for m in res.members],
+        "missing_dependencies": list(res.missing_dependencies),
+    }
 
 
 @router.get("/relief-templates")
@@ -94,19 +131,19 @@ async def import_relief_into_world(
     template_uid: str | None = None,
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Import library uid or outline body(ies) into world registry (+ R34 terrain sync)."""
+    """Instantiate the pack owning ``template_uid``, or import outline body(ies)."""
     svc = container.relief_world_import_service()
     try:
-        if template_uid:
-            result = await svc.import_library_uid_into_world(world_uid, template_uid)
+        uid = template_uid
+        if uid is None and isinstance(data, dict) and set(data) == {"template_uid"}:
+            uid = data["template_uid"]
+        if uid is not None:
+            result = await _instantiate_member_pack(container, world_uid, uid)
             return JSONResponse(status_code=200, content=result)
         body = data
         if body is None:
             raise HTTPException(status_code=422, detail="Provide template_uid or JSON body")
         if isinstance(body, dict):
-            if "template_uid" in body and len(body) == 1:
-                result = await svc.import_library_uid_into_world(world_uid, body["template_uid"])
-                return JSONResponse(status_code=200, content=result)
             outlines = [body]
         elif isinstance(body, list):
             outlines = body
@@ -116,6 +153,8 @@ async def import_relief_into_world(
         return JSONResponse(status_code=200, content=result)
     except (ReliefNotFoundError, ReliefValidationError) as exc:
         raise _http_from_relief(exc) from exc
+    except LibraryPackError as exc:
+        raise _http_from_pack(exc) from exc
 
 
 @router.delete("/relief-templates/{template_uid}", status_code=204)

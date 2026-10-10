@@ -19,6 +19,7 @@ from unittest import IsolatedAsyncioTestCase
 
 from app.application.worldData.libraryPacks.errors import (
     LibraryPackConflictError,
+    LibraryPackNotFoundError,
     LibraryPackValidationError,
 )
 from app.application.worldData.loadReliefTemplatesForWorld import (
@@ -326,6 +327,34 @@ class InstantiateTests(_ServiceCase):
         self.assertEqual(
             new_body["secondary_buildings"][0]["structure"], om.template_uid
         )
+
+    async def test_template_uid_resolves_to_pack_instantiate(self):
+        """libpack-t2 step 2 route seam: member → owning pack → instantiate."""
+        await self._world("w1")
+        src, (m1, _m2) = await self._relief_engine_pack()
+
+        member = await self.service.get_member(m1.template_uid)
+        self.assertEqual(member.pack_uid, src.pack_uid)
+
+        first = await self.service.instantiate_pack(
+            member.pack_uid, world_uid="w1"
+        )
+        second = await self.service.instantiate_pack(
+            member.pack_uid, world_uid="w1"
+        )
+        self.assertTrue(first.created)
+        self.assertFalse(second.created)
+        self.assertEqual(second.pack.pack_uid, first.pack.pack_uid)
+
+        world = await self.worlds.get_by_id("w1")
+        registry_uids = {
+            e["system_template_uid"] for e in world.relief_template_registry
+        }
+        self.assertEqual(registry_uids, set(first.uid_map.values()))
+
+    async def test_get_member_unknown_uid_not_found(self):
+        with self.assertRaises(LibraryPackNotFoundError):
+            await self.service.get_member("missing-uid")
 
     async def test_reinstantiate_returns_same_instance(self):
         await self._world("w1")

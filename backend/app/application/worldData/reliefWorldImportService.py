@@ -125,42 +125,6 @@ class ReliefWorldImportService:
         self._validate_structure_canal(outline, world)
         return outline
 
-    async def import_library_uid_into_world(
-        self,
-        world_uid: str,
-        template_uid: str,
-    ) -> dict:
-        """Attach an engine-library template as a world-owned ``legacy`` member.
-
-        Interim until step 4b ``instantiate_pack``: the body copies into the
-        world's legacy pack (pointer must target a world-owned member), with
-        the engine uid kept as ``source_template_uid`` provenance.
-        """
-        if self._db is not None:
-            async with self._db.transaction_if_needed():
-                return await self._import_library_uid(world_uid, template_uid)
-        return await self._import_library_uid(world_uid, template_uid)
-
-    async def _import_library_uid(
-        self,
-        world_uid: str,
-        template_uid: str,
-    ) -> dict:
-        row = await self._library.get_by_uid(template_uid)
-        world = await self._worlds.get_by_id(world_uid)
-        outline = self.prepare_body(world, row.data, template_uid=template_uid)
-        new_row = await self._attach_member(
-            world_uid,
-            outline,
-            source_file=row.source_file or "library",
-            member=legacy_member_row(
-                LibraryKind.RELIEF_TEMPLATES, outline.system_name,
-                world_uid=world_uid,
-                source_template_uid=row.template_uid,
-            ),
-        )
-        return {"imported": 1, "uids": [new_row.template_uid]}
-
     def _validate_structure_refs(
         self,
         outline: ReliefTemplate,
