@@ -1,4 +1,5 @@
-"""Domain adapters of the pack application service — plan step 4a, TZ §0.2.
+"""Domain adapters of the pack application service — plan steps 4a–4b,
+TZ §0.2/§2.
 
 The universal pack layer (``packService``) owns identity, ownership and
 atomicity; each adapter owns the body model, domain restrictions and the
@@ -13,16 +14,14 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
-from app.application.jsonValidation.worldRow import (
-    building_template_registry,
-    relief_pick_policy,
-    relief_template_registry,
-)
+from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.application.worldData.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
 )
@@ -36,7 +35,6 @@ from app.application.worldData.reliefWorldImportService import ReliefWorldImport
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
-from app.application.worldData.worldService import WorldService
 from app.dataModel.locations.structure.building.buildingTemplateOutline import (
     BuildingTemplateOutline,
 )
@@ -56,6 +54,7 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import (
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
+from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
 
 if TYPE_CHECKING:
@@ -69,6 +68,13 @@ DomainLibrary = (
     | StructureTemplateLibraryService
     | BuildingTemplateLibraryService
 )
+
+@dataclass(frozen=True)
+class RemappedMember:
+    """Instance member + its parsed outline — ``remap_world_refs`` input."""
+    member: LibraryPackMemberRow
+    outline: Any
+
 
 class PackDomainAdapter(ABC):
     """Body/pointer contract of one ``library_kind`` for the pack service.
@@ -131,11 +137,88 @@ class PackDomainAdapter(ABC):
         """Diagnostics of world-side uses that block member delete."""
         return []
 
+    # ------------------------------------------------------------------
+    # Remap contract (TZ §2) — instantiate_pack / copy_pack, step 4b.
+    # ------------------------------------------------------------------
 
-_REGISTRY_ACCESSORS = {
-    "relief_template_registry": relief_template_registry,
-    "building_template_registry": building_template_registry,
-}
+    def remap_body(
+        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]
+    ) -> dict:
+        """Copied member body for the new owner.
+
+        Rewrites the embedded member uid (model A bodies) and refs to
+        source-pack members by ``uid_map``; refs absent from the map —
+        other packs, external bodies — stay untouched.
+        """
+        return dict(body)
+
+    async def body_source_file(self, template_uid: str) -> str | None:
+        """Diagnostic ``source_file`` of the body row — carried into copies."""
+        return None
+
+    async def remap_world_refs(
+        self,
+        world: World,
+        uid_map: Mapping[str, str],
+        members: Sequence[RemappedMember],
+    ) -> None:
+        """Instantiate-time world-side remap (TZ §2).
+
+        Registry pointers land on the *instance* member uids and entries
+        still aimed at source members are repointed; the adapter's
+        declared world-side ref fields (pick policies, layout-embedded
+        structure refs) follow the same map. Runs inside the caller's
+        transaction; ``members`` are this kind's freshly written
+        instance members.
+        """
+
+
+def _remap_structure_refs(row: dict, uid_map: Mapping[str, str]) -> dict | None:
+    """``structure`` uid refs of a plot-layout wire shape → instance uids.
+
+    Declared ref fields of the structure domain (TZ §2):
+    ``main_building.structure`` and ``secondary_buildings[].structure``.
+    Returns the rewritten dict, or ``None`` when nothing matched — refs
+    to other packs stay untouched.
+    """
+    out = dict(row)
+    changed = False
+    main = out.get("main_building")
+    if isinstance(main, dict) and main.get("structure") in uid_map:
+        main = dict(main)
+        main["structure"] = uid_map[main["structure"]]
+        out["main_building"] = main
+        changed = True
+    secondary = out.get("secondary_buildings")
+    if isinstance(secondary, list):
+        items = [
+            {**item, "structure": uid_map[item["structure"]]}
+            if isinstance(item, dict) and item.get("structure") in uid_map
+            else item
+            for item in secondary
+        ]
+        if items != secondary:
+            out["secondary_buildings"] = items
+            changed = True
+    return out if changed else None
+
+
+def _remap_relief_pick_policy(world: World, uid_map: Mapping[str, str]) -> dict | None:
+    """``relief_pick_policy.<context>.default_template_uid`` — the declared
+    world-side ref field of the relief domain (TZ §2); other keys stay."""
+    raw = world.relief_pick_policy or {}
+    if not isinstance(raw, dict):
+        return None
+    out = dict(raw)
+    changed = False
+    for name in WorldReliefPickPolicy.model_fields:
+        entry = out.get(name)
+        if isinstance(entry, dict) and entry.get("default_template_uid") in uid_map:
+            entry = dict(entry)
+            entry["default_template_uid"] = uid_map[entry["default_template_uid"]]
+            out[name] = entry
+            changed = True
+    return out if changed else None
 
 
 class _LibraryBodyMixin:
@@ -151,12 +234,23 @@ class _LibraryBodyMixin:
         if await self._library.find_by_uid(template_uid) is not None:
             await self._library.delete(template_uid)
 
+    async def body_source_file(self, template_uid: str) -> str | None:
+        row = await self._library.find_by_uid(template_uid)
+        return None if row is None else row.source_file
+
 
 class _RegistryPointerMixin:
-    """Shared world-registry pointer dual-write for uid-keyed registries."""
+    """Shared world-registry pointer dual-write for uid-keyed registries.
+
+    Registry columns are written through the world repository as raw
+    rows — the same storage path as ``prepare_import``. ``worlds.update``
+    would normalize the column against the registry-entry POJO and reject
+    non-pointer rows (e.g. embedded plot layouts) that legitimately live
+    there.
+    """
 
     registry_field: ClassVar[str]
-    _worlds: WorldService
+    _world_repo: IWorldRepository
 
     async def ensure_pointer(
         self, world: World, member: LibraryPackMemberRow, outline: Any
@@ -170,6 +264,39 @@ class _RegistryPointerMixin:
     async def drop_pointer(self, world: World, template_uid: str) -> None:
         await self._swap_pointer(world, template_uid=template_uid, entry=None)
 
+    async def remap_world_refs(
+        self,
+        world: World,
+        uid_map: Mapping[str, str],
+        members: Sequence[RemappedMember],
+    ) -> None:
+        setattr(
+            world, self.registry_field,
+            self._remapped_registry(world, uid_map, members),
+        )
+        await self._world_repo.update(world)
+
+    def _remapped_registry(
+        self,
+        world: World,
+        uid_map: Mapping[str, str],
+        members: Sequence[RemappedMember],
+    ) -> list:
+        """Registry after instantiate: pointer rows aimed at source or new
+        member uids are rebuilt; other rows (foreign pointers, embedded
+        plot layouts) pass through untouched — raw-dict scan, not the
+        resolved POJO, so non-pointer rows survive."""
+        drop = set(uid_map) | {rm.member.template_uid for rm in members}
+        entries = [
+            row for row in (getattr(world, self.registry_field, None) or [])
+            if not (isinstance(row, dict) and row.get("system_template_uid") in drop)
+        ]
+        entries.extend(
+            self._pointer_entry(rm.member, rm.outline).model_dump(mode="json")
+            for rm in members
+        )
+        return entries
+
     def _pointer_entry(self, member: LibraryPackMemberRow, outline: Any):
         """Registry entry for this member — declared by each domain."""
         raise NotImplementedError
@@ -177,15 +304,18 @@ class _RegistryPointerMixin:
     async def _swap_pointer(
         self, world: World, *, template_uid: str, entry: Any | None
     ) -> None:
-        reg = _REGISTRY_ACCESSORS[self.registry_field](world)
         entries = [
-            e.model_dump(mode="json")
-            for e in reg.root
-            if e.system_template_uid != template_uid
+            row
+            for row in (getattr(world, self.registry_field, None) or [])
+            if not (
+                isinstance(row, dict)
+                and row.get("system_template_uid") == template_uid
+            )
         ]
         if entry is not None:
             entries.append(entry.model_dump(mode="json"))
-        await self._worlds.update(world.world_uid, {self.registry_field: entries})
+        setattr(world, self.registry_field, entries)
+        await self._world_repo.update(world)
 
 
 class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
@@ -197,11 +327,11 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
     def __init__(
         self,
         library: ReliefTemplateLibraryService,
-        world_service: WorldService,
+        world_repository: IWorldRepository,
         world_import: ReliefWorldImportService | None = None,
     ) -> None:
         self._library = library
-        self._worlds = world_service
+        self._world_repo = world_repository
         self._world_import = world_import
 
     async def write_body(
@@ -271,19 +401,40 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
                 usages.append(f"relief_pick_policy.{name}.default_template_uid")
         return usages
 
+    async def remap_world_refs(
+        self,
+        world: World,
+        uid_map: Mapping[str, str],
+        members: Sequence[RemappedMember],
+    ) -> None:
+        setattr(
+            world, self.registry_field,
+            self._remapped_registry(world, uid_map, members),
+        )
+        policy = _remap_relief_pick_policy(world, uid_map)
+        if policy is not None:
+            world.relief_pick_policy = policy
+        await self._world_repo.update(world)
+
 
 class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
     """Model-A structures: wire ``system_name`` IS the member uid.
 
     No world registry exists for structures — the member is reachable
     through pack membership; body refs (``main_building.structure``) are
-    the 4c referenced-set.
+    the 4c referenced-set. World-side refs to structure members live in
+    plot-layout rows of ``building_template_registry``.
     """
 
     library_kind = LibraryKind.STRUCTURE_TEMPLATES
 
-    def __init__(self, library: StructureTemplateLibraryService) -> None:
+    def __init__(
+        self,
+        library: StructureTemplateLibraryService,
+        world_repository: IWorldRepository,
+    ) -> None:
         self._library = library
+        self._world_repo = world_repository
 
     async def write_body(
         self,
@@ -314,6 +465,35 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         await self._library.upsert_outline(outline, source_file=source_file)
         return outline
 
+    def remap_body(
+        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]
+    ) -> dict:
+        """Model A: the copied body embeds its new member uid (TZ §2)."""
+        out = dict(body)
+        out["system_name"] = template_uid
+        return out
+
+    async def remap_world_refs(
+        self,
+        world: World,
+        uid_map: Mapping[str, str],
+        members: Sequence[RemappedMember],
+    ) -> None:
+        """World-side refs to structure members — ``structure`` keys
+        inside plot-layout rows of ``building_template_registry``."""
+        raw = world.building_template_registry or []
+        out: list = []
+        changed = False
+        for row in raw:
+            remapped = (
+                _remap_structure_refs(row, uid_map) if isinstance(row, dict) else None
+            )
+            out.append(remapped if remapped is not None else row)
+            changed = changed or remapped is not None
+        if changed:
+            world.building_template_registry = out
+            await self._world_repo.update(world)
+
     async def import_fs_pack(
         self, path: str | Path, *, domain_root: Path | None = None
     ) -> StructurePackImport:
@@ -341,10 +521,10 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
     def __init__(
         self,
         library: BuildingTemplateLibraryService,
-        world_service: WorldService,
+        world_repository: IWorldRepository,
     ) -> None:
         self._library = library
-        self._worlds = world_service
+        self._world_repo = world_repository
 
     async def write_body(
         self,
@@ -382,6 +562,14 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
         )
         return body
 
+    def remap_body(
+        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]
+    ) -> dict:
+        """Plot layouts carry ``structure`` refs into the structure
+        library — internal refs to source members follow the map (TZ §2)."""
+        remapped = _remap_structure_refs(body, uid_map)
+        return remapped if remapped is not None else dict(body)
+
     def _pointer_entry(
         self,
         member: LibraryPackMemberRow,
@@ -399,16 +587,18 @@ def build_pack_domain_adapters(
     relief_library: ReliefTemplateLibraryService,
     structure_library: StructureTemplateLibraryService,
     building_library: BuildingTemplateLibraryService,
-    world_service: WorldService,
+    world_repository: IWorldRepository,
     relief_world_import: ReliefWorldImportService | None = None,
 ) -> dict[LibraryKind, PackDomainAdapter]:
     """Container seam — one adapter per supported ``library_kind``."""
     return {
         LibraryKind.RELIEF_TEMPLATES: ReliefPackAdapter(
-            relief_library, world_service, relief_world_import
+            relief_library, world_repository, relief_world_import
         ),
-        LibraryKind.STRUCTURE_TEMPLATES: StructurePackAdapter(structure_library),
+        LibraryKind.STRUCTURE_TEMPLATES: StructurePackAdapter(
+            structure_library, world_repository
+        ),
         LibraryKind.BUILDING_TEMPLATES: BuildingPackAdapter(
-            building_library, world_service
+            building_library, world_repository
         ),
     }

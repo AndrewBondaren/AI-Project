@@ -705,7 +705,7 @@ class Container:
                     relief_library=self.relief_template_library_service(),
                     structure_library=self.structure_template_library_service(),
                     building_library=self.building_template_library_service(),
-                    world_service=self.world_service(),
+                    world_repository=self.world_repository(),
                     relief_world_import=self.relief_world_import_service(),
                 ),
             )

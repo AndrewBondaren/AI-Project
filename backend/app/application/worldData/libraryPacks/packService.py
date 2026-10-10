@@ -1,9 +1,11 @@
-"""Pack application service — plan library-packs-model.md step 4a, TZ §0.2/§1.1/§3.
+"""Pack application service — plan library-packs-model.md steps 4a–4b,
+TZ §0.2/§1.1/§2/§3.
 
 Single CRUD/ownership boundary over ``library_packs`` +
-``library_pack_members`` (+ ``library_pack_dependencies``). Remap
-operations (``instantiate_pack``/``copy_pack``), re-instantiate and
-bundle/routes are later steps (4b/4c/4d).
+``library_pack_members`` (+ ``library_pack_dependencies``), plus the §2
+remap operations (``instantiate_pack`` engine→world / ``copy_pack``
+publish world→engine). Re-instantiate member rewrite and bundle/routes
+are later steps (4c/4d).
 
 Ownership semantics (TZ §1.1 — availability = ownership or default):
 
@@ -23,13 +25,16 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
+from app.application.worldData.libraryPacks.domainAdapters import (
+    PackDomainAdapter,
+    RemappedMember,
+)
 from app.application.worldData.libraryPacks.errors import (
     LibraryPackConflictError,
     LibraryPackInUseError,
@@ -79,6 +84,20 @@ class PackImportResult:
     pack: LibraryPackRow
     bodies: tuple[ReliefTemplateRow | StructureTemplateRow, ...]
     missing_dependencies: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PackRemapResult:
+    """Outcome of ``instantiate_pack`` / ``copy_pack`` (TZ §2).
+
+    ``created=False`` marks a re-instantiate returning the existing
+    instance identity — member/body rewrite is step 4c's contract.
+    """
+    pack: LibraryPackRow
+    members: tuple[LibraryPackMemberRow, ...]
+    uid_map: Mapping[str, str]  # source member uid → remapped member uid
+    missing_dependencies: tuple[str, ...] = ()
+    created: bool = True
 
 
 def _coerce_kind(library_kind: str | LibraryKind) -> LibraryKind:
@@ -613,6 +632,236 @@ class _PackOps:
         )
 
 
+def _instance_system_name(world_uid: str, source_system_name: str) -> str:
+    """Deterministic ``system_name`` of a world instance pack."""
+    return f"world.{world_uid}.instance.{source_system_name}"
+
+
+def _uid_map_for(
+    members: Iterable[LibraryPackMemberRow], pack_uid: str
+) -> dict[str, str]:
+    """source member uid → member uid under ``pack_uid`` (central formula)."""
+    return {
+        m.template_uid: library_uid(
+            LibraryKind(m.library_kind), m.local_uid, pack_uid=pack_uid
+        )
+        for m in members
+    }
+
+
+class _RemapOps:
+    """``instantiate_pack`` / ``copy_pack`` — the TZ §2 snapshot remap job.
+
+    A copy+remap of the whole pack (partial instances do not exist, §1):
+    a new ``pack_uid`` under the new owner, members minted by the
+    central formula, ``source_template_uid``/``source_pack_uid``
+    provenance, internal body refs rewritten, refs to other packs
+    untouched. The source pack is never modified.
+    """
+
+    def __init__(self, scope: _PackScope, pack_ops: _PackOps) -> None:
+        self._scope = scope
+        self._packs = pack_ops  # get()
+
+    async def instantiate(
+        self, source_pack_uid: str, world_uid: str
+    ) -> PackRemapResult:
+        scope = self._scope
+        source = await self._packs.get(source_pack_uid)
+        if source.owner_world_uid is not None:
+            raise LibraryPackValidationError(
+                f"pack '{source.system_name}' is world-owned — only engine "
+                "libraries instantiate into worlds (TZ §1.1)"
+            )
+        if is_default_pack_uid(source.pack_uid):
+            raise LibraryPackValidationError(
+                f"pack '{source.system_name}' is a declared default — already "
+                "available to every world; an owned instance would be cut "
+                "off from canonical attach (TZ §6)"
+            )
+        world = await scope.worlds.find_by_id(world_uid)
+        if world is None:
+            raise LibraryPackValidationError(
+                f"world '{world_uid}' does not exist"
+            )
+        existing = await scope.packs.find_instance(world_uid, source.pack_uid)
+        if existing is not None:
+            # Re-instantiate = the same instance identity (TZ §2), not a
+            # duplicate; member/body rewrite lands with step 4c.
+            members = await scope.members.list_by_pack(existing.pack_uid)
+            missing = await scope.diagnose_missing(existing)
+            return PackRemapResult(
+                pack=existing,
+                members=tuple(members),
+                uid_map={
+                    m.source_template_uid: m.template_uid
+                    for m in members
+                    if m.source_template_uid is not None
+                },
+                missing_dependencies=tuple(sorted(missing)),
+                created=False,
+            )
+        return await self._copy(
+            source,
+            system_name=_instance_system_name(world_uid, source.system_name),
+            owner_world_uid=world_uid,
+            world=world,
+        )
+
+    async def copy(
+        self,
+        source_pack_uid: str,
+        *,
+        system_name: str | None = None,
+    ) -> PackRemapResult:
+        """Publish world→engine — the same remap with ``owner=NULL``."""
+        source = await self._packs.get(source_pack_uid)
+        if source.owner_world_uid is None:
+            raise LibraryPackValidationError(
+                f"pack '{source.system_name}' is an engine library — "
+                "copy_pack publishes world-owned packs (TZ §4.1)"
+            )
+        return await self._copy(
+            source,
+            system_name=system_name or f"{source.system_name}.published",
+            owner_world_uid=None,
+        )
+
+    async def _copy(
+        self,
+        source: LibraryPackRow,
+        *,
+        system_name: str,
+        owner_world_uid: str | None,
+        world: World | None = None,
+    ) -> PackRemapResult:
+        scope = self._scope
+        system_name = (system_name or "").strip()
+        if not system_name:
+            raise LibraryPackValidationError("system_name is required")
+        new_pack_uid = library_uid(LibraryKind.LIBRARY_PACKS, system_name)
+        if is_default_pack_uid(new_pack_uid):
+            raise LibraryPackReadOnlyError(
+                f"system_name '{system_name}' resolves to a declared default "
+                "pack — defaults arrive only via the trusted source (TZ §6)"
+            )
+        if (
+            await scope.packs.get_by_uid(new_pack_uid) is not None
+            or await scope.packs.get_by_system_name(system_name) is not None
+        ):
+            raise LibraryPackConflictError(
+                f"pack system_name '{system_name}' already exists"
+            )
+        members = await scope.members.list_by_pack(source.pack_uid)
+        uid_map = _uid_map_for(members, new_pack_uid)
+        if world is not None:
+            await self._require_local_uids_free(members, world.world_uid)
+
+        pack_row = LibraryPackRow(
+            pack_uid=new_pack_uid,
+            system_name=system_name,
+            pack_name=source.pack_name,
+            display_name=source.display_name,
+            version=source.version,
+            owner_world_uid=owner_world_uid,
+            source_pack_uid=source.pack_uid,
+        )
+        dep_rows = [
+            LibraryPackDependencyRow(new_pack_uid, dep.required_pack_uid)
+            for dep in await scope.deps.list_for_pack(source.pack_uid)
+        ]
+        new_rows: list[LibraryPackMemberRow] = []
+        per_kind: dict[str, list[RemappedMember]] = {}
+
+        async def _write() -> None:
+            try:
+                await scope.packs.insert(pack_row)
+            except sqlite3.IntegrityError as exc:
+                raise LibraryPackConflictError(
+                    f"pack '{system_name}' conflicts with an existing row: {exc}"
+                ) from exc
+            if dep_rows:
+                await scope.deps.insert_missing(dep_rows)
+            for src in members:
+                adapter = scope.adapter_for(LibraryKind(src.library_kind))
+                body = await adapter.read_body(src.template_uid)
+                if body is None:
+                    raise LibraryPackValidationError(
+                        f"source member '{src.template_uid}' has no body — "
+                        "incomplete source pack, cannot remap"
+                    )
+                new_uid = uid_map[src.template_uid]
+                outline = await adapter.write_body(
+                    adapter.remap_body(
+                        body, template_uid=new_uid, uid_map=uid_map
+                    ),
+                    local_uid=src.local_uid,
+                    template_uid=new_uid,
+                    pack=pack_row,
+                    world=world,
+                    source_file=await adapter.body_source_file(src.template_uid),
+                )
+                member = LibraryPackMemberRow(
+                    template_uid=new_uid,
+                    pack_uid=new_pack_uid,
+                    library_kind=src.library_kind,
+                    local_uid=src.local_uid,
+                    source_template_uid=src.template_uid,
+                )
+                new_rows.append(member)
+                per_kind.setdefault(src.library_kind, []).append(
+                    RemappedMember(member=member, outline=outline)
+                )
+            await scope.members.insert_missing(new_rows)
+            if world is not None:
+                # Dual-write + world-side refs (TZ §2): pointers land on
+                # the instance member uids; refs to source members follow
+                # the same map. Refetch between adapters — two kinds can
+                # share one world column.
+                for kind, kind_members in per_kind.items():
+                    fresh = await scope.worlds.get_by_id(world.world_uid)
+                    await scope.adapter_for(LibraryKind(kind)).remap_world_refs(
+                        fresh, uid_map, kind_members
+                    )
+
+        await scope.atomic(_write)
+        missing = await scope.diagnose_missing(pack_row)
+        logger.info(
+            "packs | remap %s → %s owner=%s members=%d",
+            source.pack_uid, new_pack_uid, owner_world_uid, len(new_rows),
+        )
+        return PackRemapResult(
+            pack=pack_row,
+            members=tuple(new_rows),
+            uid_map=uid_map,
+            missing_dependencies=tuple(sorted(missing)),
+        )
+
+    async def _require_local_uids_free(
+        self,
+        members: Iterable[LibraryPackMemberRow],
+        world_uid: str,
+    ) -> None:
+        """``local_uid`` is the identity axis: a collision between two
+        world-owned packs of the same world rejects the instantiate
+        (TZ §1.1). Default records are overridden by layer priority —
+        not checked here."""
+        taken = {
+            (m.library_kind, m.local_uid)
+            for m in await self._scope.members.list_for_world(world_uid)
+        }
+        collisions = sorted(
+            f"{m.library_kind}:{m.local_uid}"
+            for m in members
+            if (m.library_kind, m.local_uid) in taken
+        )
+        if collisions:
+            raise LibraryPackConflictError(
+                f"local_uid collision in world '{world_uid}' packs: "
+                f"{collisions} (TZ §1.1)"
+            )
+
+
 class LibraryPackService:
     """Pack + member CRUD with ownership enforcement — step 4a facade."""
 
@@ -636,6 +885,7 @@ class LibraryPackService:
         )
         self._member_ops = _MemberOps(self._scope)
         self._pack_ops = _PackOps(self._scope, self._member_ops)
+        self._remap_ops = _RemapOps(self._scope, self._pack_ops)
 
     # ------------------------------------------------------------------
     # Pack CRUD — delegated to the pack write job
@@ -749,6 +999,41 @@ class LibraryPackService:
         """
         return await self._pack_ops.import_fs_pack(
             library_kind, path, domain_root=domain_root
+        )
+
+    # ------------------------------------------------------------------
+    # Remap operations (TZ §2) — delegated to the remap job
+    # ------------------------------------------------------------------
+
+    async def instantiate_pack(
+        self, source_pack_uid: str, *, world_uid: str
+    ) -> PackRemapResult:
+        """Snapshot-instantiate an engine library into a world (TZ §1.1/§2).
+
+        Full-pack copy: members get deterministic uids from the
+        world-owned instance, ``source_pack_uid``/``source_template_uid``
+        record provenance, internal body refs and declared world-side
+        refs (pick-policy fields, registry pointers, layout-embedded
+        structure refs) are repointed at the instance members — pointers
+        never aim at a source member. A ``local_uid`` shared with
+        another world-owned pack of the world is a collision, not a
+        merge. Re-instantiating the same source returns the existing
+        instance (``created=False``); member rewrite is step 4c.
+        """
+        return await self._remap_ops.instantiate(source_pack_uid, world_uid)
+
+    async def copy_pack(
+        self, source_pack_uid: str, *, system_name: str | None = None
+    ) -> PackRemapResult:
+        """Publish a world-owned pack to the engine catalog (TZ §4.1).
+
+        The same §2 remap with ``owner_world_uid=None`` — the source
+        world pack, its members and its registry pointers are not
+        touched; editing the published library never reaches instances.
+        ``system_name`` defaults to ``{source}.published``.
+        """
+        return await self._remap_ops.copy(
+            source_pack_uid, system_name=system_name
         )
 
     # ------------------------------------------------------------------

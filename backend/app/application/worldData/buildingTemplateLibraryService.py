@@ -112,7 +112,8 @@ class BuildingTemplateLibraryService:
             system_name=outline.system_name,
             display_name=outline.display_name,
             structure_type=_body_structure_type(outline),
-            version=outline.version,
+            # PlotLayoutTemplate carries no version — the row model default applies.
+            version=getattr(outline, "version", BuildingTemplateRow.version),
             data=outline.model_dump(mode="json"),
             source_file=source_file,
         )
