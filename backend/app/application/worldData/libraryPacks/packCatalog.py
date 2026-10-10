@@ -8,6 +8,8 @@ repeated import is uid-stable/idempotent.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.dataModel.libraryPacks.packManifest import LibraryPackManifest
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
@@ -67,14 +69,26 @@ def dependency_rows_for(
     ]
 
 
+@dataclass(frozen=True)
+class PackCatalogRepos:
+    """Bundle of pack-catalog repositories — one ctor param for consumers.
+
+    ``deps`` is optional: flows that never attach dependency rows
+    (world-owned legacy member writes) wire only packs + members.
+    """
+
+    packs: ILibraryPackRepository
+    members: ILibraryPackMemberRepository
+    deps: ILibraryPackDependencyRepository | None = None
+
+
 async def attach_pack_catalog(
     manifest: LibraryPackManifest,
-    *,
-    packs: ILibraryPackRepository,
-    members: ILibraryPackMemberRepository,
-    deps: ILibraryPackDependencyRepository,
+    repos: PackCatalogRepos | None,
 ) -> None:
     """Write pack + members + dependencies via insert-missing (never replaces)."""
-    await packs.insert_missing([pack_row_for(manifest)])
-    await members.insert_missing(member_rows_for(manifest))
-    await deps.insert_missing(dependency_rows_for(manifest))
+    if repos is None or repos.deps is None:
+        raise RuntimeError("pack catalog repositories are not wired")
+    await repos.packs.insert_missing([pack_row_for(manifest)])
+    await repos.members.insert_missing(member_rows_for(manifest))
+    await repos.deps.insert_missing(dependency_rows_for(manifest))

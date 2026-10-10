@@ -439,7 +439,9 @@ class OwnershipAndDualWriteTests(_ServiceCase):
             body=_relief_body("meadow"), world_uid="w3",
         )
         await self.container.world_service().update(
-            "w3", {"library_pins": [pin_for_member(_RELIEF, "meadow")]}
+            "w3", {"library_pins": [
+                pin_for_member(_RELIEF, "meadow").model_dump(mode="json")
+            ]}
         )
         with self.assertRaises(LibraryPackInUseError) as ctx:
             await self.service.delete_member(member.template_uid, world_uid="w3")

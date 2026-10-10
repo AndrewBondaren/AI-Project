@@ -245,3 +245,42 @@ def _reject_undeclared_json(pack_dir: Path, loaded: list[LoadedMember]) -> None:
             f"undeclared *.json in pack '{pack_dir.name}': {stray} — "
             "every body file is a manifest member"
         )
+
+
+def resolve_owning_pack(
+    file: Path,
+    *,
+    domain_root: Path,
+    library_kind: LibraryKind,
+) -> LoadedPack:
+    """The pack owning a member ``file`` — its parent dir under the domain root.
+
+    A lone file directly under the domain root is rejected: a template
+    exists only as a declared pack member (template-pack-layout).
+    """
+    domain_root = domain_root.resolve()
+    if file.parent.resolve() == domain_root:
+        raise PackManifestError(
+            f"lone file '{file.name}' in domain root is not imported — "
+            "templates arrive as members of a pack with pack.manifest.json"
+        )
+    return load_pack_manifest(
+        file.parent, domain_root=domain_root, library_kind=library_kind
+    )
+
+
+def require_declared_member(loaded: LoadedPack, file: Path) -> LoadedMember:
+    """The manifest member owning ``file``, or reject."""
+    member = loaded.member_for_file(file)
+    if member is None:
+        raise PackManifestError(
+            f"file '{file.name}' is not a declared member of pack "
+            f"'{loaded.manifest.system_name}'"
+        )
+    return member
+
+
+def source_file_label(file: Path, *, domain_root: Path, root_label: str) -> str:
+    """``{root_label}/<pack>/<file>.json`` — diagnostic source label."""
+    rel = file.resolve().relative_to(domain_root.resolve())
+    return f"{root_label}/{rel.as_posix()}"

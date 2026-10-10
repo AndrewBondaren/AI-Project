@@ -13,6 +13,7 @@ from app.application.jsonValidation.worldRow import livestock
 from app.application.worldData.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
 )
+from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.livestock.worldLivestockRegistry import WorldLivestockRegistry
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
@@ -147,7 +148,7 @@ class LivestockTemplateImportTest(unittest.IsolatedAsyncioTestCase):
         worlds.get_by_id = AsyncMock(return_value=world)
         service = BuildingTemplateLibraryService(
             repo=MagicMock(), world_service=worlds,
-            packs=AsyncMock(), members=AsyncMock(),
+            catalog=PackCatalogRepos(packs=AsyncMock(), members=AsyncMock()),
         )
         result = await service.import_bodies_into_world("w1", [{
             "system_name": "confused_pen",

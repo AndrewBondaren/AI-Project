@@ -106,6 +106,19 @@ class Database:
             yield self.main_conn
 
     @asynccontextmanager
+    async def transaction_if_needed(self):
+        """``transaction()`` unless the caller is already inside one —
+
+        outer transaction wins (atomicity belongs to the outermost unit
+        of work); standalone calls get their own BEGIN/COMMIT.
+        """
+        if _in_transaction.get():
+            yield self.main_conn
+            return
+        async with self.transaction() as conn:
+            yield conn
+
+    @asynccontextmanager
     async def transaction_on(self, conn: aiosqlite.Connection):
         """BEGIN/COMMIT/ROLLBACK on the given connection (TR-PAR-6 writer txn)."""
         token = _in_transaction.set(True)

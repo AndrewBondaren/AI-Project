@@ -2079,6 +2079,25 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 ---
 
+## Library packs — шаг 4a transitional leftovers (LIBPACK-T)
+
+**Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model.md`](../.cursor/plans/library-packs-model.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt.md`](../.cursor/plans/library-packs-4a-review-debt.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **LIBPACK-T-1** | medium | **open** | P1 | владение | Ownerless write-paths ещё открыты: `relief_template_uid()`, `building_template_uid()`, `upsert_outline(pack_uid=None)` в relief/building libs пишут тела вне членства (тело без членства владельца не имеет, TZ §1.1) | Закрыть/запретить ownerless-paths когда все писатели на `LibraryPackService`; не позднее 5b |
+| **LIBPACK-T-2** | medium | **open** | P1 | interim API | `ReliefWorldImportService.import_library_uid_into_world` — копия engine-тела в `legacy` world-пак; docstring сам называет себя interim | Заменить на `instantiate_pack` — **шаг 4b** |
+| **LIBPACK-T-3** | low | **open** | P2 | transitional | `get_by_system_name` на domain repos deprecated: при >1 строке обязан ошибкой — коллизии `system_name` возможны с 4a (контракт шага 2) | Снять с registry-миграцией — **шаг 5b** |
+| **LIBPACK-T-4** | low | **open** | P3 | производительность | `_swap_pointer` O(реестр) на член → `delete_pack` O(members × registry); pointer-write идёт через полный `worlds.update` (normalize+merge всей строки мира) | Принято: реестры умирают в 5b, оптимизировать не нужно |
+| **LIBPACK-T-5** | medium | **open** | P1 | used-member policy | `member_usages` покрывает pins (`library_pins`) + `relief_pick_policy.*.default_template_uid`; refs **внутри тел** (`main_building.structure` и прочие cross-template ссылки) не сканируются — удаление члена может оставить битый ref | Referenced-set — **шаг 4c** (`member_usages` — точка расширения адаптера) |
+| **LIBPACK-T-6** | info | **open** | P3 | конвенция | `from app.db.database import _in_transaction` — приватный ContextVar на ~15 файлах (repos, library services, canonicalLibrary) | Отдельная тема: публичный флаг транзакции на `Database` |
+
+**Related (info):** member identity иммутабельна (update = замена тела) и `source_pack_uid`/`source_template_uid` колонки заведены, но не пишутся — это контракт, не долг; remap заполняет их в 4b.
+
+**Agent pointer:** [`.cursor/plans/library-packs-model.md`](../.cursor/plans/library-packs-model.md) **шаг 4a**; SoT [`tz_template_library_packs.md`](./tz_template_library_packs.md) §0.2/§1.1/§3.
+
+---
+
 ## Out of scope (не tech debt этого registry)
 
 - Imperial conversion in generators (display only)
@@ -2092,6 +2111,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-10 | **LIBPACK-T** open: шаг 4a `library-packs-model` — ownerless write-paths (T-1), interim `import_library_uid_into_world` → 4b (T-2), `get_by_system_name` deprecated → 5b (T-3), `_swap_pointer` O(members×registry) accepted (T-4), referenced-set used-check → 4c (T-5), `_in_transaction` convention (T-6). Code smells шага — `library-packs-4a-review-debt.md`. |
 | 2026-10-06 | **NC-10** гидрология ✅: loader fine, coarse view в `build_hydrology_master_input`, `resolve_declared_river_intents(space=)`, rename `*_meter*` → `*_fine*`; `tz_terrain_hydrology` U20/U21/C1. Остались горы, pack, locals. |
 | 2026-09-07 | **NC-10** open: leftover `_m` / «метры» вне coordinate hub (горы, гидрология, pack `light_m`/`tile_m`, `sparse_meter_hydro`) после rename на fine grid. Не NC-1a/c/g, не NC-2 parcel. Слайс по кластеру. |
 | 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |

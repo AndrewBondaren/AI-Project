@@ -26,11 +26,10 @@ from app.application.worldData.libraryPacks.legacyPack import (
     ensure_legacy_pack,
     legacy_member_row,
 )
-from app.db.database import Database, _in_transaction
+from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.db.database import Database
 from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
-from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
-from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 
 logger = logging.getLogger(__name__)
 _PLOT_ONLY_FIELDS = frozenset(PlotLayoutTemplate.model_fields) - frozenset(BuildingTemplateOutline.model_fields)
@@ -44,12 +43,11 @@ def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:
     return list(building_template_registry(world).root)
 
 
-def _body_structure_type(body) -> str:
+def _body_structure_type(body: BuildingTemplateOutline | PlotLayoutTemplate) -> str:
     """Row denorm: outline's primary purpose, or the plot's family (plot bodies)."""
-    value = getattr(body, "structure_type", None)
-    if value is None:
-        value = getattr(body, "plot_type", "")
-    return str(getattr(value, "value", value))
+    if isinstance(body, PlotLayoutTemplate):
+        return str(body.plot_type.value)
+    return body.structure_type
 
 
 class BuildingTemplateLibraryService:
@@ -60,14 +58,12 @@ class BuildingTemplateLibraryService:
         world_service: WorldService,
         *,
         db: Database | None = None,
-        packs: ILibraryPackRepository | None = None,
-        members: ILibraryPackMemberRepository | None = None,
+        catalog: PackCatalogRepos | None = None,
     ) -> None:
         self._repo = repo
         self._worlds = world_service
         self._db = db
-        self._packs = packs
-        self._members = members
+        self._catalog = catalog
 
     async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
         """Hydrate plot bodies; valid outline-only bodies have no packing layout."""
@@ -105,7 +101,7 @@ class BuildingTemplateLibraryService:
 
     async def upsert_outline(
         self,
-        outline: BuildingTemplateOutline,
+        outline: BuildingTemplateOutline | PlotLayoutTemplate,
         *,
         source_file: str | None = None,
         pack_uid: str | None = None,
@@ -130,8 +126,8 @@ class BuildingTemplateLibraryService:
     ) -> ImportResult:
         if not isinstance(bodies, list):
             raise BundleValidationError("building_templates section must be an array")
-        if self._db is not None and not _in_transaction.get():
-            async with self._db.transaction():
+        if self._db is not None:
+            async with self._db.transaction_if_needed():
                 return await self._import_bodies(world_uid, bodies)
         return await self._import_bodies(world_uid, bodies)
 
@@ -141,12 +137,14 @@ class BuildingTemplateLibraryService:
         bodies: list[dict],
     ) -> ImportResult:
         """Manifest-less bodies → world-owned ``legacy`` pack members (plan step 3)."""
-        if self._packs is None or self._members is None:
+        if not bodies:
+            return ImportResult(total=0, succeeded=0, failed=0, errors=[])
+        if self._catalog is None:
             raise RuntimeError(
                 "BuildingTemplateLibraryService: pack catalog repositories are not wired"
             )
         world = await self._worlds.get_by_id(world_uid)
-        legacy = await ensure_legacy_pack(world_uid, self._packs)
+        legacy = await ensure_legacy_pack(world_uid, self._catalog.packs)
         succeeded = 0
         errors = []
         for i, raw in enumerate(bodies):
@@ -155,7 +153,7 @@ class BuildingTemplateLibraryService:
                 row = await self.upsert_outline(
                     outline, source_file="bundle", pack_uid=legacy.pack_uid
                 )
-                await self._members.insert_missing([
+                await self._catalog.members.insert_missing([
                     legacy_member_row(
                         LibraryKind.BUILDING_TEMPLATES, outline.system_name,
                         world_uid=world_uid,

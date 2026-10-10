@@ -38,10 +38,10 @@ from app.application.worldData.generators.terrain.relief.canal.outlineCollect im
     collect_outline_structure_canal_refs,
     collect_outline_structure_refs,
 )
-from app.db.database import Database, _in_transaction
+from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.db.database import Database
 from app.db.models.libraryPackMember import LibraryPackMemberRow
-from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
-from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
+from app.db.models.reliefTemplate import ReliefTemplateRow
 
 
 class ReliefWorldImportService:
@@ -51,14 +51,12 @@ class ReliefWorldImportService:
         world_service: WorldService,
         library: ReliefTemplateLibraryService,
         *,
-        packs: ILibraryPackRepository,
-        members: ILibraryPackMemberRepository,
+        catalog: PackCatalogRepos,
         db: Database | None = None,
     ) -> None:
         self._worlds = world_service
         self._library = library
-        self._packs = packs
-        self._members = members
+        self._catalog = catalog
         self._db = db
 
     async def import_outlines_into_world(
@@ -67,8 +65,8 @@ class ReliefWorldImportService:
         outlines: list[dict],
     ) -> dict:
         """Bodies → world-owned ``legacy`` members + registry pointers + R34 sync."""
-        if self._db is not None and not _in_transaction.get():
-            async with self._db.transaction():
+        if self._db is not None:
+            async with self._db.transaction_if_needed():
                 return await self._import_outlines(world_uid, outlines)
         return await self._import_outlines(world_uid, outlines)
 
@@ -78,28 +76,50 @@ class ReliefWorldImportService:
         outlines: list[dict],
     ) -> dict:
         world = await self._worlds.get_by_id(world_uid)
-        legacy = await ensure_legacy_pack(world_uid, self._packs)
         imported_uids: list[str] = []
         for raw in outlines:
             outline = self.prepare_body(world, raw)
-            row = await self._library.upsert_outline(
-                outline, source_file="bundle", pack_uid=legacy.pack_uid
-            )
-            await self._members.insert_missing([
-                legacy_member_row(
+            row = await self._attach_member(
+                world_uid,
+                outline,
+                source_file="bundle",
+                member=legacy_member_row(
                     LibraryKind.RELIEF_TEMPLATES, outline.system_name,
                     world_uid=world_uid,
                 ),
-            ])
+            )
             imported_uids.append(row.template_uid)
-            await self._ensure_registry_pointer(world_uid, row.template_uid, outline)
-            await self._sync_terrain_from_outline(world_uid, outline, row.template_uid)
 
         return {"imported": len(imported_uids), "uids": imported_uids}
 
-    def prepare_body(self, world, raw: dict, *, ctx: ResolveContext | None = None) -> ReliefTemplate:
+    async def _attach_member(
+        self,
+        world_uid: str,
+        outline: ReliefTemplate,
+        *,
+        source_file: str,
+        member: LibraryPackMemberRow,
+    ) -> ReliefTemplateRow:
+        """Body → world-owned ``legacy`` member + registry pointer + R34 sync."""
+        legacy = await ensure_legacy_pack(world_uid, self._catalog.packs)
+        row = await self._library.upsert_outline(
+            outline, source_file=source_file, pack_uid=legacy.pack_uid
+        )
+        await self._catalog.members.insert_missing([member])
+        await self._ensure_registry_pointer(world_uid, row.template_uid, outline)
+        await self._sync_terrain_from_outline(world_uid, outline, row.template_uid)
+        return row
+
+    def prepare_body(
+        self,
+        world,
+        raw: dict,
+        *,
+        ctx: ResolveContext | None = None,
+        template_uid: str | None = None,
+    ) -> ReliefTemplate:
         outline = resolve_model(ReliefTemplate, raw, ctx=ctx)
-        warn_template_invalid_geom(outline)
+        warn_template_invalid_geom(outline, template_uid=template_uid)
         barrier_keys = {e.system_type for e in barrier_templates(world).root}
         self._validate_structure_refs(outline, barrier_keys)
         self._validate_structure_canal(outline, world)
@@ -116,8 +136,8 @@ class ReliefWorldImportService:
         world's legacy pack (pointer must target a world-owned member), with
         the engine uid kept as ``source_template_uid`` provenance.
         """
-        if self._db is not None and not _in_transaction.get():
-            async with self._db.transaction():
+        if self._db is not None:
+            async with self._db.transaction_if_needed():
                 return await self._import_library_uid(world_uid, template_uid)
         return await self._import_library_uid(world_uid, template_uid)
 
@@ -127,31 +147,18 @@ class ReliefWorldImportService:
         template_uid: str,
     ) -> dict:
         row = await self._library.get_by_uid(template_uid)
-        outline = resolve_model(ReliefTemplate, row.data, label=template_uid)
-        warn_template_invalid_geom(outline, template_uid=template_uid)
         world = await self._worlds.get_by_id(world_uid)
-        barrier_keys = {
-            e.system_type for e in barrier_templates(world).root
-        } if barrier_templates(world).root else set()
-        self._validate_structure_refs(outline, barrier_keys)
-        self._validate_structure_canal(outline, world)
-        legacy = await ensure_legacy_pack(world_uid, self._packs)
-        new_row = await self._library.upsert_outline(
+        outline = self.prepare_body(world, row.data, template_uid=template_uid)
+        new_row = await self._attach_member(
+            world_uid,
             outline,
             source_file=row.source_file or "library",
-            pack_uid=legacy.pack_uid,
-        )
-        await self._members.insert_missing([
-            LibraryPackMemberRow(
-                template_uid=new_row.template_uid,
-                pack_uid=legacy.pack_uid,
-                library_kind=LibraryKind.RELIEF_TEMPLATES.value,
-                local_uid=outline.system_name,
+            member=legacy_member_row(
+                LibraryKind.RELIEF_TEMPLATES, outline.system_name,
+                world_uid=world_uid,
                 source_template_uid=row.template_uid,
             ),
-        ])
-        await self._ensure_registry_pointer(world_uid, new_row.template_uid, outline)
-        await self._sync_terrain_from_outline(world_uid, outline, new_row.template_uid)
+        )
         return {"imported": 1, "uids": [new_row.template_uid]}
 
     def _validate_structure_refs(

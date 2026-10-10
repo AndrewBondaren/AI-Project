@@ -72,6 +72,12 @@ _FORMER_UID_TABLES: Mapping[LibraryKind, Mapping[str, str]] = {
     LibraryKind.RELIEF_TEMPLATES: RELIEF_SMOKE_003_FORMER_UIDS,
 }
 
+# Reverse view: member local_uid → its former (pre-migration) uid.
+_FORMER_LOCAL_TO_UID: Mapping[LibraryKind, Mapping[str, str]] = {
+    kind: {local: old for old, local in table.items()}
+    for kind, table in _FORMER_UID_TABLES.items()
+}
+
 
 def pack_uid_for(system_name: str) -> str:
     """Pack uid by the central formula (``library_uid(LIBRARY_PACKS, …)``)."""
@@ -117,16 +123,13 @@ def mapped_template_uid(old_uid: str) -> str | None:
 def former_template_uid(kind: LibraryKind, local_uid: str) -> str | None:
     """The pre-migration uid of a shipped member (``source_template_uid``
     provenance), or None when the map has no former identity for it."""
-    table = _FORMER_UID_TABLES.get(LibraryKind(kind), {})
-    for old_uid, local in table.items():
-        if local == local_uid:
-            return old_uid
-    return None
+    return _FORMER_LOCAL_TO_UID.get(LibraryKind(kind), {}).get(local_uid)
 
 
-def pin_for_member(kind: LibraryKind, local_uid: str) -> dict:
-    """Pin entry form for a migrated pointer — ``worlds.library_pins[]``."""
+def pin_for_member(kind: LibraryKind, local_uid: str) -> LibraryPinEntry:
+    """Pin entry for a migrated pointer — ``worlds.library_pins[]``;
+    the caller dumps to JSON when writing the world row."""
     return LibraryPinEntry(
         library_kind=LibraryKind(kind).value,
         local_uid=local_uid,
-    ).model_dump(mode="json")
+    )

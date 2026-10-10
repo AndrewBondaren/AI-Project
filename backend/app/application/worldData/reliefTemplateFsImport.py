@@ -19,10 +19,12 @@ from pathlib import Path
 from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.manifest import (
     LoadedMember,
-    LoadedPack,
     PackManifestError,
     load_pack_manifest,
     member_file_stem,
+    require_declared_member,
+    resolve_owning_pack,
+    source_file_label,
 )
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
@@ -71,50 +73,27 @@ async def import_relief_path(
 
     if not p.exists():
         raise ReliefNotFoundError(f"Path not found: {path}")
-    if p.is_file():
-        loaded = _load_owning_pack(p, domain_root=root)
-        member = _declared_member(loaded, p)
-        rows = [await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)]
-        return ReliefPackImport(manifest=loaded.manifest, rows=rows)
-    if p.is_dir():
-        loaded = _load_pack_dir(p, domain_root=root)
-        rows = [
-            await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)
-            for member in loaded.members
-        ]
-        return ReliefPackImport(manifest=loaded.manifest, rows=rows)
-    raise ReliefValidationError(f"Not a file or directory: {path}")
-
-
-def _load_pack_dir(pack_dir: Path, *, domain_root: Path) -> LoadedPack:
     try:
-        return load_pack_manifest(
-            pack_dir, domain_root=domain_root, library_kind=_LIBRARY_KIND
-        )
+        if p.is_file():
+            loaded = resolve_owning_pack(
+                p, domain_root=root, library_kind=_LIBRARY_KIND
+            )
+            members = [require_declared_member(loaded, p)]
+        elif p.is_dir():
+            loaded = load_pack_manifest(
+                p, domain_root=root, library_kind=_LIBRARY_KIND
+            )
+            members = loaded.members
+        else:
+            raise ReliefValidationError(f"Not a file or directory: {path}")
     except PackManifestError as exc:
         logger.warning("relief | library reject %s", exc)
         raise ReliefValidationError(str(exc)) from exc
-
-
-def _load_owning_pack(file: Path, *, domain_root: Path) -> LoadedPack:
-    """The pack owning ``file`` — its parent dir under the domain root."""
-    if file.parent.resolve() == domain_root.resolve():
-        msg = (
-            f"lone file '{file.name}' in domain root is not imported — "
-            "templates arrive as members of a pack with pack.manifest.json"
-        )
-        logger.warning("relief | library reject %s", msg)
-        raise ReliefValidationError(msg)
-    return _load_pack_dir(file.parent, domain_root=domain_root)
-
-
-def _declared_member(loaded: LoadedPack, file: Path) -> LoadedMember:
-    member = loaded.member_for_file(file)
-    if member is None:
-        msg = f"file '{file.name}' is not a declared member of pack '{loaded.manifest.system_name}'"
-        logger.warning("relief | library reject %s", msg)
-        raise ReliefValidationError(msg)
-    return member
+    rows = [
+        await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)
+        for member in members
+    ]
+    return ReliefPackImport(manifest=loaded.manifest, rows=rows)
 
 
 async def _import_file(
@@ -133,7 +112,7 @@ async def _import_file(
         raise ReliefValidationError(f"Invalid JSON: {file}") from exc
     if not isinstance(raw, dict):
         raise ReliefValidationError(f"Template JSON must be object: {file}")
-    source = _source_file_label(file, domain_root=domain_root)
+    source = source_file_label(file, domain_root=domain_root, root_label=DOMAIN_ROOT)
     return await upsert(
         raw,
         source_file=source,
@@ -141,8 +120,3 @@ async def _import_file(
         pack_uid=manifest.pack_uid,
         local_uid=member.local_uid,
     )
-
-
-def _source_file_label(file: Path, *, domain_root: Path) -> str:
-    rel = file.resolve().relative_to(domain_root.resolve())
-    return f"{DOMAIN_ROOT}/{rel.as_posix()}"

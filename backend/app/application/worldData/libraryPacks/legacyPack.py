@@ -43,16 +43,25 @@ def legacy_pack_row(world_uid: str) -> LibraryPackRow:
 
 
 def legacy_member_row(
-    kind: LibraryKind, local_uid: str, *, world_uid: str
+    kind: LibraryKind,
+    local_uid: str,
+    *,
+    world_uid: str,
+    source_template_uid: str | None = None,
 ) -> LibraryPackMemberRow:
     """Member row for a manifest-less body; ``source_template_uid`` keeps the
-    former uid when the migration map knows it (TZ §4 legacy, plan 5b)."""
+    former uid — an explicit arg wins, else the migration map's former
+    identity when it knows one (TZ §4 legacy, plan 5b)."""
     return LibraryPackMemberRow(
         template_uid=legacy_member_uid(kind, local_uid, world_uid=world_uid),
         pack_uid=legacy_pack_uid(world_uid),
         library_kind=LibraryKind(kind).value,
         local_uid=local_uid,
-        source_template_uid=former_template_uid(kind, local_uid),
+        source_template_uid=(
+            source_template_uid
+            if source_template_uid is not None
+            else former_template_uid(kind, local_uid)
+        ),
     )
 
 

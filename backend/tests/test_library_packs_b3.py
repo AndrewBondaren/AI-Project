@@ -29,6 +29,7 @@ from app.application.worldData.libraryPacks.legacyPack import (
     legacy_member_uid,
     legacy_pack_uid,
 )
+from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
 from app.application.worldData.libraryPacks.manifest import (
     PACK_MANIFEST_FILENAME,
     PackManifestError,
@@ -486,7 +487,7 @@ class UidMapTests(unittest.TestCase):
 
     def test_pin_form(self):
         self.assertEqual(
-            pin_for_member(_RELIEF, "open_land_soft"),
+            pin_for_member(_RELIEF, "open_land_soft").model_dump(mode="json"),
             {"library_kind": "relief_templates", "local_uid": "open_land_soft"},
         )
 
@@ -645,8 +646,7 @@ class LegacyBodyImportTests(_DbCase):
         service = ReliefWorldImportService(
             world_service=container.world_service(),
             library=container.relief_template_library_service(),
-            packs=self.packs,
-            members=self.members,
+            catalog=PackCatalogRepos(packs=self.packs, members=self.members),
             db=self.db,
         )
         body = {
@@ -683,8 +683,7 @@ class LegacyBodyImportTests(_DbCase):
             repo=container.building_template_repository(),
             world_service=container.world_service(),
             db=self.db,
-            packs=self.packs,
-            members=self.members,
+            catalog=PackCatalogRepos(packs=self.packs, members=self.members),
         )
         result = await service.import_bodies_into_world("w-build", [{
             "system_name": "mill_x",
@@ -739,6 +738,48 @@ class FsPackImportCatalogTests(_DbCase):
         self.assertEqual(
             len(await self.members.list_by_pack(loaded.manifest.pack_uid)), 13
         )
+
+
+class MemberIdentityGuardTests(_DbCase):
+    """``upsert_from_dict``: ``local_uid``/``pack_uid`` — live identity checks."""
+
+    async def test_relief_body_must_match_local_uid(self):
+        service = Container(None, self.db).relief_template_library_service()
+        with self.assertRaises(ReliefValidationError):
+            await service.upsert_from_dict(
+                {
+                    "system_name": "other_name",
+                    "display_name": "X",
+                    "context": "open_land",
+                },
+                local_uid="meadow_x",
+            )
+        row = await service.upsert_from_dict(
+            {
+                "system_name": "meadow_x",
+                "display_name": "Meadow",
+                "context": "open_land",
+            },
+            local_uid="meadow_x",
+        )
+        self.assertEqual(row.system_name, "meadow_x")
+
+    async def test_structure_body_must_match_member_identity(self):
+        service = Container(None, self.db).structure_template_library_service()
+        pack_uid = library_uid(_PACKS, "user.structures.x")
+        member_uid = library_uid(_STRUCT, "shop", pack_uid=pack_uid)
+        with self.assertRaises(StructureTemplateValidationError):
+            await service.upsert_from_dict(
+                {"system_name": "not-the-member-uid", "display_name": "Shop"},
+                local_uid="shop",
+                pack_uid=pack_uid,
+            )
+        row = await service.upsert_from_dict(
+            {"system_name": member_uid, "display_name": "Shop"},
+            local_uid="shop",
+            pack_uid=pack_uid,
+        )
+        self.assertEqual(row.template_uid, member_uid)
 
 
 if __name__ == "__main__":

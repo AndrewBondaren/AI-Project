@@ -38,13 +38,18 @@ from app.application.worldData.libraryPacks.errors import (
     LibraryPackReadOnlyError,
     LibraryPackValidationError,
 )
-from app.application.worldData.libraryPacks.packCatalog import attach_pack_catalog
+from app.application.worldData.libraryPacks.packCatalog import (
+    PackCatalogRepos,
+    attach_pack_catalog,
+)
 from app.application.worldData.worldService import WorldService
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
-from app.db.database import Database, _in_transaction
+from app.db.database import Database
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
+from app.db.models.reliefTemplate import ReliefTemplateRow
+from app.db.models.structureTemplate import StructureTemplateRow
 from app.db.models.world import World
 from app.db.repositories.iLibraryPackDependencyRepository import (
     ILibraryPackDependencyRepository,
@@ -72,7 +77,7 @@ class MemberDeleteResult:
 @dataclass(frozen=True)
 class PackImportResult:
     pack: LibraryPackRow
-    bodies: tuple[Any, ...]
+    bodies: tuple[ReliefTemplateRow | StructureTemplateRow, ...]
     missing_dependencies: tuple[str, ...] = ()
 
 
@@ -145,13 +150,14 @@ class _PackScope:
         self.packs = packs
         self.members = members
         self.deps = deps
+        self.catalog = PackCatalogRepos(packs=packs, members=members, deps=deps)
         self.worlds = world_service
         self.adapters = dict(adapters)
 
     async def atomic(self, op: Callable[[], Awaitable[Any]]) -> Any:
         """One unit of work; reuses an outer transaction when present."""
-        if self.db is not None and not _in_transaction.get():
-            async with self.db.transaction():
+        if self.db is not None:
+            async with self.db.transaction_if_needed():
                 return await op()
         return await op()
 
@@ -198,13 +204,15 @@ class _PackScope:
             return set()
         return required - await self.packs.existing_uids(sorted(required))
 
-    async def diagnose_missing(self, pack: LibraryPackRow) -> None:
+    async def diagnose_missing(self, pack: LibraryPackRow) -> set[str]:
+        """Log + return declared dependencies absent from the catalog."""
         missing = await self.missing_uids(pack.pack_uid)
         if missing:
             logger.warning(
                 "packs | pack=%s has missing dependencies: %s",
                 pack.system_name, sorted(missing),
             )
+        return missing
 
 
 class _MemberOps:
@@ -278,7 +286,7 @@ class _MemberOps:
     ) -> LibraryPackMemberRow:
         """Replace a member's body — member identity stays immutable."""
         scope = self._scope
-        member = await self._require_member(template_uid)
+        member = await self.require_member(template_uid)
         pack = await self._require_pack(member.pack_uid)
         scope.require_writable(pack)
         scope.require_owner_scope(pack, world_uid)
@@ -313,7 +321,7 @@ class _MemberOps:
         diagnostics so the caller can repair the dangling references.
         """
         scope = self._scope
-        member = await self._require_member(template_uid)
+        member = await self.require_member(template_uid)
         pack = await self._require_pack(member.pack_uid)
         scope.require_writable(pack)
         scope.require_owner_scope(pack, world_uid)
@@ -343,7 +351,7 @@ class _MemberOps:
         )
 
     async def read_body(self, template_uid: str) -> dict | None:
-        member = await self._require_member(template_uid)
+        member = await self.require_member(template_uid)
         return await self._scope.adapter_for(
             LibraryKind(member.library_kind)
         ).read_body(template_uid)
@@ -358,7 +366,31 @@ class _MemberOps:
             return []  # engine members are never inside a world's catalog
         return _pin_usages(world, member) + adapter.member_usages(world, member)
 
-    async def _require_member(self, template_uid: str) -> LibraryPackMemberRow:
+    async def teardown(
+        self,
+        members: Iterable[LibraryPackMemberRow],
+        world: World | None,
+    ) -> list[str]:
+        """Drop pointers + bodies of all members (pack delete path).
+
+        Members whose kind has no wired adapter get an orphan diagnostic;
+        their member rows still cascade with the pack delete.
+        """
+        diagnostics: list[str] = []
+        for member in members:
+            adapter = self._scope.adapters.get(LibraryKind(member.library_kind))
+            if adapter is None:
+                diagnostics.append(
+                    f"no adapter for kind '{member.library_kind}' — "
+                    f"body '{member.template_uid}' left orphaned"
+                )
+                continue
+            if world is not None:
+                await adapter.drop_pointer(world, member.template_uid)
+            await adapter.delete_body(member.template_uid)
+        return diagnostics
+
+    async def require_member(self, template_uid: str) -> LibraryPackMemberRow:
         member = await self._scope.members.get_by_uid(template_uid)
         if member is None:
             raise LibraryPackNotFoundError(f"member '{template_uid}' not found")
@@ -371,75 +403,14 @@ class _MemberOps:
         return pack
 
 
-async def _import_fs_pack(
-    scope: _PackScope,
-    library_kind: str | LibraryKind,
-    path: str | Path,
-    *,
-    domain_root: Path | None = None,
-) -> PackImportResult:
-    """Manifest-based FS import → engine library — bodies + catalog attach,
-    one unit of work (trusted-source write; see ``import_fs_pack``)."""
-    kind = _coerce_kind(library_kind)
-    adapter = scope.adapter_for(kind)
+class _PackOps:
+    """Pack-level read/write path of TZ §0.2/§3 — internal job."""
 
-    async def _write():
-        outcome = await adapter.import_fs_pack(path, domain_root=domain_root)
-        await attach_pack_catalog(
-            outcome.manifest,
-            packs=scope.packs,
-            members=scope.members,
-            deps=scope.deps,
-        )
-        return outcome
+    def __init__(self, scope: _PackScope, members: _MemberOps) -> None:
+        self._scope = scope
+        self._members = members  # member teardown on pack delete
 
-    outcome = await scope.atomic(_write)
-    pack = await scope.packs.get_by_uid(outcome.manifest.pack_uid)
-    if pack is None:
-        raise LibraryPackNotFoundError(
-            f"imported pack '{outcome.manifest.pack_uid}' missing after attach"
-        )
-    missing = await scope.missing_uids(pack.pack_uid)
-    if missing:
-        logger.warning(
-            "packs | imported pack=%s missing dependencies: %s",
-            pack.system_name, sorted(missing),
-        )
-    return PackImportResult(
-        pack=pack,
-        bodies=tuple(outcome.rows),
-        missing_dependencies=tuple(sorted(missing)),
-    )
-
-
-class LibraryPackService:
-    """Pack + member CRUD with ownership enforcement — step 4a facade."""
-
-    def __init__(
-        self,
-        *,
-        db: Database | None,
-        packs: ILibraryPackRepository,
-        members: ILibraryPackMemberRepository,
-        deps: ILibraryPackDependencyRepository,
-        world_service: WorldService,
-        adapters: dict[LibraryKind, PackDomainAdapter],
-    ) -> None:
-        self._scope = _PackScope(
-            db=db,
-            packs=packs,
-            members=members,
-            deps=deps,
-            world_service=world_service,
-            adapters=adapters,
-        )
-        self._member_ops = _MemberOps(self._scope)
-
-    # ------------------------------------------------------------------
-    # Pack CRUD
-    # ------------------------------------------------------------------
-
-    async def create_pack(
+    async def create(
         self,
         *,
         system_name: str,
@@ -449,12 +420,6 @@ class LibraryPackService:
         owner_world_uid: str | None = None,
         dependencies: Iterable[str] = (),
     ) -> LibraryPackRow:
-        """Create an engine (``owner_world_uid=None``) or world-owned pack.
-
-        Default-pack identity is reserved: a caller can never mint a pack
-        whose ``system_name`` resolves to a declared default uid (TZ §3).
-        Missing dependencies are diagnosed, not blocked (§3: no FK).
-        """
         scope = self._scope
         system_name = (system_name or "").strip()
         if not system_name:
@@ -507,26 +472,25 @@ class LibraryPackService:
         await scope.diagnose_missing(row)
         return row
 
-    async def get_pack(self, pack_uid: str) -> LibraryPackRow:
+    async def get(self, pack_uid: str) -> LibraryPackRow:
         pack = await self._scope.packs.get_by_uid(pack_uid)
         if pack is None:
             raise LibraryPackNotFoundError(f"pack '{pack_uid}' not found")
         return pack
 
-    async def find_pack(self, pack_uid: str) -> LibraryPackRow | None:
+    async def find(self, pack_uid: str) -> LibraryPackRow | None:
         return await self._scope.packs.get_by_uid(pack_uid)
 
-    async def list_packs(self) -> list[LibraryPackRow]:
-        """Administrative listing — never the availability catalog."""
+    async def list_all(self) -> list[LibraryPackRow]:
         return await self._scope.packs.list_all()
 
-    async def list_engine_packs(self) -> list[LibraryPackRow]:
+    async def list_engine(self) -> list[LibraryPackRow]:
         return await self._scope.packs.list_engine()
 
-    async def list_world_packs(self, owner_world_uid: str) -> list[LibraryPackRow]:
+    async def list_world_owned(self, owner_world_uid: str) -> list[LibraryPackRow]:
         return await self._scope.packs.list_world_owned(owner_world_uid)
 
-    async def update_pack_metadata(
+    async def update_metadata(
         self,
         pack_uid: str,
         *,
@@ -536,7 +500,7 @@ class LibraryPackService:
         world_uid: str | None = None,
     ) -> LibraryPackRow:
         """Mutable metadata only — identity/provenance/owner never change."""
-        pack = await self.get_pack(pack_uid)
+        pack = await self.get(pack_uid)
         self._scope.require_writable(pack)
         self._scope.require_owner_scope(pack, world_uid)
         updated = replace(
@@ -550,22 +514,15 @@ class LibraryPackService:
         await self._scope.packs.update_metadata(updated)
         return updated
 
-    async def delete_pack(
+    async def delete(
         self,
         pack_uid: str,
         *,
         force: bool = False,
         world_uid: str | None = None,
     ) -> PackDeleteResult:
-        """Delete pack + members + bodies.
-
-        Engine-pack delete is always safe for worlds (they hold instance
-        copies). Declared dependents block the delete unless ``force`` —
-        then they keep a dangling ``required_pack_uid``, diagnosed here.
-        World-owned packs additionally drop their registry pointers.
-        """
         scope = self._scope
-        pack = await self.get_pack(pack_uid)
+        pack = await self.get(pack_uid)
         scope.require_writable(pack)
         scope.require_owner_scope(pack, world_uid)
         dependents = await scope.deps.list_dependents(pack_uid)
@@ -583,17 +540,7 @@ class LibraryPackService:
         world = await scope.world_for(pack)
 
         async def _write() -> None:
-            for member in members:
-                adapter = scope.adapters.get(LibraryKind(member.library_kind))
-                if adapter is None:
-                    diagnostics.append(
-                        f"no adapter for kind '{member.library_kind}' — "
-                        f"body '{member.template_uid}' left orphaned"
-                    )
-                    continue
-                if world is not None:
-                    await adapter.drop_pointer(world, member.template_uid)
-                await adapter.delete_body(member.template_uid)
+            diagnostics.extend(await self._members.teardown(members, world))
             await scope.packs.delete(pack_uid)  # members/deps rows cascade
 
         await scope.atomic(_write)
@@ -616,7 +563,7 @@ class LibraryPackService:
     ) -> tuple[str, ...]:
         """Replace the dependency declaration; returns the missing uids."""
         scope = self._scope
-        pack = await self.get_pack(pack_uid)
+        pack = await self.get(pack_uid)
         scope.require_writable(pack)
         scope.require_owner_scope(pack, world_uid)
         dep_uids = _validate_dependencies(pack_uid, required_pack_uids)
@@ -629,16 +576,162 @@ class LibraryPackService:
                 )
 
         await scope.atomic(_write)
-        missing = await scope.missing_uids(pack_uid)
-        if missing:
-            logger.warning(
-                "packs | pack=%s missing dependencies: %s",
-                pack_uid, sorted(missing),
-            )
+        missing = await scope.diagnose_missing(pack)
         return tuple(sorted(missing))
 
     async def missing_dependencies(self, pack_uid: str) -> set[str]:
         return await self._scope.missing_uids(pack_uid)
+
+    async def import_fs_pack(
+        self,
+        library_kind: str | LibraryKind,
+        path: str | Path,
+        *,
+        domain_root: Path | None = None,
+    ) -> PackImportResult:
+        """Bodies + catalog attach, one unit of work (trusted-source write)."""
+        scope = self._scope
+        kind = _coerce_kind(library_kind)
+        adapter = scope.adapter_for(kind)
+
+        async def _write():
+            outcome = await adapter.import_fs_pack(path, domain_root=domain_root)
+            await attach_pack_catalog(outcome.manifest, scope.catalog)
+            return outcome
+
+        outcome = await scope.atomic(_write)
+        pack = await scope.packs.get_by_uid(outcome.manifest.pack_uid)
+        if pack is None:
+            raise LibraryPackNotFoundError(
+                f"imported pack '{outcome.manifest.pack_uid}' missing after attach"
+            )
+        missing = await scope.diagnose_missing(pack)
+        return PackImportResult(
+            pack=pack,
+            bodies=tuple(outcome.rows),
+            missing_dependencies=tuple(sorted(missing)),
+        )
+
+
+class LibraryPackService:
+    """Pack + member CRUD with ownership enforcement — step 4a facade."""
+
+    def __init__(
+        self,
+        *,
+        db: Database | None,
+        packs: ILibraryPackRepository,
+        members: ILibraryPackMemberRepository,
+        deps: ILibraryPackDependencyRepository,
+        world_service: WorldService,
+        adapters: dict[LibraryKind, PackDomainAdapter],
+    ) -> None:
+        self._scope = _PackScope(
+            db=db,
+            packs=packs,
+            members=members,
+            deps=deps,
+            world_service=world_service,
+            adapters=adapters,
+        )
+        self._member_ops = _MemberOps(self._scope)
+        self._pack_ops = _PackOps(self._scope, self._member_ops)
+
+    # ------------------------------------------------------------------
+    # Pack CRUD — delegated to the pack write job
+    # ------------------------------------------------------------------
+
+    async def create_pack(
+        self,
+        *,
+        system_name: str,
+        pack_name: str | None = None,
+        display_name: str | None = None,
+        version: str = "1.0",
+        owner_world_uid: str | None = None,
+        dependencies: Iterable[str] = (),
+    ) -> LibraryPackRow:
+        """Create an engine (``owner_world_uid=None``) or world-owned pack.
+
+        Default-pack identity is reserved: a caller can never mint a pack
+        whose ``system_name`` resolves to a declared default uid (TZ §3).
+        Missing dependencies are diagnosed, not blocked (§3: no FK).
+        """
+        return await self._pack_ops.create(
+            system_name=system_name,
+            pack_name=pack_name,
+            display_name=display_name,
+            version=version,
+            owner_world_uid=owner_world_uid,
+            dependencies=dependencies,
+        )
+
+    async def get_pack(self, pack_uid: str) -> LibraryPackRow:
+        return await self._pack_ops.get(pack_uid)
+
+    async def find_pack(self, pack_uid: str) -> LibraryPackRow | None:
+        return await self._pack_ops.find(pack_uid)
+
+    async def list_packs(self) -> list[LibraryPackRow]:
+        """Administrative listing — never the availability catalog."""
+        return await self._pack_ops.list_all()
+
+    async def list_engine_packs(self) -> list[LibraryPackRow]:
+        return await self._pack_ops.list_engine()
+
+    async def list_world_packs(self, owner_world_uid: str) -> list[LibraryPackRow]:
+        return await self._pack_ops.list_world_owned(owner_world_uid)
+
+    async def update_pack_metadata(
+        self,
+        pack_uid: str,
+        *,
+        pack_name: str | None = None,
+        display_name: str | None = None,
+        version: str | None = None,
+        world_uid: str | None = None,
+    ) -> LibraryPackRow:
+        """Mutable metadata only — identity/provenance/owner never change."""
+        return await self._pack_ops.update_metadata(
+            pack_uid,
+            pack_name=pack_name,
+            display_name=display_name,
+            version=version,
+            world_uid=world_uid,
+        )
+
+    async def delete_pack(
+        self,
+        pack_uid: str,
+        *,
+        force: bool = False,
+        world_uid: str | None = None,
+    ) -> PackDeleteResult:
+        """Delete pack + members + bodies.
+
+        Engine-pack delete is always safe for worlds (they hold instance
+        copies). Declared dependents block the delete unless ``force`` —
+        then they keep a dangling ``required_pack_uid``, diagnosed here.
+        World-owned packs additionally drop their registry pointers.
+        """
+        return await self._pack_ops.delete(
+            pack_uid, force=force, world_uid=world_uid
+        )
+
+    async def set_dependencies(
+        self,
+        pack_uid: str,
+        required_pack_uids: Iterable[str],
+        *,
+        world_uid: str | None = None,
+    ) -> tuple[str, ...]:
+        """Replace the dependency declaration; returns the missing uids."""
+        return await self._pack_ops.set_dependencies(
+            pack_uid, required_pack_uids, world_uid=world_uid
+        )
+
+    async def missing_dependencies(self, pack_uid: str) -> set[str]:
+        return await self._pack_ops.missing_dependencies(pack_uid)
 
     async def import_fs_pack(
         self,
@@ -654,8 +747,8 @@ class LibraryPackService:
         a user pack never gains default status or world availability by
         landing in the catalog.
         """
-        return await _import_fs_pack(
-            self._scope, library_kind, path, domain_root=domain_root
+        return await self._pack_ops.import_fs_pack(
+            library_kind, path, domain_root=domain_root
         )
 
     # ------------------------------------------------------------------
@@ -683,10 +776,10 @@ class LibraryPackService:
         )
 
     async def get_member(self, template_uid: str) -> LibraryPackMemberRow:
-        return await self._member_ops._require_member(template_uid)
+        return await self._member_ops.require_member(template_uid)
 
     async def list_members(self, pack_uid: str) -> list[LibraryPackMemberRow]:
-        await self.get_pack(pack_uid)
+        await self._pack_ops.get(pack_uid)
         return await self._scope.members.list_by_pack(pack_uid)
 
     async def read_member_body(self, template_uid: str) -> dict | None:

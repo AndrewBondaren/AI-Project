@@ -17,18 +17,15 @@ from dataclasses import asdict
 from pathlib import Path
 
 from app.ids import LibraryKind, library_uid
-from app.application.worldData.libraryPacks.packCatalog import attach_pack_catalog
+from app.application.worldData.libraryPacks.packCatalog import (
+    PackCatalogRepos,
+    attach_pack_catalog,
+)
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
-from app.dataModel.libraryPacks.packManifest import LibraryPackManifest
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.db.database import Database, _in_transaction
+from app.db.database import Database
 from app.db.models.reliefTemplate import ReliefTemplateRow
-from app.db.repositories.iLibraryPackDependencyRepository import (
-    ILibraryPackDependencyRepository,
-)
-from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
-from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
 
 logger = logging.getLogger(__name__)
@@ -58,15 +55,11 @@ class ReliefTemplateLibraryService:
         repo: IReliefTemplateRepository,
         *,
         db: Database | None = None,
-        packs: ILibraryPackRepository | None = None,
-        members: ILibraryPackMemberRepository | None = None,
-        deps: ILibraryPackDependencyRepository | None = None,
+        catalog: PackCatalogRepos | None = None,
     ) -> None:
         self._repo = repo
         self._db = db
-        self._packs = packs
-        self._members = members
-        self._deps = deps
+        self._catalog = catalog
 
     async def find_by_uid(self, template_uid: str) -> ReliefTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
@@ -127,6 +120,13 @@ class ReliefTemplateLibraryService:
             )
             logger.warning("relief | library reject %s", msg)
             raise ReliefValidationError(msg)
+        if local_uid is not None and outline.system_name != local_uid:
+            msg = (
+                f"member local_uid '{local_uid}' != body system_name "
+                f"'{outline.system_name}' (TZ §2 member identity)"
+            )
+            logger.warning("relief | library reject %s", msg)
+            raise ReliefValidationError(msg)
         warn_template_invalid_geom(outline, source_file=source_file)
         return await self.upsert_outline(outline, source_file=source_file, pack_uid=pack_uid)
 
@@ -137,8 +137,8 @@ class ReliefTemplateLibraryService:
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
     ) -> list[ReliefTemplateRow]:
-        if self._db is not None and not _in_transaction.get():
-            async with self._db.transaction():
+        if self._db is not None:
+            async with self._db.transaction_if_needed():
                 return await self._import(path, domain_root=domain_root,
                                           enforce_domain_root=enforce_domain_root)
         return await self._import(path, domain_root=domain_root,
@@ -159,18 +159,8 @@ class ReliefTemplateLibraryService:
             domain_root=domain_root,
             enforce_domain_root=enforce_domain_root,
         )
-        await self._attach_pack(outcome.manifest)
+        await attach_pack_catalog(outcome.manifest, self._catalog)
         return outcome.rows
-
-    async def _attach_pack(self, manifest: LibraryPackManifest) -> None:
-        """Bodies + membership land in the same unit of work (TZ §3)."""
-        if self._packs is None or self._members is None or self._deps is None:
-            raise RuntimeError(
-                "ReliefTemplateLibraryService: pack catalog repositories are not wired"
-            )
-        await attach_pack_catalog(
-            manifest, packs=self._packs, members=self._members, deps=self._deps,
-        )
 
     async def delete(self, template_uid: str) -> None:
         row = await self.find_by_uid(template_uid)

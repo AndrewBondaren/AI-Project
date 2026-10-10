@@ -35,6 +35,13 @@ _DECLARED_DEFAULT_PACKS: Mapping[LibraryKind, tuple[tuple[str, str], ...]] = {
     LibraryKind.BUILDING_TEMPLATES: (),
 }
 
+# Resolved once at import — the declaration above is a module constant.
+_DEFAULT_PACK_UIDS: frozenset[str] = frozenset(
+    library_uid(LibraryKind.LIBRARY_PACKS, system_name)
+    for pairs in _DECLARED_DEFAULT_PACKS.values()
+    for _, system_name in pairs
+)
+
 
 def default_pack_names(kind: LibraryKind) -> tuple[str, ...]:
     """Declared default pack names (folder names under the domain root)."""
@@ -43,13 +50,9 @@ def default_pack_names(kind: LibraryKind) -> tuple[str, ...]:
 
 def default_pack_uids() -> frozenset[str]:
     """UIDs of all declared default packs (the read-only gate key, TZ §3)."""
-    return frozenset(
-        library_uid(LibraryKind.LIBRARY_PACKS, system_name)
-        for pairs in _DECLARED_DEFAULT_PACKS.values()
-        for _, system_name in pairs
-    )
+    return _DEFAULT_PACK_UIDS
 
 
 def is_default_pack_uid(pack_uid: str) -> bool:
     """True when *pack_uid* is a declared default pack — read-only for writes."""
-    return pack_uid in default_pack_uids()
+    return pack_uid in _DEFAULT_PACK_UIDS

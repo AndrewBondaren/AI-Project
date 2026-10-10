@@ -15,7 +15,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.application.jsonValidation.worldRow import (
@@ -23,9 +23,20 @@ from app.application.jsonValidation.worldRow import (
     relief_pick_policy,
     relief_template_registry,
 )
+from app.application.worldData.buildingTemplateLibraryService import (
+    BuildingTemplateLibraryService,
+)
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+from app.application.worldData.reliefTemplateLibraryService import (
+    ReliefTemplateLibraryService,
+)
+from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
+from app.application.worldData.structureTemplateLibraryService import (
+    StructureTemplateLibraryService,
+)
+from app.application.worldData.worldService import WorldService
 from app.dataModel.locations.structure.building.buildingTemplateOutline import (
     BuildingTemplateOutline,
 )
@@ -47,7 +58,17 @@ from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind
 
+if TYPE_CHECKING:
+    from app.application.worldData.reliefTemplateFsImport import ReliefPackImport
+    from app.application.worldData.structureTemplateFsImport import StructurePackImport
+
 logger = logging.getLogger(__name__)
+
+DomainLibrary = (
+    ReliefTemplateLibraryService
+    | StructureTemplateLibraryService
+    | BuildingTemplateLibraryService
+)
 
 class PackDomainAdapter(ABC):
     """Body/pointer contract of one ``library_kind`` for the pack service.
@@ -88,7 +109,7 @@ class PackDomainAdapter(ABC):
 
     async def import_fs_pack(
         self, path: str | Path, *, domain_root: Path | None = None
-    ) -> Any:
+    ) -> ReliefPackImport | StructurePackImport:
         """Manifest-based FS import → ``(manifest, body rows)`` outcome.
 
         Domain bodies land via the library service; catalog attach is the
@@ -111,24 +132,52 @@ class PackDomainAdapter(ABC):
         return []
 
 
+_REGISTRY_ACCESSORS = {
+    "relief_template_registry": relief_template_registry,
+    "building_template_registry": building_template_registry,
+}
+
+
+class _LibraryBodyMixin:
+    """Shared body-row CRUD over the domain library service."""
+
+    _library: DomainLibrary
+
+    async def read_body(self, template_uid: str) -> dict | None:
+        row = await self._library.find_by_uid(template_uid)
+        return None if row is None else dict(row.data)
+
+    async def delete_body(self, template_uid: str) -> None:
+        if await self._library.find_by_uid(template_uid) is not None:
+            await self._library.delete(template_uid)
+
+
 class _RegistryPointerMixin:
     """Shared world-registry pointer dual-write for uid-keyed registries."""
 
-    _worlds: Any  # WorldService
+    registry_field: ClassVar[str]
+    _worlds: WorldService
+
+    async def ensure_pointer(
+        self, world: World, member: LibraryPackMemberRow, outline: Any
+    ) -> None:
+        await self._swap_pointer(
+            world,
+            template_uid=member.template_uid,
+            entry=self._pointer_entry(member, outline),
+        )
+
+    async def drop_pointer(self, world: World, template_uid: str) -> None:
+        await self._swap_pointer(world, template_uid=template_uid, entry=None)
+
+    def _pointer_entry(self, member: LibraryPackMemberRow, outline: Any):
+        """Registry entry for this member — declared by each domain."""
+        raise NotImplementedError
 
     async def _swap_pointer(
-        self,
-        world: World,
-        *,
-        registry_field: str,
-        template_uid: str,
-        entry: Any | None,
+        self, world: World, *, template_uid: str, entry: Any | None
     ) -> None:
-        reg = (
-            relief_template_registry(world)
-            if registry_field == "relief_template_registry"
-            else building_template_registry(world)
-        )
+        reg = _REGISTRY_ACCESSORS[self.registry_field](world)
         entries = [
             e.model_dump(mode="json")
             for e in reg.root
@@ -136,15 +185,21 @@ class _RegistryPointerMixin:
         ]
         if entry is not None:
             entries.append(entry.model_dump(mode="json"))
-        await self._worlds.update(world.world_uid, {registry_field: entries})
+        await self._worlds.update(world.world_uid, {self.registry_field: entries})
 
 
-class ReliefPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
+class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
     """Name-keyed relief bodies; ``relief_template_registry`` pointers."""
 
     library_kind = LibraryKind.RELIEF_TEMPLATES
+    registry_field: ClassVar[str] = "relief_template_registry"
 
-    def __init__(self, library: Any, world_service: Any, world_import: Any = None) -> None:
+    def __init__(
+        self,
+        library: ReliefTemplateLibraryService,
+        world_service: WorldService,
+        world_import: ReliefWorldImportService | None = None,
+    ) -> None:
         self._library = library
         self._worlds = world_service
         self._world_import = world_import
@@ -181,15 +236,9 @@ class ReliefPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
         )
         return outline
 
-    async def read_body(self, template_uid: str) -> dict | None:
-        row = await self._library.find_by_uid(template_uid)
-        return None if row is None else dict(row.data)
-
-    async def delete_body(self, template_uid: str) -> None:
-        if await self._library.find_by_uid(template_uid) is not None:
-            await self._library.delete(template_uid)
-
-    async def import_fs_pack(self, path, *, domain_root=None):
+    async def import_fs_pack(
+        self, path: str | Path, *, domain_root: Path | None = None
+    ) -> ReliefPackImport:
         from app.application.worldData.reliefTemplateFsImport import import_relief_path
 
         return await import_relief_path(
@@ -198,28 +247,19 @@ class ReliefPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
             domain_root=domain_root,
         )
 
-    async def ensure_pointer(self, world, member, outline) -> None:
-        await self._swap_pointer(
-            world,
-            registry_field="relief_template_registry",
-            template_uid=member.template_uid,
-            entry=ReliefTemplateRegistryEntry(
-                system_template_uid=member.template_uid,
-                display_template_name=outline.display_name,
-                context=outline.context,
-                imported_at=datetime.now(timezone.utc).isoformat(),
-            ),
+    def _pointer_entry(
+        self, member: LibraryPackMemberRow, outline: ReliefTemplate
+    ) -> ReliefTemplateRegistryEntry:
+        return ReliefTemplateRegistryEntry(
+            system_template_uid=member.template_uid,
+            display_template_name=outline.display_name,
+            context=outline.context,
+            imported_at=datetime.now(timezone.utc).isoformat(),
         )
 
-    async def drop_pointer(self, world, template_uid) -> None:
-        await self._swap_pointer(
-            world,
-            registry_field="relief_template_registry",
-            template_uid=template_uid,
-            entry=None,
-        )
-
-    def member_usages(self, world, member) -> list[str]:
+    def member_usages(
+        self, world: World, member: LibraryPackMemberRow
+    ) -> list[str]:
         usages: list[str] = []
         policy = relief_pick_policy(world)
         for name in WorldReliefPickPolicy.model_fields:
@@ -232,7 +272,7 @@ class ReliefPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
         return usages
 
 
-class StructurePackAdapter(PackDomainAdapter):
+class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
     """Model-A structures: wire ``system_name`` IS the member uid.
 
     No world registry exists for structures — the member is reachable
@@ -242,7 +282,7 @@ class StructurePackAdapter(PackDomainAdapter):
 
     library_kind = LibraryKind.STRUCTURE_TEMPLATES
 
-    def __init__(self, library: Any) -> None:
+    def __init__(self, library: StructureTemplateLibraryService) -> None:
         self._library = library
 
     async def write_body(
@@ -274,15 +314,9 @@ class StructurePackAdapter(PackDomainAdapter):
         await self._library.upsert_outline(outline, source_file=source_file)
         return outline
 
-    async def read_body(self, template_uid: str) -> dict | None:
-        row = await self._library.find_by_uid(template_uid)
-        return None if row is None else dict(row.data)
-
-    async def delete_body(self, template_uid: str) -> None:
-        if await self._library.find_by_uid(template_uid) is not None:
-            await self._library.delete(template_uid)
-
-    async def import_fs_pack(self, path, *, domain_root=None):
+    async def import_fs_pack(
+        self, path: str | Path, *, domain_root: Path | None = None
+    ) -> StructurePackImport:
         from app.application.worldData.structureTemplateFsImport import (
             import_structure_templates_path,
         )
@@ -294,7 +328,7 @@ class StructurePackAdapter(PackDomainAdapter):
         )
 
 
-class BuildingPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
+class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
     """Name-keyed building bodies; ``building_template_registry`` pointers.
 
     World-owned bodies additionally pass the subject checks against the
@@ -302,8 +336,13 @@ class BuildingPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
     """
 
     library_kind = LibraryKind.BUILDING_TEMPLATES
+    registry_field: ClassVar[str] = "building_template_registry"
 
-    def __init__(self, library: Any, world_service: Any) -> None:
+    def __init__(
+        self,
+        library: BuildingTemplateLibraryService,
+        world_service: WorldService,
+    ) -> None:
         self._library = library
         self._worlds = world_service
 
@@ -343,42 +382,25 @@ class BuildingPackAdapter(_RegistryPointerMixin, PackDomainAdapter):
         )
         return body
 
-    async def read_body(self, template_uid: str) -> dict | None:
-        row = await self._library.find_by_uid(template_uid)
-        return None if row is None else dict(row.data)
-
-    async def delete_body(self, template_uid: str) -> None:
-        if await self._library.find_by_uid(template_uid) is not None:
-            await self._library.delete(template_uid)
-
-    async def ensure_pointer(self, world, member, outline) -> None:
-        await self._swap_pointer(
-            world,
-            registry_field="building_template_registry",
-            template_uid=member.template_uid,
-            entry=BuildingTemplateRegistryEntry(
-                system_template_uid=member.template_uid,
-                display_template_name=outline.display_name,
-                imported_at=datetime.now(timezone.utc).isoformat(),
-            ),
-        )
-
-    async def drop_pointer(self, world, template_uid) -> None:
-        await self._swap_pointer(
-            world,
-            registry_field="building_template_registry",
-            template_uid=template_uid,
-            entry=None,
+    def _pointer_entry(
+        self,
+        member: LibraryPackMemberRow,
+        outline: BuildingTemplateOutline | PlotLayoutTemplate,
+    ) -> BuildingTemplateRegistryEntry:
+        return BuildingTemplateRegistryEntry(
+            system_template_uid=member.template_uid,
+            display_template_name=outline.display_name,
+            imported_at=datetime.now(timezone.utc).isoformat(),
         )
 
 
 def build_pack_domain_adapters(
     *,
-    relief_library: Any,
-    structure_library: Any,
-    building_library: Any,
-    world_service: Any,
-    relief_world_import: Any = None,
+    relief_library: ReliefTemplateLibraryService,
+    structure_library: StructureTemplateLibraryService,
+    building_library: BuildingTemplateLibraryService,
+    world_service: WorldService,
+    relief_world_import: ReliefWorldImportService | None = None,
 ) -> dict[LibraryKind, PackDomainAdapter]:
     """Container seam — one adapter per supported ``library_kind``."""
     return {

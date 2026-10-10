@@ -25,10 +25,12 @@ from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.defaults import default_pack_names
 from app.application.worldData.libraryPacks.manifest import (
     LoadedMember,
-    LoadedPack,
     PackManifestError,
     load_pack_manifest,
     member_file_stem,
+    require_declared_member,
+    resolve_owning_pack,
+    source_file_label,
 )
 from app.application.worldData.structureTemplateErrors import (
     StructureTemplateNotFoundError,
@@ -81,50 +83,27 @@ async def import_structure_templates_path(
 
     if not p.exists():
         raise StructureTemplateNotFoundError(f"Path not found: {path}")
-    if p.is_file():
-        loaded = _load_owning_pack(p, domain_root=root)
-        member = _declared_member(loaded, p)
-        rows = [await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)]
-        return StructurePackImport(manifest=loaded.manifest, rows=rows)
-    if p.is_dir():
-        loaded = _load_pack_dir(p, domain_root=root)
-        rows = [
-            await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)
-            for member in loaded.members
-        ]
-        return StructurePackImport(manifest=loaded.manifest, rows=rows)
-    raise StructureTemplateValidationError(f"Not a file or directory: {path}")
-
-
-def _load_pack_dir(pack_dir: Path, *, domain_root: Path) -> LoadedPack:
     try:
-        return load_pack_manifest(
-            pack_dir, domain_root=domain_root, library_kind=_LIBRARY_KIND
-        )
+        if p.is_file():
+            loaded = resolve_owning_pack(
+                p, domain_root=root, library_kind=_LIBRARY_KIND
+            )
+            members = [require_declared_member(loaded, p)]
+        elif p.is_dir():
+            loaded = load_pack_manifest(
+                p, domain_root=root, library_kind=_LIBRARY_KIND
+            )
+            members = loaded.members
+        else:
+            raise StructureTemplateValidationError(f"Not a file or directory: {path}")
     except PackManifestError as exc:
         logger.warning("structure | library reject %s", exc)
         raise StructureTemplateValidationError(str(exc)) from exc
-
-
-def _load_owning_pack(file: Path, *, domain_root: Path) -> LoadedPack:
-    """The pack owning ``file`` — its parent dir under the domain root."""
-    if file.parent.resolve() == domain_root.resolve():
-        msg = (
-            f"lone file '{file.name}' in domain root is not imported — "
-            "templates arrive as members of a pack with pack.manifest.json"
-        )
-        logger.warning("structure | library reject %s", msg)
-        raise StructureTemplateValidationError(msg)
-    return _load_pack_dir(file.parent, domain_root=domain_root)
-
-
-def _declared_member(loaded: LoadedPack, file: Path) -> LoadedMember:
-    member = loaded.member_for_file(file)
-    if member is None:
-        msg = f"file '{file.name}' is not a declared member of pack '{loaded.manifest.system_name}'"
-        logger.warning("structure | library reject %s", msg)
-        raise StructureTemplateValidationError(msg)
-    return member
+    rows = [
+        await _import_file(member, loaded.manifest, domain_root=root, upsert=upsert_from_dict)
+        for member in members
+    ]
+    return StructurePackImport(manifest=loaded.manifest, rows=rows)
 
 
 async def _import_file(
@@ -143,8 +122,7 @@ async def _import_file(
         raise StructureTemplateValidationError(f"Invalid JSON: {file}") from exc
     if not isinstance(raw, dict):
         raise StructureTemplateValidationError(f"Template JSON must be object: {file}")
-    rel = file.relative_to(domain_root.resolve())
-    source = f"{DOMAIN_ROOT}/{rel.as_posix()}"
+    source = source_file_label(file, domain_root=domain_root, root_label=DOMAIN_ROOT)
     return await upsert(
         raw,
         source_file=source,
@@ -166,7 +144,13 @@ def load_structure_stdlib(root: Path | None = None) -> list[StructureTemplate]:
     out: dict[str, StructureTemplate] = {}
     paths: dict[str, Path] = {}
     for pack_name in default_pack_names(_LIBRARY_KIND):
-        loaded = _load_pack_dir(base / pack_name, domain_root=base)
+        try:
+            loaded = load_pack_manifest(
+                base / pack_name, domain_root=base, library_kind=_LIBRARY_KIND
+            )
+        except PackManifestError as exc:
+            logger.warning("structure | library reject %s", exc)
+            raise StructureTemplateValidationError(str(exc)) from exc
         for loaded_member in loaded.members:
             file = loaded_member.file
             try:
