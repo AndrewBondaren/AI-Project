@@ -79,8 +79,9 @@ class ReliefTemplateLibraryService:
         *,
         source_file: str | None = None,
         pack_uid: str | None = None,
+        template_uid: str | None = None,
     ) -> ReliefTemplateRow:
-        uid = library_uid(LibraryKind.RELIEF_TEMPLATES, outline.system_name, pack_uid=pack_uid)
+        uid = template_uid or library_uid(LibraryKind.RELIEF_TEMPLATES, outline.system_name, pack_uid=pack_uid)
         row = ReliefTemplateRow(
             template_uid=uid,
             system_name=outline.system_name,

@@ -1,11 +1,11 @@
-"""Pack application service — plan library-packs-model.md steps 4a–4b,
+"""Pack application service — plan library-packs-model.md steps 4a–4c,
 TZ §0.2/§1.1/§2/§3.
 
 Single CRUD/ownership boundary over ``library_packs`` +
 ``library_pack_members`` (+ ``library_pack_dependencies``), plus the §2
 remap operations (``instantiate_pack`` engine→world / ``copy_pack``
-publish world→engine). Re-instantiate member rewrite and bundle/routes
-are later steps (4c/4d).
+publish world→engine), preview/confirm re-instantiate and independent
+member copies. Bundle/routes are step 4d.
 
 Ownership semantics (TZ §1.1 — availability = ownership or default):
 
@@ -32,6 +32,9 @@ from pathlib import Path
 
 from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
 from app.application.worldData.libraryPacks.memberOps import _MemberOps
+from app.application.worldData.libraryPacks.lifecycleContracts import (
+    MemberCopyResult, MemberStatus, ReinstantiatePreview,
+)
 from app.application.worldData.libraryPacks.packOps import _PackOps
 from app.application.worldData.libraryPacks.packResults import (
     MemberDeleteResult,
@@ -197,8 +200,9 @@ class LibraryPackService:
     # ------------------------------------------------------------------
 
     async def instantiate_pack(
-        self, source_pack_uid: str, *, world_uid: str
-    ) -> PackRemapResult:
+        self, source_pack_uid: str, *, world_uid: str,
+        confirm: bool = False, preview_token: str | None = None,
+    ) -> PackRemapResult | ReinstantiatePreview:
         """Snapshot-instantiate an engine library into a world (TZ §1.1/§2).
 
         Full-pack copy: members get deterministic uids from the
@@ -206,12 +210,13 @@ class LibraryPackService:
         record provenance, internal body refs and declared world-side
         refs (pick-policy fields, registry pointers, layout-embedded
         structure refs) are repointed at the instance members — pointers
-        never aim at a source member. A ``local_uid`` shared with
-        another world-owned pack of the world is a collision, not a
-        merge. Re-instantiating the same source returns the existing
-        instance (``created=False``); member rewrite is step 4c.
+        never aim at a source member. Repeated readable names are allowed.
+        An existing instance returns a no-write preview; applying it requires
+        ``confirm=True`` and its current ``preview_token``. A stale token
+        returns a fresh preview. Existing member UIDs remain stable.
         """
-        return await self._remap_ops.instantiate(source_pack_uid, world_uid)
+        return await self._scope.atomic(lambda: self._remap_ops.instantiate(
+            source_pack_uid, world_uid, confirm=confirm, preview_token=preview_token))
 
     async def copy_pack(
         self, source_pack_uid: str, *, system_name: str | None = None
@@ -223,9 +228,18 @@ class LibraryPackService:
         touched; editing the published library never reaches instances.
         ``system_name`` defaults to ``{source}.published``.
         """
-        return await self._remap_ops.copy(
-            source_pack_uid, system_name=system_name
-        )
+        return await self._scope.atomic(lambda: self._remap_ops.copy(
+            source_pack_uid, system_name=system_name))
+
+    async def copy_member(self, source_template_uid: str, target_pack_uid: str,
+                          *, world_uid: str | None = None) -> MemberCopyResult:
+        from app.application.worldData.libraryPacks.memberCopyOps import copy_member
+        return await self._scope.atomic(lambda: copy_member(
+            self._scope, self._member_ops, source_template_uid, target_pack_uid, world_uid=world_uid))
+
+    async def member_status(self, template_uid: str) -> MemberStatus:
+        from app.application.worldData.libraryPacks.provenanceResolver import member_status
+        return await member_status(self._scope, await self.get_member(template_uid))
 
     # ------------------------------------------------------------------
     # Member CRUD (TZ §0.2) — delegated to the member write job
@@ -265,9 +279,9 @@ class LibraryPackService:
         self, template_uid: str, body: dict, *, world_uid: str | None = None
     ) -> LibraryPackMemberRow:
         """Replace a member's body — identity change is delete + create."""
-        return await self._member_ops.update_body(
+        return await self._scope.atomic(lambda: self._member_ops.update_body(
             template_uid, body, world_uid=world_uid
-        )
+        ))
 
     async def delete_member(
         self,
@@ -278,6 +292,6 @@ class LibraryPackService:
     ) -> MemberDeleteResult:
         """Refuses while the member is in use; ``allow_used`` overrides
         with diagnostics (TZ §0.2 explicit delete policy)."""
-        return await self._member_ops.delete(
+        return await self._scope.atomic(lambda: self._member_ops.delete(
             template_uid, allow_used=allow_used, world_uid=world_uid
-        )
+        ))

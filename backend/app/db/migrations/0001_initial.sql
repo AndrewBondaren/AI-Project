@@ -693,7 +693,8 @@ CREATE TABLE IF NOT EXISTS library_pack_members (
     library_kind        TEXT NOT NULL,
     local_uid           TEXT NOT NULL,
     source_template_uid TEXT,          -- provenance: член-источник; может ссылаться на удалённого члена
-    UNIQUE (pack_uid, library_kind, local_uid)
+    creation_kind       TEXT NOT NULL DEFAULT 'authored'
+                        CHECK (creation_kind IN ('authored', 'pack_copy', 'member_copy'))
 );
 
 -- ============================================================

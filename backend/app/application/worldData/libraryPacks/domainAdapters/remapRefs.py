@@ -26,6 +26,20 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import (
 from app.db.models.world import World
 
 
+def remap_pins(world: World, uid_map: Mapping[str, str]) -> bool:
+    from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
+    out = []
+    changed = False
+    for raw in world.library_pins or []:
+        pin = LibraryPinEntry.model_validate(raw)
+        uid = uid_map.get(pin.template_uid, pin.template_uid)
+        changed = changed or uid != pin.template_uid
+        out.append({**raw, 'template_uid': uid})
+    if changed:
+        world.library_pins = out
+    return changed
+
+
 def _remap_structure_refs(row: dict, uid_map: Mapping[str, str]) -> dict | None:
     """``structure`` uid refs of a plot-layout wire shape → instance uids.
 

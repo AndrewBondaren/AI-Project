@@ -15,6 +15,7 @@ layer, so kind membership is validated at the consumer boundary (same rule as
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 
@@ -30,6 +31,7 @@ class LibraryPackManifestMember(BaseModel):
     # Path of the body file relative to the domain root (FS import).
     source_file: StrictOnWire[str]
     source_template_uid: DefaultWhenMissing[str | None] = None
+    creation_kind: DefaultWhenMissing[Literal['authored', 'pack_copy', 'member_copy']] = 'authored'
 
 
 class LibraryPackManifest(BaseModel):

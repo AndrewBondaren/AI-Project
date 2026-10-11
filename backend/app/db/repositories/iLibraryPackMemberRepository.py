@@ -28,8 +28,8 @@ class ILibraryPackMemberRepository(ABC):
 
         Existing membership — including another owner's row for the same
         ``template_uid`` — is never replaced (membership never changes
-        owner). A ``UNIQUE(pack_uid, library_kind, local_uid)`` collision
-        or FK violation raises and rolls the batch back.
+        owner). FK/CHECK violations raise and roll the batch back;
+        readable ``local_uid`` values may repeat.
         Owns a transaction only when the caller is not inside one.
         Returns the number of inserted rows.
         """
@@ -52,7 +52,9 @@ class ILibraryPackMemberRepository(ABC):
         pack_uid: str,
         library_kind: str,
         local_uid: str,
-    ) -> LibraryPackMemberRow | None: ...
+    ) -> LibraryPackMemberRow | None:
+        """Readable-name lookup; raises ValueError when ambiguous."""
+        ...
 
     @abstractmethod
     async def list_by_pack(self, pack_uid: str) -> list[LibraryPackMemberRow]: ...
@@ -70,6 +72,11 @@ class ILibraryPackMemberRepository(ABC):
 
     @abstractmethod
     async def delete(self, template_uid: str) -> None: ...
+
+    @abstractmethod
+    async def update_local_uid(self, template_uid: str, local_uid: str) -> None:
+        """Change a readable attribute, never identity or provenance."""
+        ...
 
     @abstractmethod
     async def delete_by_pack(self, pack_uid: str) -> int:

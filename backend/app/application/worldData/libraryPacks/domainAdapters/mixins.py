@@ -75,6 +75,8 @@ class _RegistryPointerMixin:
     ) -> None:
         """Rebuild the pointer column in place — no repository write;
         domains with extra world-side fields update once themselves."""
+        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
+        remap_pins(world, uid_map)
         setattr(
             world, self.registry_field,
             self._remapped_registry(world, uid_map, members),

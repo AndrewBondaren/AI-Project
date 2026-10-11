@@ -1,5 +1,5 @@
 """Domain adapter contract of the pack application service — plan steps
-4a–4b, TZ §0.2/§2.
+4a–4c, TZ §0.2/§2.
 
 The universal pack layer (``packService``) owns identity, ownership and
 atomicity; each adapter owns the body model, domain restrictions and the
@@ -44,6 +44,7 @@ from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind
+from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
 
 if TYPE_CHECKING:
     from app.application.worldData.reliefTemplateFsImport import ReliefPackImport
@@ -82,11 +83,22 @@ class PackDomainAdapter(ABC):
     """Body/pointer contract of one ``library_kind`` for the pack service.
 
     All methods run inside the caller's transaction — an adapter never owns
-    atomicity. ``member_usages`` is the §0.2 used-member policy hook; the
-    referenced-set scan lands with step 4c.
+    atomicity. Declared body/world references feed the common usage index;
+    the lifecycle job decides retention and deletion.
     """
 
     library_kind: ClassVar[LibraryKind]
+
+    @abstractmethod
+    def prepare_body(self, raw: dict, *, local_uid: str, template_uid: str,
+                     world: World | None = None) -> DomainOutline:
+        """Pure validation/normalization shared by preview and persistence."""
+
+    def body_refs(self, body: dict, consumer: str) -> tuple[MemberRef, ...]:
+        return ()
+
+    def world_refs(self, world: World) -> tuple[MemberRef, ...]:
+        return ()
 
     @abstractmethod
     async def write_body(
@@ -147,10 +159,6 @@ class PackDomainAdapter(ABC):
 
     async def drop_pointer(self, world: World, template_uid: str) -> None:
         """Dual-write: remove the world registry pointer for a member."""
-
-    def member_usages(self, world: World, member: LibraryPackMemberRow) -> list[str]:
-        """Diagnostics of world-side uses that block member delete."""
-        return []
 
     # ------------------------------------------------------------------
     # Remap contract (TZ §2) — instantiate_pack / copy_pack, step 4b.

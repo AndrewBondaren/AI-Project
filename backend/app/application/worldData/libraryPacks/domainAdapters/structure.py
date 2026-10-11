@@ -51,15 +51,13 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         self._library = library
         self._world_repo = world_repository
 
-    async def write_body(
+    def prepare_body(
         self,
         raw: dict,
         *,
         local_uid: str,
         template_uid: str,
-        pack: LibraryPackRow,
-        world: World | None,
-        source_file: str | None = None,
+        world: World | None = None,
     ) -> StructureTemplate:
         if not isinstance(raw, dict):
             raise LibraryPackValidationError(
@@ -77,6 +75,11 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
                 f"structure body system_name '{outline.system_name}' != member "
                 f"template_uid '{template_uid}' (model A: body carries the uid)"
             )
+        return outline
+
+    async def write_body(self, raw, *, local_uid, template_uid, pack, world,
+                         source_file=None):
+        outline = self.prepare_body(raw, local_uid=local_uid, template_uid=template_uid, world=world)
         await self._library.upsert_outline(outline, source_file=source_file)
         return outline
 
@@ -98,7 +101,8 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         inside plot-layout rows of ``building_template_registry``."""
         raw = world.building_template_registry or []
         out: list = []
-        changed = False
+        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
+        changed = remap_pins(world, uid_map)
         for row in raw:
             remapped = (
                 _remap_structure_refs(row, uid_map) if isinstance(row, dict) else None

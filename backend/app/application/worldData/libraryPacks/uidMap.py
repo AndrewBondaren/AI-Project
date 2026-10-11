@@ -6,10 +6,8 @@ no runtime owner guessing and no dual UID support for migrated content.
 The map covers the three reference classes:
 
 1. **Pointer entries** of world registries — old ``system_template_uid``
-   pointers become ``LibraryPinEntry`` pairs ``(library_kind, local_uid)``;
-   the pin's ``local_uid`` is the member's local key in the pack that now
-   owns the body (equal to the body ``system_name`` for name-keyed
-   domains).
+   pointers become ``LibraryPinEntry`` pairs ``(library_kind, template_uid)``;
+   the pin addresses the migrated member by its actual UID.
 2. **Manifest-less bundle bodies** — a flat body section becomes members
    of the world-owned ``legacy`` pack of the importing world; the member
    uid is ``legacy_member_uid(kind, local_uid, world_uid=…)`` and
@@ -126,10 +124,10 @@ def former_template_uid(kind: LibraryKind, local_uid: str) -> str | None:
     return _FORMER_LOCAL_TO_UID.get(LibraryKind(kind), {}).get(local_uid)
 
 
-def pin_for_member(kind: LibraryKind, local_uid: str) -> LibraryPinEntry:
+def pin_for_member(kind: LibraryKind, template_uid: str) -> LibraryPinEntry:
     """Pin entry for a migrated pointer — ``worlds.library_pins[]``;
     the caller dumps to JSON when writing the world row."""
     return LibraryPinEntry(
         library_kind=LibraryKind(kind).value,
-        local_uid=local_uid,
+        template_uid=template_uid,
     )

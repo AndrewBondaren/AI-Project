@@ -40,8 +40,8 @@ class SqliteLibraryPackMemberRepository(
         cols, _ = to_row(members[0])
         placeholders = ", ".join("?" * len(cols))
         # ON CONFLICT(template_uid) DO NOTHING: membership never changes the
-        # owner of an existing row. A UNIQUE(pack_uid, library_kind, local_uid)
-        # collision or FK violation raises and rolls the batch back (TZ §3, §6).
+        # owner of an existing row. Readable names may repeat; FK/CHECK
+        # violations raise and roll the batch back (TZ §3, §6).
         sql = (
             f"INSERT INTO {self._table} ({', '.join(cols)}) "
             f"VALUES ({placeholders}) "
@@ -71,10 +71,13 @@ class SqliteLibraryPackMemberRepository(
         library_kind: str,
         local_uid: str,
     ) -> LibraryPackMemberRow | None:
-        return await self.fetch_one(
+        rows = await self.fetch_all(
             "pack_uid = ? AND library_kind = ? AND local_uid = ?",
             [pack_uid, library_kind, local_uid],
         )
+        if len(rows) > 1:
+            raise ValueError("ambiguous readable member name; address member by template_uid")
+        return rows[0] if rows else None
 
     async def list_by_pack(self, pack_uid: str) -> list[LibraryPackMemberRow]:
         return await self.fetch_all("pack_uid = ?", [pack_uid], order="local_uid ASC")
@@ -106,6 +109,14 @@ class SqliteLibraryPackMemberRepository(
 
     async def delete(self, template_uid: str) -> None:
         await super().delete(template_uid)
+
+    async def update_local_uid(self, template_uid: str, local_uid: str) -> None:
+        await self._db.conn.execute(
+            "UPDATE library_pack_members SET local_uid = ? WHERE template_uid = ?",
+            [local_uid, template_uid],
+        )
+        if not _in_transaction.get():
+            await self._db.conn.commit()
 
     async def delete_by_pack(self, pack_uid: str) -> int:
         cur = await self._db.conn.execute(

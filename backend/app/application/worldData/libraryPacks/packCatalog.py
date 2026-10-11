@@ -50,6 +50,7 @@ def member_rows_for(
             library_kind=member.library_kind,
             local_uid=member.local_uid,
             source_template_uid=member.source_template_uid,
+            creation_kind=member.creation_kind,
         )
         for member in manifest.members
     ]

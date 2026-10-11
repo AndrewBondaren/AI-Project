@@ -65,15 +65,13 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
         self._world_repo = world_repository
         self._world_import = world_import
 
-    async def write_body(
+    def prepare_body(
         self,
         raw: dict,
         *,
         local_uid: str,
         template_uid: str,
-        pack: LibraryPackRow,
-        world: World | None,
-        source_file: str | None = None,
+        world: World | None = None,
     ) -> ReliefTemplate:
         if not isinstance(raw, dict):
             raise LibraryPackValidationError(
@@ -84,7 +82,7 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
                 outline = self._world_import.prepare_body(world, raw)  # warns geom
             else:
                 outline = resolve_model(ReliefTemplate, raw, label=local_uid)
-                warn_template_invalid_geom(outline, source_file=source_file)
+                warn_template_invalid_geom(outline)
         except (ValueError, ReliefValidationError) as exc:
             raise LibraryPackValidationError(str(exc)) from exc
         if outline.system_name != local_uid:
@@ -92,10 +90,23 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
                 f"relief body system_name '{outline.system_name}' != "
                 f"member local_uid '{local_uid}'"
             )
-        await self._library.upsert_outline(
-            outline, source_file=source_file, pack_uid=pack.pack_uid
-        )
         return outline
+
+    async def write_body(self, raw, *, local_uid, template_uid, pack, world,
+                         source_file=None):
+        outline = self.prepare_body(raw, local_uid=local_uid, template_uid=template_uid, world=world)
+        await self._library.upsert_outline(outline, source_file=source_file,
+                                          pack_uid=pack.pack_uid, template_uid=template_uid)
+        return outline
+
+    def world_refs(self, world):
+        from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
+        policy = relief_pick_policy(world)
+        return tuple(MemberRef(self.library_kind.value, entry.default_template_uid,
+                               f"world:{world.world_uid}", f"relief_pick_policy.{name}.default_template_uid")
+                     for name in WorldReliefPickPolicy.model_fields
+                     if isinstance(entry := getattr(policy, name), ReliefContextPickPolicy)
+                     and entry.default_template_uid)
 
     async def import_fs_pack(
         self, path: str | Path, *, domain_root: Path | None = None
@@ -117,20 +128,6 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
             context=outline.context,
             imported_at=datetime.now(timezone.utc).isoformat(),
         )
-
-    def member_usages(
-        self, world: World, member: LibraryPackMemberRow
-    ) -> list[str]:
-        usages: list[str] = []
-        policy = relief_pick_policy(world)
-        for name in WorldReliefPickPolicy.model_fields:
-            entry = getattr(policy, name)
-            if (
-                isinstance(entry, ReliefContextPickPolicy)
-                and entry.default_template_uid == member.template_uid
-            ):
-                usages.append(f"relief_pick_policy.{name}.default_template_uid")
-        return usages
 
     async def remap_world_refs(
         self,

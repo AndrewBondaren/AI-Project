@@ -22,3 +22,4 @@ class LibraryPackMemberRow:
     library_kind: str
     local_uid: str
     source_template_uid: str | None = None
+    creation_kind: str = "authored"

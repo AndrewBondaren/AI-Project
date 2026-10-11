@@ -19,6 +19,7 @@ Three roots, one canonical string ``"{root}|{kind}|{k}={v}"`` hashed by
 from __future__ import annotations
 
 import hashlib
+import json
 from enum import Enum
 from random import Random
 from typing import Any
@@ -101,6 +102,26 @@ def library_uid(
 def runtime_uid() -> str:
     """uuid4 for ``origin='runtime'`` entities — not generation-reproducible."""
     return str(uuid4())
+
+
+def remapped_library_uid(
+    library: LibraryKind, *, target_pack_uid: str, source_template_uid: str
+) -> str:
+    """Identity of a full-pack copy; readable names never enter the formula."""
+    if not target_pack_uid or not source_template_uid:
+        raise ValueError("target pack and source member uids are required")
+    if any(_SEP in value for value in (target_pack_uid, source_template_uid)):
+        raise ValueError("remap uids must not contain '|'")
+    return _hash(
+        f"{target_pack_uid}|{LibraryKind(library).value}|source_template_uid={source_template_uid}"
+    )
+
+
+def state_fingerprint(value: Any) -> str:
+    """Stable token for structured state; distinct from an entity identity."""
+    wire = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                      allow_nan=False)
+    return hashlib.sha256(wire.encode("utf-8")).hexdigest()
 
 
 def seed_root(world: Any) -> str:

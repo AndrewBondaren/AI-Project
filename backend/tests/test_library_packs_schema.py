@@ -108,11 +108,11 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
             library_pins=[
                 LibraryPinEntry(
                     library_kind=LibraryKind.RELIEF_TEMPLATES,
-                    local_uid="smoke_003",
+                    template_uid="smoke_003",
                 ).model_dump(mode="json"),
                 LibraryPinEntry(
                     library_kind=LibraryKind.STRUCTURE_TEMPLATES,
-                    local_uid="inn_small",
+                    template_uid="inn_small",
                 ).model_dump(mode="json"),
             ],
         )
@@ -168,19 +168,14 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
             await self.members.find_by_local_uid(pack_b.pack_uid, _STRUCT.value, "shared"),
         )
 
-    async def test_same_local_uid_within_one_pack_rejected(self):
+    async def test_same_local_uid_within_one_pack_allowed(self):
         pack = _pack("engine.dup")
         await self.packs.insert(pack)
         await self.members.insert(_member(pack, "dup"))
-        with self.assertRaises(sqlite3.IntegrityError):
-            await self.members.insert(
-                LibraryPackMemberRow(
-                    template_uid="other-uid",
-                    pack_uid=pack.pack_uid,
-                    library_kind=_STRUCT.value,
-                    local_uid="dup",
-                ),
-            )
+        await self.members.insert(
+            LibraryPackMemberRow(template_uid="other-uid", pack_uid=pack.pack_uid,
+                                 library_kind=_STRUCT.value, local_uid="dup"))
+        self.assertEqual(len(await self.members.list_by_pack(pack.pack_uid)), 2)
 
     async def test_member_single_owner_by_pk(self):
         pack_a, pack_b = _pack("engine.a2"), _pack("engine.b2")
@@ -303,7 +298,7 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
         self.assertEqual(stored.pack_uid, pack_a.pack_uid)
         self.assertEqual(stored.local_uid, "m")
 
-    async def test_insert_missing_local_uid_conflict_rolls_back_batch(self):
+    async def test_invalid_creation_kind_rolls_back_batch(self):
         pack = _pack("engine.conflict")
         await self.packs.insert(pack)
         await self.members.insert(_member(pack, "taken"))
@@ -311,7 +306,7 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
             _member(pack, "fresh"),
             LibraryPackMemberRow(
                 template_uid="clash-uid", pack_uid=pack.pack_uid,
-                library_kind=_STRUCT.value, local_uid="taken",
+                library_kind=_STRUCT.value, local_uid="taken", creation_kind='invalid',
             ),
         )
         with self.assertRaises(sqlite3.IntegrityError):

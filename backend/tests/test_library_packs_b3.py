@@ -488,7 +488,7 @@ class UidMapTests(unittest.TestCase):
     def test_pin_form(self):
         self.assertEqual(
             pin_for_member(_RELIEF, "open_land_soft").model_dump(mode="json"),
-            {"library_kind": "relief_templates", "local_uid": "open_land_soft"},
+            {"library_kind": "relief_templates", "template_uid": "open_land_soft"},
         )
 
 

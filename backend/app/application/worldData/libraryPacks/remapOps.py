@@ -20,12 +20,13 @@ from app.application.worldData.libraryPacks.errors import (
 )
 from app.application.worldData.libraryPacks.packOps import _PackOps
 from app.application.worldData.libraryPacks.packResults import PackRemapResult
+from app.application.worldData.libraryPacks.lifecycleContracts import ReinstantiatePreview
 from app.application.worldData.libraryPacks.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, remapped_library_uid
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,8 @@ def _uid_map_for(
 ) -> dict[str, str]:
     """source member uid → member uid under ``pack_uid`` (central formula)."""
     return {
-        m.template_uid: library_uid(
-            LibraryKind(m.library_kind), m.local_uid, pack_uid=pack_uid
+        m.template_uid: remapped_library_uid(
+            LibraryKind(m.library_kind), source_template_uid=m.template_uid, target_pack_uid=pack_uid
         )
         for m in members
     }
@@ -55,8 +56,8 @@ class _RemapOps:
         self._packs = pack_ops  # get()
 
     async def instantiate(
-        self, source_pack_uid: str, world_uid: str
-    ) -> PackRemapResult:
+        self, source_pack_uid: str, world_uid: str, *, confirm=False, preview_token=None
+    ) -> PackRemapResult | ReinstantiatePreview:
         scope = self._scope
         source = await self._packs.get(source_pack_uid)
         if source.owner_world_uid is not None:
@@ -77,21 +78,9 @@ class _RemapOps:
             )
         existing = await scope.packs.find_instance(world_uid, source.pack_uid)
         if existing is not None:
-            # Re-instantiate = the same instance identity (TZ §2), not a
-            # duplicate; member/body rewrite lands with step 4c.
-            members = await scope.members.list_by_pack(existing.pack_uid)
-            missing = await scope.diagnose_missing(existing)
-            return PackRemapResult(
-                pack=existing,
-                members=tuple(members),
-                uid_map={
-                    m.source_template_uid: m.template_uid
-                    for m in members
-                    if m.source_template_uid is not None
-                },
-                missing_dependencies=tuple(sorted(missing)),
-                created=False,
-            )
+            from app.application.worldData.libraryPacks.reinstantiateOps import reinstantiate
+            return await reinstantiate(scope, source, existing, world,
+                                       confirm=confirm, preview_token=preview_token)
         return await self._copy(
             source,
             system_name=_instance_system_name(world_uid, source.system_name),
@@ -130,8 +119,6 @@ class _RemapOps:
         system_name, new_pack_uid = await scope.new_pack_identity(system_name)
         members = await scope.members.list_by_pack(source.pack_uid)
         uid_map = _uid_map_for(members, new_pack_uid)
-        if world is not None:
-            await self._require_local_uids_free(members, world.world_uid)
 
         pack_row = LibraryPackRow(
             pack_uid=new_pack_uid,
@@ -179,6 +166,7 @@ class _RemapOps:
                     library_kind=src.library_kind,
                     local_uid=src.local_uid,
                     source_template_uid=src.template_uid,
+                    creation_kind='pack_copy',
                 )
                 new_rows.append(member)
                 per_kind.setdefault(src.library_kind, []).append(
@@ -212,27 +200,3 @@ class _RemapOps:
             uid_map=uid_map,
             missing_dependencies=tuple(sorted(missing)),
         )
-
-    async def _require_local_uids_free(
-        self,
-        members: Iterable[LibraryPackMemberRow],
-        world_uid: str,
-    ) -> None:
-        """``local_uid`` is the identity axis: a collision between two
-        world-owned packs of the same world rejects the instantiate
-        (TZ §1.1). Default records are overridden by layer priority —
-        not checked here."""
-        taken = {
-            (m.library_kind, m.local_uid)
-            for m in await self._scope.members.list_for_world(world_uid)
-        }
-        collisions = sorted(
-            f"{m.library_kind}:{m.local_uid}"
-            for m in members
-            if (m.library_kind, m.local_uid) in taken
-        )
-        if collisions:
-            raise LibraryPackConflictError(
-                f"local_uid collision in world '{world_uid}' packs: "
-                f"{collisions} (TZ §1.1)"
-            )

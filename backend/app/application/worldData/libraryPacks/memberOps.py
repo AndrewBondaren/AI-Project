@@ -12,7 +12,6 @@ import logging
 import sqlite3
 from collections.abc import Iterable
 
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
 from app.application.worldData.libraryPacks.errors import (
     LibraryPackConflictError,
     LibraryPackInUseError,
@@ -21,7 +20,6 @@ from app.application.worldData.libraryPacks.errors import (
 )
 from app.application.worldData.libraryPacks.packResults import MemberDeleteResult
 from app.application.worldData.libraryPacks.packScope import _PackScope, _coerce_kind
-from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
@@ -39,18 +37,6 @@ def _validate_local_uid(local_uid: str) -> str:
             f"local_uid must not contain '|': {local_uid!r}"
         )
     return local_uid
-
-
-def _pin_usages(world: World, member: LibraryPackMemberRow) -> list[str]:
-    """Author pins ``(library_kind, local_uid)`` naming this member (TZ §1.1)."""
-    for raw_pin in world.library_pins or []:
-        pin = LibraryPinEntry.model_validate(raw_pin)
-        if (
-            pin.library_kind == member.library_kind
-            and pin.local_uid == member.local_uid
-        ):
-            return [f"pinned by world '{world.world_uid}' (library_pins)"]
-    return []
 
 
 class _MemberOps:
@@ -91,11 +77,11 @@ class _MemberOps:
 
         async def _write() -> None:
             if (
-                await scope.members.find_by_local_uid(pack_uid, kind.value, local_uid)
+                await scope.members.get_by_uid(template_uid)
                 is not None
             ):
                 raise LibraryPackConflictError(
-                    f"local_uid '{local_uid}' already exists in pack "
+                    f"authored template_uid '{template_uid}' already exists in pack "
                     f"'{pack.system_name}' ({kind.value})"
                 )
             outline = await adapter.write_body(
@@ -130,6 +116,7 @@ class _MemberOps:
         scope.require_owner_scope(pack, world_uid)
         adapter = scope.adapter_for(LibraryKind(member.library_kind))
         world = await scope.world_for(pack)
+        source_file = await adapter.body_source_file(template_uid)
 
         async def _write() -> None:
             outline = await adapter.write_body(
@@ -138,6 +125,7 @@ class _MemberOps:
                 template_uid=member.template_uid,
                 pack=pack,
                 world=world,
+                source_file=source_file,
             )
             if world is not None:
                 await adapter.drop_pointer(world, template_uid)
@@ -165,7 +153,8 @@ class _MemberOps:
         scope.require_owner_scope(pack, world_uid)
         adapter = scope.adapter_for(LibraryKind(member.library_kind))
         world = await scope.world_for(pack)
-        usages = self._usages(world, member, adapter)
+        from app.application.worldData.libraryPacks.referenceResolver import member_usages
+        usages = await member_usages(scope, member, world)
         if usages and not allow_used:
             raise LibraryPackInUseError(
                 f"member '{member.local_uid}' is in use: {usages}",
@@ -193,16 +182,6 @@ class _MemberOps:
         return await self._scope.adapter_for(
             LibraryKind(member.library_kind)
         ).read_body(template_uid)
-
-    @staticmethod
-    def _usages(
-        world: World | None,
-        member: LibraryPackMemberRow,
-        adapter: PackDomainAdapter,
-    ) -> list[str]:
-        if world is None:
-            return []  # engine members are never inside a world's catalog
-        return _pin_usages(world, member) + adapter.member_usages(world, member)
 
     async def teardown(
         self,

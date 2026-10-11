@@ -55,15 +55,13 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
         self._library = library
         self._world_repo = world_repository
 
-    async def write_body(
+    def prepare_body(
         self,
         raw: dict,
         *,
         local_uid: str,
         template_uid: str,
-        pack: LibraryPackRow,
-        world: World | None,
-        source_file: str | None = None,
+        world: World | None = None,
     ) -> BuildingTemplateOutline | PlotLayoutTemplate:
         if not isinstance(raw, dict):
             raise LibraryPackValidationError(
@@ -86,10 +84,24 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
                 f"building body system_name '{body.system_name}' != "
                 f"member local_uid '{local_uid}'"
             )
-        await self._library.upsert_outline(
-            body, source_file=source_file, pack_uid=pack.pack_uid
-        )
         return body
+
+    async def write_body(self, raw, *, local_uid, template_uid, pack, world,
+                         source_file=None):
+        body = self.prepare_body(raw, local_uid=local_uid, template_uid=template_uid, world=world)
+        await self._library.upsert_outline(body, source_file=source_file,
+                                          pack_uid=pack.pack_uid, template_uid=template_uid)
+        return body
+
+    def body_refs(self, body, consumer):
+        from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
+        return structure_refs(body, consumer)
+
+    def world_refs(self, world):
+        from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
+        return tuple(ref for i, row in enumerate(world.building_template_registry or [])
+                     if isinstance(row, dict) and 'system_template_uid' not in row
+                     for ref in structure_refs(row, f"world:{world.world_uid}:building_template_registry[{i}]"))
 
     def remap_body(
         self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]

@@ -8,7 +8,7 @@ from app.dataModel.annotationPolicy import StrictOnWire
 
 
 class LibraryPinEntry(BaseModel):
-    """Author pin: pair ``(library_kind, local_uid)`` — survives member remap.
+    """Author pin: pair ``(library_kind, template_uid)`` — remapped on pack copy.
 
     ``library_kind`` carries a ``LibraryKind`` value; the enum itself lives
     in ``app.ids`` — dataModel never imports the
@@ -18,4 +18,4 @@ class LibraryPinEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     library_kind: StrictOnWire[str]
-    local_uid: StrictOnWire[str]
+    template_uid: StrictOnWire[str]

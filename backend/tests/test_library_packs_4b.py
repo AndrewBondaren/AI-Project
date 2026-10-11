@@ -39,7 +39,7 @@ from app.db.repositories.sqlite.structureTemplateRepository import (
     SqliteStructureTemplateRepository,
 )
 from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid, remapped_library_uid
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STRUCTURES_ROOT = _REPO_ROOT / "structures_templates"
@@ -133,7 +133,7 @@ class InstantiateTests(_ServiceCase):
             self.assertEqual(inst_m.source_template_uid, src_m.template_uid)
             self.assertEqual(
                 inst_m.template_uid,
-                library_uid(_RELIEF, src_m.local_uid, pack_uid=inst.pack_uid),
+                remapped_library_uid(_RELIEF, source_template_uid=src_m.template_uid, target_pack_uid=inst.pack_uid),
             )
             # Snapshot: a body row exists at the new uid and is the copy.
             inst_body = await self.service.read_member_body(inst_m.template_uid)
@@ -344,7 +344,7 @@ class InstantiateTests(_ServiceCase):
         )
         self.assertTrue(first.created)
         self.assertFalse(second.created)
-        self.assertEqual(second.pack.pack_uid, first.pack.pack_uid)
+        self.assertEqual(second.pack_uid, first.pack.pack_uid)
 
         world = await self.worlds.get_by_id("w1")
         registry_uids = {
@@ -363,7 +363,7 @@ class InstantiateTests(_ServiceCase):
         second = await self.service.instantiate_pack(src.pack_uid, world_uid="w1")
         self.assertTrue(first.created)
         self.assertFalse(second.created)
-        self.assertEqual(second.pack.pack_uid, first.pack.pack_uid)
+        self.assertEqual(second.pack_uid, first.pack.pack_uid)
         self.assertEqual(
             {m.template_uid for m in second.members},
             {m.template_uid for m in first.members},
@@ -385,7 +385,7 @@ class InstantiateTests(_ServiceCase):
             {m.template_uid for m in first.members},
         )
 
-    async def test_local_uid_collision_rejected(self):
+    async def test_same_readable_name_does_not_block_instantiate(self):
         await self._world("w1")
         world_pack = await self.service.create_pack(
             system_name="world.w1.relief", owner_world_uid="w1"
@@ -395,11 +395,9 @@ class InstantiateTests(_ServiceCase):
             body=_relief_body("meadow"), world_uid="w1",
         )
         engine, _ = await self._relief_engine_pack(members=("meadow",))
-        with self.assertRaises(LibraryPackConflictError):
-            await self.service.instantiate_pack(engine.pack_uid, world_uid="w1")
-        self.assertIsNone(
-            await self.packs.find_instance("w1", engine.pack_uid)
-        )
+        result = await self.service.instantiate_pack(engine.pack_uid, world_uid="w1")
+        self.assertTrue(result.created)
+        self.assertIsNotNone(await self.packs.find_instance("w1", engine.pack_uid))
         # A different domain with the same local key is not a collision.
         engine2 = await self.service.create_pack(system_name="user.buildings.b")
         await self.service.create_member(
@@ -506,7 +504,7 @@ class PublishTests(_ServiceCase):
         self.assertEqual(new_member.source_template_uid, wmember.template_uid)
         self.assertEqual(
             new_member.template_uid,
-            library_uid(_RELIEF, "meadow", pack_uid=pub.pack_uid),
+            remapped_library_uid(_RELIEF, source_template_uid=wmember.template_uid, target_pack_uid=pub.pack_uid),
         )
         self.assertIsNotNone(
             await self.relief_rows.get_by_uid(new_member.template_uid)

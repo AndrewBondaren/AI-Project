@@ -144,6 +144,8 @@ def _resolve_members(
     loaded: list[LoadedMember] = []
     for member in manifest.members:
         _validate_member_identity(member, manifest, library_kind)
+        if member.creation_kind != 'authored':
+            raise PackManifestError('FS author manifests cannot declare copy creation_kind')
         if member.source_template_uid is not None:
             raise PackManifestError(
                 f"member '{member.local_uid}': source_template_uid is remap "

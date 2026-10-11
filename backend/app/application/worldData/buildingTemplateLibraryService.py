@@ -101,14 +101,18 @@ class BuildingTemplateLibraryService:
     async def find_by_uid(self, template_uid: str) -> BuildingTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
 
+    async def delete(self, template_uid: str) -> None:
+        await self._repo.delete(template_uid)
+
     async def upsert_outline(
         self,
         outline: BuildingTemplateOutline | PlotLayoutTemplate,
         *,
         source_file: str | None = None,
         pack_uid: str | None = None,
+        template_uid: str | None = None,
     ) -> BuildingTemplateRow:
-        uid = library_uid(LibraryKind.BUILDING_TEMPLATES, outline.system_name, pack_uid=pack_uid)
+        uid = template_uid or library_uid(LibraryKind.BUILDING_TEMPLATES, outline.system_name, pack_uid=pack_uid)
         row = BuildingTemplateRow(
             template_uid=uid,
             system_name=outline.system_name,

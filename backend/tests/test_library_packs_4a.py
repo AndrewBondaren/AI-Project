@@ -440,7 +440,7 @@ class OwnershipAndDualWriteTests(_ServiceCase):
         )
         await self.container.world_service().update(
             "w3", {"library_pins": [
-                pin_for_member(_RELIEF, "meadow").model_dump(mode="json")
+                pin_for_member(_RELIEF, member.template_uid).model_dump(mode="json")
             ]}
         )
         with self.assertRaises(LibraryPackInUseError) as ctx:
