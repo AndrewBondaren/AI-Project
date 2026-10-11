@@ -1,7 +1,6 @@
-from fastapi import HTTPException
-
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list, with_default_created_at, prepare_import_row
+from app.application.worldData.errors import WorldDataNotFoundError
 from app.db.models.state import State
 from app.db.repositories.iStateRepository import IStateRepository
 
@@ -17,7 +16,7 @@ class StateService:
     async def get_by_id(self, world_uid: str, state_uid: str) -> State:
         state = await self._repo.get_by_id(state_uid)
         if state is None or state.world_uid != world_uid:
-            raise HTTPException(status_code=404, detail=f"State '{state_uid}' not found")
+            raise WorldDataNotFoundError(f"State '{state_uid}' not found")
         return state
 
     async def get_by_uids(self, uids: list[str]) -> list[State]:

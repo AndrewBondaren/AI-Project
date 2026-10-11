@@ -2,8 +2,7 @@ import dataclasses
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import HTTPException
-
+from app.application.worldData.errors import WorldDataNotFoundError
 from app.db.models.player import Player
 from app.db.repositories.iPlayerRepository import IPlayerRepository
 
@@ -19,7 +18,7 @@ class PlayerService:
     async def get_by_id(self, character_uid: str) -> Player:
         player = await self._repo.get_by_id(character_uid)
         if player is None:
-            raise HTTPException(status_code=404, detail=f"Character '{character_uid}' not found")
+            raise WorldDataNotFoundError(f"Character '{character_uid}' not found")
         return player
 
     async def create(self, data: dict) -> Player:

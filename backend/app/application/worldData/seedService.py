@@ -1,6 +1,5 @@
-from fastapi import HTTPException
-
 from app.api.schemas.imports import ImportError, ImportResult
+from app.application.worldData.errors import WorldDataValidationError
 from app.db.database import Database
 
 ALLOWED_SEED_TABLES = frozenset({
@@ -98,4 +97,4 @@ class SeedService:
 
     def _validate_table(self, table: str) -> None:
         if table not in ALLOWED_SEED_TABLES:
-            raise HTTPException(status_code=400, detail=f"Unknown seed table: '{table}'")
+            raise WorldDataValidationError(f"Unknown seed table: '{table}'")

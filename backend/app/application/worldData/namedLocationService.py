@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from dataclasses import asdict
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.application.jsonValidation.sourceValidation import validate_source
@@ -6,6 +5,7 @@ from app.application.jsonValidation.worldRow import location_types
 
 from app.application.importResult import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at
+from app.application.worldData.errors import WorldDataNotFoundError
 from app.application.worldData.settlementMapOccupancy import (
     emit_settlement_volume_conflicts,
     pick_occupants,
@@ -41,7 +41,7 @@ class NamedLocationService:
     async def get_by_id(self, world_uid: str, location_uid: str) -> NamedLocation:
         loc = await self._repo.get_by_id(location_uid)
         if loc is None or loc.world_uid != world_uid:
-            raise HTTPException(status_code=404, detail=f"Location '{location_uid}' not found")
+            raise WorldDataNotFoundError(f"Location '{location_uid}' not found")
         return loc
 
     async def get_children(self, world_uid: str, parent_uid: str) -> list[NamedLocation]:
