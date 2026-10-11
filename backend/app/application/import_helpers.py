@@ -3,6 +3,7 @@ from typing import Awaitable, Callable, TypeVar
 from inspect import signature
 
 from app.application.importResult import ImportError, ImportResult
+from app.application.worldData.errors import WorldDataError
 
 T = TypeVar("T")
 
@@ -40,6 +41,8 @@ async def import_list(
             obj = prepare(row)
             await upsert(obj)
             succeeded += 1
+        except WorldDataError:
+            raise  # domain failure is not a row-level validation error
         except ValueError as e:
             entity_id = row.get(id_key) if id_key and isinstance(row, dict) else None
             errors.append(ImportError(index=i, message=str(e), entity_id=entity_id))

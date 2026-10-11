@@ -13,6 +13,7 @@ from app.application.jsonValidation.sourceValidation import validate_source
 from app.ids import LibraryKind, library_uid
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
+from app.application.worldData.errors import WorldDataError
 from app.application.worldData.worldService import WorldService
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
@@ -163,6 +164,8 @@ class BuildingTemplateLibraryService:
                 ])
                 await self._ensure_registry(world_uid, row)
                 succeeded += 1
+            except WorldDataError:
+                raise  # domain failure is not a row-level validation error
             except ValueError as exc:
                 from app.application.importResult import ImportError
                 errors.append(ImportError(index=i, message=str(exc)))

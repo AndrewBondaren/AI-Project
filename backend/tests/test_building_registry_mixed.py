@@ -20,8 +20,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 
-from fastapi import HTTPException
-
+from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import world_building_layout_overrides
 from app.core.container import Container
 from app.db.database import Database
@@ -167,13 +166,12 @@ class MixedColumnRejectTests(IsolatedAsyncioTestCase):
     async def test_garbage_row_rejected_with_index(self):
         world = _world_fixture()
         world["building_template_registry"] = [_POINTER, _GARBAGE]
-        # Domain-error contract after worlddata-http-decoupling; HTTPException
-        # while the CRUD adapter still maps in-service.
-        with self.assertRaises(HTTPException) as caught:
+        with self.assertRaises(ImportValidationError) as caught:
             await self.worlds.import_from_json(world)
-        detail = str(caught.exception.detail)
-        self.assertIn("building_template_registry", detail)
-        self.assertIn("1", detail)  # row index in the error path
+        self.assertTrue(any(
+            "building_template_registry" in e.path and 1 in e.path
+            for e in caught.exception.errors
+        ))  # row index in the error path
 
 
 if __name__ == "__main__":

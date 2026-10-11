@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 
 from app.api.deps import get_container
 from app.api.routes.worlds import router
@@ -148,9 +148,8 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         world = await self.worlds.get_by_id(uid)
         self.assertEqual(world.terrain_masks["default_forests"]["forest_min_rainfall"], 60)
         self.assertFalse(world.terrain_masks["default_forests"]["enabled"])
-        with self.assertRaises(HTTPException) as error:
+        with self.assertRaises(ImportValidationError):
             await self.worlds.update(uid, {"terrain_masks": {"default_forests": {"forest_min_rainfall": -1}}})
-        self.assertEqual(error.exception.status_code, 422)
         self.assertEqual((await self.worlds.get_by_id(uid)).terrain_masks, world.terrain_masks)
 
     async def test_union_patch_persists_star_changes_and_invalid_merge_never_writes(self):
@@ -166,9 +165,8 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
                          {"form_type": "star", "rays": 7, "inner_ratio": 0.45})
         for change in ({"default_mountains": {"default_form": {"rays": 1}}},
                        {"default_forests": {"hills": {"shapes": None}}}):
-            with self.assertRaises(HTTPException) as caught:
+            with self.assertRaises(ImportValidationError):
                 await self.worlds.update(uid, {"terrain_masks": change})
-            self.assertEqual(caught.exception.status_code, 422)
             self.assertEqual((await self.worlds.get_by_id(uid)).terrain_masks, world.terrain_masks)
 
     async def test_http_flag_default_false_true_and_invalid(self):

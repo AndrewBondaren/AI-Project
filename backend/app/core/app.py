@@ -86,6 +86,9 @@ def create_app():
     container = Container(config_manager=config_manager, db=db)
     app.state.container = container
 
+    from app.api.errorMapping import install_error_handlers
+    install_error_handlers(app)
+
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(
         CORSMiddleware,

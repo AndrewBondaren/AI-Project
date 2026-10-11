@@ -2,13 +2,15 @@ import dataclasses
 import re
 from dataclasses import dataclass
 
-from fastapi import HTTPException
-
 from app.api.schemas.imports import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at, prepare_import_row
 from app.application.jsonValidation.facade import normalize_world, merge_world_patch
 from app.application.jsonValidation.worldSlices import world_wire_from_row
-from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
+from app.application.worldData.errors import (
+    WorldDataError,
+    WorldDataNotFoundError,
+    WorldDataValidationError,
+)
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
@@ -36,7 +38,7 @@ class WorldService:
     async def get_by_id(self, world_uid: str) -> World:
         world = await self._repo.get_by_id(world_uid)
         if world is None:
-            raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+            raise WorldDataNotFoundError(f"World '{world_uid}' not found")
         return world
 
     async def find_by_id(self, world_uid: str) -> World | None:
@@ -64,8 +66,10 @@ class WorldService:
         merged = merge_world_patch(world_wire_from_row(world), patch)
         try:
             world = self.prepare_import(_normalize_world_data(merged))
+        except WorldDataError:
+            raise
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise WorldDataValidationError(str(exc)) from exc
 
         map_size_changed = old_map_cell_size != world.fine_cells_per_map_cell
 
@@ -106,7 +110,7 @@ class WorldService:
             world = self.prepare_import(data)
             await self._repo.upsert(world)
             return ImportResult(total=1, succeeded=1, failed=0)
-        except HTTPException:
+        except WorldDataError:
             raise
         except Exception as e:
             return ImportResult(
@@ -117,14 +121,7 @@ class WorldService:
     @classmethod
     def prepare_import(cls, data: dict) -> World:
         world = prepare_import_row(World, with_default_created_at(data))
-        try:
-            cls._validate(world)
-        except HTTPException as exc:
-            # Existing CRUD adapter uses HTTPException; bundle preflight exposes
-            # a domain failure without importing HTTP machinery into handlers.
-            if exc.status_code != 422:
-                raise
-            raise ValueError(str(exc.detail)) from exc
+        cls._validate(world)
         return world
 
     # ------------------------------------------------------------------
@@ -155,32 +152,29 @@ class WorldService:
     def _validate(world: World) -> None:
         v = world.fine_cells_per_map_cell
         if not isinstance(v, int) or isinstance(v, bool):
-            raise HTTPException(status_code=422,
-                detail="fine_cells_per_map_cell must be an integer")
+            raise WorldDataValidationError(
+                "fine_cells_per_map_cell must be an integer")
         if v < 1000:
-            raise HTTPException(status_code=422,
-                detail="fine_cells_per_map_cell must be at least 1000")
+            raise WorldDataValidationError(
+                "fine_cells_per_map_cell must be at least 1000")
         if v % 1000 != 0:
-            raise HTTPException(status_code=422,
-                detail="fine_cells_per_map_cell must be a multiple of 1000")
+            raise WorldDataValidationError(
+                "fine_cells_per_map_cell must be a multiple of 1000")
 
         if world.grid_bbox_padding < 0:
-            raise HTTPException(status_code=422,
-                detail="grid_bbox_padding must be >= 0")
+            raise WorldDataValidationError(
+                "grid_bbox_padding must be >= 0")
 
         chunk = world.terrain_chunk_columns
         if not isinstance(chunk, int) or isinstance(chunk, bool) or chunk < 1:
-            raise HTTPException(status_code=422,
-                detail="terrain_chunk_columns must be an integer >= 1")
+            raise WorldDataValidationError(
+                "terrain_chunk_columns must be an integer >= 1")
 
         depth = world.map_subsurface_depth
         if not isinstance(depth, int) or isinstance(depth, bool) or depth < 0:
-            raise HTTPException(status_code=422,
-                detail="map_subsurface_depth must be an integer >= 0")
+            raise WorldDataValidationError(
+                "map_subsurface_depth must be an integer >= 0")
 
 
 def _normalize_world_data(data: dict, *, partial: bool = False) -> dict:
-    try:
-        return normalize_world(data, partial=partial)
-    except ImportValidationError as exc:
-        raise HTTPException(status_code=422, detail=import_validation_http_detail(exc)) from exc
+    return normalize_world(data, partial=partial)
