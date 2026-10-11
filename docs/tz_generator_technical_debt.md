@@ -2081,6 +2081,8 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 ## Library packs — шаг 4a transitional leftovers (LIBPACK-T)
 
+**Ревью шага 4c (2026-10-11):** согласованные пункты по коммиту `9a50d4d1` — **LIBPACK-4C-R-1** (**resolved**, P2: диагностика через общий resolve logger проекта; 122 теста прошли), **LIBPACK-4C-R-2** (**resolved**, P3: единая декларация ref-полей для чтения/remap; 81 тест прошёл), **LIBPACK-4C-R-3** (**resolved**, P3: snapshot загрузка отдельно от pure update-plan, body/retention/fingerprint разделены; 103 теста прошли). Подробности и критерии закрытия — [library-packs-4c-review-debt-done.md](../.cursor/plans/library-packs-4c-review-debt-done.md).
+
 **Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model.md`](../.cursor/plans/library-packs-model.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt.md`](../.cursor/plans/library-packs-4a-review-debt.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
 
 | ID | Severity | Status | P | Ось | Smell | Target |

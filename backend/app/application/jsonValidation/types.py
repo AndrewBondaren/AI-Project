@@ -3,6 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
+
+
+class ReferenceIssueReason(StrEnum):
+    UNKNOWN_TEMPLATE = "unknown_template"
+    OWNER_UNAVAILABLE = "owner_pack_unavailable"
+    KIND_MISMATCH = "library_kind_mismatch"
+    MISSING_DEPENDENCY = "missing_dependency"
+
+
+@dataclass(frozen=True)
+class ReferenceIssueContext:
+    reason: ReferenceIssueReason
+    domain: str
+    world_uid: str | None = None
+    requested_template_uid: str | None = None
+    owner_pack_uid: str | None = None
+    dependency_pack_uid: str | None = None
+    consumer: str | None = None
+    selected_default: str | None = None
 
 
 @dataclass(frozen=True)
@@ -11,6 +31,7 @@ class FieldPathError:
     message: str
     schema_id: str | None = None
     code: str | None = None
+    reference: ReferenceIssueContext | None = None
 
 
 @dataclass

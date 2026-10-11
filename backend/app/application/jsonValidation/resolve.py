@@ -9,7 +9,8 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from collections.abc import Iterable
 from enum import StrEnum
 from typing import Any, NoReturn, TYPE_CHECKING
 
@@ -90,13 +91,21 @@ class ResolveResult:
         return self.value is not None
 
 
-def reject_unresolved(ctx: ResolveContext, issues: list[FieldPathError]) -> NoReturn:
-    """One reaction point for structured facts from wire/domain checks."""
+def report_issues(ctx: ResolveContext, issues: Iterable[FieldPathError]) -> None:
+    """Shared policy-resolve reporting for rejecting and diagnostic callers."""
+    issues = tuple(dict.fromkeys(issues))
     ctx.errors.extend(issues)
     if not ctx.validate_only:
         for issue in issues:
+            extra = ({**asdict(issue.reference), "reference_path": issue.path}
+                     if issue.reference is not None else {})
             logger.warning("json_validation | WarningError | path=%s code=%s | %s",
-                           issue.path, issue.code, issue.message)
+                           issue.path, issue.code, issue.message, extra=extra)
+
+
+def reject_unresolved(ctx: ResolveContext, issues: list[FieldPathError]) -> NoReturn:
+    """One rejection point for structured facts from wire/domain checks."""
+    report_issues(ctx, issues)
     raise UnresolvedModelError(issues)
 
 

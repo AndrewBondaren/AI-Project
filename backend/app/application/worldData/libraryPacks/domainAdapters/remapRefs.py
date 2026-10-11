@@ -13,15 +13,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.application.jsonValidation.resolve import resolve_model
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    _POINTER_UID_FIELD,
+from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+    RELIEF_POLICY_REF_FIELDS, STRUCTURE_REF_FIELDS, structure_ref_model,
 )
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ReliefContextPickPolicy,
-    WorldReliefPickPolicy,
 )
 from app.db.models.world import World
 
@@ -53,34 +50,18 @@ def _remap_structure_refs(row: dict, uid_map: Mapping[str, str]) -> dict | None:
     Returns ``None`` when nothing matched — refs to other packs stay
     untouched.
     """
-    if not isinstance(row, dict) or _POINTER_UID_FIELD in row:
-        return None
-    if not any(
-        row.get(name)
-        for name in ("main_building", "secondary_buildings")
-    ):
-        return None
     try:
-        plot = resolve_model(PlotLayoutTemplate, row, label="plot-layout")
+        plot = structure_ref_model(row, label="plot-layout")
     except ValueError as exc:
         raise LibraryPackValidationError(
             f"plot-layout row fails schema during ref remap: {exc}"
         ) from exc
-    update: dict[str, Any] = {}
-    main = plot.main_building
-    if main is not None and str(main.structure) in uid_map:
-        update["main_building"] = main.model_copy(
-            update={"structure": uid_map[str(main.structure)]}
-        )
-    if plot.secondary_buildings:
-        items = [
-            body.model_copy(update={"structure": uid_map[str(body.structure)]})
-            if str(body.structure) in uid_map
-            else body
-            for body in plot.secondary_buildings
-        ]
-        if items != list(plot.secondary_buildings):
-            update["secondary_buildings"] = items
+    if plot is None:
+        return None
+    update: dict[str, Any] = {
+        field.parent_field: value for field in STRUCTURE_REF_FIELDS
+        if (value := field.remap(plot, uid_map)) is not None
+    }
     if not update:
         return None
     return {**row, **plot.model_copy(update=update).model_dump(mode="json")}
@@ -96,7 +77,8 @@ def _remap_relief_pick_policy(world: World, uid_map: Mapping[str, str]) -> dict 
         return None
     out = dict(raw)
     changed = False
-    for name in WorldReliefPickPolicy.model_fields:
+    for field in RELIEF_POLICY_REF_FIELDS:
+        name = field.parent_field
         entry = out.get(name)
         if not isinstance(entry, dict):
             continue
@@ -106,12 +88,11 @@ def _remap_relief_pick_policy(world: World, uid_map: Mapping[str, str]) -> dict 
             raise LibraryPackValidationError(
                 f"relief_pick_policy.{name} fails schema during ref remap: {exc}"
             ) from exc
-        if policy.default_template_uid in uid_map:
+        replacement = field.remap_entry(policy, uid_map)
+        if replacement is not policy:
             out[name] = {
                 **entry,
-                **policy.model_copy(
-                    update={"default_template_uid": uid_map[policy.default_template_uid]}
-                ).model_dump(mode="json"),
+                **replacement.model_dump(mode="json"),
             }
             changed = True
     return out if changed else None

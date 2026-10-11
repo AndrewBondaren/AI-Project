@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from app.application.jsonValidation.resolve import resolve_model
-from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
     PackDomainAdapter,
     RemappedMember,
@@ -21,6 +20,7 @@ from app.application.worldData.libraryPacks.domainAdapters.mixins import (
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
     _remap_relief_pick_policy,
 )
+from app.application.worldData.libraryPacks.domainAdapters.refFields import relief_policy_refs
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
@@ -34,10 +34,6 @@ from app.application.worldData.reliefWorldImportService import ReliefWorldImport
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
     ReliefTemplateRegistryEntry,
-)
-from app.dataModel.terrain.relief.worldReliefPickPolicy import (
-    ReliefContextPickPolicy,
-    WorldReliefPickPolicy,
 )
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -100,13 +96,7 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
         return outline
 
     def world_refs(self, world):
-        from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
-        policy = relief_pick_policy(world)
-        return tuple(MemberRef(self.library_kind.value, entry.default_template_uid,
-                               f"world:{world.world_uid}", f"relief_pick_policy.{name}.default_template_uid")
-                     for name in WorldReliefPickPolicy.model_fields
-                     if isinstance(entry := getattr(policy, name), ReliefContextPickPolicy)
-                     and entry.default_template_uid)
+        return relief_policy_refs(world)
 
     async def import_fs_pack(
         self, path: str | Path, *, domain_root: Path | None = None

@@ -22,6 +22,7 @@ from app.application.worldData.libraryPacks.domainAdapters.mixins import (
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
     _remap_structure_refs,
 )
+from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.dataModel.locations.structure.building.buildingTemplateOutline import (
     BuildingTemplateOutline,
@@ -94,13 +95,10 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
         return body
 
     def body_refs(self, body, consumer):
-        from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
         return structure_refs(body, consumer)
 
     def world_refs(self, world):
-        from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
         return tuple(ref for i, row in enumerate(world.building_template_registry or [])
-                     if isinstance(row, dict) and 'system_template_uid' not in row
                      for ref in structure_refs(row, f"world:{world.world_uid}:building_template_registry[{i}]"))
 
     def remap_body(

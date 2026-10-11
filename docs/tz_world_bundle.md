@@ -31,20 +31,20 @@ metadata:
 ### Целевое расширение: паки библиотек (2026-10-08, ещё не реализовано)
 
 Контракт — [tz_template_library_packs.md §4](./tz_template_library_packs.md).
-Добавляются `library_packs` (manifests/состав/зависимости), `structure_templates`
-(тела дочерней геометрии) и entity-секция `library_pack_bindings` (`{pack_uid}`,
-world UID определяется импортируемым миром). Manifest/body без binding не
-подключает пользовательский пак. Подключение — ко всему миру, не генератору
-или локации. Defaults доступны через отдельные доверенные spec, не назначаются
-флагом пользовательского manifest.
+Добавляются `library_packs` (world-owned manifests/состав/зависимости) и
+`structure_templates` (тела дочерней геометрии). Секции `library_pack_bindings`
+нет: доступность следует из владения паком импортируемым миром (§1.1 и §4
+связанного ТЗ). Инстанс подключается ко всему миру. Defaults доступны через
+отдельные доверенные spec, не назначаются флагом пользовательского manifest.
 
 Валидация всех manifests/UID/body предшествует persist. В одной существующей
-bundle-транзакции: world → manifests → bodies/membership → bindings → диагностика
-зависимостей. Body-секции не создают скрытые bindings. Неразрешимые template refs/
+bundle-транзакции: world → manifests → bodies/membership → диагностика
+зависимостей. Body-секции не создают скрытые подключения. Неразрешимые template refs/
 зависимости дают default + warning в runtime-политике; невалидный wire или
 владение отвергаются resolver. Будущий master-mode — строгая диагностика refs.
-Remap мира не меняет глобальные pack/template UID. Self-contained export
-сохраняет состав подключённых пользовательских паков, тела и явные bindings;
+Remap мира не меняет engine pack/template UID; при copy world-owned UID
+перевычисляются от нового владельца по §4.2. Self-contained export
+сохраняет состав world-owned паков, тела, зависимости и provenance;
 зависимость не означает автоматического подключения. Рефы в самих телах
 остаются только UID шаблонов. Текущие allowlists/order/handlers ниже требуют
 расширения отдельным этапом, до него новый формат не считается реализованным.
@@ -55,6 +55,11 @@ Remap мира не меняет глобальные pack/template UID. Self-co
 Секции bundle становятся файлами архива; модель `dict {key: payload}` и
 handlers не меняются. World archive несёт только world-owned manifests —
 engine-библиотеки идут отдельным архивом `kind:"library_pack"`.
+Первая версия конверта — `format_version: 1`; индекс секций, согласованность
+`source` и правила воспроизводимости заданы в §4.2 связанного ТЗ.
+`download=false` сохраняет inline JSON-preview sections dict; файловый экспорт
+пишет `.wpack`, импорт также читает legacy flat JSON. Проверка ZIP-конверта
+предшествует JSON resolver; дальнейший pipeline handlers остаётся общим.
 
 ---
 

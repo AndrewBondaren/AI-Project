@@ -1,7 +1,10 @@
 """Independent member-copy inside one author scope (TZ packs §0.1)."""
 from app.application.worldData.libraryPacks.errors import LibraryPackOwnershipError, LibraryPackValidationError
 from app.application.worldData.libraryPacks.lifecycleContracts import MemberCopyResult
-from app.application.worldData.libraryPacks.referenceResolver import load_catalog, reference_index
+from app.application.worldData.libraryPacks.referenceResolver import (
+    contextualize_issues, dependency_issues, load_catalog, reference_index,
+)
+from app.application.jsonValidation.resolve import ResolveContext, report_issues
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, runtime_uid
 
@@ -29,12 +32,14 @@ async def copy_member(scope, members, source_uid, target_pack_uid, *, world_uid=
     member = LibraryPackMemberRow(uid, target.pack_uid, source.library_kind,
                                   source.local_uid, source_uid, 'member_copy')
     catalog = await load_catalog(scope, target.owner_world_uid)
-    _, diagnostics = reference_index(adapter.body_refs(body.model_dump(mode='json'), uid), catalog.members)
-    missing = await scope.diagnose_missing(target)
-    diagnostics += tuple(f"missing dependency pack '{dep}'" for dep in sorted(missing))
+    _, issues = reference_index(adapter.body_refs(body.model_dump(mode='json'), uid), catalog.members)
+    issues = await contextualize_issues(scope, issues, target.owner_world_uid)
+    missing = await scope.missing_uids(target.pack_uid)
+    issues += dependency_issues(target.pack_uid, missing, target.owner_world_uid)
     await adapter.write_body(body.model_dump(mode='json'), local_uid=member.local_uid,
                              template_uid=uid, pack=target, world=world, source_file=source_file)
     await scope.members.insert(member)
     if world is not None:
         await adapter.ensure_pointer(world, member, body)
-    return MemberCopyResult(member, diagnostics)
+    report_issues(ResolveContext(), issues)
+    return MemberCopyResult(member, tuple(issue.message for issue in issues))

@@ -1,5 +1,6 @@
 """Preview/recheck/apply orchestration; all writes share one caller UOW."""
 from dataclasses import replace
+from app.application.jsonValidation.resolve import ResolveContext, report_issues
 
 from app.application.worldData.libraryPacks.domainAdapters import RemappedMember
 from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
@@ -10,6 +11,7 @@ from app.ids import LibraryKind
 
 async def reinstantiate(scope, source, instance, world, *, confirm=False, preview_token=None):
     preview = await prepare_update(scope, source, instance, world)
+    report_issues(ResolveContext(), preview.resolve_issues)
     if not confirm or not preview_token or preview_token != preview.preview_token:
         return replace(preview, stale=bool(confirm and preview_token and preview_token != preview.preview_token))
     if preview.conflicts:

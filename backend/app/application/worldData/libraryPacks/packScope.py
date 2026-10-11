@@ -8,7 +8,6 @@ shared member-domain gate.
 
 from __future__ import annotations
 
-import logging
 import sqlite3
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -32,8 +31,8 @@ from app.db.repositories.iLibraryPackDependencyRepository import (
 from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.ids import LibraryKind, library_uid
-
-logger = logging.getLogger(__name__)
+from app.application.jsonValidation.resolve import ResolveContext, report_issues
+from app.application.worldData.libraryPacks.referenceResolver import dependency_issues
 
 
 def _coerce_kind(library_kind: str | LibraryKind) -> LibraryKind:
@@ -159,9 +158,5 @@ class _PackScope:
     async def diagnose_missing(self, pack: LibraryPackRow) -> set[str]:
         """Log + return declared dependencies absent from the catalog."""
         missing = await self.missing_uids(pack.pack_uid)
-        if missing:
-            logger.warning(
-                "packs | pack=%s has missing dependencies: %s",
-                pack.system_name, sorted(missing),
-            )
+        report_issues(ResolveContext(), dependency_issues(pack.pack_uid, missing, pack.owner_world_uid))
         return missing
