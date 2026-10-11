@@ -102,20 +102,25 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
                      for ref in structure_refs(row, f"world:{world.world_uid}:building_template_registry[{i}]"))
 
     def remap_body(
-        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]
+        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str], local_uid: str | None = None,
     ) -> dict:
         """Plot layouts carry ``structure`` refs into the structure
         library — internal refs to source members follow the map (TZ §2)."""
         remapped = _remap_structure_refs(body, uid_map)
-        return remapped if remapped is not None else dict(body)
+        result = remapped if remapped is not None else dict(body)
+        if local_uid is not None:
+            from app.application.worldData.libraryPacks.domainAdapters.contract import _SYSTEM_NAME_FIELD
+            result[_SYSTEM_NAME_FIELD] = local_uid
+        return result
+
+    def pointer_entry(self, member, outline):
+        return BuildingTemplateRegistryEntry(system_template_uid=member.template_uid,
+                                             display_template_name=outline.display_name)
 
     def _pointer_entry(
         self,
         member: LibraryPackMemberRow,
         outline: BuildingTemplateOutline | PlotLayoutTemplate,
     ) -> BuildingTemplateRegistryEntry:
-        return BuildingTemplateRegistryEntry(
-            system_template_uid=member.template_uid,
-            display_template_name=outline.display_name,
-            imported_at=datetime.now(timezone.utc).isoformat(),
-        )
+        return self.pointer_entry(member, outline).model_copy(
+            update={"imported_at": datetime.now(timezone.utc).isoformat()})

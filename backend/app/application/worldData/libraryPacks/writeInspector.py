@@ -187,7 +187,8 @@ class LibraryWriteInspector:
         return WriteInspectionState(tuple(sorted(sources.items())), states,
                                      tuple(packs[uid] for uid in sorted(packs)),
                                      tuple(members[uid] for uid in sorted(members)),
-                                     tuple(sorted(dependency_edges.items())))
+                                     tuple(sorted(dependency_edges.items())),
+                                     tuple(sorted(await self._catalog.members.existing_uids(sorted(members)))))
 
     @staticmethod
     def _target(pack: LibraryPackRow) -> WriteTarget:

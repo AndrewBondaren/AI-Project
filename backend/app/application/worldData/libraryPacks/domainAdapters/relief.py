@@ -112,12 +112,32 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
     def _pointer_entry(
         self, member: LibraryPackMemberRow, outline: ReliefTemplate
     ) -> ReliefTemplateRegistryEntry:
-        return ReliefTemplateRegistryEntry(
-            system_template_uid=member.template_uid,
-            display_template_name=outline.display_name,
-            context=outline.context,
-            imported_at=datetime.now(timezone.utc).isoformat(),
-        )
+        return self.pointer_entry(member, outline).model_copy(
+            update={"imported_at": datetime.now(timezone.utc).isoformat()})
+
+    def pointer_entry(self, member, outline):
+        return ReliefTemplateRegistryEntry(system_template_uid=member.template_uid,
+                                           display_template_name=outline.display_name, context=outline.context)
+
+    def remap_body(self, body, *, template_uid, uid_map, local_uid=None):
+        from app.application.worldData.libraryPacks.domainAdapters.contract import _SYSTEM_NAME_FIELD
+        result = dict(body)
+        if local_uid is not None:
+            result[_SYSTEM_NAME_FIELD] = local_uid
+        return result
+
+    def prepare_world_refs(self, world, uid_map, members, *, removed_uids=()):
+        from app.application.worldData.reliefTerrainSync import missing_terrain_entries
+        result = super().prepare_world_refs(world, uid_map, members, removed_uids=removed_uids)
+        policy = _remap_relief_pick_policy(result, uid_map)
+        if policy is not None:
+            result.relief_pick_policy = policy
+        needed = (c.terrain.value for rm in members if isinstance(rm.outline, ReliefTemplate)
+                  for c in rm.outline.conditions)
+        entries = missing_terrain_entries(result, needed)
+        if entries:
+            result.terrain_registry = list(result.terrain_registry or []) + [e.model_dump(mode="json") for e in entries]
+        return result
 
     async def remap_world_refs(
         self,

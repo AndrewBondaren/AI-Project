@@ -27,6 +27,13 @@ if TYPE_CHECKING:
     from app.db.models.world import World
 
 
+def missing_terrain_entries(world: World, needed: Iterable[str]) -> list:
+    """Pure R34 projection; emission and persistence belong to the caller."""
+    have = {row.get("system_terrain") for row in world.terrain_registry or [] if isinstance(row, dict)}
+    canon = {e.system_terrain: e for e in WorldTerrainRegistry.canonical_engine().root}
+    return [canon[key] for key in sorted(set(needed)) if key not in have and key in canon]
+
+
 def merge_missing_terrain_entries(
     world: World,
     needed: Iterable[str],
@@ -43,24 +50,12 @@ def merge_missing_terrain_entries(
     should always resolve). Logs ``r34_terrain_upsert`` per added key;
     returns the added keys.
     """
-    keys = sorted(set(needed))
-    if not keys:
-        return []
-    raw_rows = list(getattr(world, "terrain_registry", None) or [])
-    have = {
-        row.get("system_terrain")
-        for row in raw_rows
-        if isinstance(row, dict)
-    }
-    canon = {
-        e.system_terrain: e
-        for e in WorldTerrainRegistry.canonical_engine().root
-    }
+    entries = missing_terrain_entries(world, needed)
+    raw_rows = list(world.terrain_registry or [])
     added: list[str] = []
-    for key in keys:
-        if key in have or key not in canon:
-            continue
-        raw_rows.append(canon[key].model_dump(mode="json"))
+    for entry in entries:
+        key = entry.system_terrain
+        raw_rows.append(entry.model_dump(mode="json"))
         added.append(key)
         relief_warning(
             "r34_terrain_upsert",

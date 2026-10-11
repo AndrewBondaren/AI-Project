@@ -61,3 +61,4 @@ class WriteInspectionState:
     known_packs: tuple[LibraryPackRow, ...]
     known_members: tuple[LibraryPackMemberRow, ...]
     dependency_edges: tuple[tuple[str, tuple[str, ...]], ...]
+    existing_member_uids: tuple[str, ...] = ()

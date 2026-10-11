@@ -165,7 +165,7 @@ class PackDomainAdapter(ABC):
     # ------------------------------------------------------------------
 
     def remap_body(
-        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]
+        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str], local_uid: str | None = None,
     ) -> dict:
         """Copied member body for the new owner.
 
@@ -174,6 +174,12 @@ class PackDomainAdapter(ABC):
         other packs, external bodies — stay untouched.
         """
         return dict(body)
+
+    def prepare_world_refs(self, world: World, uid_map: Mapping[str, str],
+                           members: Sequence[RemappedMember], *, removed_uids: Sequence[str] = ()) -> World:
+        """Pure projected world; existing async remap remains the legacy write seam."""
+        from copy import deepcopy
+        return deepcopy(world)
 
     async def remap_world_refs(
         self,

@@ -84,12 +84,22 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         return outline
 
     def remap_body(
-        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str]
+        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str], local_uid: str | None = None,
     ) -> dict:
         """Model A: the copied body embeds its new member uid (TZ §2)."""
         out = dict(body)
         out[_SYSTEM_NAME_FIELD] = template_uid
         return out
+
+    def prepare_world_refs(self, world, uid_map, members, *, removed_uids=()):
+        from copy import deepcopy
+        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
+        result = deepcopy(world)
+        remap_pins(result, uid_map)
+        result.building_template_registry = [
+            _remap_structure_refs(row, uid_map) or row if isinstance(row, dict) else row
+            for row in result.building_template_registry or []]
+        return result
 
     async def remap_world_refs(
         self,

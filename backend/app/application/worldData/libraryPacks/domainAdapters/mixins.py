@@ -46,6 +46,16 @@ class _RegistryPointerMixin:
     registry_field: ClassVar[str]
     _world_repo: IWorldRepository
 
+    def prepare_world_refs(self, world, uid_map, members, *, removed_uids=()):
+        from copy import deepcopy
+        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
+        result = deepcopy(world)
+        remap_pins(result, uid_map)
+        entries = [self.pointer_entry(rm.member, rm.outline).model_dump(mode="json") for rm in members]
+        setattr(result, self.registry_field, self._registry_with_entries(
+            result, uid_map, members, entries, removed_uids))
+        return result
+
     async def ensure_pointer(
         self, world: World, member: LibraryPackMemberRow, outline: Any
     ) -> None:
@@ -92,15 +102,16 @@ class _RegistryPointerMixin:
         member uids are rebuilt; other rows (foreign pointers, embedded
         plot layouts) pass through untouched — raw-dict scan, not the
         resolved POJO, so non-pointer rows survive."""
-        drop = set(uid_map) | {rm.member.template_uid for rm in members}
+        entries = [self._pointer_entry(rm.member, rm.outline).model_dump(mode="json") for rm in members]
+        return self._registry_with_entries(world, uid_map, members, entries)
+
+    def _registry_with_entries(self, world, uid_map, members, new_entries, removed_uids=()):
+        drop = set(uid_map) | {rm.member.template_uid for rm in members} | set(removed_uids)
         entries = [
             row for row in (getattr(world, self.registry_field, None) or [])
             if not (isinstance(row, dict) and row.get(_POINTER_UID_FIELD) in drop)
         ]
-        entries.extend(
-            self._pointer_entry(rm.member, rm.outline).model_dump(mode="json")
-            for rm in members
-        )
+        entries.extend(new_entries)
         return entries
 
     def _pointer_entry(self, member: LibraryPackMemberRow, outline: Any):
