@@ -22,6 +22,9 @@ from app.application.worldData.libraryPacks.packOps import _PackOps
 from app.application.worldData.libraryPacks.packResults import PackRemapResult
 from app.application.worldData.libraryPacks.lifecycleContracts import ReinstantiatePreview
 from app.application.worldData.libraryPacks.packScope import _PackScope
+from app.application.worldData.libraryPacks.packIdentity import (
+    instance_system_name as _instance_system_name, published_system_name,
+)
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -29,11 +32,6 @@ from app.db.models.world import World
 from app.ids import LibraryKind, remapped_library_uid
 
 logger = logging.getLogger(__name__)
-
-
-def _instance_system_name(world_uid: str, source_system_name: str) -> str:
-    """Deterministic ``system_name`` of a world instance pack."""
-    return f"world.{world_uid}.instance.{source_system_name}"
 
 
 def _uid_map_for(
@@ -103,7 +101,7 @@ class _RemapOps:
             )
         return await self._copy(
             source,
-            system_name=system_name or f"{source.system_name}.published",
+            system_name=system_name or published_system_name(source.system_name),
             owner_world_uid=None,
         )
 

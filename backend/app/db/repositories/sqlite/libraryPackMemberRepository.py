@@ -65,16 +65,21 @@ class SqliteLibraryPackMemberRepository(
     async def get_by_uid(self, template_uid: str) -> LibraryPackMemberRow | None:
         return await self.fetch_one("template_uid = ?", [template_uid])
 
+    async def list_by_local_uid(
+        self, pack_uid: str, library_kind: str, local_uid: str,
+    ) -> list[LibraryPackMemberRow]:
+        return await self.fetch_all(
+            "pack_uid = ? AND library_kind = ? AND local_uid = ?",
+            [pack_uid, library_kind, local_uid], order="template_uid ASC",
+        )
+
     async def find_by_local_uid(
         self,
         pack_uid: str,
         library_kind: str,
         local_uid: str,
     ) -> LibraryPackMemberRow | None:
-        rows = await self.fetch_all(
-            "pack_uid = ? AND library_kind = ? AND local_uid = ?",
-            [pack_uid, library_kind, local_uid],
-        )
+        rows = await self.list_by_local_uid(pack_uid, library_kind, local_uid)
         if len(rows) > 1:
             raise ValueError("ambiguous readable member name; address member by template_uid")
         return rows[0] if rows else None

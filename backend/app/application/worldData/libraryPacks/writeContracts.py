@@ -3,10 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.ids import LibraryKind
+
+if TYPE_CHECKING:
+    from app.application.worldData.libraryPacks.writeInspectionContracts import WriteInspectionState
 
 
 class WriteObjectKind(StrEnum):
@@ -138,6 +142,7 @@ class WriteSnapshot:
     """
     items: tuple[WriteItemSnapshot, ...]
     preview_token: str
+    inspection: WriteInspectionState | None = None
 
 
 @dataclass(frozen=True)

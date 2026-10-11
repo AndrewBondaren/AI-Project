@@ -47,6 +47,13 @@ class ILibraryPackMemberRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_by_local_uid(
+        self, pack_uid: str, library_kind: str, local_uid: str,
+    ) -> list[LibraryPackMemberRow]:
+        """All matches of a local key, ordered by template_uid (packs TZ §0.3)."""
+        ...
+
+    @abstractmethod
     async def find_by_local_uid(
         self,
         pack_uid: str,
