@@ -524,7 +524,11 @@ SQL-schema изменяется только в `0001_initial.sql` с синхр
 ## 4. Manifest, импорт и bundle
 
 Typed manifest пака содержит `pack_uid`, `system_name`, `pack_name`,
-`display_name`, `version`, `dependencies` (список UID паков), `members`.
+`display_name`, `version`, `dependencies` (список UID паков), `members` и
+необязательный `defaults` — карта `library_kind → local_uid` члена этого же
+пака, объявляемого доменным default пака (§5.1; v1 — только
+`structure_templates`). `local_uid` обязан быть членом манифеста того же
+kind — иначе ошибка контракта импорта; ссылка на чужой пак не допускается.
 Каждый member содержит `library_kind`, `local_uid`, `template_uid` и,
 для FS-импорта, `source_file` относительно соответствующего domain root.
 `source_pack_uid` пака и `source_template_uid` членов присутствуют только в
@@ -780,6 +784,55 @@ Ref-поле различает три состояния (уточнение 20
 Будущий режим мастера использует те же диагностические причины, но выдаёт
 конкретную ошибку вместо warning/default. Реализация режима мастера вне scope.
 
+### 5.1 Default-слой structures: POJO + цепочка override (решение 2026-10-11)
+
+Домен `structure_templates` получает default-слой для fallback-ветки §5
+(unknown UID / owner unavailable / missing dependency / member без body /
+пустой ref / явный `default`-маркер). До этого решения домен контракта не
+объявлял — исход был отказ (`GenerationError` в planner/area assembler).
+
+**База — POJO.** `StructureTemplate.canonical_defaults()` — валидное тело с
+**объявленными комнатами**, не пустая оболочка: один уровень `z_offset=0`
+с одной обязательной комнатой. Strict-поля комнаты/уровня (`room_id`,
+`display_name`, `room_type`, `is_public`/`is_forbidden`/`required`, `size`)
+объявляются canonical-константами в модуле POJO (прецедент —
+`WorldRoomTypeRegistry._CANONICAL_ENTRIES`): `room_type` — ключ из
+canonical `WorldRoomTypeRegistry` (`common_hall`), `size` — preset
+`RoomSize` (без литеральных диапазонов), `purpose` — лист `house`,
+`entry_point` объявлен. Все остальные поля — Field-defaults моделей
+(`RoomDef`/`LevelDef`/`StructureTemplate`: высоты, двери, `attach_wall`,
+`passage_type`…). `system_name` — детерминированный UUID из центрального
+`ids` (model A). Это доменный POJO-контракт, как parent plots (§6): без
+SQL-строки, без pack-членства, без FS; тело проходит те же валидаторы, что
+любой шаблон (`validate_room_ids`, `RoomDef._conditional_fields`).
+
+**Цепочка override** — `world → pack → POJO`, первый найденный:
+
+1. **Мир** — `worlds.structure_defaults.default_template_uid` (POJO
+   `WorldStructureDefaults`, `canonical_defaults()` = пусто). Это
+   template ref: разрешается через эффективный каталог мира по §1.1
+   (членство + доступность); сам ref **не** проходит fallback — битый
+   override = обычная диагностика §5 с причиной и переход к следующему
+   уровню, подстановка другого кандидата запрещена. Пишется как scoped
+   world-column (см. `world-scoped-column-write.md`).
+2. **Пак** — `defaults.structure_templates` манифеста (§4) пака, входящего
+   в membership мира. Приоритет внутри уровня: world-owned паки выше
+   default-паков; при нескольких объявлениях в одном ярусе — детерминированный
+   выбор sort by `pack_uid` + одна warning-запись (причина
+   `default_conflict`, перечень pack UID). Объявление пака вне membership
+   не участвует. Объявление хранится в SQL-каталоге паков вместе с
+   членством (export/bundle/instantiate переносят его; remap §2
+   переписывает `local_uid` не требуется — он локален для пака).
+3. **POJO** — `StructureTemplate.canonical_defaults()`.
+
+Выбранный default попадает в `selected_default` диагностики как
+`{source}:{uid}` (`world:` / `pack:` / `pojo:`); событие одно, на границе
+resolve (§7). Сохранённая ссылка не переписывается ни на одном уровне.
+
+Не меняется: relief остаётся на R21 (reject, без default-слоя тел),
+building — на POJO parent plots; `_DECLARED_DEFAULT_PACKS` и статус
+default-паков не затрагиваются; override не делает чужой пак доступным.
+
 ## 6. Canonical attach и жизненный цикл
 
 `world_wire_overlay` остаётся чистым merge исходных wire-полей перед resolver.
@@ -806,7 +859,10 @@ Canonical attach — единственная мутация read-only default-�
 записи не оставляет строк. В чужой транзакции adapter использует существующий
 transaction/savepoint-контракт, не делает скрытый commit или вложенный BEGIN.
 
-Стартовый default structures — объявленный `base`. Родительские builtin
+Стартовый default-**пак** structures — объявленный `base` (каталог
+кандидатов); default-**тело** для fallback одной ссылки — POJO
+`StructureTemplate.canonical_defaults()` с override world → pack (§5.1,
+решение 2026-10-11). Родительские builtin
 plots остаются доменным default-слоем через POJO `canonical_defaults()` —
 без pack-членства и SQL-строк: импорт их в библиотеку дал бы второй
 источник истины поверх POJO (уточнение 2026-10-09). У relief объявленный
@@ -825,7 +881,7 @@ settlement `packingLog`, relief `relief_warning`, policy resolve — сущес�
 контракт событий, без новых параллельных log-функций/handlers/форматтеров.
 
 Причины: unknown template, owner pack unavailable to world, missing dependency,
-default applied. Диагностика несёт world UID, generator/domain, requested template
+body missing, default applied, default conflict (§5.1). Диагностика несёт world UID, generator/domain, requested template
 UID, owner/dependency pack UID (если известны), reference path, причину и выбранный
 default. Одно событие эмитируется один раз на границе resolve; callers его не
 дублируют. Штатный facade направляет запись в доменный JSON sink, generation

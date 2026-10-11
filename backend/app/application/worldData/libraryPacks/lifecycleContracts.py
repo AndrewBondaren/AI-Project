@@ -107,6 +107,28 @@ class ReinstantiatePreview:
 
 
 @dataclass(frozen=True)
+class FallbackDecision:
+    """Domain answer to an unresolvable template ref (TZ packs §5).
+
+    ``value`` is the domain's own default contract (POJO ``canonical_defaults``
+    layer) — never another library candidate; ``reject`` marks domains without
+    a substitution contract (relief R21). The adapter decides, never logs:
+    the resolve boundary emits the single warning record.
+    """
+    value: Any = None
+    selected_default: str | None = None
+    reject: bool = False
+
+    @classmethod
+    def default(cls, value: Any, selected_default: str) -> FallbackDecision:
+        return cls(value=value, selected_default=selected_default)
+
+    @classmethod
+    def rejected(cls) -> FallbackDecision:
+        return cls(reject=True)
+
+
+@dataclass(frozen=True)
 class MemberCopyResult:
     member: LibraryPackMemberRow
     diagnostics: tuple[str, ...] = ()

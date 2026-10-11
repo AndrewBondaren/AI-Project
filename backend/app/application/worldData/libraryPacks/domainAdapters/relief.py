@@ -22,6 +22,7 @@ from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
 )
 from app.application.worldData.libraryPacks.domainAdapters.refFields import relief_policy_refs
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 from app.application.worldData.reliefTemplateLibraryService import (
@@ -97,6 +98,10 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
 
     def world_refs(self, world):
         return relief_policy_refs(world)
+
+    def resolve_fallback(self, *, world_uid):
+        """R21 unresolved policy: no template substitution — reject (TZ §5)."""
+        return FallbackDecision.rejected()
 
     async def import_fs_pack(
         self, path: str | Path, *, domain_root: Path | None = None

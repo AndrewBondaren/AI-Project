@@ -6,16 +6,14 @@ from dataclasses import replace
 from app.application.jsonValidation.resolve import ResolveContext, report_issues
 from app.application.jsonValidation.types import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 
-from app.application.worldData.libraryPacks.defaults import default_pack_uids
 from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot, MemberRef
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldData.libraryPacks.membership import membership_pack_uids
 from app.ids import LibraryKind
 
 
 async def load_catalog(scope, world_uid: str | None) -> CatalogSnapshot:
-    packs = (await scope.packs.list_world_owned(world_uid) if world_uid is not None
-             else await scope.packs.list_engine())
-    uids = sorted({p.pack_uid for p in packs} | set(default_pack_uids()))
+    uids = await membership_pack_uids(scope.packs, world_uid)
     members = await scope.members.list_by_packs(uids)
     bodies, files = {}, {}
     for member in members:

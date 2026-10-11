@@ -24,6 +24,7 @@ from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
 )
 from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision
 from app.dataModel.locations.structure.building.buildingTemplateOutline import (
     BuildingTemplateOutline,
 )
@@ -112,6 +113,14 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
             from app.application.worldData.libraryPacks.domainAdapters.contract import _SYSTEM_NAME_FIELD
             result[_SYSTEM_NAME_FIELD] = local_uid
         return result
+
+    def resolve_fallback(self, *, world_uid):
+        """Domain default layer: builtin parent plots (POJO ``canonical_defaults``),
+        not pack members — TZ §5/§6."""
+        from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import (
+            canonical_defaults,
+        )
+        return FallbackDecision.default(canonical_defaults(), "builtin_plots")
 
     def pointer_entry(self, member, outline):
         return BuildingTemplateRegistryEntry(system_template_uid=member.template_uid,

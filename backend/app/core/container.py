@@ -66,6 +66,10 @@ from app.application.worldData.reliefTemplateLibraryService import ReliefTemplat
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
+from app.application.worldData.libraryPacks.effectiveCatalog import EffectiveCatalogLoader
+from app.application.worldData.libraryPacks.refResolve import RefResolver
+from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
@@ -186,6 +190,9 @@ class Container:
         self._building_template_library_service: BuildingTemplateLibraryService | None = None
         self._structure_template_library_service: StructureTemplateLibraryService | None = None
         self._library_pack_service: LibraryPackService | None = None
+        self._pack_domain_adapters: dict[LibraryKind, PackDomainAdapter] | None = None
+        self._effective_catalog_loader: EffectiveCatalogLoader | None = None
+        self._ref_resolver: RefResolver | None = None
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
@@ -692,6 +699,25 @@ class Container:
             )
         return self._structure_template_library_service
 
+    def pack_catalog_repos(self) -> PackCatalogRepos:
+        """Full pack catalog bundle (packs + members + deps) — public read seam."""
+        return PackCatalogRepos(
+            packs=self.library_pack_repository(),
+            members=self.library_pack_member_repository(),
+            deps=self.library_pack_dependency_repository(),
+        )
+
+    def pack_domain_adapters(self) -> dict[LibraryKind, PackDomainAdapter]:
+        if self._pack_domain_adapters is None:
+            self._pack_domain_adapters = build_pack_domain_adapters(
+                relief_library=self.relief_template_library_service(),
+                structure_library=self.structure_template_library_service(),
+                building_library=self.building_template_library_service(),
+                world_repository=self.world_repository(),
+                relief_world_import=self.relief_world_import_service(),
+            )
+        return self._pack_domain_adapters
+
     def library_pack_service(self) -> LibraryPackService:
         """Step-4a CRUD boundary over packs/members (+ dual-write pointers)."""
         if self._library_pack_service is None:
@@ -701,15 +727,25 @@ class Container:
                 members=self.library_pack_member_repository(),
                 deps=self.library_pack_dependency_repository(),
                 world_service=self.world_service(),
-                adapters=build_pack_domain_adapters(
-                    relief_library=self.relief_template_library_service(),
-                    structure_library=self.structure_template_library_service(),
-                    building_library=self.building_template_library_service(),
-                    world_repository=self.world_repository(),
-                    relief_world_import=self.relief_world_import_service(),
-                ),
+                adapters=self.pack_domain_adapters(),
             )
         return self._library_pack_service
+
+    def effective_catalog_loader(self) -> EffectiveCatalogLoader:
+        """Step-5a runtime read facade — membership-scoped world catalog."""
+        if self._effective_catalog_loader is None:
+            self._effective_catalog_loader = EffectiveCatalogLoader(
+                self.pack_catalog_repos(), self.pack_domain_adapters()
+            )
+        return self._effective_catalog_loader
+
+    def ref_resolver(self) -> RefResolver:
+        """Step-5a template-ref resolve (TZ packs §5) over the effective catalog."""
+        if self._ref_resolver is None:
+            self._ref_resolver = RefResolver(
+                self.pack_catalog_repos(), self.pack_domain_adapters()
+            )
+        return self._ref_resolver
 
     def location_service(self) -> NamedLocationService:
         if self._location_service is None:

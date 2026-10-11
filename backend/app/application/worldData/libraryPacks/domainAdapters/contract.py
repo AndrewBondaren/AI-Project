@@ -44,7 +44,7 @@ from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
+from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision, MemberRef
 
 if TYPE_CHECKING:
     from app.application.worldData.reliefTemplateFsImport import ReliefPackImport
@@ -159,6 +159,22 @@ class PackDomainAdapter(ABC):
 
     async def drop_pointer(self, world: World, template_uid: str) -> None:
         """Dual-write: remove the world registry pointer for a member."""
+
+    # ------------------------------------------------------------------
+    # Runtime resolve contract (TZ §5) — effective catalog, step 5a-2.
+    # ------------------------------------------------------------------
+
+    def resolve_fallback(self, *, world_uid: str) -> FallbackDecision:
+        """Domain decision for a ref that did not resolve to an available body
+        (unknown uid, owner unavailable, missing dependency, missing body,
+        empty ref, explicit default marker).
+
+        Domains with a POJO default layer answer ``FallbackDecision.default``;
+        domains without a substitution contract keep the base ``rejected``
+        (relief R21: no other template is ever substituted). Pure — the
+        resolve boundary emits the single warning record.
+        """
+        return FallbackDecision.rejected()
 
     # ------------------------------------------------------------------
     # Remap contract (TZ §2) — instantiate_pack / copy_pack, step 4b.

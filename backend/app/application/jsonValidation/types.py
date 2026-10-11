@@ -11,6 +11,8 @@ class ReferenceIssueReason(StrEnum):
     OWNER_UNAVAILABLE = "owner_pack_unavailable"
     KIND_MISMATCH = "library_kind_mismatch"
     MISSING_DEPENDENCY = "missing_dependency"
+    BODY_MISSING = "body_missing"
+    DEFAULT_APPLIED = "default_applied"
 
 
 @dataclass(frozen=True)
