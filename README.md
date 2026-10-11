@@ -115,5 +115,23 @@ curl.exe "http://localhost:8000/api/worlds/world-test-003/map/render-location-gr
 curl.exe "http://localhost:8000/api/worlds/world-test-003/map/render-wilderness-tile-grid?gx=-2&gy=-2"
 curl.exe "http://localhost:8000/api/worlds/world-test-003/locations/{location_uid}/render-grid"
 
+# 4. Relief templates (library packs)
 
+# список engine-библиотеки relief (глобальный SQL-каталог)
+curl.exe "http://localhost:8000/api/relief-templates"
+curl.exe "http://localhost:8000/api/relief-templates/{template_uid}"
+
+# импорт в engine-библиотеку: JSON-объект/массив ИЛИ FS-пак (relief_templates/{pack_name}/)
+curl.exe -X POST http://localhost:8000/api/relief-templates/import -F "path=e:/AI Project/relief_templates/{pack_name}"
+
+# подключить к миру: template_uid = member engine-пака → instantiate ВСЕГО пака
+# (частичных инстансов нет; повторный вызов — created:false, обновление членов — re-instantiate)
+curl.exe -X POST "http://localhost:8000/api/worlds/{world_uid}/relief-templates/import?template_uid={template_uid}"
+# → {"pack_uid","created","imported","uids","missing_dependencies"}
+# ошибки: 404 member не найден · 409 local_uid коллизия · 422 world-owned/default пак, невалидное тело
+
+# авторские outline-тела в мир (world-owned legacy-пак + registry pointer + R34 terrain upsert)
+curl.exe -X POST "http://localhost:8000/api/worlds/{world_uid}/relief-templates/import" \
+  -H "Content-Type: application/json" \
+  -d "{...outline...}"  # или массив [outline, ...]
 
