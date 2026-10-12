@@ -57,18 +57,21 @@ class WriteRetentionPlanner:
                 worlds.append(WorldWrite(scope.world, world, body_diff(asdict(scope.world), asdict(world))))
             available_packs = {p.pack_uid for p in scope.packs} | {i.pack.value.pack_uid for i in final if i.pack}
             refs = collect_refs(self._adapters, projected, world)
+            touched_packs = {item.pack.value.pack_uid for item in final if item.pack}
+            touched_members = {write.value.member.template_uid for item in final for write in item.members}
+            diagnosed = touched_members | {uid for uid, member in projected.members.items()
+                                           if member.pack_uid in touched_packs}
+            refs = tuple(ref for ref in refs if ref.consumer in diagnosed or ref.consumer.startswith("world:"))
             _, issues = reference_index(refs, projected.members)
             issues = contextualize_reference_issues(issues, {m.template_uid: m for m in inspection.known_members},
                                                     scope.owner_world_uid)
             diagnostics.extend(issues)
             graph = dict(inspection.dependency_edges)
             graph.update((item.pack.value.pack_uid, item.pack.dependencies) for item in final if item.pack)
-            for item in final:
-                if item.pack:
-                    diagnostics.extend(dependency_issues(item.pack.value.pack_uid,
-                                                         self._missing_dependencies(item.pack.value.pack_uid,
-                                                             graph, available_packs),
-                                                         scope.owner_world_uid))
+            dependency_roots = {by_key[item.item_key].pack.pack_uid for item in final}
+            for pack_uid in sorted(dependency_roots):
+                diagnostics.extend(dependency_issues(pack_uid,
+                    self._missing_dependencies(pack_uid, graph, available_packs), scope.owner_world_uid))
         return LibraryWritePlan(snapshot.preview_token, tuple(updated[i.item_key] for i in items),
                                 tuple(removed), tuple(sorted(all_held.items())), tuple(worlds),
                                 tuple(dict.fromkeys(diagnostics)))
@@ -100,4 +103,16 @@ class WriteRetentionPlanner:
                     RemappedMember(write.value.member, write.value.outline))
         for kind, adapter in sorted(self._adapters.items(), key=lambda entry: entry[0].value):
             result = adapter.prepare_world_refs(result, uid_map, by_kind[kind], removed_uids=tuple(removed))
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.jsonValidation.worldColumnResolve import resolve_world_column
+        for key, value in asdict(result).items():
+            if value != getattr(world, key):
+                if key == "library_pins":
+                    from app.application.jsonValidation.resolve import resolve_model
+                    from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
+                    result.library_pins = [resolve_model(LibraryPinEntry, pin).model_dump(mode="json") for pin in value]
+                    continue
+                resolved = resolve_world_column(key, value, ResolveContext(), existing=result)
+                for column, prepared in resolved.items():
+                    setattr(result, column, prepared)
         return result

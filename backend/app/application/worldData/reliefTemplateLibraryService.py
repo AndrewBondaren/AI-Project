@@ -1,10 +1,7 @@
-"""Global relief template library — SQL upsert CRUD (R11).
+"""Relief body reads/prepared persistence and common L-4 write delegation.
 
-FS/pack import — ``reliefTemplateFsImport`` (RELIEF-T-12; packs only,
-manifest required). ``upsert_outline(pack_uid=None)`` keeps the ownerless
-uid for the transitional direct-CRUD path; pack-scoped flows always pass
-the owner ``pack_uid`` (step 4a will close the ownerless path).
-Domain errors — RELIEF-T-3 (no FastAPI here).
+Standalone in-memory callers keep their test seam; SQL callers require
+the common pack boundary. Domain errors contain no FastAPI types.
 """
 
 from __future__ import annotations
@@ -56,10 +53,12 @@ class ReliefTemplateLibraryService:
         *,
         db: Database | None = None,
         catalog: PackCatalogRepos | None = None,
+        write_provider=None,
     ) -> None:
         self._repo = repo
         self._db = db
         self._catalog = catalog
+        self._write_provider = write_provider
 
     async def find_by_uid(self, template_uid: str) -> ReliefTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
@@ -73,6 +72,13 @@ class ReliefTemplateLibraryService:
     async def list_all(self) -> list[ReliefTemplateRow]:
         return await self._repo.list_all()
 
+    async def persist_prepared(self, outline, *, template_uid, source_file, added):
+        from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+        row = ReliefTemplateRow(template_uid=template_uid, system_name=outline.system_name,
+            display_name=outline.display_name, context=outline.context.value, version=outline.version,
+            data=outline.model_dump(mode="json"), source_file=source_file)
+        return await persist_body_row(self._repo, row, added=added)
+
     async def upsert_outline(
         self,
         outline: ReliefTemplate,
@@ -80,7 +86,14 @@ class ReliefTemplateLibraryService:
         source_file: str | None = None,
         pack_uid: str | None = None,
         template_uid: str | None = None,
+        world_uid: str | None = None,
     ) -> ReliefTemplateRow:
+        if self._write_provider is not None:
+            from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+            return await write_domain_body(self._write_provider(), LibraryKind.RELIEF_TEMPLATES,
+                outline, pack_uid=pack_uid, template_uid=template_uid, source_file=source_file, world_uid=world_uid)
+        if self._db is not None:
+            raise RuntimeError("SQL library writes require the common write service")
         uid = template_uid or library_uid(LibraryKind.RELIEF_TEMPLATES, outline.system_name, pack_uid=pack_uid)
         row = ReliefTemplateRow(
             template_uid=uid,
@@ -137,11 +150,16 @@ class ReliefTemplateLibraryService:
         *,
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
+        decisions=(), preview_token=None,
     ) -> list[ReliefTemplateRow]:
+        if self._write_provider is not None:
+            from app.application.worldData.libraryPacks.packResults import PackImportResult
+            result = await self._write_provider()._fs_writes.import_path(LibraryKind.RELIEF_TEMPLATES,
+                path, domain_root=domain_root, enforce_domain_root=enforce_domain_root,
+                decisions=decisions, preview_token=preview_token)
+            return list(result.bodies) if isinstance(result, PackImportResult) else result
         if self._db is not None:
-            async with self._db.transaction_if_needed():
-                return await self._import(path, domain_root=domain_root,
-                                          enforce_domain_root=enforce_domain_root)
+            raise RuntimeError("SQL library imports require the common write service")
         return await self._import(path, domain_root=domain_root,
                                   enforce_domain_root=enforce_domain_root)
 
@@ -163,7 +181,18 @@ class ReliefTemplateLibraryService:
         await attach_pack_catalog(outcome.manifest, self._catalog)
         return outcome.rows
 
-    async def delete(self, template_uid: str) -> None:
+    async def delete_prepared(self, template_uid: str) -> None:
+        from app.db.database import _in_transaction
+        if not _in_transaction.get():
+            raise RuntimeError("prepared deletion requires caller UOW")
+        await self._repo.delete(template_uid)
+
+    async def delete(self, template_uid: str, *, world_uid=None) -> None:
+        if self._write_provider is not None:
+            await self._write_provider().delete_member(template_uid, world_uid=world_uid)
+            return
+        if self._db is not None:
+            raise RuntimeError("SQL library writes require the common write service")
         row = await self.find_by_uid(template_uid)
         if row is None:
             raise ReliefNotFoundError(f"Relief template '{template_uid}' not found")

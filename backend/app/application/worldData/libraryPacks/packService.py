@@ -21,8 +21,9 @@ uid, never an engine member — so existing registry readers resolve the
 member. Member delete drops the pointer in the same transaction.
 
 This module is the facade only: shared deps + gates live in
-``packScope``, result DTOs in ``packResults``, the member/pack/remap
-jobs in ``memberOps``/``packOps``/``remapOps``.
+``packScope``, result DTOs in ``packResults``. Body writes and imports
+delegate to ``writeService``; exact CRUD/delete jobs remain in
+``memberOps``/``packOps``.
 """
 
 from __future__ import annotations
@@ -42,8 +43,7 @@ from app.application.worldData.libraryPacks.packResults import (
     PackImportResult,
     PackRemapResult,
 )
-from app.application.worldData.libraryPacks.packScope import _PackScope
-from app.application.worldData.libraryPacks.remapOps import _RemapOps
+from app.application.worldData.libraryPacks.packScope import _PackScope, _coerce_kind
 from app.application.worldData.worldService import WorldService
 from app.db.database import Database
 from app.db.models.libraryPack import LibraryPackRow
@@ -68,6 +68,7 @@ class LibraryPackService:
         deps: ILibraryPackDependencyRepository,
         world_service: WorldService,
         adapters: dict[LibraryKind, PackDomainAdapter],
+        write_service,
     ) -> None:
         self._scope = _PackScope(
             db=db,
@@ -79,7 +80,16 @@ class LibraryPackService:
         )
         self._member_ops = _MemberOps(self._scope)
         self._pack_ops = _PackOps(self._scope, self._member_ops)
-        self._remap_ops = _RemapOps(self._scope, self._pack_ops)
+        from app.application.worldData.libraryPacks.writeFacade import LibraryWriteFacade
+        self._writes = LibraryWriteFacade(self._scope, write_service)
+        from app.application.worldData.libraryPacks.fsWriteService import LibraryFsWriteService
+        self._fs_writes = LibraryFsWriteService(self._scope, write_service)
+        self._write_service = write_service
+
+    async def import_legacy_bodies(self, kind, world_uid, outlines, *, decisions=(), preview_token=None):
+        from app.application.worldData.libraryPacks.legacyWrite import import_legacy_bodies
+        return await import_legacy_bodies(self._scope, self._write_service, kind, world_uid, outlines,
+                                          decisions=decisions, preview_token=preview_token)
 
     # ------------------------------------------------------------------
     # Pack CRUD — delegated to the pack write job
@@ -183,6 +193,7 @@ class LibraryPackService:
         path: str | Path,
         *,
         domain_root: Path | None = None,
+        decisions=(), preview_token=None,
     ) -> PackImportResult:
         """Manifest-based FS import → engine library (TZ §4).
 
@@ -191,9 +202,8 @@ class LibraryPackService:
         a user pack never gains default status or world availability by
         landing in the catalog.
         """
-        return await self._pack_ops.import_fs_pack(
-            library_kind, path, domain_root=domain_root
-        )
+        return await self._fs_writes.import_path(library_kind, path, domain_root=domain_root,
+                                                decisions=decisions, preview_token=preview_token)
 
     # ------------------------------------------------------------------
     # Remap operations (TZ §2) — delegated to the remap job
@@ -215,8 +225,8 @@ class LibraryPackService:
         ``confirm=True`` and its current ``preview_token``. A stale token
         returns a fresh preview. Existing member UIDs remain stable.
         """
-        return await self._scope.atomic(lambda: self._remap_ops.instantiate(
-            source_pack_uid, world_uid, confirm=confirm, preview_token=preview_token))
+        return await self._writes.instantiate(await self.get_pack(source_pack_uid), world_uid,
+                                              confirm=confirm, preview_token=preview_token)
 
     async def copy_pack(
         self, source_pack_uid: str, *, system_name: str | None = None
@@ -228,14 +238,12 @@ class LibraryPackService:
         touched; editing the published library never reaches instances.
         ``system_name`` defaults to ``{source}.published``.
         """
-        return await self._scope.atomic(lambda: self._remap_ops.copy(
-            source_pack_uid, system_name=system_name))
+        return await self._writes.publish(await self.get_pack(source_pack_uid), system_name=system_name)
 
     async def copy_member(self, source_template_uid: str, target_pack_uid: str,
                           *, world_uid: str | None = None) -> MemberCopyResult:
-        from app.application.worldData.libraryPacks.memberCopyOps import copy_member
-        return await self._scope.atomic(lambda: copy_member(
-            self._scope, self._member_ops, source_template_uid, target_pack_uid, world_uid=world_uid))
+        return await self._writes.copy_member(await self.get_member(source_template_uid),
+                                              target_pack_uid, owner=world_uid)
 
     async def member_status(self, template_uid: str) -> MemberStatus:
         from app.application.worldData.libraryPacks.provenanceResolver import member_status
@@ -256,14 +264,9 @@ class LibraryPackService:
         world_uid: str | None = None,
     ) -> LibraryPackMemberRow:
         """Validate + write body and member atomically (no partial apply)."""
-        return await self._member_ops.create(
-            pack_uid,
-            library_kind=library_kind,
-            local_uid=local_uid,
-            body=body,
-            source_file=source_file,
-            world_uid=world_uid,
-        )
+        return await self._writes.create_member(await self.get_pack(pack_uid),
+            kind=_coerce_kind(library_kind), local_uid=local_uid, body=body,
+            owner=world_uid, source_file=source_file)
 
     async def get_member(self, template_uid: str) -> LibraryPackMemberRow:
         return await self._member_ops.require_member(template_uid)
@@ -279,9 +282,10 @@ class LibraryPackService:
         self, template_uid: str, body: dict, *, world_uid: str | None = None
     ) -> LibraryPackMemberRow:
         """Replace a member's body — identity change is delete + create."""
-        return await self._scope.atomic(lambda: self._member_ops.update_body(
-            template_uid, body, world_uid=world_uid
-        ))
+        member = await self.get_member(template_uid)
+        pack = await self.get_pack(member.pack_uid)
+        source_file = await self._scope.adapter_for(LibraryKind(member.library_kind)).body_source_file(template_uid)
+        return await self._writes.edit_member(member, pack, body, owner=world_uid, source_file=source_file)
 
     async def delete_member(
         self,

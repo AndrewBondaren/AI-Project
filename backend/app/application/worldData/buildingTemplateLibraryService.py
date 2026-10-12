@@ -61,11 +61,13 @@ class BuildingTemplateLibraryService:
         *,
         db: Database | None = None,
         catalog: PackCatalogRepos | None = None,
+        write_provider=None,
     ) -> None:
         self._repo = repo
         self._worlds = world_service
         self._db = db
         self._catalog = catalog
+        self._write_provider = write_provider
 
     async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
         """Hydrate plot bodies; valid outline-only bodies have no packing layout."""
@@ -101,7 +103,26 @@ class BuildingTemplateLibraryService:
     async def find_by_uid(self, template_uid: str) -> BuildingTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
 
-    async def delete(self, template_uid: str) -> None:
+    async def persist_prepared(self, outline, *, template_uid, source_file, added):
+        from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+        row = BuildingTemplateRow(template_uid=template_uid, system_name=outline.system_name,
+            display_name=outline.display_name, structure_type=_body_structure_type(outline),
+            version=outline.version if isinstance(outline, BuildingTemplateOutline) else BuildingTemplateRow.version,
+            data=outline.model_dump(mode="json"), source_file=source_file)
+        return await persist_body_row(self._repo, row, added=added)
+
+    async def delete_prepared(self, template_uid: str) -> None:
+        from app.db.database import _in_transaction
+        if not _in_transaction.get():
+            raise RuntimeError("prepared deletion requires caller UOW")
+        await self._repo.delete(template_uid)
+
+    async def delete(self, template_uid: str, *, world_uid=None) -> None:
+        if self._write_provider is not None:
+            await self._write_provider().delete_member(template_uid, world_uid=world_uid)
+            return
+        if self._db is not None:
+            raise RuntimeError("SQL library writes require the common write service")
         await self._repo.delete(template_uid)
 
     async def upsert_outline(
@@ -111,7 +132,14 @@ class BuildingTemplateLibraryService:
         source_file: str | None = None,
         pack_uid: str | None = None,
         template_uid: str | None = None,
+        world_uid: str | None = None,
     ) -> BuildingTemplateRow:
+        if self._write_provider is not None:
+            from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+            return await write_domain_body(self._write_provider(), LibraryKind.BUILDING_TEMPLATES,
+                outline, pack_uid=pack_uid, template_uid=template_uid, source_file=source_file, world_uid=world_uid)
+        if self._db is not None:
+            raise RuntimeError("SQL library writes require the common write service")
         uid = template_uid or library_uid(LibraryKind.BUILDING_TEMPLATES, outline.system_name, pack_uid=pack_uid)
         row = BuildingTemplateRow(
             template_uid=uid,
@@ -130,18 +158,22 @@ class BuildingTemplateLibraryService:
         self,
         world_uid: str,
         bodies: list[dict],
+        *, decisions=(), preview_token=None,
     ) -> ImportResult:
         if not isinstance(bodies, list):
             raise BundleValidationError("building_templates section must be an array")
+        if self._db is not None and self._write_provider is None:
+            raise RuntimeError("SQL library imports require the common write service")
         if self._db is not None:
             async with self._db.transaction_if_needed():
-                return await self._import_bodies(world_uid, bodies)
-        return await self._import_bodies(world_uid, bodies)
+                return await self._import_bodies(world_uid, bodies, decisions=decisions, preview_token=preview_token)
+        return await self._import_bodies(world_uid, bodies, decisions=decisions, preview_token=preview_token)
 
     async def _import_bodies(
         self,
         world_uid: str,
         bodies: list[dict],
+        *, decisions=(), preview_token=None,
     ) -> ImportResult:
         """Manifest-less bodies → world-owned ``legacy`` pack members (plan step 3)."""
         if not bodies:
@@ -151,6 +183,15 @@ class BuildingTemplateLibraryService:
                 "BuildingTemplateLibraryService: pack catalog repositories are not wired"
             )
         world = await self._worlds.get_by_id(world_uid)
+        if self._write_provider is not None:
+            from app.application.worldData.libraryPacks.writeResults import WriteResult
+            prepared = [self.prepare_body(world, raw) for raw in bodies]
+            result = await self._write_provider().import_legacy_bodies(
+                LibraryKind.BUILDING_TEMPLATES, world_uid, prepared,
+                decisions=decisions, preview_token=preview_token)
+            if not isinstance(result, WriteResult):
+                return result
+            return ImportResult(total=len(bodies), succeeded=len(bodies), failed=0, errors=[])
         legacy = await ensure_legacy_pack(world_uid, self._catalog.packs)
         succeeded = 0
         errors = []
@@ -158,7 +199,7 @@ class BuildingTemplateLibraryService:
             try:
                 outline = self.prepare_body(world, raw)
                 row = await self.upsert_outline(
-                    outline, source_file="bundle", pack_uid=legacy.pack_uid
+                    outline, source_file="bundle", pack_uid=legacy.pack_uid, world_uid=world_uid
                 )
                 await self._catalog.members.insert_missing([
                     legacy_member_row(

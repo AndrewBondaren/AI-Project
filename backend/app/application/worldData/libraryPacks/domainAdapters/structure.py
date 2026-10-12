@@ -4,8 +4,6 @@ IS the member uid; world-side refs live in plot-layout rows (TZ §0.2/§2)."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from app.application.jsonValidation.resolve import resolve_model
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
@@ -22,14 +20,9 @@ from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
-from app.db.models.libraryPack import LibraryPackRow
-from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
-
-if TYPE_CHECKING:
-    from app.application.worldData.structureTemplateFsImport import StructurePackImport
 
 
 class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
@@ -77,11 +70,6 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
             )
         return outline
 
-    async def write_body(self, raw, *, local_uid, template_uid, pack, world,
-                         source_file=None):
-        outline = self.prepare_body(raw, local_uid=local_uid, template_uid=template_uid, world=world)
-        await self._library.upsert_outline(outline, source_file=source_file)
-        return outline
 
     def remap_body(
         self, body: dict, *, template_uid: str, uid_map: Mapping[str, str], local_uid: str | None = None,
@@ -122,16 +110,3 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         if changed:
             world.building_template_registry = out
             await self._world_repo.update(world)
-
-    async def import_fs_pack(
-        self, path: str | Path, *, domain_root: Path | None = None
-    ) -> StructurePackImport:
-        from app.application.worldData.structureTemplateFsImport import (
-            import_structure_templates_path,
-        )
-
-        return await import_structure_templates_path(
-            path,
-            upsert_from_dict=self._library.upsert_from_dict,
-            domain_root=domain_root,
-        )

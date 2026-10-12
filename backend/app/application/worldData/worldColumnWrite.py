@@ -36,3 +36,12 @@ def apply_world_column(world: World, key: str, raw: Any,
     for column, value in resolved.items():
         setattr(world, column, value)
     return invalidated
+
+
+def apply_prepared_world_columns(world: World, prepared: Mapping[str, Any]) -> frozenset[str]:
+    """Apply values already resolved by the caller's pure preparation stage."""
+    before = {column: getattr(world, column) for column in prepared}
+    invalidated = invalidated_world_tables(before, prepared)
+    for column, value in prepared.items():
+        setattr(world, column, value)
+    return invalidated

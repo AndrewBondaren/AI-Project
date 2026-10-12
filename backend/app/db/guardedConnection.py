@@ -36,6 +36,10 @@ class GuardedConnection(aiosqlite.Connection):
         except sqlite3.ProgrammingError:
             return False  # close() has executed on the worker thread
 
+    @property
+    def owns_unit_of_work(self) -> bool:
+        return self._explicit and self._owner is asyncio.current_task()
+
     async def _execute(self, fn, *args, **kwargs):
         # aiosqlite routes SQL, cursor fetches and commit through this seam.
         await self._acquire()

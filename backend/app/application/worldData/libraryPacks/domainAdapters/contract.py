@@ -21,13 +21,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from app.application.worldData.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
@@ -40,15 +38,10 @@ from app.dataModel.locations.structure.building.buildingTemplateOutline import (
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision, MemberRef
-
-if TYPE_CHECKING:
-    from app.application.worldData.reliefTemplateFsImport import ReliefPackImport
-    from app.application.worldData.structureTemplateFsImport import StructurePackImport
 
 DomainLibrary = (
     ReliefTemplateLibraryService
@@ -89,6 +82,15 @@ class PackDomainAdapter(ABC):
 
     library_kind: ClassVar[LibraryKind]
 
+    async def find_body_row(self, template_uid: str):
+        """Legacy row-returning facade seam; common pipeline uses typed outlines."""
+        raise NotImplementedError
+
+    async def persist_prepared(self, outline: DomainOutline, *, member: LibraryPackMemberRow,
+                               source_file: str | None, added: bool) -> None:
+        """Persist validated typed data with explicit insert/update, in caller UOW."""
+        raise NotImplementedError("domain has no prepared persistence")
+
     @abstractmethod
     def prepare_body(self, raw: dict, *, local_uid: str, template_uid: str,
                      world: World | None = None) -> DomainOutline:
@@ -100,24 +102,6 @@ class PackDomainAdapter(ABC):
     def world_refs(self, world: World) -> tuple[MemberRef, ...]:
         return ()
 
-    @abstractmethod
-    async def write_body(
-        self,
-        raw: dict,
-        *,
-        local_uid: str,
-        template_uid: str,
-        pack: LibraryPackRow,
-        world: World | None,
-        source_file: str | None = None,
-    ) -> Any:
-        """Validate + persist the body; return the parsed outline.
-
-        Raise ``LibraryPackValidationError`` on invalid body or when the
-        body's own identity does not agree with the member identity.
-        ``world`` is the owning world for world-owned packs (domain
-        restrictions resolve against its registries), else None.
-        """
 
     @abstractmethod
     async def read_body_row(
@@ -140,17 +124,6 @@ class PackDomainAdapter(ABC):
     async def delete_body(self, template_uid: str) -> None:
         """Remove the body row; tolerate an already-missing row."""
 
-    async def import_fs_pack(
-        self, path: str | Path, *, domain_root: Path | None = None
-    ) -> ReliefPackImport | StructurePackImport:
-        """Manifest-based FS import → ``(manifest, body rows)`` outcome.
-
-        Domain bodies land via the library service; catalog attach is the
-        service's job (same unit of work).
-        """
-        raise LibraryPackValidationError(
-            f"library_kind '{self.library_kind.value}' has no FS domain root"
-        )
 
     async def ensure_pointer(
         self, world: World, member: LibraryPackMemberRow, outline: Any

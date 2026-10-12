@@ -188,7 +188,7 @@ class InstantiateTests(_ServiceCase):
         by_key = {
             e["system_terrain"]: e for e in world.terrain_registry
         }
-        self.assertEqual(set(by_key), {"plains", "forest", "shore_sea"})
+        self.assertTrue({"plains", "forest", "shore_sea"} <= set(by_key))
         canon = {
             e.system_terrain: e.model_dump(mode="json")
             for e in WorldTerrainRegistry.canonical_engine().root

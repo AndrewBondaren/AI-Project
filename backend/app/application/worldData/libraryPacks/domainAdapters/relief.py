@@ -5,8 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import ClassVar
 
 from app.application.jsonValidation.resolve import resolve_model
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
@@ -36,14 +35,10 @@ from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
     ReliefTemplateRegistryEntry,
 )
-from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
-
-if TYPE_CHECKING:
-    from app.application.worldData.reliefTemplateFsImport import ReliefPackImport
 
 
 class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
@@ -89,12 +84,6 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
             )
         return outline
 
-    async def write_body(self, raw, *, local_uid, template_uid, pack, world,
-                         source_file=None):
-        outline = self.prepare_body(raw, local_uid=local_uid, template_uid=template_uid, world=world)
-        await self._library.upsert_outline(outline, source_file=source_file,
-                                          pack_uid=pack.pack_uid, template_uid=template_uid)
-        return outline
 
     def world_refs(self, world):
         return relief_policy_refs(world)
@@ -103,16 +92,6 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
         """R21 unresolved policy: no template substitution — reject (TZ §5)."""
         return FallbackDecision.rejected()
 
-    async def import_fs_pack(
-        self, path: str | Path, *, domain_root: Path | None = None
-    ) -> ReliefPackImport:
-        from app.application.worldData.reliefTemplateFsImport import import_relief_path
-
-        return await import_relief_path(
-            path,
-            upsert_from_dict=self._library.upsert_from_dict,
-            domain_root=domain_root,
-        )
 
     def _pointer_entry(
         self, member: LibraryPackMemberRow, outline: ReliefTemplate

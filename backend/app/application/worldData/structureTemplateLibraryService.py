@@ -52,10 +52,12 @@ class StructureTemplateLibraryService:
         *,
         db: Database | None = None,
         catalog: PackCatalogRepos | None = None,
+        write_provider=None,
     ) -> None:
         self._repo = repo
         self._db = db
         self._catalog = catalog
+        self._write_provider = write_provider
 
     async def find_by_uid(self, template_uid: str) -> StructureTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
@@ -71,12 +73,25 @@ class StructureTemplateLibraryService:
     async def list_all(self) -> list[StructureTemplateRow]:
         return await self._repo.list_all()
 
+    async def persist_prepared(self, outline, *, template_uid, source_file, added):
+        from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+        row = StructureTemplateRow(template_uid=template_uid, display_name=outline.display_name,
+            version=outline.version, data=outline.model_dump(mode="json"), source_file=source_file)
+        return await persist_body_row(self._repo, row, added=added)
+
     async def upsert_outline(
         self,
         outline: StructureTemplate,
         *,
         source_file: str | None = None,
+        pack_uid: str | None = None, local_uid: str | None = None, world_uid: str | None = None,
     ) -> StructureTemplateRow:
+        if self._write_provider is not None:
+            from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+            return await write_domain_body(self._write_provider(), LibraryKind.STRUCTURE_TEMPLATES,
+                outline, pack_uid=pack_uid, local_uid=local_uid, source_file=source_file, world_uid=world_uid)
+        if self._db is not None:
+            raise RuntimeError("SQL library writes require the common write service")
         uid = str(outline.system_name)
         existing = await self._repo.get_by_uid(uid)
         data = outline.model_dump(mode="json")
@@ -140,7 +155,7 @@ class StructureTemplateLibraryService:
                 )
                 logger.warning("structure | library reject %s", msg)
                 raise StructureTemplateValidationError(msg)
-        return await self.upsert_outline(outline, source_file=source_file)
+        return await self.upsert_outline(outline, source_file=source_file, pack_uid=pack_uid, local_uid=local_uid)
 
     async def import_path(
         self,
@@ -148,11 +163,16 @@ class StructureTemplateLibraryService:
         *,
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
+        decisions=(), preview_token=None,
     ) -> list[StructureTemplateRow]:
+        if self._write_provider is not None:
+            from app.application.worldData.libraryPacks.packResults import PackImportResult
+            result = await self._write_provider()._fs_writes.import_path(LibraryKind.STRUCTURE_TEMPLATES,
+                path, domain_root=domain_root, enforce_domain_root=enforce_domain_root,
+                decisions=decisions, preview_token=preview_token)
+            return list(result.bodies) if isinstance(result, PackImportResult) else result
         if self._db is not None:
-            async with self._db.transaction_if_needed():
-                return await self._import(path, domain_root=domain_root,
-                                          enforce_domain_root=enforce_domain_root)
+            raise RuntimeError("SQL library imports require the common write service")
         return await self._import(path, domain_root=domain_root,
                                   enforce_domain_root=enforce_domain_root)
 
@@ -176,7 +196,18 @@ class StructureTemplateLibraryService:
         await attach_pack_catalog(outcome.manifest, self._catalog)
         return outcome.rows
 
-    async def delete(self, template_uid: str) -> None:
+    async def delete_prepared(self, template_uid: str) -> None:
+        from app.db.database import _in_transaction
+        if not _in_transaction.get():
+            raise RuntimeError("prepared deletion requires caller UOW")
+        await self._repo.delete(template_uid)
+
+    async def delete(self, template_uid: str, *, world_uid=None) -> None:
+        if self._write_provider is not None:
+            await self._write_provider().delete_member(template_uid, world_uid=world_uid)
+            return
+        if self._db is not None:
+            raise RuntimeError("SQL library writes require the common write service")
         row = await self.find_by_uid(template_uid)
         if row is None:
             raise StructureTemplateNotFoundError(

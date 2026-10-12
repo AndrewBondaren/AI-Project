@@ -63,19 +63,35 @@ class ReliefWorldImportService:
         self,
         world_uid: str,
         outlines: list[dict],
+        *, decisions=(), preview_token=None,
     ) -> dict:
         """Bodies → world-owned ``legacy`` members + registry pointers + R34 sync."""
+        if self._db is not None and self._library._write_provider is None:
+            raise RuntimeError("SQL library imports require the common write service")
         if self._db is not None:
             async with self._db.transaction_if_needed():
-                return await self._import_outlines(world_uid, outlines)
-        return await self._import_outlines(world_uid, outlines)
+                return await self._import_outlines(world_uid, outlines, decisions=decisions, preview_token=preview_token)
+        return await self._import_outlines(world_uid, outlines, decisions=decisions, preview_token=preview_token)
 
     async def _import_outlines(
         self,
         world_uid: str,
         outlines: list[dict],
+        *, decisions=(), preview_token=None,
     ) -> dict:
         world = await self._worlds.get_by_id(world_uid)
+        if self._library._write_provider is not None:
+            from app.application.worldData.libraryPacks.writeResults import WriteResult
+            prepared = [self.prepare_body(world, raw) for raw in outlines]
+            if not prepared:
+                return {"imported": 0, "uids": []}
+            result = await self._library._write_provider().import_legacy_bodies(
+                LibraryKind.RELIEF_TEMPLATES, world_uid, prepared,
+                decisions=decisions, preview_token=preview_token)
+            if not isinstance(result, WriteResult):
+                return result
+            uids = [write.value.member.template_uid for item in result.plan.items for write in item.members]
+            return {"imported": len(uids), "uids": uids}
         imported_uids: list[str] = []
         for raw in outlines:
             outline = self.prepare_body(world, raw)
@@ -103,7 +119,7 @@ class ReliefWorldImportService:
         """Body → world-owned ``legacy`` member + registry pointer + R34 sync."""
         legacy = await ensure_legacy_pack(world_uid, self._catalog.packs)
         row = await self._library.upsert_outline(
-            outline, source_file=source_file, pack_uid=legacy.pack_uid
+            outline, source_file=source_file, pack_uid=legacy.pack_uid, world_uid=world_uid
         )
         await self._catalog.members.insert_missing([member])
         await self._ensure_registry_pointer(world_uid, row.template_uid, outline)

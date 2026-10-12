@@ -1,29 +1,24 @@
-"""Member write path of the pack service — TZ §0.2 internal job.
+"""Member reads and explicit usage-gated deletion — TZ §0.2.
 
-``_MemberOps`` owns member create/update/delete (body + member row +
-registry pointer dual-write in one unit of work) plus the usage gates
-that block a used-member delete: author pins (``library_pins``) and the
-adapter's domain usages.
+Create/copy/replace are handled by the common LibraryWriteService.
 """
 
 from __future__ import annotations
 
 import logging
-import sqlite3
 from collections.abc import Iterable
 
 from app.application.worldData.libraryPacks.errors import (
-    LibraryPackConflictError,
     LibraryPackInUseError,
     LibraryPackNotFoundError,
     LibraryPackValidationError,
 )
 from app.application.worldData.libraryPacks.packResults import MemberDeleteResult
-from app.application.worldData.libraryPacks.packScope import _PackScope, _coerce_kind
+from app.application.worldData.libraryPacks.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind
 
 logger = logging.getLogger(__name__)
 
@@ -40,99 +35,10 @@ def _validate_local_uid(local_uid: str) -> str:
 
 
 class _MemberOps:
-    """Member write path of TZ §0.2 — internal job of the pack service."""
+    """Member read/delete job of the pack service."""
 
     def __init__(self, scope: _PackScope) -> None:
         self._scope = scope
-
-    async def create(
-        self,
-        pack_uid: str,
-        *,
-        library_kind: str | LibraryKind,
-        local_uid: str,
-        body: dict,
-        source_file: str | None = None,
-        world_uid: str | None = None,
-    ) -> LibraryPackMemberRow:
-        scope = self._scope
-        pack = await scope.packs.get_by_uid(pack_uid)
-        if pack is None:
-            raise LibraryPackNotFoundError(f"pack '{pack_uid}' not found")
-        scope.require_writable(pack)
-        scope.require_owner_scope(pack, world_uid)
-        kind = _coerce_kind(library_kind)
-        adapter = scope.adapter_for(kind)
-        local_uid = _validate_local_uid(local_uid)
-        template_uid = library_uid(kind, local_uid, pack_uid=pack_uid)
-        world = await scope.world_for(pack)
-        await scope.diagnose_missing(pack)
-
-        member = LibraryPackMemberRow(
-            template_uid=template_uid,
-            pack_uid=pack_uid,
-            library_kind=kind.value,
-            local_uid=local_uid,
-        )
-
-        async def _write() -> None:
-            if (
-                await scope.members.get_by_uid(template_uid)
-                is not None
-            ):
-                raise LibraryPackConflictError(
-                    f"authored template_uid '{template_uid}' already exists in pack "
-                    f"'{pack.system_name}' ({kind.value})"
-                )
-            outline = await adapter.write_body(
-                body,
-                local_uid=local_uid,
-                template_uid=template_uid,
-                pack=pack,
-                world=world,
-                source_file=source_file,
-            )
-            try:
-                await scope.members.insert(member)
-            except sqlite3.IntegrityError as exc:
-                raise LibraryPackConflictError(
-                    f"member '{local_uid}' conflicts with an existing row: {exc}"
-                ) from exc
-            if world is not None:
-                # Dual-write: the pointer targets THIS world-owned member uid.
-                await adapter.ensure_pointer(world, member, outline)
-
-        await scope.atomic(_write)
-        return member
-
-    async def update_body(
-        self, template_uid: str, body: dict, *, world_uid: str | None = None
-    ) -> LibraryPackMemberRow:
-        """Replace a member's body — member identity stays immutable."""
-        scope = self._scope
-        member = await self.require_member(template_uid)
-        pack = await self._require_pack(member.pack_uid)
-        scope.require_writable(pack)
-        scope.require_owner_scope(pack, world_uid)
-        adapter = scope.adapter_for(LibraryKind(member.library_kind))
-        world = await scope.world_for(pack)
-        source_file = await adapter.body_source_file(template_uid)
-
-        async def _write() -> None:
-            outline = await adapter.write_body(
-                body,
-                local_uid=member.local_uid,
-                template_uid=member.template_uid,
-                pack=pack,
-                world=world,
-                source_file=source_file,
-            )
-            if world is not None:
-                await adapter.drop_pointer(world, template_uid)
-                await adapter.ensure_pointer(world, member, outline)
-
-        await scope.atomic(_write)
-        return member
 
     async def delete(
         self,

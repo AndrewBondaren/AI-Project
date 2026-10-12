@@ -2,7 +2,7 @@
 
 ``_PackScope`` bundles the repositories, the domain-adapter map, the
 atomic-unit wrapper and the cross-cutting gates (TZ §1.1/§3/§6) used by
-``_MemberOps``, ``_PackOps`` and ``_RemapOps``. ``_coerce_kind`` is the
+CRUD/delete jobs and common write facades. ``_coerce_kind`` is the
 shared member-domain gate.
 """
 

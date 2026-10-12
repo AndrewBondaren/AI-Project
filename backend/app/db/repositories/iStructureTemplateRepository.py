@@ -9,6 +9,12 @@ from app.db.models.structureTemplate import StructureTemplateRow
 
 class IStructureTemplateRepository(ABC):
 
+    async def insert(self, row: StructureTemplateRow) -> None:
+        raise NotImplementedError
+
+    async def save(self, row: StructureTemplateRow) -> None:
+        raise NotImplementedError
+
     @abstractmethod
     async def get_by_uid(self, template_uid: str) -> StructureTemplateRow | None: ...
 

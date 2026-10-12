@@ -669,8 +669,14 @@ class LegacyBodyImportTests(_DbCase):
         world = await SqliteWorldRepository(self.db).get_by_id("w-relief")
         self.assertIn(uid, {e["system_template_uid"] for e in world.relief_template_registry})
 
-        # Re-import is stable — same uid, no duplicate member.
-        again = await service.import_outlines_into_world("w-relief", [body])
+        # Re-import negotiates; explicit replace keeps the saved identity.
+        from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+        from app.application.worldData.libraryPacks.writeContracts import LibraryWriteSelection
+        preview = await service.import_outlines_into_world("w-relief", [body])
+        self.assertIsInstance(preview, PolicyRequired)
+        again = await service.import_outlines_into_world("w-relief", [body],
+            decisions=(LibraryWriteSelection(item_key="0", policy="replace", target_uid=uid),),
+            preview_token=preview.preview_token)
         self.assertEqual(again["uids"], [uid])
         self.assertEqual(
             len(await self.members.list_by_pack(legacy_pack_uid("w-relief"))), 1
@@ -684,6 +690,7 @@ class LegacyBodyImportTests(_DbCase):
             world_service=container.world_service(),
             db=self.db,
             catalog=PackCatalogRepos(packs=self.packs, members=self.members),
+            write_provider=container.library_pack_service,
         )
         result = await service.import_bodies_into_world("w-build", [{
             "system_name": "mill_x",
@@ -730,7 +737,7 @@ class FsPackImportCatalogTests(_DbCase):
         for row in rows:
             self.assertTrue(row.source_file.startswith("structures_templates/base/"))
 
-        # Repeated import is stable — bodies upsert, catalog insert-missing.
+        # Trusted canonical attach is additive, preserving existing bodies.
         again = await service.import_path(
             _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT
         )
@@ -744,7 +751,9 @@ class MemberIdentityGuardTests(_DbCase):
     """``upsert_from_dict``: ``local_uid``/``pack_uid`` — live identity checks."""
 
     async def test_relief_body_must_match_local_uid(self):
-        service = Container(None, self.db).relief_template_library_service()
+        container = Container(None, self.db)
+        service = container.relief_template_library_service()
+        pack = await container.library_pack_service().create_pack(system_name="user.relief.x")
         with self.assertRaises(ReliefValidationError):
             await service.upsert_from_dict(
                 {
@@ -761,12 +770,14 @@ class MemberIdentityGuardTests(_DbCase):
                 "context": "open_land",
             },
             local_uid="meadow_x",
+            pack_uid=pack.pack_uid,
         )
         self.assertEqual(row.system_name, "meadow_x")
 
     async def test_structure_body_must_match_member_identity(self):
-        service = Container(None, self.db).structure_template_library_service()
-        pack_uid = library_uid(_PACKS, "user.structures.x")
+        container = Container(None, self.db)
+        service = container.structure_template_library_service()
+        pack_uid = (await container.library_pack_service().create_pack(system_name="user.structures.x")).pack_uid
         member_uid = library_uid(_STRUCT, "shop", pack_uid=pack_uid)
         with self.assertRaises(StructureTemplateValidationError):
             await service.upsert_from_dict(

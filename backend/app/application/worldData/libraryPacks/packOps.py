@@ -1,12 +1,11 @@
 """Pack-level read/write path of the pack service — TZ §0.2/§3/§4
-internal job: pack CRUD, metadata, dependency declaration, FS import."""
+internal job: empty-pack CRUD, metadata and dependency declaration."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
 from dataclasses import replace
-from pathlib import Path
 
 from app.application.worldData.libraryPacks.errors import (
     LibraryPackInUseError,
@@ -14,15 +13,12 @@ from app.application.worldData.libraryPacks.errors import (
     LibraryPackValidationError,
 )
 from app.application.worldData.libraryPacks.memberOps import _MemberOps
-from app.application.worldData.libraryPacks.packCatalog import attach_pack_catalog
 from app.application.worldData.libraryPacks.packResults import (
     PackDeleteResult,
-    PackImportResult,
 )
-from app.application.worldData.libraryPacks.packScope import _PackScope, _coerce_kind
+from app.application.worldData.libraryPacks.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
-from app.ids import LibraryKind
 
 logger = logging.getLogger(__name__)
 
@@ -199,33 +195,3 @@ class _PackOps:
 
     async def missing_dependencies(self, pack_uid: str) -> set[str]:
         return await self._scope.missing_uids(pack_uid)
-
-    async def import_fs_pack(
-        self,
-        library_kind: str | LibraryKind,
-        path: str | Path,
-        *,
-        domain_root: Path | None = None,
-    ) -> PackImportResult:
-        """Bodies + catalog attach, one unit of work (trusted-source write)."""
-        scope = self._scope
-        kind = _coerce_kind(library_kind)
-        adapter = scope.adapter_for(kind)
-
-        async def _write():
-            outcome = await adapter.import_fs_pack(path, domain_root=domain_root)
-            await attach_pack_catalog(outcome.manifest, scope.catalog)
-            return outcome
-
-        outcome = await scope.atomic(_write)
-        pack = await scope.packs.get_by_uid(outcome.manifest.pack_uid)
-        if pack is None:
-            raise LibraryPackNotFoundError(
-                f"imported pack '{outcome.manifest.pack_uid}' missing after attach"
-            )
-        missing = await scope.diagnose_missing(pack)
-        return PackImportResult(
-            pack=pack,
-            bodies=tuple(outcome.rows),
-            missing_dependencies=tuple(sorted(missing)),
-        )

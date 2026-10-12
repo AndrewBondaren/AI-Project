@@ -24,6 +24,13 @@ class LibraryPackConflictError(LibraryPackError):
     """Uniqueness violation (system_name / local_uid / template_uid)."""
 
 
+class LibraryPackPolicyRequiredError(LibraryPackConflictError):
+    """Legacy row-returning entry cannot return an applied row before selection."""
+    def __init__(self, outcome):
+        super().__init__("library write requires explicit copy/replace decisions")
+        self.outcome = outcome
+
+
 class LibraryPackReadOnlyError(LibraryPackError):
     """Write attempted on a declared default pack (TZ §1.1, §6)."""
 

@@ -52,16 +52,15 @@ def legacy_member_row(
     """Member row for a manifest-less body; ``source_template_uid`` keeps the
     former uid — an explicit arg wins, else the migration map's former
     identity when it knows one (TZ §4 legacy, plan 5b)."""
+    source_uid = (source_template_uid if source_template_uid is not None
+                  else former_template_uid(kind, local_uid))
     return LibraryPackMemberRow(
         template_uid=legacy_member_uid(kind, local_uid, world_uid=world_uid),
         pack_uid=legacy_pack_uid(world_uid),
         library_kind=LibraryKind(kind).value,
         local_uid=local_uid,
-        source_template_uid=(
-            source_template_uid
-            if source_template_uid is not None
-            else former_template_uid(kind, local_uid)
-        ),
+        source_template_uid=source_uid,
+        creation_kind="member_copy" if source_uid else "authored",
     )
 
 

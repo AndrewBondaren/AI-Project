@@ -13,7 +13,7 @@ from app.application.worldData.libraryPacks.writeContracts import (
 class LibraryWritePolicy:
     """Decide the complete batch or return no executable actions."""
 
-    def decide(self, snapshot: WriteSnapshot, request: LibraryWriteRequest) -> WriteDecision:
+    def decide(self, snapshot: WriteSnapshot, request: LibraryWriteRequest, *, exact_operation=False) -> WriteDecision:
         if tuple(f.item for f in snapshot.items) != request.items or not snapshot.preview_token:
             return self._result(snapshot, WriteStatus.REJECTED, issues=("snapshot_request_mismatch",))
         choices = tuple(self._choice(f) for f in snapshot.items)
@@ -24,7 +24,10 @@ class LibraryWritePolicy:
         # A returned token remains mandatory even when all former matches disappeared.
         needs_token = request.preview_token is not None or (
             bool(request.decisions) and any(f.matches for f in snapshot.items))
-        if needs_token and request.preview_token != snapshot.preview_token:
+        if exact_operation and (len(request.items) != 1 or
+            request.items[0].object_kind is not WriteObjectKind.MEMBER or len(request.decisions) != 1):
+            return self._result(snapshot, WriteStatus.REJECTED, issues=("invalid_exact_operation",))
+        if needs_token and (not exact_operation or request.preview_token is not None) and request.preview_token != snapshot.preview_token:
             return self._result(snapshot, WriteStatus.POLICY_REQUIRED, choices=choices,
                                 stale=request.preview_token is not None)
         selections = {s.item_key: s for s in request.decisions}

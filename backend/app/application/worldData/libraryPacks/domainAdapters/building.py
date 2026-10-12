@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.buildingTemplateLibraryService import (
@@ -32,7 +32,6 @@ from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry im
     BuildingTemplateRegistryEntry,
 )
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
@@ -88,12 +87,6 @@ class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAd
             )
         return body
 
-    async def write_body(self, raw, *, local_uid, template_uid, pack, world,
-                         source_file=None):
-        body = self.prepare_body(raw, local_uid=local_uid, template_uid=template_uid, world=world)
-        await self._library.upsert_outline(body, source_file=source_file,
-                                          pack_uid=pack.pack_uid, template_uid=template_uid)
-        return body
 
     def body_refs(self, body, consumer):
         return structure_refs(body, consumer)

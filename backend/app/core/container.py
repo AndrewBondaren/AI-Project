@@ -649,6 +649,7 @@ class Container:
             self._relief_template_library_service = ReliefTemplateLibraryService(
                 repo=self.relief_template_repository(),
                 db=self._db,
+                write_provider=self.library_pack_service,
                 catalog=PackCatalogRepos(
                     packs=self.library_pack_repository(),
                     members=self.library_pack_member_repository(),
@@ -679,6 +680,7 @@ class Container:
                 repo=self.building_template_repository(),
                 world_service=self.world_service(),
                 db=self._db,
+                write_provider=self.library_pack_service,
                 catalog=PackCatalogRepos(
                     packs=self.library_pack_repository(),
                     members=self.library_pack_member_repository(),
@@ -691,6 +693,7 @@ class Container:
             self._structure_template_library_service = StructureTemplateLibraryService(
                 repo=self.structure_template_repository(),
                 db=self._db,
+                write_provider=self.library_pack_service,
                 catalog=PackCatalogRepos(
                     packs=self.library_pack_repository(),
                     members=self.library_pack_member_repository(),
@@ -728,8 +731,14 @@ class Container:
                 deps=self.library_pack_dependency_repository(),
                 world_service=self.world_service(),
                 adapters=self.pack_domain_adapters(),
+                write_service=self.library_write_service(),
             )
         return self._library_pack_service
+
+    def library_write_service(self):
+        from app.application.worldData.libraryPacks.writeServiceFactory import build_library_write_service
+        return build_library_write_service(db=self._db, catalog=self.pack_catalog_repos(),
+            adapters=self.pack_domain_adapters(), worlds=self.world_service(), world_repository=self.world_repository())
 
     def effective_catalog_loader(self) -> EffectiveCatalogLoader:
         """Step-5a runtime read facade — membership-scoped world catalog."""

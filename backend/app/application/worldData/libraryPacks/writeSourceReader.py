@@ -24,7 +24,7 @@ class LibraryWriteSourceReader:
 
     async def read(self, item: LibraryWriteItem, world: World | None,
                    imports: Mapping[str, WriteImportSource]) -> InspectedSource:
-        if item.source.kind is WriteSourceKind.IMPORT:
+        if item.source.kind is not WriteSourceKind.CATALOG:
             raw = deepcopy(imports.get(item.source.key))
             if raw is None:
                 raise LibraryPackValidationError("import_source_missing")

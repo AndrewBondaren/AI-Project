@@ -38,6 +38,7 @@ class WriteStatus(StrEnum):
 class WriteSourceKind(StrEnum):
     CATALOG = "catalog"
     IMPORT = "import"
+    AUTHORING = "authoring"
 
 
 class WriteSource(BaseModel):

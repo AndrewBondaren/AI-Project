@@ -57,7 +57,7 @@ class LifecycleTests(_ServiceCase):
     async def test_random_uid_collision_retries(self):
         pack, (member,) = await self._relief_engine_pack(members=('meadow',))
         fresh = runtime_uid()
-        with patch('app.application.worldData.libraryPacks.memberCopyOps.runtime_uid',
+        with patch('app.application.worldData.libraryPacks.memberWritePlanner.runtime_uid',
                    side_effect=[member.template_uid, fresh]):
             result = await self.service.copy_member(member.template_uid, pack.pack_uid)
         self.assertEqual(result.member.template_uid, fresh)
@@ -190,7 +190,7 @@ class LifecycleTests(_ServiceCase):
         preview = await self.preview(source)
         before = await self.snapshot()
         adapter = self.service._scope.adapter_for(_RELIEF)
-        original = adapter.write_body
+        original = adapter.persist_prepared
         count = 0
         async def failing(*args, **kwargs):
             nonlocal count
@@ -198,7 +198,7 @@ class LifecycleTests(_ServiceCase):
             if count == 2:
                 raise ValueError('late domain failure')
             return await original(*args, **kwargs)
-        with patch.object(adapter, 'write_body', side_effect=failing):
+        with patch.object(adapter, 'persist_prepared', side_effect=failing):
             with self.assertRaises(ValueError):
                 await self.confirm(source, preview)
         self.assertEqual(await self.snapshot(), before)
@@ -241,7 +241,11 @@ class LifecycleTests(_ServiceCase):
         source, members, result = await self.instance(names=('meadow',))
         original = members[0]
         await self.members.update_local_uid(original.template_uid, 'renamed')
-        await self.service.update_member_body(original.template_uid, _relief_body('renamed'))
+        # Seed a consistent renamed source revision; public edits keep the local key.
+        row = await self.relief_rows.get_by_uid(original.template_uid)
+        row.system_name = 'renamed'
+        row.data = _relief_body('renamed')
+        await self.relief_rows.save(row)
         added = await self.service.create_member(source.pack_uid, library_kind=_RELIEF,
                     local_uid='new', body=_relief_body('new'))
         preview = await self.preview(source)
@@ -257,7 +261,7 @@ class LifecycleTests(_ServiceCase):
         await self._world('w1')
         source, (member,) = await self._relief_engine_pack(members=('meadow',))
         old_uid = runtime_uid()
-        with patch('app.application.worldData.libraryPacks.remapOps.remapped_library_uid', return_value=old_uid):
+        with patch('app.application.worldData.libraryPacks.packWritePlanner.remapped_library_uid', return_value=old_uid):
             result = await self.service.instantiate_pack(source.pack_uid, world_uid='w1')
         self.assertEqual(result.uid_map[member.template_uid], old_uid)
         await self.service.update_member_body(member.template_uid, _relief_body('meadow', display_name='Updated'))
@@ -316,7 +320,7 @@ class LifecycleTests(_ServiceCase):
         source, members, result = await self.instance(names=('meadow',))
         before = await self.snapshot()
         adapter = self.service._scope.adapter_for(_RELIEF)
-        with patch.object(adapter, 'ensure_pointer', side_effect=ValueError('pointer failure')):
+        with patch.object(self.container.world_repository(), 'update', side_effect=ValueError('pointer failure')):
             with self.assertRaises(ValueError):
                 await self.service.copy_member(result.members[0].template_uid, result.pack.pack_uid, world_uid='w1')
         self.assertEqual(await self.snapshot(), before)

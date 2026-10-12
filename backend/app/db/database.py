@@ -129,6 +129,8 @@ class Database:
         of work); standalone calls get their own BEGIN/COMMIT.
         """
         if _in_transaction.get():
+            if not self.main_conn.owns_unit_of_work:
+                raise RuntimeError("caller UOW must own this database's main connection")
             yield self.main_conn
             return
         async with self.transaction() as conn:

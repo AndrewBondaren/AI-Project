@@ -9,6 +9,12 @@ from app.db.models.reliefTemplate import ReliefTemplateRow
 
 class IReliefTemplateRepository(ABC):
 
+    async def insert(self, row: ReliefTemplateRow) -> None:
+        raise NotImplementedError
+
+    async def save(self, row: ReliefTemplateRow) -> None:
+        raise NotImplementedError
+
     @abstractmethod
     async def get_by_uid(self, template_uid: str) -> ReliefTemplateRow | None: ...
 

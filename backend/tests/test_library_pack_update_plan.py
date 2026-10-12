@@ -44,7 +44,10 @@ class UpdateSnapshotTests(_ServiceCase):
                             confirm=True, preview_token=replay.preview_token)
         self.assertTrue(confirmed.stale)
         self.assertFalse(confirmed.applied)
-        self.assertEqual(confirmed.preview_token, fresh_plan.preview_token)
+        # Compatibility callers now use the common write fingerprint.
+        current = await self.service.instantiate_pack(source.pack_uid, world_uid='w1')
+        self.assertEqual(confirmed.preview_token, current.preview_token)
+        self.assertEqual(confirmed.prepared, fresh_plan.prepared)
 
     async def test_loader_keeps_global_uid_conflicts_outside_available_catalog(self):
         source, _, instance = await self.instance()
@@ -54,9 +57,11 @@ class UpdateSnapshotTests(_ServiceCase):
                                           source_template_uid=added.template_uid)
         foreign = await self.service.create_pack(system_name='engine.foreign')
         adapter = self.service._scope.adapter_for(_RELIEF)
-        await adapter.write_body(_relief_body('collision'), local_uid='collision', template_uid=target_uid,
-                                  pack=foreign, world=None)
-        await self.members.insert(LibraryPackMemberRow(target_uid, foreign.pack_uid, _RELIEF.value, 'collision'))
+        collision = LibraryPackMemberRow(target_uid, foreign.pack_uid, _RELIEF.value, 'collision')
+        async with self.db.transaction():
+            outline = adapter.prepare_body(_relief_body('collision'), local_uid='collision', template_uid=target_uid)
+            await adapter.persist_prepared(outline, member=collision, source_file=None, added=True)
+            await self.members.insert(collision)
         snapshot = await self.load(source, instance)
         self.assertIn(target_uid, snapshot.known_members)
         self.assertNotIn(target_uid, snapshot.catalog.members)
