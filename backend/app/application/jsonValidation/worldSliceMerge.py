@@ -76,8 +76,6 @@ def _merge_registry_list(
     raw = out.get(key)
     if world_slice.wire_adapter is not None:
         raw = world_slice.wire_adapter(raw)
-        if raw is None:
-            return
 
     raw = canonical_registry_wire(world_slice, raw)
     resolved = resolve_root_list(
@@ -130,8 +128,6 @@ def _merge_json_blob(
         return
 
     raw = out.get(key)
-    if raw is None:
-        return
 
     if ctx.partial:
         out[key] = resolve_patch(world_slice.pojo_cls, raw, ctx=ctx.child(key))

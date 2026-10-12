@@ -15,7 +15,7 @@ from enum import StrEnum
 from typing import Any, NoReturn, TYPE_CHECKING
 
 from pydantic import BaseModel, RootModel, ValidationError
-from pydantic_core import SchemaValidator, core_schema
+from pydantic_core import SchemaSerializer, SchemaValidator, core_schema
 from functools import lru_cache
 
 from app.application.jsonValidation.types import FieldPathError, ResolveReport
@@ -194,6 +194,39 @@ def _patch_validator(model_cls: type[BaseModel]) -> SchemaValidator:
     if definitions:
         patch_schema = core_schema.definitions_schema(patch_schema, definitions)
     return SchemaValidator(patch_schema)
+
+
+@lru_cache
+def _field_codec(model_cls: type[BaseModel], name: str) -> tuple[SchemaValidator, SchemaSerializer]:
+    """Reuse the complete field schema, including nested model validators.
+
+    Unlike patch validation, an authored column is an atomic value.
+    Model-level invariants of the containing POJO need resolve_model instead.
+    """
+    schema = model_cls.__pydantic_core_schema__
+    definitions = schema.get("definitions", []) if schema["type"] == "definitions" else []
+    field_schema = core_schema.typed_dict_schema({
+        name: core_schema.typed_dict_field(
+            _model_fields_schema(schema, definitions)["fields"][name]["schema"], required=False),
+    })
+    if definitions:
+        field_schema = core_schema.definitions_schema(field_schema, definitions)
+    config = dict(model_cls.model_config)
+    return SchemaValidator(field_schema, config=config), SchemaSerializer(field_schema, config=config)
+
+
+def resolve_model_field(model_cls: type[BaseModel], name: str, raw: Any,
+                        *, ctx: ResolveContext) -> Any:
+    """Validate one independent, complete POJO field and return its JSON wire."""
+    validator, serializer = _field_codec(model_cls, name)
+    try:
+        value = validator.validate_python({name: raw}, by_name=True, by_alias=True)
+    except ValidationError as exc:
+        reject_unresolved(ctx, [_validation_issue(ctx, ctx.path_prefix + tuple(e["loc"])[1:],
+            ("unknown wire value; " if e["type"] == "enum" else "") + e["msg"],
+            code="UNKNOWN_ENUM" if e["type"] == "enum" else e["type"])
+            for e in exc.errors()])
+    return serializer.to_python(value, mode="json")[name]
 
 
 def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistryIndex) -> list[FieldPathError]:

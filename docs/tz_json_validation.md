@@ -498,7 +498,7 @@ mixed-строками ломал любой PATCH до union-POJO).
 
 | Функция | Слой | Роль |
 |---------|------|------|
-| `resolve_world_column(key, raw, ctx) -> dict[str, Any]` | `jsonValidation` (рядом с `worldSliceMerge`) | Чистый resolve одного слайса через `merge_world_slice` → materialized dump по `world_keys`. Без I/O |
+| `resolve_world_column(key, raw, ctx, *, existing=None) -> dict[str, Any]` | `jsonValidation/worldColumnResolve.py` | Чистый resolve атомарной колонки через общий merge либо исходную field schema; для общего инварианта — итоговый POJO с текущими значениями caller'а. Dump только явно изменяемых колонок. Без I/O |
 | `apply_world_column(world, key, raw, ctx) -> frozenset[str]` | `worldData/worldColumnWrite.py` — module-level функция, **не** сервис | resolve → `setattr` на `World` → возвращает имена инвалидированных таблиц |
 
 **Инварианты:**
@@ -506,6 +506,57 @@ mixed-строками ломал любой PATCH до union-POJO).
 - **Supplied = atomic**: caller передаёт колонку целиком (`partial=False`);
   `resolve_root_list` материализует canonical overlay + dump — та же семантика,
   что у facade-merge. `wire_adapter` (legacy формы) работает на общем пути.
+  Для отдельного поля multi-column атомарно само переданное значение;
+  это не требование полного resolve всех соседних колонок POJO.
+- **Политика значений принадлежит POJO:** defaults, missing, допустимость null
+  и ограничения значений определяет соответствующий `dataModel` POJO.
+  Scoped write использует общий resolver с той же семантикой, что импорт;
+  собственных правил подстановки default или обработки `None` у
+  `resolve_world_column` / `apply_world_column` нет. Явный `None` не означает
+  универсально «подставить default»: применяется контракт конкретной модели.
+  Отсутствие колонки в операции означает «не менять её»; defaults, полученные
+  при resolve POJO, сами по себе не расширяют область записи.
+  Существующие early-return/skip в общем merge при `None` проверяются на
+  соответствие POJO-контракту. Несоответствие исправляется в общем
+  `worldSliceMerge` / resolver-пути для импорта и scoped write, без локальной
+  ветки обработки null в scoped-примитиве. Это проверка реализации, а не
+  открытый выбор отдельной scoped-политики.
+- **Действующие политики POJO (сверено с кодом 2026-10-12):** источник —
+  `dataModel/annotationPolicy.py` и исходная Pydantic-схема, исполнение — общий
+  `resolve_model` / `resolve_patch` (см. § Field policy).
+  `DefaultWhenMissing` / `DefaultEnumWhenMissing`: missing полного объекта →
+  объявленный schema default; supplied invalid → ошибка. Явный null для
+  `T | None` сохраняется как `None`, для non-nullable `T` отклоняется,
+  без подстановки default. `IgnoreOnWire` — wire as-is, без отдельного
+  policy-автозаполнения; required/nullable/schema defaults определяет исходная
+  модель. Ignore не означает пропуск ошибки или явно переданного null.
+  `StrictOnWire` / `StrictEnumOnWire` не дают error default.
+  Legacy `DefaultOnWire` / `DefaultEnumOnWire` — aliases missing-only политики;
+  metadata `WireFieldPolicy.DEFAULT` deprecated, error-default execution path
+  удалён. Общей политики «null → сброс к default» нет; W2 её не вводит.
+  Отсутствующая колонка scoped-операции не меняется. Допустимые явные
+  `false`, `0` и пустые коллекции не считаются отсутствием через `if not value`.
+  Это контракт полей POJO; root-коллекции используют существующий общий
+  slice-контракт `empty_factory` / canonical overlay, проверяемый отдельно,
+  а не новую field-политику null.
+- **Multi-column: область проверки и записи (решение 2026-10-12).** Независимый
+  скаляр проверяется отдельно по контракту поля исходного POJO через общий
+  resolver; невалидное независимое соседнее поле не блокирует его изменение.
+  Поля, связанные общим инвариантом POJO, проверяются совместно на итоговых
+  значениях: существующее состояние нужных полей + явно переданные изменения.
+  Существующие значения предоставляет caller, resolve остаётся без I/O.
+  Связность определяется контрактом POJO, а не самим нахождением полей в одном
+  классе; параллельные локальные правила в scoped write не создаются.
+  Возврат resolve — dict только явно изменяемых колонок; сохраняются только
+  они. Defaults и нормализация соседей не расширяют область записи и не
+  выполняют скрытый repair. Registry / JSON blob передаются целиком и
+  проверяются как атомарное значение соответствующей колонки.
+- **Библиотечный pipeline:** итоговые world-колонки подготавливаются,
+  нормализуются и проверяются до записи в общем `libraryPacks` pipeline через
+  доменные адаптеры и общий resolver. Ownership, dependencies, refs,
+  copy/replace и stale остаются проверками библиотечной операции, а не
+  scoped-примитива. Executor применяет подготовленный результат без новой
+  нормализации; защитная проверка при apply не должна менять этот результат.
 - **Шов не владеет транзакцией** и не делает `repo.update` сам — как
   `PackDomainAdapter`: все методы внутри транзакции caller'а. Одиночная колонка:
   `apply` → `repo.update`; мультиколонка (relief: registry + pick-policy):
@@ -515,12 +566,31 @@ mixed-строками ломал любой PATCH до union-POJO).
   POJO). Raw `repo.update` на колонках мира — вне пути, исключение только
   repair-путь.
 - **Invalid rows never disappear** — reject с индексом строки, как на импорте.
+- **Ошибки scoped resolve/apply:** невалидные данные передаются caller'у как
+  `ImportValidationError` с исходными `FieldPathError` (список ошибок, пути,
+  индексы строк, schema и code). Не сворачивать их в текстовый
+  `WorldDataValidationError`. Это общий контракт диагностики POJO, несмотря
+  на историческое имя исключения. Ошибки библиотечной операции (ownership,
+  copy/replace, stale и т.п.) сохраняют контракт `libraryPacks`.
 - **`COLUMN_INVALIDATES`** — реестр `dict[str, frozenset[str]]` в `worldData`
   (не на `WorldSlice`: jsonValidation не именует domain-таблицы). Колонка →
-  доменные таблицы, которые её запись инвалидирует (`fine_cells_per_map_cell` →
-  `map_cells`). `apply_world_column` возвращает их caller'у — тот решает, что
-  чистить (как route решает `map_cells_invalidated` сегодня). Мастер-путь
-  `worlds.update` читает тот же реестр — один источник политики инвалидаций.
+  доменные таблицы, которые изменение её значения инвалидирует
+  (`fine_cells_per_map_cell` → `map_cells`). Мастер-путь `worlds.update` и
+  `apply_world_column` используют один расчёт: сравнение старых и новых
+  нормализованных значений фактически записываемых колонок → объединение
+  соответствующих наборов таблиц. Запись равного значения возвращает пустой
+  набор; при записи нескольких колонок учитываются все изменённые колонки.
+  `apply_world_column` возвращает последствия caller'у — тот организует
+  сохранение, очистку и транзакцию. Пользовательское подтверждение `force`
+  относится к мастерской операции, не к persistence-примитиву.
+- **Два независимых реестра:** `WORLD_SLICE_BY_KEY` описывает POJO-покрытие и
+  способ resolve; `COLUMN_INVALIDATES` — последствия изменения. Guard для
+  `COLUMN_INVALIDATES`: все ключи существуют среди полей `World`; принадлежность
+  к `WORLD_SLICE_BY_KEY` не требуется. Реестр может содержать technical-колонку,
+  доступную пока только мастер-пути. Наличие записи об инвалидации не разрешает
+  scoped write: facade-доступность отдельно проверяет `resolve_world_column`.
+  До появления POJO + facade-слайса `fine_cells_per_map_cell` через scoped-шов
+  отклоняется. Вызов `WorldService._validate` из scoped-примитива запрещён.
 
 **Не через шов:** мастер-PATCH, `import_from_json`, bundle — full-doc семантика
 сохраняется. Состояние внутри мира (клетки, здания, дороги, флора, поселения) —
@@ -585,8 +655,24 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 - `terrain_chunk_columns` ≥ 1
 - `map_subsurface_depth` ≥ 10
 
-Сейчас: `WorldService._validate`.  
-Целевое: отдельный technical pass или поля на `World` metadata POJO — **не** смешивать с `WorldClimateScalars`.
+Сейчас: `WorldService._validate`; `fine_cells_per_map_cell` и `grid_bbox_padding`
+не покрыты `WorldSlice`. Это явная граница текущего покрытия, а не потерянные
+регистрации. `terrain_chunk_columns` и `map_subsurface_depth` уже покрыты
+`WorldTerrainScalars`, но дополнительно проверяются сервисом.
+
+**Целевое решение (2026-10-12):** допустимость значения принадлежит `dataModel`
+POJO и переиспользуется всеми write-путями. `WorldService` организует операцию,
+а `worldData` определяет последствия изменения; постоянные параллельные
+ограничения в сервисе и POJO не допускаются. Для настроек сетки выделяется
+небольшой POJO по смыслу полей и связанным инвариантам, с регистрацией facade-слайса.
+Не смешивать его с `WorldClimateScalars` и не собирать все technical-поля в один
+общий контейнер. Сохранить строгий контракт размера клетки: int без bool,
+≥1000, кратно 1000; расширение покрытия не меняет допустимые значения.
+
+Перенос — отдельный шаг **G-1** плана `world-scoped-column-write.md`, вне объёма
+W2-1…W2-4. До его выполнения действует существующий technical pass сервиса;
+он не вызывается из scoped write. `COLUMN_INVALIDATES` уже может содержать эти
+колонки независимо от их POJO-покрытия.
 
 ---
 
