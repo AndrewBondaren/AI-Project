@@ -12,13 +12,16 @@ from pydantic import ValidationError
 
 from app.application.worldData.bundle.archive.contents import ArchiveContents
 from app.application.worldData.bundle.archive.errors import BundleArchiveError
+from app.application.worldData.bundle.archive.libraryLayout import (
+    discover_library_layout, read_library_packs, reject_flat_duplicates,
+)
 from app.application.worldData.bundle.archive.validation import (
     decode_json,
     validate_blob_paths,
     validate_path,
     validate_source,
 )
-from app.dataModel.worldBundle.bundleManifest import BundleManifest
+from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest
 from app.dataModel.worldBundle.bundleSections import BundleArchiveLayout
 
 
@@ -64,8 +67,15 @@ def _read(archive: ZipFile, blob_paths: set[str]) -> ArchiveContents:
         manifest = BundleManifest.model_validate(raw_manifest)
     except ValidationError as exc:
         raise BundleArchiveError(f"Invalid bundle manifest: {exc}") from exc
+    if manifest.kind == BundleKind.LIBRARY_PACK and blob_paths:
+        raise BundleArchiveError("Standalone library archive does not permit raw subtrees")
 
-    expected = {manifest_path, *manifest.sections.values(), *blob_paths}
+    library = discover_library_layout(
+        set(files) - blob_paths, manifest, lambda path: archive.read(files[path]),
+    )
+    if library.paths & blob_paths:
+        raise BundleArchiveError("Library layout overlaps raw blob paths")
+    expected = {manifest_path, *manifest.sections.values(), *blob_paths, *library.paths}
     unknown = set(files) - expected
     missing = expected - set(files)
     if unknown:
@@ -89,8 +99,10 @@ def _read(archive: ZipFile, blob_paths: set[str]) -> ArchiveContents:
         for key, path in manifest.sections.items()
     }
     validate_source(manifest, sections)
+    reject_flat_duplicates(sections, library)
+    library_packs = read_library_packs(library, lambda path: archive.read(files[path]))
     blobs = {path: archive.read(files[path]) for path in sorted(blob_paths)}
-    return ArchiveContents(manifest, sections, blobs)
+    return ArchiveContents(manifest, sections, blobs, library_packs)
 
 
 def read_archive(
@@ -100,8 +112,8 @@ def read_archive(
 ) -> ArchiveContents:
     """Read known files only; blob allowlists come from a trusted layout layer.
 
-    Default C-3 layout permits manifest + indexed section files only. C-5/C-6
-    supply validated subtree paths; merely using a prefix grants no access.
+    C-5 library paths are derived from validated pack manifests. Opaque blobs
+    still require a trusted caller allowlist; merely using a prefix grants no access.
     """
     allowed_blobs = validate_blob_paths(blob_paths)
     try:

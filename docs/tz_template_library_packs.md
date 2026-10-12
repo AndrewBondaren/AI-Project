@@ -631,9 +631,9 @@ handlers и модель `dict {section_key: payload}` не меняются, co
                               # pack-owned тела плоскими не дублируются
   library/                    # библиотеки мира — self-contained
     {domain_root}/
-      {pack_name}/
+      {pack_uid}/
         pack.manifest.json    # схема §4: members, deps, provenance
-        {system_name}.json    # тела членов, stem == system_name
+        {template_uid}.json   # тела членов, идентичность — UID
   pack/                       # запечённый World Pack — только уровень full:
                               # verbatim зеркало pack_root; layout SoT —
                               # WorldPackPaths, здесь не перечисляется;
@@ -685,11 +685,34 @@ handlers и модель `dict {section_key: payload}` не меняются, co
 - **Уровни экспорта:** `registry` → manifest + `skeleton/world.json`;
   `skeleton` → + `skeleton/*` + `library/`; `full` → + `pack/`.
   `full` на мире без запечённого pack — явная ошибка уровня.
-- **`library/` subtree повторяет FS-layout** (`template-pack-layout`):
+- **Архивный layout по UID (согласовано 2026-10-12):** папка пака —
+  `pack_uid`, имя body-файла — `template_uid.json`; `pack_name`,
+  `system_name` и `local_uid` остаются метаданными, не компонентами пути.
+  Одноимённые паки и члены с разными UID не конфликтуют и не переименовываются.
+  Авторский FS-layout `{domain_root}/{pack_name}/{system_name}.json`
+  сохраняется; его name/formula-gates не применяются к архивам копий.
+  `source_file` — диагностическое происхождение, не адрес body внутри
+  архива; может отсутствовать в архивном member. UID не вычисляется
+  из имён при чтении конверта.
+- **`library/` subtree сохраняет разделение доменов** (`template-pack-layout`):
   тела членов лежат внутри папки своего пака; плоские body-секции §4 для
   pack-owned тел в архиве **не дублируются** — секция `library_packs`
   разворачивается в subtree. Тело вне папки пака — ошибка структуры
   (аналог lone files).
+  Один логический пак разных доменов несёт одинаковый полный manifest
+  в каждой из своих domain-root/UID папок. Manifest объявляет весь состав;
+  необходимы все объявленные domain roots и тела. Точный allowlist файлов
+  выводится из проверенных manifests и фиксированного mapping
+  `library_kind → domain_root`, не из произвольных entries ZIP.
+  В этом domain layout пак без членов отвергается явно: корень домена
+  определяется объявленным составом, а не угадывается по имени.
+  Domain roots v1: `building_templates`, `structures_templates`,
+  `relief_templates`, `race_templates`, `perk_templates`.
+  Manifest сохраняет provenance, creation_kind, defaults и дополнительные
+  метаданные без потери; тела — JSON objects без нормализации/remap codec.
+  Формулы UID, доступ/владение и доменная валидность проверяются в 4d
+  общей политикой библиотек. Одна body UID не может принадлежать двум
+  пакетам; pack-owned тела не дублируются в плоских body-секциях.
 - **Строгость входа:** неизвестные файлы, битый zip, отсутствующий или
   невалидный manifest — reject до разбора секций. Секция ↔ path — явная
   таблица, не вывод из имени файла.
@@ -705,7 +728,7 @@ handlers и модель `dict {section_key: payload}` не меняются, co
   корень = domain layout (`pack.manifest.json` + member-файлы).
   Корневой `bundle.manifest.json` обязателен и для library-пака;
   его `sections` пуст, `skeleton/` и `pack/` отсутствуют, тела лежат по
-  `{domain_root}/{pack_name}/{system_name}.json` (без `library/`).
+  `{domain_root}/{pack_uid}/{template_uid}.json` (без `library/`).
   Сокращённый layout без domain root допустим только для отдельного
   upload API, явно привязанного к домену (`template-pack-layout`);
   универсальный `.wpack` такого внешнего контекста не требует.

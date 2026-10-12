@@ -1,12 +1,14 @@
 from dataclasses import asdict
+from pathlib import Path
+import tempfile
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.background import BackgroundTask
 
 from app.api.deps import get_container
-from app.api.utils.jsonResolver import JsonResolver
-from app.api.utils.responseHelpers import json_or_download
+from app.api.utils.bundleSource import resolve_bundle_source
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, import_validation_http_detail
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
@@ -26,9 +28,23 @@ async def export_world(
     download: bool = False,
     level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
     container=Depends(get_container),
-) -> JSONResponse:
-    bundle = await container.world_bundle_service().export(world_uid, level=level)  # type: ignore[arg-type]
-    return json_or_download(bundle, download, f"world_{world_uid}.json")
+) -> Response:
+    service = container.world_bundle_service()
+    bundle = await service.export(world_uid, level=level)  # type: ignore[arg-type]
+    if not download:
+        return JSONResponse(content=bundle)
+    temporary = tempfile.TemporaryDirectory(prefix="world-export-")
+    try:
+        archive_path = service.write_archive(bundle, path=Path(temporary.name) / "world.wpack")
+        return FileResponse(
+            archive_path,
+            media_type="application/zip",
+            filename=f"world_{world_uid}.wpack",
+            background=BackgroundTask(temporary.cleanup),
+        )
+    except Exception:
+        temporary.cleanup()
+        raise
 
 
 @router.get("/worlds/{world_uid}")
@@ -82,11 +98,12 @@ async def import_world(
     validate_only: bool = Query(default=False),
     container=Depends(get_container),
 ) -> JSONResponse:
-    data = await JsonResolver.resolve(file=file, path=path)
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
     try:
-        result = await container.world_bundle_service().import_bundle(
+        service = container.world_bundle_service()
+        data = await resolve_bundle_source(file=file, path=path, read_archive=service.read_archive)
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
+        result = await service.import_bundle(
             data, level=level,  # type: ignore[arg-type]
             validate_only=validate_only,
         )

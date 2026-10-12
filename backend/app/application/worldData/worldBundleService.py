@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
+
+from app.application.worldData.bundle.archive import BundleArchiveError, read_archive, write_archive
+from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleWorldSource
+from app.dataModel.worldBundle.bundleSections import SECTION_PATHS
 from app.application.importResult import ImportResult
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
@@ -52,6 +58,30 @@ class WorldBundleService:
                 continue
             bundle[handler.key] = payload
         return filter_bundle_for_export(bundle, level)
+
+    def write_archive(self, sections: dict, *, path: Path) -> Path:
+        world = sections[BundleSection.WORLD]
+        manifest = BundleManifest(
+            kind=BundleKind.WORLD,
+            format_version=1,
+            source=BundleWorldSource(
+                kind=BundleKind.WORLD,
+                world_uid=world["world_uid"],
+                world_name=world["name"],
+                exporter="AI Project",
+                exported_at=datetime.now(timezone.utc),
+            ),
+            sections={key: SECTION_PATHS[key] for key in sections},
+        )
+        return write_archive(sections, manifest, path=path)
+
+    def read_archive(self, path: Path) -> dict:
+        contents = read_archive(path)
+        if contents.manifest.kind != BundleKind.WORLD:
+            raise BundleArchiveError("World import requires a world archive")
+        if contents.library_packs:
+            raise BundleArchiveError("World library import requires bundle integration (4d)")
+        return contents.sections
 
     async def import_bundle(
         self,
