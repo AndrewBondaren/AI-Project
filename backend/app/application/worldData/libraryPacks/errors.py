@@ -31,6 +31,14 @@ class LibraryPackPolicyRequiredError(LibraryPackConflictError):
         self.outcome = outcome
 
 
+def require_no_policy(result):
+    """Unwind caller UOW when a legacy result consumer cannot apply yet."""
+    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+    if isinstance(result, PolicyRequired):
+        raise LibraryPackPolicyRequiredError(result)
+    return result
+
+
 class LibraryPackReadOnlyError(LibraryPackError):
     """Write attempted on a declared default pack (TZ §1.1, §6)."""
 

@@ -108,6 +108,15 @@ class LibraryWriteRequest(BaseModel):
         return self
 
 
+def validated_write_request(**kwargs) -> LibraryWriteRequest:
+    """Turn invalid external selections into a domain validation failure."""
+    from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+    try:
+        return LibraryWriteRequest(**kwargs)
+    except ValueError as exc:
+        raise LibraryPackValidationError(str(exc)) from exc
+
+
 @dataclass(frozen=True)
 class WriteTarget:
     uid: str

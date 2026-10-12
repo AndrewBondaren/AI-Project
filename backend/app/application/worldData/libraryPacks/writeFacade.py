@@ -9,7 +9,7 @@ from app.application.worldData.libraryPacks.lifecycleContracts import (
 )
 from app.application.worldData.libraryPacks.packResults import PackRemapResult
 from app.application.worldData.libraryPacks.writeContracts import (
-    LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteSource,
+    LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteSource, validated_write_request,
 )
 from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
 from app.application.worldData.libraryPacks.writeResults import PolicyRequired, WriteRejected, WriteResult
@@ -30,7 +30,7 @@ def require_result(outcome):
 
 
 def pack_request(uid, owner, *, decisions=(), token=None):
-    return LibraryWriteRequest(items=(LibraryWriteItem(item_key="pack", object_kind="pack",
+    return validated_write_request(items=(LibraryWriteItem(item_key="pack", object_kind="pack",
         source=WriteSource(kind="catalog", key=uid), owner_world_uid=owner),),
         decisions=tuple(decisions), preview_token=token)
 
@@ -51,6 +51,13 @@ class LibraryWriteFacade:
     def __init__(self, scope, writer):
         self._scope, self._writer = scope, writer
 
+    async def instantiate_negotiated(self, source, world_uid, *, decisions=(), preview_token=None) -> PackRemapResult | PolicyRequired:
+        if source.owner_world_uid is not None or is_default_pack_uid(source.pack_uid):
+            raise LibraryPackValidationError("only non-default engine packs instantiate into worlds")
+        result = require_result(await self._writer.execute(pack_request(source.pack_uid, world_uid,
+            decisions=decisions, token=preview_token)))
+        return await self.remap_result(result) if isinstance(result, WriteResult) else result
+
     async def instantiate(self, source, world_uid, *, confirm=False, preview_token=None):
         if source.owner_world_uid is not None or is_default_pack_uid(source.pack_uid):
             raise LibraryPackValidationError("only non-default engine packs instantiate into worlds")
@@ -68,12 +75,19 @@ class LibraryWriteFacade:
             return lifecycle_preview(result.plan, source_uid=source.pack_uid, applied=True)
         return await self.remap_result(result)
 
-    async def publish(self, source, *, system_name=None):
+    async def publish(self, source, *, system_name=None, decisions=(), preview_token=None) -> PackRemapResult | PolicyRequired:
         if source.owner_world_uid is None:
             raise LibraryPackValidationError("copy_pack publishes world-owned packs")
-        decisions = (LibraryWriteSelection(item_key="pack", policy="copy", copy_system_name=system_name),
-                     ) if system_name else ()
-        result = require_result(await self._writer.execute(pack_request(source.pack_uid, None, decisions=decisions)))
+        decisions = tuple(decisions)
+        if decisions:
+            if (len(decisions) != 1 or decisions[0].item_key != "pack"
+                    or decisions[0].policy.value != "copy"
+                    or system_name is not None and decisions[0].copy_system_name != system_name):
+                raise LibraryPackValidationError("publish requires one consistent COPY selection")
+        elif system_name:
+            decisions = (LibraryWriteSelection(item_key="pack", policy="copy", copy_system_name=system_name),)
+        result = require_result(await self._writer.execute(pack_request(source.pack_uid, None,
+            decisions=decisions, token=preview_token)))
         return await self.remap_result(result) if isinstance(result, WriteResult) else result
 
     async def copy_member(self, source, target_uid, *, owner=None):

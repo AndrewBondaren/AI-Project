@@ -28,6 +28,10 @@ delegate to ``writeService``; exact CRUD/delete jobs remain in
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.application.worldData.libraryPacks.writeResults import PolicyRequired, WriteResult
+
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -86,7 +90,7 @@ class LibraryPackService:
         self._fs_writes = LibraryFsWriteService(self._scope, write_service)
         self._write_service = write_service
 
-    async def import_legacy_bodies(self, kind, world_uid, outlines, *, decisions=(), preview_token=None):
+    async def import_legacy_bodies(self, kind, world_uid, outlines, *, decisions=(), preview_token=None) -> WriteResult | PolicyRequired:
         from app.application.worldData.libraryPacks.legacyWrite import import_legacy_bodies
         return await import_legacy_bodies(self._scope, self._write_service, kind, world_uid, outlines,
                                           decisions=decisions, preview_token=preview_token)
@@ -194,7 +198,7 @@ class LibraryPackService:
         *,
         domain_root: Path | None = None,
         decisions=(), preview_token=None,
-    ) -> PackImportResult:
+    ) -> PackImportResult | PolicyRequired:
         """Manifest-based FS import → engine library (TZ §4).
 
         Trusted-source write: a manifest whose identity is a declared
@@ -229,16 +233,30 @@ class LibraryPackService:
                                               confirm=confirm, preview_token=preview_token)
 
     async def copy_pack(
-        self, source_pack_uid: str, *, system_name: str | None = None
-    ) -> PackRemapResult:
+        self, source_pack_uid: str, *, system_name: str | None = None,
+        decisions=(), preview_token=None,
+    ) -> PackRemapResult | PolicyRequired:
         """Publish a world-owned pack to the engine catalog (TZ §4.1).
 
         The same §2 remap with ``owner_world_uid=None`` — the source
         world pack, its members and its registry pointers are not
         touched; editing the published library never reaches instances.
-        ``system_name`` defaults to ``{source}.published``.
+        ``system_name`` defaults to ``{source}.published``. A policy outcome
+        can be continued with its token and an explicit COPY decision.
         """
-        return await self._writes.publish(await self.get_pack(source_pack_uid), system_name=system_name)
+        return await self._writes.publish(await self.get_pack(source_pack_uid), system_name=system_name,
+                                         decisions=decisions, preview_token=preview_token)
+
+    async def instantiate_pack_negotiated(self, source_pack_uid, *, world_uid,
+                                         decisions=(), preview_token=None) -> PackRemapResult | PolicyRequired:
+        return await self._writes.instantiate_negotiated(await self.get_pack(source_pack_uid), world_uid,
+            decisions=decisions, preview_token=preview_token)
+
+    async def write_authored_bodies(self, kind, pack_uid, bodies, *, local_uid=None,
+                                    decisions=(), preview_token=None, source_file=None) -> WriteResult | PolicyRequired:
+        from app.application.worldData.libraryPacks.authoringWrite import write_authored_bodies
+        return await write_authored_bodies(self, _coerce_kind(kind), pack_uid, bodies,
+            local_uid=local_uid, decisions=decisions, preview_token=preview_token, source_file=source_file)
 
     async def copy_member(self, source_template_uid: str, target_pack_uid: str,
                           *, world_uid: str | None = None) -> MemberCopyResult:

@@ -9,6 +9,10 @@ Domain errors — ``structureTemplateErrors`` (no FastAPI here).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+
 from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 
 import logging
@@ -164,7 +168,7 @@ class StructureTemplateLibraryService:
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
         decisions=(), preview_token=None,
-    ) -> list[StructureTemplateRow]:
+    ) -> list[StructureTemplateRow] | PolicyRequired:
         if self._write_provider is not None:
             from app.application.worldData.libraryPacks.packResults import PackImportResult
             result = await self._write_provider()._fs_writes.import_path(LibraryKind.STRUCTURE_TEMPLATES,

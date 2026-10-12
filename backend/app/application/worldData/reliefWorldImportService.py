@@ -8,6 +8,10 @@ at the world-owned member uids (step 4a contract). API/routes stay thin.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+
 from datetime import datetime, timezone
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
@@ -64,7 +68,7 @@ class ReliefWorldImportService:
         world_uid: str,
         outlines: list[dict],
         *, decisions=(), preview_token=None,
-    ) -> dict:
+    ) -> dict | PolicyRequired:
         """Bodies → world-owned ``legacy`` members + registry pointers + R34 sync."""
         if self._db is not None and self._library._write_provider is None:
             raise RuntimeError("SQL library imports require the common write service")
@@ -78,7 +82,7 @@ class ReliefWorldImportService:
         world_uid: str,
         outlines: list[dict],
         *, decisions=(), preview_token=None,
-    ) -> dict:
+    ) -> dict | PolicyRequired:
         world = await self._worlds.get_by_id(world_uid)
         if self._library._write_provider is not None:
             from app.application.worldData.libraryPacks.writeResults import WriteResult

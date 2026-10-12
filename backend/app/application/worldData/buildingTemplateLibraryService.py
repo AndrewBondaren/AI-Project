@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+
 import logging
 from datetime import datetime, timezone
 
@@ -159,7 +163,7 @@ class BuildingTemplateLibraryService:
         world_uid: str,
         bodies: list[dict],
         *, decisions=(), preview_token=None,
-    ) -> ImportResult:
+    ) -> ImportResult | PolicyRequired:
         if not isinstance(bodies, list):
             raise BundleValidationError("building_templates section must be an array")
         if self._db is not None and self._write_provider is None:
@@ -174,7 +178,7 @@ class BuildingTemplateLibraryService:
         world_uid: str,
         bodies: list[dict],
         *, decisions=(), preview_token=None,
-    ) -> ImportResult:
+    ) -> ImportResult | PolicyRequired:
         """Manifest-less bodies → world-owned ``legacy`` pack members (plan step 3)."""
         if not bodies:
             return ImportResult(total=0, succeeded=0, failed=0, errors=[])

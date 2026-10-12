@@ -23,6 +23,13 @@ from app.application.worldData.errors import (
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    from app.api.libraryWrite import library_error_response
+    from app.application.worldData.libraryPacks.errors import LibraryPackError
+
+    @app.exception_handler(LibraryPackError)
+    async def _library_error(_request: Request, exc: LibraryPackError) -> JSONResponse:
+        return library_error_response(exc)
+
     @app.exception_handler(WorldDataNotFoundError)
     async def _world_data_not_found(
         _request: Request, exc: WorldDataNotFoundError

@@ -1,6 +1,6 @@
 """Normalize manifest-less bodies before the shared, atomic write boundary."""
 from app.application.worldData.libraryPacks.legacyPack import legacy_member_row, legacy_pack_row
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, LibraryWriteRequest, WriteSource
+from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, validated_write_request, WriteSource
 from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
 from app.application.worldData.libraryPacks.writeFacade import require_result
 
@@ -20,5 +20,5 @@ async def import_legacy_bodies(scope, writer, kind, world_uid, outlines, *, deci
             items = tuple(LibraryWriteItem(item_key=str(i), object_kind="member",
                 source=WriteSource(kind="import", key=str(i)), owner_world_uid=world_uid,
                 target_pack_uid=pack.pack_uid, library_kind=kind) for i in range(len(entries)))
-        return require_result(await writer.execute(LibraryWriteRequest(items=items,
+        return require_result(await writer.execute(validated_write_request(items=items,
             decisions=tuple(decisions), preview_token=preview_token), imports=sources))

@@ -9,6 +9,7 @@ from app.application.worldData.bundle.archive import BundleArchiveError, read_ar
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleWorldSource
 from app.dataModel.worldBundle.bundleSections import SECTION_PATHS
 from app.application.importResult import ImportResult
+from app.application.worldData.libraryPacks.errors import require_no_policy
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
@@ -114,9 +115,9 @@ class WorldBundleService:
                 for handler in self._handlers:
                     if handler.key not in data:
                         continue
-                    results[handler.key] = await handler.import_section(
+                    results[handler.key] = require_no_policy(await handler.import_section(
                         world_uid, data[handler.key],
-                    )
+                    ))
                     if (
                         handler.key == BundleSection.WORLD
                         and results[handler.key].failed > 0

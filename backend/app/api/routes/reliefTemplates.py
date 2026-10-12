@@ -9,15 +9,9 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
-from app.application.worldData.libraryPacks.errors import (
-    LibraryPackConflictError,
-    LibraryPackError,
-    LibraryPackInUseError,
-    LibraryPackNotFoundError,
-    LibraryPackOwnershipError,
-    LibraryPackReadOnlyError,
-    LibraryPackValidationError,
-)
+from app.api.libraryWrite import parse_negotiation
+from app.application.worldData.libraryPacks.errors import require_no_policy
+from app.ids import LibraryKind
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
@@ -34,25 +28,14 @@ def _http_from_relief(exc: Exception) -> HTTPException:
     raise exc
 
 
-def _http_from_pack(exc: LibraryPackError) -> HTTPException:
-    if isinstance(exc, LibraryPackNotFoundError):
-        return HTTPException(status_code=404, detail=str(exc))
-    if isinstance(exc, (LibraryPackConflictError, LibraryPackInUseError)):
-        return HTTPException(status_code=409, detail=str(exc))
-    if isinstance(exc, (LibraryPackOwnershipError, LibraryPackReadOnlyError)):
-        return HTTPException(status_code=403, detail=str(exc))
-    if isinstance(exc, LibraryPackValidationError):
-        return HTTPException(status_code=422, detail=str(exc))
-    return HTTPException(status_code=500, detail=str(exc))
-
-
 async def _instantiate_member_pack(
-    container, world_uid: str, template_uid: str
+    container, world_uid: str, template_uid: str, *, decisions=(), preview_token=None,
 ) -> dict:
     """``template_uid`` → owning engine pack → ``instantiate_pack`` (TZ §1.1)."""
     packs = container.library_pack_service()
     member = await packs.get_member(template_uid)
-    res = await packs.instantiate_pack(member.pack_uid, world_uid=world_uid)
+    res = require_no_policy(await packs.instantiate_pack_negotiated(member.pack_uid,
+        world_uid=world_uid, decisions=decisions, preview_token=preview_token))
     return {
         "pack_uid": res.pack.pack_uid,
         "created": res.created,
@@ -81,9 +64,15 @@ async def get_relief_template(template_uid: str, container=Depends(get_container
 async def upsert_relief_template(
     data: dict[str, Any],
     container=Depends(get_container),
+    pack_uid: str | None = None,
+    negotiation=Depends(parse_negotiation),
 ) -> dict:
     try:
-        row = await container.relief_template_library_service().upsert_from_dict(data)
+        result = require_no_policy(await container.library_pack_service().write_authored_bodies(
+            LibraryKind.RELIEF_TEMPLATES, pack_uid, [data],
+            decisions=negotiation.decisions, preview_token=negotiation.preview_token))
+        uid = result.plan.items[0].members[0].value.member.template_uid
+        row = await container.relief_template_library_service().get_by_uid(uid)
     except (ReliefNotFoundError, ReliefValidationError) as exc:
         raise _http_from_relief(exc) from exc
     return ReliefTemplateLibraryService.row_as_dict(row)
@@ -94,30 +83,27 @@ async def import_relief_templates(
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
     container=Depends(get_container),
+    pack_uid: str | None = Form(default=None),
+    decisions: str | None = Form(default=None),
+    preview_token: str | None = Form(default=None),
 ) -> JSONResponse:
     """Import one JSON object, a JSON array of outlines, or a filesystem pack path."""
     svc = container.relief_template_library_service()
+    negotiation = parse_negotiation(decisions, preview_token)
+    options = {"decisions": negotiation.decisions, "preview_token": negotiation.preview_token}
     try:
         if path:
-            rows = await svc.import_path(path)
+            rows = require_no_policy(await svc.import_path(path, **options))
             return JSONResponse(
                 status_code=200,
                 content={"imported": len(rows), "uids": [r.template_uid for r in rows]},
             )
         data = await JsonResolver.resolve(file=file, path=None)
-        if isinstance(data, dict):
-            row = await svc.upsert_from_dict(data)
-            return JSONResponse(
-                status_code=200,
-                content={"imported": 1, "uids": [row.template_uid]},
-            )
-        if isinstance(data, list):
-            uids: list[str] = []
-            for item in data:
-                if not isinstance(item, dict):
-                    raise HTTPException(status_code=422, detail="Array items must be objects")
-                row = await svc.upsert_from_dict(item)
-                uids.append(row.template_uid)
+        if isinstance(data, (dict, list)):
+            result = require_no_policy(await container.library_pack_service().write_authored_bodies(
+                LibraryKind.RELIEF_TEMPLATES, pack_uid, [data] if isinstance(data, dict) else data,
+                source_file="upload", **options))
+            uids = [w.value.member.template_uid for item in result.plan.items for w in item.members]
             return JSONResponse(status_code=200, content={"imported": len(uids), "uids": uids})
     except (ReliefNotFoundError, ReliefValidationError) as exc:
         raise _http_from_relief(exc) from exc
@@ -130,6 +116,7 @@ async def import_relief_into_world(
     data: dict[str, Any] | list[Any] | None = None,
     template_uid: str | None = None,
     container=Depends(get_container),
+    negotiation=Depends(parse_negotiation),
 ) -> JSONResponse:
     """Instantiate the pack owning ``template_uid``, or import outline body(ies)."""
     svc = container.relief_world_import_service()
@@ -138,7 +125,8 @@ async def import_relief_into_world(
         if uid is None and isinstance(data, dict) and set(data) == {"template_uid"}:
             uid = data["template_uid"]
         if uid is not None:
-            result = await _instantiate_member_pack(container, world_uid, uid)
+            result = await _instantiate_member_pack(container, world_uid, uid,
+                decisions=negotiation.decisions, preview_token=negotiation.preview_token)
             return JSONResponse(status_code=200, content=result)
         body = data
         if body is None:
@@ -149,12 +137,13 @@ async def import_relief_into_world(
             outlines = body
         else:
             raise HTTPException(status_code=422, detail="Expected object or array")
-        result = await svc.import_outlines_into_world(world_uid, outlines)
+        if any(not isinstance(outline, dict) for outline in outlines):
+            raise HTTPException(status_code=422, detail="Array items must be objects")
+        result = require_no_policy(await svc.import_outlines_into_world(world_uid, outlines,
+            decisions=negotiation.decisions, preview_token=negotiation.preview_token))
         return JSONResponse(status_code=200, content=result)
     except (ReliefNotFoundError, ReliefValidationError) as exc:
         raise _http_from_relief(exc) from exc
-    except LibraryPackError as exc:
-        raise _http_from_pack(exc) from exc
 
 
 @router.delete("/relief-templates/{template_uid}", status_code=204)

@@ -3,8 +3,8 @@ from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
 from app.application.worldData.libraryPacks.fsWriteSource import read_fs_write_source
 from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
 from app.application.worldData.libraryPacks.packResults import PackImportResult
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, LibraryWriteRequest, WriteSource
-from app.application.worldData.libraryPacks.writeResults import WriteResult
+from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, validated_write_request, WriteSource
+from app.application.worldData.libraryPacks.writeResults import WriteResult, PolicyRequired
 from app.application.worldData.libraryPacks.writeFacade import require_result
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.ids import LibraryKind
@@ -15,9 +15,13 @@ class LibraryFsWriteService:
         self._scope, self._writer = scope, writer
 
     async def import_path(self, kind, path, *, domain_root=None, enforce_domain_root=True,
-                          decisions=(), preview_token=None):
-        loaded = read_fs_write_source(kind, path, domain_root=domain_root,
-                                      enforce_domain_root=enforce_domain_root)
+                          decisions=(), preview_token=None) -> PackImportResult | PolicyRequired:
+        from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+        try:
+            loaded = read_fs_write_source(kind, path, domain_root=domain_root,
+                                          enforce_domain_root=enforce_domain_root)
+        except (ValueError, OSError) as exc:
+            raise LibraryPackValidationError(str(exc)) from exc
         async with self._scope.db.transaction_if_needed():
             return await self._import_loaded(kind, loaded, decisions=decisions, preview_token=preview_token)
 
@@ -32,7 +36,7 @@ class LibraryFsWriteService:
             source=WriteSource(kind="import", key="fs"),
             target_pack_uid=raw.pack.pack_uid if member_mode else None,
             library_kind=LibraryKind(kind) if member_mode else None)
-        result = require_result(await self._writer.execute(LibraryWriteRequest(items=(item,),
+        result = require_result(await self._writer.execute(validated_write_request(items=(item,),
             decisions=tuple(decisions), preview_token=preview_token), imports={"fs": raw}))
         if not isinstance(result, WriteResult):
             return result

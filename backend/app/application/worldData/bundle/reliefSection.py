@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from app.application.importResult import ImportResult
+from app.application.worldData.libraryPacks.errors import require_no_policy
 from app.application.jsonValidation.worldRow import relief_template_registry
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
@@ -46,6 +47,6 @@ async def import_relief_templates_section(
 ) -> ImportResult:
     if not isinstance(bodies, list):
         raise ReliefValidationError("relief_templates section must be an array")
-    info = await relief_import.import_outlines_into_world(world_uid, bodies)
+    info = require_no_policy(await relief_import.import_outlines_into_world(world_uid, bodies))
     n = int(info["imported"])
     return ImportResult(total=n, succeeded=n, failed=0)

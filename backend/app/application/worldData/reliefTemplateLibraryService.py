@@ -6,6 +6,10 @@ the common pack boundary. Domain errors contain no FastAPI types.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+
 from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 
 import logging
@@ -151,7 +155,7 @@ class ReliefTemplateLibraryService:
         domain_root: Path | None = None,
         enforce_domain_root: bool = True,
         decisions=(), preview_token=None,
-    ) -> list[ReliefTemplateRow]:
+    ) -> list[ReliefTemplateRow] | PolicyRequired:
         if self._write_provider is not None:
             from app.application.worldData.libraryPacks.packResults import PackImportResult
             result = await self._write_provider()._fs_writes.import_path(LibraryKind.RELIEF_TEMPLATES,
