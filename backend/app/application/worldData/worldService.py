@@ -11,6 +11,7 @@ from app.application.worldData.errors import (
     WorldDataNotFoundError,
     WorldDataValidationError,
 )
+from app.application.worldData.worldColumnWrite import invalidated_world_tables
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
@@ -59,7 +60,6 @@ class WorldService:
         data = _normalize_world_data(data, partial=True)
         world = await self.get_by_id(world_uid)
         original = dataclasses.replace(world)  # snapshot before mutations
-        old_map_cell_size = world.fine_cells_per_map_cell
 
         patch = {key: value for key, value in data.items()
                  if hasattr(world, key) and key not in self._IMMUTABLE}
@@ -71,13 +71,16 @@ class WorldService:
         except ValueError as exc:
             raise WorldDataValidationError(str(exc)) from exc
 
-        map_size_changed = old_map_cell_size != world.fine_cells_per_map_cell
+        invalidated = invalidated_world_tables(
+            world_wire_from_row(original), world_wire_from_row(world))
+        map_cells_invalidated = "map_cells" in invalidated
 
-        if map_size_changed and not force:
+        if map_cells_invalidated and not force:
             return WorldUpdateResult(
                 world=original,
                 warning=(
-                    f"fine_cells_per_map_cell changed from {old_map_cell_size} to {world.fine_cells_per_map_cell}. "
+                    f"fine_cells_per_map_cell changed from "
+                    f"{original.fine_cells_per_map_cell} to {world.fine_cells_per_map_cell}. "
                     "All map_cells will be deleted and terrain must be regenerated. "
                     "Re-send with force=true to confirm."
                 ),
@@ -87,7 +90,7 @@ class WorldService:
         await self._repo.update(world)
         return WorldUpdateResult(
             world=world,
-            map_cells_invalidated=map_size_changed,
+            map_cells_invalidated=map_cells_invalidated,
         )
 
     async def repair_defaults(self, world: World) -> World:

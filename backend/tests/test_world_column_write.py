@@ -18,6 +18,7 @@ from app.application.jsonValidation.worldSlices import (
 from app.application.worldData.worldColumnWrite import (
     COLUMN_INVALIDATES, apply_world_column, invalidated_world_tables,
 )
+from app.application.worldData.worldService import WorldService
 from app.dataModel.annotationPolicy import DefaultWhenMissing, IgnoreOnWire
 from app.dataModel.climate.worldClimateScalars import SeasonTempOffsets
 from app.db.models.world import World
@@ -213,6 +214,56 @@ class WorldColumnWriteTests(unittest.TestCase):
         with patch.dict(COLUMN_INVALIDATES, {"g": frozenset({"test_table"})}):
             self.assertEqual(apply_world_column(world, "g", 2.0, self.ctx()), frozenset())
             self.assertEqual(apply_world_column(world, "g", 3.0, self.ctx()), frozenset({"test_table"}))
+
+
+class _StubWorldRepo:
+    def __init__(self, world: World) -> None:
+        self.world = world
+        self.saved: World | None = None
+
+    async def get_by_id(self, world_uid: str) -> World | None:
+        return self.world if self.world.world_uid == world_uid else None
+
+    async def update(self, world: World) -> None:
+        self.saved = world
+
+
+class WorldUpdateInvalidationTests(unittest.IsolatedAsyncioTestCase):
+    """W2-2: master PATCH derives cleanup from COLUMN_INVALIDATES."""
+
+    def service(self) -> tuple[WorldService, _StubWorldRepo]:
+        repo = _StubWorldRepo(World("w1", "World", "2026-10-12"))
+        return WorldService(repo), repo
+
+    async def test_unchanged_cell_size_saves_without_invalidation(self):
+        service, repo = self.service()
+        result = await service.update("w1", {"fine_cells_per_map_cell": 1000})
+        self.assertFalse(result.requires_force)
+        self.assertFalse(result.map_cells_invalidated)
+        self.assertEqual(repo.saved.fine_cells_per_map_cell, 1000)
+
+    async def test_changed_cell_size_requires_force_and_never_writes(self):
+        service, repo = self.service()
+        result = await service.update("w1", {"fine_cells_per_map_cell": 2000})
+        self.assertTrue(result.requires_force)
+        self.assertIn("1000", result.warning)
+        self.assertIn("2000", result.warning)
+        self.assertIsNone(repo.saved)
+        self.assertEqual(result.world.fine_cells_per_map_cell, 1000)
+
+    async def test_forced_cell_size_reports_cleanup(self):
+        service, repo = self.service()
+        result = await service.update("w1", {"fine_cells_per_map_cell": 2000, "force": True})
+        self.assertFalse(result.requires_force)
+        self.assertTrue(result.map_cells_invalidated)
+        self.assertEqual(repo.saved.fine_cells_per_map_cell, 2000)
+
+    async def test_unrelated_change_does_not_invalidate(self):
+        service, repo = self.service()
+        result = await service.update("w1", {"name": "Renamed"})
+        self.assertFalse(result.requires_force)
+        self.assertFalse(result.map_cells_invalidated)
+        self.assertEqual(repo.saved.name, "Renamed")
 
 
 if __name__ == "__main__":
