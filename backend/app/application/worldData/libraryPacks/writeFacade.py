@@ -51,21 +51,28 @@ class LibraryWriteFacade:
     def __init__(self, scope, writer):
         self._scope, self._writer = scope, writer
 
-    async def instantiate_negotiated(self, source, world_uid, *, decisions=(), preview_token=None) -> PackRemapResult | PolicyRequired:
+    @staticmethod
+    def _require_instantiable_source(source):
         if source.owner_world_uid is not None or is_default_pack_uid(source.pack_uid):
             raise LibraryPackValidationError("only non-default engine packs instantiate into worlds")
-        result = require_result(await self._writer.execute(pack_request(source.pack_uid, world_uid,
+
+    async def _execute_instantiation(self, source, world_uid, *, decisions=(), preview_token=None) -> WriteResult | PolicyRequired:
+        return require_result(await self._writer.execute(pack_request(source.pack_uid, world_uid,
             decisions=decisions, token=preview_token)))
+
+    async def instantiate_negotiated(self, source, world_uid, *, decisions=(), preview_token=None) -> PackRemapResult | PolicyRequired:
+        self._require_instantiable_source(source)
+        result = await self._execute_instantiation(source, world_uid,
+            decisions=decisions, preview_token=preview_token)
         return await self.remap_result(result) if isinstance(result, WriteResult) else result
 
     async def instantiate(self, source, world_uid, *, confirm=False, preview_token=None):
-        if source.owner_world_uid is not None or is_default_pack_uid(source.pack_uid):
-            raise LibraryPackValidationError("only non-default engine packs instantiate into worlds")
+        self._require_instantiable_source(source)
         existing = await self._scope.packs.find_instance(world_uid, source.pack_uid)
         decisions = (LibraryWriteSelection(item_key="pack", policy="replace", target_uid=existing.pack_uid),
                      ) if existing and confirm else ()
-        result = require_result(await self._writer.execute(pack_request(source.pack_uid, world_uid,
-            decisions=decisions, token=preview_token)))
+        result = await self._execute_instantiation(source, world_uid,
+            decisions=decisions, preview_token=preview_token)
         if isinstance(result, PolicyRequired):
             preview = next((p.plan for p in result.preview if p.plan is not None), None)
             if preview is None:

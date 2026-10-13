@@ -417,20 +417,26 @@ class InstantiateTests(_ServiceCase):
         world_pack = await self.service.create_pack(
             system_name="world.w1.relief", owner_world_uid="w1"
         )
-        with self.assertRaises(LibraryPackValidationError):
-            await self.service.instantiate_pack(world_pack.pack_uid, world_uid="w2")
+        for instantiate in (self.service.instantiate_pack, self.service.instantiate_pack_negotiated):
+            with self.subTest(entry=instantiate.__name__, source="world-owned"):
+                with self.assertRaises(LibraryPackValidationError):
+                    await instantiate(world_pack.pack_uid, world_uid="w2")
         # Nonexistent world.
         engine, _ = await self._relief_engine_pack(members=("a",))
-        with self.assertRaises(LibraryPackValidationError):
-            await self.service.instantiate_pack(engine.pack_uid, world_uid="ghost")
+        for instantiate in (self.service.instantiate_pack, self.service.instantiate_pack_negotiated):
+            with self.subTest(entry=instantiate.__name__, destination="missing-world"):
+                with self.assertRaises(LibraryPackValidationError):
+                    await instantiate(engine.pack_uid, world_uid="ghost")
         # Declared default — already available, instance would detach from
         # canonical attach (TZ §6).
         await self.service.import_fs_pack(
             _STRUCT, _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT
         )
         base_uid = library_uid(_PACKS, _BASE_SYSTEM_NAME)
-        with self.assertRaises(LibraryPackValidationError):
-            await self.service.instantiate_pack(base_uid, world_uid="w1")
+        for instantiate in (self.service.instantiate_pack, self.service.instantiate_pack_negotiated):
+            with self.subTest(entry=instantiate.__name__, source="default"):
+                with self.assertRaises(LibraryPackValidationError):
+                    await instantiate(base_uid, world_uid="w1")
 
     async def test_dependencies_copied_never_instantiated(self):
         await self._world("w1")

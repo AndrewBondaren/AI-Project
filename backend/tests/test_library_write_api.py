@@ -225,6 +225,22 @@ class LibraryWriteApiTests(_ServiceCase):
         applied = await self.client.post(url, params=params)
         self.assertEqual(applied.status_code, 200, applied.text)
 
+        preview = await self.client.post(url, params={"template_uid": members[0].template_uid})
+        self.assertEqual(preview.status_code, 409, preview.text)
+        instance_uid = first.json()["pack_uid"]
+        before_members = await self.members.list_by_pack(instance_uid)
+        before_bodies = {m.template_uid: await self.service.read_member_body(m.template_uid)
+                         for m in before_members}
+        await self.service.update_member_body(members[0].template_uid,
+            _relief_body(members[0].local_uid, display_name="Changed after preview"))
+        params["preview_token"] = preview.json()["preview_token"]
+        stale = await self.client.post(url, params=params)
+        self.assertEqual(stale.status_code, 409, stale.text)
+        self.assertTrue(stale.json()["stale"])
+        self.assertEqual(await self.members.list_by_pack(instance_uid), before_members)
+        self.assertEqual({m.template_uid: await self.service.read_member_body(m.template_uid)
+                          for m in before_members}, before_bodies)
+
     async def test_bundle_policy_conflict_rolls_back_world_and_members(self):
         from app.application.worldData.bundle.entity.sections import WorldSectionHandler
         from app.application.worldData.worldBundleService import WorldBundleService
