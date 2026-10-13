@@ -118,9 +118,9 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
                     locations = {row["location_uid"]: row for row in exported["locations"]}
                     # Copy remaps entity identity while retaining declaration order.
                     self.assertEqual(len(locations), len(fixture.get("locations", [])))
-                    by_name = {row["name"]: row for row in locations.values()}
+                    by_name = {row["display_name"]: row for row in locations.values()}
                     for source in fixture.get("locations", []):
-                        row = by_name[source["name"]]
+                        row = by_name[source["display_name"]]
                         parent_uid = row["parent_location_uid"]
                         parent_type = locations[parent_uid]["system_location_type"] if parent_uid else None
                         self.assertTrue(registry.allows_parent(row["system_location_type"], parent_type),

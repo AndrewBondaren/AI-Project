@@ -1,5 +1,6 @@
 {
   "world": {
+    "world_uid": "world-template",
     "name": "Шаблон мира (эталон)",
     "narrative_language": "ru",
     "measurement_system": "metric",

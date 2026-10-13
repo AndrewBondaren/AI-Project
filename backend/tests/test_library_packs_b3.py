@@ -559,11 +559,12 @@ class SuppliedContentTests(unittest.TestCase):
         )
         world_uid = fixture["world"]["world_uid"]
         pins = {
-            (p["library_kind"], p["local_uid"]) for p in fixture["world"]["library_pins"]
+            (p["library_kind"], p["template_uid"]) for p in fixture["world"]["library_pins"]
         }
         self.assertEqual(
             pins,
-            {(_RELIEF.value, local) for local in RELIEF_SMOKE_003_FORMER_UIDS.values()},
+            {(_RELIEF.value, legacy_member_uid(_RELIEF, local, world_uid=world_uid))
+             for local in RELIEF_SMOKE_003_FORMER_UIDS.values()},
         )
         policy = fixture["world"]["relief_pick_policy"]
         expected = {
