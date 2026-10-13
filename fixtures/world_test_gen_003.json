@@ -321,19 +321,19 @@
     "library_pins": [
       {
         "library_kind": "relief_templates",
-        "local_uid": "open_land_soft"
+        "template_uid": "3be102cf-9d76-5932-b784-51fed4997166"
       },
       {
         "library_kind": "relief_templates",
-        "local_uid": "shore_soft"
+        "template_uid": "d2ac3c54-7383-59fa-9a33-47dd55b86726"
       },
       {
         "library_kind": "relief_templates",
-        "local_uid": "road_shoulder_soft"
+        "template_uid": "87c0153d-9ef4-5bff-8f5f-7d796c94c94d"
       },
       {
         "library_kind": "relief_templates",
-        "local_uid": "ravine_soft"
+        "template_uid": "0f7a014c-71b3-58b6-8cea-a0e113b2b603"
       }
     ]
   },

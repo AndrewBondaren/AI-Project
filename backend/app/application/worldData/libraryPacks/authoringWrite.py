@@ -9,7 +9,7 @@ from app.ids import LibraryKind, library_uid
 
 
 async def write_authored_bodies(service, kind, pack_uid, bodies, *, local_uid=None,
-                                decisions=(), preview_token=None, source_file=None) -> WriteResult | PolicyRequired:
+                                decisions=(), preview_token=None, source_file=None, world_uid=None) -> WriteResult | PolicyRequired:
     if not pack_uid:
         raise LibraryPackValidationError("body write requires owning pack_uid")
     if not isinstance(bodies, list) or not bodies or any(not isinstance(b, dict) for b in bodies):
@@ -34,6 +34,7 @@ async def write_authored_bodies(service, kind, pack_uid, bodies, *, local_uid=No
             item_key = str(index)
             sources[item_key] = WriteImportSource(pack, (WriteImportMember(member, body, source_file),))
             items.append(LibraryWriteItem(item_key=item_key, object_kind="member",
-                source=WriteSource(kind="authoring", key=item_key), target_pack_uid=pack_uid, library_kind=kind))
+                source=WriteSource(kind="authoring", key=item_key), target_pack_uid=pack_uid,
+                library_kind=kind, owner_world_uid=world_uid))
         return require_result(await service._write_service.execute(validated_write_request(items=tuple(items),
             decisions=tuple(decisions), preview_token=preview_token), imports=sources))

@@ -24,6 +24,8 @@ class BundleSection:
     BUILDING_TEMPLATES: ClassVar[str] = "building_templates"
     RACE_TEMPLATES: ClassVar[str] = "race_templates"
     PERK_TEMPLATES: ClassVar[str] = "perk_templates"
+    LIBRARY_PACKS: ClassVar[str] = "library_packs"
+    STRUCTURE_TEMPLATES: ClassVar[str] = "structure_templates"
     # Rejected on skeleton/registry import (pack path) — not in allowlists below.
     MAP_CELLS: ClassVar[str] = "map_cells"
 
@@ -40,6 +42,8 @@ class BundleSection:
         BUILDING_TEMPLATES,
         RACE_TEMPLATES,
         PERK_TEMPLATES,
+        LIBRARY_PACKS,
+        STRUCTURE_TEMPLATES,
     })
 
     @classmethod
@@ -74,8 +78,9 @@ SECTION_PATHS = MappingProxyType({
     BundleSection.BUILDING_TEMPLATES: "skeleton/building_templates.json",
     BundleSection.RACE_TEMPLATES: "skeleton/race_templates.json",
     BundleSection.PERK_TEMPLATES: "skeleton/perk_templates.json",
+    BundleSection.STRUCTURE_TEMPLATES: "skeleton/structure_templates.json",
 })
 PATH_SECTIONS = MappingProxyType({path: key for key, path in SECTION_PATHS.items()})
 
-assert set(SECTION_PATHS) == BundleSection.SKELETON
+assert set(SECTION_PATHS) == BundleSection.SKELETON - {BundleSection.LIBRARY_PACKS}
 assert len(PATH_SECTIONS) == len(SECTION_PATHS)

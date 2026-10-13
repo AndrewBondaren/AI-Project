@@ -22,7 +22,7 @@ class PackWritePlanner:
             pack = replace(target, pack_name=source.pack.pack_name,
                            display_name=source.pack.display_name, version=source.pack.version)
         else:
-            name = source.pack.system_name
+            name = facts.item.target_system_name or source.pack.system_name
             if action.action is WriteAction.COPY:
                 name = action.copy_system_name
             elif facts.item.source.kind is WriteSourceKind.CATALOG:
@@ -33,7 +33,8 @@ class PackWritePlanner:
             uid = library_uid(LibraryKind.LIBRARY_PACKS, name)
             if any(p.pack_uid == uid or p.system_name == name for p in state.packs):
                 raise LibraryPackConflictError("pack create identity is occupied")
-            carrying = facts.item.source.kind is WriteSourceKind.IMPORT and action.action is WriteAction.CREATE
+            carrying = (facts.item.source.kind is WriteSourceKind.IMPORT
+                        and action.action is WriteAction.CREATE and uid == source.pack.pack_uid)
             pack = replace(source.pack, pack_uid=uid, system_name=name,
                            owner_world_uid=facts.item.owner_world_uid,
                            source_pack_uid=source.pack.source_pack_uid if carrying else source.pack.pack_uid)

@@ -73,7 +73,9 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(result.failed, 0, result.errors)
                         self.assertEqual(result.succeeded, 1 if key == "world" else len(fixture[key]))
                     worlds = await repo.get_all()
-                    world = next(w for w in worlds if w.name == fixture["world"]["name"])
+                    self.assertEqual(len(worlds), 1)
+                    world = worlds[0]
+                    self.assertNotEqual(world.world_uid, fixture["world"]["world_uid"])
                     exported = await bundle.export(world.world_uid)
                     for key, identity, pojo in (
                         ("material_registry", "system_material", materials(world)),
@@ -87,6 +89,11 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
                                 self.assertEqual(stored[row[identity]][field], value, (name, key, field))
                     for key, rows in fixture.items():
                         if key == "world":
+                            continue
+                        if key in ("relief_templates", "building_templates") and rows:
+                            members = [m for pack in exported["library_packs"] for m in pack["manifest"]["members"]
+                                       if m["library_kind"] == key]
+                            self.assertEqual(len(members), len(rows), key)
                             continue
                         self.assertEqual(len(exported[key]), len(rows), key)
                         if key in ("race_templates", "perk_templates"):
@@ -109,8 +116,11 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
                             self.assertEqual(recipe.footprint_by_size["huge"], 0.9 if subtype == "village" else 8.0)
                             self.assertIn("huge", {row["system_size"] for row in world.city_size_registry})
                     locations = {row["location_uid"]: row for row in exported["locations"]}
+                    # Copy remaps entity identity while retaining declaration order.
+                    self.assertEqual(len(locations), len(fixture.get("locations", [])))
+                    by_name = {row["name"]: row for row in locations.values()}
                     for source in fixture.get("locations", []):
-                        row = locations[source["location_uid"]]
+                        row = by_name[source["name"]]
                         parent_uid = row["parent_location_uid"]
                         parent_type = locations[parent_uid]["system_location_type"] if parent_uid else None
                         self.assertTrue(registry.allows_parent(row["system_location_type"], parent_type),
@@ -139,7 +149,10 @@ class FixtureBundleImportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results["world"].succeeded, 1, results["world"].errors)
         self.assertEqual(results["world"].failed, 0)
         # Read through a fresh repository instance, not an in-memory World object.
-        return await SqliteWorldRepository(self.db).get_by_id(fixture["world"]["world_uid"])
+        rows = await SqliteWorldRepository(self.db).get_all()
+        self.assertEqual(len(rows), 1)
+        self.assertNotEqual(rows[0].world_uid, fixture["world"]["world_uid"])
+        return rows[0]
 
     async def test_defaults_fixture_imports_and_reads_all_declared_world_defaults(self):
         world = await self.import_world(self.defaults_fixture())

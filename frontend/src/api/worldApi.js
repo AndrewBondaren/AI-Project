@@ -8,10 +8,12 @@ export async function getWorlds() {
 
 // The caller (editor preview or ordinary import) owns the user context.
 // Preview returns diagnostics only; apply always sends a fresh ordinary import.
-export async function importWorld({ file, path, level = 'skeleton', validateOnly = false }) {
+export async function importWorld({ file, path, level = 'skeleton', validateOnly = false, decisions, previewToken }) {
   const form = new FormData()
   if (file) form.append('file', file)
   if (path) form.append('path', path)
+  if (decisions) form.append('decisions', JSON.stringify(decisions))
+  if (previewToken) form.append('preview_token', previewToken)
   const query = new URLSearchParams({ level })
   if (validateOnly) query.set('validate_only', 'true')
   const res = await fetch(`${API_URL}/worlds/import?${query}`, { method: 'POST', body: form })
@@ -19,6 +21,8 @@ export async function importWorld({ file, path, level = 'skeleton', validateOnly
   if (!res.ok) {
     const error = new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`)
     error.issues = data.detail
+    error.status = res.status
+    error.outcome = data
     throw error
   }
   return data

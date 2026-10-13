@@ -99,6 +99,13 @@ class LibraryWriteFacade:
         return MemberCopyResult(result.plan.items[0].members[0].value.member,
                                 tuple(i.message for i in result.plan.diagnostics))
 
+    async def copy_member_negotiated(self, source, target_uid, *, owner=None, decisions=(), preview_token=None):
+        request = validated_write_request(items=(LibraryWriteItem(item_key="member", object_kind="member",
+            source=WriteSource(kind="catalog", key=source.template_uid), owner_world_uid=owner,
+            target_pack_uid=target_uid, library_kind=LibraryKind(source.library_kind)),),
+            decisions=tuple(decisions), preview_token=preview_token)
+        return require_result(await self._writer.execute(request))
+
     async def edit_member(self, member, pack, body, *, owner=None, source_file=None):
         raw = WriteImportSource(pack, (WriteImportMember(member, body, source_file),))
         request = LibraryWriteRequest(items=(LibraryWriteItem(item_key="member", object_kind="member",

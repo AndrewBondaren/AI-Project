@@ -107,7 +107,7 @@ class LibraryWriteInspector:
 
     async def _matches(self, item: LibraryWriteItem, source: InspectedSource) -> tuple[WriteTarget, ...]:
         if item.object_kind is WriteObjectKind.PACK:
-            name = source.pack.system_name
+            name = item.target_system_name or source.pack.system_name
             if (item.source.kind is WriteSourceKind.CATALOG
                     and not is_default_pack_uid(source.pack.pack_uid)):
                 if source.pack.owner_world_uid is None and item.owner_world_uid is not None:

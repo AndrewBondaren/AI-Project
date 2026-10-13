@@ -89,6 +89,8 @@ class LibraryPackService:
         from app.application.worldData.libraryPacks.fsWriteService import LibraryFsWriteService
         self._fs_writes = LibraryFsWriteService(self._scope, write_service)
         self._write_service = write_service
+        from app.application.worldData.libraryPacks.archiveService import LibraryArchiveService
+        self.archives = LibraryArchiveService(self._scope, write_service)
 
     async def import_legacy_bodies(self, kind, world_uid, outlines, *, decisions=(), preview_token=None) -> WriteResult | PolicyRequired:
         from app.application.worldData.libraryPacks.legacyWrite import import_legacy_bodies
@@ -253,10 +255,16 @@ class LibraryPackService:
             decisions=decisions, preview_token=preview_token)
 
     async def write_authored_bodies(self, kind, pack_uid, bodies, *, local_uid=None,
-                                    decisions=(), preview_token=None, source_file=None) -> WriteResult | PolicyRequired:
+                                    decisions=(), preview_token=None, source_file=None, world_uid=None) -> WriteResult | PolicyRequired:
         from app.application.worldData.libraryPacks.authoringWrite import write_authored_bodies
         return await write_authored_bodies(self, _coerce_kind(kind), pack_uid, bodies,
-            local_uid=local_uid, decisions=decisions, preview_token=preview_token, source_file=source_file)
+            local_uid=local_uid, decisions=decisions, preview_token=preview_token, source_file=source_file,
+            world_uid=world_uid)
+
+    async def copy_member_negotiated(self, source_uid, target_pack_uid, *, world_uid=None,
+                                     decisions=(), preview_token=None):
+        return await self._writes.copy_member_negotiated(await self.get_member(source_uid), target_pack_uid,
+            owner=world_uid, decisions=decisions, preview_token=preview_token)
 
     async def copy_member(self, source_template_uid: str, target_pack_uid: str,
                           *, world_uid: str | None = None) -> MemberCopyResult:

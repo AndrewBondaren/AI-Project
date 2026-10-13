@@ -70,10 +70,11 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
         worlds = await self.worlds.get_all()
         self.assertEqual(len(worlds), 4)
         self.assertEqual(len({w.world_uid for w in worlds}), 4)
-        self.assertIn(self.uid, {w.world_uid for w in worlds})
+        self.assertNotIn(self.uid, {w.world_uid for w in worlds})
 
     async def test_download_preview_levels_and_round_trip(self):
         await self.service.import_bundle(self.bundle)
+        self.uid = (await self.worlds.get_all())[0].world_uid
         expected = await self.service.export(self.uid)
         for level in ("registry", "skeleton"):
             preview = await self.client.get(f"/worlds/{self.uid}/export?level={level}")
@@ -95,7 +96,7 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.status_code, 200, result.text)
         copies = [w for w in await self.worlds.get_all() if w.world_uid != self.uid]
         # Registry copy has no child sections; the final copy is skeleton.
-        skeleton = next(w for w in copies if w.name.endswith(" v2"))
+        skeleton = next(w for w in copies if w.name.endswith(" v3"))
         exported = await self.service.export(skeleton.world_uid)
         self.assertEqual(set(exported), set(expected))
         for key, uid_field in (("states", "state_uid"), ("locations", "location_uid")):
@@ -149,7 +150,7 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
             response = await self.client.post("/worlds/import", files={"file": ("x", payload)})
             self.assertEqual(response.status_code, 422)
 
-    async def test_library_transport_is_not_silently_discarded_before_4d(self):
+    async def test_library_transport_validates_identity_without_writes(self):
         pack = LibraryArchivePack(LibraryArchiveManifest.model_validate({
             "pack_uid": "pack-test", "system_name": "test", "pack_name": "test",
             "display_name": "Test", "members": [{
@@ -161,8 +162,9 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
         write_archive(self.bundle, manifest, path=packed, library_packs=[pack])
         for upload in (True, False):
             response = await self.send(packed, upload=upload, query="?validate_only=true")
-            self.assertEqual(response.status_code, 422, response.text)
-            self.assertIn("4d", response.json()["detail"])
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertFalse(response.json()["valid"])
+            self.assertIn("identity", response.json()["issues"][0]["msg"])
             self.assertEqual(await self.worlds.get_all(), [])
 
     async def test_upload_temporary_cleanup_on_success_and_decode_failure(self):
@@ -188,6 +190,7 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_export_temporary_cleanup_after_response_and_writer_failure(self):
         await self.service.import_bundle(self.bundle)
+        self.uid = (await self.worlds.get_all())[0].world_uid
         paths = []
         original = self.service.write_archive
 

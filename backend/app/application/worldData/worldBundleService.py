@@ -9,7 +9,10 @@ from app.application.worldData.bundle.archive import BundleArchiveError, read_ar
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleWorldSource
 from app.dataModel.worldBundle.bundleSections import SECTION_PATHS
 from app.application.importResult import ImportResult
-from app.application.worldData.libraryPacks.errors import require_no_policy
+from app.application.worldData.libraryPacks.archiveSources import pack_to_wire, packs_from_wire
+from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldData.bundle.worldCopyImport import WorldCopyImport
+from app.application.worldData.bundle.worldLibraries import export_libraries, import_libraries
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
@@ -41,11 +44,14 @@ class WorldBundleService:
         db: Database,
         world_service: WorldService,
         handlers: list[IBundleSectionHandler],
+        library_archives=None,
     ) -> None:
         self._db = db
         self._world = world_service
         self._handlers = handlers
         self._by_key = {h.key: h for h in handlers}
+        self._archives = library_archives
+        self._copy_import = WorldCopyImport(db, world_service, handlers, library_archives)
 
     async def export(self, world_uid: str, *, level: ImportLevel = "skeleton") -> dict:
         world = await self._world.get_by_id(world_uid)
@@ -58,9 +64,13 @@ class WorldBundleService:
             if payload is None:
                 continue
             bundle[handler.key] = payload
+        if self._archives is not None and level == "skeleton":
+            bundle = await export_libraries(self._archives, bundle, world_uid)
         return filter_bundle_for_export(bundle, level)
 
     def write_archive(self, sections: dict, *, path: Path) -> Path:
+        sections = dict(sections)
+        packs = packs_from_wire(sections.pop(BundleSection.LIBRARY_PACKS, []))
         world = sections[BundleSection.WORLD]
         manifest = BundleManifest(
             kind=BundleKind.WORLD,
@@ -74,15 +84,16 @@ class WorldBundleService:
             ),
             sections={key: SECTION_PATHS[key] for key in sections},
         )
-        return write_archive(sections, manifest, path=path)
+        return write_archive(sections, manifest, path=path, library_packs=packs)
 
     def read_archive(self, path: Path) -> dict:
         contents = read_archive(path)
         if contents.manifest.kind != BundleKind.WORLD:
             raise BundleArchiveError("World import requires a world archive")
+        result = dict(contents.sections)
         if contents.library_packs:
-            raise BundleArchiveError("World library import requires bundle integration (4d)")
-        return contents.sections
+            result[BundleSection.LIBRARY_PACKS] = [pack_to_wire(p) for p in contents.library_packs]
+        return result
 
     async def import_bundle(
         self,
@@ -90,6 +101,8 @@ class WorldBundleService:
         *,
         level: ImportLevel = "skeleton",
         validate_only: bool = False,
+        decisions=(),
+        preview_token: str | None = None,
     ) -> tuple[dict[str, ImportResult], bool] | ImportValidationReport:
         ctx = ResolveContext.for_import(validate_only=validate_only)
         try:
@@ -101,34 +114,7 @@ class WorldBundleService:
         if validate_only:
             return ImportValidationReport()
 
-        world_uid = data[BundleSection.WORLD]["world_uid"]
-        existing = await self._world.find_by_id(world_uid)
-        if existing is not None:
-            version_n = await self._world.next_version_number(existing.name)
-            data = remap_bundle(data, version_n, self._world.strip_version_suffix)
-            world_uid = data[BundleSection.WORLD]["world_uid"]
-
-        results: dict[str, ImportResult] = {}
-        rolled_back = False
-        try:
-            async with self._db.transaction():
-                for handler in self._handlers:
-                    if handler.key not in data:
-                        continue
-                    results[handler.key] = require_no_policy(await handler.import_section(
-                        world_uid, data[handler.key],
-                    ))
-                    if (
-                        handler.key == BundleSection.WORLD
-                        and results[handler.key].failed > 0
-                    ):
-                        raise _ImportFailed()
-                if any(r.failed > 0 for r in results.values()):
-                    raise _ImportFailed()
-        except _ImportFailed:
-            rolled_back = True
-
-        return results, rolled_back
+        return await self._copy_import.run(data, level=level, decisions=decisions, preview_token=preview_token)
 
     def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext) -> dict:
         """Shared pipeline. This phase has no repository/Pack/task access."""
@@ -172,6 +158,12 @@ class WorldBundleService:
                     reject_unresolved(section_ctx, [FieldPathError(section_ctx.path_prefix, str(exc), code="VALIDATION_ERROR")])
                 except UnresolvedModelError:
                     continue
+        if self._archives is not None:
+            try:
+                packs, _ = import_libraries(data)
+                self._archives.validate_bodies(packs, world)
+            except (ValueError, LibraryPackValidationError) as exc:
+                ctx.errors.append(FieldPathError((BundleSection.LIBRARY_PACKS,), str(exc), code="LIBRARY_INVALID"))
         if ctx.errors:
             raise ImportValidationError(list(ctx.errors))
         return data

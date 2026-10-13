@@ -78,8 +78,8 @@ class TestBundleManifest(unittest.TestCase):
         BundleManifest.model_validate(wire)
 
     def test_layout_covers_all_skeleton_sections_bijectively(self):
-        self.assertEqual(set(SECTION_PATHS), BundleSection.SKELETON)
-        self.assertEqual(len(SECTION_PATHS), 9)
+        self.assertEqual(set(SECTION_PATHS), BundleSection.SKELETON - {BundleSection.LIBRARY_PACKS})
+        self.assertEqual(len(SECTION_PATHS), 10)
         self.assertEqual(len(PATH_SECTIONS), len(SECTION_PATHS))
         for section, path in SECTION_PATHS.items():
             self.assertEqual(PATH_SECTIONS[path], section)

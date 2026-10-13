@@ -942,6 +942,7 @@ class Container:
                 db=self._db,
                 world_service=self.world_service(),
                 handlers=handlers,
+                library_archives=self.library_pack_service().archives,
             )
         return self._world_bundle_service
 

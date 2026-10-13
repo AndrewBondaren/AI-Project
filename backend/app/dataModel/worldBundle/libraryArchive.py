@@ -51,6 +51,12 @@ class LibraryArchiveManifest(BaseModel):
     dependencies: DefaultWhenMissing[list[str]] = Field(default_factory=list)
     members: StrictOnWire[list[LibraryArchiveMember]]
     source_pack_uid: DefaultWhenMissing[str | None] = None
+    # Deferred extension, not an active pack fallback contract (2026-10-13).
+    # Retained by the archive codec for transport compatibility only; this
+    # field does not select runtime defaults or require SQL support in 4d/L-5.
+    # Context selection, suitability and coverage need a separate specification:
+    # docs/tz_library_contextual_fallback.md. Base defaults remain in POJOs
+    # and engine-declared default libraries.
     defaults: DefaultWhenMissing[dict[str, str]] = Field(default_factory=dict)
 
 

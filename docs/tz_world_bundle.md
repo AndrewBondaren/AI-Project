@@ -49,6 +49,14 @@ Remap мира не меняет engine pack/template UID; при copy world-own
 остаются только UID шаблонов. Текущие allowlists/order/handlers ниже требуют
 расширения отдельным этапом, до него новый формат не считается реализованным.
 
+**Уточнение пользователя 2026-10-13:** импорт целого мира по умолчанию создаёт
+независимую копию; обновления существующего мира идут через библиотеки
+и действующую политику патчей. Отдельный world-conflict update/copy не требуется.
+Общая библиотечная policy сохраняется. Мир записывается перед библиотеками
+в одной UOW; policy/stale/ошибка откатывают и временную world row до ответа.
+Fallback из manifest пака отложен в
+[отдельное расширение](tz_library_contextual_fallback.md), не блокирующее 4d/L-5.
+
 Транспортный формат — zip-архив `.wpack` с файловой структурой
 (`bundle.manifest.json` + `skeleton/` + `library/` + `pack/`):
 [tz_template_library_packs.md §4.2](./tz_template_library_packs.md).

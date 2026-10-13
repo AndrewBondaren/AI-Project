@@ -9,6 +9,7 @@ from starlette.background import BackgroundTask
 
 from app.api.deps import get_container
 from app.api.utils.bundleSource import resolve_bundle_source
+from app.api.libraryWrite import parse_negotiation
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, import_validation_http_detail
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
@@ -94,6 +95,8 @@ async def delete_world(world_uid: str, container=Depends(get_container)) -> None
 async def import_world(
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
+    decisions: str | None = Form(default=None),
+    preview_token: str | None = Form(default=None),
     level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
     validate_only: bool = Query(default=False),
     container=Depends(get_container),
@@ -106,6 +109,7 @@ async def import_world(
         result = await service.import_bundle(
             data, level=level,  # type: ignore[arg-type]
             validate_only=validate_only,
+            **parse_negotiation(decisions, preview_token).model_dump(),
         )
     except BundleValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc

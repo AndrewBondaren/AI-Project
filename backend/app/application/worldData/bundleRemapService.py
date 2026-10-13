@@ -91,9 +91,11 @@ def remap_bundle(
     data: dict[str, Any],
     version_n: int,
     strip_suffix: Callable[[str], str],
+    *,
+    uid_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return a deep copy of the bundle with entity UIDs replaced and name versioned."""
-    uid_map = _build_uid_map(data)
+    uid_map = uid_map if uid_map is not None else _build_uid_map(data)
     result = copy.deepcopy(data)
     new_world_uid = uid_map[data[BundleSection.WORLD]["world_uid"]]
 
@@ -129,3 +131,7 @@ def _build_uid_map(data: dict[str, Any]) -> dict[str, str]:
                     register(item[field])
 
     return uid_map
+
+
+# The world-copy orchestrator retains this allocation in its signed continuation.
+build_bundle_uid_map = _build_uid_map

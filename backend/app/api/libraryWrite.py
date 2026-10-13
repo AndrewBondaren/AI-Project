@@ -49,6 +49,16 @@ def policy_response(outcome: PolicyRequired) -> JSONResponse:
         "preview_token": outcome.preview_token, "choices": choices, "preview": previews, "stale": outcome.stale}))
 
 
+def write_response(outcome) -> JSONResponse:
+    """Expose applied identities/remap, never raw bodies or persistence plans."""
+    if isinstance(outcome, PolicyRequired):
+        return policy_response(outcome)
+    return JSONResponse(content=jsonable_encoder({"status": outcome.status,
+        "items": [{"item_key": item.item_key, "pack_uid": item.pack.value.pack_uid if item.pack else None,
+                   "members": [w.value.member.template_uid for w in item.members],
+                   "uid_map": dict(item.uid_map)} for item in outcome.plan.items]}))
+
+
 def library_error_response(exc) -> JSONResponse:
     if isinstance(exc, LibraryPackPolicyRequiredError):
         return policy_response(exc.outcome)

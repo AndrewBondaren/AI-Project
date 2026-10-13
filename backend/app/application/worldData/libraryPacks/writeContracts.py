@@ -56,9 +56,17 @@ class LibraryWriteItem(BaseModel):
     owner_world_uid: str | None = None
     target_pack_uid: str | None = None
     library_kind: LibraryKind | None = None
+    # Application-selected identity for owner attach; not a copy/replace decision.
+    target_system_name: str | None = None
 
     @model_validator(mode="after")
     def validate_destination(self):
+        if self.target_system_name is not None and (
+            self.object_kind is not WriteObjectKind.PACK or self.source.kind is not WriteSourceKind.IMPORT
+            or not self.target_system_name.strip() or "|" in self.target_system_name
+            or self.target_system_name != self.target_system_name.strip()
+        ):
+            raise ValueError("target_system_name requires a normalized imported pack identity")
         if self.object_kind is WriteObjectKind.MEMBER:
             if not self.target_pack_uid or self.library_kind in (None, LibraryKind.LIBRARY_PACKS):
                 raise ValueError("member requires target_pack_uid and a member library_kind")

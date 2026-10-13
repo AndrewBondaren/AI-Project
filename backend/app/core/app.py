@@ -112,6 +112,8 @@ def create_app():
     from app.api.routes.debug import router as debug_router
     from app.api.routes.reliefTemplates import router as relief_templates_router
     from app.api.routes.structureTemplates import router as structure_templates_router
+    from app.api.routes.libraryPacks import router as library_packs_router
+    from app.api.routes.libraryArchives import router as library_archives_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -127,6 +129,8 @@ def create_app():
     app.include_router(debug_router, prefix="/api")
     app.include_router(relief_templates_router, prefix="/api")
     app.include_router(structure_templates_router, prefix="/api")
+    app.include_router(library_archives_router, prefix="/api")
+    app.include_router(library_packs_router, prefix="/api")
 
     return app
 
