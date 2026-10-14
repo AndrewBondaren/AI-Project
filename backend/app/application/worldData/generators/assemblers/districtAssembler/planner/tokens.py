@@ -20,9 +20,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
     packing_warning,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     building_tier_compatible,
 )
@@ -52,20 +49,23 @@ from app.dataModel.locations.settlement.district.structurePlacement import (
     resolve_plot_priority,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.buildingCatalog import (
+    BuildingCatalog,
+    CatalogPlot,
+)
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.enums.buildingPurpose import FAMILY_OF, BuildingPurpose, expand_allowed
 from app.db.models.world import World
 
 
 def _tier_pool(
-    layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
+    entries: tuple[CatalogPlot, ...] | list[CatalogPlot],
     skeleton: SettlementSkeleton,
     world: World,
-) -> list[PlotLayoutTemplate]:
+) -> list[CatalogPlot]:
     return [
-        layout for layout in layouts
-        if building_tier_compatible(layout, skeleton, world)
+        entry for entry in entries
+        if building_tier_compatible(entry.body, skeleton, world)
     ]
 
 
@@ -74,38 +74,38 @@ def _subjects_for(slot: DistrictSlot, structure_type: str) -> tuple[str, ...]:
 
 
 def _subject_catalog(
-    layouts: list[PlotLayoutTemplate],
+    entries: list[CatalogPlot] | tuple[CatalogPlot, ...],
     structure_type: str,
 ) -> str | None:
-    if any(layout.resource_kind is not None for layout in layouts):
+    if any(entry.body.resource_kind is not None for entry in entries):
         return "resource"
-    if any(layout.crop_kind is not None for layout in layouts):
+    if any(entry.body.crop_kind is not None for entry in entries):
         return "crop"
     if (
-        any(layout.livestock_kind is not None for layout in layouts)
+        any(entry.body.livestock_kind is not None for entry in entries)
         or structure_type == BuildingPurpose.LIVESTOCK.value
     ):
         return "livestock"
     return None
 
 
-def _fallback_pool(world: World, catalog: str, layouts: list[PlotLayoutTemplate]) -> list[str]:
+def _fallback_pool(world: World, catalog: str, entries: list[CatalogPlot] | tuple[CatalogPlot, ...]) -> list[str]:
     if catalog == "resource":
-        wanted = {layout.resource_kind for layout in layouts if layout.resource_kind is not None}
+        wanted = {entry.body.resource_kind for entry in entries if entry.body.resource_kind is not None}
         return sorted(
             entry.system_resource
             for entry in resource_types(world).root
             if entry.resource_kind in wanted
         )
     if catalog == "crop":
-        wanted = {layout.crop_kind for layout in layouts if layout.crop_kind is not None}
+        wanted = {entry.body.crop_kind for entry in entries if entry.body.crop_kind is not None}
         return sorted(
             entry.system_crop
             for entry in crops(world).root
             if entry.crop_kind in wanted
         )
     registry = livestock(world)
-    wanted = {layout.livestock_kind for layout in layouts if layout.livestock_kind is not None}
+    wanted = {entry.body.livestock_kind for entry in entries if entry.body.livestock_kind is not None}
     if wanted:
         return sorted(
             entry.system_livestock
@@ -141,11 +141,11 @@ def _resolve_subjects(
     slot: DistrictSlot,
     world: World,
     structure_type: str,
-    layouts: list[PlotLayoutTemplate],
+    entries: list[CatalogPlot] | tuple[CatalogPlot, ...],
     settlement_uid: str | None,
 ) -> tuple[str, ...]:
     """Named tokens stay; empty extract/farm/livestock → world RNG (§1.2.1)."""
-    catalog = _subject_catalog(layouts, structure_type)
+    catalog = _subject_catalog(entries, structure_type)
     subjects = _subjects_for(slot, structure_type)
     district = slot.district_template.system_name
     if subjects:
@@ -162,7 +162,7 @@ def _resolve_subjects(
         return subjects
     if catalog is None:
         return subjects
-    pool = _fallback_pool(world, catalog, layouts)
+    pool = _fallback_pool(world, catalog, entries)
     if not pool:
         packing_warning(
             PackingStep.TOKENS,
@@ -229,21 +229,21 @@ def _livestock_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[Lives
 
 
 def _choose_layout(
-    layouts: list[PlotLayoutTemplate],
+    entries: list[CatalogPlot],
     rng: random.Random,
     subjects: tuple[str, ...],
     resource_kinds: tuple[ResourceKind, ...] = (),
     crop_kinds: tuple[CropKind, ...] = (),
     livestock_kinds: tuple[LivestockKind, ...] = (),
-) -> PlotLayoutTemplate:
+) -> CatalogPlot:
     pool = list(BuildingCatalog.prefer_subjects(
-        layouts, subjects, resource_kinds, crop_kinds, livestock_kinds,
+        entries, subjects, resource_kinds, crop_kinds, livestock_kinds,
     ))
     return rng.choice(pool)
 
 
-def _purpose_keys(catalog: BuildingCatalog, layout: PlotLayoutTemplate) -> set[str]:
-    return {str(purpose) for purpose in catalog.structures.leaves_of(layout)}
+def _purpose_keys(catalog: BuildingCatalog, entry: CatalogPlot) -> set[str]:
+    return {str(purpose) for purpose in catalog.structures.leaves_of(entry.body)}
 
 
 def _required_type_keys(required: RequiredStructure) -> set[str]:
@@ -254,23 +254,23 @@ def _required_type_keys(required: RequiredStructure) -> set[str]:
 
 def _layouts_enabled(
     catalog: BuildingCatalog,
-    layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
+    entries: tuple[CatalogPlot, ...] | list[CatalogPlot],
     enabled: frozenset[BuildingPurpose],
-) -> list[PlotLayoutTemplate]:
+) -> list[CatalogPlot]:
     return [
-        layout for layout in layouts
-        if any(purpose in enabled for purpose in catalog.structures.leaves_of(layout))
+        entry for entry in entries
+        if any(purpose in enabled for purpose in catalog.structures.leaves_of(entry.body))
     ]
 
 
 def _match_allowed(
     catalog: BuildingCatalog,
-    layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
+    entries: tuple[CatalogPlot, ...] | list[CatalogPlot],
     allowed: list | None,
     match,
     enabled: frozenset[BuildingPurpose],
-) -> list[PlotLayoutTemplate]:
-    live = _layouts_enabled(catalog, layouts, enabled)
+) -> list[CatalogPlot]:
+    live = _layouts_enabled(catalog, entries, enabled)
     if not allowed:
         return live
     filtered = [purpose for purpose in expand_allowed(allowed) if purpose in enabled]
@@ -296,7 +296,7 @@ def _buildings_rng(
     )
 
 
-def pick_layout_names(
+def pick_layout_uids(
     slot: DistrictSlot,
     world: World,
     skeleton: SettlementSkeleton,
@@ -305,27 +305,27 @@ def pick_layout_names(
     *,
     settlement_uid: str | None = None,
 ) -> list[str]:
-    """One ``system_name`` per required/fill type (SoT for tokens and cache)."""
+    """One plot member ``template_uid`` per required/fill type (SoT for
+    tokens and cache)."""
     rng = _buildings_rng(world, slot, rng, settlement_uid)
     return [
-        name
-        for name, _req in _pick_layout_picks(
+        entry.template_uid
+        for entry, _req in _pick_layout_picks(
             slot, world, skeleton, catalog, rng, settlement_uid,
         )
     ]
 
 
-def candidate_template_names(
+def candidate_template_uids(
     slot: DistrictSlot,
     world: World,
     skeleton: SettlementSkeleton,
-    catalog: BuildingCatalog | None = None,
+    catalog: BuildingCatalog,
     rng: random.Random | None = None,
     *,
     settlement_uid: str | None = None,
 ) -> list[str]:
-    catalog = catalog or assemble_building_catalog(world)
-    return pick_layout_names(
+    return pick_layout_uids(
         slot, world, skeleton, catalog, rng, settlement_uid=settlement_uid,
     )
 
@@ -337,24 +337,24 @@ def _pick_layout_picks(
     catalog: BuildingCatalog,
     rng: random.Random,
     settlement_uid: str | None = None,
-) -> list[tuple[str, RequiredStructure | None]]:
-    picks: list[tuple[str, RequiredStructure | None]] = []
-    seen_names: set[str] = set()
+) -> list[tuple[CatalogPlot, RequiredStructure | None]]:
+    picks: list[tuple[CatalogPlot, RequiredStructure | None]] = []
+    seen_uids: set[str] = set()
     skip_fill_types: set[str] = set()
 
     enabled = enabled_building_purposes(world)
-    for plot in catalog.layouts:
-        body = plot.main_building
+    for entry in catalog.entries:
+        body = entry.body.main_building
         if body is not None and catalog.structures.resolve(body.structure) is None:
             raise GenerationError(
-                f"Plot '{plot.system_name}': structure '{body.structure}' not found"
+                f"Plot '{entry.template_uid}': structure '{body.structure}' not found"
             )
 
     allowed = slot.district_template.allowed_structure_types
     if allowed is None and slot.allowed_structure_types is not None:
         families = {FAMILY_OF[purpose] for purpose in expand_allowed(slot.allowed_structure_types)}
         catalog = BuildingCatalog(
-            (plot for plot in catalog.layouts if plot.plot_type in families),
+            (entry for entry in catalog.entries if entry.body.plot_type in families),
             catalog.structures,
         )
     match = slot.district_template.allowed_match
@@ -370,7 +370,7 @@ def _pick_layout_picks(
                 reason=PackingReason.LEFTOVER,
             )
             continue
-        found: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate] = (
+        found: tuple[CatalogPlot, ...] | list[CatalogPlot] = (
             resolve_required_layouts(req, catalog)
         )
         if not found:
@@ -380,7 +380,7 @@ def _pick_layout_picks(
                 system_name=(
                     str(req.structure_type)
                     if req.structure_type is not None
-                    else req.plot_template
+                    else str(req.plot_template)
                 ),
                 reason=PackingReason.NO_CACHE,
             )
@@ -394,7 +394,7 @@ def _pick_layout_picks(
                 system_name=(
                     str(req.structure_type)
                     if req.structure_type is not None
-                    else req.plot_template
+                    else str(req.plot_template)
                 ),
                 reason=PackingReason.LEFTOVER,
             )
@@ -402,7 +402,7 @@ def _pick_layout_picks(
         type_keys = _required_type_keys(req)
         stype = next(
             iter(type_keys),
-            next(iter(catalog.structures.leaves_of(layouts[0])), None),
+            next(iter(catalog.structures.leaves_of(layouts[0].body)), None),
         )
         subjects = _resolve_subjects(slot, world, stype, layouts, settlement_uid)
         chosen = _choose_layout(
@@ -412,10 +412,10 @@ def _pick_layout_picks(
             _livestock_kinds_for(world, subjects),
         )
         skip_fill_types |= _purpose_keys(catalog, chosen)
-        if chosen.system_name in seen_names:
+        if chosen.template_uid in seen_uids:
             continue
-        seen_names.add(chosen.system_name)
-        picks.append((chosen.system_name, req))
+        seen_uids.add(chosen.template_uid)
+        picks.append((chosen, req))
 
     fill_types = allowed_fill_structure_types(
         allowed,
@@ -452,23 +452,23 @@ def _pick_layout_picks(
             _livestock_kinds_for(world, subjects),
         )
         skip_fill_types |= _purpose_keys(catalog, chosen)
-        if chosen.system_name in seen_names:
+        if chosen.template_uid in seen_uids:
             continue
-        seen_names.add(chosen.system_name)
-        picks.append((chosen.system_name, None))
+        seen_uids.add(chosen.template_uid)
+        picks.append((chosen, None))
     return picks
 
 
 def _required_for(
     slot: DistrictSlot,
-    system_name: str,
+    template_uid: str,
     catalog: BuildingCatalog,
 ) -> RequiredStructure | None:
     for req in slot.required_structures:
-        if req.plot_template == system_name:
+        if req.plot_template == template_uid:
             return req
-        layouts = resolve_required_layouts(req, catalog)
-        if any(layout.system_name == system_name for layout in layouts):
+        entries = resolve_required_layouts(req, catalog)
+        if any(entry.template_uid == template_uid for entry in entries):
             return req
     return None
 
@@ -478,12 +478,11 @@ def build_tokens(
     cache: BuildingLayoutCache,
     world: World,
     skeleton: SettlementSkeleton,
-    catalog: BuildingCatalog | None = None,
+    catalog: BuildingCatalog,
     rng: random.Random | None = None,
     *,
     settlement_uid: str | None = None,
 ) -> list[PackingToken]:
-    catalog = catalog or assemble_building_catalog(world)
     rng = _buildings_rng(world, slot, rng, settlement_uid)
     district = slot.district_template.system_name
     picks = _pick_layout_picks(
@@ -494,30 +493,30 @@ def build_tokens(
             PackingStep.CACHE, district=district, reason=PackingReason.NO_CANDIDATES,
         )
     tokens: list[PackingToken] = []
-    for name, required in picks:
-        fp = cache.envelope(name)
-        template = catalog.by_system_name(name)
-        if fp is None or template is None:
+    for entry, required in picks:
+        uid = entry.template_uid
+        fp = cache.envelope(uid)
+        if fp is None:
             packing_warning(
                 PackingStep.CACHE, district=district,
-                system_name=name, reason=PackingReason.NO_CACHE,
+                system_name=uid, reason=PackingReason.NO_CACHE,
             )
             continue
         packing_info(
             PackingStep.CACHE, district=district,
-            system_name=name, facing=Facing.SOUTH,
+            system_name=uid, facing=Facing.SOUTH,
             w=fp.width, h=fp.depth, hit=True,
         )
         if required is None:
-            required = _required_for(slot, name, catalog)
+            required = _required_for(slot, uid, catalog)
         n, n_from = resolve_plot_count(
-            name,
+            uid,
             required=required,
             district_counts=slot.district_template.plot_counts,
             settlement_counts=skeleton.plot_counts,
         )
         priority = resolve_plot_priority(
-            name,
+            uid,
             district_priority=slot.district_template.plot_priority,
             settlement_priority=skeleton.plot_priority,
         )
@@ -525,14 +524,14 @@ def build_tokens(
         if n <= 0:
             packing_info(
                 PackingStep.TOKENS, district=district,
-                uid=f"{name}#0", w=fp.width, h=fp.depth,
+                uid=f"{uid}#0", w=fp.width, h=fp.depth,
                 N=0, priority=priority, n_from=n_from,
             )
             continue
         for i in range(n):
             token = PackingToken(
-                uid=f"{name}#{i}",
-                system_name=name,
+                uid=f"{uid}#{i}",
+                template_uid=uid,
                 w=fp.width,
                 h=fp.depth,
                 priority=priority,

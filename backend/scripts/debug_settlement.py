@@ -22,8 +22,31 @@ from app.application.worldData.locationPayloadAccess import settlement_payload
 from app.db.models.world import World
 
 
+def _debug_catalog():
+    """Canonical-pack catalog — the script has no DB, so it hydrates the
+    declared defaults straight from the SoT fixtures (same bodies the
+    canonical packs serve)."""
+    from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+    from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+    from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+    from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+    from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+    from app.ids import LibraryKind
+
+    structures = StructureCatalog(load_structure_stdlib(
+        Path(__file__).resolve().parents[2] / "structures_templates"
+    ))
+    return BuildingCatalog.from_entries(
+        {
+            canonical_member_uid(LibraryKind.PLOT_TEMPLATES, layout.system_name): layout
+            for layout in canonical_defaults()
+        },
+        structures=structures,
+    )
+
+
 def _run_case(label: str, world: World, settlement: NamedLocation, terrain=None) -> None:
-    layout = SettlementAssembler().assemble(world, settlement, terrain)
+    layout = SettlementAssembler().assemble(world, settlement, terrain, catalog=_debug_catalog())
     print(f"=== {label} ===")
     print(f"districts: {len(layout.district_layouts)}")
     for i, dl in enumerate(layout.district_layouts):
@@ -169,8 +192,10 @@ def test_phase_e_building_cache() -> None:
     from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
     from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
         build_layout_cache,
-        collect_building_template_names,
+        collect_building_template_uids,
     )
+    from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+    from app.ids import LibraryKind
     from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
         WorldDistrictTemplateRegistry,
     )
@@ -217,14 +242,14 @@ def test_phase_e_building_cache() -> None:
 
     assembler = SettlementAssembler()
     skeleton = assembler._build_skeleton(world, settlement)
-    names = collect_building_template_names([slot_a, slot_b], world, skeleton)
-    assert "town_hall" in names
+    catalog = _debug_catalog()
+    uids = collect_building_template_uids([slot_a, slot_b], world, skeleton, catalog)
+    assert canonical_member_uid(LibraryKind.PLOT_TEMPLATES, "town_hall") in uids
 
-    cache = build_layout_cache(world, skeleton, [slot_a, slot_b], None)
-    assert "town_hall" not in cache
+    cache = build_layout_cache(world, skeleton, [slot_a, slot_b], None, catalog=catalog)
     assert len(cache) == 0
 
-    layout = assembler.assemble(world, settlement)
+    layout = assembler.assemble(world, settlement, catalog=catalog)
     civic_layout = layout.district_layouts[0]
     assert civic_layout.area_layouts == []
     print("phase E building cache checks: OK")
@@ -237,9 +262,8 @@ def test_phase_area_barriers() -> None:
     from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
         should_build_area_barrier,
     )
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-        lookup_building_template,
-    )
+    from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+    from app.ids import LibraryKind
 
     from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
     from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
@@ -286,11 +310,14 @@ def test_phase_area_barriers() -> None:
     )
     settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
-    town_hall = lookup_building_template(world, "town_hall")
+    catalog = _debug_catalog()
+    town_hall = catalog.by_uid(
+        canonical_member_uid(LibraryKind.PLOT_TEMPLATES, "town_hall")
+    )
     assert town_hall is not None
     assert town_hall.perimeter_barrier.template == "stone_fence"
 
-    layout = SettlementAssembler().assemble(world, settlement)
+    layout = SettlementAssembler().assemble(world, settlement, catalog=catalog)
     assert layout.district_layouts[0].area_layouts == []
 
     print("phase area barriers checks: OK")

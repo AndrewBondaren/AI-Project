@@ -43,7 +43,7 @@ def building_tier_compatible(
 ) -> bool:
     """
     building_template.economic_tier_range пересекается с city ± delta тир.
-    v1 фильтр для plan_area_placements / buildingCache.collect_building_template_names.
+    v1 фильтр для plan_area_placements / buildingCache.collect_building_template_uids.
     """
     city_tier = city_skeleton.economic_tier
     if not city_tier:

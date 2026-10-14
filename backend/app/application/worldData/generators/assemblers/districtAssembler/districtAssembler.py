@@ -62,9 +62,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
     packing_warning,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
 from app.application.worldData.generators.coordinates.columnSurface import column_surface
 from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
@@ -120,7 +117,10 @@ class DistrictAssembler:
         classes = street_classes_for(template)
         cache = _as_cache(layout_cache)
         settlement_uid = settlement_uid or world.world_uid
-        catalog = catalog or assemble_building_catalog(world)
+        if catalog is None:
+            raise ValueError(
+                "DistrictAssembler requires a world-scoped BuildingCatalog"
+            )
         buildings_rng = settlement_cell_rng(
             world.world_uid,
             settlement_uid,
@@ -202,7 +202,7 @@ class DistrictAssembler:
         for placement in placements:
             facing = placement.area_slot.facing
             layout = cache.ensure(
-                world, placement.template, facing,
+                world, placement.template_uid, placement.template, facing,
                 district=district,
                 leaves=catalog.structures.leaves_of(placement.template),
             )
@@ -267,6 +267,7 @@ class DistrictAssembler:
                 district_ctx=slot.district_ctx,
                 district_uid=d_uid,
                 existing_buildings=existing_buildings,
+                template_uid=placement.template_uid or None,
             )
             area_layouts.append(layout)
 

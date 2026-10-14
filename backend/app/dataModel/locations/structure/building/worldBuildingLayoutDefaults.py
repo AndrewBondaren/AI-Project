@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.ids import LibraryKind
 
 _FIXTURES_TEMPLATES = (
     Path(__file__).resolve().parents[6] / "fixtures" / "templates"
@@ -21,6 +23,11 @@ CANONICAL_PLOT_NAMES = (
     "farm", "inn_small", "library", "livestock", "mill", "mine", "smelter",
     "temple", "theater", "town_hall", "workshop",
 )
+
+
+def canonical_plot_uid(local_uid: str) -> str:
+    """Member uid of a shipped plot inside ``engine.plots.base`` (TZ §2)."""
+    return canonical_member_uid(LibraryKind.PLOT_TEMPLATES, local_uid)
 
 
 def _load_fixture_layout(path: Path) -> PlotLayoutTemplate:

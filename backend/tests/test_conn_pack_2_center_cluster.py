@@ -49,6 +49,7 @@ from app.dataModel.locations.settlement.district.requiredStructure import POSITI
 from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
+from tests.canonicalCatalog import canonical_plot_uid
 from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing
@@ -99,7 +100,7 @@ def _token(
     name = system_name or uid.split("#", 1)[0]
     return PackingToken(
         uid=uid,
-        system_name=name,
+        template_uid=name,
         w=w,
         h=h,
         priority=priority,
@@ -179,10 +180,11 @@ def _placement(
     )
     return AreaPlacement(
         area_slot=AreaSlot(cells=[(x, y)], ground_z=0, facing=Facing.SOUTH),
-        template=_layout(token.system_name, purpose),
+        template=_layout(token.template_uid, purpose),
         building_x=x,
         building_y=y,
         reservation=reservation,
+        template_uid=token.template_uid,
     )
 
 
@@ -256,7 +258,10 @@ class CenterClusterPass1Test(unittest.TestCase):
         )
         assert civic is not None
         self.assertEqual(len(civic.required_structures or []), 1)
-        self.assertEqual(civic.required_structures[0].plot_template, "town_hall")
+        self.assertEqual(
+            civic.required_structures[0].plot_template,
+            canonical_plot_uid("town_hall"),
+        )
         self.assertEqual(civic.required_structures[0].position, POSITION_CENTER)
         inner = _inner(3)
         lattice = make_lattice(inner, _STEP)
@@ -319,14 +324,14 @@ class CenterClusterPass1Test(unittest.TestCase):
         ]
         placed, leftover, _occupied = run_pass1(_slot(), inner, lattice, with_plaza, ())
         self.assertEqual(leftover, [])
-        self.assertEqual({row.token.system_name for row in placed}, {"town_hall", "plaza_1"})
+        self.assertEqual({row.token.template_uid for row in placed}, {"town_hall", "plaza_1"})
         self.assertTrue(all(row.cluster_id == _CLUSTER_ID for row in placed))
         halls_only = [_token("town_hall#0"), _token("cathedral#0", system_name="cathedral")]
         placed_halls, leftover_halls, _occ = run_pass1(
             _slot(), inner, lattice, halls_only, (),
         )
         self.assertEqual(leftover_halls, [])
-        self.assertNotIn("plaza_1", {row.token.system_name for row in placed_halls})
+        self.assertNotIn("plaza_1", {row.token.template_uid for row in placed_halls})
         plaza = _layout("plaza_1", BuildingPurpose.PLAZA.value)
         self.assertIn(
             BuildingPurpose.PLAZA,

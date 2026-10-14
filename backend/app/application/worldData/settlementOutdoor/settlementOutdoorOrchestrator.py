@@ -8,13 +8,10 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
-from app.application.worldData.structureTemplateLibraryService import (
-    StructureTemplateLibraryService,
-)
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
+from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_c11_start,
@@ -86,8 +83,7 @@ class SettlementOutdoorOrchestrator:
         writer_for,
         facade_for,
         pack_context_for,
-        library: BuildingTemplateLibraryService,
-        structure_library: StructureTemplateLibraryService,
+        snapshot_loader: TemplateSnapshotLoader,
         node_repo: IConnectionNodeRepository,
         edge_repo: IConnectionEdgeRepository,
     ) -> None:
@@ -102,7 +98,7 @@ class SettlementOutdoorOrchestrator:
         )
         self._packing = SettlementOutdoorPackingJob(
             generator, sql_persist, self._invalidate,
-            library, structure_library, node_repo, edge_repo,
+            snapshot_loader, node_repo, edge_repo,
             location_repo,
         )
 

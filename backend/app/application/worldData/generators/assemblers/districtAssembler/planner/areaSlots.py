@@ -15,10 +15,6 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-    lookup_building_template,
-)
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
 )
@@ -93,17 +89,16 @@ def placements_from_reservations(
     world: World,
     skeleton: SettlementSkeleton,
     fallback_z: int,
-    catalog: BuildingCatalog | None = None,
+    catalog: BuildingCatalog,
     *,
     deck: int = SURFACE_DECK,
 ) -> list[AreaPlacement]:
-    _ = skeleton
-    catalog = catalog or assemble_building_catalog(world)
+    _ = (world, skeleton)
     placements: list[AreaPlacement] = []
     for reservation in reservations:
-        name = reservation.token.system_name
-        template = catalog.by_system_name(name) or lookup_building_template(world, name)
-        fp = cache.envelope(name)
+        uid = reservation.token.template_uid
+        template = catalog.by_uid(uid)
+        fp = cache.envelope(uid)
         if template is None or fp is None:
             continue
         bx, by = origin_in_reservation(fp, reservation.rect_xy)
@@ -117,5 +112,6 @@ def placements_from_reservations(
             building_y=by,
             facing=Facing.SOUTH,
             reservation=reservation,
+            template_uid=uid,
         ))
     return placements

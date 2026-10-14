@@ -25,9 +25,6 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtA
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import build_layout_cache
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
 )
@@ -75,7 +72,10 @@ class SettlementAssembler:
         wall0 = time.perf_counter()
         ctx = settlement_context(world, settlement)
         skeleton = self._build_skeleton(world, settlement, ctx)
-        catalog = catalog or assemble_building_catalog(world)
+        if catalog is None:
+            raise ValueError(
+                "SettlementAssembler requires a world-scoped BuildingCatalog"
+            )
         logger.info(
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
             settlement.location_uid,
@@ -109,7 +109,7 @@ class SettlementAssembler:
         if timings is not None:
             timings.cache_s += time.perf_counter() - t
         logger.info(
-            "SettlementAssembler | building_cache templates=%d names=%s",
+            "SettlementAssembler | building_cache templates=%d uids=%s",
             len(layout_cache),
             layout_cache.keys(),
         )

@@ -81,9 +81,12 @@ async def test_persist_outdoor_inprocess() -> None:
         await container.location_repository().create(settlement)
 
         from app.application.jsonValidation.worldRow import transition_types
-        from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import assemble_building_catalog
         from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+        from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+        from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
         from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+        from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+        from app.ids import LibraryKind
         from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import extract_settlement
         from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import SettlementOutdoorSqlPersist
         from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
@@ -93,11 +96,18 @@ async def test_persist_outdoor_inprocess() -> None:
         from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
 
         structures = StructureCatalog(load_structure_stdlib(Path(__file__).resolve().parents[2] / "structures_templates"))
-        catalog = assemble_building_catalog(world, structures=structures)
-        # The temporary library must contain the templates referenced by generated NLs.
+        catalog = BuildingCatalog.from_entries(
+            {
+                canonical_member_uid(LibraryKind.PLOT_TEMPLATES, plot.system_name): plot
+                for plot in canonical_defaults()
+            },
+            structures=structures,
+        )
+        # The temporary library must contain the templates referenced by generated NLs
+        # (member uids — ``system_template_uid`` on the NL stores them, not names).
         await db.conn.executemany("INSERT INTO building_templates(template_uid,system_name,display_name,structure_type,data) "
-            "VALUES (?,?,?,?,?)", [(plot.system_name, plot.system_name, plot.display_name, "building",
-                                   json.dumps(plot.model_dump(mode="json"))) for plot in catalog.layouts])
+            "VALUES (?,?,?,?,?)", [(entry.template_uid, entry.body.system_name, entry.body.display_name, "building",
+                                   json.dumps(entry.body.model_dump(mode="json"))) for entry in catalog.entries])
         await db.conn.commit()
         layout = SettlementGeneratorService().generate_layout(world, settlement, catalog=catalog)
         registry = transition_types(world)

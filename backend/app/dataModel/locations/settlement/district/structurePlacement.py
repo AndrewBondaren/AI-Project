@@ -16,7 +16,7 @@ N_FROM_DEFAULT = "default"
 
 
 def resolve_plot_count(
-    system_name: str,
+    template_uid: str,
     *,
     required: RequiredStructure | None,
     district_counts: dict[DrawingKey, int] | None,
@@ -25,25 +25,26 @@ def resolve_plot_count(
     """
     First set source: required.count → district plot_counts → settlement plot_counts → 1.
     Missing key is not zero. Explicit 0 is zero. Required ignores plot_counts.
+    Map keys are plot member uids (tz_city_generation §9.2/§9.4).
     """
     if required is not None:
         return int(required.count), N_FROM_REQUIRED
-    if district_counts is not None and system_name in district_counts:
-        return int(district_counts[system_name]), N_FROM_DISTRICT
-    if settlement_counts is not None and system_name in settlement_counts:
-        return int(settlement_counts[system_name]), N_FROM_SETTLEMENT
+    if district_counts is not None and template_uid in district_counts:
+        return int(district_counts[template_uid]), N_FROM_DISTRICT
+    if settlement_counts is not None and template_uid in settlement_counts:
+        return int(settlement_counts[template_uid]), N_FROM_SETTLEMENT
     return COUNT_WITHOUT_KEY, N_FROM_DEFAULT
 
 
 def resolve_plot_priority(
-    system_name: str,
+    template_uid: str,
     *,
     district_priority: dict[DrawingKey, int] | None,
     settlement_priority: dict[DrawingKey, int] | None,
 ) -> int:
-    """District plot_priority by key → settlement map by key → 0 (pass 2)."""
-    if district_priority is not None and system_name in district_priority:
-        return int(district_priority[system_name])
-    if settlement_priority is not None and system_name in settlement_priority:
-        return int(settlement_priority[system_name])
+    """District plot_priority by uid key → settlement map by uid key → 0 (pass 2)."""
+    if district_priority is not None and template_uid in district_priority:
+        return int(district_priority[template_uid])
+    if settlement_priority is not None and template_uid in settlement_priority:
+        return int(settlement_priority[template_uid])
     return PRIORITY_WITHOUT_KEY

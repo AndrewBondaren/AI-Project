@@ -56,8 +56,11 @@ async def debug_generate_structure_rotations(
     container=Depends(get_container),
 ) -> JSONResponse:
     from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import assemble_structure_catalog
+    from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
     from app.application.worldData.debugStructureRotations import generate_rotations
+    from app.application.worldData.structureTemplateLibraryService import (
+        StructureTemplateNotFoundError,
+    )
 
     if plot_uid is not None:
         if file is not None or path is not None:
@@ -82,10 +85,16 @@ async def debug_generate_structure_rotations(
     world = await container.world_service().get_by_id(world_uid)
     if world is None:
         raise HTTPException(404, f"World '{world_uid}' not found")
-    rows = await container.structure_template_library_service().list_all()
-    structure = assemble_structure_catalog(rows).resolve(plot.main_building.structure)
-    if structure is None:
-        raise HTTPException(422, f"Plot '{plot.system_name}': structure '{plot.main_building.structure}' not found")
+    try:
+        row = await container.structure_template_library_service().get_by_uid(
+            plot.main_building.structure
+        )
+        structure = StructureTemplate.model_validate(row.data)
+    except (StructureTemplateNotFoundError, ValidationError) as exc:
+        raise HTTPException(
+            422,
+            f"Plot '{plot.system_name}': structure '{plot.main_building.structure}' not found",
+        ) from exc
     building = NamedLocation(
         location_uid=f"debug-building-{world_uid}", world_uid=world_uid,
         display_name="[Debug] " + plot.display_name, system_location_type="building",

@@ -737,6 +737,17 @@ class Container(TemplateRepositoryProviders):
             )
         return self._effective_catalog_loader
 
+    def template_snapshot_loader(self):
+        """B3 async boundary: world template snapshot for packing."""
+        from app.application.worldData.templateSnapshotLoader import (
+            TemplateSnapshotLoader,
+        )
+        if getattr(self, "_template_snapshot_loader", None) is None:
+            self._template_snapshot_loader = TemplateSnapshotLoader(
+                self.effective_catalog_loader(), self.pack_domain_adapters(),
+            )
+        return self._template_snapshot_loader
+
     def ref_resolver(self) -> RefResolver:
         """Step-5a template-ref resolve (TZ packs §5) over the effective catalog."""
         if self._ref_resolver is None:
@@ -897,8 +908,7 @@ class Container(TemplateRepositoryProviders):
                 writer_for=self.world_pack_writer_for,
                 facade_for=self.map_cell_query_facade,
                 pack_context_for=lambda uid: self.pack_read_services(uid).context,
-                library=self.building_template_library_service(),
-                structure_library=self.structure_template_library_service(),
+                snapshot_loader=self.template_snapshot_loader(),
                 node_repo=self.connection_node_repository(),
                 edge_repo=self.connection_edge_repository(),
             )

@@ -65,6 +65,7 @@ class PackingReason(StrEnum):
     STUB_NO_SHELL = "stub_no_shell"
     Z_COLLISION = "z_collision"
     PLOT_TYPE_DEFAULTED = "plot_type_defaulted"
+    MISSING_TEMPLATE = "missing_template"
 
 
 class PackingHost(StrEnum):

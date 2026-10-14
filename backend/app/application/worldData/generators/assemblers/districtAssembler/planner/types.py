@@ -73,7 +73,7 @@ class Lattice:
 @dataclass(frozen=True)
 class PackingToken:
     uid: str
-    system_name: str
+    template_uid: str
     w: int
     h: int
     priority: int
@@ -130,3 +130,6 @@ class AreaPlacement:
     building_y: int
     facing: Facing = Facing.SOUTH
     reservation: Reservation | None = None
+    # Library member uid of the applied plot (B3); empty for synthetic
+    # non-member placements (tests/debug).
+    template_uid: str = ""

@@ -121,14 +121,15 @@ class CropsRegistryTest(unittest.TestCase):
         generic = _layout("farm", "farm", crop_kind=CropKind.GRAIN)
         orchard = _layout("orchard_1", "farm", crop_kind=CropKind.FRUIT)
         wheat = _layout("wheat_farm_1", "farm", subjects=["wheat"])
+        catalog = BuildingCatalog.from_layouts((generic, orchard, wheat))
         tagged = BuildingCatalog.prefer_subjects(
-            (generic, orchard, wheat), ["wheat"], crop_kinds={CropKind.GRAIN},
+            catalog.entries, ["wheat"], crop_kinds={CropKind.GRAIN},
         )
-        self.assertEqual([row.system_name for row in tagged], ["wheat_farm_1"])
+        self.assertEqual([row.body.system_name for row in tagged], ["wheat_farm_1"])
         by_kind = BuildingCatalog.prefer_subjects(
-            (generic, orchard), ["wheat"], crop_kinds={CropKind.GRAIN},
+            catalog.entries[:2], ["wheat"], crop_kinds={CropKind.GRAIN},
         )
-        self.assertEqual([row.system_name for row in by_kind], ["farm"])
+        self.assertEqual([row.body.system_name for row in by_kind], ["farm"])
 
 
 class FarmTemplateImportTest(unittest.IsolatedAsyncioTestCase):

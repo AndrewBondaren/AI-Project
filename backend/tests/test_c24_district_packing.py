@@ -29,6 +29,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator i
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import SettlementOutdoorPackingJob
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.templateContracts import WorldTemplateSnapshot
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     packing_queue,
@@ -347,10 +348,12 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
         failure = GenerationError("Plot 'plot-1': structure 'structure-1' not found")
         generator = MagicMock()
         generator.generate_layout.side_effect = failure
+        snapshot = WorldTemplateSnapshot(
+            world_uid="w1", plots={}, buildings={}, structures={},
+        )
         job = SettlementOutdoorPackingJob(
             generator, sql, MagicMock(),
-            MagicMock(layouts_for_world=AsyncMock(return_value=[])),
-            MagicMock(list_all=AsyncMock(return_value=[])),
+            MagicMock(load=AsyncMock(return_value=snapshot)),
             MagicMock(get_by_world=AsyncMock(return_value=[])),
             MagicMock(get_by_world=AsyncMock(return_value=[])),
         )
@@ -360,8 +363,6 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
         clock.lap.return_value = 0.0
         with (
             patch(module + ".territory_volume_for_location", return_value=SimpleNamespace(**_volume())),
-            patch(module + ".assemble_building_catalog", return_value=BuildingCatalog.empty()),
-            patch(module + ".assemble_structure_catalog"),
             patch(module + ".load_topology_slots", return_value=[slot]),
             patch(module + ".city_graph_for_settlement", return_value=([MagicMock()], [])),
             patch(module + ".slot_for_census_row", return_value=slot),
@@ -395,8 +396,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
             writer_for=lambda _world: writer,
             facade_for=lambda _uid: facade,
             pack_context_for=MagicMock(),
-            library=MagicMock(),
-            structure_library=MagicMock(list_all=AsyncMock(return_value=[])),
+            snapshot_loader=MagicMock(),
             node_repo=MagicMock(),
             edge_repo=MagicMock(),
         ), settlement

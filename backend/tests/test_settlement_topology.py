@@ -49,14 +49,11 @@ from app.dataModel.locations.settlement.enums.districtDensity import DistrictDen
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import assemble_building_catalog
-from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
-from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from tests.canonicalCatalog import canonical_building_catalog
 
 
 def _catalog(world):
-    return assemble_building_catalog(world, structures=StructureCatalog(
-        load_structure_stdlib(Path(__file__).resolve().parents[2] / "structures_templates")))
+    return canonical_building_catalog()
 
 
 def _world(**kwargs) -> World:

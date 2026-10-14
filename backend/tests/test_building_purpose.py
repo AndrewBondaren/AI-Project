@@ -66,7 +66,7 @@ def _layout(
             if structure_type is not None
             else None
         ),
-        levels=[{"z_offset": 0, "rooms": []}],
+        levels=[],
     )
     return PlotLayoutTemplate(
         system_name=system_name,
@@ -172,7 +172,7 @@ class CatalogAndPinTest(unittest.TestCase):
             _layout("combo_1", ["house", "workshop"]),
             _layout("shop_1", "shop"),
         )
-        names = [row.system_name for row in catalog.of_structure_type("workshop")]
+        names = [entry.body.system_name for entry in catalog.of_structure_type("workshop")]
         self.assertEqual(names, ["combo_1"])
         self.assertEqual(
             sorted(catalog.structure_types()),
@@ -185,15 +185,15 @@ class CatalogAndPinTest(unittest.TestCase):
             _layout("pure_ws", "workshop"),
         )
         like = catalog.matching_allowed(
-            catalog.layouts, [BuildingPurpose.WORKSHOP], "like",
+            catalog.entries, [BuildingPurpose.WORKSHOP], "like",
         )
-        self.assertEqual([row.system_name for row in like], ["combo_1", "pure_ws"])
+        self.assertEqual([entry.body.system_name for entry in like], ["combo_1", "pure_ws"])
         strict = catalog.matching_allowed(
-            catalog.layouts, [BuildingPurpose.WORKSHOP], "strict",
+            catalog.entries, [BuildingPurpose.WORKSHOP], "strict",
         )
-        self.assertEqual([row.system_name for row in strict], ["pure_ws"])
+        self.assertEqual([entry.body.system_name for entry in strict], ["pure_ws"])
 
-    def test_pin_is_system_name_not_purpose_pool(self) -> None:
+    def test_pin_is_template_uid_not_purpose_pool(self) -> None:
         catalog = _catalog(
             _layout("inn_small", "tavern"),
             _layout("inn_suite", "tavern"),
@@ -202,7 +202,7 @@ class CatalogAndPinTest(unittest.TestCase):
             RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in pool], ["inn_small", "inn_suite"])
+        self.assertEqual([entry.body.system_name for entry in pool], ["inn_small", "inn_suite"])
         pin_miss = resolve_required_layouts(
             RequiredStructure(plot_template="tavern"),
             catalog,
@@ -212,7 +212,7 @@ class CatalogAndPinTest(unittest.TestCase):
             RequiredStructure(plot_template="inn_small"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in pin_hit], ["inn_small"])
+        self.assertEqual([entry.body.system_name for entry in pin_hit], ["inn_small"])
 
 
 class HostAndFillTest(unittest.TestCase):

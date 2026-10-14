@@ -8,20 +8,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
-)
-from app.application.worldData.structureTemplateLibraryService import (
-    StructureTemplateLibraryService,
-)
 from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-    assemble_structure_catalog,
+    building_catalog_from_snapshot,
 )
+from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
@@ -101,8 +95,7 @@ class SettlementOutdoorPackingJob:
         generator: SettlementGeneratorService,
         sql_persist: SettlementOutdoorSqlPersist,
         invalidate: Callable[[World, MapCellQueryFacade], None],
-        library: BuildingTemplateLibraryService,
-        structure_library: StructureTemplateLibraryService,
+        snapshot_loader: TemplateSnapshotLoader,
         node_repo: IConnectionNodeRepository,
         edge_repo: IConnectionEdgeRepository,
         location_repo: INamedLocationRepository | None = None,
@@ -110,8 +103,7 @@ class SettlementOutdoorPackingJob:
         self._generator = generator
         self._sql = sql_persist
         self._invalidate = invalidate
-        self._library = library
-        self._structure_library = structure_library
+        self._snapshots = snapshot_loader
         self._nodes = node_repo
         self._edges = edge_repo
         self._locations = location_repo
@@ -142,12 +134,8 @@ class SettlementOutdoorPackingJob:
             location_uid=location_uid,
         )
         terrain_s = clock.lap()
-        library_layouts = await self._library.layouts_for_world(world)
-        structure_rows = await self._structure_library.list_all()
-        catalog = assemble_building_catalog(
-            world, library_layouts,
-            structures=assemble_structure_catalog(structure_rows),
-        )
+        snapshot = await self._snapshots.load(world)
+        catalog = building_catalog_from_snapshot(snapshot)
         catalog_s = clock.lap()
         settlement_ctx = settlement_context(world, settlement)
         skeleton = resolved_settlement_skeleton(

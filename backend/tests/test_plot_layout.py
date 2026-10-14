@@ -12,10 +12,8 @@ from pydantic import ValidationError
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
 from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+from tests.canonicalCatalog import canonical_building_catalog, canonical_plot_uid
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_has_building,
@@ -32,10 +30,6 @@ from app.db.models.world import World
 _REPO = Path(__file__).resolve().parents[2]
 _TEMPLATES = _REPO / "fixtures" / "templates"
 _STRUCTURES = _REPO / "structures_templates"
-
-
-def _stdlib() -> StructureCatalog:
-    return StructureCatalog(load_structure_stdlib(_STRUCTURES))
 
 # Pack-owned uid of the shared tavern structure (pack ``base``, member
 # ``tavern_1`` — library_packs uidMap, plan B-3).
@@ -66,7 +60,7 @@ def _plot(
         system_name=uid,
         display_name=system_name,
         structure_types=[purpose],
-        levels=[{"z_offset": 0, "rooms": []}],
+        levels=[],
     )
     return plot, structure
 
@@ -158,13 +152,13 @@ class PlotLayoutContractTest(unittest.TestCase):
             _plot("town_hall", "town_hall"),
         )
         self.assertEqual(
-            [row.system_name for row in catalog.of_structure_type("tavern")],
+            [entry.body.system_name for entry in catalog.of_structure_type("tavern")],
             ["inn_small"],
         )
 
     def test_canonical_defaults_resolve_in_stdlib(self) -> None:
-        catalog = assemble_building_catalog(_world(), structures=_stdlib())
-        inn = catalog.by_system_name("inn_small")
+        catalog = canonical_building_catalog()
+        inn = catalog.by_uid(canonical_plot_uid("inn_small"))
         self.assertIsNotNone(inn)
         self.assertTrue(plot_has_building(inn))
         stdlib_uids = {str(t.system_name) for t in load_structure_stdlib(_STRUCTURES)}
@@ -178,7 +172,7 @@ class PlotLayoutContractTest(unittest.TestCase):
             structures.leaves_of(inn),
         )
         cache = BuildingLayoutCache()
-        layout = cache.ensure(_world(), inn)
+        layout = cache.ensure(_world(), canonical_plot_uid("inn_small"), inn)
         self.assertIsNotNone(layout)
         self.assertEqual(layout.occupied_footprint.width, 16)
         self.assertEqual(layout.occupied_footprint.depth, 16)

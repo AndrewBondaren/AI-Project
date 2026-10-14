@@ -216,6 +216,7 @@ class StructureAreaAssembler:
         district_ctx:   LocationContext | None = None,
         district_uid:   str | None = None,
         existing_buildings: dict[str, NamedLocation] | None = None,
+        template_uid:   str | None = None,
     ) -> AreaLayout:
         bx = building_x if building_x is not None else (
             min(c[0] for c in slot.cells) if slot.cells else 0
@@ -271,6 +272,7 @@ class StructureAreaAssembler:
             building = self._place_building(
                 world, slot, template, bx, by, fp_cells, surface,
                 area_uid=area_uid,
+                template_uid=template_uid,
             )
             if area_uid is None:
                 area_uid = f"{building.location_uid}#area"
@@ -438,7 +440,10 @@ class StructureAreaAssembler:
         surface:   dict[Coord, int],
         *,
         area_uid:  str | None = None,
+        template_uid: str | None = None,
     ) -> NamedLocation:
+        # Readable local key for the det-id formula; the library member uid
+        # (template_uid) is the persisted template identity (TZ §5).
         template_name = template.system_name
         map_z = median_surface_z(fp_cells, surface, slot.ground_z)
         # Single minting point of the building uid (DET-1 D4): the
@@ -460,7 +465,7 @@ class StructureAreaAssembler:
             map_x=map_x,
             map_y=map_y,
             map_z=map_z,
-            system_template_uid=template_name,
+            system_template_uid=template_uid or template_name,
         )
 
     def _build_barrier(

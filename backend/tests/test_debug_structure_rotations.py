@@ -2,12 +2,15 @@
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 from app.api.routes.debug import debug_generate_structure_rotations, _LogCapture
 from app.application.worldData.debugStructureRotations import generate_rotations, RotationProbe
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.structureTemplateLibraryService import (
+    StructureTemplateNotFoundError,
+)
 from app.dataModel.spatial.facing import Facing
 from tests.test_structure_orientation import simple_structure, test_world_building
 
@@ -26,14 +29,22 @@ class DebugStructureRotationsTests(unittest.IsolatedAsyncioTestCase):
         self.container = SimpleNamespace(
             building_template_library_service=lambda: self.plots,
             world_service=lambda: self.worlds,
-            structure_template_library_service=lambda: SimpleNamespace(list_all=AsyncMock(return_value=[])),
+            structure_template_library_service=self._structure_service,
+        )
+
+    def _structure_service(self):
+        if self.structure is None:
+            return SimpleNamespace(
+                get_by_uid=AsyncMock(side_effect=StructureTemplateNotFoundError("missing")),
+            )
+        return SimpleNamespace(
+            get_by_uid=AsyncMock(
+                return_value=SimpleNamespace(data=self.structure.model_dump(mode="json")),
+            ),
         )
 
     async def call_route(self, **kwargs):
-        with patch("app.api.routes.debug.JsonResolver.resolve", AsyncMock(return_value=self.plot)), patch(
-            "app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults.assemble_structure_catalog",
-            return_value=Mock(resolve=Mock(return_value=self.structure)),
-        ):
+        with patch("app.api.routes.debug.JsonResolver.resolve", AsyncMock(return_value=self.plot)):
             return await debug_generate_structure_rotations(
                 self.world.world_uid, file=None, path=None, container=self.container, **kwargs,
             )

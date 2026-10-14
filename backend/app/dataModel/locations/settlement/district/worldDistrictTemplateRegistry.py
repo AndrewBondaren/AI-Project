@@ -16,8 +16,15 @@ from app.dataModel.locations.settlement.district.requiredStructure import POSITI
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
+from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import (
+    canonical_plot_uid,
+)
 
 _RANK_MEDIUM = WorldSettlementSizeRegistry.default_system_size()
+
+# Canonical recipe pins address the canonical plot member uid (TZ
+# city §9.4: ``plot_template`` is a template_uid, never a name).
+_CANONICAL_TOWN_HALL_PLOT_UID = canonical_plot_uid("town_hall")
 
 
 class WorldDistrictTemplateRegistry(RootModel[list[DistrictTemplateEntry]]):
@@ -61,7 +68,11 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         max_per_city=1,
         allowed_structure_types=["town_hall"],
         required_structures=[
-            RequiredStructure(plot_template="town_hall", count=1, position=POSITION_CENTER),
+            RequiredStructure(
+                plot_template=_CANONICAL_TOWN_HALL_PLOT_UID,
+                count=1,
+                position=POSITION_CENTER,
+            ),
         ],
         street_layout=StreetLayout.GRID,
         connections=[

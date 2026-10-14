@@ -20,13 +20,26 @@ from __future__ import annotations
 
 from typing import Mapping
 
+from app.dataModel.libraryPacks.defaultPacks import (
+    BUILDINGS_BASE_SYSTEM_NAME,
+    PLOTS_BASE_SYSTEM_NAME,
+    STRUCTURES_BASE_SYSTEM_NAME,
+    default_pack_uid,
+)
 from app.ids import LibraryKind, library_uid
 
-# Global ``system_name`` of the shipped structures default pack — pack
-# identity constant (TZ §2), consumed by the migration map as well.
-STRUCTURES_BASE_SYSTEM_NAME = "engine.structures.base"
-PLOTS_BASE_SYSTEM_NAME = "engine.plots.base"
-BUILDINGS_BASE_SYSTEM_NAME = "engine.buildings.base"
+__all__ = [
+    "BUILDINGS_BASE_SYSTEM_NAME",
+    "PLOTS_BASE_SYSTEM_NAME",
+    "STRUCTURES_BASE_SYSTEM_NAME",
+    "default_pack_names",
+    "default_pack_uids",
+    "is_default_pack_uid",
+]
+
+# Global ``system_name`` constants of the shipped default packs live in
+# ``dataModel.libraryPacks.defaultPacks`` — canonical recipe keys derive
+# member uids from them (TZ §2/§6).
 
 # kind → (source pack_name, global system_name)
 _DECLARED_DEFAULT_PACKS: Mapping[LibraryKind, tuple[tuple[str, str], ...]] = {
