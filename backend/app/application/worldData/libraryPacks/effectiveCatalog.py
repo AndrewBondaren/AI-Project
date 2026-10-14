@@ -104,13 +104,17 @@ class EffectiveCatalogLoader:
         self,
         repos: PackCatalogRepos,
         adapters: Mapping[LibraryKind, PackDomainAdapter],
+        *, ensure_defaults=None,
     ) -> None:
         self._repos = repos
         self._adapters = adapters
+        self._ensure_defaults = ensure_defaults
 
     async def load(self, world_uid: str) -> EffectiveCatalog:
         if not world_uid:
             raise LibraryPackValidationError("effective catalog requires a world uid")
+        if self._ensure_defaults is not None:
+            await self._ensure_defaults()
         pack_uids = await membership_pack_uids(self._repos.packs, world_uid)
         members = await self._repos.members.list_by_packs(pack_uids)
         return EffectiveCatalog(

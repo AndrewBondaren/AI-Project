@@ -625,13 +625,24 @@ CREATE TABLE IF NOT EXISTS states (
 CREATE INDEX IF NOT EXISTS idx_states_world ON states (world_uid);
 
 -- ============================================================
+-- plot_templates (шаблоны участков; owner/membership — library pack catalog)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS plot_templates (
+    template_uid TEXT PRIMARY KEY,
+    system_name  TEXT NOT NULL,  -- readable key, not member identity or UNIQUE
+    display_name TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    source_file  TEXT
+);
+
+-- ============================================================
 -- building_templates  (глобальная библиотека шаблонов зданий)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS building_templates (
     template_uid   TEXT PRIMARY KEY,
     system_name    TEXT NOT NULL,  -- не глобально UNIQUE (tz_template_library_packs §3): локальный ключ, уникальность — в library_pack_members
     display_name   TEXT NOT NULL,
-    structure_type TEXT NOT NULL,
+    structure_type TEXT,  -- legacy outline metadata; modern building bodies carry a structure UID in data
     version        TEXT NOT NULL DEFAULT '1.0',
     data           TEXT NOT NULL,
     source_file    TEXT

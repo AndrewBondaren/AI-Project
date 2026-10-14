@@ -2,7 +2,7 @@
 from copy import deepcopy
 from unittest import TestCase
 
-from test_library_packs_4b import _ServiceCase, _plot_body, _BUILDING, _STRUCT
+from test_library_packs_4b import _ServiceCase, _plot_body, _PLOT, _STRUCT
 from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs, relief_policy_refs
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
     _remap_structure_refs, _remap_relief_pick_policy,
@@ -92,7 +92,7 @@ class SecondaryReferenceLifecycleTests(_ServiceCase):
         struct = await self.service.create_member(pack.pack_uid, library_kind=_STRUCT,
                                                   local_uid='geometry', body={'display_name': 'Geometry'})
         external = runtime_uid()
-        plot = await self.service.create_member(pack.pack_uid, library_kind=_BUILDING,
+        plot = await self.service.create_member(pack.pack_uid, library_kind=_PLOT,
             local_uid='house', body=_plot_body('house', external,
                                               secondary_buildings=[{'structure': struct.template_uid}]))
         result = await self.service.instantiate_pack(pack.pack_uid, world_uid='w1')

@@ -145,8 +145,20 @@ class WorldBundleService:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,) + tuple(e["loc"]), e["msg"], code=e["type"]) for e in exc.errors()]) from exc
         except ValueError as exc:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,), str(exc), code="VALIDATION_ERROR")]) from exc
+        consumed = set()
+        if self._archives is not None:
+            # Convert raw compatibility bodies before the legacy section handlers can normalize them.
+            try:
+                packs, consumed = import_libraries(data)
+                self._archives.validate_bodies(packs, world)
+            except ImportValidationError as exc:
+                ctx.errors.extend(exc.errors)
+                consumed = {BundleSection.PLOT_TEMPLATES, BundleSection.BUILDING_TEMPLATES}
+            except (ValueError, LibraryPackValidationError) as exc:
+                ctx.errors.append(FieldPathError((BundleSection.LIBRARY_PACKS,), str(exc), code="LIBRARY_INVALID"))
+                consumed = {BundleSection.PLOT_TEMPLATES, BundleSection.BUILDING_TEMPLATES}
         for handler in self._handlers:
-            if handler.key not in data or handler.key == BundleSection.WORLD:
+            if handler.key not in data or handler.key == BundleSection.WORLD or handler.key in consumed:
                 continue
             section_ctx = ctx.child(handler.key)
             try:
@@ -158,12 +170,6 @@ class WorldBundleService:
                     reject_unresolved(section_ctx, [FieldPathError(section_ctx.path_prefix, str(exc), code="VALIDATION_ERROR")])
                 except UnresolvedModelError:
                     continue
-        if self._archives is not None:
-            try:
-                packs, _ = import_libraries(data)
-                self._archives.validate_bodies(packs, world)
-            except (ValueError, LibraryPackValidationError) as exc:
-                ctx.errors.append(FieldPathError((BundleSection.LIBRARY_PACKS,), str(exc), code="LIBRARY_INVALID"))
         if ctx.errors:
             raise ImportValidationError(list(ctx.errors))
         return data

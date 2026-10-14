@@ -54,12 +54,12 @@ class WorldCopyImport:
                     if BundleSection.LIBRARY_PACKS in data:
                         count = len(data[BundleSection.LIBRARY_PACKS])
                         results[BundleSection.LIBRARY_PACKS] = ImportResult(count, count, 0)
-                    for key in consumed:
-                        count = len(data[key])
-                        results[key] = ImportResult(count, count, 0)
                 elif preview_token or decisions:
                     # Continuations cannot silently lose their entire library batch.
                     raise LibraryPackPolicyRequiredError(PolicyRequired("", (), (), stale=True))
+                for key in consumed:
+                    count = len(data[key])
+                    results[key] = ImportResult(count, count, 0)
                 for handler in self._handlers:
                     if handler.key == "world" or handler.key in consumed or handler.key not in copied:
                         continue

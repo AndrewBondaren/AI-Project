@@ -23,6 +23,8 @@ async def write_authored_bodies(service, kind, pack_uid, bodies, *, local_uid=No
             key = local_uid if kind is LibraryKind.STRUCTURE_TEMPLATES else body.get("system_name")
             if not isinstance(key, str) or not key.strip() or key != key.strip() or "|" in key:
                 raise LibraryPackValidationError("invalid authored local_uid")
+            if local_uid is not None and key != local_uid:
+                raise LibraryPackValidationError("body system_name differs from declared local_uid")
             uid = library_uid(kind, key, pack_uid=pack_uid)
             # Model-A copies carry a minted UID in the body, not the authored
             # pack/local formula. Preserve that identity when editing a copy.

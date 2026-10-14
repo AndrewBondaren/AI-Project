@@ -24,6 +24,7 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     plot_type_defaulted,
 )
 from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import (
     BuildingTemplateRegistryEntry,
 )
@@ -49,8 +50,10 @@ def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:
     return list(building_template_registry(world).pointers)
 
 
-def _body_structure_type(body: BuildingTemplateOutline | PlotLayoutTemplate) -> str:
-    """Row denorm: outline's primary purpose, or the plot's family (plot bodies)."""
+def _body_structure_type(body: BuildingTemplateOutline | PlotLayoutTemplate | BuildingTemplate) -> str | None:
+    """Legacy denorm only; target building bodies store their structure UID in data."""
+    if isinstance(body, BuildingTemplate):
+        return None
     if isinstance(body, PlotLayoutTemplate):
         return str(body.plot_type.value)
     return body.structure_type
@@ -66,12 +69,24 @@ class BuildingTemplateLibraryService:
         db: Database | None = None,
         catalog: PackCatalogRepos | None = None,
         write_provider=None,
+        ensure_provider=None,
     ) -> None:
         self._repo = repo
         self._worlds = world_service
         self._db = db
         self._catalog = catalog
         self._write_provider = write_provider
+        self._ensure_provider = ensure_provider
+
+    async def get_by_uid(self, template_uid: str) -> BuildingTemplateRow | None:
+        if self._ensure_provider is not None:
+            await self._ensure_provider()
+        return await self.find_by_uid(template_uid)
+
+    async def list_all(self) -> list[BuildingTemplateRow]:
+        if self._ensure_provider is not None:
+            await self._ensure_provider()
+        return await self._repo.list_all()
 
     async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
         """Hydrate plot bodies; valid outline-only bodies have no packing layout."""
@@ -106,6 +121,13 @@ class BuildingTemplateLibraryService:
 
     async def find_by_uid(self, template_uid: str) -> BuildingTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
+
+    async def write_body(self, body: BuildingTemplate, *, pack_uid, template_uid=None,
+                         source_file=None, world_uid=None) -> BuildingTemplateRow:
+        from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+        return await write_domain_body(self._write_provider(), LibraryKind.BUILDING_TEMPLATES,
+            body, pack_uid=pack_uid, template_uid=template_uid,
+            source_file=source_file, world_uid=world_uid)
 
     async def persist_prepared(self, outline, *, template_uid, source_file, added):
         from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row

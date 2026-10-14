@@ -35,7 +35,6 @@ from app.application.worldData.libraryPacks.refResolve import (
 from app.application.worldData.libraryPacks.uidMap import pin_for_member
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ReferenceIssueReason
-from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.core.container import Container
 from app.db.database import Database
 from app.db.models.world import World
@@ -44,6 +43,7 @@ from app.db.repositories.sqlite.reliefTemplateRepository import (
 )
 from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
 from app.ids import LibraryKind, library_uid
+from app.application.worldData.libraryPacks.defaults import default_pack_uids
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STRUCTURES_ROOT = _REPO_ROOT / "structures_templates"
@@ -80,6 +80,7 @@ class _CatalogCase(IsolatedAsyncioTestCase):
             relief_library=self.container.relief_template_library_service(),
             structure_library=self.container.structure_template_library_service(),
             building_library=self.container.building_template_library_service(),
+            plot_library=self.container.plot_template_library_service(),
             world_repository=self.container.world_repository(),
             relief_world_import=self.container.relief_world_import_service(),
         )
@@ -131,7 +132,7 @@ class MembershipTests(_CatalogCase):
         catalog = await self.loader.load("w1")
         self.assertIsInstance(catalog, EffectiveCatalog)
         self.assertEqual(catalog.world_uid, "w1")
-        self.assertEqual(catalog.pack_uids, tuple(sorted((own.pack_uid, base.pack_uid))))
+        self.assertEqual(catalog.pack_uids, tuple(sorted({own.pack_uid} | default_pack_uids())))
         self.assertEqual(base.pack_uid, _BASE_PACK_UID)
 
         for m in own_members:
@@ -151,7 +152,7 @@ class MembershipTests(_CatalogCase):
 
         # The other world sees only its own pack + defaults.
         other_catalog = await self.loader.load("w2")
-        self.assertEqual(other_catalog.pack_uids, tuple(sorted((other.pack_uid, base.pack_uid))))
+        self.assertEqual(other_catalog.pack_uids, tuple(sorted({other.pack_uid} | default_pack_uids())))
         self.assertFalse(other_catalog.available(own_members[0].template_uid, _RELIEF))
 
     async def test_membership_helper_matches_loader_and_engine_scope(self):
@@ -162,11 +163,11 @@ class MembershipTests(_CatalogCase):
 
         self.assertEqual(
             await membership_pack_uids(self.packs, "w1"),
-            sorted((own.pack_uid, base.pack_uid)),
+            sorted({own.pack_uid} | default_pack_uids()),
         )
         self.assertEqual(
             await membership_pack_uids(self.packs, None),
-            sorted((engine.pack_uid, base.pack_uid)),
+            sorted({engine.pack_uid} | default_pack_uids()),
         )
 
     async def test_loader_requires_world_uid(self):
@@ -315,33 +316,31 @@ class ResolveTests(_CatalogCase):
         self.assertIs(ref.reason, ReferenceIssueReason.KIND_MISMATCH)
         self.assertEqual(ref.owner_pack_uid, own.pack_uid)
 
-    async def test_building_unknown_uid_falls_back_to_pojo_default(self):
+    async def test_building_unknown_uid_is_not_replaced_with_builtin_plots(self):
         await self._world("w1")
         catalog = await self.loader.load("w1")
         result, ref = await self._resolve(
             catalog, LibraryKind.BUILDING_TEMPLATES, TemplateRef.of("ghost"), warnings=1)
-        self.assertIs(result.outcome, RefOutcome.DEFAULT)
+        self.assertIs(result.outcome, RefOutcome.REJECTED)
         self.assertIs(ref.reason, ReferenceIssueReason.UNKNOWN_TEMPLATE)
-        self.assertEqual(ref.selected_default, "builtin_plots")
-        self.assertTrue(result.default)
-        self.assertTrue(all(isinstance(p, PlotLayoutTemplate) for p in result.default))
+        self.assertIsNone(ref.selected_default)
+        self.assertIsNone(result.default)
         self.assertEqual(result.ref.uid, "ghost")  # stored ref not rewritten
 
-    async def test_building_explicit_default_marker_is_silent(self):
+    async def test_building_explicit_default_marker_requires_declared_fallback(self):
         await self._world("w1")
         catalog = await self.loader.load("w1")
         result, _ = await self._resolve(
-            catalog, LibraryKind.BUILDING_TEMPLATES, TemplateRef.default(), warnings=0)
-        self.assertIs(result.outcome, RefOutcome.DEFAULT)
-        self.assertIsNone(result.issue)
-        self.assertTrue(result.default)
+            catalog, LibraryKind.BUILDING_TEMPLATES, TemplateRef.default(), warnings=1)
+        self.assertIs(result.outcome, RefOutcome.REJECTED)
+        self.assertIsNone(result.default)
 
-    async def test_building_empty_ref_warns_default_applied(self):
+    async def test_building_empty_ref_warns_and_rejects(self):
         await self._world("w1")
         catalog = await self.loader.load("w1")
         result, ref = await self._resolve(
             catalog, LibraryKind.BUILDING_TEMPLATES, TemplateRef.of("  "), warnings=1)
-        self.assertIs(result.outcome, RefOutcome.DEFAULT)
+        self.assertIs(result.outcome, RefOutcome.REJECTED)
         self.assertIs(ref.reason, ReferenceIssueReason.DEFAULT_APPLIED)
         self.assertIsNone(ref.requested_template_uid)
 

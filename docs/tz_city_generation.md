@@ -1,5 +1,7 @@
 # ТЗ: Генератор города
 
+**A0, 2026-10-14:** [библиотеки plot/building/structure](tz_domain_template_libraries.md). Standard plots — default library members с UID. Recipe plot refs и keys counts/priority — UID; name-based examples только legacy input. District N+1 keys этим не меняются.
+
 **Обновлено:** 2026-09-20 **C24** packing по району (outdoor); 2026-09-07 **§9.3** PlacementCondition RegistryKey/`CellZone`; `min_adjacent_cells`; **LOC-T-2** ранг размера (`small`…) ≠ морфология, footprint из контекста; 2026-09-06 **detailed_bake** консьюмер C11 (`generate-settlement`); **§8** topology на `full_bake`; **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
 
 **Связанные документы:**
@@ -212,8 +214,8 @@ generic tier/mood NL; resolved view получает tier/density от LocationC
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | `DistrictDensity` | JSON import | ENUM-E `sparse` / `medium` / `dense` | ✅ read (NC-9) |
 | `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `SettlementPayload` → `SettlementSkeleton`; SQL — JSON внутри location_payload. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
-| `plot_counts` | object | JSON import, optional | Городской дефолт копий участка: `{ "<drawing system_name>": int }`. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
-| `plot_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<drawing system_name>": int }`. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
+| `plot_counts` | object | JSON import, optional | Городской дефолт копий участка: `{ "<plot template_uid>": int }`. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
+| `plot_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<plot template_uid>": int }`. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
 | `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `SettlementPayload` → `SettlementSkeleton`. Нет поля / `template` null/`""` — скип. `template` — `BarrierTemplateKey`. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района. [POJO-C-6](./tz_pojo_city_typing.md) | ⬜ |
 | `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `SettlementSkeleton` |
 
@@ -544,8 +546,8 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
 | `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
 | `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4. `count` — §5.1.3 «Число токенов»; очередь — §5.1.3 «Приоритет посадки» |
-| `plot_counts` | object | optional | `{ "<drawing system_name>": int }` — районный override копий участка. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
-| `plot_priority` | object | optional | `{ "<drawing system_name>": int }` — районный override очереди fill. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
+| `plot_counts` | object | optional | `{ "<plot template_uid>": int }` — районный override копий участка. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
+| `plot_priority` | object | optional | `{ "<plot template_uid>": int }` — районный override очереди fill. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
 | `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Барьер **района** (прямые **уже урезанного** `DistrictSlot`). Тот же класс, другой инстанс, чем у поселения ([tz_locations.md](./tz_locations.md)). Omit/null / `template` null/`""` — скип. `template` — `BarrierTemplateKey` ([POJO-C-6](./tz_pojo_city_typing.md)). Поле + `template` — всегда, без roll. `sides` — прямые **слота**; нет ключа / `null` / `[]` → четыре прямые слота. **v1 packing:** inner bbox минус эти прямые внутрь. Клетки — `DistrictAssembler` (TODO). Список поселения не пишет; общая xy запрещена (вычет поселения раньше). |
 | `deck` | int | optional | **Ярус** района. Omit → `0` (поверхность). Не этаж здания, не `economic_tier`, не climate hive, **не** разведение двух поселений ([`tz_locations.md`](./tz_locations.md) **LOC-T-3**). Участки копируют значение при packing (`AreaSlot.deck`); не независимая настройка участка. Канон omit. Коллизия xy×z — assembler §7.1. |
 
@@ -597,14 +599,16 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 **Хост:** settlement-required purpose садится только в слоты, чей **штамп** `DistrictSlot.allowed_structure_types` содержит ключ (семья раскрывается). Ткань без специализации несёт семьи на чертеже, не omit=весь каталог. `[]` = pins only, не хост. Нет хоста среди слотов → leftover + warning. Не копировать тип на каждый слот.
 
-**Район `required_structures[]`:** `plot_template` — pin **чертежа участка** (`system_name` / `DrawingKey`). Только `by_system_name`. Не пул purpose по строке pin (два чертежа `tavern_*` не выбираются pin-ом `"tavern"`). Назначение — массив **самого** чертежа (`structure_types`). Optional leftover `RequiredStructure.structure_type` — дубль purpose на строке рецепта поселения, не pin. Leftover JSON `building_template` → тот же pin. Пул fill района — `allowed_structure_types` + `allowed_match`. Рецепт поселения даёт types; generate выбирает чертёж. Комбо `[house, workshop]` при like на `workshop` годится, если влезает в щель; одна посадка закрывает **все** свои теги (fill `house` после не ставить).
+**Район `required_structures[]`:** `plot_template` — UID конкретного **шаблона участка** доступной библиотеки; name lookup только в однозначном legacy importer. Не пул purpose по строке pin (два чертежа `tavern_*` не выбираются pin-ом `"tavern"`). Назначение — массив **самого** чертежа (`structure_types`). Optional leftover `RequiredStructure.structure_type` — дубль purpose на строке рецепта поселения, не pin. Leftover JSON `building_template` → тот же pin. Пул fill района — `allowed_structure_types` + `allowed_match`. Рецепт поселения даёт types; generate выбирает чертёж. Комбо `[house, workshop]` при like на `workshop` годится, если влезает в щель; одна посадка закрывает **все** свои теги (fill `house` после не ставить).
 
 ```json
 "required_structures": [
-  { "plot_template": "town_hall",  "count": 1, "position": "center" },
-  { "plot_template": "market",     "count": 1, "position": "any"    }
+  { "plot_template": "11111111-1111-5111-8111-111111111111",  "count": 1, "position": "center" },
+  { "plot_template": "22222222-2222-5222-8222-222222222222",     "count": 1, "position": "any"    }
 ]
 ```
+
+UUID в примере — условные ссылки: реальный importer проверяет membership/kind/body; UID вычисляет app.ids. Имена town_hall/market — читаемые названия, не ссылки.
 
 `count` — число токенов; default 1. Приоритет над `plot_counts` — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Массив — проход 1 **до** рамки пустых кварталов; порядок массива = очередь среди required — §5.1.3 «Приоритет посадки». Не путать с `plot_priority` (желательный fill, не обязательность).
 

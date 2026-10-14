@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
-from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _BUILDING, _plot_body, _relief_body
+from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _PLOT, _plot_body, _relief_body
 from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
 from app.application.worldData.libraryPacks.defaults import STRUCTURES_BASE_SYSTEM_NAME
 from app.application.worldData.libraryPacks.writeContracts import (
@@ -148,7 +148,7 @@ class LibraryWriteInspectorTests(_ServiceCase):
         external = await self.service.create_pack(system_name="engine.structures.external")
         structure = await self.service.create_member(external.pack_uid, library_kind=_STRUCT,
                                                      local_uid="house", body={"display_name": "House"})
-        plot = await self.service.create_member(self.target_pack.pack_uid, library_kind=_BUILDING,
+        plot = await self.service.create_member(self.target_pack.pack_uid, library_kind=_PLOT,
                                                 local_uid="plot", body=_plot_body("plot", structure.template_uid), world_uid="w1")
         snapshot = await self.inspect(self.member_request())
         state = snapshot.inspection.scopes[0]

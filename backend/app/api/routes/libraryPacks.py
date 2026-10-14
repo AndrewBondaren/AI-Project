@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from app.api.deps import get_container
 from app.api.libraryWrite import WriteNegotiation, policy_response, write_response
 from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+from app.ids import LibraryKind
 
 router = APIRouter()
 
@@ -38,7 +39,7 @@ class Publish(WriteNegotiation):
 
 
 class MemberCreate(WriteNegotiation):
-    library_kind: str
+    library_kind: LibraryKind
     local_uid: str
     body: dict
 

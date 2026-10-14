@@ -72,7 +72,10 @@ class LibraryWriteSourceReader:
             raise LibraryPackValidationError("source_domain_unavailable")
         outline = adapter.prepare_body(deepcopy(entry.body), local_uid=member.local_uid,
                                        template_uid=member.template_uid, world=deepcopy(world))
-        return InspectedMember(member, entry.body, outline, entry.source_file)
+        body = (outline.model_dump(mode="json") if LibraryKind(member.library_kind) in
+                (LibraryKind.PLOT_TEMPLATES, LibraryKind.BUILDING_TEMPLATES,
+                 LibraryKind.STRUCTURE_TEMPLATES) else entry.body)
+        return InspectedMember(member, body, outline, entry.source_file)
 
     def references(self, entry: InspectedMember) -> tuple[MemberRef, ...]:
         return self._adapters[LibraryKind(entry.member.library_kind)].body_refs(

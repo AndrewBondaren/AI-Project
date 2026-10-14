@@ -12,6 +12,7 @@ from app.ids import LibraryKind
 
 
 LIBRARY_DOMAIN_ROOTS: Mapping[str, str] = MappingProxyType({
+    LibraryKind.PLOT_TEMPLATES: "plot_templates",
     LibraryKind.BUILDING_TEMPLATES: "building_templates",
     LibraryKind.STRUCTURE_TEMPLATES: "structures_templates",
     LibraryKind.RELIEF_TEMPLATES: "relief_templates",
@@ -26,7 +27,7 @@ class LibraryArchiveMember(BaseModel):
 
     model_config = ConfigDict(extra="allow", frozen=True)
 
-    library_kind: StrictOnWire[str]
+    library_kind: StrictOnWire[LibraryKind]
     local_uid: StrictOnWire[str]
     template_uid: StrictOnWire[str]
     source_file: DefaultWhenMissing[str | None] = None

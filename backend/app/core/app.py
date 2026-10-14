@@ -32,6 +32,7 @@ def make_lifespan(db: Database):
     from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
     from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
     from app.db.models.buildingTemplate import BuildingTemplateRow
+    from app.db.models.plotTemplate import PlotTemplateRow
     from app.db.models.structureTemplate import StructureTemplateRow
     from app.db.models.libraryPack import LibraryPackRow
     from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -43,7 +44,7 @@ def make_lifespan(db: Database):
         Race, WorldPerk, NamedLocation, LocationLevel, MapCell,
         TransitionRow, TransitionSideRow,
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
-        State, SessionPending, ReliefTemplateRow, BuildingTemplateRow,
+        State, SessionPending, ReliefTemplateRow, BuildingTemplateRow, PlotTemplateRow,
         ReliefGradeSystemRow, ReliefGradeInstanceRow, StructureTemplateRow,
         LibraryPackRow, LibraryPackMemberRow, LibraryPackDependencyRow,
     ]

@@ -22,6 +22,7 @@ class BundleSection:
     CONNECTION_EDGES: ClassVar[str] = "connection_edges"
     RELIEF_TEMPLATES: ClassVar[str] = "relief_templates"
     BUILDING_TEMPLATES: ClassVar[str] = "building_templates"
+    PLOT_TEMPLATES: ClassVar[str] = "plot_templates"
     RACE_TEMPLATES: ClassVar[str] = "race_templates"
     PERK_TEMPLATES: ClassVar[str] = "perk_templates"
     LIBRARY_PACKS: ClassVar[str] = "library_packs"
@@ -40,6 +41,7 @@ class BundleSection:
         CONNECTION_EDGES,
         RELIEF_TEMPLATES,
         BUILDING_TEMPLATES,
+        PLOT_TEMPLATES,
         RACE_TEMPLATES,
         PERK_TEMPLATES,
         LIBRARY_PACKS,
@@ -76,6 +78,7 @@ SECTION_PATHS = MappingProxyType({
     BundleSection.CONNECTION_EDGES: "skeleton/connection_edges.json",
     BundleSection.RELIEF_TEMPLATES: "skeleton/relief_templates.json",
     BundleSection.BUILDING_TEMPLATES: "skeleton/building_templates.json",
+    BundleSection.PLOT_TEMPLATES: "skeleton/plot_templates.json",
     BundleSection.RACE_TEMPLATES: "skeleton/race_templates.json",
     BundleSection.PERK_TEMPLATES: "skeleton/perk_templates.json",
     BundleSection.STRUCTURE_TEMPLATES: "skeleton/structure_templates.json",

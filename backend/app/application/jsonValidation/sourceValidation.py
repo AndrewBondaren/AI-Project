@@ -69,6 +69,15 @@ def validate_source(world, source: BaseModel, *, ctx: ResolveContext):
         validation_context = {"location_type_registry": location_types(world)}
     resolve_model(type(source), source.model_dump(mode="python", exclude_unset=True), ctx=ctx,
                   validation_context=validation_context)
+    return validate_prepared_source(world, source, ctx=ctx)
+
+
+def validate_prepared_source(world, source: BaseModel, *, ctx: ResolveContext):
+    """Check channels on a POJO just validated by its domain preparer.
+
+    Keeps the same registry/band/range checks without reconstructing authored
+    fields or logging a second wire-to-POJO transformation.
+    """
     cache = WorldRegistryIndex()
     for name, info in type(source).model_fields.items():
         channels = [m for m in info.metadata if isinstance(m, CascadeChannel)]

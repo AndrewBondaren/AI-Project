@@ -226,7 +226,7 @@ class BundleLibraryArchiveTests(unittest.TestCase):
     def test_unknown_kind_and_nonobject_body_rejected(self):
         self.write()
         self.mutate_manifests(lambda wire: wire["members"][0].update(library_kind="unknown"))
-        with self.assertRaisesRegex(BundleArchiveError, "Unknown library kind"):
+        with self.assertRaisesRegex(BundleArchiveError, "library_kind"):
             read_archive(self.path)
         self.write()
         entries = self.entries()

@@ -57,16 +57,20 @@ class StructureTemplateLibraryService:
         db: Database | None = None,
         catalog: PackCatalogRepos | None = None,
         write_provider=None,
+        ensure_provider=None,
     ) -> None:
         self._repo = repo
         self._db = db
         self._catalog = catalog
         self._write_provider = write_provider
+        self._ensure_provider = ensure_provider
 
     async def find_by_uid(self, template_uid: str) -> StructureTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
 
     async def get_by_uid(self, template_uid: str) -> StructureTemplateRow:
+        if self._ensure_provider is not None:
+            await self._ensure_provider()
         row = await self.find_by_uid(template_uid)
         if row is None:
             raise StructureTemplateNotFoundError(
@@ -75,6 +79,8 @@ class StructureTemplateLibraryService:
         return row
 
     async def list_all(self) -> list[StructureTemplateRow]:
+        if self._ensure_provider is not None:
+            await self._ensure_provider()
         return await self._repo.list_all()
 
     async def persist_prepared(self, outline, *, template_uid, source_file, added):

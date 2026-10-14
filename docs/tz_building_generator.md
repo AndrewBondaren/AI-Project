@@ -1,5 +1,13 @@
 # ТЗ: Генератор зданий
 
+**A0, 2026-10-14 — актуальный библиотечный контракт:**
+[plot/building/structure](tz_domain_template_libraries.md).
+Plot имеет собственный шаблон с building templates внутри; building содержит
+structure UID ref. Standard plot/building — members default-библиотек,
+defaults параметров — в POJO. Вложенность не требует замены тела голой
+UID-ссылкой. Исторические name-based SQL/JSON library snippets ниже не
+отменяют UID identity и новое разделение доменов.
+
 > **Архитектура нод:** ноды structure-домена пишут только в `state.structure_context: StructureContext` — типизированный контекст на `ExecutionState`. `shared_context` не использовать как канал передачи данных. См. `tz_engine_node_context.md`.
 
 ## Участок: главное здание (locked)
@@ -36,7 +44,7 @@
 
 | Термин | Смысл |
 |--------|-------|
-| **Шаблон участка** | JSON-корень packing: `BuildingLayoutTemplate`. Identity = `system_name` (`DrawingKey`). |
+| **Шаблон участка** | Собственный шаблон plot с building templates внутри; библиотечная identity = template_uid, system_name — читаемый ключ. |
 | **main_building** | Главное здание на участке (вложенное тело §3). Фасад забора / калитка целятся в него. Не `structure_types[]`. |
 | **Шаблон** | JSON тела здания: этажи, комнаты, связи, входы. На участке — поле `main_building`. |
 | **structure_types** | Листья дерева назначений (ребёнок `BuildingPurpose`), не семья и не чертёж. Не N+1: мир не выдумывает `"blacksmith"` — это чертёж с тегом `smithy` / `workshop` (+ опц. `house`). Omit/`[]` → `[house]`. Leftover scalar `structure_type` → один лист. Primary (первый тег) — колонка SQL library. Не `district_type`, не subtype NL `building`, не `ASSEMBLER_REGISTRY`. Дерево + паки мира — **§2.1**. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2 |
@@ -170,7 +178,7 @@ Wire включённых id: omit/`[]` → `[base, fantasy]`. `purpose_packs: [
 
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
-| `system_name` | string | required | Identity **участка** (`DrawingKey`): `"inn_small"`, `"tavern_1"`. Не путать с `main_building.system_name` интерьера |
+| `system_name` | string | required | Читаемый ключ **участка**, например inn_small; не identity member. Библиотечные ссылки — template_uid. |
 | `structure_types` | `BuildingPurpose[]` | optional | Теги назначения **участка** (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing. **Не** выбор здания на участке |
 | `structure_type` | string | leftover | Скаляр → `structure_types` из одного ключа. Не писать в новых JSON |
 | `display_name` | string | required | Отображаемое название шаблона |
@@ -1283,12 +1291,18 @@ dataModel только сохраняет отметку подмены. Неи�
 подключение ко всему миру и UID определяются
 [tz_template_library_packs.md](./tz_template_library_packs.md).
 Приведённая ниже историческая схема требует миграции: глобальная UNIQUE
-на `system_name` заменяется уникальностью локального ключа внутри пака/домена;
-UID вычисляет центральный `worldData/ids` с владельцем, не локальный uuid5.
+на `system_name` отменяется; local_uid может повторяться даже внутри пака.
+Identity — template_uid. UID вычисляет центральный `app.ids` с владельцем,
+не локальный uuid5. Раздельное хранение доменов — [A0 §3](tz_domain_template_libraries.md).
 `building_templates` хранит родительские участки; `structure_templates` —
 дочернюю геометрию по ссылке `main_building.structure` (только UID, без pack-id).
 
 ### 5.1 Глобальная библиотека — `building_templates`
+
+**После A0:** plot_templates хранит участки, building_templates — здания,
+structure_templates — geometry. Общие membership/default declarations —
+[A0 §1/3/4](tz_domain_template_libraries.md). SQL ниже — исторический mixed
+storage до split, не инструкция создать UNIQUE(system_name).
 
 ```sql
 CREATE TABLE IF NOT EXISTS building_templates (
@@ -1333,6 +1347,11 @@ WHERE template_uid=?` после валидации UID и неизменног�
 Перегенерация выполняется синхронно до подтверждения пользователю об успехе замены шаблона.
 
 ### 5.2 Per-world реестр — `worlds.building_template_registry`
+
+**Legacy до cutover 5b.** Union/колонка ниже остаются compatibility input.
+Доступность после миграции — defaults + world-owned packs, usage — pins
+по UID и declared refs. Embedded authored plots сохраняются без потери
+building параметров/structure refs. Name-based runtime overlay отменён.
 
 Хранится как JSON-массив внутри `worlds` (аналогично `terrain_registry`, `material_registry`):
 
@@ -1428,7 +1447,13 @@ class BuildingLayout:
 ```
 
 Здание (`NamedLocation` с `system_location_type="building"`):
-- `system_template_uid` — ссылка на `building_templates.template_uid`; RESTRICT при удалении шаблона
+- `system_template_uid` — UID реально выбранного библиотечного шаблона,
+  переданный caller отдельно от имени; kind определяется источником.
+  Имя plot/building не записывается вместо UID.
+- `system_structure_template_uid` — UID фактически применённой structure;
+  участвует в usage/deletion, import/export/remap. Обычное чтение не
+  пересчитывает его после изменения building template; regeneration
+  записывает вновь применённый UID. Это identity, не версия тела.
 - `map_x, map_y, map_z` — origin здания в глобальных координатах
 
 Каждая комната — `NamedLocation` с:

@@ -1263,6 +1263,19 @@ Lookup: `alias → { category, system_name, current_value }`.
 
 ### Детерминированные uid и rng (**DET-1**, cross-cutting)
 
+**A0, 2026-10-14:** единственное актуальное место UID helper — `app/ids/`
+(переезд выполнен; worldData/ids в историческом тексте ниже — старый путь).
+Template identity/persist refs — [доменные библиотеки §1/3/5/6](tz_domain_template_libraries.md).
+Любая библиотечная ссылка хранит member UID, никогда system_name/local_uid.
+Обычный authored/canonical identity — library_uid с owner pack;
+member-copy — назначенный runtime_uid; полный pack remap — существующее
+правило target pack + source template UID. Назначенные UID не пересчитываются.
+Отдельного split helper для каждого вложенного building не требуется:
+вложенность не создаёт member. При смене domain kind legacy mapping
+записывает старую identity → новую по центральному UID-контракту;
+если исходник не содержит достаточной identity, импорт диагностирует это,
+а не угадывает pack по имени/source_file. Не вводить локальную hash-формулу.
+
 Повторная генерация мира с тем же входом даёт **те же** uid сущностей и те
 же rng-потоки — ссылки между SQL, pack-файлами и якорями сцены переживают
 regenerate. Это достигается **одной** конвенцией формулы, принуждённой
@@ -1987,6 +2000,15 @@ INDEX (world_id, x, y)
 ```
 
 **Уровень 2 — `named_locations`** — агрегат ячеек с именем:
+
+**Библиотечные refs A0:** system_template_uid — UID реально применённого
+member, kind проверяется consumer-контрактом; system_structure_template_uid
+— сохраняемый UID фактически применённого StructureTemplate здания.
+Обе ссылки входят в export/import/world-copy remap и usage/deletion.
+Structure ref не пересчитывается при чтении из изменившегося building
+template; regeneration обновляет его. None разрешён для объектов без
+structure и legacy unknown provenance; фиктивный member не создаётся.
+SQL/model/DTO синхронизируются в кодовом B4; это не snapshot версии тела.
 ```sql
 named_locations (
   location_uid,

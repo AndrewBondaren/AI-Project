@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 
 from app.core.settingsService import SettingsService
+from app.core.templateRepositories import TemplateRepositoryProviders
 from app.application.jsonValidation.worldRow import transition_types
 from app.application.worldData.transitions.transitionService import TransitionService
 from app.application.worldData.transitions.transitionReadService import BuildingTransitionPackBinding, TransitionReadService
@@ -51,10 +52,6 @@ from app.db.repositories.iReliefTemplateRepository import IReliefTemplateReposit
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemplateRepository
 from app.db.repositories.sqlite.reliefGradeRepository import SqliteReliefGradeRepository
-from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
-from app.db.repositories.sqlite.buildingTemplateRepository import SqliteBuildingTemplateRepository
-from app.db.repositories.iStructureTemplateRepository import IStructureTemplateRepository
-from app.db.repositories.sqlite.structureTemplateRepository import SqliteStructureTemplateRepository
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.db.repositories.sqlite.libraryPackRepository import SqliteLibraryPackRepository
 from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
@@ -150,11 +147,11 @@ from app.application.cancellation.snapshotStore import snapshot_store
 from app.core.appSettings import app_settings
 
 
-class Container:
+class Container(TemplateRepositoryProviders):
 
     def __init__(self, config_manager, db: Database):
+        super().__init__(db)
         self._config_manager = config_manager
-        self._db = db
 
         # REPOSITORIES
         self._world_repository: IWorldRepository | None = None
@@ -175,8 +172,6 @@ class Container:
         self._state_repository: IStateRepository | None = None
         self._relief_template_repository: IReliefTemplateRepository | None = None
         self._relief_grade_repository: IReliefGradeRepository | None = None
-        self._building_template_repository: IBuildingTemplateRepository | None = None
-        self._structure_template_repository: IStructureTemplateRepository | None = None
         self._library_pack_repository: ILibraryPackRepository | None = None
         self._library_pack_member_repository: ILibraryPackMemberRepository | None = None
         self._library_pack_dependency_repository: ILibraryPackDependencyRepository | None = None
@@ -521,16 +516,6 @@ class Container:
             self._relief_grade_repository = SqliteReliefGradeRepository(db=self._db)
         return self._relief_grade_repository
 
-    def building_template_repository(self) -> IBuildingTemplateRepository:
-        if self._building_template_repository is None:
-            self._building_template_repository = SqliteBuildingTemplateRepository(db=self._db)
-        return self._building_template_repository
-
-    def structure_template_repository(self) -> IStructureTemplateRepository:
-        if self._structure_template_repository is None:
-            self._structure_template_repository = SqliteStructureTemplateRepository(db=self._db)
-        return self._structure_template_repository
-
     def library_pack_repository(self) -> ILibraryPackRepository:
         if self._library_pack_repository is None:
             self._library_pack_repository = SqliteLibraryPackRepository(db=self._db)
@@ -681,6 +666,7 @@ class Container:
                 world_service=self.world_service(),
                 db=self._db,
                 write_provider=self.library_pack_service,
+                ensure_provider=self.ensure_template_canonical,
                 catalog=PackCatalogRepos(
                     packs=self.library_pack_repository(),
                     members=self.library_pack_member_repository(),
@@ -694,6 +680,7 @@ class Container:
                 repo=self.structure_template_repository(),
                 db=self._db,
                 write_provider=self.library_pack_service,
+                ensure_provider=self.ensure_template_canonical,
                 catalog=PackCatalogRepos(
                     packs=self.library_pack_repository(),
                     members=self.library_pack_member_repository(),
@@ -717,6 +704,7 @@ class Container:
                 structure_library=self.structure_template_library_service(),
                 building_library=self.building_template_library_service(),
                 world_repository=self.world_repository(),
+                plot_library=self.plot_template_library_service(),
                 relief_world_import=self.relief_world_import_service(),
             )
         return self._pack_domain_adapters
@@ -744,7 +732,8 @@ class Container:
         """Step-5a runtime read facade — membership-scoped world catalog."""
         if self._effective_catalog_loader is None:
             self._effective_catalog_loader = EffectiveCatalogLoader(
-                self.pack_catalog_repos(), self.pack_domain_adapters()
+                self.pack_catalog_repos(), self.pack_domain_adapters(),
+                ensure_defaults=self.ensure_template_canonical,
             )
         return self._effective_catalog_loader
 

@@ -101,6 +101,12 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 
 ### Библиотека и мир
 
+**A0, 2026-10-14:** [доменные библиотеки §3/6/7](tz_domain_template_libraries.md).
+После 5b availability = default-паки ∪ world-owned паки, не pointers.
+Relief default bodies по-прежнему не объявлены; smoke_003 user pack.
+Context pick-кандидата берётся из body, порядок — template_uid; pins не
+фильтр. Fixed ref — member UID; R21 отказ сохраняется, warning не дублируется.
+
 **Целевой контракт паков (2026-10-08):**
 [tz_template_library_packs.md](./tz_template_library_packs.md).
 Один шаблон — один пак-владелец, UID — только центральный `worldData/ids`
@@ -116,7 +122,8 @@ runtime пишет WarningError и останавливает операцию; 
 те же факты без runtime-лога. Исходный ref не переписывается (E6-R21).
 Новые параллельные UID/log-хелперы не вводятся.
 
-Как здания: глобальная библиотека + per-world pointers (**R11**). Тела **не** внутри `world` JSON (**R35**).
+Как template-домены: общая библиотека + membership паков; per-world pointers
+R11 ниже — legacy до cutover 5b. Тела **не** внутри world JSON (R35).
 
 | Где | Что |
 |---|---|
@@ -132,7 +139,7 @@ runtime пишет WarningError и останавливает операцию; 
 ### Pick: мир → локация / объект
 
 На **каждый** context — `fixed` \| `random` \| `round_robin` (**R19**).
-В текущем pointer-пути `fixed` требует `default_template_uid` в registry.
+В текущем legacy pointer-пути `fixed` ещё требует default_template_uid в registry.
 После pack-owned миграции UID должен быть в эффективном каталоге мира
 (defaults + явно подключённые паки); индивидуальный registry pointer не является
 обязательным для каждого члена пака. Недоступный fixed UID → общий отказ R21.

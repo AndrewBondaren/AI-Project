@@ -1,128 +1,19 @@
-"""Building domain adapter — name-keyed bodies +
-``building_template_registry`` pointers; world-owned bodies pass
-subject checks against resource/crops/livestock registries (TZ §0.2/§2)."""
+"""Strict building member bodies; legacy outlines/plots require explicit conversion."""
 
-from __future__ import annotations
-
-from collections.abc import Mapping
-from datetime import datetime, timezone
-from typing import ClassVar
-
-from app.application.jsonValidation.resolve import ResolveContext
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
-)
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    PackDomainAdapter,
-)
-from app.application.worldData.libraryPacks.domainAdapters.mixins import (
-    _LibraryBodyMixin,
-    _RegistryPointerMixin,
-)
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
-    _remap_structure_refs,
-)
-from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision
-from app.dataModel.locations.structure.building.buildingTemplateOutline import (
-    BuildingTemplateOutline,
-)
-from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import (
-    BuildingTemplateRegistryEntry,
-)
-from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.db.models.libraryPackMember import LibraryPackMemberRow
-from app.db.models.world import World
-from app.db.repositories.iWorldRepository import IWorldRepository
+from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplateBodyPreparation
+from app.application.worldData.libraryPacks.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
+from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.ids import LibraryKind
 
 
-class BuildingPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
-    """Name-keyed building bodies; ``building_template_registry`` pointers.
-
-    World-owned bodies additionally pass the subject checks against the
-    owning world's resource/crops/livestock registries.
-    """
-
+class BuildingBodyPreparation(TemplateBodyPreparation[BuildingTemplate]):
     library_kind = LibraryKind.BUILDING_TEMPLATES
-    registry_field: ClassVar[str] = "building_template_registry"
+    model = BuildingTemplate
 
-    def __init__(
-        self,
-        library: BuildingTemplateLibraryService,
-        world_repository: IWorldRepository,
-    ) -> None:
+
+class BuildingPackAdapter(TemplateBodyAdapter):
+    library_kind = LibraryKind.BUILDING_TEMPLATES
+    preparation = BuildingBodyPreparation()
+
+    def __init__(self, library, world_repository):
         self._library = library
-        self._world_repo = world_repository
-
-    def prepare_body(
-        self,
-        raw: dict,
-        *,
-        local_uid: str,
-        template_uid: str,
-        world: World | None = None,
-    ) -> BuildingTemplateOutline | PlotLayoutTemplate:
-        if not isinstance(raw, dict):
-            raise LibraryPackValidationError(
-                f"building body for '{local_uid}' must be a JSON object"
-            )
-        ctx = ResolveContext(path_prefix=("building_templates", local_uid))
-        try:
-            body = self._library.parse_body(raw, ctx=ctx)
-        except ValueError as exc:
-            raise LibraryPackValidationError(str(exc)) from exc
-        if world is not None:
-            issues = self._library.subject_issues(world, body)
-            if issues:
-                token, code = issues[0]
-                raise LibraryPackValidationError(
-                    f"{local_uid}: {code}: extract/farm/livestock subject {token!r}"
-                )
-        if str(body.system_name) != local_uid:
-            raise LibraryPackValidationError(
-                f"building body system_name '{body.system_name}' != "
-                f"member local_uid '{local_uid}'"
-            )
-        return body
-
-
-    def body_refs(self, body, consumer):
-        return structure_refs(body, consumer)
-
-    def world_refs(self, world):
-        return tuple(ref for i, row in enumerate(world.building_template_registry or [])
-                     for ref in structure_refs(row, f"world:{world.world_uid}:building_template_registry[{i}]"))
-
-    def remap_body(
-        self, body: dict, *, template_uid: str, uid_map: Mapping[str, str], local_uid: str | None = None,
-    ) -> dict:
-        """Plot layouts carry ``structure`` refs into the structure
-        library — internal refs to source members follow the map (TZ §2)."""
-        remapped = _remap_structure_refs(body, uid_map)
-        result = remapped if remapped is not None else dict(body)
-        if local_uid is not None:
-            from app.application.worldData.libraryPacks.domainAdapters.contract import _SYSTEM_NAME_FIELD
-            result[_SYSTEM_NAME_FIELD] = local_uid
-        return result
-
-    def resolve_fallback(self, *, world_uid):
-        """Domain default layer: builtin parent plots (POJO ``canonical_defaults``),
-        not pack members — TZ §5/§6."""
-        from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import (
-            canonical_defaults,
-        )
-        return FallbackDecision.default(canonical_defaults(), "builtin_plots")
-
-    def pointer_entry(self, member, outline):
-        return BuildingTemplateRegistryEntry(system_template_uid=member.template_uid,
-                                             display_template_name=outline.display_name)
-
-    def _pointer_entry(
-        self,
-        member: LibraryPackMemberRow,
-        outline: BuildingTemplateOutline | PlotLayoutTemplate,
-    ) -> BuildingTemplateRegistryEntry:
-        return self.pointer_entry(member, outline).model_copy(
-            update={"imported_at": datetime.now(timezone.utc).isoformat()})

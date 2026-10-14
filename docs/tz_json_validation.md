@@ -250,6 +250,11 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 
 ## Field policy (annotationPolicy)
 
+**Доменные библиотеки A0:** [контракт §2](tz_domain_template_libraries.md).
+Plot/building/structure используют свои POJO defaults и валидируют полный
+результат overrides. Body preparation, canonical member attach и fallback
+неразрешимого UID не взаимозаменяемы. Cascade None сохраняет наследование.
+
 Контракт поля на POJO — `dataModel/annotationPolicy.py`:
 
 | Annotation | Import (facade) | Runtime (worldRow) |
@@ -405,15 +410,21 @@ overrides canonical UID. Ручная замена — отдельная явн
 транзакции. Полнота определяется всеми canonical UID и membership, а не
 непустотой таблицы. Подробный lifecycle — [паки §6](./tz_template_library_packs.md#6-canonical-attach-и-жизненный-цикл).
 
-**Global scope:** библиотека глобальна — partial-update мира к ней неприменим;
-авто-импорт покрывает только явно объявленные defaults из spec. Пак вне defaults
+**Уточнение A0, 2026-10-14:** стандартные plot/building templates — объявленные
+default library members с UID, body defaults остаются в POJO. Действует
+[доменный контракт §3–4](tz_domain_template_libraries.md); прежнее исключение
+plots вне SQL отменено. Runtime world catalog использует ownership ∪ defaults,
+а не bindings. Удаляемые world registry slices остаются только compatibility
+input до cutover; новый importer извлекает legacy данные до normalize.
+
+**Global scope:** библиотека глобальна — partial-update мира к ней неприменим; авто-импорт покрывает только явно объявленные defaults из spec. Пак вне defaults
 автоматически импортировать запрещено. Пользовательские паки используются после
 явного подключения ко всему миру, через bundle или позже. Global list_all не
 является runtime-каталогом мира; движок разрешает template-only refs через
-единственного пак-владельца и bindings. Template ref отсутствует/неразрешим →
+единственного пак-владельца и world ownership/default status (bindings нет). Template ref отсутствует/неразрешим →
 доменный default, при неразрешимой явной ссылке — warning без переписывания ref.
 Будущий master-mode заменяет warning/fallback ошибкой. Остальные REF-W правила
-не меняются. UID — только `worldData/ids`, логи — существующая инфраструктура
+не меняются. UID — только `app.ids`, логи — существующая инфраструктура
 `tz_logging.md`. Полный контракт владения, storage и bundle —
 [tz_template_library_packs.md](./tz_template_library_packs.md).
 FS domain root резолвится через env
@@ -842,6 +853,11 @@ wire helper, общий resolver не имеет отдельной enum-fallbac
 ```
 
 ### Bundle row DTO (вариант A+ для секций вне `worlds`)
+
+**A0:** NamedLocation DTO переносит system_template_uid (реальный member UID)
+и system_structure_template_uid (применённая geometry здания), см.
+[доменные библиотеки §5](tz_domain_template_libraries.md). Ошибочное значение
+при import не заменяется fallback; runtime resolve имеет доменную политику.
 
 Модуль: `jsonValidation/bundle/` (новый). Hook в `WorldBundleService.import_bundle` **до** `import_list` / repo upsert.
 

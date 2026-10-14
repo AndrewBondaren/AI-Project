@@ -9,9 +9,30 @@ from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.application.worldData.libraryPacks.domainAdapters.contract import _POINTER_UID_FIELD
 from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy, WorldReliefPickPolicy
 from app.db.models.world import World
 from app.ids import LibraryKind
+
+
+@dataclass(frozen=True)
+class DirectRefField:
+    uid_field: str
+    library_kind: LibraryKind
+
+    def references(self, model: BaseModel, consumer: str, prefix: str = '') -> tuple[MemberRef, ...]:
+        uid = getattr(model, self.uid_field)
+        return (() if not uid else
+                (MemberRef(self.library_kind.value, str(uid), consumer, prefix + self.uid_field),))
+
+    def remap_entry(self, entry: BaseModel, uid_map: Mapping[str, str]) -> BaseModel:
+        uid = getattr(entry, self.uid_field)
+        replacement = uid_map.get(str(uid)) if uid is not None else None
+        return (entry.model_copy(update={self.uid_field: replacement})
+                if replacement is not None and replacement != str(uid) else entry)
+
+
+BUILDING_STRUCTURE_REF = DirectRefField('structure', LibraryKind.STRUCTURE_TEMPLATES)
 
 
 @dataclass(frozen=True)
@@ -29,10 +50,10 @@ class NestedRefField:
             yield self.parent_field, value
 
     def references(self, model: BaseModel, consumer: str, prefix: str = '') -> tuple[MemberRef, ...]:
-        return tuple(MemberRef(self.library_kind.value, str(uid), consumer,
-                               f'{prefix}{path}.{self.uid_field}')
+        return tuple(ref
                      for path, entry in self.entries(model)
-                     if (uid := getattr(entry, self.uid_field)))
+                     for ref in DirectRefField(self.uid_field, self.library_kind).references(
+                         entry, consumer, f'{prefix}{path}.'))
 
     def remap(self, model: BaseModel, uid_map: Mapping[str, str]) -> BaseModel | list[BaseModel] | None:
         entries, changed = [], False
@@ -45,15 +66,13 @@ class NestedRefField:
         return entries if self.repeated else entries[0]
 
     def remap_entry(self, entry: BaseModel, uid_map: Mapping[str, str]) -> BaseModel:
-        uid = getattr(entry, self.uid_field)
-        replacement = uid_map.get(str(uid)) if uid is not None else None
-        return (entry.model_copy(update={self.uid_field: replacement})
-                if replacement is not None and replacement != str(uid) else entry)
+        return DirectRefField(self.uid_field, self.library_kind).remap_entry(entry, uid_map)
 
 
 STRUCTURE_REF_FIELDS = (
-    NestedRefField('main_building', 'structure', LibraryKind.STRUCTURE_TEMPLATES),
-    NestedRefField('secondary_buildings', 'structure', LibraryKind.STRUCTURE_TEMPLATES, repeated=True),
+    NestedRefField('main_building', BUILDING_STRUCTURE_REF.uid_field, BUILDING_STRUCTURE_REF.library_kind),
+    NestedRefField('secondary_buildings', BUILDING_STRUCTURE_REF.uid_field,
+                   BUILDING_STRUCTURE_REF.library_kind, repeated=True),
 )
 
 _RELIEF_DEFAULTS = WorldReliefPickPolicy.canonical_defaults()
@@ -75,6 +94,26 @@ def structure_refs(raw: dict, consumer: str) -> tuple[MemberRef, ...]:
     plot = structure_ref_model(raw, label=consumer)
     return (() if plot is None else tuple(ref for field in STRUCTURE_REF_FIELDS
                                           for ref in field.references(plot, consumer)))
+
+
+def template_body_refs(kind: LibraryKind, body: BaseModel, consumer: str) -> tuple[MemberRef, ...]:
+    """Target body declarations; inline buildings are not separate member refs."""
+    if kind == LibraryKind.PLOT_TEMPLATES and isinstance(body, PlotLayoutTemplate):
+        return tuple(ref for field in STRUCTURE_REF_FIELDS for ref in field.references(body, consumer))
+    if kind == LibraryKind.BUILDING_TEMPLATES and isinstance(body, BuildingTemplate):
+        return BUILDING_STRUCTURE_REF.references(body, consumer)
+    return ()
+
+
+def remap_template_body(kind: LibraryKind, body: BaseModel, uid_map: Mapping[str, str]) -> BaseModel:
+    """Read/remap share exactly the same declared fields, without mutating input."""
+    if kind == LibraryKind.BUILDING_TEMPLATES and isinstance(body, BuildingTemplate):
+        return BUILDING_STRUCTURE_REF.remap_entry(body, uid_map)
+    if kind == LibraryKind.PLOT_TEMPLATES and isinstance(body, PlotLayoutTemplate):
+        update = {field.parent_field: value for field in STRUCTURE_REF_FIELDS
+                  if (value := field.remap(body, uid_map)) is not None}
+        return body.model_copy(update=update) if update else body
+    return body
 
 
 def relief_policy_refs(world: World) -> tuple[MemberRef, ...]:

@@ -32,6 +32,8 @@ from app.application.worldData.reliefTemplateLibraryService import (
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
+from app.application.worldData.plotTemplateLibraryService import PlotTemplateLibraryService
+from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.dataModel.locations.structure.building.buildingTemplateOutline import (
     BuildingTemplateOutline,
 )
@@ -47,6 +49,7 @@ DomainLibrary = (
     ReliefTemplateLibraryService
     | StructureTemplateLibraryService
     | BuildingTemplateLibraryService
+    | PlotTemplateLibraryService
 )
 
 DomainOutline = (
@@ -54,6 +57,7 @@ DomainOutline = (
     | StructureTemplate
     | BuildingTemplateOutline
     | PlotLayoutTemplate
+    | BuildingTemplate
 )
 
 _POINTER_UID_FIELD = "system_template_uid"

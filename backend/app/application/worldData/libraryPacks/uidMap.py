@@ -131,3 +131,31 @@ def pin_for_member(kind: LibraryKind, template_uid: str) -> LibraryPinEntry:
         library_kind=LibraryKind(kind).value,
         template_uid=template_uid,
     )
+
+
+def compose_template_uid_maps(*stages: Mapping[str, str]) -> dict[str, str]:
+    """Resolve explicit old/intermediate/final UID edges; reject conflicts/cycles.
+
+    Self edges describe unchanged identities. No UID is minted here.
+    """
+    edges = {}
+    for stage in stages:
+        for source, target in stage.items():
+            if source == target:
+                continue
+            edges.setdefault(source, set()).add(target)
+    resolved = {}
+
+    def resolve(source, visiting):
+        if source in visiting:
+            raise ValueError(f"cyclic template UID mapping at {source}")
+        if source not in edges:
+            return source
+        if source not in resolved:
+            targets = {resolve(target, visiting | {source}) for target in edges[source]}
+            if len(targets) != 1:
+                raise ValueError(f"conflicting template UID mapping for {source}: {sorted(targets)}")
+            resolved[source] = targets.pop()
+        return resolved[source]
+
+    return {source: resolve(source, set()) for source in sorted(edges)}

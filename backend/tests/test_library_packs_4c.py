@@ -4,7 +4,7 @@ import sqlite3
 from unittest import TestCase
 from unittest.mock import patch
 
-from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _BUILDING
+from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _PLOT
 from app.application.worldData.libraryPacks.errors import LibraryPackInUseError, LibraryPackOwnershipError
 from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
 from app.application.worldData.libraryPacks.reinstantiatePlan import hold_candidates
@@ -147,7 +147,7 @@ class LifecycleTests(_ServiceCase):
         pack = await self.service.create_pack(system_name='user.mixed')
         struct = await self.service.create_member(pack.pack_uid, library_kind=_STRUCT,
                                                   local_uid='geometry', body={'display_name': 'Geometry'})
-        plot = await self.service.create_member(pack.pack_uid, library_kind=_BUILDING,
+        plot = await self.service.create_member(pack.pack_uid, library_kind=_PLOT,
                                                 local_uid='house', body=_plot_body('house', struct.template_uid))
         result = await self.service.instantiate_pack(pack.pack_uid, world_uid='w1')
         return pack, struct, plot, result

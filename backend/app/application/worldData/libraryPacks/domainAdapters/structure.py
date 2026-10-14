@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from app.application.jsonValidation.resolve import resolve_model
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
     _SYSTEM_NAME_FIELD,
     PackDomainAdapter,
@@ -15,7 +14,6 @@ from app.application.worldData.libraryPacks.domainAdapters.mixins import _Librar
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
     _remap_structure_refs,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
@@ -23,6 +21,17 @@ from app.dataModel.locations.structure.building.structureTemplate import Structu
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
+from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplateBodyPreparation
+
+
+class StructureBodyPreparation(TemplateBodyPreparation[StructureTemplate]):
+    library_kind = LibraryKind.STRUCTURE_TEMPLATES
+    model = StructureTemplate
+    model_a = True
+
+    def remap_body(self, body, uid_map):
+        target = uid_map.get(str(body.system_name))
+        return body.model_copy(update={_SYSTEM_NAME_FIELD: target}) if target else body
 
 
 class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
@@ -52,23 +61,8 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         template_uid: str,
         world: World | None = None,
     ) -> StructureTemplate:
-        if not isinstance(raw, dict):
-            raise LibraryPackValidationError(
-                f"structure body for '{local_uid}' must be a JSON object"
-            )
-        payload = dict(raw)
-        if payload.get(_SYSTEM_NAME_FIELD) is None:
-            payload[_SYSTEM_NAME_FIELD] = template_uid
-        try:
-            outline = resolve_model(StructureTemplate, payload, label=local_uid)
-        except ValueError as exc:
-            raise LibraryPackValidationError(str(exc)) from exc
-        if str(outline.system_name) != template_uid:
-            raise LibraryPackValidationError(
-                f"structure body system_name '{outline.system_name}' != member "
-                f"template_uid '{template_uid}' (model A: body carries the uid)"
-            )
-        return outline
+        return StructureBodyPreparation().prepare_body(raw, local_uid=local_uid,
+            template_uid=template_uid, world=world)
 
 
     def remap_body(
@@ -78,6 +72,13 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         out = dict(body)
         out[_SYSTEM_NAME_FIELD] = template_uid
         return out
+
+    def world_refs(self, world):
+        # Explicit transitional world format, removed with registry cutover (B6).
+        from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
+        return tuple(ref for i, row in enumerate(world.building_template_registry or [])
+                     for ref in structure_refs(row,
+                         f"world:{world.world_uid}:building_template_registry[{i}]"))
 
     def prepare_world_refs(self, world, uid_map, members, *, removed_uids=()):
         from copy import deepcopy

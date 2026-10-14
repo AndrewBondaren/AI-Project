@@ -23,6 +23,7 @@ from app.ids import LibraryKind, library_uid
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.db.database import Database
 from app.db.models.buildingTemplate import BuildingTemplateRow
+from app.db.models.plotTemplate import PlotTemplateRow
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -97,7 +98,7 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
 
     async def test_schema_validation(self):
         await self.db.validate_schema([
-            World, BuildingTemplateRow, ReliefTemplateRow, StructureTemplateRow,
+            World, PlotTemplateRow, BuildingTemplateRow, ReliefTemplateRow, StructureTemplateRow,
             LibraryPackRow, LibraryPackMemberRow, LibraryPackDependencyRow,
         ])
 

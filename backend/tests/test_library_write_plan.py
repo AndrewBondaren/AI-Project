@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import replace
 from unittest.mock import patch
 
-from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _BUILDING, _plot_body, _relief_body
+from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _plot_body, _relief_body
 from app.application.worldData.libraryPacks.errors import LibraryPackConflictError, LibraryPackValidationError
 from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
 from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
@@ -18,6 +18,8 @@ from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, library_uid, remapped_library_uid, runtime_uid
 
+
+_PLOT = LibraryKind.PLOT_TEMPLATES
 
 class LibraryWritePlanTests(_ServiceCase):
     async def asyncSetUp(self):
@@ -114,9 +116,9 @@ class LibraryWritePlanTests(_ServiceCase):
         pack = await self.service.create_pack(system_name="world.graph", owner_world_uid="w1")
         structure = await self.service.create_member(pack.pack_uid, library_kind=_STRUCT, local_uid="house",
                                                      body={"display_name": "House"}, world_uid="w1")
-        plot = await self.service.create_member(pack.pack_uid, library_kind=_BUILDING, local_uid="plot",
+        plot = await self.service.create_member(pack.pack_uid, library_kind=_PLOT, local_uid="plot",
                                                 body=_plot_body("plot", structure.template_uid), world_uid="w1")
-        plan = await self.plan([self.item(plot.template_uid, target=pack.pack_uid, kind=_BUILDING)],
+        plan = await self.plan([self.item(plot.template_uid, target=pack.pack_uid, kind=_PLOT)],
                                selections=[self.select()])
         copied = plan.items[0].members[0]
         self.assertNotEqual(copied.value.member.template_uid, plot.template_uid)
@@ -143,7 +145,7 @@ class LibraryWritePlanTests(_ServiceCase):
         structure = await self.service.create_member(source.pack_uid, library_kind=_STRUCT, local_uid="house",
                                                      body={"display_name": "House"}, world_uid="w1")
         duplicate = await self.service.copy_member(structure.template_uid, source.pack_uid, world_uid="w1")
-        plot = await self.service.create_member(source.pack_uid, library_kind=_BUILDING, local_uid="plot",
+        plot = await self.service.create_member(source.pack_uid, library_kind=_PLOT, local_uid="plot",
             body=_plot_body("plot", structure.template_uid, secondary_buildings=[{"structure": ext.template_uid}]), world_uid="w1")
         await self.service.set_dependencies(source.pack_uid, [external.pack_uid], world_uid="w1")
         plan = await self.plan([self.item(source.pack_uid)], selections=[self.select(copy_name="world.copy")])
@@ -200,7 +202,7 @@ class LibraryWritePlanTests(_ServiceCase):
         building = await self.service.create_pack(system_name="engine.buildings")
         row = await self.service.create_member(structures.pack_uid, library_kind=_STRUCT, local_uid="house",
                                                body={"display_name": "House"})
-        await self.service.create_member(building.pack_uid, library_kind=_BUILDING, local_uid="plot",
+        await self.service.create_member(building.pack_uid, library_kind=_PLOT, local_uid="plot",
                                           body=_plot_body("plot", row.template_uid))
         await self.service.set_dependencies(building.pack_uid, [structures.pack_uid])
         plan = await self.plan([self.item(building.pack_uid, key="b"), self.item(structures.pack_uid, key="s")])
@@ -211,12 +213,12 @@ class LibraryWritePlanTests(_ServiceCase):
 
     async def test_import_unavailable_reference_rejected_catalog_reports_diagnostic(self):
         missing = runtime_uid()
-        raw = self.imported(local="plot", kind=_BUILDING, body=_plot_body("plot", missing))
+        raw = self.imported(local="plot", kind=_PLOT, body=_plot_body("plot", missing))
         snapshot, decision = await self.ready([self.item("raw", imported=True)], imports={"raw": raw})
         with self.assertRaises(LibraryPackValidationError):
             self.planner.prepare(snapshot, decision)
         source = await self.service.create_pack(system_name="engine.broken")
-        await self.service.create_member(source.pack_uid, library_kind=_BUILDING, local_uid="plot",
+        await self.service.create_member(source.pack_uid, library_kind=_PLOT, local_uid="plot",
                                           body=_plot_body("plot", missing))
         plan = await self.plan([self.item(source.pack_uid)])
         self.assertTrue(any(i.code == "LIBRARY_REFERENCE" for i in plan.diagnostics))
@@ -278,7 +280,7 @@ class LibraryWritePlanTests(_ServiceCase):
         pack = await self.service.create_pack(system_name="world.graph", owner_world_uid="w1")
         structure = await self.service.create_member(pack.pack_uid, library_kind=_STRUCT, local_uid="house",
                                                      body={"display_name": "House"}, world_uid="w1")
-        plot = await self.service.create_member(pack.pack_uid, library_kind=_BUILDING, local_uid="plot",
+        plot = await self.service.create_member(pack.pack_uid, library_kind=_PLOT, local_uid="plot",
                                                 body=_plot_body("plot", structure.template_uid), world_uid="w1")
         return pack, structure, plot
 
@@ -291,12 +293,12 @@ class LibraryWritePlanTests(_ServiceCase):
         plan = await self.empty_replace(pack)
         self.assertEqual({r.template_uid for r in plan.removed}, {structure.template_uid, plot.template_uid})
         self.assertFalse(plan.held)
-        self.assertFalse(plan.worlds[0].after.building_template_registry)
+        self.assertFalse(plan.worlds)  # Modern plot members create no legacy pointers.
 
     async def test_pin_retains_removed_candidate_and_its_dependencies(self):
         pack, structure, plot = await self.graph()
         world = await self.worlds.get_by_id("w1")
-        world.library_pins = [{"library_kind": _BUILDING.value, "template_uid": plot.template_uid}]
+        world.library_pins = [{"library_kind": _PLOT.value, "template_uid": plot.template_uid}]
         await self.worlds.update(world)
         dependency = await self.service.create_pack(system_name="world.dependency", owner_world_uid="w1")
         await self.service.set_dependencies(pack.pack_uid, [dependency.pack_uid], world_uid="w1")
@@ -357,7 +359,7 @@ class LibraryWritePlanTests(_ServiceCase):
         plots = await self.service.create_pack(system_name="world.b", owner_world_uid="w1")
         row = await self.service.create_member(structures.pack_uid, library_kind=_STRUCT, local_uid="house",
                                                body={"display_name": "House"}, world_uid="w1")
-        plot = await self.service.create_member(plots.pack_uid, library_kind=_BUILDING, local_uid="plot",
+        plot = await self.service.create_member(plots.pack_uid, library_kind=_PLOT, local_uid="plot",
                                                 body=_plot_body("plot", row.template_uid), world_uid="w1")
         plan = await self.plan([self.item("s", key="s", imported=True), self.item("b", key="b", imported=True)],
             selections=[self.select(key="s", target=structures.pack_uid), self.select(key="b", target=plots.pack_uid)],
@@ -367,7 +369,7 @@ class LibraryWritePlanTests(_ServiceCase):
 
     async def test_batch_new_consumer_retains_removed_target(self):
         pack, structure, plot = await self.graph()
-        raw = self.imported(name="world.new", local="newplot", kind=_BUILDING,
+        raw = self.imported(name="world.new", local="newplot", kind=_PLOT,
                             body=_plot_body("newplot", structure.template_uid))
         plan = await self.plan([self.item("empty", key="e", imported=True), self.item("new", key="n", imported=True)],
             selections=[self.select(key="e", target=pack.pack_uid)],
@@ -398,7 +400,7 @@ class LibraryWritePlanTests(_ServiceCase):
         # Future adapters may reference each other. A declared reverse edge
         # exercises the shared closure without adding fictitious domain fields.
         with patch.object(adapter, "body_refs", return_value=(
-                MemberRef(_BUILDING.value, plot.template_uid, structure.template_uid, "future_ref"),)):
+                MemberRef(_PLOT.value, plot.template_uid, structure.template_uid, "future_ref"),)):
             plan = await self.empty_replace(pack)
             self.assertEqual({r.template_uid for r in plan.removed}, {structure.template_uid, plot.template_uid})
             self.assertFalse(plan.held)

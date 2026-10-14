@@ -47,7 +47,7 @@ _BASE_SYSTEM_NAME = "engine.structures.base"
 
 _STRUCT = LibraryKind.STRUCTURE_TEMPLATES
 _RELIEF = LibraryKind.RELIEF_TEMPLATES
-_BUILDING = LibraryKind.BUILDING_TEMPLATES
+_PLOT = LibraryKind.PLOT_TEMPLATES
 _PACKS = LibraryKind.LIBRARY_PACKS
 
 
@@ -309,7 +309,7 @@ class InstantiateTests(_ServiceCase):
             body={"display_name": "Silo"},
         )
         bm = await self.service.create_member(
-            src.pack_uid, library_kind=_BUILDING, local_uid="farm_plot",
+            src.pack_uid, library_kind=_PLOT, local_uid="farm_plot",
             body=_plot_body(
                 "farm_plot",
                 sm.template_uid,
@@ -401,11 +401,11 @@ class InstantiateTests(_ServiceCase):
         # A different domain with the same local key is not a collision.
         engine2 = await self.service.create_pack(system_name="user.buildings.b")
         await self.service.create_member(
-            engine2.pack_uid, library_kind=_BUILDING, local_uid="meadow",
+            engine2.pack_uid, library_kind=_PLOT, local_uid="meadow",
             body={
                 "system_name": "meadow",
                 "display_name": "Meadow B",
-                "structure_types": ["farm"],
+                "plot_type": "dwelling",
             },
         )
         res = await self.service.instantiate_pack(engine2.pack_uid, world_uid="w1")

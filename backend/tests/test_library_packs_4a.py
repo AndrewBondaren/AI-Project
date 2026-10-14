@@ -301,12 +301,14 @@ class MemberCrudTests(_ServiceCase):
 
     async def test_building_member_crud(self):
         pack = await self.service.create_pack(system_name="user.buildings.b")
+        structure = await self.service.create_member(pack.pack_uid, library_kind=_STRUCT,
+            local_uid="geometry", body={"display_name": "Geometry"})
         member = await self.service.create_member(
             pack.pack_uid, library_kind=_BUILDING, local_uid="mill_x",
             body={
                 "system_name": "mill_x",
                 "display_name": "Mill",
-                "structure_types": ["farm"],
+                "structure": structure.template_uid,
             },
         )
         uid = library_uid(_BUILDING, "mill_x", pack_uid=pack.pack_uid)
@@ -409,25 +411,25 @@ class OwnershipAndDualWriteTests(_ServiceCase):
                 body=_relief_body("x"), world_uid="w2",
             )
 
-    async def test_building_member_pointer_dual_write(self):
+    async def test_modern_building_member_does_not_create_legacy_pointer(self):
         await self._world("w2")
         pack = await self.service.create_pack(
             system_name="world.w2.buildings", owner_world_uid="w2"
         )
+        structure = await self.service.create_member(pack.pack_uid, library_kind=_STRUCT,
+            local_uid="geometry", body={"display_name": "Geometry"}, world_uid="w2")
         member = await self.service.create_member(
             pack.pack_uid, library_kind=_BUILDING, local_uid="mill_x",
             body={
                 "system_name": "mill_x",
                 "display_name": "Mill",
-                "structure_types": ["farm"],
+                "structure": structure.template_uid,
             },
             world_uid="w2",
         )
         world = await self.worlds.get_by_id("w2")
-        self.assertIn(
-            member.template_uid,
-            {e["system_template_uid"] for e in world.building_template_registry},
-        )
+        self.assertFalse(world.building_template_registry)
+        self.assertIsNotNone(await self.building_rows.get_by_uid(member.template_uid))
 
     async def test_pinned_member_delete_refused(self):
         await self._world("w3")

@@ -17,18 +17,40 @@ metadata:
 
 ## Назначение
 
+**A0, 2026-10-14:** [доменные библиотеки](tz_domain_template_libraries.md).
+Modern world archive переносит world-owned packs/members/bodies целиком
+с domain kinds plot/building/structure; plot содержит building templates,
+явные refs внутри тел — UID. Legacy flat sections/pointers читаются только
+compatibility importer, а не служат современным источником доступности.
+Archive root для plot — plot_templates; для structure — structures_templates.
+Modern library_packs всегда адресует members по UID и определяет body domain
+через library_kind. Flat plot_templates — compatibility input, переносимый
+в world-owned legacy pack; старые flat building_templates с явными plot-полями
+проходят converter до outline parser. Bare outline без structure отвергается.
+Структуры такого self-contained flat input должны иметь incoming pack membership;
+converter не ищет их по глобальной SQL-библиотеке. Совпадение имён неоднозначно
+при нескольких кандидатах. validate_only выполняет ту же подготовку без записи.
+Entity DTO переносит system_template_uid и system_structure_template_uid;
+world copy remap обеих ссылок согласован с library uid_map. Engine defaults
+обеспечиваются доверенными spec, не публикуются world import'ом.
+Один common writer/token/UOW, порядок world → libraries → entities;
+policy/stale/ошибка откатывают всё. Стандартные plots/buildings — default
+members, POJO-defaults полей не являются отдельной экспортируемой библиотекой.
+
 Целевая **оркестрация** world JSON bundle (не Pack):
 
 - один HTTP facade;
 - тонкий `WorldBundleService` (validate → normalize → remap → transaction → порядок);
 - секции = handlers двух родов (entity / library-template);
-- **self-contained skeleton** возит pointers в `world` + **тела** всех library-backed шаблонов top-level секциями.
+- **self-contained skeleton** возит world-owned manifests/members/bodies
+  в library subtree; pins/refs в world — UID. Старые flat body/pointer
+  sections ниже описывают legacy-compatible wire до A0/cutover.
 
 **Не slice:** не проектируем «сначала только то, что уже в коде». Каркас handlers и allowlist описывают **полный** целевой skeleton; имплементация идёт **слоями архитектуры** (errors → protocol → kinds → все handlers), не «v1 без building_templates».
 
 **Вне scope:** Pack zip/bake; PC/NPC/starter_characters; RELIEF-BAR-1 materialize cells; DAG; interior map blobs.
 
-### Целевое расширение: паки библиотек (2026-10-08, ещё не реализовано)
+### Паки библиотек (4d/L-5 выполнены; A0 split — следующий этап)
 
 Контракт — [tz_template_library_packs.md §4](./tz_template_library_packs.md).
 Добавляются `library_packs` (world-owned manifests/состав/зависимости) и

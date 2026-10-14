@@ -1,9 +1,17 @@
 # Паки библиотек шаблонов и canonical defaults
 
-**Статус:** целевой контракт, согласован 2026-10-08, уточнён 2026-10-11.
+**Статус:** целевой контракт, согласован 2026-10-08, уточнён 2026-10-14 (A0).
 Реализованы хранение/CRUD паков, полный remap, re-instantiate preview/confirm
-и независимое member-copy (план, шаги до 4c включительно). Bundle/routes
-и эффективный каталог — последующие шаги. Не относится к terrain/map pack-файлам.
+и независимое member-copy, effective catalog 5a, bundle/routes 4d/L-5.
+Разделение plot/building и снятие registries 5b ещё не реализованы.
+Не относится к terrain/map pack-файлам.
+
+**Домены plot/building/structure:** [актуальный контракт A0](tz_domain_template_libraries.md).
+Plot имеет собственный шаблон с building templates внутри; building содержит
+structure UID ref. Стандартные plots/buildings — canonical members default
+библиотек с UID; defaults параметров остаются в POJO. Это заменяет прежнее
+правило «builtin plots вне SQL/member-каталога», не требует превращать
+каждый вложенный building body в голую UID-ссылку.
 
 ## 0. Граница ответственности и универсальность библиотек
 
@@ -242,9 +250,13 @@ default-шаблоном не создаёт override; автоматическ�
 Описание ссылки содержит целевой домен, UID либо системный ключ,
 источник (член или конфиг мира) и путь поля для диагностики.
 
-В текущей фазе покрываются template-домены: building-ссылки
-`main_building.structure`, `secondary_buildings[].structure`, включая
-embedded layouts мира, и relief pick-policy `default_template_uid`.
+В текущей реализации покрываются building-ссылки `main_building.structure`,
+`secondary_buildings[].structure`, embedded layouts мира и relief policy.
+Целевой контракт A0 дополнительно покрывает plot recipe UID refs/keys
+plot_counts/plot_priority и NamedLocation.system_template_uid /
+system_structure_template_uid. Вложенные полные тела сканируются рекурсивно
+через объявленные поля домена; наличие вложенного body не означает отдельный
+member. Ссылки созданных локаций учитываются usage/deletion/retention.
 Сканируются только объявленные ref-поля, не произвольные UUID в JSON.
 
 Каталог выборки — defaults + паки данного мира, до шага 5a через
@@ -259,8 +271,9 @@ engine-паков не участвуют. Битые ссылки возвра�
 проверкой удаления и диагностикой member-copy. Pins учитываются отдельно;
 provenance, объявления dependencies и registry pointers сами по себе не
 означают использование члена. Persisted-таблицы `referenced` нет.
-Изменение генераторов, формата ссылок и существующих читателей этим
-расширением не требуется; остальные библиотечные домены подключаются позже.
+Расширение usage-индекса 2026-10-11 само по себе не меняло генераторы.
+Проводка перечисленных A0 refs и переход читателей выполняются отдельными
+кодовыми шагами; остальные библиотечные домены подключаются позже.
 
 ## 2. UID и владение
 
@@ -534,9 +547,10 @@ UID независимых копий действует исключение в
   либо default-статус. Удаление world-пака каскадом с миром; удаление
   engine-пака безопасно всегда — миры держат инстансы-копии.
 
-Доменные `system_name` не должны оставаться глобально UNIQUE в таблицах
-building/relief после перехода: уникальность локального ключа задаётся владельцем
-в каталоге. `get_by_system_name` без контекста пака не разрешает неоднозначность;
+Доменные `system_name` не являются identity и не должны быть глобально UNIQUE
+в plot/building/relief. Local_uid может повторяться даже внутри пака согласно
+уточнению §0.1/1.1/2; уникальность member обеспечивается PK template_uid.
+`get_by_system_name` без контекста не разрешает неоднозначность;
 потребители переходят на UID либо запрос с явным владельцем.
 
 Тело и членство сохраняются атомарно и проверяются доменным адаптером
@@ -873,7 +887,7 @@ canonical `WorldRoomTypeRegistry` (`common_hall`), `size` — preset
 `entry_point` объявлен. Все остальные поля — Field-defaults моделей
 (`RoomDef`/`LevelDef`/`StructureTemplate`: высоты, двери, `attach_wall`,
 `passage_type`…). `system_name` — детерминированный UUID из центрального
-`ids` (model A). Это доменный POJO-контракт, как parent plots (§6): без
+`ids` (model A). Это доменный POJO-контракт fallback-тела: без
 SQL-строки, без pack-членства, без FS; тело проходит те же валидаторы, что
 любой шаблон (`validate_room_ids`, `RoomDef._conditional_fields`).
 
@@ -901,8 +915,9 @@ SQL-строки, без pack-членства, без FS; тело проход
 resolve (§7). Сохранённая ссылка не переписывается ни на одном уровне.
 
 Не меняется: relief остаётся на R21 (reject, без default-слоя тел),
-building — на POJO parent plots; `_DECLARED_DEFAULT_PACKS` и статус
-default-паков не затрагиваются; override не делает чужой пак доступным.
+building/plot применяют собственные POJO-defaults параметров; их стандартные
+шаблоны — members объявленных default-библиотек по A0. Отложенный contextual
+override не делает чужой пак доступным и не меняет trusted default status.
 
 ## 6. Canonical attach и жизненный цикл
 
@@ -934,10 +949,12 @@ transaction/savepoint-контракт, не делает скрытый commit 
 кандидатов); default-**тело** для fallback одной ссылки — POJO
 `StructureTemplate.canonical_defaults()`. Override world → pack из прежнего
 §5.1 отложен в отдельное расширение, не часть текущего lifecycle.
-Родительские builtin
-plots остаются доменным default-слоем через POJO `canonical_defaults()` —
-без pack-членства и SQL-строк: импорт их в библиотеку дал бы второй
-источник истины поверх POJO (уточнение 2026-10-09). У relief объявленный
+Стандартные plot/building templates хранятся как canonical members
+объявленных default-библиотек ([A0 §3–4](tz_domain_template_libraries.md)).
+Canonical source задаёт стандартные тела; POJO задаёт defaults параметров;
+SQL хранит подготовленные записи. Старое исключение 2026-10-09 «plots вне
+SQL/pack membership» отменено 2026-10-14. Явный выбор — обычный template_uid,
+без специального default/drawing_key selector. У relief объявленный
 список default-паков пуст (решение 2026-10-08): `smoke_003` и любые FS-паки
 остаются пользовательскими и доступны миру только через явное инстанцирование;
 доменный default relief — существующие POJO-контракты (`canonical_defaults`

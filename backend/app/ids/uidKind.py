@@ -47,6 +47,7 @@ class UidKind(StrEnum):
 class LibraryKind(StrEnum):
     """Global template-library namespaces — no world root (plan D8)."""
 
+    PLOT_TEMPLATES = "plot_templates"
     BUILDING_TEMPLATES = "building_templates"
     RELIEF_TEMPLATES = "relief_templates"
     STRUCTURE_TEMPLATES = "structure_templates"

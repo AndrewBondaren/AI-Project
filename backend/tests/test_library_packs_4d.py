@@ -92,14 +92,14 @@ class LibraryPacks4dTests(_ServiceCase):
             local_uid="house", body=body, world_uid="source")
         plots = await self.service.create_pack(system_name="world.source.plots", owner_world_uid="source",
             dependencies=(structure_pack.pack_uid,))
-        plot = await self.service.create_member(plots.pack_uid, library_kind="building_templates",
+        plot = await self.service.create_member(plots.pack_uid, library_kind="plot_templates",
             local_uid="home", body=_plot_body("home", uid), world_uid="source")
         _, rolled_back = await self.bundle.import_bundle(await self.bundle.export("source"))
         self.assertFalse(rolled_back)
         copied = next(w for w in await self.worlds.get_all() if w.world_uid != "source")
         packs = {p.source_pack_uid: p for p in await self.packs.list_world_owned(copied.world_uid)}
         member_uid = remapped_library_uid(kind, target_pack_uid=packs[structure_pack.pack_uid].pack_uid, source_template_uid=uid)
-        plot_uid = remapped_library_uid(LibraryKind.BUILDING_TEMPLATES,
+        plot_uid = remapped_library_uid(LibraryKind.PLOT_TEMPLATES,
             target_pack_uid=packs[plots.pack_uid].pack_uid, source_template_uid=plot.template_uid)
         self.assertEqual((await self.service.read_member_body(plot_uid))["main_building"]["structure"], member_uid)
         self.assertEqual(await self.deps.required_uids(packs[plots.pack_uid].pack_uid), {packs[structure_pack.pack_uid].pack_uid})

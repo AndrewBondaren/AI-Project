@@ -79,7 +79,8 @@ class TestBundleManifest(unittest.TestCase):
 
     def test_layout_covers_all_skeleton_sections_bijectively(self):
         self.assertEqual(set(SECTION_PATHS), BundleSection.SKELETON - {BundleSection.LIBRARY_PACKS})
-        self.assertEqual(len(SECTION_PATHS), 10)
+        self.assertEqual(len(SECTION_PATHS), 11)
+        self.assertEqual(SECTION_PATHS[BundleSection.PLOT_TEMPLATES], "skeleton/plot_templates.json")
         self.assertEqual(len(PATH_SECTIONS), len(SECTION_PATHS))
         for section, path in SECTION_PATHS.items():
             self.assertEqual(PATH_SECTIONS[path], section)

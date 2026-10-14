@@ -2,7 +2,7 @@
 from copy import deepcopy
 from unittest.mock import patch
 
-from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _BUILDING
+from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _PLOT
 from app.application.jsonValidation.types import ReferenceIssueReason
 from app.application.worldData.libraryPacks.reinstantiatePlan import build_update_plan, prepare_update
 from app.application.worldData.libraryPacks.reinstantiateSnapshot import load_update_snapshot
@@ -75,7 +75,7 @@ class UpdateSnapshotTests(_ServiceCase):
         foreign = await self.service.create_pack(system_name='engine.geometry')
         geometry = await self.service.create_member(foreign.pack_uid, library_kind=_STRUCT,
                             local_uid='geometry', body={'display_name': 'Geometry'})
-        await self.service.create_member(source.pack_uid, library_kind=_BUILDING, local_uid='house',
+        await self.service.create_member(source.pack_uid, library_kind=_PLOT, local_uid='house',
                                          body=_plot_body('house', geometry.template_uid))
         snapshot = await self.load(source, instance)
         self.assertNotIn(geometry.template_uid, snapshot.catalog.members)

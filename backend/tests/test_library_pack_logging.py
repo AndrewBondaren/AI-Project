@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from unittest import TestCase
 
-from test_library_packs_4b import _ServiceCase, _plot_body, _relief_body, _BUILDING, _RELIEF, _STRUCT
+from test_library_packs_4b import _ServiceCase, _plot_body, _relief_body, _PLOT, _RELIEF, _STRUCT
 from app.application.jsonValidation.types import ReferenceIssueReason
 from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
 from app.application.worldData.libraryPacks.referenceResolver import reference_index
@@ -21,7 +21,7 @@ class LifecycleLoggingTests(_ServiceCase):
         await self._world(world_uid)
         pack = await self.service.create_pack(system_name=f'world.{world_uid}.plots', owner_world_uid=world_uid)
         plot = await self.service.create_member(
-            pack.pack_uid, library_kind=_BUILDING, local_uid='house',
+            pack.pack_uid, library_kind=_PLOT, local_uid='house',
             body=_plot_body('house', structure_uid or runtime_uid()), world_uid=world_uid)
         return pack, plot
 
@@ -51,7 +51,7 @@ class LifecycleLoggingTests(_ServiceCase):
         await self._world('w1')
         pack = await self.service.create_pack(system_name='engine.plots')
         missing_template = runtime_uid()
-        await self.service.create_member(pack.pack_uid, library_kind=_BUILDING, local_uid='house',
+        await self.service.create_member(pack.pack_uid, library_kind=_PLOT, local_uid='house',
                                          body=_plot_body('house', missing_template))
         await self.service.instantiate_pack(pack.pack_uid, world_uid='w1')
         missing_pack = runtime_uid()

@@ -1,4 +1,6 @@
 from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.structure.building.buildingTemplate import BuildingKey, BuildingTemplate
+from app.dataModel.locations.structure.building.plotTemplate import PlotKey, PlotTemplate
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     DrawingKey,
@@ -25,6 +27,8 @@ from app.dataModel.locations.structure.building.worldBuildingTemplateRegistry im
 
 __all__ = [
     "BuildingBodyTemplate",
+    "BuildingKey",
+    "BuildingTemplate",
     "BuildingCatalog",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
@@ -33,6 +37,8 @@ __all__ = [
     "DrawingKey",
     "OccupiedFootprintSpec",
     "PlotLayoutTemplate",
+    "PlotKey",
+    "PlotTemplate",
     "RoomConnection",
     "StaircaseSpec",
     "LevelDef",
