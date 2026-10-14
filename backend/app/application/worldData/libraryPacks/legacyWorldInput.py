@@ -69,6 +69,8 @@ def extract_legacy_world_input(raw_world: dict, body_sections: Mapping | None = 
 
     for field, kind in REGISTRY_KINDS.items():
         rows = world.get(field, [])
+        if rows is None:
+            rows = []  # null reads as absent, matching normalize defaults
         if not isinstance(rows, list):
             issues.append(FieldPathError(("world", field), "expected list", code="EXPECTED_LIST"))
             continue

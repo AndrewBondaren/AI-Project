@@ -8,7 +8,7 @@ from unittest.mock import patch
 import httpx
 from fastapi import FastAPI
 
-from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body
+from tests.test_library_packs_4b import _ServiceCase, _relief_body, _plot_body
 from app.api.deps import get_container
 from app.api.errorMapping import install_error_handlers
 from app.api.routes.libraryPacks import router as packs_router
@@ -72,7 +72,10 @@ class LibraryPacks4dTests(_ServiceCase):
         self.assertEqual({m.local_uid for m in members}, {"meadow"})
         mapping = {m.source_template_uid: m.template_uid for m in members}
         self.assertEqual(set(mapping), {member.template_uid, duplicate.member.template_uid})
-        self.assertEqual(copied.library_pins[0]["template_uid"], mapping[member.template_uid])
+        # B2: registry pointers are availability declarations and migrate to
+        # pins, so both imported members land in the copied world's pin set.
+        self.assertEqual({p["template_uid"] for p in copied.library_pins},
+                         {mapping[member.template_uid], mapping[duplicate.member.template_uid]})
         self.assertEqual(await self.bundle.export("source"), source)
         self.assertEqual(await self.packs.list_engine(), [])
         second = await self.bundle.export(copied.world_uid)

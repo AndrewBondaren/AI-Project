@@ -23,6 +23,8 @@ from pydantic import ValidationError
 from app.application.worldData.bundle.handler import IBundleSectionHandler
 from app.application.worldData.bundleRemapService import remap_bundle
 from app.application.worldData.deriveWorldUid import derive_world_uid
+from app.application.worldData.libraryPacks.legacyWorldInput import extract_legacy_world_input
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.application.worldData.pack.import_.importLevels import (
     ImportLevel,
     filter_bundle_for_export,
@@ -37,6 +39,34 @@ class _ImportFailed(Exception):
     pass
 
 
+def _cleanse_consumed_rows(world: dict) -> dict:
+    """Drop registry rows extraction consumes as bodies so normalize only sees
+    modern registry content (pointers and valid plot layouts)."""
+    cleansed = dict(world)
+    registries = (
+        ("building_template_registry", PlotLayoutTemplate),
+        ("relief_template_registry", None),
+    )
+    for field, layout_model in registries:
+        rows = cleansed.get(field)
+        if not isinstance(rows, list):
+            continue
+        kept = []
+        for row in rows:
+            if not isinstance(row, dict) or "system_template_uid" in row:
+                kept.append(row)
+                continue
+            if layout_model is not None:
+                try:
+                    layout_model.model_validate(row)
+                    kept.append(row)
+                    continue
+                except ValidationError:
+                    pass
+        cleansed[field] = kept
+    return cleansed
+
+
 class WorldBundleService:
 
     def __init__(
@@ -45,13 +75,15 @@ class WorldBundleService:
         world_service: WorldService,
         handlers: list[IBundleSectionHandler],
         library_archives=None,
+        legacy_migration=None,
     ) -> None:
         self._db = db
         self._world = world_service
         self._handlers = handlers
         self._by_key = {h.key: h for h in handlers}
         self._archives = library_archives
-        self._copy_import = WorldCopyImport(db, world_service, handlers, library_archives)
+        self._migration = legacy_migration
+        self._copy_import = WorldCopyImport(db, world_service, handlers, library_archives, legacy_migration)
 
     async def export(self, world_uid: str, *, level: ImportLevel = "skeleton") -> dict:
         world = await self._world.get_by_id(world_uid)
@@ -106,7 +138,7 @@ class WorldBundleService:
     ) -> tuple[dict[str, ImportResult], bool] | ImportValidationReport:
         ctx = ResolveContext.for_import(validate_only=validate_only)
         try:
-            data = self._prepare_bundle(data, level=level, ctx=ctx)
+            data, legacy = self._prepare_bundle(data, level=level, ctx=ctx)
         except ImportValidationError as exc:
             if validate_only:
                 return ImportValidationReport(tuple(exc.errors))
@@ -114,16 +146,22 @@ class WorldBundleService:
         if validate_only:
             return ImportValidationReport()
 
-        return await self._copy_import.run(data, level=level, decisions=decisions, preview_token=preview_token)
+        return await self._copy_import.run(data, level=level, decisions=decisions,
+                                         preview_token=preview_token, legacy=legacy)
 
-    def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext) -> dict:
+    def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext):
         """Shared pipeline. This phase has no repository/Pack/task access."""
         if not isinstance(data.get(BundleSection.WORLD), dict):
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,), "expected world object", code="EXPECTED_OBJECT")])
+        raw_world = data[BundleSection.WORLD]
+        if self._migration is not None:
+            raw_for_normalize = _cleanse_consumed_rows(raw_world)
+        else:
+            raw_for_normalize = raw_world
 
         try:
             validate_bundle_for_import(data, level)
-            world_data = normalize_world(dict(data[BundleSection.WORLD]), ctx=ctx)
+            world_data = normalize_world(dict(raw_for_normalize), ctx=ctx)
             if not world_data.get("world_uid"):
                 world_data["world_uid"] = derive_world_uid(world_data)
             data = {**data, BundleSection.WORLD: world_data}
@@ -145,12 +183,23 @@ class WorldBundleService:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,) + tuple(e["loc"]), e["msg"], code=e["type"]) for e in exc.errors()]) from exc
         except ValueError as exc:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,), str(exc), code="VALIDATION_ERROR")]) from exc
+        legacy = None
+        if self._migration is not None:
+            # Raw extraction before the consumed sections/registry rows are normalized away.
+            legacy = extract_legacy_world_input(
+                {**raw_world, "world_uid": world_data["world_uid"]}, data)
         consumed = set()
         if self._archives is not None:
+            migrate = self._migration is not None and self._migration.has_content(legacy)
             # Convert raw compatibility bodies before the legacy section handlers can normalize them.
             try:
-                packs, consumed = import_libraries(data)
+                packs, consumed = import_libraries(data, legacy_migration=migrate)
                 self._archives.validate_bodies(packs, world)
+                if migrate:
+                    if legacy.issues:
+                        ctx.errors.extend(legacy.issues)
+                    else:
+                        ctx.errors.extend(self._migration.plan_wire(legacy, packs))
             except ImportValidationError as exc:
                 ctx.errors.extend(exc.errors)
                 consumed = {BundleSection.PLOT_TEMPLATES, BundleSection.BUILDING_TEMPLATES}
@@ -172,4 +221,4 @@ class WorldBundleService:
                     continue
         if ctx.errors:
             raise ImportValidationError(list(ctx.errors))
-        return data
+        return data, legacy

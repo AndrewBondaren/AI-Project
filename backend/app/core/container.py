@@ -932,8 +932,18 @@ class Container(TemplateRepositoryProviders):
                 world_service=self.world_service(),
                 handlers=handlers,
                 library_archives=self.library_pack_service().archives,
+                legacy_migration=self.legacy_world_migration(),
             )
         return self._world_bundle_service
+
+    def legacy_world_migration(self):
+        """B2 seam: legacy extraction/plan application through the 4d writer."""
+        from app.application.worldData.libraryPacks.legacyWorldMigration import LegacyWorldMigration
+        return LegacyWorldMigration(
+            catalog=self.pack_catalog_repos(),
+            adapters=self.pack_domain_adapters(),
+            archives=self.library_pack_service().archives,
+        )
 
     def relief_world_import_service(self) -> ReliefWorldImportService:
         if self._relief_world_import_service is None:

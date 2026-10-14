@@ -4,8 +4,8 @@ from pathlib import Path
 from zipfile import ZipFile
 from unittest.mock import patch
 
-from test_library_packs_4b import _ServiceCase
-from template_domain_transport_fixture import create_graph, S, B, P
+from tests.test_library_packs_4b import _ServiceCase
+from tests.template_domain_transport_fixture import create_graph, S, B, P
 from app.application.worldData.bundle.archive import read_archive
 from app.application.worldData.bundle.worldLibraries import import_libraries
 from app.application.worldData.libraryPacks.archiveSources import pack_to_wire

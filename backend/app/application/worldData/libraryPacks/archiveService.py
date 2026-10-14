@@ -60,8 +60,12 @@ class LibraryArchiveService:
 
     async def prepare_world(self, packs, *, source_owner, target_owner, decisions=(), preview_token=None):
         imports, items = self.sources(packs, source_owner=source_owner, target_owner=target_owner)
-        request = validated_write_request(items=items, decisions=tuple(decisions), preview_token=preview_token)
-        return require_result(await self._writer.prepare(request, imports=imports))
+        return await self.prepare_items(imports, items, decisions=decisions, preview_token=preview_token)
+
+    async def prepare_items(self, imports, items, *, decisions=(), preview_token=None):
+        """One write request over already-projected items (bundle + migration)."""
+        request = validated_write_request(items=tuple(items), decisions=tuple(decisions), preview_token=preview_token)
+        return require_result(await self._writer.prepare(request, imports=dict(imports)))
 
     async def apply(self, plan):
         return await self._writer.apply_prepared(plan)

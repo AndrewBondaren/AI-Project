@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-09-07 — **NC-10** leftover `_m` (горы / гидрология / pack `light_m`) после rename coordinate hub на fine grid. 2026-09-05 — **CITY-T-4** планировщик после 2d **resolved** (`/impl-city-t-4`: POJO rank/zone/conditions, один resolve, cache=tokens, skip unknown assembler). **CITY-T-2d** контракт §1.2 в коде (`partial`; leftover **2b**). **CITY-T-2a** null=каталог + civic allow-list (`resolved`). **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
+**Обновлено:** 2026-10-14 — repo review: **HY-S-6** `HydrologyBands` дубль POJO + divergent clamp defaults; **HY-S-5** evidence+; **FM-4** `StructureGeneratorService` ~575 class; **DR-8** `grid_bbox_padding` третий литерал; **RELIEF-T-68** два relief domain root; **LIBPACK-T-8** write-pipeline granularity. 2026-09-07 — **NC-10** leftover `_m` (горы / гидрология / pack `light_m`) после rename coordinate hub на fine grid. 2026-09-05 — **CITY-T-4** планировщик после 2d **resolved** (`/impl-city-t-4`: POJO rank/zone/conditions, один resolve, cache=tokens, skip unknown assembler). **CITY-T-2d** контракт §1.2 в коде (`partial`; leftover **2b**). **CITY-T-2a** null=каталог + civic allow-list (`resolved`). **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -118,6 +118,7 @@ parent/host, фиксированной точкой или выдуманным
 | `worldData/reliefTemplateLibraryService.py` | ~135 | CRUD + R29 FS + validate + **HTTPException** — см. **RELIEF-T-3** |
 | `pack/refine/fineChunkRunner.py` | ~390 | pool + persist; grade sample+materialize в том же compute task (**R36w**) |
 | `relief/discover/core.py` | ~160 | тонкий фасад: leftover walk + `run_mill_schedule` + sheer/C38 — **R41-T-20** ✅ |
+| `structure/structureGeneratorService.py` | ~825 (class ~575) | interior pipeline все фазы — **2× лимит** `class-size-limit`; latent ctx-deref; dead `validate_template` — см. **FM-4** |
 
 ---
 
@@ -474,6 +475,7 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 | DR-5 | low | `_smoothstep`, `_dist` (hypot) | `climatePoleField.py` + `tierResolve.py` | `generators/climate/math.py` или shared | P2 |
 | DR-6 | low | `terrain_set` comprehension | inline ×6 (`columnFillPass`, `heightmapPass`, `liquidOverlayPass`, `cavesGenerator`, `generate_minimal`, `_non_surface_anchor_cells`); `_terrain_set` только в `columnFillPass` | `terrain_registry_set(world)` в `terrain/terrainZ.py` | P2 |
 | DR-7 | low | lazy single-cell weather MapCell | `TerrainGeneratorService.generate_minimal` ≈ `ClimateSurfaceAssembler._non_surface_anchor_cells` | shared `build_weathered_anchor_cell(...)` | P3 |
+| DR-8 | low | `worldMapSettings.py:10` + `db/models/world.py:123` + `0001_initial.sql:116` | `grid_bbox_padding = 2` — **третий литерал**: колонка `NOT NULL DEFAULT 2`, fallback в `worldMapSettings` (`v is None`) мёртв по схеме; POJO-owner отсутствует | POJO (terrain scalars) или убрать fallback — читать колонку как есть | P3 |
 | MAP-1 | low | `api/routes/map.py` | 4× fetch world/locations; 6× `status_code`/`JSONResponse`; module-level `_terrain_generator` / `_climate_orchestrator` | route dep `load_world_context`; container factory | P3 |
 
 ---
@@ -495,6 +497,7 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
 | FM-2 | medium | `streets.plan_city_street_grid` | split graph vs policy | P3 |
 | FM-3 | low | `pick_barrier_template_type` | registry-driven pick; см. § ниже | P2 |
+| FM-4 | medium | `structure/structureGeneratorService.py` — файл 825 строк, class body ~575 (250→825) | 2× лимит `class-size-limit`, phased pipeline растёт; latent `ctx.wall_material` deref (:667) до guard `ctx is not None` (:670); мёртвый `validate_template` stub (:824-825) | split по фазам (instantiate/layout/cells/transitions); guard order; удалить stub | P2 |
 | DBG-2 | medium | `scripts/debug_settlement.py` monolith (~1500 строк) | split `debug_climate.py` / core settlement smoke; shared `make_test_world()` | P2 |
 
 ---
@@ -530,6 +533,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 |---|---|---|---|---|---|
 | DR-6 | low | P2 | `terrain_set` inline ×6 | `terrain_registry_set(world)` | open |
 | DR-7 | low | P3 | lazy anchor cell builder duplicated | shared helper | open |
+| DR-8 | low | P3 | `grid_bbox_padding` — третий литерал `2` (`worldMapSettings` + db model + SQL `DEFAULT`; колонка NOT NULL → fallback мёртв) | POJO owner или убрать fallback | open |
 | MAP-1 | low | P3 | `map.py` route boilerplate | deps / helper | open |
 | TR-2 | medium | P2 | Debug path S→CL: double `run_pole_resolve_pass` | **deferred** — snapshot-run (§ `tz_city_generation.md` §11.4); не orchestrated HTTP | deferred |
 
@@ -642,6 +646,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CITY-T-1d** | Синхрон шапки city TZ / §6.3 / connections §5.1 vs C22 packing | open |
 | **CITY-T-5** | Швы после C23 (слои, хардкоды leftover) — SoT [city debt TZ](./tz_city_generation_technical_debt.md) | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
+| **FM-4** | `StructureGeneratorService` 825 / class ~575 — split по фазам; ctx-deref :667; dead stub :824 | open |
 | **CL-3** | Единый `ClimateSpatialSample` / Protocol | open |
 | **CL-4** | `climate_pole_mode` в `poleResolve.py` | **resolved** |
 | **CL-2b** | Admin не merge при active pole | **resolved** |
@@ -662,6 +667,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | MR-4, FM-2 | Split `streets.py` | open |
 | NC-6..NC-9 | Docs / model fields / validators | open |
 | DR-2, DR-3, DR-4 | API cleanup после Phase 6 | open |
+| DR-8 | `grid_bbox_padding` — третий литерал; fallback мёртв (NOT NULL колонка) | open |
 | **CL-7** | contracts `ClimateChangeEvent`/`ClimateRecalcRequest` ✅; node routing spec ✅; generator impl + node ⬜ |
 | **CL-5, CL-6, CL-8, CL-9** | validator; pole contract; legacy deprecate; CGS split | open |
 | **CL-2a, CL-2c..CL-2e** | tierResolve edge cases (см. § CL) | open / accepted |
@@ -1040,11 +1046,28 @@ Declare geometry: `declared_coastline_segments`, `declared_lake_specs`, `declare
 
 ### HY-S-5 — `LoadedConnectionGraph.edges: list[dict]`
 
-**Severity:** low · **P:** P2 · **Status:** open
+**Severity:** low → **medium** · **P:** P2 · **Status:** open
 
-Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Неявный контракт polyline / width для rasterize.
+**Уточнено 2026-10-14:** это не только «dict вместо dataclass» — прямое нарушение `pojo-world-row-wire` / `dataModel-no-hardcode` (typed-контракт есть, читают через `.get`).
 
-**Fix:** `ResolvedConnectionEdge` frozen dataclass; или reuse `ConnectionEdge` если generator layer may import DB models (climate pattern).
+Nodes typed (`ResolvedConnectionNode`, `types.py:55-64`), edges — `asdict(ConnectionEdge)` (`load/loadConnectionGraph.py:60`). Consumers: `edge.get("connection_type")` / `.get("from_node_uid", "")` в `rivers/riverSpecs.py:34-49` и `load/declaredEdges.py:16-19`. Локальный fallback `width_cells else 1` (`riverSpecs.py:41-46`) дублирует `DeclaredRiverEdge.width_cells=1` (`types.py:85`). Неявный контракт polyline / width для rasterize.
+
+**Fix:** `ResolvedConnectionEdge` frozen dataclass (снять асимметрию с `ResolvedConnectionNode`); или reuse `ConnectionEdge` если generator layer may import DB models (climate pattern).
+
+---
+
+### HY-S-6 — `HydrologyBands`: dataclass-дубль POJO + divergent defaults
+
+**Severity:** medium · **P:** P2 · **Status:** open · **Найдено:** 2026-10-14 (repo review)
+
+Самое явное текущее нарушение `dataModel-no-hardcode`: два типа `HydrologyBands` с расходящейся семантикой.
+
+- `generators/hydrology/types.py:39-42` — frozen dataclass `HydrologyBands(min, max)` дублирует Pydantic `dataModel/hydrology/bands.py` (`BAND_MIN=1`/`BAND_MAX=99`, field defaults `min=1`, `max=5`). Consumers берут dataclass (`proceduralSeaAutoresolve`, `deepeningBandCarver`, `proceduralLakeAutoresolve`, …).
+- `load/resolveHydrologyBands.py:16-17` — локальные `_BAND_MIN`/`_BAND_MAX` вместо импорта из `dataModel.hydrology.bands`.
+- `clamp_bands` (`resolveHydrologyBands.py:56-63`) — missing `max` → `99` (`_BAND_MAX`); POJO default `max=5`. Поведенческое расхождение: `bands: {min: 3}` без `max` даёт `(3, 99)` через resolver и `(3, 5)` через POJO; категории вне POJO-map без `bands` получают полный `1..99` вместо per-category default.
+- `_CATEGORY_POJO` (`:27-31`) покрывает только rivers/lakes/seas; `shore`/`landforms` — raw-dict path (`:43-53`). Миграция на POJO остановлена посередине (см. также HY-S-3).
+
+**Fix:** resolver читает `dataModel` `HydrologyBands` напрямую (все категории через POJO), `clamp_bands` → bounds из POJO; единственный тип `HydrologyBands` в hydrology (генераторы принимают POJO).
 
 ---
 
@@ -1089,7 +1112,8 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | HY-BATH-1 | medium | P1 | light SEA z = plains; Depression forms TZ | **partial** — stub drop ✅; full Form pipeline ⬜ |
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
 | HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
-| HY-S-5 | low | P2 | edges as dict | open |
+| HY-S-5 | low→medium | P2 | edges as dict (`asdict` + `.get` consumers) | open |
+| HY-S-6 | medium | P2 | `HydrologyBands` дубль POJO + divergent clamp defaults | open |
 | CONN-1 | low | P2 | `node_type` → `connection_node_type` wire rename | open |
 
 ---
@@ -1288,6 +1312,12 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **JV-SCALARS-2** | medium | **resolved** | P2 | Hand-written multi_column resolve в `worldRow` (climate/terrain/relief) дублировал `WorldSlice`. **Fix:** `resolve_multi_column_world` + `WORLD_SLICE_BY_POJO`; named accessors = thin DX. Field shorthand `relief_grade_obstacle_policy` OK. Registry/blob runtime → **T-28** ✅ |
 
 ---
+
+### Registry — 2026-10-14 (repo review)
+
+| ID | Sev | Status | P | Категория | Суть |
+|---|---|---|---|---|---|
+| **RELIEF-T-68** | low | **open** | P3 | FS layout | `relief_templates/smoke_003` лежит **дважды**: `repo_root/relief_templates/` и `backend/relief_templates/`. `resolve_relief_domain_root()` (T-7) = `RELIEF_TEMPLATES_ROOT` env или `cwd/relief_templates` → SoT root зависит от cwd запуска. Fix: один canonical root + задокументировать разделение (authoring vs test fixture), либо убрать дубликат |
 
 ### Clean (не долг / wins)
 
@@ -2094,6 +2124,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | **LIBPACK-T-5** | medium | **open** | P1 | used-member policy | `member_usages` покрывает pins (`library_pins`) + `relief_pick_policy.*.default_template_uid`; refs **внутри тел** (`main_building.structure` и прочие cross-template ссылки) не сканируются — удаление члена может оставить битый ref | Referenced-set — **шаг 4c** (`member_usages` — точка расширения адаптера) |
 | **LIBPACK-T-6** | info | **open** | P3 | конвенция | `from app.db.database import _in_transaction` — приватный ContextVar на ~15 файлах (repos, library services, canonicalLibrary) | Отдельная тема: публичный флаг транзакции на `Database` |
 | **LIBPACK-T-7** | low | **open** | P2 | ТЗ семантика / overlay | `terrain(world)` резолвит `canonical_defaults ⊕ world rows` (T-29) — resolved-scan делает R34-upsert мёртвым: `added` всегда пуст. `merge_missing_terrain_entries` (libpack-t2 шаг 1) читает **сырую** колонку и теперь реально дописывает canonical-ряды в stored `terrain_registry` (legacy import + instantiate). Побочки выбранного persist-прочтения: canonical-дубли в stored/bundle; `terrain_registry` — write-колонка двух писателей (учесть в W2 `COLUMN_INVALIDATES`) | Решение к ТЗ `tz_terrain_relief` R34: оставить persist-семантику (зафиксировать в ТЗ) или удалить upsert как рудимент — overlay гарантирует resolved-полноту. При «удалить» — убрать helper + вызов в `ReliefPackAdapter.remap_world_refs` |
+| **LIBPACK-T-8** | low | **open** | P3 | granularity | Write pipeline размазан по ~15 `write*`/`reinstantiate*` модулям (пакет `libraryPacks/` ~65 файлов / ~5.6k строк) — ravioli-риск, обратный god-file: каждый файл мал, но call graph write стадий трудно удержать целиком | Watch; либо консолидировать стадии вокруг `writeFacade`, либо doc-map слоёв (facade → ops → planner → executor → inspector) |
 
 **Related (info):** member identity иммутабельна (update = замена тела) и `source_pack_uid`/`source_template_uid` колонки заведены, но не пишутся — это контракт, не долг; remap заполняет их в 4b.
 
@@ -2114,6 +2145,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-14 | **Repo review → open:** **HY-S-6** `HydrologyBands` dataclass-дубль POJO + `clamp_bands` divergent default (`max`→99 vs POJO 5); **HY-S-5** enriched (`asdict` edges, `.get` consumers, width fallback — severity low→medium); **FM-4** `StructureGeneratorService` class ~575 (2× лимит) + latent ctx-deref + dead `validate_template`; **DR-8** `grid_bbox_padding` третий литерал (NOT NULL → fallback мёртв); **RELIEF-T-68** два relief domain root (cwd-dependent SoT); **LIBPACK-T-8** write-pipeline granularity watch |
 | 2026-10-11 | **LIBPACK-T-2** **resolved** — оба шага `libpack-t2-relief-import-instantiate-done.md`; interim-метод и caller удалены, engine→world relief только через `instantiate_pack`. |
 | 2026-10-11 | **LIBPACK-T-7** open: R34-upsert был мёртв под T-29 overlay (resolved-scan всегда полон); шаг 1 libpack-t2 ввёл raw-scan и реальный persist. Открытый вопрос к R34: persist vs удалить рудимент. |
 | 2026-10-11 | **LIBPACK-T-2** → план `libpack-t2-relief-import-instantiate.md` (2 шага: R34→adapter, роут→instantiate). Решения: `template_uid`→member→pack→`instantiate_pack`; member-level engine→world отклонён по ТЗ §0.1; R34 в `remap_world_refs`. |

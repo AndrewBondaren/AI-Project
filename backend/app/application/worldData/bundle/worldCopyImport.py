@@ -18,11 +18,12 @@ class ImportFailed(Exception):
 
 
 class WorldCopyImport:
-    def __init__(self, db, worlds, handlers, archives):
+    def __init__(self, db, worlds, handlers, archives, migration=None):
         self._db, self._worlds, self._handlers, self._archives = db, worlds, handlers, archives
+        self._migration = migration
         self._tokens = WorldCopyTokens()
 
-    async def run(self, data, *, level, decisions=(), preview_token=None):
+    async def run(self, data, *, level, decisions=(), preview_token=None, legacy=None):
         fingerprint = state_fingerprint({"source": data, "level": level})
         continuation = self._tokens.decode(preview_token) if preview_token else None
         stale = continuation is not None and continuation["context"]["source_hash"] != fingerprint
@@ -40,23 +41,41 @@ class WorldCopyImport:
                 uid = copied["world"]["world_uid"]
                 if await self._worlds.find_by_id(uid) is not None:
                     raise LibraryPackConflictError("world copy identity occupied; start a fresh import")
+                packs, consumed, imports, items = (), set(), {}, ()
+                if self._archives is not None:
+                    migration = (self._migration if self._migration is not None
+                                 and self._migration.has_content(legacy) else None)
+                    source_owner = data[BundleSection.WORLD]["world_uid"]
+                    packs, consumed = import_libraries(data, legacy_migration=migration is not None)
+                    if packs:
+                        imports, items = self._archives.sources(packs,
+                            source_owner=source_owner, target_owner=uid)
+                    if migration is not None:
+                        # Pure B1 plan over the SQL/wire snapshot; projected
+                        # packs and pins join the same writer request (B2).
+                        migration_plan = await migration.plan(legacy,
+                            source_owner=source_owner, target_owner=uid,
+                            bundle_sources=imports, bundle_items=items)
+                        projected, migration_items = migration.writer_inputs(
+                            migration_plan, target_owner=uid)
+                        imports = {**imports, **projected}
+                        items = (*items, *migration_items)
+                        copied["world"].update(migration.world_fields(migration_plan))
                 world_handler = next(h for h in self._handlers if h.key == BundleSection.WORLD)
                 results["world"] = await world_handler.import_section(uid, copied["world"])
                 if results["world"].failed:
                     raise ImportFailed()
-                packs, consumed = import_libraries(data) if self._archives else ((), set())
                 library_token = ("stale" if stale else continuation["library_token"] if continuation else None)
-                if packs:
-                    plan = require_no_policy(await self._archives.prepare_world(packs,
-                        source_owner=data["world"]["world_uid"], target_owner=uid,
+                if items:
+                    outcome = require_no_policy(await self._archives.prepare_items(imports, items,
                         decisions=decisions, preview_token=library_token))
-                    await self._archives.apply(plan)
-                    if BundleSection.LIBRARY_PACKS in data:
-                        count = len(data[BundleSection.LIBRARY_PACKS])
-                        results[BundleSection.LIBRARY_PACKS] = ImportResult(count, count, 0)
+                    await self._archives.apply(outcome)
                 elif preview_token or decisions:
                     # Continuations cannot silently lose their entire library batch.
                     raise LibraryPackPolicyRequiredError(PolicyRequired("", (), (), stale=True))
+                if packs:
+                    count = len(data[BundleSection.LIBRARY_PACKS])
+                    results[BundleSection.LIBRARY_PACKS] = ImportResult(count, count, 0)
                 for key in consumed:
                     count = len(data[key])
                     results[key] = ImportResult(count, count, 0)

@@ -6,14 +6,19 @@ from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, Lib
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.ids import LibraryKind
 from app.application.worldData.bundle.legacyTemplateBodies import convert_flat_template_bodies
+from app.application.worldData.libraryPacks.legacyWorldInput import TEMPLATE_KINDS
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
 
 
 FLAT_KINDS = (LibraryKind.RELIEF_TEMPLATES,)
 
 
-def import_libraries(data):
+def import_libraries(data, *, legacy_migration=False):
     packs = list(packs_from_wire(data.get(BundleSection.LIBRARY_PACKS, [])))
+    if legacy_migration:
+        # B2 owns flat bodies/registries; handlers skip every template kind.
+        consumed = {kind.value for kind in TEMPLATE_KINDS if data.get(kind.value)}
+        return tuple(packs), consumed
     source_uid = data[BundleSection.WORLD]["world_uid"]
     legacy = legacy_pack_row(source_uid)
     members, bodies, consumed = [], {}, set()
