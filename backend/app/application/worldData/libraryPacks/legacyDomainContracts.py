@@ -8,6 +8,7 @@ from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind
 
 type SourcePath = tuple[str | int, ...]
+LEGACY_PLOT_FIELDS = ("plot_type", "main_building", "secondary_buildings", "occupied_footprint")
 
 
 class LegacyDomainShape(StrEnum):

@@ -9,7 +9,7 @@ Identity is fully derived from ``world_uid`` through the central
 
 from __future__ import annotations
 
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, library_uid, remapped_library_uid
 from app.application.worldData.libraryPacks.uidMap import former_template_uid
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -62,6 +62,15 @@ def legacy_member_row(
         source_template_uid=source_uid,
         creation_kind="member_copy" if source_uid else "authored",
     )
+
+
+def legacy_source_member_row(kind: LibraryKind, local_uid: str, *, world_uid: str,
+                             source_template_uid: str) -> LibraryPackMemberRow:
+    """Source identity, rather than a nonunique local name, keys a migrated copy."""
+    pack_uid = legacy_pack_uid(world_uid)
+    return LibraryPackMemberRow(
+        remapped_library_uid(kind, target_pack_uid=pack_uid, source_template_uid=source_template_uid),
+        pack_uid, kind.value, local_uid, source_template_uid, "member_copy")
 
 
 async def ensure_legacy_pack(

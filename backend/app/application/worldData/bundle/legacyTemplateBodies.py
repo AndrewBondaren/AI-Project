@@ -1,6 +1,6 @@
 """Flat bundle compatibility boundary; modern manifest kinds never use shape inference."""
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.worldData.libraryPacks.legacyDomainContracts import LegacyDomainRecord, LegacyDomainShape
+from app.application.worldData.libraryPacks.legacyDomainContracts import LEGACY_PLOT_FIELDS, LegacyDomainRecord, LegacyDomainShape
 from app.application.worldData.libraryPacks.legacyDomainSplit import split_legacy_domains
 from app.application.worldData.libraryPacks.legacyPack import legacy_member_row
 from app.application.worldData.libraryPacks.uidMap import STRUCTURE_MEMBER_RENAMES, mapped_template_uid
@@ -10,7 +10,6 @@ from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.domainAdapters.refFields import template_body_refs
 
 TEMPLATE_FLAT_KINDS = (LibraryKind.PLOT_TEMPLATES, LibraryKind.BUILDING_TEMPLATES)
-_PLOT_DISCRIMINATORS = ("plot_type", "main_building", "secondary_buildings", "occupied_footprint")
 
 
 def convert_flat_template_bodies(data, packs, source_world_uid):
@@ -25,7 +24,7 @@ def convert_flat_template_bodies(data, packs, source_world_uid):
             path = (source_kind.value, index)
             if not isinstance(raw, dict) or not isinstance(raw.get("system_name"), str):
                 raise ImportValidationError([FieldPathError(path, "raw body requires system_name", code="STRICT_REQUIRED")])
-            is_plot = source_kind == LibraryKind.PLOT_TEMPLATES or any(key in raw for key in _PLOT_DISCRIMINATORS)
+            is_plot = source_kind == LibraryKind.PLOT_TEMPLATES or any(key in raw for key in LEGACY_PLOT_FIELDS)
             if is_plot and "structure" in raw:
                 raise ImportValidationError([FieldPathError(path,
                     "flat body mixes plot and standalone building shapes", code="LEGACY_DOMAIN_KIND")])
