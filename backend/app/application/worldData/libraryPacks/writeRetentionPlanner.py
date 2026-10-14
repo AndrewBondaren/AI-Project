@@ -35,8 +35,9 @@ class WriteRetentionPlanner:
             projected = CatalogSnapshot(members, bodies, {})
             candidates = {uid for item in scoped for uid in item.candidates}
             world = self._world(scope.world, scoped, world_maps.get(scope.owner_world_uid, {}), ())
-            held = hold_candidates(collect_refs(self._adapters, projected, world), members, candidates,
-                                   pin_index(world, members))
+            held = hold_candidates(collect_refs(self._adapters, projected, world)
+                                   + tuple(scope.location_refs),
+                                   members, candidates, pin_index(world, members))
             deleted = candidates - held.keys()
             all_held.update((uid, tuple(sorted(reasons))) for uid, reasons in held.items())
             removed.extend(members[uid] for uid in sorted(deleted))
@@ -56,7 +57,7 @@ class WriteRetentionPlanner:
             if scope.world is not None and world != scope.world:
                 worlds.append(WorldWrite(scope.world, world, body_diff(asdict(scope.world), asdict(world))))
             available_packs = {p.pack_uid for p in scope.packs} | {i.pack.value.pack_uid for i in final if i.pack}
-            refs = collect_refs(self._adapters, projected, world)
+            refs = collect_refs(self._adapters, projected, world) + tuple(scope.location_refs)
             touched_packs = {item.pack.value.pack_uid for item in final if item.pack}
             touched_members = {write.value.member.template_uid for item in final for write in item.members}
             diagnosed = touched_members | {uid for uid, member in projected.members.items()

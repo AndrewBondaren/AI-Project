@@ -59,6 +59,7 @@ class _PackScope:
         deps: ILibraryPackDependencyRepository,
         world_service: WorldService,
         adapters: dict[LibraryKind, PackDomainAdapter],
+        locations=None,
     ) -> None:
         self.db = db
         self.packs = packs
@@ -67,6 +68,9 @@ class _PackScope:
         self.catalog = PackCatalogRepos(packs=packs, members=members, deps=deps)
         self.worlds = world_service
         self.adapters = dict(adapters)
+        # INamedLocationRepository | None — persisted template refs feed
+        # usage checks and retention (B4); absent in tests without a world DB.
+        self.locations = locations
 
     async def atomic(self, op: Callable[[], Awaitable[Any]]) -> Any:
         """One unit of work; reuses an outer transaction when present."""

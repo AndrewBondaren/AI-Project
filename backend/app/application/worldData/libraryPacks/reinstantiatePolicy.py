@@ -32,7 +32,7 @@ def plan_retention(snapshot: ReinstantiateSnapshot, projection: MemberProjection
         projected.members[prepared.member.template_uid] = prepared.member
         projected.bodies[prepared.member.template_uid] = prepared.body
     # Candidate edges become roots only when their consumer is retained.
-    refs = collect_refs(adapters, projected, snapshot.world)
+    refs = collect_refs(adapters, projected, snapshot.world) + tuple(snapshot.location_refs)
     held = hold_candidates(refs, projected.members, projection.candidates,
                            pin_index(snapshot.world, projected.members))
     removed = projection.candidates - held.keys()

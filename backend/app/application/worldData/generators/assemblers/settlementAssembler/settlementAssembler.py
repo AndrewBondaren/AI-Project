@@ -62,8 +62,8 @@ class SettlementAssembler:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-        catalog:       BuildingCatalog | None = None,
         *,
+        catalog:       BuildingCatalog,
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
         timings: SettlementAssembleTimings | None = None,
@@ -72,10 +72,6 @@ class SettlementAssembler:
         wall0 = time.perf_counter()
         ctx = settlement_context(world, settlement)
         skeleton = self._build_skeleton(world, settlement, ctx)
-        if catalog is None:
-            raise ValueError(
-                "SettlementAssembler requires a world-scoped BuildingCatalog"
-            )
         logger.info(
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
             settlement.location_uid,
@@ -103,7 +99,7 @@ class SettlementAssembler:
 
         t = time.perf_counter()
         layout_cache = build_layout_cache(
-            world, skeleton, district_slots, terrain_cells, catalog=catalog,
+            world, skeleton, district_slots, catalog,
             settlement_uid=settlement.location_uid,
         )
         if timings is not None:

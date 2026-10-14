@@ -73,6 +73,7 @@ class LibraryPackService:
         world_service: WorldService,
         adapters: dict[LibraryKind, PackDomainAdapter],
         write_service,
+        locations=None,
     ) -> None:
         self._scope = _PackScope(
             db=db,
@@ -81,6 +82,7 @@ class LibraryPackService:
             deps=deps,
             world_service=world_service,
             adapters=adapters,
+            locations=locations,
         )
         self._member_ops = _MemberOps(self._scope)
         self._pack_ops = _PackOps(self._scope, self._member_ops)

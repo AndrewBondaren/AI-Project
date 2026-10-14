@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from enum import StrEnum
 
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
@@ -29,35 +30,42 @@ from app.dataModel.locations.structure.building.buildingCatalog import CatalogPl
 from app.db.models.world import World
 
 
-def _subjects_for(slot: DistrictSlot, structure_type: str) -> tuple[str, ...]:
+class SubjectCatalog(StrEnum):
+    """World instance catalog a subject token belongs to."""
+    RESOURCE = "resource"
+    CROP = "crop"
+    LIVESTOCK = "livestock"
+
+
+def _subjects_for(slot: DistrictSlot, structure_type: str | None) -> tuple[str, ...]:
     return tuple((slot.subject_tags or {}).get(structure_type, ()))
 
 
 def _subject_catalog(
     entries: list[CatalogPlot] | tuple[CatalogPlot, ...],
-    structure_type: str,
-) -> str | None:
+    structure_type: str | None,
+) -> SubjectCatalog | None:
     if any(entry.body.resource_kind is not None for entry in entries):
-        return "resource"
+        return SubjectCatalog.RESOURCE
     if any(entry.body.crop_kind is not None for entry in entries):
-        return "crop"
+        return SubjectCatalog.CROP
     if (
         any(entry.body.livestock_kind is not None for entry in entries)
         or structure_type == BuildingPurpose.LIVESTOCK.value
     ):
-        return "livestock"
+        return SubjectCatalog.LIVESTOCK
     return None
 
 
-def _fallback_pool(world: World, catalog: str, entries: list[CatalogPlot] | tuple[CatalogPlot, ...]) -> list[str]:
-    if catalog == "resource":
+def _fallback_pool(world: World, catalog: SubjectCatalog, entries: list[CatalogPlot] | tuple[CatalogPlot, ...]) -> list[str]:
+    if catalog is SubjectCatalog.RESOURCE:
         wanted = {entry.body.resource_kind for entry in entries if entry.body.resource_kind is not None}
         return sorted(
             entry.system_resource
             for entry in resource_types(world).root
             if entry.resource_kind in wanted
         )
-    if catalog == "crop":
+    if catalog is SubjectCatalog.CROP:
         wanted = {entry.body.crop_kind for entry in entries if entry.body.crop_kind is not None}
         return sorted(
             entry.system_crop
@@ -75,10 +83,10 @@ def _fallback_pool(world: World, catalog: str, entries: list[CatalogPlot] | tupl
     return sorted(registry.keys())
 
 
-def _token_in_catalog(world: World, catalog: str, token: str) -> bool:
-    if catalog == "resource":
+def _token_in_catalog(world: World, catalog: SubjectCatalog, token: str) -> bool:
+    if catalog is SubjectCatalog.RESOURCE:
         return resource_types(world).entry_for(token) is not None
-    if catalog == "crop":
+    if catalog is SubjectCatalog.CROP:
         return crops(world).entry_for(token) is not None
     return livestock(world).entry_for(token) is not None
 
@@ -97,14 +105,18 @@ def _subjects_rng(
     )
 
 
-def _resolve_subjects(
+def resolve_subjects(
     slot: DistrictSlot,
     world: World,
-    structure_type: str,
+    structure_type: str | None,
     entries: list[CatalogPlot] | tuple[CatalogPlot, ...],
     settlement_uid: str | None,
 ) -> tuple[str, ...]:
-    """Named tokens stay; empty extract/farm/livestock → world RNG (§1.2.1)."""
+    """Named tokens stay; empty extract/farm/livestock → world RNG (§1.2.1).
+
+    Pure resolution — no slot mutation. Callers persist picks on the slot via
+    record_subjects() so later passes and topology replay see the same tokens.
+    """
     catalog = _subject_catalog(entries, structure_type)
     subjects = _subjects_for(slot, structure_type)
     district = slot.district_template.system_name
@@ -132,7 +144,6 @@ def _resolve_subjects(
         )
         return ()
     picked = _subjects_rng(world, slot, settlement_uid).choice(pool)
-    slot.subject_tags[structure_type] = (picked,)
     packing_warning(
         PackingStep.TOKENS,
         district=district,
@@ -143,7 +154,24 @@ def _resolve_subjects(
     return (picked,)
 
 
-def _resource_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[ResourceKind, ...]:
+def record_subjects(
+    slot: DistrictSlot,
+    structure_type: str | None,
+    subjects: tuple[str, ...],
+) -> None:
+    """Write resolved tokens back onto the slot (explicit, caller-driven).
+
+    Subject tags are slot state consumed by later picks and topology replay —
+    recording is the caller's responsibility, not a resolve() side effect.
+    No-op when the type is already named on the slot.
+    """
+    if not subjects or structure_type is None:
+        return
+    if not slot.subject_tags.get(structure_type):
+        slot.subject_tags[structure_type] = subjects
+
+
+def resource_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[ResourceKind, ...]:
     if not subjects:
         return ()
     registry = resource_types(world)
@@ -158,7 +186,7 @@ def _resource_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[Resour
     return tuple(kinds)
 
 
-def _crop_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[CropKind, ...]:
+def crop_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[CropKind, ...]:
     if not subjects:
         return ()
     registry = crops(world)
@@ -173,7 +201,7 @@ def _crop_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[CropKind, 
     return tuple(kinds)
 
 
-def _livestock_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[LivestockKind, ...]:
+def livestock_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[LivestockKind, ...]:
     if not subjects:
         return ()
     registry = livestock(world)

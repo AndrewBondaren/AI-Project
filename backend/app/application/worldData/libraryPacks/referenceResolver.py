@@ -6,6 +6,9 @@ from dataclasses import replace
 from app.application.jsonValidation.resolve import ResolveContext, report_issues
 from app.application.jsonValidation.types import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 
+from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+    named_location_template_refs,
+)
 from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot, MemberRef
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.libraryPacks.membership import membership_pack_uids
@@ -111,6 +114,11 @@ def pin_index(world, members):
 async def member_usages(scope, member, world):
     catalog = await load_catalog(scope, None if world is None else world.world_uid)
     refs = collect_refs(scope.adapters, catalog, world)
+    # Persisted location refs (B4): generated buildings hold the applied
+    # member uids, so location consumers gate the member delete as well.
+    if getattr(scope, "locations", None) is not None:
+        rows = await scope.locations.find_by_template_ref(member.template_uid)
+        refs = (*refs, *named_location_template_refs(rows, {member.template_uid: member}))
     index, issues = reference_index(refs, catalog.members)
     issues = await contextualize_issues(scope, issues, None if world is None else world.world_uid)
     report_issues(ResolveContext(), issues)

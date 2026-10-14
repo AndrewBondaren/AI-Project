@@ -1,6 +1,9 @@
 """Read all inputs for update planning inside the caller's transaction."""
 from copy import deepcopy
 
+from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+    named_location_template_refs,
+)
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot, ReinstantiateSnapshot
 from app.application.worldData.libraryPacks.referenceResolver import collect_refs, load_catalog
@@ -31,6 +34,11 @@ async def load_update_snapshot(scope, source, instance, world) -> ReinstantiateS
     source_deps = tuple(sorted(await scope.deps.required_uids(source.pack_uid)))
     target_deps = tuple(sorted(await scope.deps.required_uids(instance.pack_uid)))
     existing_deps = frozenset(await scope.packs.existing_uids(sorted(set(source_deps) | set(target_deps))))
+    location_refs: tuple = ()
+    if scope.locations is not None:
+        location_refs = named_location_template_refs(
+            await scope.locations.get_by_world(world.world_uid), catalog.members)
     return deepcopy(ReinstantiateSnapshot(source, instance, world, catalog, source_members,
                                            source_bodies, source_files, known_members,
-                                           source_deps, target_deps, existing_deps))
+                                           source_deps, target_deps, existing_deps,
+                                           location_refs=location_refs))

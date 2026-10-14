@@ -18,29 +18,20 @@ Boundary duties (TZ packs §5/§7, domain libraries §5):
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 
 from app.application.jsonValidation.resolve import ResolveContext, report_issues
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
+    PackingScope,
     PackingStep,
     packing_warning,
-)
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
-    TemplatePreparationError,
-)
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    PackDomainAdapter,
-)
-from app.application.worldData.libraryPacks.domainAdapters.refFields import (
-    template_body_refs,
 )
 from app.application.worldData.libraryPacks.effectiveCatalog import (
     EffectiveCatalogLoader,
 )
 from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
 from app.application.worldData.libraryPacks.templateGraphValidation import (
-    template_graph_issues,
+    prepare_template_graph,
 )
 from app.application.worldData.templateContracts import (
     TemplateEntry,
@@ -56,7 +47,6 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
 from app.dataModel.locations.structure.building.structureTemplate import (
     StructureTemplate,
 )
-from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind
 
@@ -70,15 +60,10 @@ _SNAPSHOT_KINDS = (
 
 
 class TemplateSnapshotLoader:
-    """Container seam: ``EffectiveCatalogLoader`` + the domain adapter map."""
+    """Container seam: ``EffectiveCatalogLoader`` → validated snapshot."""
 
-    def __init__(
-        self,
-        catalog_loader: EffectiveCatalogLoader,
-        adapters: Mapping[LibraryKind, PackDomainAdapter],
-    ) -> None:
+    def __init__(self, catalog_loader: EffectiveCatalogLoader) -> None:
         self._loader = catalog_loader
-        self._adapters = adapters
 
     async def load(self, world: World) -> WorldTemplateSnapshot:
         catalog = await self._loader.load(world.world_uid)
@@ -92,41 +77,26 @@ class TemplateSnapshotLoader:
             raw = await catalog.body(uid)
             if raw is not None:
                 bodies[uid] = raw
-        issues = template_graph_issues(
+        graph = prepare_template_graph(
             CatalogSnapshot(members, bodies, {}), world=world,
         )
-        if issues:
-            report_issues(ResolveContext(), issues)
-
-        prepared: dict[str, tuple[LibraryPackMemberRow, object]] = {}
-        for uid, member in members.items():
-            raw = bodies.get(uid)
-            if raw is None:
-                continue  # already diagnosed by template_graph_issues
-            adapter = self._adapters.get(LibraryKind(member.library_kind))
-            try:
-                body = adapter.prepare_body(
-                    raw,
-                    local_uid=member.local_uid,
-                    template_uid=uid,
-                    world=world,
-                )
-            except TemplatePreparationError:
-                continue  # already diagnosed by template_graph_issues
-            prepared[uid] = (member, body)
+        if graph.issues:
+            report_issues(ResolveContext(), graph.issues)
 
         # Drop members whose declared refs resolve to absent/excluded
         # bodies — a missing dependency stays a diagnosed gap, not a
-        # district-wide generation error. Refs only point plot/building →
-        # structure, so a single pass is closed under exclusion.
-        for uid in list(prepared):
-            member, body = prepared[uid]
-            for ref in template_body_refs(
-                LibraryKind(member.library_kind), body, uid,
-            ):
-                if ref.template_uid not in prepared:
-                    del prepared[uid]
-                    break
+        # district-wide generation error. Declared refs only target
+        # ref-free structure kinds (template_body_refs contract), so a
+        # single pass is closed under exclusion.
+        excluded = {
+            ref.consumer for ref in graph.refs
+            if ref.template_uid not in graph.bodies
+        }
+        prepared = {
+            uid: (members[uid], body)
+            for uid, body in graph.bodies.items()
+            if uid not in excluded
+        }
 
         def entries_of(kind: LibraryKind, model: type) -> dict[str, TemplateEntry]:
             out = {}
@@ -143,7 +113,7 @@ class TemplateSnapshotLoader:
             if plot_type_defaulted(entry.body):
                 packing_warning(
                     PackingStep.CACHE,
-                    district="snapshot",
+                    district=PackingScope.SNAPSHOT,
                     system_name=uid,
                     reason=PackingReason.PLOT_TYPE_DEFAULTED,
                 )

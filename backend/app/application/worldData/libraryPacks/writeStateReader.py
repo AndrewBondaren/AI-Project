@@ -8,6 +8,9 @@ from app.db.models.world import World
 from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.defaults import default_pack_uids
 from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
+from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+    named_location_template_refs,
+)
 from app.application.worldData.libraryPacks.referenceResolver import collect_refs, pin_index
 from app.application.worldData.libraryPacks.writeInspectionContracts import WriteScopeState
 
@@ -16,8 +19,9 @@ class LibraryWriteStateReader:
     """Load explicit owner/default pack sets and their consumers."""
 
     def __init__(self, catalog: PackCatalogRepos, adapters: Mapping[LibraryKind, PackDomainAdapter],
-                 sources: LibraryWriteSourceReader):
+                 sources: LibraryWriteSourceReader, *, locations=None):
         self._catalog, self._adapters, self._sources = catalog, adapters, sources
+        self._locations = locations
 
     async def read(self, owner_world_uid: str | None, world: World | None) -> WriteScopeState:
         owned = (await self._catalog.packs.list_engine() if owner_world_uid is None
@@ -37,6 +41,10 @@ class LibraryWriteStateReader:
                               for uid in sorted(packs)])
         refs = tuple(sorted(set(collect_refs(self._adapters, catalog, world)),
                             key=lambda r: (r.consumer, r.path, r.library_kind, r.template_uid)))
+        location_refs: tuple = ()
+        if self._locations is not None and world is not None:
+            location_refs = named_location_template_refs(
+                await self._locations.get_by_world(world.world_uid), catalog.members)
         pins = tuple(sorted(pin_index(world, catalog.members).items()))
         return WriteScopeState(owner_world_uid, world, tuple(packs[uid] for uid in sorted(packs)),
-                               members, dependencies, refs, pins)
+                               members, dependencies, refs, pins, location_refs=location_refs)

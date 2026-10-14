@@ -101,6 +101,7 @@ class BundleNamedLocation(BaseModel):
     map_z: DefaultWhenMissing[int | None] = None
     is_mobile: DefaultWhenMissing[bool] = False
     system_template_uid: DefaultWhenMissing[str | None] = None
+    system_structure_template_uid: DefaultWhenMissing[str | None] = None
     # Repeat one NL field on each tag of the declared context scope path.
     parent_wall_material: Annotated[
         DefaultWhenMissing[MaterialKey | None],

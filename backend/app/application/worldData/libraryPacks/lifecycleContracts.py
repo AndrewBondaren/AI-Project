@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from pydantic import BaseModel
 from app.application.jsonValidation.types import FieldPathError
 
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -30,6 +31,21 @@ class ReinstantiateSnapshot:
     source_dependencies: tuple[str, ...]
     target_dependencies: tuple[str, ...]
     existing_dependencies: frozenset[str]
+    # Persisted NamedLocation template refs (B4) — retention must hold
+    # members still referenced by generated buildings.
+    location_refs: tuple["MemberRef", ...] = ()
+
+
+@dataclass(frozen=True)
+class PreparedTemplateGraph:
+    """One catalog pass: validated bodies + declared refs + issues.
+
+    ``bodies`` holds only members that passed preparation — the snapshot
+    loader reuses them instead of a second ``prepare_body`` round (B3).
+    """
+    bodies: dict[str, BaseModel]
+    refs: tuple[MemberRef, ...]
+    issues: tuple[FieldPathError, ...]
 
 
 @dataclass(frozen=True)

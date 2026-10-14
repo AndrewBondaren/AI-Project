@@ -172,7 +172,7 @@ class PlotLayoutContractTest(unittest.TestCase):
             structures.leaves_of(inn),
         )
         cache = BuildingLayoutCache()
-        layout = cache.ensure(_world(), canonical_plot_uid("inn_small"), inn)
+        layout = cache.ensure(canonical_plot_uid("inn_small"), inn)
         self.assertIsNotNone(layout)
         self.assertEqual(layout.occupied_footprint.width, 16)
         self.assertEqual(layout.occupied_footprint.depth, 16)

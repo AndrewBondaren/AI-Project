@@ -180,7 +180,7 @@ def test_city_shared_nodes() -> None:
         f"expected 1 shared node_uid on boundary x={boundary_x} y={sample_y}, got {uids}"
     )
 
-    layout = assembler.assemble(world, settlement)
+    layout = assembler.assemble(world, settlement, catalog=_debug_catalog())
     city_edges = [e for e in layout.connection_edges if e.graph_level == "city"]
     assert len(city_edges) > 8, "city should have perimeter + internal corridor edges"
     print("city shared-node check: OK")
@@ -246,7 +246,7 @@ def test_phase_e_building_cache() -> None:
     uids = collect_building_template_uids([slot_a, slot_b], world, skeleton, catalog)
     assert canonical_member_uid(LibraryKind.PLOT_TEMPLATES, "town_hall") in uids
 
-    cache = build_layout_cache(world, skeleton, [slot_a, slot_b], None, catalog=catalog)
+    cache = build_layout_cache(world, skeleton, [slot_a, slot_b], catalog)
     assert len(cache) == 0
 
     layout = assembler.assemble(world, settlement, catalog=catalog)
@@ -403,7 +403,7 @@ def test_phase_b_travel_and_sidewalk() -> None:
         map_z=0,
     )
     settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
-    layout = SettlementAssembler().assemble(world, settlement)
+    layout = SettlementAssembler().assemble(world, settlement, catalog=_debug_catalog())
     entry_edges = [e for e in layout.connection_edges if e.edge_uid.startswith("city_link_")]
     assert entry_edges, "town should have city entry link edges"
     for e in entry_edges:
@@ -492,7 +492,7 @@ def test_phase_d_barriers() -> None:
     assert all(c.location_uid == city.location_uid for c in barriers)
     assert all(c.z == gz for c in barriers)
 
-    layout = assembler.assemble(world, city)
+    layout = assembler.assemble(world, city, catalog=_debug_catalog())
     assert len(layout.barrier_cells) == len(barriers)
     print("phase D barriers checks: OK")
 
@@ -554,7 +554,7 @@ def test_phase_f_map_occupancy() -> None:
     svc = SettlementGeneratorService()
     assert svc.needs_geometry(town, world, occ) is True
 
-    layout, cells = svc.generate_map_cells(world, town)
+    layout, cells = svc.generate_map_cells(world, town, catalog=_debug_catalog())
     assert len(layout.occupancy_cells) == 1
     assert any(c.system_building_element for c in cells)
     assert svc.needs_geometry(town, world, cells) is False
@@ -668,7 +668,7 @@ def test_coordinate_spaces_anchor_3000() -> None:
     assert len(occ) == 1
     assert (occ[0].x, occ[0].y) == (1, 0), "occupancy uses world surface grid index, not meters"
 
-    layout = assembler.assemble(world, town)
+    layout = assembler.assemble(world, town, catalog=_debug_catalog())
     assert layout.connection_nodes, "town should have city connection nodes"
     assert min(n.x for n in layout.connection_nodes) >= 3000
     assert min(n.y for n in layout.connection_nodes) >= 0
@@ -1472,7 +1472,7 @@ def test_phase_4_collect_map_cells() -> None:
     )
     settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
-    layout = SettlementAssembler().assemble(world, settlement)
+    layout = SettlementAssembler().assemble(world, settlement, catalog=_debug_catalog())
     grid_cells = collect_surface_grid_cells(layout)
     meter_cells = collect_geometry_fine_cells(layout)
     merged = collect_map_cells_from_layout(world, settlement, layout)

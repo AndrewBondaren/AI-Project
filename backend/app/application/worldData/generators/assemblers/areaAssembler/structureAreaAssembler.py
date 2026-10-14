@@ -442,20 +442,21 @@ class StructureAreaAssembler:
         area_uid:  str | None = None,
         template_uid: str | None = None,
     ) -> NamedLocation:
-        # Readable local key for the det-id formula; the library member uid
-        # (template_uid) is the persisted template identity (TZ §5).
-        template_name = template.system_name
+        # Member uid is the persisted identity (TZ §5); the readable name is
+        # only a local fallback for the det-id of standalone/debug layouts.
+        identity = template_uid or template.system_name
         map_z = median_surface_z(fp_cells, surface, slot.ground_z)
         # Single minting point of the building uid (DET-1 D4): the
         # canonical det-id when the district chain is known; the readable
         # fallback only stands in debug/standalone layouts.
         location_uid = (
             _building_location_uid(
-                world.world_uid, area_uid, template_name, map_x, map_y,
+                world.world_uid, area_uid, identity, map_x, map_y,
             )
             if area_uid is not None
-            else f"{world.world_uid}-{template_name}-{map_x}-{map_y}"
+            else f"{world.world_uid}-{identity}-{map_x}-{map_y}"
         )
+        body = template.main_building
         return NamedLocation(
             location_uid=location_uid,
             world_uid=world.world_uid,
@@ -465,7 +466,10 @@ class StructureAreaAssembler:
             map_x=map_x,
             map_y=map_y,
             map_z=map_z,
-            system_template_uid=template_uid or template_name,
+            system_template_uid=template_uid,
+            system_structure_template_uid=(
+                str(body.structure) if body is not None else None
+            ),
         )
 
     def _build_barrier(

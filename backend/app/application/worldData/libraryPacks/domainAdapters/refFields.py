@@ -97,12 +97,20 @@ def structure_refs(raw: dict, consumer: str) -> tuple[MemberRef, ...]:
 
 
 def template_body_refs(kind: LibraryKind, body: BaseModel, consumer: str) -> tuple[MemberRef, ...]:
-    """Target body declarations; inline buildings are not separate member refs."""
+    """Target body declarations; inline buildings are not separate member refs.
+
+    Declared refs only target ``STRUCTURE_TEMPLATES`` — the snapshot loader
+    drops referrers of absent bodies in a single pass, closed because
+    structure bodies declare no refs of their own. Keep this invariant.
+    """
     if kind == LibraryKind.PLOT_TEMPLATES and isinstance(body, PlotLayoutTemplate):
-        return tuple(ref for field in STRUCTURE_REF_FIELDS for ref in field.references(body, consumer))
-    if kind == LibraryKind.BUILDING_TEMPLATES and isinstance(body, BuildingTemplate):
-        return BUILDING_STRUCTURE_REF.references(body, consumer)
-    return ()
+        refs = tuple(ref for field in STRUCTURE_REF_FIELDS for ref in field.references(body, consumer))
+    elif kind == LibraryKind.BUILDING_TEMPLATES and isinstance(body, BuildingTemplate):
+        refs = BUILDING_STRUCTURE_REF.references(body, consumer)
+    else:
+        refs = ()
+    assert all(ref.library_kind == LibraryKind.STRUCTURE_TEMPLATES.value for ref in refs)
+    return refs
 
 
 def remap_template_body(kind: LibraryKind, body: BaseModel, uid_map: Mapping[str, str]) -> BaseModel:
@@ -120,3 +128,31 @@ def relief_policy_refs(world: World) -> tuple[MemberRef, ...]:
     policy = relief_pick_policy(world)
     return tuple(ref for field in RELIEF_POLICY_REF_FIELDS
                  for ref in field.references(policy, f'world:{world.world_uid}', 'relief_pick_policy.'))
+
+
+# Persisted location refs (5b/B4): a generated building stores the applied
+# plot member in ``system_template_uid`` and the structure actually
+# materialized in ``system_structure_template_uid``. ``system_template_uid``
+# is polymorphic by caller contract, so the ref adopts the resolved member's
+# kind — names are never reinterpreted as identity.
+LOCATION_TEMPLATE_REF_FIELDS: tuple[str, ...] = (
+    'system_template_uid',
+    'system_structure_template_uid',
+)
+
+
+def named_location_template_refs(rows, members) -> tuple[MemberRef, ...]:
+    """Usage refs of persisted NamedLocation rows against the member catalog.
+
+    Refs targeting members absent from the given catalog are not usages of
+    this scope — dangling identity is diagnosed by the ref checks, not here.
+    """
+    refs = []
+    for row in rows:
+        for field in LOCATION_TEMPLATE_REF_FIELDS:
+            uid = getattr(row, field, None)
+            member = members.get(uid) if isinstance(uid, str) else None
+            if member is not None:
+                refs.append(MemberRef(member.library_kind, uid,
+                                      f'named_location:{row.location_uid}', field))
+    return tuple(refs)

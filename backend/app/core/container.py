@@ -720,13 +720,15 @@ class Container(TemplateRepositoryProviders):
                 world_service=self.world_service(),
                 adapters=self.pack_domain_adapters(),
                 write_service=self.library_write_service(),
+                locations=self.location_repository(),
             )
         return self._library_pack_service
 
     def library_write_service(self):
         from app.application.worldData.libraryPacks.writeServiceFactory import build_library_write_service
         return build_library_write_service(db=self._db, catalog=self.pack_catalog_repos(),
-            adapters=self.pack_domain_adapters(), worlds=self.world_service(), world_repository=self.world_repository())
+            adapters=self.pack_domain_adapters(), worlds=self.world_service(), world_repository=self.world_repository(),
+            locations=self.location_repository())
 
     def effective_catalog_loader(self) -> EffectiveCatalogLoader:
         """Step-5a runtime read facade — membership-scoped world catalog."""
@@ -744,7 +746,7 @@ class Container(TemplateRepositoryProviders):
         )
         if getattr(self, "_template_snapshot_loader", None) is None:
             self._template_snapshot_loader = TemplateSnapshotLoader(
-                self.effective_catalog_loader(), self.pack_domain_adapters(),
+                self.effective_catalog_loader(),
             )
         return self._template_snapshot_loader
 

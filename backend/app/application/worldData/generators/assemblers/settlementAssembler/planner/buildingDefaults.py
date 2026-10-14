@@ -17,7 +17,9 @@ from app.dataModel.locations.structure.building.structureCatalog import Structur
 
 def structure_catalog_from_snapshot(snapshot: WorldTemplateSnapshot) -> StructureCatalog:
     """UID-keyed structure view of the world's membership (model A bodies)."""
-    return StructureCatalog(entry.body for entry in snapshot.structures.values())
+    return StructureCatalog.from_entries(
+        {uid: entry.body for uid, entry in snapshot.structures.items()}
+    )
 
 
 def building_catalog_from_snapshot(snapshot: WorldTemplateSnapshot) -> BuildingCatalog:

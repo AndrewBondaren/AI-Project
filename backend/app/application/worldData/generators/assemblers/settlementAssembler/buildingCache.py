@@ -14,8 +14,12 @@ from __future__ import annotations
 
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
+from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
+    PACKING_ENVELOPE_FACING,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
+    PackingScope,
     PackingStep,
     packing_warning,
 )
@@ -31,7 +35,6 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
-from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 
@@ -72,7 +75,7 @@ class BuildingLayoutCache:
         """Test seam: keys are the caller-declared template uids."""
         cache = cls()
         for uid, layout in layouts.items():
-            cache._layouts[(uid, Facing.SOUTH.value)] = layout
+            cache._layouts[(uid, PACKING_ENVELOPE_FACING.value)] = layout
         return cache
 
     def _key(self, template_uid: str, facing: Facing) -> tuple[str, str]:
@@ -81,12 +84,12 @@ class BuildingLayoutCache:
     def get(
         self,
         template_uid: str,
-        facing: Facing = Facing.SOUTH,
+        facing: Facing = PACKING_ENVELOPE_FACING,
     ) -> StructureLayout | None:
         return self._layouts.get(self._key(template_uid, facing))
 
     def envelope(self, template_uid: str) -> OccupiedFootprint | None:
-        layout = self.get(template_uid, Facing.SOUTH)
+        layout = self.get(template_uid, PACKING_ENVELOPE_FACING)
         if layout is None or layout.occupied_footprint is None:
             return None
         return layout.occupied_footprint
@@ -103,25 +106,23 @@ class BuildingLayoutCache:
     def __contains__(self, template_uid: object) -> bool:
         if not isinstance(template_uid, str):
             return False
-        return self.get(template_uid, Facing.SOUTH) is not None
+        return self.get(template_uid, PACKING_ENVELOPE_FACING) is not None
 
     def __getitem__(self, template_uid: str) -> StructureLayout:
-        layout = self.get(template_uid, Facing.SOUTH)
+        layout = self.get(template_uid, PACKING_ENVELOPE_FACING)
         if layout is None:
             raise KeyError(template_uid)
         return layout
 
     def ensure(
         self,
-        world: World,
-        template_uid: str,
+        template_uid: str | None,
         template: PlotLayoutTemplate,
-        facing: Facing = Facing.SOUTH,
+        facing: Facing = PACKING_ENVELOPE_FACING,
         *,
         district: str | None = None,
         leaves: tuple[BuildingPurpose, ...] = (),
     ) -> StructureLayout | None:
-        _ = world
         if not template_uid:
             return None
         cached = self.get(template_uid, facing)
@@ -140,15 +141,11 @@ def build_layout_cache(
     world:          World,
     skeleton:       SettlementSkeleton,
     district_slots: list[DistrictSlot],
-    terrain_cells:  list[MapCell] | None = None,
-    catalog:        BuildingCatalog | None = None,
+    catalog:        BuildingCatalog,
     *,
     settlement_uid: str | None = None,
 ) -> BuildingLayoutCache:
     """Pick drawings by member uid; envelopes from declared plot footprint."""
-    _ = terrain_cells
-    if catalog is None:
-        raise ValueError("build_layout_cache requires a world-scoped BuildingCatalog")
     cache = BuildingLayoutCache()
     for uid in sorted(
         collect_building_template_uids(
@@ -160,13 +157,13 @@ def build_layout_cache(
         if entry is None:
             packing_warning(
                 PackingStep.CACHE,
-                district="cache",
+                district=PackingScope.CACHE,
                 system_name=uid,
                 reason=PackingReason.MISSING_TEMPLATE,
             )
             continue
         cache.ensure(
-            world, uid, entry.body, Facing.SOUTH,
+            uid, entry.body, PACKING_ENVELOPE_FACING,
             leaves=catalog.structures.leaves_of(entry.body),
         )
     return cache
@@ -184,7 +181,7 @@ def _envelope_layout(
     spec = template.occupied_footprint
     if spec is None:
         packing_warning(
-            district or "cache",
+            district or PackingScope.CACHE,
             PackingStep.CACHE,
             system_name=template_uid,
             facing=facing.value,

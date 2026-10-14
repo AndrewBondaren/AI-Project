@@ -45,12 +45,14 @@ class LibraryWriteInspector:
     """Collect matching targets and retain the inputs needed by a planner."""
 
     def __init__(self, *, catalog: PackCatalogRepos,
-                 adapters: Mapping[LibraryKind, PackDomainAdapter], worlds: WorldService):
+                 adapters: Mapping[LibraryKind, PackDomainAdapter], worlds: WorldService,
+                 locations=None):
         if catalog.deps is None:
             raise ValueError("write inspection requires dependency repositories")
         self._catalog, self._worlds = catalog, worlds
         self._sources = LibraryWriteSourceReader(catalog, adapters)
-        self._states = LibraryWriteStateReader(catalog, adapters, self._sources)
+        self._states = LibraryWriteStateReader(catalog, adapters, self._sources,
+                                               locations=locations)
 
     async def inspect(self, request: LibraryWriteRequest, *,
                       imports: Mapping[str, WriteImportSource] | None = None) -> WriteSnapshot:

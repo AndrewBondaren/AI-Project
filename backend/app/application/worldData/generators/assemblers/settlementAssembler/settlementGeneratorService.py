@@ -85,8 +85,8 @@ class SettlementGeneratorService:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-        catalog:       BuildingCatalog | None = None,
         *,
+        catalog:       BuildingCatalog,
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
         timings: SettlementAssembleTimings | None = None,
@@ -119,7 +119,8 @@ class SettlementGeneratorService:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-        catalog:       BuildingCatalog | None = None,
+        *,
+        catalog:       BuildingCatalog,
     ) -> tuple[SettlementLayout, list[MapCell]]:
         layout = self.generate_layout(world, settlement, terrain_cells, catalog=catalog)
         grid_cells   = self.collect_surface_grid_cells(layout)

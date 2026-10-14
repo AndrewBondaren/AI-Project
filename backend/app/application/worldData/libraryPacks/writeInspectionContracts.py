@@ -51,6 +51,9 @@ class WriteScopeState:
     dependencies: tuple[tuple[str, tuple[str, ...]], ...]
     refs: tuple[MemberRef, ...]
     pins: tuple[tuple[str, tuple[str, ...]], ...]
+    # Persisted NamedLocation template refs (B4) — projection-invariant
+    # consumers the retention planner merges with the projected catalog refs.
+    location_refs: tuple[MemberRef, ...] = ()
 
 
 @dataclass(frozen=True)

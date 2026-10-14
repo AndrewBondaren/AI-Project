@@ -47,11 +47,11 @@ def area_uid(
 
 
 def building_location_uid(
-    world_uid: str, area_uid: str, template_name: str, map_x: int, map_y: int,
+    world_uid: str, area_uid: str, template_uid: str, map_x: int, map_y: int,
 ) -> str:
     return entity_uid(
         world_uid, UidKind.BUILDING,
-        parent=area_uid, template=template_name, map_x=map_x, map_y=map_y,
+        parent=area_uid, template=template_uid, map_x=map_x, map_y=map_y,
     )
 
 

@@ -24,7 +24,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.tokens import (
     build_tokens,
-    candidate_template_uids,
+    pick_layout_uids,
     pick_layout_uids,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
@@ -612,7 +612,7 @@ class SpecializationPassTest(unittest.TestCase):
             _layout("mine", "mine", plot_type="extract"),
             _layout("inn_small", "tavern"),
         )
-        names = candidate_template_uids(
+        names = pick_layout_uids(
             mining, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(names, ["mine"])
@@ -620,7 +620,7 @@ class SpecializationPassTest(unittest.TestCase):
             slot for slot in slots
             if slot.district_template.system_name == "commercial_quarter"
         )
-        names_c = candidate_template_uids(
+        names_c = pick_layout_uids(
             commercial, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(names_c, ["inn_small"])
@@ -718,7 +718,7 @@ class SpecializationPassTest(unittest.TestCase):
         ]}
         skeleton = _skeleton(world, settlement)
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        names = candidate_template_uids(
+        names = pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng,
         )
         self.assertEqual(names, ["iron_mine_1"])
@@ -752,7 +752,7 @@ class SpecializationPassTest(unittest.TestCase):
         settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         skeleton = _skeleton(world, settlement)
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        candidate_template_uids(
+        pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng, settlement_uid="loc-1",
         )
         self.assertEqual(slot.subject_tags.get("mine"), ("mithril_ore",))
@@ -767,7 +767,7 @@ class SpecializationPassTest(unittest.TestCase):
             cell_x=0, cell_y=0,
             subject_tags={},
         )
-        candidate_template_uids(
+        pick_layout_uids(
             again, world, skeleton, catalog=catalog, rng=rng, settlement_uid="loc-1",
         )
         self.assertEqual(again.subject_tags.get("mine"), slot.subject_tags.get("mine"))
@@ -799,7 +799,7 @@ class SpecializationPassTest(unittest.TestCase):
         ])
         settlement = _settlement(subtype="city")
         skeleton = _skeleton(world, settlement)
-        candidate_template_uids(
+        pick_layout_uids(
             slot, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(slot.subject_tags.get("mine"), ("mithril_ore",))
@@ -831,7 +831,7 @@ class SpecializationPassTest(unittest.TestCase):
         }])
         settlement = _settlement(subtype="city")
         skeleton = _skeleton(world, settlement)
-        candidate_template_uids(
+        pick_layout_uids(
             slot, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(slot.subject_tags.get("mine"), ("not_a_resource",))
@@ -859,13 +859,13 @@ class TokenPickTest(unittest.TestCase):
         world = _world()
         skeleton = _skeleton(world, _settlement(subtype="city"))
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        names = candidate_template_uids(
+        names = pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng,
         )
         self.assertEqual(len(names), 1)
         self.assertIn(names[0], {"inn_small", "inn_suite", "inn_xl"})
         rng2 = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        names2 = candidate_template_uids(
+        names2 = pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng2,
         )
         self.assertEqual(names, names2)
@@ -916,7 +916,7 @@ class StructureCatalogPackingTest(unittest.TestCase):
             0, 0, 40, 40, 0, template,
             allowed_structure_types=stamp, required_structures=list(required),
         )
-        return candidate_template_uids(slot, world, _skeleton(world, _settlement(subtype="city")), catalog)
+        return pick_layout_uids(slot, world, _skeleton(world, _settlement(subtype="city")), catalog)
 
     def test_explicit_allowed_uses_structure_despite_plot_family_and_stamp(self):
         tavern = _layout("tavern-on-dwelling", "tavern", plot_type="dwelling")
@@ -1142,14 +1142,14 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_cache_envelope_from_plot_footprint_not_assembler_key(self) -> None:
         cache = BuildingLayoutCache()
         missing_fp = _layout("town_hall", "town_hall")
-        self.assertIsNone(cache.ensure(_world(), missing_fp.system_name, missing_fp))
+        self.assertIsNone(cache.ensure(missing_fp.system_name, missing_fp))
         self.assertNotIn("town_hall", cache)
         template = _layout(
             "town_hall",
             "town_hall",
             occupied_footprint={"width": 4, "depth": 4},
         )
-        layout = cache.ensure(_world(), template.system_name, template)
+        layout = cache.ensure(template.system_name, template)
         self.assertIsNotNone(layout)
         self.assertEqual(layout.occupied_footprint.width, 4)
         self.assertFalse(layout.rooms)

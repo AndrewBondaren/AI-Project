@@ -107,7 +107,8 @@ class DistrictAssembler:
         terrain_cells:   list[MapCell] | None = None,
         layout_cache:    BuildingLayoutCache | dict[str, StructureLayout] | None = None,
         settlement_uid:  str | None = None,
-        catalog:         BuildingCatalog | None = None,
+        *,
+        catalog:         BuildingCatalog,
         timings:         SettlementAssembleTimings | None = None,
         existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> DistrictLayout:
@@ -117,10 +118,6 @@ class DistrictAssembler:
         classes = street_classes_for(template)
         cache = _as_cache(layout_cache)
         settlement_uid = settlement_uid or world.world_uid
-        if catalog is None:
-            raise ValueError(
-                "DistrictAssembler requires a world-scoped BuildingCatalog"
-            )
         buildings_rng = settlement_cell_rng(
             world.world_uid,
             settlement_uid,
@@ -157,7 +154,7 @@ class DistrictAssembler:
         nodes, edges, edge_roles = graph.nodes, graph.edges, graph.edge_roles
         empty_holes = holes_after_frame(lattice, occupied)
         packing_info(
-            district, "frame",
+            district, PackingStep.FRAME,
             block_size=step,
             empty_modules=len(empty_holes),
             inner=inner.as_rect(),
@@ -170,7 +167,8 @@ class DistrictAssembler:
         _ = leftover2
         reservations = pass1 + pass2
         placements = placements_from_reservations(
-            reservations, cache, world, city_skeleton, slot.ground_z, catalog=catalog,
+            reservations, cache, slot.ground_z, catalog,
+            district=district,
             deck=slot.district_template.deck,
         )
 
@@ -186,7 +184,7 @@ class DistrictAssembler:
         edge_xy = rasterize_edges_xy(nodes, edges)
         street_xy = rasterize_street_xy(nodes, edges) - plot_mask
         packing_info(
-            district, "graph",
+            district, PackingStep.GRAPH,
             nodes=len(nodes), edges=len(edges),
             street_xy=len(street_xy), plots=len(plot_mask),
         )
@@ -202,7 +200,7 @@ class DistrictAssembler:
         for placement in placements:
             facing = placement.area_slot.facing
             layout = cache.ensure(
-                world, placement.template_uid, placement.template, facing,
+                placement.template_uid, placement.template, facing,
                 district=district,
                 leaves=catalog.structures.leaves_of(placement.template),
             )
@@ -213,10 +211,10 @@ class DistrictAssembler:
             bx, by = origin_in_reservation(fp, res.rect_xy)
             if not footprint_fits_rect(fp, res.rect_xy, bx, by):
                 packing_warning(
-                    district, "cache",
+                    district, PackingStep.CACHE,
                     system_name=placement.template.system_name,
                     facing=facing.value,
-                    reason="footprint_miss_reservation",
+                    reason=PackingReason.FOOTPRINT_MISS,
                 )
                 continue
             placement.building_x = bx
@@ -227,7 +225,7 @@ class DistrictAssembler:
             )
 
         packing_info(
-            district, "area_slots",
+            district, PackingStep.AREA_SLOTS,
             area_slots=len(placements),
             street_xy=len(street_xy),
             connection_type=classes.spine.connection_type,
@@ -249,7 +247,7 @@ class DistrictAssembler:
         for placement in placements:
             local_street = touching_street_xy(plot_cells(placement), street_xy)
             packing_info(
-                district, "area",
+                district, PackingStep.AREA,
                 template=placement.template.system_name,
                 facing=placement.area_slot.facing.value,
                 touching=len(local_street),
@@ -267,7 +265,7 @@ class DistrictAssembler:
                 district_ctx=slot.district_ctx,
                 district_uid=d_uid,
                 existing_buildings=existing_buildings,
-                template_uid=placement.template_uid or None,
+                template_uid=placement.template_uid,
             )
             area_layouts.append(layout)
 

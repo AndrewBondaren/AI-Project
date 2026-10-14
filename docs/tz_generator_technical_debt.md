@@ -2114,6 +2114,8 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 **Ревью шага 4c (2026-10-11):** согласованные пункты по коммиту `9a50d4d1` — **LIBPACK-4C-R-1** (**resolved**, P2: диагностика через общий resolve logger проекта; 122 теста прошли), **LIBPACK-4C-R-2** (**resolved**, P3: единая декларация ref-полей для чтения/remap; 81 тест прошёл), **LIBPACK-4C-R-3** (**resolved**, P3: snapshot загрузка отдельно от pure update-plan, body/retention/fingerprint разделены; 103 теста прошли). Подробности и критерии закрытия — [library-packs-4c-review-debt-done.md](../.cursor/plans/library-packs-4c-review-debt-done.md).
 
+**Ревью шага B3 плана 5b (2026-10-14):** находки по коммитам `a7d01a7f`/`9522f962` (snapshot loader, packing identity по `template_uid`) — packing-литералы (`Facing.SOUTH`, district-метки), ложный `catalog=None`, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, private-имена как межмодульный API. Подробности и шаги — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md).
+
 **Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model.md`](../.cursor/plans/library-packs-model.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt.md`](../.cursor/plans/library-packs-4a-review-debt.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
 
 | ID | Severity | Status | P | Ось | Smell | Target |
@@ -2146,6 +2148,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-14 | **5b-B3 review debt** ✅ closed — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md): packing-литералы, `catalog=None`→raise, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, `_`-имена как межмодульный API — все устранены; `StructureAreaAssembler` ~281 (pre-existing, repo-лимит не перейден) — зафиксирован, вынос при следующей правке файла |
 | 2026-10-14 | **Repo review → open:** **HY-S-6** `HydrologyBands` dataclass-дубль POJO + `clamp_bands` divergent default (`max`→99 vs POJO 5); **HY-S-5** enriched (`asdict` edges, `.get` consumers, width fallback — severity low→medium); **FM-4** `StructureGeneratorService` class ~575 (2× лимит) + latent ctx-deref + dead `validate_template`; **DR-8** `grid_bbox_padding` третий литерал (NOT NULL → fallback мёртв); **RELIEF-T-68** два relief domain root (cwd-dependent SoT); **LIBPACK-T-8** write-pipeline granularity watch |
 | 2026-10-11 | **LIBPACK-T-2** **resolved** — оба шага `libpack-t2-relief-import-instantiate-done.md`; interim-метод и caller удалены, engine→world relief только через `instantiate_pack`. |
 | 2026-10-11 | **LIBPACK-T-7** open: R34-upsert был мёртв под T-29 overlay (resolved-scan всегда полон); шаг 1 libpack-t2 ввёл raw-scan и реальный persist. Открытый вопрос к R34: persist vs удалить рудимент. |

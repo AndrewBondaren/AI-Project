@@ -5,6 +5,9 @@ from app.application.importResult import ImportResult
 from app.application.worldData.bundle.copyTokens import WorldCopyTokens
 from app.application.worldData.bundle.worldLibraries import import_libraries
 from app.application.worldData.bundleRemapService import build_bundle_uid_map, remap_bundle
+from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
+    remap_locations_section,
+)
 from app.application.worldData.libraryPacks.errors import (
     LibraryPackConflictError, LibraryPackPolicyRequiredError, require_no_policy,
 )
@@ -42,6 +45,7 @@ class WorldCopyImport:
                 if await self._worlds.find_by_id(uid) is not None:
                     raise LibraryPackConflictError("world copy identity occupied; start a fresh import")
                 packs, consumed, imports, items = (), set(), {}, ()
+                member_map: dict[str, str] = {}
                 if self._archives is not None:
                     migration = (self._migration if self._migration is not None
                                  and self._migration.has_content(legacy) else None)
@@ -56,6 +60,7 @@ class WorldCopyImport:
                         migration_plan = await migration.plan(legacy,
                             source_owner=source_owner, target_owner=uid,
                             bundle_sources=imports, bundle_items=items)
+                        member_map.update(dict(migration_plan.uid_map))
                         projected, migration_items = migration.writer_inputs(
                             migration_plan, target_owner=uid)
                         imports = {**imports, **projected}
@@ -70,6 +75,8 @@ class WorldCopyImport:
                     outcome = require_no_policy(await self._archives.prepare_items(imports, items,
                         decisions=decisions, preview_token=library_token))
                     await self._archives.apply(outcome)
+                    member_map.update({src: dst for item in outcome.items
+                                       for src, dst in item.uid_map})
                 elif preview_token or decisions:
                     # Continuations cannot silently lose their entire library batch.
                     raise LibraryPackPolicyRequiredError(PolicyRequired("", (), (), stale=True))
@@ -79,6 +86,11 @@ class WorldCopyImport:
                 for key in consumed:
                     count = len(data[key])
                     results[key] = ImportResult(count, count, 0)
+                # B4: persisted member refs follow the composed member map —
+                # entity uid remap above never touches template fields.
+                if copied.get(BundleSection.LOCATIONS):
+                    copied[BundleSection.LOCATIONS] = remap_locations_section(
+                        copied[BundleSection.LOCATIONS], member_map, imports)
                 for handler in self._handlers:
                     if handler.key == "world" or handler.key in consumed or handler.key not in copied:
                         continue

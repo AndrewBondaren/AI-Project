@@ -9,10 +9,11 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.layoutPicks import (
-    _buildings_rng,
-    _pick_layout_picks,
+    buildings_rng,
+    pick_layout_picks,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
+    PACKING_ENVELOPE_FACING,
     PackingToken,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
@@ -24,7 +25,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
     packing_warning,
 )
-from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
 from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
@@ -48,27 +48,13 @@ def pick_layout_uids(
 ) -> list[str]:
     """One plot member ``template_uid`` per required/fill type (SoT for
     tokens and cache)."""
-    rng = _buildings_rng(world, slot, rng, settlement_uid)
+    rng = buildings_rng(world, slot, rng, settlement_uid)
     return [
         entry.template_uid
-        for entry, _req in _pick_layout_picks(
+        for entry, _req in pick_layout_picks(
             slot, world, skeleton, catalog, rng, settlement_uid,
         )
     ]
-
-
-def candidate_template_uids(
-    slot: DistrictSlot,
-    world: World,
-    skeleton: SettlementSkeleton,
-    catalog: BuildingCatalog,
-    rng: random.Random | None = None,
-    *,
-    settlement_uid: str | None = None,
-) -> list[str]:
-    return pick_layout_uids(
-        slot, world, skeleton, catalog, rng, settlement_uid=settlement_uid,
-    )
 
 
 def _required_for(
@@ -95,9 +81,9 @@ def build_tokens(
     *,
     settlement_uid: str | None = None,
 ) -> list[PackingToken]:
-    rng = _buildings_rng(world, slot, rng, settlement_uid)
+    rng = buildings_rng(world, slot, rng, settlement_uid)
     district = slot.district_template.system_name
-    picks = _pick_layout_picks(
+    picks = pick_layout_picks(
         slot, world, skeleton, catalog, rng, settlement_uid,
     )
     if not picks:
@@ -116,7 +102,7 @@ def build_tokens(
             continue
         packing_info(
             PackingStep.CACHE, district=district,
-            system_name=uid, facing=Facing.SOUTH,
+            system_name=uid, facing=PACKING_ENVELOPE_FACING,
             w=fp.width, h=fp.depth, hit=True,
         )
         if required is None:

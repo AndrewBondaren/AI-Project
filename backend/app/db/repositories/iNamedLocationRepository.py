@@ -27,6 +27,11 @@ class INamedLocationRepository(ABC):
     ) -> list[NamedLocation]: ...
 
     @abstractmethod
+    async def find_by_template_ref(self, template_uid: str) -> list[NamedLocation]:
+        """Rows referencing the library member in a persisted template field."""
+        ...
+
+    @abstractmethod
     async def upsert_bulk(self, rows: Sequence[NamedLocation]) -> int: ...
 
     @abstractmethod

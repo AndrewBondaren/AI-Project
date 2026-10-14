@@ -30,6 +30,7 @@ class PackingStep(StrEnum):
     ALLEY = "alley"
     GRAPH = "graph"
     AREA = "area"
+    AREA_SLOTS = "area_slots"
     FRONTAGE = "frontage"
 
 
@@ -70,6 +71,12 @@ class PackingReason(StrEnum):
 
 class PackingHost(StrEnum):
     SETTLEMENT = "settlement"
+
+
+class PackingScope(StrEnum):
+    """Non-district contexts of boundary diagnostics (not a district name)."""
+    SNAPSHOT = "snapshot"
+    CACHE = "cache"
 
 
 def _wire(value: Any) -> Any:

@@ -9,10 +9,11 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.subjects import (
-    _crop_kinds_for,
-    _livestock_kinds_for,
-    _resolve_subjects,
-    _resource_kinds_for,
+    crop_kinds_for,
+    livestock_kinds_for,
+    record_subjects,
+    resolve_subjects,
+    resource_kinds_for,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
@@ -110,7 +111,7 @@ def _match_allowed(
     return list(catalog.matching_allowed(live, filtered, match))
 
 
-def _buildings_rng(
+def buildings_rng(
     world: World,
     slot: DistrictSlot,
     rng: random.Random | None,
@@ -127,7 +128,7 @@ def _buildings_rng(
     )
 
 
-def _pick_layout_picks(
+def pick_layout_picks(
     slot: DistrictSlot,
     world: World,
     skeleton: SettlementSkeleton,
@@ -201,12 +202,13 @@ def _pick_layout_picks(
             iter(type_keys),
             next(iter(catalog.structures.leaves_of(layouts[0].body)), None),
         )
-        subjects = _resolve_subjects(slot, world, stype, layouts, settlement_uid)
+        subjects = resolve_subjects(slot, world, stype, layouts, settlement_uid)
+        record_subjects(slot, stype, subjects)
         chosen = _choose_layout(
             layouts, rng, subjects,
-            _resource_kinds_for(world, subjects),
-            _crop_kinds_for(world, subjects),
-            _livestock_kinds_for(world, subjects),
+            resource_kinds_for(world, subjects),
+            crop_kinds_for(world, subjects),
+            livestock_kinds_for(world, subjects),
         )
         skip_fill_types |= _purpose_keys(catalog, chosen)
         if chosen.template_uid in seen_uids:
@@ -239,14 +241,15 @@ def _pick_layout_picks(
                 reason=PackingReason.NO_CACHE,
             )
             continue
-        subjects = _resolve_subjects(
+        subjects = resolve_subjects(
             slot, world, structure_type, layouts, settlement_uid,
         )
+        record_subjects(slot, structure_type, subjects)
         chosen = _choose_layout(
             layouts, rng, subjects,
-            _resource_kinds_for(world, subjects),
-            _crop_kinds_for(world, subjects),
-            _livestock_kinds_for(world, subjects),
+            resource_kinds_for(world, subjects),
+            crop_kinds_for(world, subjects),
+            livestock_kinds_for(world, subjects),
         )
         skip_fill_types |= _purpose_keys(catalog, chosen)
         if chosen.template_uid in seen_uids:

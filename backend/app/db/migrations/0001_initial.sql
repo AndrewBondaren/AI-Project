@@ -750,7 +750,8 @@ CREATE TABLE IF NOT EXISTS named_locations (
     map_y                   INTEGER,
     map_z                   INTEGER,
     is_mobile               INTEGER NOT NULL DEFAULT 0,
-    system_template_uid     TEXT,
+    system_template_uid     TEXT,              -- applied library member uid (plot for city buildings)
+    system_structure_template_uid TEXT,        -- structure member uid actually materialized (B4)
     parent_wall_material    TEXT,
     parent_floor_material   TEXT,
     is_outdoor              INTEGER,
@@ -761,7 +762,10 @@ CREATE TABLE IF NOT EXISTS named_locations (
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),
     FOREIGN KEY (owner_uid)           REFERENCES character_sheet(character_uid),
-    FOREIGN KEY (system_template_uid) REFERENCES building_templates(template_uid)
+    -- Template refs point at the shared member catalog; a member removed via
+    -- the explicit used-delete override clears the persisted ref to NULL.
+    FOREIGN KEY (system_template_uid) REFERENCES library_pack_members(template_uid) ON DELETE SET NULL,
+    FOREIGN KEY (system_structure_template_uid) REFERENCES library_pack_members(template_uid) ON DELETE SET NULL
 );
 
 -- ============================================================

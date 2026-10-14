@@ -13,7 +13,10 @@ from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation impor
 from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
 from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
 from app.application.worldData.libraryPacks.domainAdapters.structure import StructureBodyPreparation
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
+from app.application.worldData.libraryPacks.lifecycleContracts import (
+    CatalogSnapshot,
+    PreparedTemplateGraph,
+)
 from app.application.worldData.libraryPacks.referenceResolver import (
     contextualize_reference_issues, reference_index,
 )
@@ -25,12 +28,18 @@ _PREPARATIONS = {p.library_kind.value: p() for p in (
 )}
 
 
-def template_graph_issues(
+def prepare_template_graph(
     catalog: CatalogSnapshot, *, world=None,
     known_members: Mapping[str, LibraryPackMemberRow] | None = None,
-) -> tuple[FieldPathError, ...]:
-    """Validate all target bodies and declared refs, preserving every issue path."""
+) -> PreparedTemplateGraph:
+    """Single pass: validate bodies once, collect declared refs and issues.
+
+    ``bodies`` holds only members that passed preparation — callers needing
+    the typed bodies (the B3 snapshot loader) reuse them instead of running
+    a second ``prepare_body`` round through the domain adapters.
+    """
     issues, refs = [], []
+    bodies: dict = {}
     world_uid = world.world_uid if world is not None else None
     for uid, member in sorted(catalog.members.items()):
         if member.template_uid != uid:
@@ -49,6 +58,7 @@ def template_graph_issues(
         except TemplatePreparationError as exc:
             issues.extend(exc.issues)
             continue
+        bodies[uid] = body
         refs.extend(preparation.body_refs(body, uid))
     _, ref_issues = reference_index(refs, catalog.members)
     issues.extend(contextualize_reference_issues(ref_issues, known_members or {}, world_uid))
@@ -59,7 +69,18 @@ def template_graph_issues(
         if (member is not None and member.library_kind == ref.library_kind
                 and member.template_uid not in catalog.bodies):
             issues.append(_missing_body(member, ref.consumer, ref.path, world_uid))
-    return tuple(dict.fromkeys(issues))
+    return PreparedTemplateGraph(bodies=bodies, refs=tuple(refs),
+                                 issues=tuple(dict.fromkeys(issues)))
+
+
+def template_graph_issues(
+    catalog: CatalogSnapshot, *, world=None,
+    known_members: Mapping[str, LibraryPackMemberRow] | None = None,
+) -> tuple[FieldPathError, ...]:
+    """Validate all target bodies and declared refs, preserving every issue path."""
+    return prepare_template_graph(
+        catalog, world=world, known_members=known_members,
+    ).issues
 
 
 def _missing_body(member, consumer, path, world_uid):

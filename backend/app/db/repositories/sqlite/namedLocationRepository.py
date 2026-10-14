@@ -57,6 +57,13 @@ class SqliteNamedLocationRepository(BaseRepository[NamedLocation], INamedLocatio
             order="location_uid ASC",
         )
 
+    async def find_by_template_ref(self, template_uid: str) -> list[NamedLocation]:
+        return await self.fetch_all(
+            "system_template_uid = ? OR system_structure_template_uid = ?",
+            [template_uid, template_uid],
+            order="location_uid ASC",
+        )
+
     async def upsert_bulk(self, rows: Sequence[NamedLocation]) -> int:
         if not rows:
             return 0

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
+    PACKING_ENVELOPE_FACING,
     PackingToken,
     Rect,
     Reservation,
@@ -13,7 +14,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     PackingStep,
     packing_info,
 )
-from app.dataModel.spatial.facing import Facing
 
 
 def parcel_size(w: int, h: int, rotated: bool) -> tuple[int, int]:
@@ -65,6 +65,6 @@ def log_place(district: str, reservation: Reservation) -> None:
         uid=token.uid,
         origin=reservation.rect_xy[:2],
         planted=f"{planted_w}x{planted_h}",
-        facing=Facing.SOUTH,
+        facing=PACKING_ENVELOPE_FACING,
         pass_id=reservation.pass_id,
     )

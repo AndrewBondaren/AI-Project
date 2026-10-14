@@ -97,7 +97,6 @@ class _SnapshotCase(IsolatedAsyncioTestCase):
                 ),
                 self.adapters,
             ),
-            self.adapters,
         )
 
     async def _world(self, world_uid: str) -> World:

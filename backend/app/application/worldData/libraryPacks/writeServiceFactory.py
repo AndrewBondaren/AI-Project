@@ -6,9 +6,10 @@ from app.application.worldData.libraryPacks.writePolicy import LibraryWritePolic
 from app.application.worldData.libraryPacks.writeService import LibraryWriteService
 
 
-def build_library_write_service(*, db, catalog, adapters, worlds, world_repository) -> LibraryWriteService:
+def build_library_write_service(*, db, catalog, adapters, worlds, world_repository, locations=None) -> LibraryWriteService:
     return LibraryWriteService(db=db,
-        inspector=LibraryWriteInspector(catalog=catalog, adapters=adapters, worlds=worlds),
+        inspector=LibraryWriteInspector(catalog=catalog, adapters=adapters, worlds=worlds,
+                                        locations=locations),
         policy=LibraryWritePolicy(), planner=LibraryWritePlanner(adapters),
         executor=LibraryWriteExecutor(db=db, catalog=catalog, adapters=adapters,
                                      world_repository=world_repository))

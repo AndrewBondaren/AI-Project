@@ -1,12 +1,15 @@
 """Resolvable snapshot of shared ``StructureTemplate`` geometry (5o split).
 
-FS stdlib ⊕ SQL library rows — caller hydrates, then passes this into the
-building catalog / assemblers. Key = ``system_name`` (uuid, model A).
+Caller hydrates, then passes this into the building catalog / assemblers.
+Two identity channels: ``__init__`` keys by the body-declared
+``system_name`` (uuid, model A — FS stdlib / test seam); ``from_entries``
+keys by the caller-declared member ``template_uid`` — the world snapshot
+path (B3), independent of the body's rewritten name.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
@@ -31,6 +34,18 @@ class StructureCatalog:
                     f"{structure.display_name!r})"
                 )
             self._by_uid[uid] = structure
+
+    @classmethod
+    def from_entries(
+        cls,
+        entries: Mapping[str, StructureTemplate] | Iterable[tuple[str, StructureTemplate]],
+    ) -> StructureCatalog:
+        """Keyed by caller-declared ``template_uid`` — world snapshot path."""
+        catalog = cls(())
+        pairs = entries.items() if isinstance(entries, Mapping) else entries
+        for uid, body in pairs:
+            catalog._by_uid[str(uid)] = body
+        return catalog
 
     @classmethod
     def empty(cls) -> StructureCatalog:
