@@ -143,6 +143,7 @@ parent/host, фиксированной точкой или выдуманным
 | CL-13 | Tier resolution docs vs code | `tz_climate.md` § на ячейке | resolved |
 | R-11 | `collect_map_cells` silent mix | split `collect_surface_grid_*` / `collect_geometry_fine_*` | resolved |
 | R-12 | Inline `// map_cell_fine_span` в planners | только `coordinates/convert.py` | resolved |
+| R-15 | `districtAssembler/planner/tokens.py` 549 строк — subjects + picks + facade | сплит `planner/{subjects,layoutPicks,tokens}.py` (161/256/188); шов `tokens` без изменений | resolved |
 
 ---
 

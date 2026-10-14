@@ -61,11 +61,7 @@ def _layout(
     _STRUCTS[uid] = StructureTemplate(
         system_name=uid,
         display_name=system_name,
-        structure_types=(
-            coerce_purpose_list(structure_type, empty_as_house=True)
-            if structure_type is not None
-            else None
-        ),
+        structure_types=coerce_purpose_list(structure_type, empty_as_house=True),
         levels=[],
     )
     return PlotLayoutTemplate(
@@ -98,12 +94,14 @@ class CoercePurposeTest(unittest.TestCase):
         layout = _layout("inn_small", "tavern")
         self.assertEqual(_leaves(layout), [BuildingPurpose.TAVERN])
 
-    def test_array_and_unknown_dropped(self) -> None:
-        layout = _layout("combo_1", ["house", "workshop", "blacksmith", "house"])
+    def test_array_dedup_and_unknown_rejected(self) -> None:
+        layout = _layout("combo_1", ["house", "workshop", "house"])
         self.assertEqual(
             _leaves(layout),
             [BuildingPurpose.HOUSE, BuildingPurpose.WORKSHOP],
         )
+        with self.assertRaises(ValueError):
+            _layout("bad_1", ["house", "blacksmith"])
 
     def test_empty_allowed_stays_empty(self) -> None:
         self.assertEqual(coerce_purpose_list([], empty_as_house=False), [])
@@ -441,9 +439,9 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
             _layout("temple_1", "temple"),
         )
         like = catalog.matching_allowed(
-            catalog.layouts, [BuildingPurposeFamily.TRADE], "like",
+            catalog.entries, [BuildingPurposeFamily.TRADE], "like",
         )
-        self.assertEqual([row.system_name for row in like], ["inn_small"])
+        self.assertEqual([entry.body.system_name for entry in like], ["inn_small"])
 
     def test_omit_packs_is_base_and_fantasy(self) -> None:
         enabled = purposes_for_world(None)
