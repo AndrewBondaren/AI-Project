@@ -7,7 +7,11 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from typing import ClassVar
 
-from app.application.jsonValidation.resolve import resolve_model
+from app.application.jsonValidation.resolve import UnresolvedModelError, resolve_model
+from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+    TemplateBodyPreparation,
+    TemplatePreparationError,
+)
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
     PackDomainAdapter,
     RemappedMember,
@@ -39,6 +43,35 @@ from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
+
+
+class ReliefBodyPreparation(TemplateBodyPreparation[ReliefTemplate]):
+    """Name-keyed relief bodies for the membership-scoped read boundary (B5).
+
+    World-side barrier/canal checks stay with ``ReliefPackAdapter`` (write
+    path); the reader reports missing/invalid geometry through the shared
+    issue channel instead of substituting a different template.
+    """
+
+    library_kind = LibraryKind.RELIEF_TEMPLATES
+    model = ReliefTemplate
+
+    def prepare_body(
+        self,
+        raw: dict,
+        *,
+        local_uid: str,
+        template_uid: str,
+        world=None,
+    ) -> ReliefTemplate:
+        body = super().prepare_body(
+            raw, local_uid=local_uid, template_uid=template_uid, world=world,
+        )
+        try:
+            warn_template_invalid_geom(body, template_uid=template_uid)
+        except UnresolvedModelError as exc:
+            raise TemplatePreparationError(tuple(exc.issues)) from exc
+        return body
 
 
 class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):

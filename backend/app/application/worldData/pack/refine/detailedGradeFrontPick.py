@@ -27,9 +27,6 @@ from app.application.worldData.pack.refine.detailedGradeFrontIdentity import (
 )
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +39,6 @@ def pick_front_grade(
     front: FrontGeometry,
     identity: FrontBakeIdentity,
     *,
-    registry: WorldReliefTemplateRegistry,
     policy: WorldReliefPickPolicy,
     world_seed: str,
     templates: Mapping[str, ReliefTemplate],
@@ -51,7 +47,7 @@ def pick_front_grade(
     """Template pick + envelope constrain. ``None`` = skip this front."""
     pick = pick_template(
         context=front.context,
-        registry=registry,
+        templates=templates,
         world_policy=policy,
         world_seed=world_seed,
         site_id=identity.site_id,

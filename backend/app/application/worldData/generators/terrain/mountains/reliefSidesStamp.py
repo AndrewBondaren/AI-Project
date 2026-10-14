@@ -10,7 +10,7 @@ from app.application.worldData.generators.terrain.relief.pick.templatePick impor
     pick_template,
     resolve_picked_template,
 )
-from app.application.jsonValidation.worldRow import relief_pick_policy, relief_template_registry
+from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
@@ -45,7 +45,6 @@ def stamp_mountain_sides_from_relief(
         )
         return spec
     n = form_side_count(spec.form)
-    registry = relief_template_registry(world)
     world_policy = relief_pick_policy(world)
     object_policy = getattr(spec, "relief_pick_policy", None)
     mountain_id = (
@@ -54,7 +53,7 @@ def stamp_mountain_sides_from_relief(
     )
     pick = pick_template(
         context=ReliefContext.MOUNTAIN,
-        registry=registry,
+        templates=templates_by_uid,
         world_policy=world_policy,
         world_seed=world_seed,
         site_id=mountain_id,

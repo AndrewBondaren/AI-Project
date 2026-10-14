@@ -19,9 +19,6 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ReliefContextPickPolicy,
     WorldReliefPickPolicy,
 )
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 
 @dataclass(frozen=True, slots=True)
 class PickResult:
@@ -73,7 +70,7 @@ def merge_pick_policy(
 def pick_template(
     *,
     context: ReliefContext | str,
-    registry: WorldReliefTemplateRegistry,
+    templates: Mapping[str, ReliefTemplate],
     world_policy: WorldReliefPickPolicy,
     world_seed: str,
     site_id: str,
@@ -90,14 +87,17 @@ def pick_template(
         side_policy=side_policy,
     )
     active = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_pick", ctx, site_id))
-    candidates = registry.entries_for_context(ctx)
+    candidates = [
+        uid for uid, body in sorted(templates.items())
+        if body.context.value == ctx
+    ]
     if not candidates:
         reject_unresolved(active, [FieldPathError(active.path_prefix,
             "no relief template candidates", code="DOMAIN_NO_CANDIDATE")])
 
     if effective.mode == ReliefPickMode.FIXED:
         uid = effective.default_template_uid
-        if uid and any(e.system_template_uid == uid for e in candidates):
+        if uid and uid in candidates:
             result = PickResult(
                 template_uid=uid,
                 policy_level=level,
@@ -118,7 +118,7 @@ def pick_template(
 
     if effective.mode == ReliefPickMode.ROUND_ROBIN:
         idx = occurrence_seq % len(candidates)
-        uid = candidates[idx].system_template_uid
+        uid = candidates[idx]
         relief_info(
             "pick",
             context=ctx,
@@ -140,7 +140,7 @@ def pick_template(
         world_seed, UidKind.RELIEF_PICK, len(candidates),
         context=ctx, site=site_id,
     )
-    uid = candidates[idx].system_template_uid
+    uid = candidates[idx]
     relief_info(
         "pick",
         context=ctx,

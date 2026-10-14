@@ -209,9 +209,9 @@ class InstantiateTests(_ServiceCase):
         self.assertEqual(registry_uids, set(res.uid_map.values()))
         self.assertFalse(registry_uids & set(res.uid_map))
 
-        # Registry readers resolve the world-owned copies.
+        # Membership readers resolve the world-owned copies.
         loaded = await load_relief_templates_for_world(
-            self.container.relief_template_library_service(), world
+            self.container.template_snapshot_loader(), world
         )
         self.assertEqual(set(loaded), set(res.uid_map.values()))
 

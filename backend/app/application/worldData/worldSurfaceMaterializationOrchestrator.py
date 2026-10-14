@@ -60,7 +60,7 @@ class WorldSurfaceMaterializationOrchestrator:
         self._pack = pack
         self._detailed = detailed or PackDetailedBakeOrchestrator(
             pack.terrain,
-            relief_library=pack.relief_library,
+            relief_loader=pack.relief_loader,
             relief_grade_repo=pack.relief_grade_repo,
         )
         self._outdoor = outdoor

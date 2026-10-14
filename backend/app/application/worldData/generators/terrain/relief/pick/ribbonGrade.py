@@ -10,10 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.jsonValidation.worldRow import (
-    relief_pick_policy,
-    relief_template_registry,
-)
+from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import (
     grade_constrained,
 )
@@ -61,14 +58,13 @@ def grade_ribbon_segments(
     context: ReliefContext = ReliefContext.ROAD_SHOULDER,
 ) -> list[RibbonGradeResult]:
     """Grade ribbon segments for ``context`` (road_shoulder / open_land / shore / ravine)."""
-    registry = relief_template_registry(world)
     world_policy = relief_pick_policy(world)
     results: list[RibbonGradeResult] = []
     seq = occurrence_start
     for segment in segments:
         pick = pick_template(
             context=context,
-            registry=registry,
+            templates=templates_by_uid,
             world_policy=world_policy,
             world_seed=world_seed,
             site_id=segment.site_id,

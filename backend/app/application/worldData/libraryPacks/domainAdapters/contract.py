@@ -3,11 +3,11 @@
 
 The universal pack layer (``packService``) owns identity, ownership and
 atomicity; each adapter owns the body model, domain restrictions and the
-transitional pointer dual-write: registry pointers stay the availability
-source of truth until step 5b, so a world-owned member write must appear
-to the existing registry readers (``load_relief_templates_for_world``,
-``layouts_for_world``) through the pointer row — always pointing at the
-world-owned member uid, never at an engine member.
+transitional pointer dual-write: pointers are still written until step
+5b, so a world-owned member write keeps the pointer row pointing at the
+world-owned member uid, never at an engine member. Relief readers
+already read membership only (B5); remaining registry readers
+(``layouts_for_world``) follow in later steps.
 
 This package holds the contract only (``contract.py``): the
 ``PackDomainAdapter`` ABC, the domain library/outline unions, the shared

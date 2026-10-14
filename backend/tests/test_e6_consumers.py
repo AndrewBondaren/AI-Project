@@ -4,6 +4,7 @@ from dataclasses import replace
 from random import Random
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
+from uuid import uuid4
 
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_source
@@ -17,6 +18,11 @@ from app.application.worldData.buildingTemplateLibraryService import BuildingTem
 from app.application.worldData.structureTemplateLibraryService import StructureTemplateLibraryService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.loadReliefTemplatesForWorld import load_relief_templates_for_world
+from app.application.worldData.templateContracts import (
+    ReliefTemplateSnapshot,
+    TemplateEntry,
+)
+from app.dataModel.terrain.relief import ReliefTemplate
 from app.application.worldData.parseObjectReliefPickPolicy import parse_object_relief_pick_policy
 from app.application.worldData.raceService import RaceService, _to_race
 from app.application.worldData.worldPerkService import WorldPerkService, _to_perk
@@ -197,12 +203,23 @@ class LibraryConsumerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(UnresolvedModelError):
             await service.layouts_for_world(world)
 
-    async def test_relief_preload_missing_reference_rejects_instead_of_skipping(self):
+    async def test_relief_preload_uses_membership_snapshot_not_registry(self):
+        """B5: the world registry no longer drives the relief reader — a dangling
+        pointer cannot produce a candidate without membership, and a prepared
+        member body arrives keyed by its member uid."""
         world, _, _ = fixture()
-        world.relief_template_registry = [{"system_template_uid": "missing", "display_template_name": "Missing", "context": "open_land"}]
-        library = SimpleNamespace(find_by_uid=AsyncMock(return_value=None))
-        with self.assertRaises(UnresolvedModelError):
-            await load_relief_templates_for_world(library, world)
+        uid = str(uuid4())
+        entry = TemplateEntry(template_uid=uid, pack_uid=str(uuid4()),
+            body=ReliefTemplate.model_validate({"system_name": "g", "display_name": "G",
+                                                "context": "open_land"}))
+        world.relief_template_registry = [{"system_template_uid": "missing",
+            "display_template_name": "Missing", "context": "open_land"}]
+        loader = SimpleNamespace(load_relief=AsyncMock(return_value=ReliefTemplateSnapshot(
+            world_uid=world.world_uid, templates={uid: entry})))
+        self.assertEqual(await load_relief_templates_for_world(loader, world), {uid: entry.body})
+        empty = SimpleNamespace(load_relief=AsyncMock(return_value=ReliefTemplateSnapshot(
+            world_uid=world.world_uid)))
+        self.assertEqual(await load_relief_templates_for_world(empty, world), {})
 
     async def test_race_and_perk_update_validate_before_write(self):
         world, _, _ = fixture()

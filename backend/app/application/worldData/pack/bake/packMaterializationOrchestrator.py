@@ -39,7 +39,7 @@ from app.application.worldData.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )
-from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
@@ -75,7 +75,7 @@ class PackMaterializationOrchestrator:
         read_context_for: Callable[[str], PackReadContext] | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         tile_planner: PackTilePlanner | None = None,
-        relief_library: ReliefTemplateLibraryService | None = None,
+        relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
     ) -> None:
         self._terrain = terrain
@@ -85,7 +85,7 @@ class PackMaterializationOrchestrator:
         self._world_service = world_service
         self._read_context = read_context
         self._read_context_for = read_context_for
-        self._relief_library = relief_library
+        self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
         if entry is not None:
             self._entry = entry
@@ -97,7 +97,7 @@ class PackMaterializationOrchestrator:
             )
             fine = fine_terrain or FineTerrainRefineOrchestrator(
                 terrain,
-                relief_library=relief_library,
+                relief_loader=relief_loader,
                 relief_grade_repo=relief_grade_repo,
             )
             self._entry = EntryRefineOrchestrator(
@@ -113,8 +113,8 @@ class PackMaterializationOrchestrator:
         return self._terrain
 
     @property
-    def relief_library(self) -> ReliefTemplateLibraryService | None:
-        return self._relief_library
+    def relief_loader(self) -> TemplateSnapshotLoader | None:
+        return self._relief_loader
 
     @property
     def relief_grade_repo(self) -> IReliefGradeRepository | None:
@@ -238,13 +238,13 @@ class PackMaterializationOrchestrator:
         writer.write_locations_index(locations_index)
 
         relief_templates: dict[str, ReliefTemplate] = {}
-        if self._relief_library is not None:
+        if self._relief_loader is not None:
             relief_templates = await load_relief_templates_for_world(
-                self._relief_library, world,
+                self._relief_loader, world,
             )
         else:
             logging.getLogger(__name__).warning(
-                "relief | pack bake: relief_library unbound world=%s — "
+                "relief | pack bake: relief_loader unbound world=%s — "
                 "mountain/road_shoulder templates not preloaded",
                 world.world_uid,
             )

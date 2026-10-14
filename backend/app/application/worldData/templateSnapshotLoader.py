@@ -34,6 +34,7 @@ from app.application.worldData.libraryPacks.templateGraphValidation import (
     prepare_template_graph,
 )
 from app.application.worldData.templateContracts import (
+    ReliefTemplateSnapshot,
     TemplateEntry,
     WorldTemplateSnapshot,
 )
@@ -47,6 +48,7 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
 from app.dataModel.locations.structure.building.structureTemplate import (
     StructureTemplate,
 )
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World
 from app.ids import LibraryKind
 
@@ -65,11 +67,15 @@ class TemplateSnapshotLoader:
     def __init__(self, catalog_loader: EffectiveCatalogLoader) -> None:
         self._loader = catalog_loader
 
-    async def load(self, world: World) -> WorldTemplateSnapshot:
+    async def _prepare(
+        self,
+        world: World,
+        kinds: tuple[LibraryKind, ...],
+    ) -> dict:
         catalog = await self._loader.load(world.world_uid)
         members = {
             member.template_uid: member
-            for kind in _SNAPSHOT_KINDS
+            for kind in kinds
             for member in catalog.candidates(kind)
         }
         bodies: dict[str, dict] = {}
@@ -92,11 +98,28 @@ class TemplateSnapshotLoader:
             ref.consumer for ref in graph.refs
             if ref.template_uid not in graph.bodies
         }
-        prepared = {
+        return {
             uid: (members[uid], body)
             for uid, body in graph.bodies.items()
             if uid not in excluded
         }
+
+    async def load_relief(self, world: World) -> ReliefTemplateSnapshot:
+        """Membership-scoped relief members → typed bodies (B5)."""
+        prepared = await self._prepare(world, (LibraryKind.RELIEF_TEMPLATES,))
+        return ReliefTemplateSnapshot(
+            world_uid=str(world.world_uid),
+            templates={
+                uid: TemplateEntry(
+                    template_uid=uid, pack_uid=member.pack_uid, body=body,
+                )
+                for uid, (member, body) in prepared.items()
+                if isinstance(body, ReliefTemplate)
+            },
+        )
+
+    async def load(self, world: World) -> WorldTemplateSnapshot:
+        prepared = await self._prepare(world, _SNAPSHOT_KINDS)
 
         def entries_of(kind: LibraryKind, model: type) -> dict[str, TemplateEntry]:
             out = {}

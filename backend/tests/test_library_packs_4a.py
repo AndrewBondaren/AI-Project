@@ -380,7 +380,7 @@ class OwnershipAndDualWriteTests(_ServiceCase):
             {e["system_template_uid"] for e in world.relief_template_registry},
         )
         loaded = await load_relief_templates_for_world(
-            self.container.relief_template_library_service(), world
+            self.container.template_snapshot_loader(), world
         )
         self.assertIn(member.template_uid, loaded)
         self.assertEqual(loaded[member.template_uid].system_name, "meadow")
@@ -483,7 +483,7 @@ class DeletePackSafetyTests(_ServiceCase):
 
         world = await self.worlds.get_by_id("w1")
         loaded = await load_relief_templates_for_world(
-            self.container.relief_template_library_service(), world
+            self.container.template_snapshot_loader(), world
         )
         self.assertIn(world_member.template_uid, loaded)
 

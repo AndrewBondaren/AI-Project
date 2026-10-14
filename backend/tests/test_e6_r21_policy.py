@@ -11,7 +11,6 @@ from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicy
 from app.dataModel.terrain.relief.enums import CanalObstacleEntity, ReliefPickMode
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import WorldCanalTemplateRegistry
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy, ReliefContextPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import WorldReliefTemplateRegistry
 from app.dataModel.terrain.relief import ReliefTemplate
 from app.application.worldData.generators.terrain.relief.pick.gradePass import grade_from_template
 from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import grade_constrained
@@ -33,12 +32,13 @@ class R21PolicyTests(unittest.TestCase):
 
     def test_empty_candidates_and_missing_fixed_do_not_pick_alternatives(self):
         policy = WorldReliefPickPolicy()
-        registry = WorldReliefTemplateRegistry([])
+        templates = {}
         def pick(ctx):
-            return pick_template(context="mountain", registry=registry, world_policy=policy,
+            return pick_template(context="mountain", templates=templates, world_policy=policy,
                 world_seed="seed", site_id="site", resolve_ctx=ctx)
         self.assert_policy_error(pick, "DOMAIN_NO_CANDIDATE")
-        registry = WorldReliefTemplateRegistry.model_validate([{"context": "mountain", "system_template_uid": "other"}])
+        templates = {"other": ReliefTemplate.model_validate(
+            {"system_name": "other", "display_name": "Other", "context": "mountain"})}
         policy = WorldReliefPickPolicy(mountain=ReliefContextPickPolicy(mode="fixed", default_template_uid="missing"))
         self.assert_policy_error(pick, "REF_W_UNKNOWN")
 
@@ -83,12 +83,13 @@ class R21PolicyTests(unittest.TestCase):
         registry = WorldCanalTemplateRegistry.canonical_defaults()
         self.assertIsNone(resolve_knobs_canal(earthen_canal=None, structure_canal=None,
             structure_refs=(), registry=registry))
-        reg = WorldReliefTemplateRegistry.model_validate([{"context": "mountain", "system_template_uid": uid}
-                                                         for uid in ("one", "two")])
+        templates = {uid: ReliefTemplate.model_validate(
+            {"system_name": uid, "display_name": uid, "context": "mountain"})
+            for uid in ("one", "two")}
         for mode in ("random", "round_robin"):
             policy = WorldReliefPickPolicy(mountain=ReliefContextPickPolicy(mode=mode))
             def replay():
-                return [pick_template(context="mountain", registry=reg, world_policy=policy,
+                return [pick_template(context="mountain", templates=templates, world_policy=policy,
                     world_seed="seed", site_id=f"site-{i}", occurrence_seq=i) for i in range(5)]
             self.assertEqual(replay(), replay())
             if mode == "round_robin":

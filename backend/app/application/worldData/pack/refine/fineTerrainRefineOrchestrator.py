@@ -44,7 +44,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
 from app.application.worldData.pack.refine.fineChunkGeom import rects_for_macro_tile
-from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
@@ -61,12 +61,12 @@ class FineTerrainRefineOrchestrator:
         terrain: TerrainBatchOrchestrator,
         *,
         runner: FineChunkRunner | None = None,
-        relief_library: ReliefTemplateLibraryService | None = None,
+        relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
     ) -> None:
         self._terrain = terrain
         self._runner = runner or FineChunkRunner(terrain)
-        self._relief_library = relief_library
+        self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
         self._templates_by_world: dict[str, dict[str, ReliefTemplate]] = {}
 
@@ -308,12 +308,12 @@ class FineTerrainRefineOrchestrator:
         if cached is not None:
             return cached
         out: dict[str, ReliefTemplate] = {}
-        if self._relief_library is not None:
+        if self._relief_loader is not None:
             from app.application.worldData.loadReliefTemplatesForWorld import (
                 load_relief_templates_for_world,
             )
 
-            out = await load_relief_templates_for_world(self._relief_library, world)
+            out = await load_relief_templates_for_world(self._relief_loader, world)
         self._templates_by_world[world.world_uid] = out
         return out
 

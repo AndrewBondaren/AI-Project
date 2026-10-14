@@ -12,6 +12,7 @@ from app.application.jsonValidation.types import (
 from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplatePreparationError
 from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
 from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
+from app.application.worldData.libraryPacks.domainAdapters.relief import ReliefBodyPreparation
 from app.application.worldData.libraryPacks.domainAdapters.structure import StructureBodyPreparation
 from app.application.worldData.libraryPacks.lifecycleContracts import (
     CatalogSnapshot,
@@ -24,7 +25,8 @@ from app.db.models.libraryPackMember import LibraryPackMemberRow
 
 
 _PREPARATIONS = {p.library_kind.value: p() for p in (
-    PlotBodyPreparation, BuildingBodyPreparation, StructureBodyPreparation,
+    PlotBodyPreparation, BuildingBodyPreparation, ReliefBodyPreparation,
+    StructureBodyPreparation,
 )}
 
 

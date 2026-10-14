@@ -15,7 +15,6 @@ import time
 
 from app.application.jsonValidation import (
     relief_pick_policy,
-    relief_template_registry,
     terrain_masks,
 )
 from app.application.worldData.generators.terrain.relief.discover.core import (
@@ -173,7 +172,6 @@ def discover_and_paint(
     fronts = discovered.fronts
 
     world_seed = bake_seed(world)
-    registry = relief_template_registry(world)
     policy = relief_pick_policy(world)
     pick_seq = 0
     acc = DetailedGradeResult.empty()
@@ -199,7 +197,6 @@ def discover_and_paint(
             picked = pick_front_grade(
                 front,
                 identity,
-                registry=registry,
                 policy=policy,
                 world_seed=world_seed,
                 templates=templates,

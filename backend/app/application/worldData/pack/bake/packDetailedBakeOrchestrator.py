@@ -46,7 +46,7 @@ from app.application.worldData.pack.refine.fineChunkGeom import (
 )
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.persistReliefGrades import persist_relief_grades
-from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
@@ -106,7 +106,7 @@ class PackDetailedBakeOrchestrator:
         runner: FineChunkRunner | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         bake_defaults: PackBakeDefaults | None = None,
-        relief_library: ReliefTemplateLibraryService | None = None,
+        relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
     ) -> None:
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
@@ -114,7 +114,7 @@ class PackDetailedBakeOrchestrator:
         self._climate = climate_bake or ClimatePackBakeOrchestrator(
             bake_defaults=self._defaults,
         )
-        self._relief_library = relief_library
+        self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
 
     async def bake(
@@ -147,13 +147,13 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
         relief_templates: dict[str, ReliefTemplate] = {}
-        if request.stages.mill and self._relief_library is not None:
+        if request.stages.mill and self._relief_loader is not None:
             from app.application.worldData.loadReliefTemplatesForWorld import (
                 load_relief_templates_for_world,
             )
 
             relief_templates = await load_relief_templates_for_world(
-                self._relief_library, world,
+                self._relief_loader, world,
             )
         if request.scope == "location":
             return await self._bake_location_scope(

@@ -562,7 +562,7 @@ class Container(TemplateRepositoryProviders):
             self._entry_refine_orchestrator = EntryRefineOrchestrator(
                 FineTerrainRefineOrchestrator(
                     terrain,
-                    relief_library=self.relief_template_library_service(),
+                    relief_loader=self.template_snapshot_loader(),
                     relief_grade_repo=self.relief_grade_repository(),
                 ),
                 job_repo=self.chunk_refine_job_repository(),
@@ -580,7 +580,7 @@ class Container(TemplateRepositoryProviders):
                 job_repo=self.chunk_refine_job_repository(),
                 world_service=self.world_service(),
                 read_context_for=lambda uid: self.pack_read_services(uid).context,
-                relief_library=self.relief_template_library_service(),
+                relief_loader=self.template_snapshot_loader(),
                 relief_grade_repo=self.relief_grade_repository(),
             )
         return self._pack_materialization_orchestrator
