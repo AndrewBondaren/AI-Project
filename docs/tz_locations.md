@@ -555,7 +555,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 | Тип | Пример | outdoor? | leaf? | Источник |
 |---|---|---|---|---|
 | `district` | Торговый квартал, Портовый район | `true` | нет | вручную / LLM |
-| `building` | Таверна, Арсенал, Особняк | `false` | нет (если есть rooms) | `building_template_registry` |
+| `building` | Таверна, Арсенал, Особняк | `false` | нет (если есть rooms) | библиотека шаблонов мира (membership) |
 | `room` | Общий зал, Кухня, Подвал | `false` | **да** | `room_type_registry` внутри building |
 
 Строение без внутренних комнат (`room`) — `building` сам является leaf в дереве. **Якорь** `SessionScene.location_uid` = этот leaf; **объём сцены** (карта вокруг игрока, события за окном) — не этот uid. SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C18**.
@@ -1284,7 +1284,7 @@ ceiling: Железная люстра
 **Использование:**
 - `items.item_value_tier` — ценность предмета
 - `named_locations.economic_tier` — ценовой уровень локации/здания
-- `building_template_registry[].economic_tier_range` — диапазон при генерации
+- `economic_tier_range` на теле шаблона здания/участка — диапазон при генерации
 
 **Фактическая цена** (отложено до системы экономики):
 ```
@@ -1327,9 +1327,9 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 **`is_public` / `is_forbidden`** — определяются в шаблоне на каждой комнате, не в реестре. Один и тот же `room_type = "common_hall"` может быть публичным в таверне и закрытым в частном доме.
 
-### `worlds.building_template_registry` (N+1)
+### Шаблоны зданий — библиотека (N+1; было `worlds.building_template_registry`, удалено в B7)
 
-Чертежи зданий с interior. Загружаются из JSON-файлов. Template engine создаёт `named_location` типа `building` (с `is_public` / `is_forbidden` из `default_*` шаблона) + дочерние `named_location` типа `room` по `room_type_registry` (с `is_public` / `is_forbidden` из `default_*` типа комнаты).
+Чертежи зданий с interior — тела библиотечных шаблонов; availability в мире — pack membership (`tz_template_library_packs`), не колонка `worlds`. Загружаются из JSON-файлов. Template engine создаёт `named_location` типа `building` (с `is_public` / `is_forbidden` из `default_*` шаблона) + дочерние `named_location` типа `room` по `room_type_registry` (с `is_public` / `is_forbidden` из `default_*` типа комнаты).
 
 ```json
 [

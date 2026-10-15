@@ -215,7 +215,7 @@ economic_tier_band
 | `worlds.economic_tier_registry[]` | World N+1 | источник истины |
 | `named_locations.system_economic_tier` | локация | `EconomyTierKey` → `system_tier` |
 | `SettlementSkeleton.economic_tier` | скелет города | тот же ключ (alias SQL `system_economic_tier`) |
-| `building_template_registry[].economic_tier_range` | шаблон здания | `{min, max}` → `EconomyTierKey` |
+| `economic_tier_range` (тело шаблона — `PlotLayoutTemplate`/building body) | шаблон здания | `{min, max}` → `EconomyTierKey` |
 | `district_template_registry[].economic_tier_range` | шаблон района | `{min, max}` → `EconomyTierKey` |
 | `district_template_registry[].placement_conditions` | `{type: economic_tier_min/max, tier}` | → `system_tier` |
 | `economic_tier_band` | шаблон города/района/здания | → band enum (§3) — **planned** |

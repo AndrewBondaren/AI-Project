@@ -307,7 +307,7 @@ Perimeter не учитывает template района — v1 compromise.
 
 **Status:** `open` | **Severity:** low | **P:** P3
 
-`building_template_registry` / `barrier_template_registry` — dict в модели, list-like в коде.  
+`barrier_template_registry` — dict в модели, list-like в коде (`building_template_registry` удалён в B7, половина пункта снята).  
 **Fix:** validator при JSON import.
 
 ---
@@ -355,7 +355,7 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | Sub-ID | Severity | P | Status | Проблема | Fix |
 |---|---|---|---|---|---|
 | **CITY-T-2a** | medium | P2 | **resolved** | Контракт §9.2 в коде (`allowed_fill_structure_types`). Civic flood закрыт allow-list на `civic_center` + cache=tokens (**4c**) | — |
-| **CITY-T-2b** | **high** | **P1** | **open** | Building §5.2: `building_template_registry` = uid → SQL `building_templates`. Packing (`building_layout_templates`) принимает только строки, которые валидятся как `BuildingLayoutTemplate` (`system_name` + `levels`) + builtins (в т.ч. stub `mine`/`temple`/… с телом ратуши). Указатели uid **игнор** | Generate читает library по uid реестра мира (тот же SoT, что import шаблона). Пока 2b open smoke layout-телами в JSON мира — interim, не контракт мастера |
+| **CITY-T-2b** | **high** | **P1** | **open** | ~~Building §5.2: `building_template_registry` = uid → SQL `building_templates`. Packing (`building_layout_templates`) принимает только строки, которые валидятся как `BuildingLayoutTemplate` (`system_name` + `levels`) + builtins (в т.ч. stub `mine`/`temple`/… с телом ратуши). Указатели uid **игнор**~~ — **interim-контракт снят B7 (2026-10-15): колонка и accessors удалены; availability = membership, generate читает snapshot (B3) по member uid** | Generate читает library по uid — реализовано через `TemplateSnapshotLoader`/`BuildingCatalog` (member uid, не world-column). Остаток — smoke/приёмка; статус закрытия за мастером |
 | **CITY-T-2c** | medium | P1 | **partial** | Ничья **района** = клетка footprint + `_districts`. Packing зданий: `BUILDINGS` seed (**4g** ✅). Frontage / city streets — проверить `world_uid` | В seed не `city_size` и не pack tile. Планирование слотов serial (CITY-T-3) |
 | **CITY-T-2d** | medium | P2 | **partial** | Контракт §1.2 в коде: `typical_districts` → роли → морфология; `district_subtype`; registry + subjects; size ≠ рецепт. Leftover: SQL uid (**2b**); материал как отдельный фильтр сверх `subjects` | Не reopen рецепт. Дальше — 2b |
 

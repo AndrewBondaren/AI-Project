@@ -380,7 +380,7 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 - `city.map_x, map_y` — origin города на глобальной карте
 - `footprint_by_size[subtype][system_settlement_size]` — множитель на `world.fine_cells_per_map_cell`; сторона footprint в fine-клетках = множитель × `fine_cells_per_map_cell`. SoT таблица и инвариант village≺city: [`tz_locations.md`](./tz_locations.md) **LOC-T-2**. Код до impl: `city_size_registry[system_city_size].footprint_multiplier` (токены `hamlet`… смешаны с морфологией — **не** целевой контракт)
 - `settlement_density` → плотность застройки
-- `building_template_registry` — доступные шаблоны
+- библиотека шаблонов мира (pack membership / `library_pins`) — доступные шаблоны; `building_template_registry` удалён (B7)
 
 **Канон множителей** — на subtype, не на ранге. Не копировать полную таблицу сюда (SoT — locations **LOC-T-2**). Omit ранга → `medium`.
 
@@ -525,7 +525,7 @@ L0 restamp полотна новых world-рёбер на уже записан
 ### 9.1 Хранение
 
 Аналогично `building_templates` — глобальная таблица шаблонов, не привязанная к конкретному миру.
-Per-world реестр: `worlds.district_template_registry` (JSON-массив, как `building_template_registry`).
+Per-world реестр: `worlds.district_template_registry` (JSON-массив, как прочие `*_registry`).
 
 ### 9.2 Схема шаблона района
 

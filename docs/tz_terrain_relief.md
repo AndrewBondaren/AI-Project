@@ -124,15 +124,17 @@ runtime пишет WarningError и останавливает операцию; 
 
 Как template-домены: общая библиотека + membership паков; per-world pointers
 R11 ниже — legacy до cutover 5b. Тела **не** внутри world JSON (R35).
+**Cutover выполнен (5b/B7, 2026-10-15):** колонка `relief_template_registry`
+удалена; availability — membership world-owned паков + `library_pins`.
 
 | Где | Что |
 |---|---|
 | Диск | корень **`relief_templates/`** (не `structures_templates/`). Пак `{pack_name}/{system_name}.json`; stem = `system_name`; иначе **reject** (**R29**) |
 | SQL library | плоский ряд `relief_templates` после import |
-| Мир | `relief_template_registry` (uid, display, `context`, imported_at) + `relief_pick_policy` |
-| Bundle | top-level секция `relief_templates` (тела) + pointers/policy в `world`. Import: library ← секция, registry/policy ← `world` |
+| Мир | membership world-owned паков + `library_pins` + `relief_pick_policy` (`default_template_uid` = member uid) |
+| Bundle | top-level секция `relief_templates` — compat flat input → `legacy` pack; policy/pins в `world` |
 
-Мастер: **(A)** файл/пак → library → registry и/или **(B)** world bundle (**R18**).
+Мастер: **(A)** файл/пак → library → attach к миру и/или **(B)** world bundle (**R18**).
 
 У шаблона **ровно один** `context` (**R17**), не список. v1: `mountain` \| `open_land` \| `shore` \| `road_shoulder` \| `ravine` (**R13**). Приоритет context на клетке: `road_shoulder > shore > mountain > ravine > open_land` (один шаблон, не blend).
 
@@ -255,7 +257,7 @@ Schema — только [`0001_initial.sql`](../backend/app/db/migrations/0001_i
 
 ### Колонки мира (JSON)
 
-`worlds`: `relief_template_registry`, `canal_template_registry`, `relief_pick_policy` (context + опц. `canal_obstacle_policy`), `relief_grade_obstacle_policy` (`truncate_skip` \| `allow_flush`). `connection_edges.relief_pick_policy` — object overlay (дорога).
+`worlds`: `canal_template_registry`, `relief_pick_policy` (context + опц. `canal_obstacle_policy`), `relief_grade_obstacle_policy` (`truncate_skip` \| `allow_flush`), `library_pins`. `connection_edges.relief_pick_policy` — object overlay (дорога). Availability relief-шаблонов — pack membership, не колонка мира (`relief_template_registry` удалён в B7).
 
 ### DDL (как в 0001)
 

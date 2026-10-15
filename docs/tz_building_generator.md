@@ -1382,12 +1382,11 @@ Layout-строки — **interim-хранилище** world-override черте
 (CITY-T-2b/5o, overlay до целевого pack-механизма). Это не uid-ссылки и не
 подключение паков — правила §6.2 касаются только pointer-вида.
 
-Контракт колонки — один union-POJO `WorldBuildingTemplateRegistry`
-(`BuildingTemplateRegistryEntry | PlotLayoutTemplate`, дискриминатор
-`system_template_uid`); ручная дискриминация потребителями запрещена.
-Строка с обоими ключами — pointer (то же правило, что в `worldRow` и
-pack-remap). Строка ни одного вида — ошибка валидации с `path` к индексу,
-не silent drop.
+~~Контракт колонки — union-POJO `WorldBuildingTemplateRegistry`~~ — POJO
+удалён вместе с колонкой (B7). Legacy wire-форму разбирает только
+explicit migration boundary (`legacyWorldInput` / `legacyDomainSplit`)
+как сырые dict: дискриминация `system_template_uid`-pointer vs embedded
+layout остаётся правилом конвертации, не runtime-контрактом мира.
 
 ---
 

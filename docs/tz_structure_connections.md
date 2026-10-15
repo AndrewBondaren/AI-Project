@@ -8,7 +8,7 @@
 Граф иерархический: мировой → городской → районный → участок.  
 Pathfinding поднимается и опускается по уровням иерархии.
 
-**Участок** — слот из шаблона (`building_template_registry`). Назначение — **листья** `structure_types` ([tz_building_generator.md](./tz_building_generator.md) §2.1). Не N+1 ключ мира. `portal` / `air_dock` — семья `transit`: участок, если пак мира включил лист (не fill в каноне `fantasy`). `lamp_post` — не plot-purpose. Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
+**Участок** — слот из шаблона (библиотека шаблонов мира — pack membership; `building_template_registry` удалён в B7). Назначение — **листья** `structure_types` ([tz_building_generator.md](./tz_building_generator.md) §2.1). Не N+1 ключ мира. `portal` / `air_dock` — семья `transit`: участок, если пак мира включил лист (не fill в каноне `fantasy`). `lamp_post` — не plot-purpose. Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
 
 **Площадь** — не тип соединения. Это тег назначения `"plaza"` на чертеже: общественная зона (сады, фонтаны, террасы — состав шаблона). Frontage hierarchy **не** применяется, если `plaza` ∈ `structure_types`. В граф — `ConnectionNode` с `location_uid` площади. Участок в pack **не** `location_type` (outdoor **C3**).
 
@@ -656,7 +656,7 @@ Peek `node.z` в §5.1.1 — **не этот контракт** (C21 leftover / 
 
 **Посадка и шаг сетки.** Шаг улицы района = `block_size` плотности (**50 / 80 / 120 клеток**). Это **модуль сетки** (прямоугольник между узлами), не особый «суперблок». Generate считает клетками; метры/футы — display.
 
-Размер участка — **шаблон** из `building_template_registry` (`occupied_footprint` + опц. двор), в клетках. Любой `structure_type`, любой размер. Нет хардкода 200×200.
+Размер участка — **шаблон** из библиотеки шаблонов мира — pack membership (`occupied_footprint` + опц. двор), в клетках. Любой `structure_type`, любой размер. Нет хардкода 200×200.
 
 **Один модуль ≠ один участок.** Модуль сетки — **двумерный бин** `(block_size × block_size)`, рамка главной улицы, не лот. Участок — прямоугольник из cache (`occupied_footprint` + опц. двор), любой `structure_type` и любой размер.
 
@@ -1011,7 +1011,7 @@ street_objects: list[dict]  # открытый список; [] по умолч�
 ```
 
 **Идея разделения по стилям:**  
-`street_objects` объявляет только `structure_type` + вероятность. Конкретный шаблон выбирается из `building_template_registry` по `structure_type` + `economic_tier` из `CitySkeleton` — та же механика что для зданий в районе.
+`street_objects` объявляет только `structure_type` + вероятность. Конкретный шаблон выбирается из библиотеки шаблонов мира (pack membership) по `structure_type` + `economic_tier` из `CitySkeleton` — та же механика что для зданий в районе.
 
 Применимо к `sidewalk`, `road`, `alley` — объекты вдоль дороги существуют в любую эпоху.
 

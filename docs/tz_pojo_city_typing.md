@@ -165,7 +165,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | `required_structures[].plot_template` | тот же `DrawingKey` | pin чертежа участка (`by_system_name`); `count` на строке **главнее** `plot_counts`. Leftover `building_template` |
 | `required_structures[].structure_type` | leftover optional purpose | дубль ключа рецепта поселения, не pin, не ключ map |
 
-`DrawingKey` — `RegistryKey[BuildingLayoutTemplate]` (identity чертежа generate, не uid `WorldBuildingTemplateRegistry`). Не ткань района. Не `PlotType` / `StructureType`.
+`DrawingKey` — `RegistryKey[BuildingLayoutTemplate]` (identity чертежа generate, не uid библиотечного member). Не ткань района. Не `PlotType` / `StructureType`.
 
 Резолв N ([`tz_structure_connections.md`](./tz_structure_connections.md) §5.1.3): `required.count` → `plot_counts` района → `plot_counts` города → **1**.
 
