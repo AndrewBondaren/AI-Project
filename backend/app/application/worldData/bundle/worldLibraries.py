@@ -13,6 +13,12 @@ from app.application.jsonValidation.types import FieldPathError, ImportValidatio
 
 FLAT_KINDS = (LibraryKind.RELIEF_TEMPLATES,)
 
+# Flat template sections are claimed by ``import_libraries``, not section
+# handlers — pack domains have none (``bundle/order.py``). On failure the
+# caller still marks every claimable section consumed so nothing
+# re-validates bodies the library seam already rejected.
+LIBRARY_CONSUMED_SECTIONS = frozenset(kind.value for kind in TEMPLATE_KINDS)
+
 
 def import_libraries(data, *, legacy_migration=False):
     packs = list(packs_from_wire(data.get(BundleSection.LIBRARY_PACKS, [])))

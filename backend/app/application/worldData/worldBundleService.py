@@ -12,7 +12,11 @@ from app.application.importResult import ImportResult
 from app.application.worldData.libraryPacks.archiveSources import pack_to_wire, packs_from_wire
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.bundle.worldCopyImport import WorldCopyImport
-from app.application.worldData.bundle.worldLibraries import export_libraries, import_libraries
+from app.application.worldData.bundle.worldLibraries import (
+    LIBRARY_CONSUMED_SECTIONS,
+    export_libraries,
+    import_libraries,
+)
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
@@ -182,10 +186,10 @@ class WorldBundleService:
                         ctx.errors.extend(self._migration.plan_wire(legacy, packs))
             except ImportValidationError as exc:
                 ctx.errors.extend(exc.errors)
-                consumed = {BundleSection.PLOT_TEMPLATES, BundleSection.BUILDING_TEMPLATES}
+                consumed = LIBRARY_CONSUMED_SECTIONS
             except (ValueError, LibraryPackValidationError) as exc:
                 ctx.errors.append(FieldPathError((BundleSection.LIBRARY_PACKS,), str(exc), code="LIBRARY_INVALID"))
-                consumed = {BundleSection.PLOT_TEMPLATES, BundleSection.BUILDING_TEMPLATES}
+                consumed = LIBRARY_CONSUMED_SECTIONS
         for handler in self._handlers:
             if handler.key not in data or handler.key == BundleSection.WORLD or handler.key in consumed:
                 continue
