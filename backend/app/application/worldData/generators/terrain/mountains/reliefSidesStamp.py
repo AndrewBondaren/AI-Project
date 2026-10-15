@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from app.application.worldData.generators.terrain.relief.mountain.mountainSideMaterialize import (
     resolve_sides_with_declare,
 )
@@ -13,7 +15,6 @@ from app.application.worldData.generators.terrain.relief.pick.templatePick impor
 from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 from app.dataModel.terrainMasks.mountain.specs import (
     MountainRangeSpec,
     MountainSpec,
@@ -22,12 +23,20 @@ from app.dataModel.terrainMasks.mountain.specs import (
 from app.db.models.world import World
 
 
+def _mountain_pick_site_id(spec: MountainSpec) -> str:
+    """site_id for pick determinism — declared location uid, else geo tuple."""
+    return (
+        spec.location_uid
+        or f"{spec.origin_x_m},{spec.origin_y_m},{spec.radius_m}"
+    )
+
+
 def stamp_mountain_sides_from_relief(
     spec: MountainSpec,
     *,
     world: World,
     world_seed: str,
-    templates_by_uid: dict[str, ReliefTemplate],
+    templates_by_uid: Mapping[str, ReliefTemplate],
 ) -> MountainSpec:
     """Empty sides → pick mountain template + materialize; declare wins.
 
@@ -46,18 +55,14 @@ def stamp_mountain_sides_from_relief(
         return spec
     n = form_side_count(spec.form)
     world_policy = relief_pick_policy(world)
-    object_policy = getattr(spec, "relief_pick_policy", None)
-    mountain_id = (
-        spec.location_uid
-        or f"{spec.origin_x_m},{spec.origin_y_m},{spec.radius_m}"
-    )
+    mountain_id = _mountain_pick_site_id(spec)
     pick = pick_template(
         context=ReliefContext.MOUNTAIN,
         templates=templates_by_uid,
         world_policy=world_policy,
         world_seed=world_seed,
         site_id=mountain_id,
-        object_policy=object_policy if isinstance(object_policy, ObjectReliefPickPolicy) else None,
+        object_policy=spec.relief_pick_policy,
     )
 
     template = resolve_picked_template(pick, templates_by_uid)
@@ -66,7 +71,7 @@ def stamp_mountain_sides_from_relief(
         n=n,
         recipe=template.side_recipe,
         world_seed=world_seed,
-        template_uid=pick.template_uid or template.system_name,
+        template_uid=pick.template_uid,
         mountain_id=mountain_id,
         declare_sides=[],
     )
@@ -78,7 +83,7 @@ def stamp_entries_from_relief(
     *,
     world: World,
     world_seed: str,
-    templates_by_uid: dict[str, ReliefTemplate],
+    templates_by_uid: Mapping[str, ReliefTemplate],
 ) -> list[MountainSpec | MountainRangeSpec]:
     out: list[MountainSpec | MountainRangeSpec] = []
     for entry in entries:

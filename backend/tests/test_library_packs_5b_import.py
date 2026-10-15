@@ -100,9 +100,11 @@ class LegacyWorldImportTests(_ServiceCase):
         owned = await self.packs.list_world_owned(copied.world_uid)
         instance = next(p for p in owned if p.source_pack_uid == pack.pack_uid)
         members = await self.members.list_by_pack(instance.pack_uid)
-        mapping = {m.source_template_uid: m.template_uid for m in members}
-        self.assertEqual([p["template_uid"] for p in copied.library_pins],
-                         [mapping[member.template_uid]])
+        self.assertEqual([m.source_template_uid for m in members],
+                         [member.template_uid])
+        # B6: no registry pointer was ever written for the source member,
+        # so the copy migrates no pin — membership alone is availability.
+        self.assertEqual(copied.library_pins or [], [])
         self.assertEqual(await self.packs.list_world_owned("src"),
                          [p for p in before if p.owner_world_uid == "src"])
 

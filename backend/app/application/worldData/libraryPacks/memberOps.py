@@ -17,7 +17,6 @@ from app.application.worldData.libraryPacks.packResults import MemberDeleteResul
 from app.application.worldData.libraryPacks.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
-from app.db.models.world import World
 from app.ids import LibraryKind
 
 logger = logging.getLogger(__name__)
@@ -68,8 +67,6 @@ class _MemberOps:
             )
 
         async def _write() -> None:
-            if world is not None:
-                await adapter.drop_pointer(world, template_uid)
             await adapter.delete_body(template_uid)
             await scope.members.delete(template_uid)
 
@@ -90,14 +87,13 @@ class _MemberOps:
         ).read_body(template_uid)
 
     async def teardown(
-        self,
-        members: Iterable[LibraryPackMemberRow],
-        world: World | None,
+        self, members: Iterable[LibraryPackMemberRow]
     ) -> list[str]:
-        """Drop pointers + bodies of all members (pack delete path).
+        """Drop bodies of all members (pack delete path).
 
         Members whose kind has no wired adapter get an orphan diagnostic;
-        their member rows still cascade with the pack delete.
+        their member rows still cascade with the pack delete. Registry
+        pointers no longer exist (B6) — nothing world-side to unwind.
         """
         diagnostics: list[str] = []
         for member in members:
@@ -108,8 +104,6 @@ class _MemberOps:
                     f"body '{member.template_uid}' left orphaned"
                 )
                 continue
-            if world is not None:
-                await adapter.drop_pointer(world, member.template_uid)
             await adapter.delete_body(member.template_uid)
         return diagnostics
 

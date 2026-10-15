@@ -197,29 +197,32 @@ class InstantiateTests(_ServiceCase):
         self.assertEqual(by_key["forest"], canon["forest"])
         self.assertEqual(by_key["shore_sea"], canon["shore_sea"])
 
-    async def test_instantiate_pointer_targets_instance_not_source(self):
+    async def test_instantiate_writes_no_registry_pointers(self):
+        """B6: instantiate never touches the legacy pointer column."""
         await self._world("w1")
         src, _ = await self._relief_engine_pack()
         res = await self.service.instantiate_pack(src.pack_uid, world_uid="w1")
 
         world = await self.worlds.get_by_id("w1")
-        registry_uids = {
-            e["system_template_uid"] for e in world.relief_template_registry
-        }
-        self.assertEqual(registry_uids, set(res.uid_map.values()))
-        self.assertFalse(registry_uids & set(res.uid_map))
+        self.assertEqual(world.relief_template_registry or [], [])
 
         # Membership readers resolve the world-owned copies.
         loaded = await load_relief_templates_for_world(
             self.container.template_snapshot_loader(), world
         )
         self.assertEqual(set(loaded), set(res.uid_map.values()))
+        self.assertEqual(
+            {m.template_uid for m in await self.members.list_for_world("w1")},
+            set(res.uid_map.values()),
+        )
 
-    async def test_instantiate_remaps_pick_policy_and_pointer(self):
+    async def test_instantiate_remaps_pick_policy_leaves_registry_untouched(self):
         await self._world("w1")
         src, (m1, _m2) = await self._relief_engine_pack()
         src_uid = m1.template_uid
         # The world referenced the engine member before instantiation.
+        # B6: the legacy pointer row is stale input — it is neither
+        # rewritten nor rebuilt; only the declared pick-policy ref moves.
         await self.container.world_service().update("w1", {
             "relief_template_registry": [{
                 "system_template_uid": src_uid,
@@ -240,8 +243,7 @@ class InstantiateTests(_ServiceCase):
         registry_uids = {
             e["system_template_uid"] for e in world.relief_template_registry
         }
-        self.assertNotIn(src_uid, registry_uids)
-        self.assertIn(new_uid, registry_uids)
+        self.assertEqual(registry_uids, {src_uid})
         policy = world.relief_pick_policy
         self.assertEqual(
             policy["open_land"]["default_template_uid"], new_uid
@@ -347,10 +349,11 @@ class InstantiateTests(_ServiceCase):
         self.assertEqual(second.pack_uid, first.pack.pack_uid)
 
         world = await self.worlds.get_by_id("w1")
-        registry_uids = {
-            e["system_template_uid"] for e in world.relief_template_registry
+        member_uids = {
+            m.template_uid for m in await self.members.list_for_world("w1")
         }
-        self.assertEqual(registry_uids, set(first.uid_map.values()))
+        self.assertEqual(member_uids, set(first.uid_map.values()))
+        self.assertEqual(world.relief_template_registry or [], [])
 
     async def test_get_member_unknown_uid_not_found(self):
         with self.assertRaises(LibraryPackNotFoundError):
@@ -517,12 +520,10 @@ class PublishTests(_ServiceCase):
         )
         self.assertIn(pub.pack_uid, {p.pack_uid for p in await self.service.list_engine_packs()})
 
-        # The source world pack and its pointers are untouched.
+        # The source world pack and its members are untouched; no pointer
+        # column is ever written (B6).
         world = await self.worlds.get_by_id("w1")
-        self.assertEqual(
-            {e["system_template_uid"] for e in world.relief_template_registry},
-            {wmember.template_uid},
-        )
+        self.assertEqual(world.relief_template_registry or [], [])
         self.assertEqual(
             len(await self.members.list_by_pack(wpack.pack_uid)), 1
         )

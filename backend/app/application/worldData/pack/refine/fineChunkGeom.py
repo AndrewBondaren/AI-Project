@@ -77,6 +77,34 @@ def expected_fine_chunks(world: World, tile_gx: int, tile_gy: int) -> int:
     return len(rects_for_macro_tile(world, tile_gx, tile_gy))
 
 
+def fine_chunk_rect(
+    world: World,
+    tile_gx: int,
+    tile_gy: int,
+    cx: int,
+    cy: int,
+) -> ColumnRect:
+    """One queued chunk rect inside a macro tile; ``ValueError`` when out of grid."""
+    cell_m = map_cell_fine_span(world)
+    chunk_size = terrain_chunk_columns(world)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    n_cx = (fine_bbox.x_max - fine_bbox.x_min + 1) // chunk_size
+    n_cy = (fine_bbox.y_max - fine_bbox.y_min + 1) // chunk_size
+    if n_cx < 1 or n_cy < 1 or not (0 <= cx < n_cx and 0 <= cy < n_cy):
+        raise ValueError(
+            f"chunk=({cx},{cy}) out of range for tile=({tile_gx},{tile_gy}) "
+            f"(grid {n_cx}x{n_cy})",
+        )
+    x_min = fine_bbox.x_min + cx * chunk_size
+    y_min = fine_bbox.y_min + cy * chunk_size
+    return ColumnRect(
+        x_min=x_min,
+        x_max=x_min + chunk_size - 1,
+        y_min=y_min,
+        y_max=y_min + chunk_size - 1,
+    )
+
+
 def rects_overlapping_volume(
     world: World,
     volume: TerritoryVolume,

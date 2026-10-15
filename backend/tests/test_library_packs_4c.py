@@ -320,7 +320,7 @@ class LifecycleTests(_ServiceCase):
         source, members, result = await self.instance(names=('meadow',))
         before = await self.snapshot()
         adapter = self.service._scope.adapter_for(_RELIEF)
-        with patch.object(self.container.world_repository(), 'update', side_effect=ValueError('pointer failure')):
+        with patch.object(self.members, 'insert', side_effect=ValueError('member write failure')):
             with self.assertRaises(ValueError):
                 await self.service.copy_member(result.members[0].template_uid, result.pack.pack_uid, world_uid='w1')
         self.assertEqual(await self.snapshot(), before)

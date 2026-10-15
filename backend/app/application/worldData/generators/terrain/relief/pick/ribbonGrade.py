@@ -8,6 +8,7 @@ Barrier stamp (RELIEF-BAR-1) was L0 bake; outdoor ribbon removed (R36u-T-8).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from app.application.jsonValidation.worldRow import relief_pick_policy
@@ -44,7 +45,7 @@ __all__ = [
 class RibbonGradeResult:
     segment: RibbonSegment
     decision: RibbonGradeDecision
-    template_uid: str | None
+    template_uid: str
 
 
 def grade_ribbon_segments(
@@ -52,7 +53,7 @@ def grade_ribbon_segments(
     world: World,
     world_seed: str,
     segments: list[RibbonSegment],
-    templates_by_uid: dict[str, ReliefTemplate],
+    templates_by_uid: Mapping[str, ReliefTemplate],
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
     context: ReliefContext = ReliefContext.ROAD_SHOULDER,
@@ -75,7 +76,7 @@ def grade_ribbon_segments(
         template = resolve_picked_template(pick, templates_by_uid)
         decision = grade_constrained(
             template=template,
-            template_uid=pick.template_uid or template.system_name,
+            template_uid=pick.template_uid,
             terrain_key=segment.terrain_key,
             dz=segment.dz,
             world_seed=world_seed,

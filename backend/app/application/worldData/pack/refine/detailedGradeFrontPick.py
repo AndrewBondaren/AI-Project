@@ -31,7 +31,7 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPo
 
 @dataclass(frozen=True, slots=True)
 class PickedFrontGrade:
-    template_uid: str | None
+    template_uid: str
     decision: RibbonGradeDecision
 
 
@@ -56,7 +56,7 @@ def pick_front_grade(
     template = resolve_picked_template(pick, templates)
     decision = grade_constrained(
         template=template,
-        template_uid=pick.template_uid or template.system_name,
+        template_uid=pick.template_uid,
         terrain_key=identity.terrain_key,
         dz=identity.dz,
         world_seed=world_seed,

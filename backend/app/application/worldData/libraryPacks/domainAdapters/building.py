@@ -15,5 +15,5 @@ class BuildingPackAdapter(TemplateBodyAdapter):
     library_kind = LibraryKind.BUILDING_TEMPLATES
     preparation = BuildingBodyPreparation()
 
-    def __init__(self, library, world_repository):
+    def __init__(self, library):
         self._library = library

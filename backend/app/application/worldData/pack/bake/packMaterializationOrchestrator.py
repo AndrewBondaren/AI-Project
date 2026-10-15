@@ -91,21 +91,15 @@ class PackMaterializationOrchestrator:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
         else:
-            self._climate = climate_bake or ClimatePackBakeOrchestrator(
+            self._entry, self._climate = _default_entry_stack(
+                terrain,
+                fine_terrain=fine_terrain,
+                job_repo=job_repo,
                 read_context=read_context,
                 bake_defaults=self._defaults,
-            )
-            fine = fine_terrain or FineTerrainRefineOrchestrator(
-                terrain,
+                climate_bake=climate_bake,
                 relief_loader=relief_loader,
                 relief_grade_repo=relief_grade_repo,
-            )
-            self._entry = EntryRefineOrchestrator(
-                fine,
-                job_repo=job_repo,
-                bake_defaults=self._defaults,
-                climate_bake=self._climate,
-                read_context=read_context,
             )
 
     @property
@@ -237,17 +231,7 @@ class PackMaterializationOrchestrator:
         locations_index = build_locations_index(locations, world)
         writer.write_locations_index(locations_index)
 
-        relief_templates: dict[str, ReliefTemplate] = {}
-        if self._relief_loader is not None:
-            relief_templates = await load_relief_templates_for_world(
-                self._relief_loader, world,
-            )
-        else:
-            logging.getLogger(__name__).warning(
-                "relief | pack bake: relief_loader unbound world=%s — "
-                "mountain/road_shoulder templates not preloaded",
-                world.world_uid,
-            )
+        relief_templates = await _load_relief_templates(self._relief_loader, world)
 
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
@@ -258,18 +242,11 @@ class PackMaterializationOrchestrator:
             bake_mode=bake_mode,
             relief_templates_by_uid=relief_templates,
         )
-        if self._relief_grade_repo is not None:
-            n_grades = await persist_relief_grades(
-                self._relief_grade_repo,
-                world_uid=world.world_uid,
-                instances=self._world_map.last_relief_grade_instances,
-                replace_world=False,
-            )
-            logging.getLogger(__name__).info(
-                "relief | persisted grade instances world=%s n=%d",
-                world.world_uid,
-                n_grades,
-            )
+        await _persist_bake_relief_grades(
+            self._relief_grade_repo,
+            world,
+            self._world_map.last_relief_grade_instances,
+        )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
 
         climate_fine_tiles = await self._climate.bake_fine_for_l0_policy(
@@ -321,3 +298,68 @@ class PackMaterializationOrchestrator:
             climate_coarse_samples=climate_coarse_samples or None,
             climate_fine_tiles=climate_fine_tiles or None,
         )
+
+
+async def _load_relief_templates(
+    relief_loader: TemplateSnapshotLoader | None,
+    world: World,
+) -> dict[str, ReliefTemplate]:
+    """Unbound loader → warning + empty set; templates are optional inputs."""
+    if relief_loader is None:
+        logging.getLogger(__name__).warning(
+            "relief | pack bake: relief_loader unbound world=%s — "
+            "mountain/road_shoulder templates not preloaded",
+            world.world_uid,
+        )
+        return {}
+    return await load_relief_templates_for_world(relief_loader, world)
+
+
+async def _persist_bake_relief_grades(
+    relief_grade_repo: IReliefGradeRepository | None,
+    world: World,
+    instances,
+) -> None:
+    if relief_grade_repo is None:
+        return
+    n_grades = await persist_relief_grades(
+        relief_grade_repo,
+        world_uid=world.world_uid,
+        instances=instances,
+        replace_world=False,
+    )
+    logging.getLogger(__name__).info(
+        "relief | persisted grade instances world=%s n=%d",
+        world.world_uid,
+        n_grades,
+    )
+
+
+def _default_entry_stack(
+    terrain: TerrainBatchOrchestrator,
+    *,
+    fine_terrain: FineTerrainRefineOrchestrator | None,
+    job_repo: IChunkRefineJobRepository | None,
+    read_context: PackReadContext | None,
+    bake_defaults: PackBakeDefaults,
+    climate_bake: ClimatePackBakeOrchestrator | None,
+    relief_loader: TemplateSnapshotLoader | None,
+    relief_grade_repo: IReliefGradeRepository | None,
+) -> tuple[EntryRefineOrchestrator, ClimatePackBakeOrchestrator]:
+    """Default refine stack wiring when ``entry`` is not injected."""
+    climate = climate_bake or ClimatePackBakeOrchestrator(
+        read_context=read_context,
+        bake_defaults=bake_defaults,
+    )
+    fine = fine_terrain or FineTerrainRefineOrchestrator(
+        terrain,
+        relief_loader=relief_loader,
+        relief_grade_repo=relief_grade_repo,
+    )
+    return EntryRefineOrchestrator(
+        fine,
+        job_repo=job_repo,
+        bake_defaults=bake_defaults,
+        climate_bake=climate,
+        read_context=read_context,
+    ), climate

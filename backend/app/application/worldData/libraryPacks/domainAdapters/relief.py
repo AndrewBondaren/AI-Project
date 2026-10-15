@@ -1,11 +1,13 @@
-"""Relief domain adapter — name-keyed bodies + ``relief_template_registry``
-pointers + ``relief_pick_policy`` world-side ref field (TZ §0.2/§2)."""
+"""Relief domain adapter — name-keyed bodies + ``relief_pick_policy``
+world-side ref field + ``terrain_registry`` sync (TZ §0.2/§2).
+
+Membership is the single availability source (B6): no
+``relief_template_registry`` pointer rows are written here.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
-from typing import ClassVar
+from copy import deepcopy
 
 from app.application.jsonValidation.resolve import UnresolvedModelError, resolve_model
 from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
@@ -14,14 +16,13 @@ from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation impor
 )
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
     PackDomainAdapter,
-    RemappedMember,
 )
 from app.application.worldData.libraryPacks.domainAdapters.mixins import (
     _LibraryBodyMixin,
-    _RegistryPointerMixin,
 )
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
     _remap_relief_pick_policy,
+    remap_pins,
 )
 from app.application.worldData.libraryPacks.domainAdapters.refFields import relief_policy_refs
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
@@ -31,17 +32,9 @@ from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
-from app.application.worldData.reliefTerrainSync import (
-    merge_missing_terrain_entries,
-)
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
-    ReliefTemplateRegistryEntry,
-)
-from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
-from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
 
 
@@ -74,20 +67,17 @@ class ReliefBodyPreparation(TemplateBodyPreparation[ReliefTemplate]):
         return body
 
 
-class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdapter):
-    """Name-keyed relief bodies; ``relief_template_registry`` pointers."""
+class ReliefPackAdapter(_LibraryBodyMixin, PackDomainAdapter):
+    """Name-keyed relief bodies; availability is membership-only (B6)."""
 
     library_kind = LibraryKind.RELIEF_TEMPLATES
-    registry_field: ClassVar[str] = "relief_template_registry"
 
     def __init__(
         self,
         library: ReliefTemplateLibraryService,
-        world_repository: IWorldRepository,
         world_import: ReliefWorldImportService | None = None,
     ) -> None:
         self._library = library
-        self._world_repo = world_repository
         self._world_import = world_import
 
     def prepare_body(
@@ -104,10 +94,11 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
             )
         try:
             if world is not None and self._world_import is not None:
-                outline = self._world_import.prepare_body(world, raw)  # warns geom
+                outline = self._world_import.prepare_body(
+                    world, raw, template_uid=template_uid)  # warns geom
             else:
                 outline = resolve_model(ReliefTemplate, raw, label=local_uid)
-                warn_template_invalid_geom(outline)
+                warn_template_invalid_geom(outline, template_uid=template_uid)
         except (ValueError, ReliefValidationError) as exc:
             raise LibraryPackValidationError(str(exc)) from exc
         if outline.system_name != local_uid:
@@ -126,16 +117,6 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
         return FallbackDecision.rejected()
 
 
-    def _pointer_entry(
-        self, member: LibraryPackMemberRow, outline: ReliefTemplate
-    ) -> ReliefTemplateRegistryEntry:
-        return self.pointer_entry(member, outline).model_copy(
-            update={"imported_at": datetime.now(timezone.utc).isoformat()})
-
-    def pointer_entry(self, member, outline):
-        return ReliefTemplateRegistryEntry(system_template_uid=member.template_uid,
-                                           display_template_name=outline.display_name, context=outline.context)
-
     def remap_body(self, body, *, template_uid, uid_map, local_uid=None):
         from app.application.worldData.libraryPacks.domainAdapters.contract import _SYSTEM_NAME_FIELD
         result = dict(body)
@@ -145,7 +126,8 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
 
     def prepare_world_refs(self, world, uid_map, members, *, removed_uids=()):
         from app.application.worldData.reliefTerrainSync import missing_terrain_entries
-        result = super().prepare_world_refs(world, uid_map, members, removed_uids=removed_uids)
+        result = deepcopy(world)
+        remap_pins(result, uid_map)
         policy = _remap_relief_pick_policy(result, uid_map)
         if policy is not None:
             result.relief_pick_policy = policy
@@ -155,25 +137,3 @@ class ReliefPackAdapter(_RegistryPointerMixin, _LibraryBodyMixin, PackDomainAdap
         if entries:
             result.terrain_registry = list(result.terrain_registry or []) + [e.model_dump(mode="json") for e in entries]
         return result
-
-    async def remap_world_refs(
-        self,
-        world: World,
-        uid_map: Mapping[str, str],
-        members: Sequence[RemappedMember],
-    ) -> None:
-        self._rebuild_registry_field(world, uid_map, members)
-        policy = _remap_relief_pick_policy(world, uid_map)
-        if policy is not None:
-            world.relief_pick_policy = policy
-        for rm in members:
-            if not isinstance(rm.outline, ReliefTemplate):
-                continue
-            merge_missing_terrain_entries(
-                world,
-                (c.terrain.value for c in rm.outline.conditions),
-                source="pack_instantiate",
-                template_uid=rm.member.template_uid,
-                system_name=rm.outline.system_name,
-            )
-        await self._world_repo.update(world)

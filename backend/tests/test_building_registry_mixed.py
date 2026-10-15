@@ -7,8 +7,11 @@ layouts (``PlotLayoutTemplate`` world overrides).
 
 RED until step 3: the declared ``WorldBuildingTemplateRegistry`` POJO is
 pointer-only, so public write paths reject mixed columns — ``worlds.update``
-422s on ANY field of such a world, ``import_from_json`` fails, and
-``_ensure_registry`` cannot read the column to append a pointer.
+422s on ANY field of such a world, ``import_from_json`` fails, and registry
+appends cannot read the column.
+
+B6: pointer writes are gone entirely — ``import_bodies_into_world`` writes
+membership only, and the column is pure legacy input until B7 removes it.
 """
 
 from __future__ import annotations
@@ -107,19 +110,30 @@ class MixedColumnServiceTests(IsolatedAsyncioTestCase):
         stored = await self.worlds.get_by_id(world["world_uid"])
         self.assertEqual(self._kinds(stored), ["pointer", "layout"])
 
-    async def test_import_bodies_appends_pointer_keeping_layout_rows(self):
-        """``_ensure_registry`` reads the whole column; layout rows are not
-        pointer entries and must survive the append (replace-semantics patch)."""
+    async def test_member_write_never_touches_mixed_column(self):
+        """B6: no pointer append — the seeded layout row stays untouched and
+        the building member exists only in the catalog."""
         uid = await self._world_with_registry([_LAYOUT])
-        result = await self.buildings.import_bodies_into_world(
-            uid, [{"system_name": "bt_new", "display_name": "BT New"}]
-        )
-        self.assertEqual(result.failed, 0, result.errors)
+        service = self.container.library_pack_service()
+        structures = await service.create_pack(
+            system_name="world.x.structures", owner_world_uid=uid)
+        struct = await service.create_member(
+            structures.pack_uid, library_kind="structure_templates",
+            local_uid="frame", body={"display_name": "Frame"}, world_uid=uid)
+        buildings = await service.create_pack(
+            system_name="world.x.buildings", owner_world_uid=uid)
+        member = await service.create_member(
+            buildings.pack_uid, library_kind="building_templates",
+            local_uid="bt_new", world_uid=uid,
+            body={"system_name": "bt_new", "display_name": "BT New",
+                  "structure": struct.template_uid})
         world = await self.worlds.get_by_id(uid)
-        kinds = self._kinds(world)
-        self.assertEqual(kinds.count("layout"), 1)
-        self.assertEqual(kinds.count("pointer"), 1)
-        self.assertEqual(kinds[0], "layout")
+        self.assertEqual(self._kinds(world), ["layout"])
+        members = await self.container.library_pack_member_repository().list_for_world(uid)
+        self.assertEqual(
+            [m.local_uid for m in members if m.library_kind == "building_templates"],
+            [member.local_uid],
+        )
 
 
 class MixedColumnOverridesTests(unittest.TestCase):

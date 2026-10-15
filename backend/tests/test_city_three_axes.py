@@ -441,42 +441,36 @@ class JsonValidationRecipeTest(unittest.TestCase):
         self.assertTrue(out["location_type_registry"])
 
 
-class LibraryHydrateTest(unittest.IsolatedAsyncioTestCase):
-    async def test_layouts_for_world_skips_outline(self) -> None:
-        layout = _layout("inn_small", "tavern")
-        outline = BuildingTemplateOutline(
-            system_name="tavern_outline",
-            structure_type="tavern",
-            display_name="Outline",
-        )
+class LibraryExportTest(unittest.IsolatedAsyncioTestCase):
+    async def test_export_bodies_for_world_uses_membership_not_registry(self) -> None:
+        """B6: flat export enumerates world-owned members, never the column."""
+        from app.db.models.libraryPackMember import LibraryPackMemberRow
         rows = {
-            "uid-ok": BuildingTemplateRow(
-                template_uid="uid-ok",
+            "uid-b": BuildingTemplateRow(
+                template_uid="uid-b",
                 system_name="inn_small",
                 display_name="Tavern",
                 structure_type="tavern",
-                data=layout.model_dump(mode="json"),
-            ),
-            "uid-outline": BuildingTemplateRow(
-                template_uid="uid-outline",
-                system_name="tavern_outline",
-                display_name="Outline",
-                structure_type="tavern",
-                data=outline.model_dump(mode="json"),
+                data={"system_name": "inn_small", "display_name": "Tavern"},
             ),
         }
         repo = MagicMock()
         repo.get_by_uid = AsyncMock(side_effect=lambda uid: rows.get(uid))
-        service = BuildingTemplateLibraryService(repo=repo, world_service=MagicMock())
-        world = SimpleNamespace(
-            world_uid="w1",
-            building_template_registry=[
-                {"system_template_uid": "uid-ok"},
-                {"system_template_uid": "uid-outline"},
-            ],
+        members = SimpleNamespace(list_for_world=AsyncMock(return_value=[
+            LibraryPackMemberRow(pack_uid="p", local_uid="inn",
+                library_kind="building_templates", template_uid="uid-b"),
+            LibraryPackMemberRow(pack_uid="p", local_uid="plot",
+                library_kind="plot_templates", template_uid="uid-plot"),
+        ]))
+        service = BuildingTemplateLibraryService(
+            repo=repo, world_service=MagicMock(),
+            catalog=SimpleNamespace(members=members),
         )
-        got = await service.layouts_for_world(world)
-        self.assertEqual([row.system_name for row in got], ["inn_small"])
+        got = await service.export_bodies_for_world("w1")
+        # Only the building-kind member exports; the foreign-kind member is
+        # filtered out before any body lookup.
+        self.assertEqual([b["system_name"] for b in got], ["inn_small"])
+        repo.get_by_uid.assert_called_once_with("uid-b")
 
 
 class DistrictSelectTest(unittest.TestCase):

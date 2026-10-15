@@ -174,7 +174,9 @@ class LibraryWritePlanTests(_ServiceCase):
         projected = plan.worlds[0].after
         self.assertEqual(projected.library_pins[0]["template_uid"], target)
         self.assertEqual(projected.relief_pick_policy["open_land"]["default_template_uid"], target)
-        self.assertIsNone(projected.relief_template_registry[0]["imported_at"])
+        # B6: the projected world rebuilds pins/policy only — the legacy
+        # registry column is never touched.
+        self.assertEqual(projected.relief_template_registry or [], [])
         self.assertEqual(await self.worlds.get_by_id("w1"), world)
 
     async def test_same_scope_independent_copy_does_not_repoint_world(self):
@@ -186,8 +188,11 @@ class LibraryWritePlanTests(_ServiceCase):
         world.relief_pick_policy = {"open_land": {"default_template_uid": row.template_uid}}
         await self.worlds.update(world)
         plan = await self.plan([self.item(source.pack_uid)], selections=[self.select(copy_name="world.copy")])
-        self.assertEqual(plan.worlds[0].after.library_pins, world.library_pins)
-        self.assertEqual(plan.worlds[0].after.relief_pick_policy, world.relief_pick_policy)
+        # B6: an in-scope copy no longer mints a world write at all.
+        self.assertEqual(tuple(plan.worlds), ())
+        saved = await self.worlds.get_by_id("w1")
+        self.assertEqual(saved.library_pins, world.library_pins)
+        self.assertEqual(saved.relief_pick_policy, world.relief_pick_policy)
 
     async def test_catalog_pack_self_replace_preserves_all_member_uids(self):
         source, rows = await self._relief_engine_pack()

@@ -1,9 +1,10 @@
-"""Import relief templates into a world — R34 terrain upsert + registry pointers.
+"""Import relief templates into a world — membership + R34 terrain upsert.
 
 Bodies arriving through a manifest-less bundle section become members of the
-world-owned ``legacy`` pack (plan library-packs-model step 3 / TZ §1.1);
-transitional dual-write keeps ``relief_template_registry`` pointers pointing
-at the world-owned member uids (step 4a contract). API/routes stay thin.
+world-owned ``legacy`` pack (plan library-packs-model step 3 / TZ §1.1).
+Membership is the single availability source (B6): no
+``relief_template_registry`` pointer rows are written here. API/routes stay
+thin.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.application.worldData.libraryPacks.writeResults import PolicyRequired
 
-from datetime import datetime, timezone
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
 from app.application.worldData.reliefTerrainSync import (
@@ -30,13 +30,9 @@ from app.application.worldData.reliefTemplateLibraryService import (
 )
 from app.application.worldData.worldService import WorldService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
-    ReliefTemplateRegistryEntry,
-)
 from app.application.jsonValidation.worldRow import (
     barrier_templates,
     canal_templates,
-    relief_template_registry,
 )
 from app.application.worldData.generators.terrain.relief.canal.outlineCollect import (
     collect_outline_structure_canal_refs,
@@ -69,7 +65,7 @@ class ReliefWorldImportService:
         outlines: list[dict],
         *, decisions=(), preview_token=None,
     ) -> dict | PolicyRequired:
-        """Bodies → world-owned ``legacy`` members + registry pointers + R34 sync."""
+        """Bodies → world-owned ``legacy`` members + R34 sync."""
         if self._db is not None and self._library._write_provider is None:
             raise RuntimeError("SQL library imports require the common write service")
         if self._db is not None:
@@ -120,13 +116,12 @@ class ReliefWorldImportService:
         source_file: str,
         member: LibraryPackMemberRow,
     ) -> ReliefTemplateRow:
-        """Body → world-owned ``legacy`` member + registry pointer + R34 sync."""
+        """Body → world-owned ``legacy`` member + R34 sync."""
         legacy = await ensure_legacy_pack(world_uid, self._catalog.packs)
         row = await self._library.upsert_outline(
             outline, source_file=source_file, pack_uid=legacy.pack_uid, world_uid=world_uid
         )
         await self._catalog.members.insert_missing([member])
-        await self._ensure_registry_pointer(world_uid, row.template_uid, outline)
         await self._sync_terrain_from_outline(world_uid, outline, row.template_uid)
         return row
 
@@ -200,30 +195,6 @@ class ReliefWorldImportService:
                 "canal_template_registry.structure.structure_refs unknown "
                 f"in barrier_template_registry: {bad}",
             )
-
-    async def _ensure_registry_pointer(
-        self,
-        world_uid: str,
-        template_uid: str,
-        outline: ReliefTemplate,
-    ) -> None:
-        world = await self._worlds.get_by_id(world_uid)
-        reg = relief_template_registry(world)
-        if reg.entry_for_uid(template_uid) is not None:
-            return
-        entries = list(reg.root)
-        entries.append(
-            ReliefTemplateRegistryEntry(
-                system_template_uid=template_uid,
-                display_template_name=outline.display_name,
-                context=outline.context,
-                imported_at=datetime.now(timezone.utc).isoformat(),
-            )
-        )
-        await self._worlds.update(
-            world_uid,
-            {"relief_template_registry": [e.model_dump(mode="json") for e in entries]},
-        )
 
     async def _sync_terrain_from_outline(
         self,

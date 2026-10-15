@@ -76,6 +76,33 @@ class ReliefTemplateLibraryService:
     async def list_all(self) -> list[ReliefTemplateRow]:
         return await self._repo.list_all()
 
+    async def export_bodies_for_world(self, world_uid: str) -> list[dict]:
+        """Flat bundle bodies of relief members owned by ``world_uid`` (B6).
+
+        Availability comes from pack membership (``owner_world_uid``), not
+        from the legacy registry column; a member without a body row is
+        logged and skipped (bundle diagnostic), same as the old
+        missing-pointer path.
+        """
+        if self._catalog is None:
+            raise RuntimeError(
+                "ReliefTemplateLibraryService: pack catalog repositories are not wired"
+            )
+        members = await self._catalog.members.list_for_world(world_uid)
+        bodies: list[dict] = []
+        for member in members:
+            if member.library_kind != LibraryKind.RELIEF_TEMPLATES.value:
+                continue
+            row = await self.find_by_uid(member.template_uid)
+            if row is None:
+                logger.warning(
+                    "relief | bundle export miss template_uid=%s world=%s",
+                    member.template_uid, world_uid,
+                )
+                continue
+            bodies.append(dict(row.data))
+        return bodies
+
     async def persist_prepared(self, outline, *, template_uid, source_file, added):
         from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
         row = ReliefTemplateRow(template_uid=template_uid, system_name=outline.system_name,

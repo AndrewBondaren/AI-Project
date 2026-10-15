@@ -14,7 +14,8 @@ from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
-from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService, _registry_entries
+from app.application.jsonValidation.worldRow import building_template_registry
+from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.structureTemplateLibraryService import StructureTemplateLibraryService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.loadReliefTemplatesForWorld import load_relief_templates_for_world
@@ -168,7 +169,7 @@ class SourceConsumerTests(unittest.TestCase):
         world, _, _ = fixture()
         world.building_template_registry = [{"system_template_uid": "ok", "display_template_name": "OK"}, 1]
         with self.assertRaises(UnresolvedModelError):
-            _registry_entries(world)
+            building_template_registry(world)
 
     def test_object_relief_policy_only_none_means_absent(self):
         self.assertIsNone(parse_object_relief_pick_policy(None))
@@ -191,17 +192,19 @@ class LibraryConsumerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OSError):
             await import_list([{}], lambda raw: raw, AsyncMock(side_effect=OSError("database")))
 
-    async def test_building_missing_or_invalid_layout_never_becomes_partial_success(self):
-        world, _, _ = fixture()
-        world.building_template_registry = [{"system_template_uid": "missing", "display_template_name": "Missing"}]
+    async def test_building_member_without_body_is_a_hard_export_error(self):
+        """B6: membership replaced the pointer walk — a member row without
+        a body fails the flat export, never becomes partial success."""
+        from app.db.models.libraryPackMember import LibraryPackMemberRow
+        members = SimpleNamespace(list_for_world=AsyncMock(return_value=[
+            LibraryPackMemberRow(pack_uid="p", local_uid="m",
+                library_kind="building_templates", template_uid="missing"),
+        ]))
         repo = SimpleNamespace(get_by_uid=AsyncMock(return_value=None))
-        service = BuildingTemplateLibraryService(repo, None)
+        service = BuildingTemplateLibraryService(
+            repo, None, catalog=SimpleNamespace(members=members))
         with self.assertRaises(UnresolvedModelError):
-            await service.layouts_for_world(world)
-        repo.get_by_uid.return_value = SimpleNamespace(data={"system_name": "plot", "display_name": "Plot",
-                                                            "plot_type": "unknown"})
-        with self.assertRaises(UnresolvedModelError):
-            await service.layouts_for_world(world)
+            await service.export_bodies_for_world("w1")
 
     async def test_relief_preload_uses_membership_snapshot_not_registry(self):
         """B5: the world registry no longer drives the relief reader — a dangling

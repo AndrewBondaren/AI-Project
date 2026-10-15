@@ -1,13 +1,13 @@
 """Domain adapter contract of the pack application service — plan steps
-4a–4c, TZ §0.2/§2.
+4a–4c/5b, TZ §0.2/§2.
 
 The universal pack layer (``packService``) owns identity, ownership and
-atomicity; each adapter owns the body model, domain restrictions and the
-transitional pointer dual-write: pointers are still written until step
-5b, so a world-owned member write keeps the pointer row pointing at the
-world-owned member uid, never at an engine member. Relief readers
-already read membership only (B5); remaining registry readers
-(``layouts_for_world``) follow in later steps.
+atomicity; each adapter owns the body model, domain restrictions and its
+declared world-side reference fields. Membership is the single runtime
+availability source (B6): no adapter writes registry pointer rows any
+more — projected-world remaps only rewrite pins, pick policies and
+embedded body references. Legacy registry columns remain as migration
+input until B7 removes them.
 
 This package holds the contract only (``contract.py``): the
 ``PackDomainAdapter`` ABC, the domain library/outline unions, the shared
@@ -21,7 +21,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from app.application.worldData.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
@@ -71,13 +71,13 @@ _SYSTEM_NAME_FIELD = "system_name"
 
 @dataclass(frozen=True)
 class RemappedMember:
-    """Instance member + its parsed outline — ``remap_world_refs`` input."""
+    """Instance member + its parsed outline — ``prepare_world_refs`` input."""
     member: LibraryPackMemberRow
     outline: DomainOutline
 
 
 class PackDomainAdapter(ABC):
-    """Body/pointer contract of one ``library_kind`` for the pack service.
+    """Body contract of one ``library_kind`` for the pack service.
 
     All methods run inside the caller's transaction — an adapter never owns
     atomicity. Declared body/world references feed the common usage index;
@@ -128,15 +128,6 @@ class PackDomainAdapter(ABC):
     async def delete_body(self, template_uid: str) -> None:
         """Remove the body row; tolerate an already-missing row."""
 
-
-    async def ensure_pointer(
-        self, world: World, member: LibraryPackMemberRow, outline: Any
-    ) -> None:
-        """Dual-write: refresh the world registry pointer for a member."""
-
-    async def drop_pointer(self, world: World, template_uid: str) -> None:
-        """Dual-write: remove the world registry pointer for a member."""
-
     # ------------------------------------------------------------------
     # Runtime resolve contract (TZ §5) — effective catalog, step 5a-2.
     # ------------------------------------------------------------------
@@ -170,22 +161,10 @@ class PackDomainAdapter(ABC):
 
     def prepare_world_refs(self, world: World, uid_map: Mapping[str, str],
                            members: Sequence[RemappedMember], *, removed_uids: Sequence[str] = ()) -> World:
-        """Pure projected world; existing async remap remains the legacy write seam."""
+        """Pure projected world with remapped pins and declared ref fields.
+
+        ``WriteRetentionPlanner`` applies the columns this projection
+        changed; registry pointer rows are never touched (B6).
+        """
         from copy import deepcopy
         return deepcopy(world)
-
-    async def remap_world_refs(
-        self,
-        world: World,
-        uid_map: Mapping[str, str],
-        members: Sequence[RemappedMember],
-    ) -> None:
-        """Instantiate-time world-side remap (TZ §2).
-
-        Registry pointers land on the *instance* member uids and entries
-        still aimed at source members are repointed; the adapter's
-        declared world-side ref fields (pick policies, layout-embedded
-        structure refs) follow the same map. Runs inside the caller's
-        transaction; ``members`` are this kind's freshly written
-        instance members.
-        """

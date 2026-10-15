@@ -361,10 +361,10 @@ class DefaultPackTests(_ServiceCase):
             await self.service.import_fs_pack(_BUILDING, Path("anywhere"))
 
 
-class OwnershipAndDualWriteTests(_ServiceCase):
-    """World-owned packs: owner-scope gate + registry-pointer dual-write."""
+class OwnershipAndMembershipTests(_ServiceCase):
+    """World-owned packs: owner-scope gate + membership-only availability (B6)."""
 
-    async def test_world_member_visible_to_registry_readers(self):
+    async def test_world_member_visible_to_membership_readers(self):
         await self._world("w1")
         pack = await self.service.create_pack(
             system_name="world.w1.relief", owner_world_uid="w1"
@@ -373,11 +373,15 @@ class OwnershipAndDualWriteTests(_ServiceCase):
             pack.pack_uid, library_kind=_RELIEF, local_uid="meadow",
             body=_relief_body("meadow"), world_uid="w1",
         )
-        # Dual-write: pointer targets the world-owned member uid.
+        # Membership-only: no pointer row is written for the member.
         world = await self.worlds.get_by_id("w1")
+        self.assertNotIn(
+            member.template_uid,
+            {e["system_template_uid"] for e in world.relief_template_registry or []},
+        )
         self.assertIn(
             member.template_uid,
-            {e["system_template_uid"] for e in world.relief_template_registry},
+            {m.template_uid for m in await self.members.list_for_world("w1")},
         )
         loaded = await load_relief_templates_for_world(
             self.container.template_snapshot_loader(), world
@@ -385,11 +389,11 @@ class OwnershipAndDualWriteTests(_ServiceCase):
         self.assertIn(member.template_uid, loaded)
         self.assertEqual(loaded[member.template_uid].system_name, "meadow")
 
-        # Member delete drops the pointer in the same operation.
+        # Member delete removes the body; nothing world-side to unwind.
         await self.service.delete_member(member.template_uid, world_uid="w1")
         world = await self.worlds.get_by_id("w1")
         self.assertEqual(
-            [e for e in world.relief_template_registry
+            [e for e in world.relief_template_registry or []
              if e["system_template_uid"] == member.template_uid],
             [],
         )

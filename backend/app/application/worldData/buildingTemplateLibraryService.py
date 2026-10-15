@@ -1,4 +1,8 @@
-"""Building template library + world registry bind — tz_building_generator §5–6 / WB-11."""
+"""Building template library — tz_building_generator §5–6 / WB-11.
+
+Membership is the single availability source (B6): world-owned member
+writes no longer append ``building_template_registry`` pointer rows.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +11,10 @@ if TYPE_CHECKING:
     from app.application.worldData.libraryPacks.writeResults import PolicyRequired
 
 import logging
-from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model, reject_unresolved
 from app.application.jsonValidation.types import FieldPathError
-from app.application.jsonValidation.worldRow import building_template_registry
-from app.application.jsonValidation.sourceValidation import validate_source
 from app.ids import LibraryKind, library_uid
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
@@ -21,13 +22,9 @@ from app.application.worldData.errors import WorldDataError
 from app.application.worldData.worldService import WorldService
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
-    plot_type_defaulted,
 )
 from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
-from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import (
-    BuildingTemplateRegistryEntry,
-)
 from app.application.worldData.libraryPacks.legacyPack import (
     ensure_legacy_pack,
     legacy_member_row,
@@ -43,11 +40,6 @@ _PLOT_ONLY_FIELDS = frozenset(PlotLayoutTemplate.model_fields) - frozenset(Build
 
 def building_template_uid(system_name: str) -> str:
     return library_uid(LibraryKind.BUILDING_TEMPLATES, system_name)
-
-
-def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:
-    """Pointer rows only — embedded plot-layout rows are not bindings (§5.2)."""
-    return list(building_template_registry(world).pointers)
 
 
 def _body_structure_type(body: BuildingTemplateOutline | PlotLayoutTemplate | BuildingTemplate) -> str | None:
@@ -87,37 +79,6 @@ class BuildingTemplateLibraryService:
         if self._ensure_provider is not None:
             await self._ensure_provider()
         return await self._repo.list_all()
-
-    async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
-        """Hydrate plot bodies; valid outline-only bodies have no packing layout."""
-
-        from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
-            PackingReason,
-            PackingStep,
-            packing_warning,
-        )
-
-        layouts: list[PlotLayoutTemplate] = []
-        world_uid = getattr(world, "world_uid", "?")
-        for entry in _registry_entries(world):
-            row = await self._repo.get_by_uid(entry.system_template_uid)
-            ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
-            if row is None:
-                reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "library reference unavailable", code="REF_W_UNKNOWN")])
-            body = self.parse_body(row.data, ctx=ctx)
-            if isinstance(body, BuildingTemplateOutline):
-                continue
-            layout = body
-            validate_source(world, layout, ctx=ctx)
-            if plot_type_defaulted(layout):
-                packing_warning(
-                    PackingStep.CACHE,
-                    district="library",
-                    system_name=layout.system_name,
-                    reason=PackingReason.PLOT_TYPE_DEFAULTED,
-                )
-            layouts.append(layout)
-        return layouts
 
     async def find_by_uid(self, template_uid: str) -> BuildingTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)
@@ -224,7 +185,7 @@ class BuildingTemplateLibraryService:
         for i, raw in enumerate(bodies):
             try:
                 outline = self.prepare_body(world, raw)
-                row = await self.upsert_outline(
+                await self.upsert_outline(
                     outline, source_file="bundle", pack_uid=legacy.pack_uid, world_uid=world_uid
                 )
                 await self._catalog.members.insert_missing([
@@ -233,7 +194,6 @@ class BuildingTemplateLibraryService:
                         world_uid=world_uid,
                     ),
                 ])
-                await self._ensure_registry(world_uid, row)
                 succeeded += 1
             except WorldDataError:
                 raise  # domain failure is not a row-level validation error
@@ -275,35 +235,24 @@ class BuildingTemplateLibraryService:
         return outline
 
     async def export_bodies_for_world(self, world_uid: str) -> list[dict]:
-        world = await self._worlds.get_by_id(world_uid)
+        """Flat bundle bodies of building members owned by ``world_uid`` (B6).
+
+        Availability comes from pack membership (``owner_world_uid``), not
+        from the legacy registry column; a member without a body row is a
+        hard reference error, same as the old missing-pointer path.
+        """
+        if self._catalog is None:
+            raise RuntimeError(
+                "BuildingTemplateLibraryService: pack catalog repositories are not wired"
+            )
+        members = await self._catalog.members.list_for_world(world_uid)
         bodies: list[dict] = []
-        for entry in _registry_entries(world):
-            row = await self._repo.get_by_uid(entry.system_template_uid)
+        for member in members:
+            if member.library_kind != LibraryKind.BUILDING_TEMPLATES.value:
+                continue
+            row = await self._repo.get_by_uid(member.template_uid)
             if row is None:
-                ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
+                ctx = ResolveContext(path_prefix=("building_templates", member.template_uid))
                 reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "library reference unavailable", code="REF_W_UNKNOWN")])
-            ctx = ResolveContext(path_prefix=("building_template_registry", entry.system_template_uid))
-            body = self.parse_body(row.data, ctx=ctx)
-            if isinstance(body, PlotLayoutTemplate):
-                validate_source(world, body, ctx=ctx)
             bodies.append(dict(row.data))
         return bodies
-
-    async def _ensure_registry(self, world_uid: str, row: BuildingTemplateRow) -> None:
-        world = await self._worlds.get_by_id(world_uid)
-        reg = building_template_registry(world)
-        if any(e.system_template_uid == row.template_uid for e in reg.pointers):
-            return
-        # The patch replaces the whole column — dump the full mixed root so
-        # embedded layout rows survive the pointer append (§5.2).
-        entries = [e.model_dump(mode="json") for e in reg.root]
-        entries.append(
-            BuildingTemplateRegistryEntry(
-                system_template_uid=row.template_uid,
-                display_template_name=row.display_name,
-                imported_at=datetime.now(timezone.utc).isoformat(),
-            ).model_dump(mode="json")
-        )
-        await self._worlds.update(
-            world_uid, {"building_template_registry": entries}
-        )

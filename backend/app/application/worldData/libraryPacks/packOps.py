@@ -151,10 +151,9 @@ class _PackOps:
                 raise LibraryPackInUseError(msg, usages=tuple(names))
             diagnostics.append(f"{msg} — left dangling after delete")
         members = await scope.members.list_by_pack(pack_uid)
-        world = await scope.world_for(pack)
 
         async def _write() -> None:
-            diagnostics.extend(await self._members.teardown(members, world))
+            diagnostics.extend(await self._members.teardown(members))
             await scope.packs.delete(pack_uid)  # members/deps rows cascade
 
         await scope.atomic(_write)

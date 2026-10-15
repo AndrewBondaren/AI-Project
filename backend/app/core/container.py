@@ -703,14 +703,13 @@ class Container(TemplateRepositoryProviders):
                 relief_library=self.relief_template_library_service(),
                 structure_library=self.structure_template_library_service(),
                 building_library=self.building_template_library_service(),
-                world_repository=self.world_repository(),
                 plot_library=self.plot_template_library_service(),
                 relief_world_import=self.relief_world_import_service(),
             )
         return self._pack_domain_adapters
 
     def library_pack_service(self) -> LibraryPackService:
-        """Step-4a CRUD boundary over packs/members (+ dual-write pointers)."""
+        """Step-4a CRUD boundary over packs/members (membership-only, B6)."""
         if self._library_pack_service is None:
             self._library_pack_service = LibraryPackService(
                 db=self._db,

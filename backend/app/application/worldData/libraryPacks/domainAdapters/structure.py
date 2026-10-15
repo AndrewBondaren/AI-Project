@@ -3,12 +3,11 @@ IS the member uid; world-side refs live in plot-layout rows (TZ §0.2/§2)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
     _SYSTEM_NAME_FIELD,
     PackDomainAdapter,
-    RemappedMember,
 )
 from app.application.worldData.libraryPacks.domainAdapters.mixins import _LibraryBodyMixin
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
@@ -19,7 +18,6 @@ from app.application.worldData.structureTemplateLibraryService import (
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.world import World
-from app.db.repositories.iWorldRepository import IWorldRepository
 from app.ids import LibraryKind
 from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplateBodyPreparation
 
@@ -45,13 +43,8 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
 
     library_kind = LibraryKind.STRUCTURE_TEMPLATES
 
-    def __init__(
-        self,
-        library: StructureTemplateLibraryService,
-        world_repository: IWorldRepository,
-    ) -> None:
+    def __init__(self, library: StructureTemplateLibraryService) -> None:
         self._library = library
-        self._world_repo = world_repository
 
     def prepare_body(
         self,
@@ -74,7 +67,7 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         return out
 
     def world_refs(self, world):
-        # Explicit transitional world format, removed with registry cutover (B6).
+        # Transitional legacy world format, removed with the column in B7.
         from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
         return tuple(ref for i, row in enumerate(world.building_template_registry or [])
                      for ref in structure_refs(row,
@@ -89,25 +82,3 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
             _remap_structure_refs(row, uid_map) or row if isinstance(row, dict) else row
             for row in result.building_template_registry or []]
         return result
-
-    async def remap_world_refs(
-        self,
-        world: World,
-        uid_map: Mapping[str, str],
-        members: Sequence[RemappedMember],
-    ) -> None:
-        """World-side refs to structure members — ``structure`` keys
-        inside plot-layout rows of ``building_template_registry``."""
-        raw = world.building_template_registry or []
-        out: list = []
-        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
-        changed = remap_pins(world, uid_map)
-        for row in raw:
-            remapped = (
-                _remap_structure_refs(row, uid_map) if isinstance(row, dict) else None
-            )
-            out.append(remapped if remapped is not None else row)
-            changed = changed or remapped is not None
-        if changed:
-            world.building_template_registry = out
-            await self._world_repo.update(world)

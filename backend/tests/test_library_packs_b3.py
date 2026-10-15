@@ -669,7 +669,9 @@ class LegacyBodyImportTests(_DbCase):
         self.assertIsNotNone(row)
 
         world = await SqliteWorldRepository(self.db).get_by_id("w-relief")
-        self.assertIn(uid, {e["system_template_uid"] for e in world.relief_template_registry})
+        # B6: import writes the member, not a registry pointer.
+        self.assertNotIn(uid, {e["system_template_uid"] for e in world.relief_template_registry or []})
+        self.assertIn(uid, {m.template_uid for m in await self.members.list_for_world("w-relief")})
 
         # Re-import negotiates; explicit replace keeps the saved identity.
         from app.application.worldData.libraryPacks.writeResults import PolicyRequired

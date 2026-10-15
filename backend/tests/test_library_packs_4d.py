@@ -72,10 +72,10 @@ class LibraryPacks4dTests(_ServiceCase):
         self.assertEqual({m.local_uid for m in members}, {"meadow"})
         mapping = {m.source_template_uid: m.template_uid for m in members}
         self.assertEqual(set(mapping), {member.template_uid, duplicate.member.template_uid})
-        # B2: registry pointers are availability declarations and migrate to
-        # pins, so both imported members land in the copied world's pin set.
+        # B6: member writes no longer mint availability — only the
+        # explicitly pinned member lands in the copied world's pin set.
         self.assertEqual({p["template_uid"] for p in copied.library_pins},
-                         {mapping[member.template_uid], mapping[duplicate.member.template_uid]})
+                         {mapping[member.template_uid]})
         self.assertEqual(await self.bundle.export("source"), source)
         self.assertEqual(await self.packs.list_engine(), [])
         second = await self.bundle.export(copied.world_uid)

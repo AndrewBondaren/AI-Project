@@ -15,10 +15,10 @@ Ownership semantics (TZ §1.1 — availability = ownership or default):
   canonical attach (trusted FS import path — steps 6–7 own the mechanics).
 - World-owned packs are editable inside their world only.
 
-Dual-write (transitional, until step 5b): member writes into a world-owned
-pack also write the world registry pointer — at the *world-owned* member
-uid, never an engine member — so existing registry readers resolve the
-member. Member delete drops the pointer in the same transaction.
+Membership is the single availability source (B6): member writes into a
+world-owned pack touch the catalog only — no registry pointer rows are
+written or dropped here; the legacy columns remain migration input until
+B7 removes them.
 
 This module is the facade only: shared deps + gates live in
 ``packScope``, result DTOs in ``packResults``. Body writes and imports
@@ -174,7 +174,6 @@ class LibraryPackService:
         Engine-pack delete is always safe for worlds (they hold instance
         copies). Declared dependents block the delete unless ``force`` —
         then they keep a dangling ``required_pack_uid``, diagnosed here.
-        World-owned packs additionally drop their registry pointers.
         """
         return await self._pack_ops.delete(
             pack_uid, force=force, world_uid=world_uid
@@ -226,9 +225,8 @@ class LibraryPackService:
         Full-pack copy: members get deterministic uids from the
         world-owned instance, ``source_pack_uid``/``source_template_uid``
         record provenance, internal body refs and declared world-side
-        refs (pick-policy fields, registry pointers, layout-embedded
-        structure refs) are repointed at the instance members — pointers
-        never aim at a source member. Repeated readable names are allowed.
+        refs (pick-policy fields, layout-embedded structure refs) are
+        repointed at the instance members. Repeated readable names are allowed.
         An existing instance returns a no-write preview; applying it requires
         ``confirm=True`` and its current ``preview_token``. A stale token
         returns a fresh preview. Existing member UIDs remain stable.
@@ -243,8 +241,8 @@ class LibraryPackService:
         """Publish a world-owned pack to the engine catalog (TZ §4.1).
 
         The same §2 remap with ``owner_world_uid=None`` — the source
-        world pack, its members and its registry pointers are not
-        touched; editing the published library never reaches instances.
+        world pack and its members are not touched; editing the published
+        library never reaches instances.
         ``system_name`` defaults to ``{source}.published``. A policy outcome
         can be continued with its token and an explicit COPY decision.
         """

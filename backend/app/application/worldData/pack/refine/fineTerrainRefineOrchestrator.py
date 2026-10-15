@@ -8,8 +8,6 @@ corridor select to ``pathCorridorSelect``. Public method names stable for
 from __future__ import annotations
 
 from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.generators.coordinates import map_cell_fine_span
-from app.application.worldData.generators.coordinates.worldTile import fine_bbox_for_tile
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
@@ -43,7 +41,10 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
-from app.application.worldData.pack.refine.fineChunkGeom import rects_for_macro_tile
+from app.application.worldData.pack.refine.fineChunkGeom import (
+    fine_chunk_rect,
+    rects_for_macro_tile,
+)
 from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -68,7 +69,6 @@ class FineTerrainRefineOrchestrator:
         self._runner = runner or FineChunkRunner(terrain)
         self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
-        self._templates_by_world: dict[str, dict[str, ReliefTemplate]] = {}
 
     async def refine_scene_volume(
         self,
@@ -103,22 +103,13 @@ class FineTerrainRefineOrchestrator:
             tile_gy=tile_gy,
             rects=len(scene_rects),
         )
-        result = await self._runner.refine_rects(
+        result = await _run_refine_phase(
+            self._runner, self._relief_grade_repo,
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, scene_rects, loc_volumes,
-            refine_role="scene",
+            role="scene",
             phase="scene",
-            stages=GradePipelineStages.off(),
-        )
-        await self._persist_grade_instances(world, result)
-        log_pack_fine_terrain_phase_done(
-            world.world_uid,
-            "scene",
-            chunks_written=result.wilderness_chunks_written,
-            cells_total=result.persist.succeeded,
             started_at=phase_t0,
-            materialize_s=result.materialize_s,
-            grade_s=result.grade_s,
         )
         return result.persist, result.wilderness_chunks_written, result.rect_count
 
@@ -150,7 +141,7 @@ class FineTerrainRefineOrchestrator:
             relief_templates_by_uid=templates,
             stages=resolved,
         )
-        await self._persist_grade_instances(world, result)
+        await _persist_grade_instances(self._relief_grade_repo, world, result)
         return result
 
     async def schedule_tile_background(
@@ -224,24 +215,7 @@ class FineTerrainRefineOrchestrator:
         *,
         stages: GradePipelineStages | None = None,
     ) -> FineRefineResult:
-        cell_m = map_cell_fine_span(world)
-        chunk_size = terrain_chunk_columns(world)
-        fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
-        n_cx = (fine_bbox.x_max - fine_bbox.x_min + 1) // chunk_size
-        n_cy = (fine_bbox.y_max - fine_bbox.y_min + 1) // chunk_size
-        if n_cx < 1 or n_cy < 1 or not (0 <= cx < n_cx and 0 <= cy < n_cy):
-            raise ValueError(
-                f"chunk=({cx},{cy}) out of range for tile=({tile_gx},{tile_gy}) "
-                f"(grid {n_cx}x{n_cy})",
-            )
-        x_min = fine_bbox.x_min + cx * chunk_size
-        y_min = fine_bbox.y_min + cy * chunk_size
-        rect = ColumnRect(
-            x_min=x_min,
-            x_max=x_min + chunk_size - 1,
-            y_min=y_min,
-            y_max=y_min + chunk_size - 1,
-        )
+        rect = fine_chunk_rect(world, tile_gx, tile_gy, cx, cy)
         return await self.refine_rect(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, rect,
@@ -284,29 +258,20 @@ class FineTerrainRefineOrchestrator:
             rects=len(corridor),
             heading=f"dx={heading.dx} dy={heading.dy}",
         )
-        result = await self._runner.refine_rects(
+        result = await _run_refine_phase(
+            self._runner, self._relief_grade_repo,
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, corridor, loc_volumes,
-            refine_role="path",
+            role="path",
             phase="path",
-            stages=GradePipelineStages.off(),
-        )
-        await self._persist_grade_instances(world, result)
-        log_pack_fine_terrain_phase_done(
-            world.world_uid,
-            "path",
-            chunks_written=result.wilderness_chunks_written,
-            cells_total=result.persist.succeeded,
             started_at=phase_t0,
-            materialize_s=result.materialize_s,
-            grade_s=result.grade_s,
         )
         return result.wilderness_chunks_written
 
     async def _relief_templates(self, world: World) -> dict[str, ReliefTemplate]:
-        cached = self._templates_by_world.get(world.world_uid)
-        if cached is not None:
-            return cached
+        """Fresh membership snapshot per refine job — same boundary as
+        pack/detailed bake: member attach/detach/replace between jobs is
+        visible to the next job; nothing is cached across operations."""
         out: dict[str, ReliefTemplate] = {}
         if self._relief_loader is not None:
             from app.application.worldData.loadReliefTemplatesForWorld import (
@@ -314,23 +279,7 @@ class FineTerrainRefineOrchestrator:
             )
 
             out = await load_relief_templates_for_world(self._relief_loader, world)
-        self._templates_by_world[world.world_uid] = out
         return out
-
-    async def _persist_grade_instances(
-        self,
-        world: World,
-        result: FineRefineResult,
-    ) -> None:
-        if self._relief_grade_repo is None or not result.grade_instances:
-            return
-        await persist_relief_grades(
-            self._relief_grade_repo,
-            world_uid=world.world_uid,
-            instances=list(result.grade_instances),
-            systems=list(result.grade_systems),
-            replace_world=False,
-        )
 
     @staticmethod
     def tile_for_anchor(world: World, anchor_x: int, anchor_y: int) -> tuple[int, int]:
@@ -339,3 +288,57 @@ class FineTerrainRefineOrchestrator:
     # Compat for tests that called private _refine_rects
     async def _refine_rects(self, *args, **kwargs):
         return await self._runner.refine_rects(*args, **kwargs)
+
+
+async def _persist_grade_instances(
+    relief_grade_repo: IReliefGradeRepository | None,
+    world: World,
+    result: FineRefineResult,
+) -> None:
+    if relief_grade_repo is None or not result.grade_instances:
+        return
+    await persist_relief_grades(
+        relief_grade_repo,
+        world_uid=world.world_uid,
+        instances=list(result.grade_instances),
+        systems=list(result.grade_systems),
+        replace_world=False,
+    )
+
+
+async def _run_refine_phase(
+    runner: FineChunkRunner,
+    relief_grade_repo: IReliefGradeRepository | None,
+    world: World,
+    locations: list[NamedLocation],
+    writer: WorldPackWriter,
+    mat_ctx: MaterializationContext,
+    surface_ctx: SurfaceTerrainContext,
+    tile_gx: int,
+    tile_gy: int,
+    rects: list[ColumnRect],
+    location_volumes: list[TerritoryVolume],
+    *,
+    role: ChunkRefineRole,
+    phase: str,
+    started_at: float,
+) -> FineRefineResult:
+    """One refine pass + grade persist + phase-done log (scene/path share it)."""
+    result = await runner.refine_rects(
+        world, locations, writer, mat_ctx, surface_ctx,
+        tile_gx, tile_gy, rects, location_volumes,
+        refine_role=role,
+        phase=phase,
+        stages=GradePipelineStages.off(),
+    )
+    await _persist_grade_instances(relief_grade_repo, world, result)
+    log_pack_fine_terrain_phase_done(
+        world.world_uid,
+        phase,
+        chunks_written=result.wilderness_chunks_written,
+        cells_total=result.persist.succeeded,
+        started_at=started_at,
+        materialize_s=result.materialize_s,
+        grade_s=result.grade_s,
+    )
+    return result

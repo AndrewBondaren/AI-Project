@@ -22,11 +22,23 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import (
 
 @dataclass(frozen=True, slots=True)
 class PickResult:
-    template_uid: str | None
+    template_uid: str
     policy_level: str  # side | object | world | fallback
     mode: ReliefPickMode | None
     reason: str
     fallback_kind: ReliefSideKind | None = None
+
+
+def candidates_for_context(
+    templates: Mapping[str, ReliefTemplate],
+    context: ReliefContext | str,
+) -> list[str]:
+    """Pick candidates — members whose body context matches, UID order (B5)."""
+    ctx = context.value if isinstance(context, ReliefContext) else context
+    return [
+        uid for uid, body in sorted(templates.items())
+        if body.context.value == ctx
+    ]
 
 
 def resolve_picked_template(
@@ -87,10 +99,7 @@ def pick_template(
         side_policy=side_policy,
     )
     active = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_pick", ctx, site_id))
-    candidates = [
-        uid for uid, body in sorted(templates.items())
-        if body.context.value == ctx
-    ]
+    candidates = candidates_for_context(templates, ctx)
     if not candidates:
         reject_unresolved(active, [FieldPathError(active.path_prefix,
             "no relief template candidates", code="DOMAIN_NO_CANDIDATE")])

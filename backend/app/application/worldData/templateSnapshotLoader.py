@@ -13,6 +13,11 @@ Boundary duties (TZ packs §5/§7, domain libraries §5):
   reported through the shared ``report_issues`` channel, one diagnostic
   per event; members with a missing/invalid body or a dangling declared
   ref are excluded so downstream planning sees a closed graph.
+
+Each public call resolves its own catalog — ``load`` and
+``load_relief`` are independent reads, not one atomic snapshot: a
+membership write between them is visible to the second. Callers that
+need one consistent view must share a single returned snapshot.
 """
 
 from __future__ import annotations
@@ -48,7 +53,6 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
 from app.dataModel.locations.structure.building.structureTemplate import (
     StructureTemplate,
 )
-from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World
 from app.ids import LibraryKind
 
@@ -105,7 +109,12 @@ class TemplateSnapshotLoader:
         }
 
     async def load_relief(self, world: World) -> ReliefTemplateSnapshot:
-        """Membership-scoped relief members → typed bodies (B5)."""
+        """Membership-scoped relief members → typed bodies (B5).
+
+        Independent read — not atomic with ``load`` (see class docstring).
+        Bodies are guaranteed ``ReliefTemplate`` by ``_prepare`` — the
+        RELIEF kind is only ever prepared by ``ReliefBodyPreparation``.
+        """
         prepared = await self._prepare(world, (LibraryKind.RELIEF_TEMPLATES,))
         return ReliefTemplateSnapshot(
             world_uid=str(world.world_uid),
@@ -114,7 +123,6 @@ class TemplateSnapshotLoader:
                     template_uid=uid, pack_uid=member.pack_uid, body=body,
                 )
                 for uid, (member, body) in prepared.items()
-                if isinstance(body, ReliefTemplate)
             },
         )
 
