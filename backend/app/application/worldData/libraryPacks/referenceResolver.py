@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from app.application.jsonValidation.resolve import ResolveContext, report_issues
+from app.application.jsonValidation.resolve import log_issues
 from app.application.jsonValidation.types import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 
 from app.application.worldData.libraryPacks.domainAdapters.refFields import (
@@ -125,5 +125,5 @@ async def member_usages(scope, member, world):
         refs = (*refs, *named_location_template_refs(rows, {member.template_uid: member}))
     index, issues = reference_index(refs, catalog.members)
     issues = await contextualize_issues(scope, issues, None if world is None else world.world_uid)
-    report_issues(ResolveContext(), issues)
+    log_issues(issues)
     return list(index.get(member.template_uid, ())) + list(pin_index(world, catalog.members).get(member.template_uid, ()))

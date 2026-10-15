@@ -10,9 +10,10 @@ Boundary duties (TZ packs §5/§7, domain libraries §5):
 - availability = membership only; pins are author-usage markers and never
   narrow candidates; members owned by another world are absent here;
 - every member is validated once at this boundary — graph issues are
-  reported through the shared ``report_issues`` channel, one diagnostic
-  per event; members with a missing/invalid body or a dangling declared
-  ref are excluded so downstream planning sees a closed graph.
+  reported through the shared ``log_issues`` warning channel, one
+  diagnostic per event; members with a missing/invalid body or a
+  dangling declared ref are excluded so downstream planning sees a
+  closed graph.
   Runtime never substitutes an arbitrary candidate (TZ §5): domains with
   a declared default layer apply their POJO default, domains without one
   (relief, R21) reject.
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.jsonValidation.resolve import ResolveContext, report_issues
+from app.application.jsonValidation.resolve import log_issues
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
     PackingScope,
@@ -94,7 +95,7 @@ class TemplateSnapshotLoader:
             CatalogSnapshot(members, bodies, {}), world=world,
         )
         if graph.issues:
-            report_issues(ResolveContext(), graph.issues)
+            log_issues(graph.issues)
 
         # Drop members whose declared refs resolve to absent/excluded
         # bodies — a missing dependency stays a diagnosed gap, not a

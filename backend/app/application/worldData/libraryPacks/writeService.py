@@ -1,5 +1,5 @@
 """L-4 orchestration: inspect/decide/prepare/apply in one caller-compatible UOW."""
-from app.application.jsonValidation.resolve import ResolveContext, report_issues
+from app.application.jsonValidation.resolve import log_issues
 from app.application.worldData.libraryPacks.writeContracts import LibraryWriteRequest, WriteStatus
 from app.application.worldData.libraryPacks.writePreview import prepare_preview
 from app.application.worldData.libraryPacks.writeResults import LibraryWriteOutcome, PolicyRequired, WriteRejected
@@ -41,9 +41,9 @@ class LibraryWriteService:
             return WriteRejected(decision.issues, decision.choices)
         if decision.status is WriteStatus.POLICY_REQUIRED:
             preview = prepare_preview(snapshot, request, decision, self._policy, self._planner)
-            report_issues(ResolveContext(), tuple(dict.fromkeys(issue for variant in preview
+            log_issues(tuple(dict.fromkeys(issue for variant in preview
                 if variant.plan for issue in variant.plan.diagnostics)))
             return PolicyRequired(decision.preview_token, decision.choices, preview, decision.stale)
         plan = self._planner.prepare(snapshot, decision)
-        report_issues(ResolveContext(), plan.diagnostics)
+        log_issues(plan.diagnostics)
         return plan

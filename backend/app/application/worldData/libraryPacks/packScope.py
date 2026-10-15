@@ -31,7 +31,7 @@ from app.db.repositories.iLibraryPackDependencyRepository import (
 from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberRepository
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.ids import LibraryKind, library_uid
-from app.application.jsonValidation.resolve import ResolveContext, report_issues
+from app.application.jsonValidation.resolve import log_issues
 from app.application.worldData.libraryPacks.referenceResolver import dependency_issues
 
 
@@ -162,5 +162,5 @@ class _PackScope:
     async def diagnose_missing(self, pack: LibraryPackRow) -> set[str]:
         """Log + return declared dependencies absent from the catalog."""
         missing = await self.missing_uids(pack.pack_uid)
-        report_issues(ResolveContext(), dependency_issues(pack.pack_uid, missing, pack.owner_world_uid))
+        log_issues(dependency_issues(pack.pack_uid, missing, pack.owner_world_uid))
         return missing

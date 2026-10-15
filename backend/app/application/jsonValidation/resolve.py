@@ -91,16 +91,21 @@ class ResolveResult:
         return self.value is not None
 
 
+def log_issues(issues: Iterable[FieldPathError]) -> None:
+    """Log-route for structured facts where no request/report ctx exists."""
+    for issue in dict.fromkeys(issues):
+        extra = ({**asdict(issue.reference), "reference_path": issue.path}
+                 if issue.reference is not None else {})
+        logger.warning("json_validation | WarningError | path=%s code=%s | %s",
+                       issue.path, issue.code, issue.message, extra=extra)
+
+
 def report_issues(ctx: ResolveContext, issues: Iterable[FieldPathError]) -> None:
     """Shared policy-resolve reporting for rejecting and diagnostic callers."""
     issues = tuple(dict.fromkeys(issues))
     ctx.errors.extend(issues)
     if not ctx.validate_only:
-        for issue in issues:
-            extra = ({**asdict(issue.reference), "reference_path": issue.path}
-                     if issue.reference is not None else {})
-            logger.warning("json_validation | WarningError | path=%s code=%s | %s",
-                           issue.path, issue.code, issue.message, extra=extra)
+        log_issues(issues)
 
 
 def reject_unresolved(ctx: ResolveContext, issues: list[FieldPathError]) -> NoReturn:
