@@ -17,8 +17,9 @@ import unittest
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
+from app.application.jsonValidation.types import ImportValidationError
+from app.application.worldData.bundle.legacyTemplateBodies import (
+    convert_flat_template_bodies,
 )
 from app.ids import LibraryKind, library_uid
 from app.application.worldData.libraryPacks.defaults import default_pack_names
@@ -649,6 +650,7 @@ class LegacyBodyImportTests(_DbCase):
             world_service=container.world_service(),
             library=container.relief_template_library_service(),
             catalog=PackCatalogRepos(packs=self.packs, members=self.members),
+            write_provider=container.library_pack_service,
             db=self.db,
         )
         body = {
@@ -668,9 +670,7 @@ class LegacyBodyImportTests(_DbCase):
         row = await SqliteReliefTemplateRepository(self.db).get_by_uid(uid)
         self.assertIsNotNone(row)
 
-        world = await SqliteWorldRepository(self.db).get_by_id("w-relief")
-        # B6: import writes the member, not a registry pointer.
-        self.assertNotIn(uid, {e["system_template_uid"] for e in world.relief_template_registry or []})
+        # B7: import writes the member; no registry pointer column exists.
         self.assertIn(uid, {m.template_uid for m in await self.members.list_for_world("w-relief")})
 
         # Re-import negotiates; explicit replace keeps the saved identity.
@@ -686,29 +686,23 @@ class LegacyBodyImportTests(_DbCase):
             len(await self.members.list_by_pack(legacy_pack_uid("w-relief"))), 1
         )
 
-    async def test_legacy_building_outline_requires_explicit_conversion_before_modern_writer(self):
+    async def test_legacy_building_outline_rejected_at_bundle_boundary(self):
+        """B7: flat legacy bodies are only interpretable through the
+        bundle converter; unrepresentable fields fail closed."""
         await self._world("w-build")
         container = Container(None, self.db)
-        service = BuildingTemplateLibraryService(
-            repo=container.building_template_repository(),
-            world_service=container.world_service(),
-            db=self.db,
-            catalog=PackCatalogRepos(packs=self.packs, members=self.members),
-            write_provider=container.library_pack_service,
-        )
-        # A4 deliberately rejects the old mixed shape; A6 adds its explicit converter.
-        from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-        with self.assertRaises(LibraryPackValidationError):
-            await service.import_bodies_into_world("w-build", [{
+        data = {
+            "building_templates": [{
                 "system_name": "mill_x",
                 "structure_types": ["farm"],
                 "display_name": "Mill",
-            }])
+            }],
+        }
+        with self.assertRaises(ImportValidationError):
+            convert_flat_template_bodies(data, (), source_world_uid="w-build")
         uid = legacy_member_uid(_BUILDING, "mill_x", world_uid="w-build")
         self.assertIsNone(await self.members.get_by_uid(uid))
         self.assertIsNone(await container.building_template_repository().get_by_uid(uid))
-        world = await SqliteWorldRepository(self.db).get_by_id("w-build")
-        self.assertFalse(world.building_template_registry)
 
 
 class FsPackImportCatalogTests(_DbCase):

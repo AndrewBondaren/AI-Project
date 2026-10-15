@@ -68,9 +68,6 @@ from app.dataModel.locations.settlement.settlement.worldSettlementSpecialization
 from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.locations.structure.building.worldBuildingTemplateRegistry import (
-    WorldBuildingTemplateRegistry,
-)
 from app.dataModel.locations.structure.enums.buildingPurpose import (
     WorldPurposePackRegistry,
     WorldPurposePacks,
@@ -86,9 +83,6 @@ from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (
     WorldCanalTemplateRegistry,
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry
 
 WireKind = Literal["multi_column", "registry_list", "registry_dict", "json_blob"]
@@ -397,11 +391,6 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(pojo_cls=WorldRaceTemplateRegistry, world_key="race_template_registry", facade=True),
     _registry_slice(pojo_cls=WorldPerkTemplateRegistry, world_key="perk_template_registry", facade=True),
     _registry_slice(
-        pojo_cls=WorldBuildingTemplateRegistry,
-        world_key="building_template_registry",
-        facade=True,
-    ),
-    _registry_slice(
         pojo_cls=WorldPurposePackRegistry,
         world_key="purpose_pack_registry",
         facade=True,
@@ -409,11 +398,6 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldPurposePacks,
         world_key="purpose_packs",
-        facade=True,
-    ),
-    _registry_slice(
-        pojo_cls=WorldReliefTemplateRegistry,
-        world_key="relief_template_registry",
         facade=True,
     ),
     _registry_slice(

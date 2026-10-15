@@ -103,11 +103,6 @@ def _world(world_uid: str, tpl_uid: str, context: ReliefContext) -> World:
         world_uid=world_uid,
         name="W",
         created_at="2026-01-01T00:00:00Z",
-        relief_template_registry=[{
-            "system_template_uid": tpl_uid,
-            "context": context.value,
-            "display_template_name": "T",
-        }],
         relief_pick_policy={
             context.value: {"mode": "fixed", "default_template_uid": tpl_uid},
         },

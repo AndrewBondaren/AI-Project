@@ -53,14 +53,6 @@ from app.dataModel.locations.settlement.settlement.worldSettlementSpecialization
 from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.locations.structure.building.plotLayoutTemplate import (
-    PlotLayoutTemplate,
-    plot_type_defaulted,
-)
-from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
-from app.dataModel.locations.structure.building.worldBuildingTemplateRegistry import (
-    WorldBuildingTemplateRegistry,
-)
 from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     WorldPurposePackRegistry,
@@ -73,9 +65,6 @@ from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     WorldReliefGradeObstacleScalars,
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 from app.dataModel.terrainMasks import WorldTerrainMasks
 
@@ -240,50 +229,6 @@ def settlement_specializations(world: Any) -> WorldSettlementSpecializationRegis
         world, WorldSettlementSpecializationRegistry, world_uid=_uid(world),
     )
 
-def world_building_layout_overrides(world: Any) -> list[PlotLayoutTemplate]:
-    """Plot-shaped registry rows only (not uid pointers, not engine builtins)."""
-    from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
-        PackingReason,
-        PackingStep,
-        packing_warning,
-    )
-
-    out: list[PlotLayoutTemplate] = []
-    for layout in building_template_registry(world).layouts:
-        if plot_type_defaulted(layout):
-            packing_warning(
-                PackingStep.CACHE,
-                district="world",
-                system_name=layout.system_name,
-                reason=PackingReason.PLOT_TYPE_DEFAULTED,
-            )
-        out.append(layout)
-    return out
-
-
-def building_layout_templates(world: Any) -> list[PlotLayoutTemplate]:
-    """Engine builtins + world rows that validate as plot layouts (not uid pointers)."""
-    from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
-        PackingReason,
-        PackingStep,
-        packing_warning,
-    )
-
-    by_name: dict[str, PlotLayoutTemplate] = {}
-    for layout in canonical_defaults():
-        if plot_type_defaulted(layout):
-            packing_warning(
-                PackingStep.CACHE,
-                district="defaults",
-                system_name=layout.system_name,
-                reason=PackingReason.PLOT_TYPE_DEFAULTED,
-            )
-        by_name[layout.system_name] = layout
-    for layout in world_building_layout_overrides(world):
-        by_name[layout.system_name] = layout
-    return list(by_name.values())
-
-
 def barrier_templates(world: Any) -> WorldBarrierTemplateRegistry:
     """Canonical ⊕ world by ``RUNTIME_MERGE_ID_FIELD`` (T-29)."""
     return resolve_registry_list_world(
@@ -344,12 +289,6 @@ def location_moods(world: Any) -> WorldLocationMoodRegistry:
     )
 
 
-def building_template_registry(world: Any) -> WorldBuildingTemplateRegistry:
-    return resolve_registry_list_world(
-        world, WorldBuildingTemplateRegistry, world_uid=_uid(world),
-    )
-
-
 def purpose_pack_registry(world: Any) -> WorldPurposePackRegistry:
     """Canonical ⊕ world by ``system_pack``; ``base`` recipe is frozen."""
     resolved = resolve_registry_list_world(
@@ -369,12 +308,6 @@ def enabled_building_purposes(world: Any) -> frozenset[BuildingPurpose]:
     return purposes_for_world(
         purpose_packs(world).root,
         recipes=purpose_pack_registry(world),
-    )
-
-
-def relief_template_registry(world: Any) -> WorldReliefTemplateRegistry:
-    return resolve_registry_list_world(
-        world, WorldReliefTemplateRegistry, world_uid=_uid(world),
     )
 
 

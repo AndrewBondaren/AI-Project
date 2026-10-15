@@ -15,19 +15,9 @@ from app.application.worldData.bundle.library.libraryTemplateSection import (
     LibraryTemplateSectionHandler,
 )
 from app.application.worldData.bundle.order import BUNDLE_IMPORT_ORDER
-from app.application.worldData.bundle.reliefSection import (
-    import_relief_templates_section,
-)
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
-)
 from app.application.worldData.connectionGraphService import ConnectionGraphService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.raceService import RaceService
-from app.application.worldData.reliefTemplateLibraryService import (
-    ReliefTemplateLibraryService,
-)
-from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.worldService import WorldService
@@ -42,9 +32,6 @@ def build_bundle_handlers(
     connection_graph_service: ConnectionGraphService,
     race_service: RaceService,
     perk_service: WorldPerkService,
-    relief_library: ReliefTemplateLibraryService,
-    relief_import: ReliefWorldImportService,
-    building_library: BuildingTemplateLibraryService,
 ) -> list[IBundleSectionHandler]:
 
     by_key: dict[str, IBundleSectionHandler] = {
@@ -56,24 +43,6 @@ def build_bundle_handlers(
         ),
         BundleSection.CONNECTION_EDGES: ConnectionEdgesSectionHandler(
             connection_graph_service,
-        ),
-        BundleSection.RELIEF_TEMPLATES: LibraryTemplateSectionHandler(
-            LibrarySectionAdapter(
-                section_key=BundleSection.RELIEF_TEMPLATES,
-                export_bodies=relief_library.export_bodies_for_world,
-                import_bodies=lambda wid, bodies: import_relief_templates_section(
-                    wid, bodies, relief_import,
-                ),
-                prepare_body=relief_import.prepare_body,
-            ),
-        ),
-        BundleSection.BUILDING_TEMPLATES: LibraryTemplateSectionHandler(
-            LibrarySectionAdapter(
-                section_key=BundleSection.BUILDING_TEMPLATES,
-                export_bodies=building_library.export_bodies_for_world,
-                import_bodies=building_library.import_bodies_into_world,
-                prepare_body=building_library.prepare_body,
-            ),
         ),
         BundleSection.RACE_TEMPLATES: LibraryTemplateSectionHandler(
             LibrarySectionAdapter(

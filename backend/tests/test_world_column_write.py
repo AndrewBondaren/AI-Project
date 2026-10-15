@@ -91,10 +91,10 @@ class WorldColumnWriteTests(unittest.TestCase):
         before = copy.deepcopy(world)
         ctx = self.ctx(path_prefix=("operation",))
         with self.assertRaises(ImportValidationError) as error:
-            apply_world_column(world, "relief_template_registry", [42, False], ctx)
+            apply_world_column(world, "race_template_registry", [42, False], ctx)
         self.assertEqual([e.path for e in error.exception.errors],
-                         [("operation", "relief_template_registry", 0),
-                          ("operation", "relief_template_registry", 1)])
+                         [("operation", "race_template_registry", 0),
+                          ("operation", "race_template_registry", 1)])
         self.assertEqual(ctx.errors, error.exception.errors)
         self.assertEqual(world, before)
 
@@ -126,7 +126,7 @@ class WorldColumnWriteTests(unittest.TestCase):
                 self.assertEqual(facts[0], facts[1])
 
     def test_registry_null_uses_shared_root_contract_after_adapter(self):
-        for key in ("climate_zone_registry", "lore_registry", "relief_template_registry"):
+        for key in ("climate_zone_registry", "lore_registry", "race_template_registry"):
             scoped = resolve_world_column(key, None, self.ctx())
             self.assertEqual(scoped[key], normalize_world({key: None}, partial=True)[key])
             self.assertIsNotNone(scoped[key])

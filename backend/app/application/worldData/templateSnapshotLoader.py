@@ -13,6 +13,9 @@ Boundary duties (TZ packs §5/§7, domain libraries §5):
   reported through the shared ``report_issues`` channel, one diagnostic
   per event; members with a missing/invalid body or a dangling declared
   ref are excluded so downstream planning sees a closed graph.
+  Runtime never substitutes an arbitrary candidate (TZ §5): domains with
+  a declared default layer apply their POJO default, domains without one
+  (relief, R21) reject.
 
 Each public call resolves its own catalog — ``load`` and
 ``load_relief`` are independent reads, not one atomic snapshot: a

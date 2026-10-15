@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import ValidationError
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import crops
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
+from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+    TemplatePreparationError,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.worldData.libraryPacks.domainAdapters.plot import (
+    PlotBodyPreparation,
+)
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.flora.worldCropsRegistry import WorldCropsRegistry
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
@@ -132,28 +133,28 @@ class CropsRegistryTest(unittest.TestCase):
         self.assertEqual([row.body.system_name for row in by_kind], ["farm"])
 
 
-class FarmTemplateImportTest(unittest.IsolatedAsyncioTestCase):
-    async def test_import_rejects_farm_subject_wrong_kind(self) -> None:
+class FarmTemplateImportTest(unittest.TestCase):
+    def test_import_rejects_farm_subject_wrong_kind(self) -> None:
+        """B7: subject/kind checks live on the plot preparation's world
+        validation — the flat body-import entry point is gone."""
         world = World(
             world_uid="w1",
             name="T",
             created_at="2026-01-01T00:00:00",
         )
-        worlds = MagicMock()
-        worlds.get_by_id = AsyncMock(return_value=world)
-        service = BuildingTemplateLibraryService(
-            repo=MagicMock(), world_service=worlds,
-            catalog=PackCatalogRepos(packs=AsyncMock(), members=AsyncMock()),
-        )
-        result = await service.import_bodies_into_world("w1", [{
-            "system_name": "confused_farm",
-            "structure_type": "farm",
-            "display_name": "Farm",
-            "crop_kind": "grain",
-            "subjects": ["flax"],
-        }])
-        self.assertEqual(result.failed, 1)
-        self.assertIn("CROP_KIND_MISMATCH", result.errors[0].message)
+        with self.assertRaises(TemplatePreparationError) as caught:
+            PlotBodyPreparation().prepare_body(
+                {
+                    "system_name": "confused_farm",
+                    "display_name": "Farm",
+                    "crop_kind": "grain",
+                    "subjects": ["flax"],
+                },
+                local_uid="confused_farm",
+                template_uid="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                world=world,
+            )
+        self.assertIn("CROP_KIND_MISMATCH", str(caught.exception))
 
 
 if __name__ == "__main__":

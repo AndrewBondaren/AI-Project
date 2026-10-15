@@ -47,7 +47,6 @@ def _world(**overrides):
         ],
         climate_zone_registry=None,
         hydrology={"enabled": False},
-        relief_template_registry=[{"system_template_uid": "test-mountain", "context": "mountain"}],
     )
     base.update(overrides)
     return SimpleNamespace(**base)

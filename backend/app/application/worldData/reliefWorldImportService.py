@@ -2,8 +2,8 @@
 
 Bodies arriving through a manifest-less bundle section become members of the
 world-owned ``legacy`` pack (plan library-packs-model step 3 / TZ §1.1).
-Membership is the single availability source (B6): no
-``relief_template_registry`` pointer rows are written here. API/routes stay
+Membership is the single availability source — the legacy
+``relief_template_registry`` world column was removed in B7. API/routes stay
 thin.
 """
 
@@ -52,11 +52,13 @@ class ReliefWorldImportService:
         library: ReliefTemplateLibraryService,
         *,
         catalog: PackCatalogRepos,
+        write_provider=None,
         db: Database | None = None,
     ) -> None:
         self._worlds = world_service
         self._library = library
         self._catalog = catalog
+        self._write_provider = write_provider
         self._db = db
 
     async def import_outlines_into_world(
@@ -66,7 +68,7 @@ class ReliefWorldImportService:
         *, decisions=(), preview_token=None,
     ) -> dict | PolicyRequired:
         """Bodies → world-owned ``legacy`` members + R34 sync."""
-        if self._db is not None and self._library._write_provider is None:
+        if self._db is not None and self._write_provider is None:
             raise RuntimeError("SQL library imports require the common write service")
         if self._db is not None:
             async with self._db.transaction_if_needed():
@@ -80,12 +82,12 @@ class ReliefWorldImportService:
         *, decisions=(), preview_token=None,
     ) -> dict | PolicyRequired:
         world = await self._worlds.get_by_id(world_uid)
-        if self._library._write_provider is not None:
+        if self._write_provider is not None:
             from app.application.worldData.libraryPacks.writeResults import WriteResult
             prepared = [self.prepare_body(world, raw) for raw in outlines]
             if not prepared:
                 return {"imported": 0, "uids": []}
-            result = await self._library._write_provider().import_legacy_bodies(
+            result = await self._write_provider().import_legacy_bodies(
                 LibraryKind.RELIEF_TEMPLATES, world_uid, prepared,
                 decisions=decisions, preview_token=preview_token)
             if not isinstance(result, WriteResult):
@@ -135,10 +137,15 @@ class ReliefWorldImportService:
     ) -> ReliefTemplate:
         outline = resolve_model(ReliefTemplate, raw, ctx=ctx)
         warn_template_invalid_geom(outline, template_uid=template_uid)
+        self.validate_world_refs(world, outline)
+        return outline
+
+    def validate_world_refs(self, world, outline: ReliefTemplate) -> None:
+        """World-side barrier/canal checks — the ``validate_world`` seam of
+        ``ReliefBodyPreparation`` (B6 review step 6)."""
         barrier_keys = {e.system_type for e in barrier_templates(world).root}
         self._validate_structure_refs(outline, barrier_keys)
         self._validate_structure_canal(outline, world)
-        return outline
 
     def _validate_structure_refs(
         self,

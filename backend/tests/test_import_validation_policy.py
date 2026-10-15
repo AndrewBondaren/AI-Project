@@ -143,7 +143,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         fixture = self.fixture("world_defaults_test")
         fixture["world"]["terrain_masks"] = {"default_forests": {"forest_min_rainfall": 60}}
         await self.service.import_bundle(fixture)
-        uid = fixture["world"]["world_uid"]
+        uid = (await self.worlds.get_all())[0].world_uid
         await self.worlds.update(uid, {"terrain_masks": {"default_forests": {"enabled": False}}})
         world = await self.worlds.get_by_id(uid)
         self.assertEqual(world.terrain_masks["default_forests"]["forest_min_rainfall"], 60)
@@ -157,7 +157,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         fixture["world"]["terrain_masks"] = {"default_mountains": {"default_form": {
             "form_type": "star", "rays": 5, "inner_ratio": 0.45}}}
         await self.service.import_bundle(fixture)
-        uid = fixture["world"]["world_uid"]
+        uid = (await self.worlds.get_all())[0].world_uid
         await self.worlds.update(uid, {"terrain_masks": {"default_mountains": {
             "default_form": {"rays": 7}}}})
         world = await self.worlds.get_by_id(uid)

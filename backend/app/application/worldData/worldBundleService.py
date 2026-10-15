@@ -24,7 +24,6 @@ from app.application.worldData.bundle.handler import IBundleSectionHandler
 from app.application.worldData.bundleRemapService import remap_bundle
 from app.application.worldData.deriveWorldUid import derive_world_uid
 from app.application.worldData.libraryPacks.legacyWorldInput import extract_legacy_world_input
-from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.application.worldData.pack.import_.importLevels import (
     ImportLevel,
     filter_bundle_for_export,
@@ -40,30 +39,11 @@ class _ImportFailed(Exception):
 
 
 def _cleanse_consumed_rows(world: dict) -> dict:
-    """Drop registry rows extraction consumes as bodies so normalize only sees
-    modern registry content (pointers and valid plot layouts)."""
+    """Legacy registry columns are pure migration input (B2/B7): after
+    extraction nothing may reach ``World`` — the fields no longer exist."""
     cleansed = dict(world)
-    registries = (
-        ("building_template_registry", PlotLayoutTemplate),
-        ("relief_template_registry", None),
-    )
-    for field, layout_model in registries:
-        rows = cleansed.get(field)
-        if not isinstance(rows, list):
-            continue
-        kept = []
-        for row in rows:
-            if not isinstance(row, dict) or "system_template_uid" in row:
-                kept.append(row)
-                continue
-            if layout_model is not None:
-                try:
-                    layout_model.model_validate(row)
-                    kept.append(row)
-                    continue
-                except ValidationError:
-                    pass
-        cleansed[field] = kept
+    cleansed.pop("building_template_registry", None)
+    cleansed.pop("relief_template_registry", None)
     return cleansed
 
 

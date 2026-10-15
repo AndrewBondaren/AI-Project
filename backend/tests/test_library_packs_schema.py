@@ -127,9 +127,9 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
         for i in ("one", "two"):
             await self.db.conn.execute(
                 "INSERT INTO building_templates "
-                "(template_uid, system_name, display_name, structure_type, data) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (f"bt-{i}", "shared_name", i, "house", "{}"),
+                "(template_uid, system_name, display_name, data) "
+                "VALUES (?, ?, ?, ?)",
+                (f"bt-{i}", "shared_name", i, "{}"),
             )
             await self.db.conn.execute(
                 "INSERT INTO relief_templates "
@@ -508,21 +508,6 @@ class LibraryPackSchemaTests(IsolatedAsyncioTestCase):
         self.assertIsNone(stored.owner_world_uid)
         self.assertEqual(stored.source_pack_uid, "src-keep")
 
-    async def test_relief_get_by_system_name_ambiguous_is_error(self):
-        repo = SqliteReliefTemplateRepository(self.db)
-        for uid in ("r-1", "r-2"):
-            await repo.upsert(ReliefTemplateRow(
-                template_uid=uid, system_name="same", display_name=uid,
-                context="any", data={},
-            ))
-        with self.assertRaises(RuntimeError):
-            await repo.get_by_system_name("same")
-        self.assertIsNone(await repo.get_by_system_name("missing"))
-        await repo.upsert(ReliefTemplateRow(
-            template_uid="r-3", system_name="unique", display_name="u",
-            context="any", data={},
-        ))
-        self.assertEqual((await repo.get_by_system_name("unique")).template_uid, "r-3")
 
 
 if __name__ == "__main__":

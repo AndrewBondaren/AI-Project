@@ -373,12 +373,9 @@ class OwnershipAndMembershipTests(_ServiceCase):
             pack.pack_uid, library_kind=_RELIEF, local_uid="meadow",
             body=_relief_body("meadow"), world_uid="w1",
         )
-        # Membership-only: no pointer row is written for the member.
+        # Membership-only: the member exists only in the pack catalog (B7:
+        # no world registry column to unwind).
         world = await self.worlds.get_by_id("w1")
-        self.assertNotIn(
-            member.template_uid,
-            {e["system_template_uid"] for e in world.relief_template_registry or []},
-        )
         self.assertIn(
             member.template_uid,
             {m.template_uid for m in await self.members.list_for_world("w1")},
@@ -391,12 +388,6 @@ class OwnershipAndMembershipTests(_ServiceCase):
 
         # Member delete removes the body; nothing world-side to unwind.
         await self.service.delete_member(member.template_uid, world_uid="w1")
-        world = await self.worlds.get_by_id("w1")
-        self.assertEqual(
-            [e for e in world.relief_template_registry or []
-             if e["system_template_uid"] == member.template_uid],
-            [],
-        )
         self.assertIsNone(await self.relief_rows.get_by_uid(member.template_uid))
 
     async def test_world_member_requires_owner_scope(self):
@@ -431,8 +422,6 @@ class OwnershipAndMembershipTests(_ServiceCase):
             },
             world_uid="w2",
         )
-        world = await self.worlds.get_by_id("w2")
-        self.assertFalse(world.building_template_registry)
         self.assertIsNotNone(await self.building_rows.get_by_uid(member.template_uid))
 
     async def test_pinned_member_delete_refused(self):
@@ -521,8 +510,6 @@ class DeletePackSafetyTests(_ServiceCase):
         )
         result = await self.service.delete_pack(pack.pack_uid, world_uid="w4")
         self.assertEqual(result.members_removed, 1)
-        world = await self.worlds.get_by_id("w4")
-        self.assertEqual(world.relief_template_registry, [])
         self.assertIsNone(await self.relief_rows.get_by_uid(member.template_uid))
 
 

@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import ValidationError
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import livestock
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
+from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+    TemplatePreparationError,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.worldData.libraryPacks.domainAdapters.plot import (
+    PlotBodyPreparation,
+)
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.livestock.worldLivestockRegistry import WorldLivestockRegistry
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
@@ -123,42 +124,44 @@ class LivestockRegistryTest(unittest.TestCase):
         generic = _layout("livestock", "livestock")
         dairy = _layout("dairy_pen", "livestock", livestock_kind=LivestockKind.DAIRY)
         cow = _layout("cow_pen_1", "livestock", subjects=["cow"])
+        catalog = BuildingCatalog.from_layouts((generic, dairy, cow))
         tagged = BuildingCatalog.prefer_subjects(
-            (generic, dairy, cow), ["cow"], livestock_kinds={LivestockKind.DAIRY},
+            catalog.entries, ["cow"], livestock_kinds={LivestockKind.DAIRY},
         )
-        self.assertEqual([row.system_name for row in tagged], ["cow_pen_1"])
+        self.assertEqual([row.body.system_name for row in tagged], ["cow_pen_1"])
+        untagged_pool = (catalog.entry_for("livestock"), catalog.entry_for("dairy_pen"))
         by_kind = BuildingCatalog.prefer_subjects(
-            (generic, dairy), ["cow"], livestock_kinds={LivestockKind.DAIRY},
+            untagged_pool, ["cow"], livestock_kinds={LivestockKind.DAIRY},
         )
-        self.assertEqual([row.system_name for row in by_kind], ["dairy_pen"])
+        self.assertEqual([row.body.system_name for row in by_kind], ["dairy_pen"])
         untagged = BuildingCatalog.prefer_subjects(
-            (generic, dairy), ["cow"], livestock_kinds={LivestockKind.MOUNT},
+            untagged_pool, ["cow"], livestock_kinds={LivestockKind.MOUNT},
         )
-        self.assertEqual([row.system_name for row in untagged], ["livestock"])
+        self.assertEqual([row.body.system_name for row in untagged], ["livestock"])
 
 
-class LivestockTemplateImportTest(unittest.IsolatedAsyncioTestCase):
-    async def test_import_rejects_livestock_subject_wrong_kind(self) -> None:
+class LivestockTemplateImportTest(unittest.TestCase):
+    def test_import_rejects_livestock_subject_wrong_kind(self) -> None:
+        """B7: subject/kind checks live on the plot preparation's world
+        validation — the flat body-import entry point is gone."""
         world = World(
             world_uid="w1",
             name="T",
             created_at="2026-01-01T00:00:00",
         )
-        worlds = MagicMock()
-        worlds.get_by_id = AsyncMock(return_value=world)
-        service = BuildingTemplateLibraryService(
-            repo=MagicMock(), world_service=worlds,
-            catalog=PackCatalogRepos(packs=AsyncMock(), members=AsyncMock()),
-        )
-        result = await service.import_bodies_into_world("w1", [{
-            "system_name": "confused_pen",
-            "structure_type": "livestock",
-            "display_name": "Pen",
-            "livestock_kind": "dairy",
-            "subjects": ["horse"],
-        }])
-        self.assertEqual(result.failed, 1)
-        self.assertIn("LIVESTOCK_KIND_MISMATCH", result.errors[0].message)
+        with self.assertRaises(TemplatePreparationError) as caught:
+            PlotBodyPreparation().prepare_body(
+                {
+                    "system_name": "confused_pen",
+                    "display_name": "Pen",
+                    "livestock_kind": "dairy",
+                    "subjects": ["horse"],
+                },
+                local_uid="confused_pen",
+                template_uid="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                world=world,
+            )
+        self.assertIn("LIVESTOCK_KIND_MISMATCH", str(caught.exception))
 
 
 if __name__ == "__main__":

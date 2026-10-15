@@ -114,7 +114,6 @@ from app.dataModel.locations.structure import (
     BarrierTemplateKey,
     BuildingTemplateOutline,
     BuildingTemplate,
-    BuildingTemplateRegistryEntry,
     DrawingKey,
     PlotLayoutTemplate,
     PlotTemplate,
@@ -130,7 +129,6 @@ from app.dataModel.locations.structure import (
     StraightSize,
     UShapeSize,
     WorldBarrierTemplateRegistry,
-    WorldBuildingTemplateRegistry,
     WorldRoomTypeRegistry,
 )
 from app.dataModel.terrain import (
@@ -154,7 +152,6 @@ __all__ = [
     "BarrierTemplateKey",
     "BuildingTemplateOutline",
     "BuildingTemplate",
-    "BuildingTemplateRegistryEntry",
     "DrawingKey",
     "PlotLayoutTemplate",
     "PlotTemplate",
@@ -232,7 +229,6 @@ __all__ = [
     "TerrainRegistryEntry",
     "WeatherTypeEntry",
     "WorldBarrierTemplateRegistry",
-    "WorldBuildingTemplateRegistry",
     "WorldSettlementSizeRegistry",
     "resolve_settlement_footprint_multiplier",
     "WorldClimateScalars",

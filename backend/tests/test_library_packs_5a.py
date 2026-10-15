@@ -81,7 +81,6 @@ class _CatalogCase(IsolatedAsyncioTestCase):
             structure_library=self.container.structure_template_library_service(),
             building_library=self.container.building_template_library_service(),
             plot_library=self.container.plot_template_library_service(),
-            world_repository=self.container.world_repository(),
             relief_world_import=self.container.relief_world_import_service(),
         )
         self.repos = PackCatalogRepos(

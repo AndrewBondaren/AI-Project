@@ -244,7 +244,8 @@ class LibraryWriteApiTests(_ServiceCase):
     async def test_bundle_policy_conflict_rolls_back_world_and_members(self):
         from app.application.worldData.bundle.entity.sections import WorldSectionHandler
         from app.application.worldData.worldBundleService import WorldBundleService
-        from app.application.worldData.libraryPacks.errors import LibraryPackPolicyRequiredError
+        from app.application.worldData.libraryPacks.errors import (
+            LibraryPackPolicyRequiredError, require_no_policy)
         from app.api.routes.worlds import router as worlds_router
         from app.application.importResult import ImportResult
 
@@ -255,15 +256,14 @@ class LibraryWriteApiTests(_ServiceCase):
             def validate_section(self, world, data, *, ctx):
                 container.relief_world_import_service().prepare_body(world, data[0], ctx=ctx)
             async def import_section(self, uid, data):
-                await container.relief_world_import_service().import_outlines_into_world(uid, data)
+                outcome = await container.relief_world_import_service().import_outlines_into_world(uid, data)
+                require_no_policy(outcome)
                 return ImportResult(total=1, succeeded=1, failed=0)
 
-        # The second real library handler sees the writes of an earlier handler
+        # The second library handler sees the writes of an earlier handler
         # in the same outer UOW; the conflict must unwind the complete import.
-        production = container.world_bundle_service()
-        relief = next(h for h in production._handlers if h.key == "relief_templates")
         service = WorldBundleService(self.db, container.world_service(),
-            [WorldSectionHandler(container.world_service()), SeedLibraries(), relief])
+            [WorldSectionHandler(container.world_service()), SeedLibraries(), SeedLibraries()])
         fixture = json.loads((Path(__file__).resolve().parents[2] / "fixtures/world_defaults_test.json").read_text(encoding="utf-8"))
         data = {"world": fixture["world"], "relief_templates": [body]}
         uid = data["world"]["world_uid"]
@@ -290,9 +290,16 @@ class LibraryWriteApiTests(_ServiceCase):
         from app.application.worldData.bundle.entity.sections import WorldSectionHandler
         from app.application.worldData.worldBundleService import WorldBundleService
         from app.application.importResult import ImportResult
+        from app.application.worldData.libraryPacks.errors import require_no_policy
         container = self.container
-        production = container.world_bundle_service()
-        relief = next(h for h in production._handlers if h.key == "relief_templates")
+        class SeedLibraries:
+            key = "relief_templates"
+            def validate_section(self, world, data, *, ctx):
+                container.relief_world_import_service().prepare_body(world, data[0], ctx=ctx)
+            async def import_section(self, uid, data):
+                outcome = await container.relief_world_import_service().import_outlines_into_world(uid, data)
+                require_no_policy(outcome)
+                return ImportResult(total=1, succeeded=1, failed=0)
         class FailingEntity:
             key = "states"
             def validate_section(self, world, data, *, ctx):
@@ -300,7 +307,7 @@ class LibraryWriteApiTests(_ServiceCase):
             async def import_section(self, uid, data):
                 return ImportResult(total=1, succeeded=0, failed=1)
         service = WorldBundleService(self.db, container.world_service(),
-            [WorldSectionHandler(container.world_service()), relief, FailingEntity()])
+            [WorldSectionHandler(container.world_service()), SeedLibraries(), FailingEntity()])
         fixture = json.loads((Path(__file__).resolve().parents[2] / "fixtures/world_defaults_test.json").read_text(encoding="utf-8"))
         data = {"world": fixture["world"], "relief_templates": [_relief_body("meadow")], "states": []}
         results, rolled_back = await service.import_bundle(data)

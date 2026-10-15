@@ -149,12 +149,10 @@ class ReliefSnapshotTests(_ReliefSnapshotCase):
 
         self.assertEqual(set(snapshot.templates), {members[2].template_uid})
 
-    async def test_reader_returns_typed_bodies_ignoring_registry(self):
-        """The registry pointer (still dual-written until B6) never supplies
-        candidates — deleting it leaves pick inputs unchanged."""
+    async def test_reader_returns_typed_bodies_from_membership(self):
+        """Membership alone supplies candidates; no registry exists."""
         world = await self._world("w1")
         _, members = await self._relief_pack("w1", "world.w1.relief", "meadow")
-        world.relief_template_registry = []
         bodies = await load_relief_templates_for_world(self.loader, world)
         self.assertEqual(set(bodies), {members[0].template_uid})
         self.assertIsInstance(bodies[members[0].template_uid], ReliefTemplate)

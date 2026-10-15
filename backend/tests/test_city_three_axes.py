@@ -16,7 +16,6 @@ from app.application.jsonValidation.worldRow import (
     district_zone_preference,
     location_types,
 )
-from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
 from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
@@ -89,7 +88,6 @@ from app.dataModel.locations.structure.building.structureCatalog import Structur
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
-from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -439,38 +437,6 @@ class JsonValidationRecipeTest(unittest.TestCase):
             },
         })
         self.assertTrue(out["location_type_registry"])
-
-
-class LibraryExportTest(unittest.IsolatedAsyncioTestCase):
-    async def test_export_bodies_for_world_uses_membership_not_registry(self) -> None:
-        """B6: flat export enumerates world-owned members, never the column."""
-        from app.db.models.libraryPackMember import LibraryPackMemberRow
-        rows = {
-            "uid-b": BuildingTemplateRow(
-                template_uid="uid-b",
-                system_name="inn_small",
-                display_name="Tavern",
-                structure_type="tavern",
-                data={"system_name": "inn_small", "display_name": "Tavern"},
-            ),
-        }
-        repo = MagicMock()
-        repo.get_by_uid = AsyncMock(side_effect=lambda uid: rows.get(uid))
-        members = SimpleNamespace(list_for_world=AsyncMock(return_value=[
-            LibraryPackMemberRow(pack_uid="p", local_uid="inn",
-                library_kind="building_templates", template_uid="uid-b"),
-            LibraryPackMemberRow(pack_uid="p", local_uid="plot",
-                library_kind="plot_templates", template_uid="uid-plot"),
-        ]))
-        service = BuildingTemplateLibraryService(
-            repo=repo, world_service=MagicMock(),
-            catalog=SimpleNamespace(members=members),
-        )
-        got = await service.export_bodies_for_world("w1")
-        # Only the building-kind member exports; the foreign-kind member is
-        # filtered out before any body lookup.
-        self.assertEqual([b["system_name"] for b in got], ["inn_small"])
-        repo.get_by_uid.assert_called_once_with("uid-b")
 
 
 class DistrictSelectTest(unittest.TestCase):

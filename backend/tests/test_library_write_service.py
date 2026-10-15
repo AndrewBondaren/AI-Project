@@ -47,9 +47,7 @@ class LibraryWriteServiceTests(_ServiceCase):
         self.assertIsInstance(result, WriteResult)
         self.assertEqual(await self.packs.get_by_uid(raw.pack.pack_uid), raw.pack)
         self.assertEqual((await self.relief_rows.get_by_uid(raw.members[0].member.template_uid)).display_name, "Meadow")
-        world = await self.worlds.get_by_id("w1")
-        # B6: membership replaces the registry pointer write.
-        self.assertEqual(world.relief_template_registry or [], [])
+        # B7: membership is the only availability write.
         self.assertEqual(
             [m.template_uid for m in await self.members.list_for_world("w1")],
             [raw.members[0].member.template_uid],

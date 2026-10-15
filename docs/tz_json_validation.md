@@ -503,7 +503,7 @@ instance-каталоги (resource/crops/livestock) spec не объявляю�
 Внутренний писатель **не** вызывает `worlds.update` для maintenance-записи одной
 колонки — полная ревалидация вне его контракта, и невалидная чужая колонка
 обязана не блокировать scoped-запись (прецедент: `building_template_registry` с
-mixed-строками ломал любой PATCH до union-POJO).
+mixed-строками ломал любой PATCH до union-POJO; колонка и facade удалены в B7).
 
 **Примитивы (два явных, не один вызов):**
 
@@ -709,7 +709,7 @@ W2-1…W2-4. До его выполнения действует существ�
 | Barrier templates | `barrier_templates()` | barrierDefaults, barriers, areaBarriers | ✅ |
 | City sizes | `city_sizes()` | `footprint.footprint_multiplier` | ✅ код; целевой lookup subtype×ранг — [`tz_locations.md`](./tz_locations.md) **LOC-T-2** |
 | District templates | `district_templates()` | footprint → placement → DistrictSlot → roads | ✅ |
-| Building layouts | `building_layout_templates()` | buildingDefaults, buildingCache, assemblers | ✅ корень `BuildingLayoutTemplate`; nested — **JV-4b** `list[dict]` |
+| ~~Building layouts~~ | ~~`building_layout_templates()`~~ | accessor удалён (B7) вместе с колонкой `world_building_layout_overrides`; layouts — в world-owned packs | ✅ корень `BuildingLayoutTemplate`; nested — **JV-4b** `list[dict]` |
 | Terrain scalars | `terrain_scalars()` | worldMapSettings, columnFillPass, climateGeneratorService (lapse) | ✅ |
 | Connection types | ⬜ | — | ⬜ POJO есть, consumers нет |
 | Location types, lore, weather, room types, terrain categories, location mood | ⬜ | — | ⬜ |
@@ -754,6 +754,7 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 
 `normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `fine_cells_per_map_cell`, …); bundle sections (`races`, `locations`, …). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.  
 ~~barrier / city_size / district / road_settings / terrain scalars / connection_type_registry / location_type / lore / weather / terrain_category / room_type / location_mood / building_template_registry~~ — ✅ GV-3 registry facades.
+*B7 (2026-10-15): facades `building_template_registry` / `relief_template_registry` удалены вместе с колонками — pack-домены на membership, см. §B `tz_world_bundle`.*
 
 ### Очередь GV (приоритет)
 

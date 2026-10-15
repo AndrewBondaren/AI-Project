@@ -2,14 +2,27 @@
 from copy import deepcopy
 from unittest import TestCase
 
+from pydantic import ValidationError
+
 from test_library_packs_4b import _ServiceCase, _plot_body, _PLOT, _STRUCT
-from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs, relief_policy_refs
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
-    _remap_structure_refs, _remap_relief_pick_policy,
+from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+    remap_template_body, relief_policy_refs, template_body_refs,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackInUseError, LibraryPackValidationError
+from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
+    _remap_relief_pick_policy,
+)
+from app.application.worldData.libraryPacks.errors import LibraryPackInUseError
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.world import World
 from app.ids import runtime_uid
+
+
+def _refs(raw: dict):
+    return template_body_refs(_PLOT, PlotLayoutTemplate.model_validate(raw), 'consumer')
+
+
+def _remap(raw: dict, uid_map):
+    return remap_template_body(_PLOT, PlotLayoutTemplate.model_validate(raw), uid_map)
 
 
 class ReferenceFieldTests(TestCase):
@@ -20,40 +33,38 @@ class ReferenceFieldTests(TestCase):
             {'structure': secondary}, {'structure': external}, {'structure': main}],
             author_extension={'keep': True})
         before = deepcopy(raw)
-        refs = structure_refs(raw, 'consumer')
+        refs = _refs(raw)
         self.assertEqual([ref.path for ref in refs], [
             'main_building.structure', 'secondary_buildings[0].structure',
             'secondary_buildings[1].structure', 'secondary_buildings[2].structure'])
-        result = _remap_structure_refs(raw, uid_map)
-        after = structure_refs(result, 'consumer')
+        result = _remap(raw, uid_map)
+        after = template_body_refs(_PLOT, result, 'consumer')
         self.assertEqual([(ref.path, ref.template_uid) for ref in after],
                          [(ref.path, uid_map.get(ref.template_uid, ref.template_uid)) for ref in refs])
-        self.assertEqual(result['author_extension'], raw['author_extension'])
         self.assertEqual(raw, before)
         self.assertEqual(after[2].template_uid, external)
 
-    def test_pointer_and_non_layout_rows_are_neither_read_nor_remapped(self):
+    def test_bodies_without_layout_refs_have_none(self):
         uid = runtime_uid()
-        for raw in (None, 'legacy', {'system_template_uid': uid, 'main_building': {'structure': uid}},
-                    {'system_name': 'outline', 'display_name': 'Outline'},
+        for raw in ({'system_name': 'outline', 'display_name': 'Outline'},
                     _plot_body('empty', uid, main_building=None, secondary_buildings=[])):
             with self.subTest(raw=raw):
-                self.assertEqual(structure_refs(raw, 'consumer'), ())
-                self.assertIsNone(_remap_structure_refs(raw, {uid: runtime_uid()}))
+                body = PlotLayoutTemplate.model_validate(raw)
+                self.assertEqual(template_body_refs(_PLOT, body, 'consumer'), ())
+                self.assertIs(remap_template_body(_PLOT, body, {uid: runtime_uid()}), body)
 
     def test_secondary_only_and_external_refs(self):
         uid = runtime_uid()
         raw = _plot_body('annex', uid, main_building=None, secondary_buildings=[{'structure': uid}])
-        self.assertEqual(structure_refs(raw, 'consumer')[0].path, 'secondary_buildings[0].structure')
-        self.assertIsNone(_remap_structure_refs(raw, {runtime_uid(): runtime_uid()}))
-        self.assertIsNone(_remap_structure_refs(raw, {uid: uid}))
+        self.assertEqual(_refs(raw)[0].path, 'secondary_buildings[0].structure')
+        body = PlotLayoutTemplate.model_validate(raw)
+        self.assertIs(remap_template_body(_PLOT, body, {runtime_uid(): runtime_uid()}), body)
+        self.assertIs(remap_template_body(_PLOT, body, {uid: uid}), body)
 
-    def test_invalid_ref_parent_is_not_silently_skipped(self):
+    def test_incomplete_body_is_not_silently_skipped(self):
         raw = {'main_building': {'structure': runtime_uid()}}
-        with self.assertRaises(ValueError):
-            structure_refs(raw, 'consumer')
-        with self.assertRaises(LibraryPackValidationError):
-            _remap_structure_refs(raw, {})
+        with self.assertRaises(ValidationError):
+            PlotLayoutTemplate.model_validate(raw)
 
     def test_relief_all_contexts_match_read_and_remap_and_preserve_wire(self):
         contexts = ('mountain', 'open_land', 'shore', 'road_shoulder', 'ravine')

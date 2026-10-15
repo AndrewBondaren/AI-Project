@@ -65,7 +65,6 @@ class TemplateDomainCanonicalTests(_ServiceCase):
             resolved = await self.container.ref_resolver().resolve(catalog, kind,
                 TemplateRef.of(member.template_uid), consumer="test", path="template", ctx=ResolveContext())
             self.assertTrue(resolved.resolved)
-        self.assertFalse((await self.worlds.get_by_id("w1")).building_template_registry)
         await self.assert_complete()
 
     async def test_public_domain_reads_attach_but_internal_find_does_not(self):

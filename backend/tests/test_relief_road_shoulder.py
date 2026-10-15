@@ -48,11 +48,6 @@ class RoadShoulderGradeTest(unittest.TestCase):
             world_uid="w1",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "road_shoulder",
-                "display_template_name": "Shoulder",
-            }],
             relief_pick_policy={
                 "road_shoulder": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -98,10 +93,6 @@ class RoadShoulderGradeTest(unittest.TestCase):
             world_uid="w1",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "road_shoulder",
-            }],
             relief_pick_policy={
                 "road_shoulder": {"mode": "fixed", "default_template_uid": uid},
             },

@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import ValidationError
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import resource_types
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
+from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+    TemplatePreparationError,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.worldData.libraryPacks.domainAdapters.plot import (
+    PlotBodyPreparation,
+)
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.resources.worldResourceTypeRegistry import WorldResourceTypeRegistry
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
@@ -117,39 +118,40 @@ class ResourceRegistryTest(unittest.TestCase):
         generic = _layout("mine", "mine", resource_kind=ResourceKind.ORE)
         timber = _layout("lumber_camp", "mine", resource_kind=ResourceKind.TIMBER)
         iron = _layout("iron_mine_1", "mine", subjects=["iron_ore"])
-        pool = (generic, timber, iron)
+        catalog = BuildingCatalog.from_layouts((generic, timber, iron))
         tagged = BuildingCatalog.prefer_subjects(
-            pool, ["iron_ore"], {ResourceKind.ORE},
+            catalog.entries, ["iron_ore"], {ResourceKind.ORE},
         )
-        self.assertEqual([row.system_name for row in tagged], ["iron_mine_1"])
+        self.assertEqual([row.body.system_name for row in tagged], ["iron_mine_1"])
         by_kind = BuildingCatalog.prefer_subjects(
-            (generic, timber), ["iron_ore"], {ResourceKind.ORE},
+            (catalog.entry_for("mine"), catalog.entry_for("lumber_camp")),
+            ["iron_ore"], {ResourceKind.ORE},
         )
-        self.assertEqual([row.system_name for row in by_kind], ["mine"])
+        self.assertEqual([row.body.system_name for row in by_kind], ["mine"])
 
 
-class BuildingTemplateImportTest(unittest.IsolatedAsyncioTestCase):
-    async def test_import_rejects_extract_subject_not_in_registry(self) -> None:
+class BuildingTemplateImportTest(unittest.TestCase):
+    def test_import_rejects_extract_subject_not_in_registry(self) -> None:
+        """B7: subject/kind checks live on the plot preparation's world
+        validation — the flat body-import entry point is gone."""
         world = World(
             world_uid="w1",
             name="T",
             created_at="2026-01-01T00:00:00",
         )
-        worlds = MagicMock()
-        worlds.get_by_id = AsyncMock(return_value=world)
-        service = BuildingTemplateLibraryService(
-            repo=MagicMock(), world_service=worlds,
-            catalog=PackCatalogRepos(packs=AsyncMock(), members=AsyncMock()),
-        )
-        result = await service.import_bodies_into_world("w1", [{
-            "system_name": "confused_mine",
-            "structure_type": "mine",
-            "display_name": "Mine",
-            "resource_kind": "ore",
-            "subjects": ["timber"],
-        }])
-        self.assertEqual(result.failed, 1)
-        self.assertIn("RESOURCE_KIND_MISMATCH", result.errors[0].message)
+        with self.assertRaises(TemplatePreparationError) as caught:
+            PlotBodyPreparation().prepare_body(
+                {
+                    "system_name": "confused_mine",
+                    "display_name": "Mine",
+                    "resource_kind": "ore",
+                    "subjects": ["timber"],
+                },
+                local_uid="confused_mine",
+                template_uid="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                world=world,
+            )
+        self.assertIn("RESOURCE_KIND_MISMATCH", str(caught.exception))
 
 
 if __name__ == "__main__":

@@ -78,13 +78,11 @@ CREATE TABLE IF NOT EXISTS worlds (
     city_size_registry          TEXT,
     district_zone_preference    TEXT,
     economic_tier_registry      TEXT,
-    building_template_registry  TEXT,
     purpose_packs               TEXT,  -- enabled pack ids; omit/[] → [base, fantasy]
     purpose_pack_registry       TEXT,  -- pack recipes (canonical ⊕ overlay); base frozen
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,
-    relief_template_registry    TEXT,
     canal_template_registry     TEXT,  -- R36q canal bodies (system_type + earthen/structure)
     relief_pick_policy          TEXT,
     relief_grade_obstacle_policy TEXT,  -- truncate_skip | allow_flush (R36n); NULL → POJO default
@@ -642,7 +640,6 @@ CREATE TABLE IF NOT EXISTS building_templates (
     template_uid   TEXT PRIMARY KEY,
     system_name    TEXT NOT NULL,  -- не глобально UNIQUE (tz_template_library_packs §3): локальный ключ, уникальность — в library_pack_members
     display_name   TEXT NOT NULL,
-    structure_type TEXT,  -- legacy outline metadata; modern building bodies carry a structure UID in data
     version        TEXT NOT NULL DEFAULT '1.0',
     data           TEXT NOT NULL,
     source_file    TEXT

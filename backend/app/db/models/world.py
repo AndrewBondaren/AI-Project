@@ -85,13 +85,11 @@ class World:
     city_size_registry:             list = json_list_col()
     district_zone_preference:       list = json_list_col()
     economic_tier_registry:         list = json_list_col()
-    building_template_registry:     list = json_list_col()
     purpose_packs:                  list = json_list_col()
     purpose_pack_registry:          list = json_list_col()
     room_type_registry:             list = json_list_col()
     barrier_template_registry:      list = json_list_col()
     connection_type_registry:       list = json_list_col()
-    relief_template_registry:       list = json_list_col()
     canal_template_registry:        list = json_list_col()  # R36q
     relief_pick_policy:             dict = json_col(default_factory=dict)
     relief_grade_obstacle_policy:   str | None = None  # R36n; NULL → POJO default

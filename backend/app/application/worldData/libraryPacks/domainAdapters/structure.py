@@ -1,5 +1,5 @@
 """Structure domain adapter — model-A bodies whose wire ``system_name``
-IS the member uid; world-side refs live in plot-layout rows (TZ §0.2/§2)."""
+IS the member uid (TZ §0.2/§2)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,7 @@ from app.application.worldData.libraryPacks.domainAdapters.contract import (
     PackDomainAdapter,
 )
 from app.application.worldData.libraryPacks.domainAdapters.mixins import _LibraryBodyMixin
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
-    _remap_structure_refs,
-)
+from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
@@ -37,8 +35,7 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
 
     No world registry exists for structures — the member is reachable
     through pack membership; body refs (``main_building.structure``) are
-    the 4c referenced-set. World-side refs to structure members live in
-    plot-layout rows of ``building_template_registry``.
+    the 4c referenced-set.
     """
 
     library_kind = LibraryKind.STRUCTURE_TEMPLATES
@@ -66,19 +63,8 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
         out[_SYSTEM_NAME_FIELD] = template_uid
         return out
 
-    def world_refs(self, world):
-        # Transitional legacy world format, removed with the column in B7.
-        from app.application.worldData.libraryPacks.domainAdapters.refFields import structure_refs
-        return tuple(ref for i, row in enumerate(world.building_template_registry or [])
-                     for ref in structure_refs(row,
-                         f"world:{world.world_uid}:building_template_registry[{i}]"))
-
-    def prepare_world_refs(self, world, uid_map, members, *, removed_uids=()):
+    def prepare_world_refs(self, world, uid_map, members):
         from copy import deepcopy
-        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
         result = deepcopy(world)
         remap_pins(result, uid_map)
-        result.building_template_registry = [
-            _remap_structure_refs(row, uid_map) or row if isinstance(row, dict) else row
-            for row in result.building_template_registry or []]
         return result

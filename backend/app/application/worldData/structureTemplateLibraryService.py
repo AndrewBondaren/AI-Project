@@ -177,7 +177,7 @@ class StructureTemplateLibraryService:
     ) -> list[StructureTemplateRow] | PolicyRequired:
         if self._write_provider is not None:
             from app.application.worldData.libraryPacks.packResults import PackImportResult
-            result = await self._write_provider()._fs_writes.import_path(LibraryKind.STRUCTURE_TEMPLATES,
+            result = await self._write_provider().import_path(LibraryKind.STRUCTURE_TEMPLATES,
                 path, domain_root=domain_root, enforce_domain_root=enforce_domain_root,
                 decisions=decisions, preview_token=preview_token)
             return list(result.bodies) if isinstance(result, PackImportResult) else result

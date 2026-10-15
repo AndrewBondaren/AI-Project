@@ -68,9 +68,11 @@ structure_templates. Каталог membership/owner общий: library_packs,
 library_pack_members, library_pack_dependencies. Один member — один пак.
 Пак может содержать несколько library_kind; это не смешивает доменные модели.
 Body row не дублирует owner_world_uid; owner определяется паком.
-До удаления legacy metadata колонки building_templates.structure_type/version
-не определяют target building body. Для BuildingTemplate structure_type=NULL;
-structure UID хранится в подготовленном data. Тип не выводится из строки UID.
+Legacy metadata-колонка `building_templates.structure_type` удалена (5b/B7):
+тип здания не определяется строкой таблицы — `BuildingTemplate` не хранит
+`structure_type`; structure UID живёт в подготовленном `data`
+(`main_building.structure` ref). Тип не выводится из строки UID.
+`version` остаётся метаданными строки и не определяет target building body.
 
 - Engine default: owner_world_uid=NULL, pack_uid входит в доверенную
   декларацию движка. Доступен всем мирам, read-only для пользовательской записи.

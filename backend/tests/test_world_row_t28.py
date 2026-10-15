@@ -16,7 +16,6 @@ from app.application.jsonValidation.worldRow import (
     purpose_pack_registry,
     purpose_packs,
     relief_pick_policy,
-    relief_template_registry,
     terrain,
 )
 from app.application.jsonValidation.worldSliceMerge import merge_world_slice
@@ -39,17 +38,10 @@ from app.dataModel.locations.structure.enums.buildingPurpose import (
     WorldPurposePacks,
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 
 
 class WorldRowSliceResolveTest(unittest.TestCase):
     def test_slice_column_key_matches_pojo(self) -> None:
-        self.assertEqual(
-            slice_column_key(WorldReliefTemplateRegistry),
-            "relief_template_registry",
-        )
         self.assertEqual(slice_column_key(WorldTerrainRegistry), "terrain_registry")
         self.assertEqual(slice_column_key(WorldPurposePacks), "purpose_packs")
         self.assertEqual(
@@ -74,21 +66,6 @@ class WorldRowSliceResolveTest(unittest.TestCase):
             relief_pick_policy(world).model_dump(mode="json"),
             WorldReliefPickPolicy.canonical_defaults().model_dump(mode="json"),
         )
-        self.assertEqual(list(relief_template_registry(world).root), [])
-
-    def test_registry_list_reads_slice_column(self) -> None:
-        world = SimpleNamespace(
-            world_uid="w1",
-            relief_template_registry=[{
-                "system_template_uid": "t1",
-                "system_name": "t1",
-                "display_name": "T1",
-                "context": "road_shoulder",
-            }],
-        )
-        reg = relief_template_registry(world)
-        self.assertEqual(len(reg.root), 1)
-        self.assertEqual(reg.root[0].system_template_uid, "t1")
 
     def test_climate_zones_wire_adapter_empty(self) -> None:
         world = SimpleNamespace(world_uid="w1", climate_zone_registry=None)

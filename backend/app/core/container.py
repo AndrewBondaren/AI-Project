@@ -663,14 +663,9 @@ class Container(TemplateRepositoryProviders):
         if self._building_template_library_service is None:
             self._building_template_library_service = BuildingTemplateLibraryService(
                 repo=self.building_template_repository(),
-                world_service=self.world_service(),
                 db=self._db,
                 write_provider=self.library_pack_service,
                 ensure_provider=self.ensure_template_canonical,
-                catalog=PackCatalogRepos(
-                    packs=self.library_pack_repository(),
-                    members=self.library_pack_member_repository(),
-                ),
             )
         return self._building_template_library_service
 
@@ -934,9 +929,6 @@ class Container(TemplateRepositoryProviders):
                 connection_graph_service=self.connection_graph_service(),
                 race_service=self.race_service(),
                 perk_service=self.perk_service(),
-                relief_library=self.relief_template_library_service(),
-                relief_import=self.relief_world_import_service(),
-                building_library=self.building_template_library_service(),
             )
             self._world_bundle_service = WorldBundleService(
                 db=self._db,
@@ -965,6 +957,7 @@ class Container(TemplateRepositoryProviders):
                     packs=self.library_pack_repository(),
                     members=self.library_pack_member_repository(),
                 ),
+                write_provider=self.library_pack_service,
                 db=self._db,
             )
         return self._relief_world_import_service

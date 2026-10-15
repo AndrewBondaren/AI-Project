@@ -1,8 +1,8 @@
 """Build packing catalogs from the world template snapshot (B3).
 
-No filesystem stdlib, no ``worlds.building_template_registry`` reads, no
-global ``list_all`` — the snapshot loader already resolved membership and
-prepared bodies at the async boundary.
+No filesystem stdlib, no world registry-column reads, no global ``list_all``
+— the snapshot loader already resolved membership and prepared bodies at the
+async boundary.
 """
 
 from __future__ import annotations

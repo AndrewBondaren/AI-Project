@@ -281,18 +281,6 @@ class LifecycleTests(_ServiceCase):
         self.assertIn(uid, preview.held)
         self.assertTrue(any('relief_pick_policy' in reason for reason in preview.held[uid]))
 
-    async def test_embedded_layout_holds_deleted_structure(self):
-        source, struct, plot, result = await self.mixed_instance()
-        uid = result.uid_map[struct.template_uid]
-        world = await self.worlds.get_by_id('w1')
-        world.building_template_registry.append(_plot_body('embedded', uid))
-        await self.worlds.update(world)
-        await self.service.delete_member(plot.template_uid)
-        await self.service.delete_member(struct.template_uid)
-        preview = await self.preview(source)
-        self.assertIn(uid, preview.held)
-        self.assertTrue(any('building_template_registry' in reason for reason in preview.held[uid]))
-
     async def test_other_world_pin_and_policy_do_not_hold_candidate(self):
         source, members, result = await self.instance(names=('meadow',))
         uid = result.uid_map[members[0].template_uid]

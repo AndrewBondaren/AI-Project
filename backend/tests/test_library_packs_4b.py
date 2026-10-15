@@ -198,13 +198,13 @@ class InstantiateTests(_ServiceCase):
         self.assertEqual(by_key["shore_sea"], canon["shore_sea"])
 
     async def test_instantiate_writes_no_registry_pointers(self):
-        """B6: instantiate never touches the legacy pointer column."""
+        """B6/B7: instantiate creates world-owned members; no pointer
+        column exists to touch."""
         await self._world("w1")
         src, _ = await self._relief_engine_pack()
         res = await self.service.instantiate_pack(src.pack_uid, world_uid="w1")
 
         world = await self.worlds.get_by_id("w1")
-        self.assertEqual(world.relief_template_registry or [], [])
 
         # Membership readers resolve the world-owned copies.
         loaded = await load_relief_templates_for_world(
@@ -216,20 +216,13 @@ class InstantiateTests(_ServiceCase):
             set(res.uid_map.values()),
         )
 
-    async def test_instantiate_remaps_pick_policy_leaves_registry_untouched(self):
+    async def test_instantiate_remaps_pick_policy(self):
         await self._world("w1")
         src, (m1, _m2) = await self._relief_engine_pack()
         src_uid = m1.template_uid
-        # The world referenced the engine member before instantiation.
-        # B6: the legacy pointer row is stale input — it is neither
-        # rewritten nor rebuilt; only the declared pick-policy ref moves.
+        # The world referenced the engine member before instantiation;
+        # instantiate moves the declared pick-policy ref to the copy.
         await self.container.world_service().update("w1", {
-            "relief_template_registry": [{
-                "system_template_uid": src_uid,
-                "display_template_name": "Meadow",
-                "context": "open_land",
-                "imported_at": "2026-10-10T00:00:00+00:00",
-            }],
             "relief_pick_policy": {
                 "open_land": {"mode": "fixed", "default_template_uid": src_uid},
                 "shore": {"mode": "random"},
@@ -240,10 +233,6 @@ class InstantiateTests(_ServiceCase):
         new_uid = res.uid_map[src_uid]
 
         world = await self.worlds.get_by_id("w1")
-        registry_uids = {
-            e["system_template_uid"] for e in world.relief_template_registry
-        }
-        self.assertEqual(registry_uids, {src_uid})
         policy = world.relief_pick_policy
         self.assertEqual(
             policy["open_land"]["default_template_uid"], new_uid
@@ -251,42 +240,16 @@ class InstantiateTests(_ServiceCase):
         self.assertEqual(policy["shore"]["mode"], "random")
         self.assertIsNone(policy["shore"]["default_template_uid"])
 
-    async def test_instantiate_structure_pack_remaps_embedded_layout_refs(self):
+    async def test_instantiate_structure_pack_copies_bodies_with_new_uid(self):
         await self._world("w1")
         src = await self.service.create_pack(system_name="user.structures.s")
         sm = await self.service.create_member(
             src.pack_uid, library_kind=_STRUCT, local_uid="barn",
             body={"display_name": "Barn"},
         )
-        foreign = "3fa85f64-5717-4562-b3fc-2c963f66afa6"  # not in the pack
-        # World-authored plot layouts embed structure refs (world-side
-        # refs). Plot rows are storage-legal but fail the registry-entry
-        # POJO, so they land via the repository — like prepare_import.
-        world = await self.worlds.get_by_id("w1")
-        world.building_template_registry = [
-            {
-                "system_name": "p1",
-                "display_name": "P1",
-                "main_building": {"structure": sm.template_uid},
-                "secondary_buildings": [{"structure": sm.template_uid}],
-            },
-            {
-                "system_name": "p2",
-                "display_name": "P2",
-                "main_building": {"structure": foreign},
-            },
-        ]
-        await self.worlds.update(world)
 
         res = await self.service.instantiate_pack(src.pack_uid, world_uid="w1")
         new_uid = res.uid_map[sm.template_uid]
-
-        world = await self.worlds.get_by_id("w1")
-        p1, p2 = world.building_template_registry
-        self.assertEqual(p1["main_building"]["structure"], new_uid)
-        self.assertEqual(p1["secondary_buildings"][0]["structure"], new_uid)
-        # Refs that never pointed at source members stay (TZ §2).
-        self.assertEqual(p2["main_building"]["structure"], foreign)
 
         # Model A: the copied body embeds the new member uid.
         body = await self.structure_rows.get_by_uid(new_uid)
@@ -348,12 +311,10 @@ class InstantiateTests(_ServiceCase):
         self.assertFalse(second.created)
         self.assertEqual(second.pack_uid, first.pack.pack_uid)
 
-        world = await self.worlds.get_by_id("w1")
         member_uids = {
             m.template_uid for m in await self.members.list_for_world("w1")
         }
         self.assertEqual(member_uids, set(first.uid_map.values()))
-        self.assertEqual(world.relief_template_registry or [], [])
 
     async def test_get_member_unknown_uid_not_found(self):
         with self.assertRaises(LibraryPackNotFoundError):
@@ -520,10 +481,8 @@ class PublishTests(_ServiceCase):
         )
         self.assertIn(pub.pack_uid, {p.pack_uid for p in await self.service.list_engine_packs()})
 
-        # The source world pack and its members are untouched; no pointer
-        # column is ever written (B6).
-        world = await self.worlds.get_by_id("w1")
-        self.assertEqual(world.relief_template_registry or [], [])
+        # The source world pack and its members are untouched (B6/B7: no
+        # pointer column exists to write).
         self.assertEqual(
             len(await self.members.list_by_pack(wpack.pack_uid)), 1
         )

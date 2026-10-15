@@ -48,10 +48,9 @@ def resolve_picked_template(
 ) -> ReliefTemplate:
     """Resolve the selected body; missing required bodies are unresolved."""
     ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_templates",))
-    uid = pick.template_uid
-    template = templates_by_uid.get(uid) if uid else None
+    template = templates_by_uid.get(pick.template_uid)
     if template is None:
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (uid or "selected",),
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (pick.template_uid,),
             "selected template body unavailable", code="REF_W_UNAVAILABLE")])
     return template
 

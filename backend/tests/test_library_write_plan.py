@@ -174,9 +174,7 @@ class LibraryWritePlanTests(_ServiceCase):
         projected = plan.worlds[0].after
         self.assertEqual(projected.library_pins[0]["template_uid"], target)
         self.assertEqual(projected.relief_pick_policy["open_land"]["default_template_uid"], target)
-        # B6: the projected world rebuilds pins/policy only — the legacy
-        # registry column is never touched.
-        self.assertEqual(projected.relief_template_registry or [], [])
+        # B7: the projected world rebuilds pins/policy only.
         self.assertEqual(await self.worlds.get_by_id("w1"), world)
 
     async def test_same_scope_independent_copy_does_not_repoint_world(self):

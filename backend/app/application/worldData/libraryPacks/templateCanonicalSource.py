@@ -54,9 +54,8 @@ def _generated_pack(kind, system_name, bodies, dependencies):
             source += "#main_building"
         member = LibraryPackMemberRow(uid, pack_uid, kind.value, name)
         row_cls = PlotTemplateRow if kind == LibraryKind.PLOT_TEMPLATES else BuildingTemplateRow
-        metadata = {} if kind == LibraryKind.PLOT_TEMPLATES else {"structure_type": None}
         row = row_cls(template_uid=uid, system_name=name, display_name=body.display_name,
-            data=prepared.model_dump(mode="json"), source_file=source, **metadata)
+            data=prepared.model_dump(mode="json"), source_file=source)
         entries.append(CanonicalEntry(uid, CanonicalTemplateRecord(member, row)))
         declarations.append(LibraryPackManifestMember(library_kind=kind.value, local_uid=name,
             template_uid=uid, source_file=f"base/{name}.json"))

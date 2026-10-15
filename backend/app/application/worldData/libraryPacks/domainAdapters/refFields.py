@@ -4,9 +4,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from app.application.jsonValidation.resolve import resolve_model
 from app.application.jsonValidation.worldRow import relief_pick_policy
-from app.application.worldData.libraryPacks.domainAdapters.contract import _POINTER_UID_FIELD
 from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
@@ -83,19 +81,6 @@ RELIEF_POLICY_REF_FIELDS = tuple(
 )
 
 
-def structure_ref_model(raw: dict, *, label: str) -> PlotLayoutTemplate | None:
-    if (not isinstance(raw, dict) or _POINTER_UID_FIELD in raw
-            or not any(raw.get(field.parent_field) for field in STRUCTURE_REF_FIELDS)):
-        return None
-    return resolve_model(PlotLayoutTemplate, raw, label=label)
-
-
-def structure_refs(raw: dict, consumer: str) -> tuple[MemberRef, ...]:
-    plot = structure_ref_model(raw, label=consumer)
-    return (() if plot is None else tuple(ref for field in STRUCTURE_REF_FIELDS
-                                          for ref in field.references(plot, consumer)))
-
-
 def template_body_refs(kind: LibraryKind, body: BaseModel, consumer: str) -> tuple[MemberRef, ...]:
     """Target body declarations; inline buildings are not separate member refs.
 
@@ -135,10 +120,15 @@ def relief_policy_refs(world: World) -> tuple[MemberRef, ...]:
 # materialized in ``system_structure_template_uid``. ``system_template_uid``
 # is polymorphic by caller contract, so the ref adopts the resolved member's
 # kind — names are never reinterpreted as identity.
-LOCATION_TEMPLATE_REF_FIELDS: tuple[str, ...] = (
-    'system_template_uid',
-    'system_structure_template_uid',
-)
+# Kinds a persisted location ref may legally point at; the legacy
+# name→member conversion only searches these members (plan §2.4: the old
+# building ref was a plot/body name, the structure ref a structure).
+LOCATION_TEMPLATE_REF_KINDS: dict[str, tuple[LibraryKind, ...]] = {
+    'system_template_uid': (LibraryKind.PLOT_TEMPLATES, LibraryKind.BUILDING_TEMPLATES),
+    'system_structure_template_uid': (LibraryKind.STRUCTURE_TEMPLATES,),
+}
+
+LOCATION_TEMPLATE_REF_FIELDS: tuple[str, ...] = tuple(LOCATION_TEMPLATE_REF_KINDS)
 
 
 def named_location_template_refs(rows, members) -> tuple[MemberRef, ...]:

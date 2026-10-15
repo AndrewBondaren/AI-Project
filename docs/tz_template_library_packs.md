@@ -551,7 +551,9 @@ UID независимых копий действует исключение в
 в plot/building/relief. Local_uid может повторяться даже внутри пака согласно
 уточнению §0.1/1.1/2; уникальность member обеспечивается PK template_uid.
 `get_by_system_name` без контекста не разрешает неоднозначность;
-потребители переходят на UID либо запрос с явным владельцем.
+member-level lookup удалён (B7) — идентичность члена только `template_uid`.
+`get_by_system_name` остаётся только на pack-репозитории: `system_name` пака —
+глобально уникальная идентичность, не member identity.
 
 Тело и членство сохраняются атомарно и проверяются доменным адаптером
 (полиморфный `library_kind` не заменяет проверку наличия тела). Смена владельца
@@ -588,10 +590,13 @@ FS manifest хранится отдельно от JSON-тел как `pack.mani
 в корне domain root не импортируются — у шаблона обязан быть пак-владелец и
 локальный ключ из manifest (решение 2026-10-08).
 
-World bundle расширяется секциями `library_packs` (только world-owned
+World bundle расширяется секцией `library_packs` (только world-owned
 manifests — инстансы и авторские паки с `owner_world_uid` импортируемого
-мира), `structure_templates` (тела дочерней геометрии) и прочими доменными
-body-секциями. Engine user-паки (`owner_world_uid=NULL`) в world bundle не
+мира). Flat body-секции (`plot_templates`, `building_templates`,
+`structure_templates`, `relief_templates`) — только compatibility input,
+потребляемый `import_libraries` в world-owned `legacy` pack (B7);
+современный экспорт тел идёт `library/`-subtree архива §4.2, а не секциями.
+Engine user-паки (`owner_world_uid=NULL`) в world bundle не
 входят: перенос библиотеки движка идёт отдельным архивом
 `kind:"library_pack"` (§4.2) либо явным publish (§4.1); импорт мира никогда
 не пишет глобальный каталог (уточнение 2026-10-09). Секции bindings нет:
@@ -853,6 +858,14 @@ Ref-поле различает три состояния (уточнение 20
 - **пусто / битое** — неявное состояние (`fallback`): обрабатывается по
   правилу выше — runtime WarningError + доменное решение; validation /
   импорт — ошибка.
+
+Уточнение 2026-10-15 — граница снапшота (missing body): член каталога
+без тела, с невалидным телом или с висячей declared-ссылкой исключается
+на read-границе (`TemplateSnapshotLoader`) с одной диагностикой через
+`report_issues` (sink `jsonValidation/resolve`) — планировка видит
+замкнутый граф. Runtime не подставляет произвольного кандидата: домен с
+объявленным default-слоем применяет свой POJO-default, без него
+(relief, R21) — reject. Не pack-домены (race/perk) политику не наследуют.
 
 Этот режим касается template refs; правила REF-W остальных реестров не меняются.
 

@@ -60,7 +60,6 @@ class TemplateDomainWriterTests(_ServiceCase):
         self.assertEqual(len(set(mapping.values())), 3)
         copied_building = await self.building_rows.get_by_uid(mapping[building.template_uid])
         copied_plot = await self.plot_rows.get_by_uid(mapping[plot.template_uid])
-        self.assertIsNone(copied_building.structure_type)
         self.assertEqual(copied_building.data["structure"], mapping[structure.template_uid])
         self.assertEqual(copied_plot.data["main_building"]["structure"], mapping[structure.template_uid])
         self.assertEqual(copied_plot.data["secondary_buildings"][0]["structure"], mapping[structure.template_uid])
@@ -71,7 +70,6 @@ class TemplateDomainWriterTests(_ServiceCase):
             "system_name"], mapping[structure.template_uid])
         for uid, raw in before.items():
             self.assertEqual(await self.service.read_member_body(uid), raw)
-        self.assertFalse((await self.worlds.get_by_id("w1")).building_template_registry)
 
     async def test_modern_building_rejects_legacy_plot_and_outline_without_writes(self):
         pack = await self.service.create_pack(system_name="world.strict", owner_world_uid="w1")

@@ -4,10 +4,10 @@
 The universal pack layer (``packService``) owns identity, ownership and
 atomicity; each adapter owns the body model, domain restrictions and its
 declared world-side reference fields. Membership is the single runtime
-availability source (B6): no adapter writes registry pointer rows any
-more — projected-world remaps only rewrite pins, pick policies and
-embedded body references. Legacy registry columns remain as migration
-input until B7 removes them.
+availability source (B6): no adapter writes registry pointer rows —
+projected-world remaps only rewrite pins, pick policies and embedded
+body references. The legacy registry columns are gone (B7); their old
+wire is read only inside the explicit migration boundary.
 
 This package holds the contract only (``contract.py``): the
 ``PackDomainAdapter`` ABC, the domain library/outline unions, the shared
@@ -34,9 +34,6 @@ from app.application.worldData.structureTemplateLibraryService import (
 )
 from app.application.worldData.plotTemplateLibraryService import PlotTemplateLibraryService
 from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
-from app.dataModel.locations.structure.building.buildingTemplateOutline import (
-    BuildingTemplateOutline,
-)
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -55,15 +52,9 @@ DomainLibrary = (
 DomainOutline = (
     ReliefTemplate
     | StructureTemplate
-    | BuildingTemplateOutline
     | PlotLayoutTemplate
     | BuildingTemplate
 )
-
-_POINTER_UID_FIELD = "system_template_uid"
-"""Shared uid-pointer field of ``ReliefTemplateRegistryEntry`` /
-``BuildingTemplateRegistryEntry`` rows. Heterogeneous columns are
-scanned on this key because embedded plot layouts carry no pointer."""
 
 _SYSTEM_NAME_FIELD = "system_name"
 """``StructureTemplate.system_name`` wire key — the model-A member uid."""
@@ -141,6 +132,12 @@ class PackDomainAdapter(ABC):
         domains without a substitution contract keep the base ``rejected``
         (relief R21: no other template is ever substituted). Pure — the
         resolve boundary emits the single warning record.
+
+        Members with a missing/invalid body or a dangling declared ref
+        are excluded earlier, at the snapshot read boundary
+        (``TemplateSnapshotLoader``, one ``report_issues`` record each —
+        TZ §5, уточнение 2026-10-15): an arbitrary candidate is never
+        substituted at any layer.
         """
         return FallbackDecision.rejected()
 
@@ -160,7 +157,7 @@ class PackDomainAdapter(ABC):
         return dict(body)
 
     def prepare_world_refs(self, world: World, uid_map: Mapping[str, str],
-                           members: Sequence[RemappedMember], *, removed_uids: Sequence[str] = ()) -> World:
+                           members: Sequence[RemappedMember]) -> World:
         """Pure projected world with remapped pins and declared ref fields.
 
         ``WriteRetentionPlanner`` applies the columns this projection

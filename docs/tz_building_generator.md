@@ -1346,12 +1346,15 @@ WHERE template_uid=?` после валидации UID и неизменног�
 
 Перегенерация выполняется синхронно до подтверждения пользователю об успехе замены шаблона.
 
-### 5.2 Per-world реестр — `worlds.building_template_registry`
+### 5.2 Per-world реестр — `worlds.building_template_registry` (удалён, B7)
 
-**Legacy до cutover 5b.** Union/колонка ниже остаются compatibility input.
-Доступность после миграции — defaults + world-owned packs, usage — pins
-по UID и declared refs. Embedded authored plots сохраняются без потери
-building параметров/structure refs. Name-based runtime overlay отменён.
+**Колонка удалена из schema и `World`-модели (5b/B7).** Wire-формат ниже
+остаётся только legacy input для explicit migration boundary
+(`legacyWorldInput` + compatibility migration); современные читатели колонку
+не разбирают. Доступность — defaults + world-owned packs (membership),
+явный выбор — `library_pins` по UID + declared refs. Embedded authored plots
+мигрируются в world-owned `legacy` pack без потери building параметров/
+structure refs. Name-based runtime overlay отменён.
 
 Хранится как JSON-массив внутри `worlds` (аналогично `terrain_registry`, `material_registry`):
 
@@ -1427,10 +1430,10 @@ pack-remap). Строка ни одного вида — ошибка валид
     иначе → ImportWarning (шаблон импортируется, но комната не будет сгенерирована в v1)
 ```
 
-В целевом pack-owned пути подключение сохраняется в `world_library_packs`.
-Индивидуальный выбор может сохраняться в `building_template_registry`; это
+Подключение — это владение паком (`owner_world_uid`) либо default-статус.
+Индивидуальный выбор сохраняется в `world.library_pins`; это
 не отдельное разрешение доступа и не замена подключения всего пака.
-Удаление такого pointer не отключает остальных членов пака. Для отключения
+Удаление такого pin не отключает остальных членов пака. Для отключения
 пользовательского пака удаляется явная world binding, глобальные тела сохраняются.
 
 ---

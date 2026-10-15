@@ -108,7 +108,8 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
                 [row.get("name") for row in exported[key]],
                 [row.get("name") for row in expected[key]],
             )
-        for key in ("relief_templates", "building_templates", "race_templates", "perk_templates"):
+        # Pack-domain flat sections were removed in B7; race/perk stay G4.
+        for key in ("race_templates", "perk_templates"):
             self.assertEqual(exported[key], expected[key])
 
     async def test_archive_errors_and_wrong_kind_are_422_without_writes(self):

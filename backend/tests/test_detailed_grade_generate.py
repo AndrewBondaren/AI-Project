@@ -109,11 +109,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_d1",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -185,11 +180,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_ravine",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": ReliefContext.RAVINE,
-                "display_template_name": "Ravine",
-            }],
             relief_pick_policy={
                 ReliefContext.RAVINE.value: {
                     "mode": "fixed", "default_template_uid": uid,
@@ -258,11 +248,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_stitch",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -329,11 +314,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_late",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -405,11 +385,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_seam",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -491,11 +466,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_halo",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -572,11 +542,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_road_seam",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": ReliefContext.ROAD_SHOULDER.value,
-                "display_template_name": "Shoulder",
-            }],
             relief_pick_policy={
                 ReliefContext.ROAD_SHOULDER.value: {
                     "mode": "fixed", "default_template_uid": uid,
@@ -824,11 +789,6 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             world_uid="w_stitch",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": tuid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": tuid},
             },
@@ -895,11 +855,6 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             world_uid="w_corner",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": tuid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": tuid},
             },
@@ -1288,11 +1243,6 @@ class GradeFormationApplyTest(unittest.TestCase):
             world_uid=uid,
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": tuid,
-                "context": ReliefContext.RAVINE,
-                "display_template_name": "Ravine ramp",
-            }],
             relief_pick_policy=pick,
         ), tuid
 

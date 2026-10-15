@@ -14,8 +14,6 @@ from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
-from app.application.jsonValidation.worldRow import building_template_registry
-from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.structureTemplateLibraryService import StructureTemplateLibraryService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.loadReliefTemplatesForWorld import load_relief_templates_for_world
@@ -144,15 +142,6 @@ class SourceConsumerTests(unittest.TestCase):
                 "system_location_type": "building", "parent_wall_material": "stone"},
                 world_uid=world.world_uid, world=world)
 
-    def test_runtime_plot_collection_does_not_skip_invalid_rows(self):
-        from app.application.jsonValidation.worldRow import world_building_layout_overrides
-        world, _, _ = fixture()
-        for bad in (1, {"system_name": "broken"},
-                    {"system_template_uid": None}):
-            world.building_template_registry = [{"system_name": "ok", "display_name": "OK"}, bad]
-            with self.assertRaises(UnresolvedModelError):
-                world_building_layout_overrides(world)
-
     def test_preflight_retains_errors_from_independent_consumer_context(self):
         from app.application.jsonValidation.bundle.preflight import validate_rows
         from app.application.jsonValidation.resolve import reject_unresolved
@@ -164,12 +153,6 @@ class SourceConsumerTests(unittest.TestCase):
         with self.assertRaises(UnresolvedModelError):
             validate_rows([{}], prepare, ctx=ctx)
         self.assertEqual(len(ctx.errors), 1)
-
-    def test_malformed_library_registry_rejects_whole_collection(self):
-        world, _, _ = fixture()
-        world.building_template_registry = [{"system_template_uid": "ok", "display_template_name": "OK"}, 1]
-        with self.assertRaises(UnresolvedModelError):
-            building_template_registry(world)
 
     def test_object_relief_policy_only_none_means_absent(self):
         self.assertIsNone(parse_object_relief_pick_policy(None))
@@ -192,31 +175,14 @@ class LibraryConsumerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OSError):
             await import_list([{}], lambda raw: raw, AsyncMock(side_effect=OSError("database")))
 
-    async def test_building_member_without_body_is_a_hard_export_error(self):
-        """B6: membership replaced the pointer walk — a member row without
-        a body fails the flat export, never becomes partial success."""
-        from app.db.models.libraryPackMember import LibraryPackMemberRow
-        members = SimpleNamespace(list_for_world=AsyncMock(return_value=[
-            LibraryPackMemberRow(pack_uid="p", local_uid="m",
-                library_kind="building_templates", template_uid="missing"),
-        ]))
-        repo = SimpleNamespace(get_by_uid=AsyncMock(return_value=None))
-        service = BuildingTemplateLibraryService(
-            repo, None, catalog=SimpleNamespace(members=members))
-        with self.assertRaises(UnresolvedModelError):
-            await service.export_bodies_for_world("w1")
-
     async def test_relief_preload_uses_membership_snapshot_not_registry(self):
-        """B5: the world registry no longer drives the relief reader — a dangling
-        pointer cannot produce a candidate without membership, and a prepared
-        member body arrives keyed by its member uid."""
+        """B5: the loader's membership snapshot is the only source — a
+        prepared member body arrives keyed by its member uid."""
         world, _, _ = fixture()
         uid = str(uuid4())
         entry = TemplateEntry(template_uid=uid, pack_uid=str(uuid4()),
             body=ReliefTemplate.model_validate({"system_name": "g", "display_name": "G",
                                                 "context": "open_land"}))
-        world.relief_template_registry = [{"system_template_uid": "missing",
-            "display_template_name": "Missing", "context": "open_land"}]
         loader = SimpleNamespace(load_relief=AsyncMock(return_value=ReliefTemplateSnapshot(
             world_uid=world.world_uid, templates={uid: entry})))
         self.assertEqual(await load_relief_templates_for_world(loader, world), {uid: entry.body})

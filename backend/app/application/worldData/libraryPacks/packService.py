@@ -194,6 +194,20 @@ class LibraryPackService:
     async def missing_dependencies(self, pack_uid: str) -> set[str]:
         return await self._pack_ops.missing_dependencies(pack_uid)
 
+    async def import_path(
+        self,
+        library_kind: str | LibraryKind,
+        path: str | Path,
+        *,
+        domain_root: Path | None = None,
+        enforce_domain_root: bool = True,
+        decisions=(), preview_token=None,
+    ) -> PackImportResult | PolicyRequired:
+        """FS/zip import — the public write seam (TZ §4)."""
+        return await self._fs_writes.import_path(library_kind, path, domain_root=domain_root,
+            enforce_domain_root=enforce_domain_root,
+            decisions=decisions, preview_token=preview_token)
+
     async def import_fs_pack(
         self,
         library_kind: str | LibraryKind,
@@ -209,8 +223,8 @@ class LibraryPackService:
         a user pack never gains default status or world availability by
         landing in the catalog.
         """
-        return await self._fs_writes.import_path(library_kind, path, domain_root=domain_root,
-                                                decisions=decisions, preview_token=preview_token)
+        return await self.import_path(library_kind, path, domain_root=domain_root,
+                                      decisions=decisions, preview_token=preview_token)
 
     # ------------------------------------------------------------------
     # Remap operations (TZ §2) — delegated to the remap job
