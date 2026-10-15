@@ -56,7 +56,7 @@ DomainOutline = (
     | BuildingTemplate
 )
 
-_SYSTEM_NAME_FIELD = "system_name"
+SYSTEM_NAME_FIELD = "system_name"
 """``StructureTemplate.system_name`` wire key — the model-A member uid."""
 
 

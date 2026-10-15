@@ -1,13 +1,13 @@
 """Shared typed body seam; identity/policy/transactions stay in the common writer."""
 
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    _SYSTEM_NAME_FIELD,
+    SYSTEM_NAME_FIELD,
     PackDomainAdapter,
 )
-from app.application.worldData.libraryPacks.domainAdapters.mixins import _LibraryBodyMixin
+from app.application.worldData.libraryPacks.domainAdapters.mixins import LibraryBodyMixin
 
 
-class TemplateBodyAdapter(_LibraryBodyMixin, PackDomainAdapter):
+class TemplateBodyAdapter(LibraryBodyMixin, PackDomainAdapter):
     def prepare_body(self, raw, *, local_uid, template_uid, world=None):
         return self.preparation.prepare_body(raw, local_uid=local_uid,
             template_uid=template_uid, world=world)
@@ -21,7 +21,7 @@ class TemplateBodyAdapter(_LibraryBodyMixin, PackDomainAdapter):
         remapped = self.preparation.remap_body(typed, uid_map)
         name = template_uid if self.preparation.model_a else local_uid
         if name is not None:
-            remapped = remapped.model_copy(update={_SYSTEM_NAME_FIELD: name})
+            remapped = remapped.model_copy(update={SYSTEM_NAME_FIELD: name})
         return remapped.model_dump(mode="json")
 
     def prepare_world_refs(self, world, uid_map, members):

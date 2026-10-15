@@ -25,20 +25,14 @@ from app.application.worldData.libraryPacks.legacyPack import (
     legacy_member_row,
 )
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
-from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
+from app.application.worldData.reliefWorldRefValidation import (
+    validate_relief_world_refs,
+)
 from app.application.worldData.worldService import WorldService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.application.jsonValidation.worldRow import (
-    barrier_templates,
-    canal_templates,
-)
-from app.application.worldData.generators.terrain.relief.canal.outlineCollect import (
-    collect_outline_structure_canal_refs,
-    collect_outline_structure_refs,
-)
 from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
 from app.db.database import Database
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -142,67 +136,10 @@ class ReliefWorldImportService:
         return outline
 
     def validate_world_refs(self, world, outline: ReliefTemplate) -> None:
-        """World-side barrier/canal checks — the ``validate_world`` seam of
-        ``ReliefBodyPreparation`` (B6 review step 6)."""
-        barrier_keys = {e.system_type for e in barrier_templates(world).root}
-        self._validate_structure_refs(outline, barrier_keys)
-        self._validate_structure_canal(outline, world)
-
-    def _validate_structure_refs(
-        self,
-        outline: ReliefTemplate,
-        barrier_keys: set[str],
-    ) -> None:
-        refs = collect_outline_structure_refs(outline)
-        if not refs:
-            return
-        if not barrier_keys:
-            raise ReliefValidationError(
-                "structure_refs present but barrier_template_registry is empty: "
-                f"{sorted(refs)}",
-            )
-        unknown = sorted(refs - barrier_keys)
-        if unknown:
-            raise ReliefValidationError(
-                f"structure_refs unknown in barrier_template_registry: {unknown}",
-            )
-
-    def _validate_structure_canal(
-        self,
-        outline: ReliefTemplate,
-        world: object,
-    ) -> None:
-        """``structure_canal`` ∈ ``canal_template_registry``; nested barrier refs."""
-        canal_refs = collect_outline_structure_canal_refs(outline)
-        if not canal_refs:
-            return
-        reg = canal_templates(world)
-        known = {e.system_type for e in reg.root}
-        unknown = sorted(canal_refs - known)
-        if unknown:
-            raise ReliefValidationError(
-                f"structure_canal unknown in canal_template_registry: {unknown}",
-            )
-        barrier_keys = {e.system_type for e in barrier_templates(world).root}
-        nested: set[str] = set()
-        for ref in canal_refs:
-            entry = reg.entry_for(ref)
-            if entry is None or entry.structure is None:
-                continue
-            nested.update(entry.structure.structure_refs)
-        if not nested:
-            return
-        if not barrier_keys:
-            raise ReliefValidationError(
-                "canal structure_refs present but barrier_template_registry "
-                f"is empty: {sorted(nested)}",
-            )
-        bad = sorted(nested - barrier_keys)
-        if bad:
-            raise ReliefValidationError(
-                "canal_template_registry.structure.structure_refs unknown "
-                f"in barrier_template_registry: {bad}",
-            )
+        """World-side barrier/canal checks — invoked only on the
+        write/import seam (``ReliefPackAdapter.prepare_body``); the
+        read boundary never reaches it (B7 review, variant B)."""
+        validate_relief_world_refs(world, outline)
 
     async def _sync_terrain_from_outline(
         self,

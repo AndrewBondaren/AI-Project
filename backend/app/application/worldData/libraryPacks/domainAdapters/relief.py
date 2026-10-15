@@ -7,23 +7,20 @@ Membership is the single availability source — the legacy
 
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 
-from app.application.jsonValidation.resolve import (
-    ResolveContext,
-    UnresolvedModelError,
-    report_issues,
-)
+from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.jsonValidation.types import FieldPathError
 from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
     TemplateBodyPreparation,
     TemplatePreparationError,
 )
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    _SYSTEM_NAME_FIELD,
+    SYSTEM_NAME_FIELD,
 )
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
-    _remap_relief_pick_policy,
+    remap_relief_pick_policy,
     remap_pins,
 )
 from app.application.worldData.libraryPacks.domainAdapters.refFields import relief_policy_refs
@@ -38,21 +35,19 @@ from app.application.worldData.reliefWorldImportService import ReliefWorldImport
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.ids import LibraryKind
 
+logger = logging.getLogger(__name__)
+
 
 class ReliefBodyPreparation(TemplateBodyPreparation[ReliefTemplate]):
-    """Name-keyed relief bodies for the membership-scoped read boundary (B5).
+    """Name-keyed relief bodies — pure schema/body checks only (B5).
 
-    World-side barrier/canal checks delegate to the injected
-    ``ReliefWorldImportService`` (``PlotBodyPreparation`` pattern): an
-    unwired service leaves one ``report_issues`` warning instead of
-    silently skipping world checks (B6 review decision 2026-10-15).
+    World-side barrier/canal validation lives on the write seam
+    (``ReliefPackAdapter`` → ``ReliefWorldImportService``); the read
+    boundary never sees it (B7 review decision 2026-10-15, variant B).
     """
 
     library_kind = LibraryKind.RELIEF_TEMPLATES
     model = ReliefTemplate
-
-    def __init__(self, world_import: ReliefWorldImportService | None = None) -> None:
-        self._world_import = world_import
 
     def prepare_body(
         self,
@@ -71,24 +66,16 @@ class ReliefBodyPreparation(TemplateBodyPreparation[ReliefTemplate]):
             raise TemplatePreparationError(tuple(exc.issues)) from exc
         return body
 
-    def validate_world(self, body: ReliefTemplate, world, path: tuple) -> None:
-        super().validate_world(body, world, path)
-        if self._world_import is None:
-            report_issues(ResolveContext(), [FieldPathError(
-                path, "relief world checks skipped: world import service is not wired",
-                code="WORLD_IMPORT_UNWIRED")])
-            return
-        try:
-            self._world_import.validate_world_refs(world, body)
-        except ReliefValidationError as exc:
-            raise TemplatePreparationError((FieldPathError(
-                path, str(exc), code="RELIEF_WORLD_REFS"),)) from exc
-
 
 class ReliefPackAdapter(TemplateBodyAdapter):
-    """Name-keyed relief bodies; availability is membership-only (B6)."""
+    """Name-keyed relief bodies; availability is membership-only (B6).
+
+    Barrier/canal world-refs run only on this write/import seam — the
+    read boundary stays free of ``ReliefWorldImportService``.
+    """
 
     library_kind = LibraryKind.RELIEF_TEMPLATES
+    preparation = ReliefBodyPreparation()
 
     def __init__(
         self,
@@ -96,7 +83,28 @@ class ReliefPackAdapter(TemplateBodyAdapter):
         world_import: ReliefWorldImportService | None = None,
     ) -> None:
         self._library = library
-        self.preparation = ReliefBodyPreparation(world_import)
+        self._world_import = world_import
+        self._unwired_warned = False
+
+    def prepare_body(self, raw, *, local_uid, template_uid, world=None):
+        outline = super().prepare_body(raw, local_uid=local_uid,
+            template_uid=template_uid, world=world)
+        if world is None:
+            return outline
+        if self._world_import is None:
+            if not self._unwired_warned:
+                self._unwired_warned = True
+                logger.warning(
+                    "packs | relief world checks skipped: "
+                    "ReliefWorldImportService is not wired")
+            return outline
+        try:
+            self._world_import.validate_world_refs(world, outline)
+        except ReliefValidationError as exc:
+            raise TemplatePreparationError((FieldPathError(
+                (self.library_kind.value, template_uid), str(exc),
+                code="RELIEF_WORLD_REFS"),)) from exc
+        return outline
 
     def world_refs(self, world):
         return relief_policy_refs(world)
@@ -111,7 +119,7 @@ class ReliefPackAdapter(TemplateBodyAdapter):
         # ``extra='ignore'`` fields on a validate/dump round-trip.
         result = dict(body)
         if local_uid is not None:
-            result[_SYSTEM_NAME_FIELD] = local_uid
+            result[SYSTEM_NAME_FIELD] = local_uid
         return result
 
     def prepare_world_refs(self, world, uid_map, members):
@@ -120,7 +128,7 @@ class ReliefPackAdapter(TemplateBodyAdapter):
         pins = remap_pins(result, uid_map)
         if pins is not None:
             result.library_pins = pins
-        policy = _remap_relief_pick_policy(result, uid_map)
+        policy = remap_relief_pick_policy(result, uid_map)
         if policy is not None:
             result.relief_pick_policy = policy
         needed = (c.terrain.value for rm in members if isinstance(rm.outline, ReliefTemplate)

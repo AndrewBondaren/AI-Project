@@ -1,6 +1,6 @@
 """Shared adapter mixins — body-row CRUD over the domain library service.
 
-``_LibraryBodyMixin`` is the single library read/write shape over the
+``LibraryBodyMixin`` is the single library read/write shape over the
 domain library service. The transitional registry pointer dual-write is
 gone (B6): membership is the single availability source, so adapters no
 longer write world registry columns — ``prepare_world_refs`` projections
@@ -14,7 +14,7 @@ from app.application.worldData.libraryPacks.domainAdapters.contract import (
 )
 
 
-class _LibraryBodyMixin:
+class LibraryBodyMixin:
     """Shared body-row CRUD over the domain library service."""
 
     _library: DomainLibrary

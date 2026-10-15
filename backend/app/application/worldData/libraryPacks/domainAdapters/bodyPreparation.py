@@ -14,7 +14,7 @@ from app.application.jsonValidation.resolve import ResolveContext, UnresolvedMod
 from app.application.jsonValidation.sourceValidation import validate_prepared_source
 from app.application.jsonValidation.types import FieldPathError
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    _SYSTEM_NAME_FIELD,
+    SYSTEM_NAME_FIELD,
 )
 from app.application.worldData.libraryPacks.domainAdapters.refFields import (
     remap_template_body, template_body_refs,
@@ -46,8 +46,8 @@ class TemplateBodyPreparation[T: BaseModel]:
             issues.append(FieldPathError(path, 'template body must be an object', code='EXPECTED_OBJECT'))
             raise TemplatePreparationError(tuple(issues))
         payload = dict(raw)
-        if self.model_a and _SYSTEM_NAME_FIELD not in payload:
-            payload[_SYSTEM_NAME_FIELD] = template_uid
+        if self.model_a and SYSTEM_NAME_FIELD not in payload:
+            payload[SYSTEM_NAME_FIELD] = template_uid
         try:
             body = self.model.model_validate(payload)
         except ValidationError as exc:
@@ -56,7 +56,7 @@ class TemplateBodyPreparation[T: BaseModel]:
             raise TemplatePreparationError(tuple(issues)) from exc
         expected = template_uid if self.model_a else local_uid
         if str(body.system_name) != expected:
-            issues.append(FieldPathError(path + (_SYSTEM_NAME_FIELD,),
+            issues.append(FieldPathError(path + (SYSTEM_NAME_FIELD,),
                 'body name does not match declared member identity/key', code='TEMPLATE_IDENTITY'))
         for ref in self.body_refs(body, template_uid):
             try:

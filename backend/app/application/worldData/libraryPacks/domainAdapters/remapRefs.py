@@ -93,7 +93,7 @@ def remap_locations_section(rows, uid_map: Mapping[str, str], sources) -> list[d
     return out
 
 
-def _remap_relief_pick_policy(world: World, uid_map: Mapping[str, str]) -> dict | None:
+def remap_relief_pick_policy(world: World, uid_map: Mapping[str, str]) -> dict | None:
     """``relief_pick_policy.<context>.default_template_uid`` — the declared
     world-side ref field of the relief domain (TZ §2). Entries are
     remapped through ``ReliefContextPickPolicy``; the dump overlays the

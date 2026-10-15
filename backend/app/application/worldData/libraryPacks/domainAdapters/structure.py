@@ -6,10 +6,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from app.application.worldData.libraryPacks.domainAdapters.contract import (
-    _SYSTEM_NAME_FIELD,
+    SYSTEM_NAME_FIELD,
     PackDomainAdapter,
 )
-from app.application.worldData.libraryPacks.domainAdapters.mixins import _LibraryBodyMixin
+from app.application.worldData.libraryPacks.domainAdapters.mixins import LibraryBodyMixin
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
@@ -27,10 +27,10 @@ class StructureBodyPreparation(TemplateBodyPreparation[StructureTemplate]):
 
     def remap_body(self, body, uid_map):
         target = uid_map.get(str(body.system_name))
-        return body.model_copy(update={_SYSTEM_NAME_FIELD: target}) if target else body
+        return body.model_copy(update={SYSTEM_NAME_FIELD: target}) if target else body
 
 
-class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
+class StructurePackAdapter(LibraryBodyMixin, PackDomainAdapter):
     """Model-A structures: wire ``system_name`` IS the member uid.
 
     No world registry exists for structures — the member is reachable
@@ -60,7 +60,7 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
     ) -> dict:
         """Model A: the copied body embeds its new member uid (TZ §2)."""
         out = dict(body)
-        out[_SYSTEM_NAME_FIELD] = template_uid
+        out[SYSTEM_NAME_FIELD] = template_uid
         return out
 
     def prepare_world_refs(self, world, uid_map, members):
