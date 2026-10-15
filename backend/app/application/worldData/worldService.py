@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from app.api.schemas.imports import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at, prepare_import_row
 from app.application.jsonValidation.facade import normalize_world, merge_world_patch
-from app.application.jsonValidation.worldSlices import world_wire_from_row
+from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.worldSliceMerge import merge_world_slice
+from app.application.jsonValidation.worldSlices import slice_for_pojo, world_wire_from_row
+from app.dataModel.worldPack.worldGridSettings import WorldGridSettings
 from app.application.worldData.errors import (
     WorldDataError,
     WorldDataNotFoundError,
@@ -123,6 +127,15 @@ class WorldService:
 
     @classmethod
     def prepare_import(cls, data: dict) -> World:
+        data = dict(data)
+        # Direct preflight callers do not necessarily pass facade-normalized wire.
+        # Validate the authored mapping before SQL projection can omit explicit null.
+        grid_slice = slice_for_pojo(WorldGridSettings)
+        assert grid_slice is not None
+        try:
+            merge_world_slice(data, grid_slice, ResolveContext.for_import())
+        except UnresolvedModelError as exc:
+            raise ImportValidationError(list(exc.issues)) from exc
         world = prepare_import_row(World, with_default_created_at(data))
         cls._validate(world)
         return world
@@ -153,17 +166,6 @@ class WorldService:
 
     @staticmethod
     def _validate(world: World) -> None:
-        v = world.fine_cells_per_map_cell
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise WorldDataValidationError(
-                "fine_cells_per_map_cell must be an integer")
-        if v < 1000:
-            raise WorldDataValidationError(
-                "fine_cells_per_map_cell must be at least 1000")
-        if v % 1000 != 0:
-            raise WorldDataValidationError(
-                "fine_cells_per_map_cell must be a multiple of 1000")
-
         if world.grid_bbox_padding < 0:
             raise WorldDataValidationError(
                 "grid_bbox_padding must be >= 0")

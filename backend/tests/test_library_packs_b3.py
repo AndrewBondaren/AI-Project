@@ -647,7 +647,7 @@ class LegacyBodyImportTests(_DbCase):
         await self._world("w-relief")
         container = Container(None, self.db)
         service = ReliefWorldImportService(
-            world_service=container.world_service(),
+            world_repository=container.world_repository(),
             library=container.relief_template_library_service(),
             catalog=PackCatalogRepos(packs=self.packs, members=self.members),
             write_provider=container.library_pack_service,

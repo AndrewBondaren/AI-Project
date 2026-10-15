@@ -21,6 +21,14 @@ class LibraryWriteExecutor:
                 or not self._db.main_conn.owns_unit_of_work):
             raise RuntimeError("library executor requires caller main-connection UOW")
         await self._check(plan)
+        world_writes = []
+        for write in plan.worlds:
+            world = await self._worlds.get_by_id(write.before.world_uid)
+            keys = {change.path[0] for change in write.changes}
+            if world is None or any(getattr(world, key) != getattr(write.before, key) for key in keys):
+                raise LibraryPackConflictError("prepared world state changed before apply")
+            world_writes.append((world, {
+                key: deepcopy(getattr(write.after, key)) for key in keys}))
         try:
             for item in plan.items:
                 if item.pack and item.pack.added:
@@ -46,13 +54,8 @@ class LibraryWriteExecutor:
             for member in plan.removed:
                 await self._adapters[LibraryKind(member.library_kind)].delete_body(member.template_uid)
                 await self._catalog.members.delete(member.template_uid)
-            for write in plan.worlds:
-                world = await self._worlds.get_by_id(write.before.world_uid)
-                keys = {change.path[0] for change in write.changes}
-                if any(getattr(world, key) != getattr(write.before, key) for key in keys):
-                    raise LibraryPackConflictError("prepared world state changed before apply")
-                apply_prepared_world_columns(world, {
-                    key: deepcopy(getattr(write.after, key)) for key in keys})
+            for world, prepared in world_writes:
+                apply_prepared_world_columns(world, prepared)
                 await self._worlds.update(world)
         except sqlite3.IntegrityError as exc:
             raise LibraryPackConflictError(str(exc)) from exc

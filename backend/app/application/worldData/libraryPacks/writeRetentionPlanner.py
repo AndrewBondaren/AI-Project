@@ -151,9 +151,15 @@ class WriteRetentionPlanner:
         for key, value in asdict(result).items():
             if value != getattr(world, key):
                 if key == "library_pins":
-                    from app.application.jsonValidation.resolve import resolve_model
+                    from app.application.jsonValidation.resolve import UnresolvedModelError, resolve_model
+                    from app.application.jsonValidation.types import ImportValidationError
                     from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
-                    result.library_pins = [resolve_model(LibraryPinEntry, pin).model_dump(mode="json") for pin in value]
+                    try:
+                        result.library_pins = [resolve_model(LibraryPinEntry, pin,
+                            ctx=ResolveContext(path_prefix=(key, index))).model_dump(mode="json")
+                            for index, pin in enumerate(value)]
+                    except UnresolvedModelError as exc:
+                        raise ImportValidationError(list(exc.issues)) from exc
                     continue
                 resolved = resolve_world_column(key, value, ResolveContext(), existing=result)
                 for column, prepared in resolved.items():

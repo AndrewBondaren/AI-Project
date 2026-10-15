@@ -9,7 +9,7 @@ from app.application.worldData.libraryPacks.domainAdapters.refFields import (
     remap_template_body, relief_policy_refs, template_body_refs,
 )
 from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
-    _remap_relief_pick_policy,
+    remap_relief_pick_policy,
 )
 from app.application.worldData.libraryPacks.errors import LibraryPackInUseError
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
@@ -78,7 +78,7 @@ class ReferenceFieldTests(TestCase):
         self.assertEqual({ref.path for ref in refs},
                          {f'relief_pick_policy.{name}.default_template_uid' for name in contexts})
         uid_map = {ref.template_uid: runtime_uid() for ref in refs[:-1]}
-        remapped = _remap_relief_pick_policy(world, uid_map)
+        remapped = remap_relief_pick_policy(world, uid_map)
         world.relief_pick_policy = remapped
         after = relief_policy_refs(world)
         self.assertEqual([(ref.path, ref.template_uid) for ref in after],
@@ -93,7 +93,7 @@ class ReferenceFieldTests(TestCase):
         world = World(world_uid='w1', name='World', created_at='2026-10-11',
                       relief_pick_policy={'open_land': {'mode': 'random'}})
         self.assertEqual(relief_policy_refs(world), ())
-        self.assertIsNone(_remap_relief_pick_policy(world, {runtime_uid(): runtime_uid()}))
+        self.assertIsNone(remap_relief_pick_policy(world, {runtime_uid(): runtime_uid()}))
 
 
 class SecondaryReferenceLifecycleTests(_ServiceCase):

@@ -66,6 +66,7 @@ from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.dataModel.worldPack.worldGridSettings import WorldGridSettings
 from app.dataModel.terrainMasks import WorldTerrainMasks
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
@@ -175,6 +176,12 @@ def road_settings_rows(world: Any) -> list[dict]:
 def climate_zones(world: Any) -> WorldClimateZoneRegistry:
     return resolve_registry_list_world(
         world, WorldClimateZoneRegistry, world_uid=_uid(world),
+    )
+
+
+def grid_settings(world: Any) -> WorldGridSettings:
+    return resolve_multi_column_world(
+        world, WorldGridSettings, label=f"world={_uid(world)} grid_settings",
     )
 
 

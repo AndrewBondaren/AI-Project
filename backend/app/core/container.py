@@ -647,7 +647,7 @@ class Container(TemplateRepositoryProviders):
         if self._race_service is None:
             self._race_service = RaceService(
                 repo=self.race_repository(),
-                world_service=self.world_service(),
+                world_repository=self.world_repository(),
             )
         return self._race_service
 
@@ -655,7 +655,7 @@ class Container(TemplateRepositoryProviders):
         if self._perk_service is None:
             self._perk_service = WorldPerkService(
                 repo=self.perk_repository(),
-                world_service=self.world_service(),
+                world_repository=self.world_repository(),
             )
         return self._perk_service
 
@@ -951,7 +951,7 @@ class Container(TemplateRepositoryProviders):
     def relief_world_import_service(self) -> ReliefWorldImportService:
         if self._relief_world_import_service is None:
             self._relief_world_import_service = ReliefWorldImportService(
-                world_service=self.world_service(),
+                world_repository=self.world_repository(),
                 library=self.relief_template_library_service(),
                 catalog=PackCatalogRepos(
                     packs=self.library_pack_repository(),

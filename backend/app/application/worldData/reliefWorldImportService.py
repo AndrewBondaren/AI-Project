@@ -9,6 +9,7 @@ thin.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.application.worldData.libraryPacks.writeResults import PolicyRequired
@@ -31,7 +32,9 @@ from app.application.worldData.reliefTemplateLibraryService import (
 from app.application.worldData.reliefWorldRefValidation import (
     validate_relief_world_refs,
 )
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.worldColumnWrite import apply_world_column
+from app.application.worldData.worldLookup import require_world
+from app.db.repositories.iWorldRepository import IWorldRepository
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
 from app.db.database import Database
@@ -43,14 +46,14 @@ class ReliefWorldImportService:
 
     def __init__(
         self,
-        world_service: WorldService,
+        world_repository: IWorldRepository,
         library: ReliefTemplateLibraryService,
         *,
         catalog: PackCatalogRepos,
         write_provider=None,
         db: Database | None = None,
     ) -> None:
-        self._worlds = world_service
+        self._worlds = world_repository
         self._library = library
         self._catalog = catalog
         self._write_provider = write_provider
@@ -76,7 +79,7 @@ class ReliefWorldImportService:
         outlines: list[dict],
         *, decisions=(), preview_token=None,
     ) -> dict | PolicyRequired:
-        world = await self._worlds.get_by_id(world_uid)
+        world = await require_world(self._worlds, world_uid)
         if self._write_provider is not None:
             from app.application.worldData.libraryPacks.writeResults import WriteResult
             prepared = [self.prepare_body(world, raw) for raw in outlines]
@@ -151,15 +154,15 @@ class ReliefWorldImportService:
         needed = {c.terrain.value for c in outline.conditions}
         if not needed:
             return
-        world = await self._worlds.get_by_id(world_uid)
+        world = await require_world(self._worlds, world_uid)
+        projected = deepcopy(world)
         added = merge_missing_terrain_entries(
-            world,
+            projected,
             needed,
             source="relief_import",
             template_uid=template_uid,
             system_name=outline.system_name,
         )
         if added:
-            await self._worlds.update(
-                world_uid, {"terrain_registry": world.terrain_registry}
-            )
+            apply_world_column(world, "terrain_registry", projected.terrain_registry, ResolveContext())
+            await self._worlds.update(world)

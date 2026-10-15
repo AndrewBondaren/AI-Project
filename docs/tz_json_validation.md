@@ -331,6 +331,7 @@ Plot/building/structure используют свои POJO defaults и вали�
 | SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ✅ runtime | **LOC-T-2** ⬜ `settlement_size_registry` + ранги `small`/`medium`/`large`; множитель на subtype |
 | SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ✅ | ✅ runtime |
 | SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ✅ | ✅ `terrain_scalars()` |
+| SCH-WORLD-GRID-SETTINGS | `WorldGridSettings` | `fine_cells_per_map_cell` | ✅ | ✅ `grid_settings()` |
 | SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ✅ | ✅ runtime |
 | SCH-WORLD-CONN | `WorldConnectionTypeRegistry` | `connection_type_registry` | ✅ | ⬜ |
 | SCH-RACE-* | — | `races` table | ⬜ JV-8 | ⬜ |
@@ -489,7 +490,8 @@ inline/pointer доменов. Их перевод в библиотеки ос�
 | ENUM-E unknown (JV-0) | 422 | `code: "UNKNOWN_ENUM"` + список допустимых wire values |
 | Unknown wire key | 422 | `code: "UNKNOWN_FIELD"` — см. § Field policy → Unknown wire keys |
 | Normalize warnings | 200/201 | **не в HTTP** — только server log |
-| Technical (`fine_cells_per_map_cell`, …) | 422 | `WorldService._validate` |
+| Grid size (`fine_cells_per_map_cell`) | 422 | Structured `ImportValidationError`, schema `SCH-WORLD-GRID-SETTINGS` |
+| Remaining technical (`grid_bbox_padding`, …) | 422 | `WorldService._validate` |
 
 **Формат strict error (422):**
 
@@ -626,8 +628,9 @@ mixed-строками ломал любой PATCH до union-POJO; колонк
   к `WORLD_SLICE_BY_KEY` не требуется. Реестр может содержать technical-колонку,
   доступную пока только мастер-пути. Наличие записи об инвалидации не разрешает
   scoped write: facade-доступность отдельно проверяет `resolve_world_column`.
-  До появления POJO + facade-слайса `fine_cells_per_map_cell` через scoped-шов
-  отклоняется. Вызов `WorldService._validate` из scoped-примитива запрещён.
+  С G-1 (2026-10-16) `fine_cells_per_map_cell` покрыт `WorldGridSettings`
+  и доступен scoped-шву; изменение возвращает `map_cells`, равное значение —
+  пустой набор. Вызов `WorldService._validate` из scoped-примитива запрещён.
 
 **Не через шов:** мастер-PATCH, `import_from_json`, bundle — full-doc семантика
 сохраняется. Состояние внутри мира (клетки, здания, дороги, флора, поселения) —
@@ -685,17 +688,28 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 ## Technical validation (SCH-WORLD-ROW-TECH)
 
-Скалярные инварианты **без** POJO domain policy:
+Оставшиеся сервисные technical-проверки:
 
-- `fine_cells_per_map_cell` — int, ≥1000, кратно 1000
 - `grid_bbox_padding` ≥ 0
 - `terrain_chunk_columns` ≥ 1
-- `map_subsurface_depth` ≥ 10
+- `map_subsurface_depth` ≥ 0 (0 = surface-only; `tz_terrain_generation.md`)
 
-Сейчас: `WorldService._validate`; `fine_cells_per_map_cell` и `grid_bbox_padding`
-не покрыты `WorldSlice`. Это явная граница текущего покрытия, а не потерянные
-регистрации. `terrain_chunk_columns` и `map_subsurface_depth` уже покрыты
-`WorldTerrainScalars`, но дополнительно проверяются сервисом.
+`grid_bbox_padding` пока не покрыт `WorldSlice`. `terrain_chunk_columns` и
+`map_subsurface_depth` принадлежат `WorldTerrainScalars`, но дополнительно
+проверяются сервисом: strictness POJO и сервиса пока расходится, эти проверки
+нельзя удалить как эквивалентные без отдельного согласования.
+
+**G-1 выполнен 2026-10-16:** `fine_cells_per_map_cell` принадлежит
+`dataModel/worldPack/worldGridSettings.py::WorldGridSettings`, schema
+`SCH-WORLD-GRID-SETTINGS`, facade multi-column slice из одного поля.
+Контракт: строгий int без bool, ≥1000, кратно 1000; default берётся из
+`mapCellSize.FINE_CELLS_PER_MAP_CELL_DEFAULT`. Missing полного объекта →
+default; missing PATCH → не менять; explicit null / float / строка отклоняются.
+Legacy `map_cell_size_m` преобразуется facade до проверки; новое имя приоритетно.
+Create/import/master-PATCH/bundle используют facade; прямой `prepare_import`
+проверяет grid-слайс общим resolver на исходном mapping до конструктора World.
+Ошибки сохраняют path/schema/code в `ImportValidationError`; ручного блока
+проверок размера в `WorldService._validate` больше нет.
 
 **Целевое решение (2026-10-12):** допустимость значения принадлежит `dataModel`
 POJO и переиспользуется всеми write-путями. `WorldService` организует операцию,
@@ -706,10 +720,11 @@ POJO и переиспользуется всеми write-путями. `WorldSe
 общий контейнер. Сохранить строгий контракт размера клетки: int без bool,
 ≥1000, кратно 1000; расширение покрытия не меняет допустимые значения.
 
-Перенос — отдельный шаг **G-1** плана `world-scoped-column-write.md`, вне объёма
-W2-1…W2-4. До его выполнения действует существующий technical pass сервиса;
-он не вызывается из scoped write. `COLUMN_INVALIDATES` уже может содержать эти
-колонки независимо от их POJO-покрытия.
+Перенос выполнен отдельным шагом **G-1** плана `world-scoped-column-write.md`,
+вне объёма W2-1…W2-4. `COLUMN_INVALIDATES` остаётся независимым от POJO-покрытия;
+scoped apply не сохраняет и не очищает таблицы. Мастерское подтверждение `force`
+сохранено. Атомарность очистки `map_cells`, padding и pack metadata — отдельные
+задачи.
 
 ---
 
@@ -717,7 +732,7 @@ W2-1…W2-4. До его выполнения действует существ�
 
 **Назначение:** зафиксировать перенос `application/worldData/generators/` с сырого `world.*` / `dict.get` на typed accessors `jsonValidation/worldRow` → `dataModel` POJO.
 
-**Не входит:** `world_seed()`; technical invariants (`fine_cells_per_map_cell`, …). Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
+**Не входит:** `world_seed()`; оставшиеся technical invariants. G-1 добавил `grid_settings(world)` для размера клетки; массовая миграция generator consumers на него не входит в G-1. Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
 
 **Правило:** generators читают master-data **только** через `worldRow`; `model_dump()` в generators — не целевой путь (допустим только в resolve-логах и import facade).
 
@@ -778,7 +793,7 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 
 ### Facade import — пробелы (symmetry с runtime)
 
-`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `fine_cells_per_map_cell`, …); bundle sections (`races`, `locations`, …). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.  
+`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `grid_bbox_padding`, …); bundle sections (`races`, `locations`, …). `fine_cells_per_map_cell` покрыт facade `WorldGridSettings` (G-1). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.
 ~~barrier / city_size / district / road_settings / terrain scalars / connection_type_registry / location_type / lore / weather / terrain_category / room_type / location_mood / building_template_registry~~ — ✅ GV-3 registry facades.
 *B7 (2026-10-15): facades `building_template_registry` / `relief_template_registry` удалены вместе с колонками — pack-домены на membership, см. §B `tz_world_bundle`.*
 

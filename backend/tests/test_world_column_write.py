@@ -99,7 +99,7 @@ class WorldColumnWriteTests(unittest.TestCase):
         self.assertEqual(world, before)
 
     def test_non_facade_and_unknown_keys_rejected(self):
-        for key in ("name", "fine_cells_per_map_cell", "missing"):
+        for key in ("name", "grid_bbox_padding", "missing"):
             with self.assertRaises(ImportValidationError):
                 resolve_world_column(key, 1000, self.ctx())
         world_slice = replace(slice_for_world_key("g"), facade=False)
@@ -199,7 +199,8 @@ class WorldColumnWriteTests(unittest.TestCase):
 
     def test_registry_guard_uses_world_fields_not_facade_coverage(self):
         self.assertLessEqual(COLUMN_INVALIDATES.keys(), {f.name for f in fields(World)})
-        self.assertNotIn("fine_cells_per_map_cell", WORLD_SLICE_BY_KEY)
+        self.assertTrue(WORLD_SLICE_BY_KEY["fine_cells_per_map_cell"].facade)
+        self.assertNotIn("grid_bbox_padding", WORLD_SLICE_BY_KEY)
 
     def test_invalidation_only_for_supplied_changes_and_unions_tables(self):
         before = {"fine_cells_per_map_cell": 1000, "g": 1.0}

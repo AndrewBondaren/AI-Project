@@ -72,6 +72,7 @@ from app.application.jsonValidation.worldRow import (
     terrain_masks_dict,
     terrain_rows,
     terrain_scalars,
+    grid_settings,
     terrain_system_keys,
     weather_types,
 )
@@ -150,6 +151,7 @@ __all__ = [
     "terrain_masks_dict",
     "terrain_rows",
     "terrain_scalars",
+    "grid_settings",
     "terrain_system_keys",
     "weather_types",
 ]

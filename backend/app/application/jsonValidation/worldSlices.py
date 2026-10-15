@@ -34,6 +34,11 @@ from app.dataModel.terrain.worldTerrainScalars import (
     WorldTerrainScalars,
     terrain_scalar_wire_from_mapping,
 )
+from app.dataModel.worldPack.worldGridSettings import (
+    GRID_SETTINGS_WIRE_KEYS,
+    WorldGridSettings,
+    grid_settings_wire_from_mapping,
+)
 from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
@@ -237,6 +242,14 @@ def _registry_dict_slice(
 
 
 WORLD_SLICES: tuple[WorldSlice, ...] = (
+    WorldSlice(
+        schema_id=WorldGridSettings.SCHEMA_ID,
+        pojo_cls=WorldGridSettings,
+        wire_kind="multi_column",
+        world_keys=tuple(GRID_SETTINGS_WIRE_KEYS),
+        wire_from_mapping=grid_settings_wire_from_mapping,
+        facade=True,
+    ),
     WorldSlice(
         schema_id=WorldClimateScalars.SCHEMA_ID,
         pojo_cls=WorldClimateScalars,
