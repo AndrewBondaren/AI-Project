@@ -46,7 +46,8 @@ from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.application.worldData.worldService import WorldService
+from app.db.database import Database
+from app.db.repositories.iWorldRepository import IWorldRepository
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
@@ -69,7 +70,8 @@ class PackMaterializationOrchestrator:
         fine_terrain: FineTerrainRefineOrchestrator | None = None,
         entry: EntryRefineOrchestrator | None = None,
         job_repo: IChunkRefineJobRepository | None = None,
-        world_service: WorldService | None = None,
+        world_repository: IWorldRepository | None = None,
+        db: Database | None = None,
         bake_defaults: PackBakeDefaults | None = None,
         read_context: PackReadContext | None = None,
         read_context_for: Callable[[str], PackReadContext] | None = None,
@@ -82,7 +84,10 @@ class PackMaterializationOrchestrator:
         self._world_map = world_map or WorldMapBakeOrchestrator()
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
-        self._world_service = world_service
+        if world_repository is not None and db is None:
+            raise ValueError("pack finalization requires caller database")
+        self._world_repository = world_repository
+        self._db = db
         self._read_context = read_context
         self._read_context_for = read_context_for
         self._relief_loader = relief_loader
@@ -263,16 +268,16 @@ class PackMaterializationOrchestrator:
         elif climate_fine_tiles:
             climate_result = PersistResult.from_counts(climate_fine_tiles, climate_fine_tiles)
 
-        if self._world_service is not None:
+        if self._world_repository is not None:
             read_ctx = self._read_context
             if read_ctx is None and self._read_context_for is not None:
                 read_ctx = self._read_context_for(world_uid)
-            await finalize_pack_on_world(
-                self._world_service,
-                world,
-                writer,
-                read_context=read_ctx,
-            )
+            assert self._db is not None
+            async with self._db.transaction_if_needed():
+                await finalize_pack_on_world(
+                    self._world_repository, world, writer,
+                    db_path=self._db.path, read_context=read_ctx,
+                )
 
         workers = resolve_terrain_workers(mat_ctx, world)
         elapsed_s = time.perf_counter() - bake_t0

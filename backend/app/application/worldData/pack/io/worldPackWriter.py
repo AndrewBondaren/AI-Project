@@ -21,7 +21,7 @@ from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_FINE_TERRAIN,
     TileCodec,
 )
-from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths, pack_storage_reference
 from app.application.worldData.pack.io.settlementStructureTmp import SettlementStructureTmpRef
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
@@ -460,8 +460,10 @@ class WorldPackWriter:
             wilderness_chunks=self._manifest.wilderness_chunks_baked,
         )
 
-    def pack_storage_path(self) -> str:
-        return f"worlds/{self._paths.world_uid}/pack"
+    def pack_storage_path(self, *, db_path: str | None = None, existing: str | None = None) -> str:
+        if db_path is None:
+            return self._paths.root.as_posix()
+        return pack_storage_reference(self._paths, db_path=db_path, existing=existing)
 
     def _replace_tile(self, entry: TileManifestEntry) -> None:
         self._manifest.tiles = [

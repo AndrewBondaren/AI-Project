@@ -601,6 +601,15 @@ light_m  = fine_cells_per_map_cell // side            # физический ш�
 | `light_m` | `fine_cells_per_map_cell // 32` | вычисляется при bake; не хранить параллельный литерал |
 | Master override `worlds.world_map_cells_per_tile` | optional | редкий тумблер; default = 32 |
 
+Typed world wire: `WorldMapResolutionSettings.world_map_cells_per_tile` —
+nullable override, missing/null сохраняют отсутствие настройки. Supplied
+значение приводится существующим policy-преобразованием `int(value)`; новых
+strict/min ограничений этот перенос не добавляет. Runtime side по-прежнему
+`max(1, int(override))`, отсутствие override использует policy default 32.
+Финализация L0 сохраняет фактический side manifest обратно в world, как прежде.
+Path/hash принадлежат отдельному nullable `WorldPackMetadata`; size G-1
+и `terrain_pack_version` финализатор не меняет.
+
 **Примеры:**
 
 | `fine_cells_per_map_cell` | `side` | `light_m` | Light cells / tile |
@@ -1453,6 +1462,23 @@ map_cell_patches (
 | `terrain_pack_path` | путь к pack |
 | `terrain_pack_hash` | fast validate |
 | `terrain_pack_version` | wire version |
+
+**Scoped L0 finalization (2026-10-16):** light/full orchestration владеет
+короткой SQL UOW. Finalizer загружает свежий World через repository, проверяет
+world/writer/manifest identity, готовит три authored поля через facade-slice
+POJO и делает один repository update без мастерского WorldService.update.
+Посторонние колонки не ревалидируются и не перезаписываются старым bake snapshot.
+`terrain_pack_version` не меняется. Путь сохраняет actual writer root:
+существующая корректная ссылка сохраняется, managed root использует переносимую
+ссылку, иной custom root — абсолютную. Общий path resolver остаётся источником
+round-trip семантики.
+
+`PackManifestStore.save` публикует JSON через временный файл в том же каталоге
+и replace; до replace прежний manifest остаётся читаемым. File-first порядок
+сохраняется: после успешного manifest save сбрасываются caches actual/old root,
+в том числе при последующей ошибке SQL. Это не общий атомарный FS+SQLite commit:
+rollback SQL не откатывает опубликованный manifest. Success-log финализатора
+следует за успешным repository update.
 
 **`map_cells` удаляется** при cutover (один PR с кодом + `0001_initial.sql`).
 

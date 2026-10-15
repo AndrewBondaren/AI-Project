@@ -332,6 +332,8 @@ Plot/building/structure используют свои POJO defaults и вали�
 | SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ✅ | ✅ runtime |
 | SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ✅ | ✅ `terrain_scalars()` |
 | SCH-WORLD-GRID-SETTINGS | `WorldGridSettings` | `fine_cells_per_map_cell` | ✅ | ✅ `grid_settings()` |
+| SCH-WORLD-PACK-METADATA | `WorldPackMetadata` | `terrain_pack_path`, `terrain_pack_hash` | ✅ | ✅ общий slice resolve |
+| SCH-WORLD-MAP-RESOLUTION-SETTINGS | `WorldMapResolutionSettings` | `world_map_cells_per_tile` | ✅ | ✅ общий slice resolve |
 | SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ✅ | ✅ runtime |
 | SCH-WORLD-CONN | `WorldConnectionTypeRegistry` | `connection_type_registry` | ✅ | ⬜ |
 | SCH-RACE-* | — | `races` table | ⬜ JV-8 | ⬜ |

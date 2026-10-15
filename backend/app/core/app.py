@@ -60,9 +60,13 @@ def make_lifespan(db: Database):
         )
         from app.dataModel.terrain.worldTerrainScalars import validate_world_row_terrain_columns
         from app.dataModel.worldPack.worldGridSettings import validate_world_row_grid_columns
+        from app.dataModel.worldPack.worldPackMetadata import validate_world_row_pack_metadata_columns
+        from app.dataModel.worldPack.worldMapResolutionSettings import validate_world_row_map_resolution_columns
         validate_world_row_climate_columns(World)
         validate_world_row_terrain_columns(World)
         validate_world_row_grid_columns(World)
+        validate_world_row_pack_metadata_columns(World)
+        validate_world_row_map_resolution_columns(World)
         validate_world_row_relief_obstacle_columns(World)
         await SqlitePendingRepository(db).cleanup_stale()
         yield

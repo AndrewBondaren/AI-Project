@@ -7,11 +7,21 @@ See ``docs/tz_world_pack_storage.md`` § L0 / WP-10 v2.
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
 WORLD_MAP_CELLS_PER_TILE = 32
+
+
+def coerce_world_map_override(value: Any) -> int | None:
+    """Existing override interpretation, shared by world wire and runtime policy."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, OverflowError) as exc:
+        raise ValueError("world map override must be convertible to int") from exc
 
 
 class WorldMapCellsPerTilePolicy(BaseModel):
@@ -29,8 +39,9 @@ class WorldMapCellsPerTilePolicy(BaseModel):
 
     def resolve_side(self, override: int | None = None) -> int:
         """Return mask side. Default always 32; optional master override (sanity ≥ 1)."""
+        override = coerce_world_map_override(override)
         if override is not None:
-            return max(1, int(override))
+            return max(1, override)
         return max(1, int(self.cells_per_tile))
 
     def resolve(self, fine_cells_per_map_cell: int, override: int | None = None) -> int:

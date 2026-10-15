@@ -39,6 +39,12 @@ from app.dataModel.worldPack.worldGridSettings import (
     WorldGridSettings,
     grid_settings_wire_from_mapping,
 )
+from app.dataModel.worldPack.worldPackMetadata import (
+    PACK_METADATA_WIRE_KEYS, WorldPackMetadata, pack_metadata_wire_from_mapping,
+)
+from app.dataModel.worldPack.worldMapResolutionSettings import (
+    MAP_RESOLUTION_WIRE_KEYS, WorldMapResolutionSettings, map_resolution_wire_from_mapping,
+)
 from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
@@ -242,6 +248,22 @@ def _registry_dict_slice(
 
 
 WORLD_SLICES: tuple[WorldSlice, ...] = (
+    WorldSlice(
+        schema_id=WorldPackMetadata.SCHEMA_ID,
+        pojo_cls=WorldPackMetadata,
+        wire_kind="multi_column",
+        world_keys=tuple(PACK_METADATA_WIRE_KEYS),
+        wire_from_mapping=pack_metadata_wire_from_mapping,
+        facade=True,
+    ),
+    WorldSlice(
+        schema_id=WorldMapResolutionSettings.SCHEMA_ID,
+        pojo_cls=WorldMapResolutionSettings,
+        wire_kind="multi_column",
+        world_keys=tuple(MAP_RESOLUTION_WIRE_KEYS),
+        wire_from_mapping=map_resolution_wire_from_mapping,
+        facade=True,
+    ),
     WorldSlice(
         schema_id=WorldGridSettings.SCHEMA_ID,
         pojo_cls=WorldGridSettings,

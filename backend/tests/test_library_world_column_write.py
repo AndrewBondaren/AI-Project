@@ -128,7 +128,7 @@ class LibraryWorldColumnWriteTests(_ServiceCase):
                 return result
             return prepare
         planner = WriteRetentionPlanner({_RELIEF: adapter})
-        with patch.object(adapter, "prepare_world_refs", side_effect=projection("terrain_pack_hash", "hash")):
+        with patch.object(adapter, "prepare_world_refs", side_effect=projection("terrain_pack_version", "1")):
             with self.assertRaises(ImportValidationError) as caught:
                 planner._world(world, (), {})
             self.assertEqual(caught.exception.errors[0].code, "NOT_WRITABLE_WORLD_COLUMN")
