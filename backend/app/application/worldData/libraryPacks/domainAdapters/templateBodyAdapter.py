@@ -28,5 +28,7 @@ class TemplateBodyAdapter(_LibraryBodyMixin, PackDomainAdapter):
         from copy import deepcopy
         from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
         result = deepcopy(world)
-        remap_pins(result, uid_map)
+        pins = remap_pins(result, uid_map)
+        if pins is not None:
+            result.library_pins = pins
         return result

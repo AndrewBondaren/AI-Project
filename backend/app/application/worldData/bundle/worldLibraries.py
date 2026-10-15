@@ -1,4 +1,5 @@
 """World-owned archive inputs and explicit legacy body migration (TZ §4)."""
+from app.application.worldData.bundle import SOURCE_FILE_BUNDLE
 from app.application.worldData.libraryPacks.archiveSources import pack_to_wire, packs_from_wire
 from app.application.worldData.libraryPacks.legacyPack import legacy_pack_row, legacy_member_row
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
@@ -51,7 +52,7 @@ def import_libraries(data, *, legacy_migration=False):
                 raise LibraryPackValidationError("legacy body UID does not match explicit legacy mapping")
             members.append(LibraryArchiveMember(library_kind=kind.value, local_uid=member.local_uid,
                 template_uid=member.template_uid, source_template_uid=member.source_template_uid,
-                creation_kind=member.creation_kind, source_file="bundle"))
+                creation_kind=member.creation_kind, source_file=SOURCE_FILE_BUNDLE))
             bodies[member.template_uid] = {key: value for key, value in body.items() if key != "template_uid"}
     if members:
         existing = next((p for p in packs if p.manifest.pack_uid == legacy.pack_uid), None)

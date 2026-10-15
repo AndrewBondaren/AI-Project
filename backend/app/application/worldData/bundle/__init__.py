@@ -2,3 +2,6 @@
 
 Orchestrator stays in ``WorldBundleService``; handlers own one BundleSection.
 """
+
+SOURCE_FILE_BUNDLE = "bundle"
+

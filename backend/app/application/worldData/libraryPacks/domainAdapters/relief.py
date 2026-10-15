@@ -117,7 +117,9 @@ class ReliefPackAdapter(TemplateBodyAdapter):
     def prepare_world_refs(self, world, uid_map, members):
         from app.application.worldData.reliefTerrainSync import missing_terrain_entries
         result = deepcopy(world)
-        remap_pins(result, uid_map)
+        pins = remap_pins(result, uid_map)
+        if pins is not None:
+            result.library_pins = pins
         policy = _remap_relief_pick_policy(result, uid_map)
         if policy is not None:
             result.relief_pick_policy = policy

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from app.application.jsonValidation.resolve import UnresolvedModelError, resolve_model
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, UID_PART_SEPARATOR, library_uid
 from app.dataModel.libraryPacks.packManifest import (
     LibraryPackManifest,
     LibraryPackManifestMember,
@@ -128,8 +128,10 @@ def _validate_pack_fields(manifest: LibraryPackManifest, pack_dir: Path) -> None
     if manifest.pack_uid in deps:
         raise PackManifestError(f"pack '{manifest.system_name}' depends on itself")
     for dep in deps:
-        if "|" in dep:
-            raise PackManifestError(f"dependency uid must not contain '|': {dep!r}")
+        if UID_PART_SEPARATOR in dep:
+            raise PackManifestError(
+                f"dependency uid must not contain {UID_PART_SEPARATOR!r}: {dep!r}"
+            )
 
 
 def _resolve_members(

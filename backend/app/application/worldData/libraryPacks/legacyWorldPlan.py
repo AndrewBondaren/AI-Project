@@ -18,13 +18,17 @@ from app.application.worldData.libraryPacks.legacyWorldContracts import (
 )
 from app.application.worldData.libraryPacks.legacyWorldProjection import existing_instance, project_pack
 from app.application.worldData.libraryPacks.legacyWorldRefs import project_world_refs
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
+from app.application.worldData.libraryPacks.lifecycleContracts import (
+    CatalogSnapshot,
+    RELIEF_POLICY_FIELD,
+    world_consumer,
+)
 from app.application.worldData.libraryPacks.referenceResolver import contextualize_reference_issues, dependency_issues, reference_index
 from app.application.worldData.libraryPacks.uidMap import compose_template_uid_maps
 from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
-from app.ids import LibraryKind
+from app.ids import LibraryKind, UID_PART_SEPARATOR
 
 
 def _fail(path, message, code="LEGACY_IDENTITY"):
@@ -76,7 +80,7 @@ def _plan(original, facts, diagnostics, decisions, comparisons):
                 _fail(("library_packs", uid, m.template_uid), "member identity must be a canonical UUID", "TEMPLATE_UID")
             if (m.library_kind not in {k.value for k in (LibraryKind.PLOT_TEMPLATES, LibraryKind.BUILDING_TEMPLATES,
                                                        LibraryKind.STRUCTURE_TEMPLATES, LibraryKind.RELIEF_TEMPLATES)} or
-                not isinstance(m.local_uid, str) or not m.local_uid or m.local_uid != m.local_uid.strip() or "|" in m.local_uid):
+                not isinstance(m.local_uid, str) or not m.local_uid or m.local_uid != m.local_uid.strip() or UID_PART_SEPARATOR in m.local_uid):
                 _fail(("library_packs", uid, m.template_uid), "invalid declared domain/local key")
             if (m.creation_kind not in ("authored", "pack_copy", "member_copy") or
                 (m.creation_kind == "authored") != (m.source_template_uid is None)):
@@ -270,7 +274,7 @@ def _plan(original, facts, diagnostics, decisions, comparisons):
             diagnostics.append(FieldPathError(pointer.path + ("system_template_uid",),
                 f"unavailable or wrong-kind pointer {pointer.template_uid}; no pin created", code="LIBRARY_REFERENCE",
                 reference=ReferenceIssueContext(reason, pointer.source_kind.value, world_uid,
-                    pointer.template_uid, known.member.pack_uid if known else None, consumer=f"world:{world_uid}")))
+                    pointer.template_uid, known.member.pack_uid if known else None, consumer=world_consumer(world_uid))))
             decisions.append(LegacyPointerDecision(pointer.path, pointer.template_uid, None, None, "unavailable"))
     projected_world, pins, pin_issues = project_world_refs(original.raw_world, mapping, final_members, pins)
     diagnostics.extend(pin_issues)
@@ -285,7 +289,8 @@ def _plan(original, facts, diagnostics, decisions, comparisons):
         raw = (projected_world.get("relief_pick_policy") or {}).get(field.parent_field)
         if raw is not None:
             refs.extend(DirectRefField(field.uid_field, field.library_kind).references(
-                ReliefContextPickPolicy.model_validate(raw), f"world:{world_uid}", f"relief_pick_policy.{field.parent_field}."))
+                ReliefContextPickPolicy.model_validate(raw), world_consumer(world_uid),
+                f"{RELIEF_POLICY_FIELD}.{field.parent_field}."))
     _, ref_issues = reference_index(refs, final_members)
     diagnostics.extend(contextualize_reference_issues(ref_issues, {u: e.member for u, e in entries.items()}, world_uid))
     # Legacy manifests did not declare dependencies. Derive only from known

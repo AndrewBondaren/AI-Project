@@ -18,7 +18,7 @@ from app.application.worldData.libraryPacks.legacyDomainContracts import (
 from app.application.worldData.libraryPacks.legacyDomainRefs import LegacyDomainRefResolver, is_canonical_uid
 from app.application.worldData.libraryPacks.uidMap import compose_template_uid_maps
 from app.db.models.libraryPackMember import LibraryPackMemberRow
-from app.ids import LibraryKind
+from app.ids import LibraryKind, UID_PART_SEPARATOR
 
 _PREPARATIONS = {p.library_kind: p() for p in (
     PlotBodyPreparation, BuildingBodyPreparation, StructureBodyPreparation)}
@@ -48,7 +48,7 @@ def _record_issues(record):
         if (uid is not None or label in ("template_uid", "pack_uid")) and not is_canonical_uid(uid):
             issues.append(FieldPathError(path + (label,), "identity must be a canonical UUID", code="TEMPLATE_UID"))
     if (not isinstance(member.local_uid, str) or not member.local_uid or
-        member.local_uid != member.local_uid.strip() or "|" in member.local_uid):
+        member.local_uid != member.local_uid.strip() or UID_PART_SEPARATOR in member.local_uid):
         issues.append(FieldPathError(path + ("local_uid",), "invalid declared local key", code="LEGACY_IDENTITY"))
     if (member.creation_kind not in ("authored", "pack_copy", "member_copy") or
         (member.creation_kind == "authored") != (member.source_template_uid is None)):

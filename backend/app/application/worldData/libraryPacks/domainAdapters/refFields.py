@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from app.application.jsonValidation.worldRow import relief_pick_policy
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
+from app.application.worldData.libraryPacks.lifecycleContracts import (
+    MemberRef,
+    RELIEF_POLICY_FIELD,
+    named_location_consumer,
+    world_consumer,
+)
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy, WorldReliefPickPolicy
@@ -112,7 +117,8 @@ def remap_template_body(kind: LibraryKind, body: BaseModel, uid_map: Mapping[str
 def relief_policy_refs(world: World) -> tuple[MemberRef, ...]:
     policy = relief_pick_policy(world)
     return tuple(ref for field in RELIEF_POLICY_REF_FIELDS
-                 for ref in field.references(policy, f'world:{world.world_uid}', 'relief_pick_policy.'))
+                 for ref in field.references(
+                     policy, world_consumer(world.world_uid), f'{RELIEF_POLICY_FIELD}.'))
 
 
 # Persisted location refs (5b/B4): a generated building stores the applied
@@ -144,5 +150,5 @@ def named_location_template_refs(rows, members) -> tuple[MemberRef, ...]:
             member = members.get(uid) if isinstance(uid, str) else None
             if member is not None:
                 refs.append(MemberRef(member.library_kind, uid,
-                                      f'named_location:{row.location_uid}', field))
+                                      named_location_consumer(row.location_uid), field))
     return tuple(refs)

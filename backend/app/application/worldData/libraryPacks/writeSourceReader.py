@@ -10,7 +10,7 @@ from app.application.worldData.libraryPacks.writeContracts import LibraryWriteIt
 from app.application.worldData.libraryPacks.writeInspectionContracts import (
     InspectedMember, InspectedSource, WriteImportMember, WriteImportSource,
 )
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, UID_PART_SEPARATOR, library_uid
 from app.db.models.world import World
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 
@@ -94,7 +94,7 @@ class LibraryWriteSourceReader:
             member = entry.member
             if member.pack_uid != pack.pack_uid or not member.template_uid:
                 raise LibraryPackValidationError("source_membership_mismatch")
-            if not member.local_uid.strip() or "|" in member.local_uid:
+            if not member.local_uid.strip() or UID_PART_SEPARATOR in member.local_uid:
                 raise LibraryPackValidationError("invalid_source_local_uid")
             if member.creation_kind not in ("authored", "pack_copy", "member_copy"):
                 raise LibraryPackValidationError("invalid_source_creation_kind")
@@ -102,5 +102,5 @@ class LibraryWriteSourceReader:
                 raise LibraryPackValidationError("invalid_source_provenance")
         if (len(set(source.dependencies)) != len(source.dependencies)
                 or pack.pack_uid in source.dependencies
-                or any(not uid or "|" in uid for uid in source.dependencies)):
+                or any(not uid or UID_PART_SEPARATOR in uid for uid in source.dependencies)):
             raise LibraryPackValidationError("invalid_source_dependency")

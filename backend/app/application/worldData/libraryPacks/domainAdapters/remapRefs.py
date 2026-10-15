@@ -4,6 +4,10 @@ Entries that carry a declared ref field are remapped through their POJO
 (``model_copy``) and the dump overlays the raw row so unknown keys
 survive. Refs absent from ``uid_map`` — other packs, external bodies —
 stay untouched.
+
+Convention: helpers are pure return-new — they hand back the rewritten
+value (``None`` / the input itself when nothing matched) and never
+mutate arguments; the caller assigns the result.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from app.application.worldData.libraryPacks.domainAdapters.refFields import (
 )
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.libraryPacks.legacyDomainRefs import is_canonical_uid
+from app.application.worldData.libraryPacks.lifecycleContracts import RELIEF_POLICY_FIELD
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ReliefContextPickPolicy,
 )
@@ -24,7 +29,8 @@ from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.db.models.world import World
 
 
-def remap_pins(world: World, uid_map: Mapping[str, str]) -> bool:
+def remap_pins(world: World, uid_map: Mapping[str, str]) -> list[dict] | None:
+    """Remapped ``library_pins`` rows — ``None`` when no pin moved."""
     from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
     out = []
     changed = False
@@ -33,9 +39,7 @@ def remap_pins(world: World, uid_map: Mapping[str, str]) -> bool:
         uid = uid_map.get(pin.template_uid, pin.template_uid)
         changed = changed or uid != pin.template_uid
         out.append({**raw, 'template_uid': uid})
-    if changed:
-        world.library_pins = out
-    return changed
+    return out if changed else None
 
 
 def remap_named_location_refs(row: dict, uid_map: Mapping[str, str]) -> dict:
@@ -108,7 +112,7 @@ def _remap_relief_pick_policy(world: World, uid_map: Mapping[str, str]) -> dict 
             policy = ReliefContextPickPolicy.model_validate(entry)
         except ValueError as exc:
             raise LibraryPackValidationError(
-                f"relief_pick_policy.{name} fails schema during ref remap: {exc}"
+                f"{RELIEF_POLICY_FIELD}.{name} fails schema during ref remap: {exc}"
             ) from exc
         replacement = field.remap_entry(policy, uid_map)
         if replacement is not policy:

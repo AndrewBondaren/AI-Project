@@ -5,7 +5,7 @@ from app.application.worldData.libraryPacks.writeFacade import require_result
 from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
 from app.application.worldData.libraryPacks.writeResults import PolicyRequired, WriteResult
 from app.db.models.libraryPackMember import LibraryPackMemberRow
-from app.ids import LibraryKind, library_uid
+from app.ids import LibraryKind, UID_PART_SEPARATOR, library_uid
 
 
 async def write_authored_bodies(service, kind, pack_uid, bodies, *, local_uid=None,
@@ -21,7 +21,7 @@ async def write_authored_bodies(service, kind, pack_uid, bodies, *, local_uid=No
         sources, items = {}, []
         for index, body in enumerate(bodies):
             key = local_uid if kind is LibraryKind.STRUCTURE_TEMPLATES else body.get("system_name")
-            if not isinstance(key, str) or not key.strip() or key != key.strip() or "|" in key:
+            if not isinstance(key, str) or not key.strip() or key != key.strip() or UID_PART_SEPARATOR in key:
                 raise LibraryPackValidationError("invalid authored local_uid")
             if local_uid is not None and key != local_uid:
                 raise LibraryPackValidationError("body system_name differs from declared local_uid")

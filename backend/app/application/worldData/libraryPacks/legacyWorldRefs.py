@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError, ReferenceIssueContext, ReferenceIssueReason
 from app.application.worldData.libraryPacks.domainAdapters.refFields import RELIEF_POLICY_REF_FIELDS
 from app.application.worldData.libraryPacks.legacyDomainRefs import is_canonical_uid
+from app.application.worldData.libraryPacks.lifecycleContracts import world_consumer
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
 from app.ids import LibraryKind
@@ -40,7 +41,7 @@ def project_world_refs(world, mapping, members, pointer_pins):
             diagnostics.append(FieldPathError(("world", "library_pins", index),
                 "existing pin is unavailable; original pair retained", code="LIBRARY_REFERENCE",
                 reference=ReferenceIssueContext(ReferenceIssueReason.UNKNOWN_TEMPLATE, pin.library_kind,
-                    world["world_uid"], pin.template_uid, consumer=f"world:{world['world_uid']}")))
+                    world["world_uid"], pin.template_uid, consumer=world_consumer(world["world_uid"]))))
         pins[pin.library_kind, pin.template_uid] = pin
     ordered = tuple(pins[key] for key in sorted(pins))
     projected["library_pins"] = [pin.model_dump(mode="json") for pin in ordered]

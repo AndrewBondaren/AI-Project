@@ -16,9 +16,11 @@ from app.application.worldData.libraryPacks.memberOps import _MemberOps
 from app.application.worldData.libraryPacks.packResults import (
     PackDeleteResult,
 )
+from app.application.worldData.libraryPacks.packIdentity import PACK_NAME_SEPARATOR
 from app.application.worldData.libraryPacks.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
+from app.ids import UID_PART_SEPARATOR
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +31,9 @@ def _validate_dependencies(pack_uid: str, dependencies: Iterable[str]) -> list[s
         dep = (dep or "").strip()
         if not dep:
             raise LibraryPackValidationError("dependency uid must be non-empty")
-        if "|" in dep:
+        if UID_PART_SEPARATOR in dep:
             raise LibraryPackValidationError(
-                f"dependency uid must not contain '|': {dep!r}"
+                f"dependency uid must not contain {UID_PART_SEPARATOR!r}: {dep!r}"
             )
         if dep == pack_uid:
             raise LibraryPackValidationError("a pack cannot depend on itself")
@@ -53,7 +55,7 @@ class _PackOps:
         system_name: str,
         pack_name: str | None = None,
         display_name: str | None = None,
-        version: str = "1.0",
+        version: str = LibraryPackRow.version,
         owner_world_uid: str | None = None,
         dependencies: Iterable[str] = (),
     ) -> LibraryPackRow:
@@ -69,7 +71,7 @@ class _PackOps:
         row = LibraryPackRow(
             pack_uid=pack_uid,
             system_name=system_name,
-            pack_name=pack_name or system_name.rsplit(".", 1)[-1],
+            pack_name=pack_name or system_name.rsplit(PACK_NAME_SEPARATOR, 1)[-1],
             display_name=display_name or pack_name or system_name,
             version=version,
             owner_world_uid=owner_world_uid,

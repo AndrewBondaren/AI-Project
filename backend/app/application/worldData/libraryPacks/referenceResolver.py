@@ -9,7 +9,11 @@ from app.application.jsonValidation.types import FieldPathError, ReferenceIssueC
 from app.application.worldData.libraryPacks.domainAdapters.refFields import (
     named_location_template_refs,
 )
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot, MemberRef
+from app.application.worldData.libraryPacks.lifecycleContracts import (
+    CatalogSnapshot,
+    MemberRef,
+    world_consumer,
+)
 from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
 from app.application.worldData.libraryPacks.membership import membership_pack_uids
 from app.ids import LibraryKind
@@ -107,7 +111,7 @@ def pin_index(world, members):
         pin = LibraryPinEntry.model_validate(raw)
         member = members.get(pin.template_uid)
         if member is not None and member.library_kind == pin.library_kind:
-            result[pin.template_uid] = (f"world:{world.world_uid}:library_pins",)
+            result[pin.template_uid] = (world_consumer(world.world_uid, "library_pins"),)
     return result
 
 

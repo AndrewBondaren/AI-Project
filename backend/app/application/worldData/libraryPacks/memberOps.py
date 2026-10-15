@@ -17,7 +17,7 @@ from app.application.worldData.libraryPacks.packResults import MemberDeleteResul
 from app.application.worldData.libraryPacks.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
-from app.ids import LibraryKind
+from app.ids import LibraryKind, UID_PART_SEPARATOR
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,9 @@ def _validate_local_uid(local_uid: str) -> str:
     local_uid = (local_uid or "").strip()
     if not local_uid:
         raise LibraryPackValidationError("local_uid is required")
-    if "|" in local_uid:
+    if UID_PART_SEPARATOR in local_uid:
         raise LibraryPackValidationError(
-            f"local_uid must not contain '|': {local_uid!r}"
+            f"local_uid must not contain {UID_PART_SEPARATOR!r}: {local_uid!r}"
         )
     return local_uid
 

@@ -1,4 +1,5 @@
 from app.ids.deterministicIds import (
+    UID_PART_SEPARATOR,
     entity_rng,
     entity_uid,
     library_uid,
@@ -14,6 +15,7 @@ from app.ids.uidKind import LibraryKind, UidKind
 
 __all__ = [
     "LibraryKind",
+    "UID_PART_SEPARATOR",
     "UidKind",
     "entity_rng",
     "entity_uid",

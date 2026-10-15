@@ -66,5 +66,7 @@ class StructurePackAdapter(_LibraryBodyMixin, PackDomainAdapter):
     def prepare_world_refs(self, world, uid_map, members):
         from copy import deepcopy
         result = deepcopy(world)
-        remap_pins(result, uid_map)
+        pins = remap_pins(result, uid_map)
+        if pins is not None:
+            result.library_pins = pins
         return result

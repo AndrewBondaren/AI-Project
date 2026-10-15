@@ -109,7 +109,7 @@ class LibraryPackService:
         system_name: str,
         pack_name: str | None = None,
         display_name: str | None = None,
-        version: str = "1.0",
+        version: str = LibraryPackRow.version,
         owner_world_uid: str | None = None,
         dependencies: Iterable[str] = (),
     ) -> LibraryPackRow:

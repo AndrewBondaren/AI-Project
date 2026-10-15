@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
+from app.application.worldData.bundle import SOURCE_FILE_BUNDLE
 from app.application.worldData.reliefTerrainSync import (
     merge_missing_terrain_entries,
 )
@@ -100,7 +101,7 @@ class ReliefWorldImportService:
             row = await self._attach_member(
                 world_uid,
                 outline,
-                source_file="bundle",
+                source_file=SOURCE_FILE_BUNDLE,
                 member=legacy_member_row(
                     LibraryKind.RELIEF_TEMPLATES, outline.system_name,
                     world_uid=world_uid,

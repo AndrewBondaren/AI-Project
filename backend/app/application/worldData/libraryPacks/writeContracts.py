@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.ids import LibraryKind
+from app.ids import LibraryKind, UID_PART_SEPARATOR
 
 if TYPE_CHECKING:
     from app.application.worldData.libraryPacks.writeInspectionContracts import WriteInspectionState
@@ -63,7 +63,7 @@ class LibraryWriteItem(BaseModel):
     def validate_destination(self):
         if self.target_system_name is not None and (
             self.object_kind is not WriteObjectKind.PACK or self.source.kind is not WriteSourceKind.IMPORT
-            or not self.target_system_name.strip() or "|" in self.target_system_name
+            or not self.target_system_name.strip() or UID_PART_SEPARATOR in self.target_system_name
             or self.target_system_name != self.target_system_name.strip()
         ):
             raise ValueError("target_system_name requires a normalized imported pack identity")
@@ -92,8 +92,11 @@ class LibraryWriteSelection(BaseModel):
         elif self.target_uid is not None:
             raise ValueError("copy must not select an existing target_uid")
         if self.copy_system_name is not None:
-            if not self.copy_system_name.strip() or "|" in self.copy_system_name:
-                raise ValueError("copy_system_name must be a nonempty identity key without '|'")
+            if not self.copy_system_name.strip() or UID_PART_SEPARATOR in self.copy_system_name:
+                raise ValueError(
+                    f"copy_system_name must be a nonempty identity key "
+                    f"without {UID_PART_SEPARATOR!r}"
+                )
             if self.copy_system_name != self.copy_system_name.strip():
                 raise ValueError("copy_system_name must be normalized")
         return self

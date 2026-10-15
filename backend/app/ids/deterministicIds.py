@@ -27,7 +27,7 @@ from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 from app.ids.uidKind import LibraryKind, UidKind
 
-_SEP = "|"
+UID_PART_SEPARATOR = "|"
 
 
 def _normalize(value: Any) -> str:
@@ -50,7 +50,7 @@ def _canonical(root: str, kind: UidKind, keys: dict[str, Any]) -> str:
     parts = [str(root), UidKind(kind).value]
     for name in sorted(keys):
         parts.append(f"{name}={_normalize(keys[name])}")
-    return _SEP.join(parts)
+    return UID_PART_SEPARATOR.join(parts)
 
 
 def _hash(canonical: str) -> str:
@@ -86,17 +86,26 @@ def library_uid(
     ``"{library}|{system_name}"`` (bit-compatible, for domains not yet
     migrated to packs). Pack-owned identity puts the owner in the root
     slot of the canonical form: ``"{pack_uid}|{library}|local_uid={system_name}"``.
-    ``_SEP`` is rejected in inputs so the serialization cannot be ambiguous.
+    ``UID_PART_SEPARATOR`` is rejected in inputs so the serialization cannot
+    be ambiguous.
     """
     lib = LibraryKind(library).value
-    if _SEP in system_name:
-        raise ValueError(f"det-id system_name must not contain {_SEP!r}")
+    if UID_PART_SEPARATOR in system_name:
+        raise ValueError(
+            f"det-id system_name must not contain {UID_PART_SEPARATOR!r}"
+        )
     if pack_uid is None:
-        return _hash(f"{lib}{_SEP}{system_name}")
+        return _hash(f"{lib}{UID_PART_SEPARATOR}{system_name}")
     pack = str(pack_uid)
-    if not pack or _SEP in pack:
-        raise ValueError(f"det-id pack_uid must be a non-empty uid without {_SEP!r}")
-    return _hash(f"{pack}{_SEP}{lib}{_SEP}local_uid={system_name}")
+    if not pack or UID_PART_SEPARATOR in pack:
+        raise ValueError(
+            f"det-id pack_uid must be a non-empty uid without "
+            f"{UID_PART_SEPARATOR!r}"
+        )
+    return _hash(
+        f"{pack}{UID_PART_SEPARATOR}{lib}{UID_PART_SEPARATOR}"
+        f"local_uid={system_name}"
+    )
 
 
 def runtime_uid() -> str:
@@ -110,10 +119,16 @@ def remapped_library_uid(
     """Identity of a full-pack copy; readable names never enter the formula."""
     if not target_pack_uid or not source_template_uid:
         raise ValueError("target pack and source member uids are required")
-    if any(_SEP in value for value in (target_pack_uid, source_template_uid)):
-        raise ValueError("remap uids must not contain '|'")
+    if any(
+        UID_PART_SEPARATOR in value
+        for value in (target_pack_uid, source_template_uid)
+    ):
+        raise ValueError(
+            f"remap uids must not contain {UID_PART_SEPARATOR!r}"
+        )
     return _hash(
-        f"{target_pack_uid}|{LibraryKind(library).value}|source_template_uid={source_template_uid}"
+        f"{target_pack_uid}{UID_PART_SEPARATOR}{LibraryKind(library).value}"
+        f"{UID_PART_SEPARATOR}source_template_uid={source_template_uid}"
     )
 
 

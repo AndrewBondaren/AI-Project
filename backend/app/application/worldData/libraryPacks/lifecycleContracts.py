@@ -60,6 +60,24 @@ class MemberRef:
         return f"{self.consumer}:{self.path}"
 
 
+# ``MemberRef.consumer`` conventions — one prefix per consumer kind.
+WORLD_CONSUMER_PREFIX = "world:"
+NAMED_LOCATION_CONSUMER_PREFIX = "named_location:"
+# ``MemberRef.path`` prefix for the relief pick-policy column.
+RELIEF_POLICY_FIELD = "relief_pick_policy"
+
+
+def world_consumer(world_uid: str, *parts: str) -> str:
+    """``MemberRef.consumer`` of a world-column ref — ``world:{uid}[:part…]``."""
+    consumer = f"{WORLD_CONSUMER_PREFIX}{world_uid}"
+    return f"{consumer}:{':'.join(parts)}" if parts else consumer
+
+
+def named_location_consumer(location_uid: str) -> str:
+    """``MemberRef.consumer`` of a persisted NamedLocation template ref."""
+    return f"{NAMED_LOCATION_CONSUMER_PREFIX}{location_uid}"
+
+
 @dataclass(frozen=True)
 class FieldChange:
     path: tuple[str | int, ...]
