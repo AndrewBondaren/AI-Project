@@ -432,6 +432,32 @@ FS domain root резолвится через env
 fallback; зависимость от `Path.cwd()` запрещена. Opt-out — отсутствие spec;
 instance-каталоги (resource/crops/livestock) spec не объявляют.
 
+**Аудит global библиотек, шаг 7 (2026-10-16):**
+
+- Plot/building/structure: global specs A5, pack-owned `template_uid`,
+  atomic fill-missing graph в общей UOW; источники объявлены явно,
+  см. [building §6.1](tz_building_generator.md#61-загрузка-в-глобальную-библиотеку).
+- Relief: global `RELIEF_CANONICAL_SPEC`, identity `template_uid`, пустой
+  default-набор; find/get/list проходят через `ensure_canonical` без записи
+  и FS-сканирования. Generation — только membership-каталог, R21 сохраняется;
+  см. [relief — библиотека и мир](tz_terrain_relief.md#библиотека-и-мир).
+- Barrier/district/purpose: opt-out global spec, inline world lists;
+  существующий T-29 canonical⊕world по `system_type`/`system_name`/`system_pack`.
+  Источники и политика — в [locations](tz_locations.md),
+  [city §9](tz_city_generation.md#9-шаблоны-районов-district_template_registry),
+  [building §2.1](tz_building_generator.md).
+- Canal: opt-out global spec; inline world list по `system_type`, POJO defaults
+  пусты; [relief — canal registry](tz_terrain_relief.md).
+- Race/perk: opt-out autoattach; SQL rows по `template_uid` из явного import/create,
+  availability через world pointers; [race](tz_races.md),
+  [WB-13/14](tz_world_bundle.md#c-пока-не-library-секции).
+- Lore: opt-out global spec; world map по lore id, POJO fallback при пустом map;
+  [архитектурный стиль — lore](tz_architectural_style.md#1-текущий-статус).
+
+Эти opt-out не вводят новых defaults, global bypass или pack-ownership для
+inline/pointer доменов. Их перевод в библиотеки остаётся deferred per-domain
+фазой плана `library-packs-model`.
+
 **Чеклист нового POJO на `worlds`:**
 
 1. POJO + field policies

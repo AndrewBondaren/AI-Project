@@ -31,7 +31,7 @@ class ReliefDebtFollowupTest(unittest.IsolatedAsyncioTestCase):
                 await svc.import_path(outsider, domain_root=root)
             self.assertIn("outside relief domain root", str(ctx.exception))
 
-    def test_resolve_domain_root_default_cwd(self) -> None:
+    def test_resolve_domain_root_default_repo_relative(self) -> None:
         root = resolve_relief_domain_root()
         self.assertEqual(root.name, "relief_templates")
 

@@ -6,12 +6,12 @@ from app.application.worldData.libraryPacks.templateCanonicalPersistence import 
     TemplateCanonicalContext, template_canonical_spec,
 )
 from app.application.worldData.libraryPacks.templateCanonicalSource import (
-    SOURCE_ROOT, load_canonical_template_graph,
+    load_canonical_template_graph,
 )
 
 
 class TemplateCanonicalService:
-    def __init__(self, *, db, catalog, source_root: Path = SOURCE_ROOT):
+    def __init__(self, *, db, catalog, source_root: Path | None = None):
         self._db, self._catalog, self._root = db, catalog, source_root
 
     async def ensure(self):

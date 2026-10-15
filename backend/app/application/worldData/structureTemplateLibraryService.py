@@ -45,7 +45,7 @@ def resolve_structures_domain_root() -> Path:
     env = os.environ.get(_ENV_ROOT)
     if env:
         return Path(env).expanduser().resolve()
-    return (Path.cwd() / DOMAIN_ROOT).resolve()
+    return Path(__file__).resolve().parents[4] / DOMAIN_ROOT
 
 
 class StructureTemplateLibraryService:
@@ -66,6 +66,7 @@ class StructureTemplateLibraryService:
         self._ensure_provider = ensure_provider
 
     async def find_by_uid(self, template_uid: str) -> StructureTemplateRow | None:
+        """Internal writer lookup; public reads use get/list with canonical attach."""
         return await self._repo.get_by_uid(template_uid)
 
     async def get_by_uid(self, template_uid: str) -> StructureTemplateRow:

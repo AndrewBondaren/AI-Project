@@ -7,6 +7,12 @@
 
 ## 1. Текущий статус
 
+**Opt-out global canonical attach lore (library-packs, шаг 7, 2026-10-16):**
+`worlds.lore_registry` — inline map мира, identity — ключ map (`glossary_ref` /
+`lore_ref`). Источник — world map; при пустом реестре применяется
+`WorldLoreRegistry.canonical_defaults()` через WorldSlice. SQL library/FS-паков
+и global spec нет; T-29 list merge не применяется. Pack migration lore deferred.
+
 `architectural_style` — поле `CitySkeleton` и `NamedLocation` поселения.  
 Используется **только LLM** для визуального языка описаний через `lore_registry[glossary_ref]`.
 

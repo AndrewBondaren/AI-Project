@@ -14,6 +14,7 @@ from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSna
 from app.application.worldData.libraryPacks.manifest import load_pack_manifest, source_file_label
 from app.application.worldData.libraryPacks.packCatalog import member_rows_for
 from app.application.worldData.libraryPacks.templateGraphValidation import template_graph_issues
+from app.application.worldData.structureTemplateLibraryService import resolve_structures_domain_root
 from app.dataModel.libraryPacks.packManifest import LibraryPackManifest, LibraryPackManifestMember
 from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import (
     CANONICAL_PLOT_NAMES, canonical_defaults,
@@ -64,9 +65,12 @@ def _generated_pack(kind, system_name, bodies, dependencies):
     return CanonicalTemplatePack(kind, manifest, tuple(entries))
 
 
-def load_canonical_template_graph(root: Path = SOURCE_ROOT) -> tuple[CanonicalTemplatePack, ...]:
+def load_canonical_template_graph(root: Path | None = None) -> tuple[CanonicalTemplatePack, ...]:
     """Every source is checked before the caller opens its attach transaction."""
-    structure_root = root / "structures_templates"
+    # Explicit roots isolate authored-source tests; production uses the same
+    # env/repo-relative domain root as explicit FS imports.
+    structure_root = root / "structures_templates" if root is not None else resolve_structures_domain_root()
+    root = root if root is not None else SOURCE_ROOT
     loaded = load_pack_manifest(structure_root / "base", domain_root=structure_root,
                                 library_kind=LibraryKind.STRUCTURE_TEMPLATES)
     if loaded.manifest.system_name != STRUCTURES_BASE_SYSTEM_NAME:

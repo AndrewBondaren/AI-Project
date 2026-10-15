@@ -516,6 +516,13 @@ L0 restamp полотна новых world-рёбер на уже записан
 
 ## 9. Шаблоны районов (`district_template_registry`)
 
+**Opt-out global canonical attach (library-packs, шаг 7, 2026-10-16):**
+district templates — inline world-реестр, источник
+`WorldDistrictTemplateRegistry.canonical_defaults()` + world entries,
+identity — `system_name`. Runtime T-29 объединяет канон и overrides по ключу;
+SQL library/FS-паков и global spec нет. Pack migration этого домена deferred,
+не часть подключения plot/building/structure-библиотек.
+
 > **Impl:** ✅ core — `planner/placement.py`, `planner/districts.py`, `DistrictAssembler`. См. settlement-assembler Phase A–C.
 
 Район — **тип** (`district_type`) + **подтип** (`district_subtype`) плюс **чертёж** в `district_template_registry`. Сначала пара type/subtype по приоритету §1.2 и зоне клетки footprint (§9.6); `DistrictAssembler` получает уже выбранный чертёж. Не путать с `structure_type` библиотеки зданий.

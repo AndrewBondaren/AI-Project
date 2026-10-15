@@ -183,6 +183,14 @@ relief_templates:   [ … ]   # legacy flat input → world-owned legacy pack
 
 ### C. Пока не library-секции
 
+**Opt-out canonical autoattach race/perk (library-packs, шаг 7, 2026-10-16):**
+источник SQL bodies — явный import/create (`RaceTemplateOutline` /
+`PerkTemplateOutline`), identity — `template_uid`; мир допускает только UID
+из `race_template_registry` / `perk_template_registry`. Объявленных default
+bodies/FS-паков и global `CanonicalLibrarySpec` нет. POJO defaults полей
+не являются источником новых SQL rows. Эти две библиотеки остаются на WB-13/14;
+перевод в pack membership — отдельная deferred per-domain миграция.
+
 | Данные | Почему |
 |---|---|
 | `barrier_template_registry` | Inline bodies на world; optional global barrier library = отдельный epic |

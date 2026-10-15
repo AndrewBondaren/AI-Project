@@ -1,7 +1,9 @@
 """A5: typed canonical source, graph-wide atomic fill and public read triggers."""
 import asyncio
 import json
+import os
 import shutil
+from contextlib import chdir
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -19,6 +21,7 @@ from app.ids import LibraryKind, runtime_uid
 from app.application.worldData.libraryPacks.refResolve import TemplateRef
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.libraryPacks.errors import LibraryPackReadOnlyError
+from app.application.worldData.structureTemplateLibraryService import resolve_structures_domain_root
 
 S, B, P = LibraryKind.STRUCTURE_TEMPLATES, LibraryKind.BUILDING_TEMPLATES, LibraryKind.PLOT_TEMPLATES
 
@@ -48,6 +51,60 @@ class TemplateDomainCanonicalTests(_ServiceCase):
         self.assertEqual({m.template_uid for m in members}, set(self.records))
         self.assertFalse(template_graph_issues(CatalogSnapshot(
             {m.template_uid: m for m in members}, bodies, {})))
+
+    async def test_structure_public_reads_are_independent_of_working_directory(self):
+        record = self.first(S)
+        service = self.container.structure_template_library_service()
+        with patch.dict(os.environ, {"STRUCTURES_TEMPLATES_ROOT": ""}):
+            for cwd in (SOURCE_ROOT, SOURCE_ROOT / "backend"):
+                with self.subTest(cwd=cwd), chdir(cwd):
+                    self.assertEqual(resolve_structures_domain_root(), SOURCE_ROOT / "structures_templates")
+                    # A fresh missing body must be attached from either cwd.
+                    await self.repo(S).delete(record.member.template_uid)
+                    row = await service.get_by_uid(record.member.template_uid)
+                    self.assertEqual(row.data, record.row.data)
+                    self.assertEqual(row.source_file, record.row.source_file)
+        await self.assert_complete()
+
+    async def test_public_reads_use_env_root_and_keep_sql_override(self):
+        root = Path(self.tmp.name) / "external_structures"
+        shutil.copytree(SOURCE_ROOT / "structures_templates/base", root / "base")
+        record = self.first(S)
+        pack = next(pack for pack in self.graph if pack.kind == S)
+        declaration = next(m for m in pack.manifest.members if m.template_uid == record.member.template_uid)
+        path = root / declaration.source_file
+        body = json.loads(path.read_text(encoding="utf-8"))
+        body["display_name"] = "External canonical source"
+        path.write_text(json.dumps(body), encoding="utf-8")
+        # Neither arbitrary packs nor lone files are canonical sources.
+        (root / "user").mkdir()
+        (root / "user/pack.manifest.json").write_text("{broken", encoding="utf-8")
+        (root / "lone.json").write_text("{broken", encoding="utf-8")
+        service = self.container.structure_template_library_service()
+        with patch.dict(os.environ, {"STRUCTURES_TEMPLATES_ROOT": str(root)}):
+            self.assertEqual(resolve_structures_domain_root(), root.resolve())
+            rows = await service.list_all()
+            row = next(row for row in rows if row.template_uid == record.member.template_uid)
+            self.assertEqual(row.display_name, "External canonical source")
+            self.assertEqual(row.source_file, record.row.source_file)
+            changed = replace(row, display_name="User override", source_file="user/override.json",
+                              data={**row.data, "display_name": "User override"})
+            await self.repo(S).upsert(changed)
+            self.assertEqual(await service.get_by_uid(row.template_uid), changed)
+            self.assertEqual(await self.repo(S).get_by_uid(row.template_uid), changed)
+        await self.assert_complete()
+
+    async def test_invalid_env_source_does_not_fall_back_or_write_sql(self):
+        root = Path(self.tmp.name) / "invalid_structures"
+        (root / "base").mkdir(parents=True)
+        (root / "base/pack.manifest.json").write_text("{broken", encoding="utf-8")
+        service = self.container.structure_template_library_service()
+        with patch.dict(os.environ, {"STRUCTURES_TEMPLATES_ROOT": str(root)}):
+            with self.assertRaises(ValueError):
+                await service.list_all()
+        self.assertFalse(await self.packs.list_all())
+        for kind in (S, B, P):
+            self.assertFalse(await self.repo(kind).list_all())
 
     async def test_fresh_public_catalog_load_attaches_whole_scoped_graph_by_uid(self):
         await self._world("w1")

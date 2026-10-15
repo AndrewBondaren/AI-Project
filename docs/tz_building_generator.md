@@ -84,6 +84,12 @@ UID-ссылкой. Исторические name-based SQL/JSON library snippet
 - `dungeon` — морфология поселения, не лист. `lamp_post` — не plot-purpose (уличная мебель).
 - **Код:** дерево семей / листьев в файлах семей + `catalog.py`. Рецепты паков — `WorldPurposePackRegistry` (`worlds.purpose_pack_registry`); включённые id — `worlds.purpose_packs` (omit/`[]` → `[base, fantasy]`; `base` всегда). `allowed` рецепта ссылается на enum семьи/листа, не на строковый хардкод. Район `allowed` expand семьи перед like/strict. Packing ∩ enabled.
 
+**Opt-out global canonical attach purpose packs (library-packs, шаг 7):**
+источник рецептов — `WorldPurposePackRegistry.canonical_defaults()` + world
+entries, identity — `system_pack`; runtime T-29 + frozen `base` сохраняются.
+`WorldPurposePacks` задаёт включённые id. Это маски назначений на мире,
+без SQL library/FS-паков и global spec; перенос в pack library deferred.
+
 Эпоха сеттинга — **не** родитель здания. `temple` — семья `culture`, `hospital` — `public`; какие листья живы — решают паки (`base` + сеттинг).
 
 #### Антипаттерн: пак на листе дерева
@@ -1393,6 +1399,15 @@ layout остаётся правилом конвертации, не runtime-к
 ## 6. Загрузка и импорт шаблонов
 
 ### 6.1 Загрузка в глобальную библиотеку
+
+**Аудит global attach (шаг 7, 2026-10-16):** plot layouts — members
+`plot_templates`, building bodies — members `building_templates`, structures —
+members `structure_templates`. Три global `CanonicalLibrarySpec` уже
+подключены в A5: источники — явно перечисленные plot fixtures,
+их standard `main_building` и `structures_templates/base`; identity —
+pack-owned `template_uid`; attach — atomic fill-missing тел, membership и deps
+в общей UOW. Непосредственный выбор — UID, defaults параметров — POJO.
+Отдельной POJO-only библиотеки plot layouts или специального selector нет.
 
 - Пользователь загружает JSON-файл через UI (аналог импорта миров, см. tz_json_import.md)
 - Один файл = один шаблон

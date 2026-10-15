@@ -104,6 +104,14 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 **A0, 2026-10-14:** [доменные библиотеки §3/6/7](tz_domain_template_libraries.md).
 После 5b availability = default-паки ∪ world-owned паки, не pointers.
 Relief default bodies по-прежнему не объявлены; smoke_003 user pack.
+**Global canonical spec (шаг 7, 2026-10-16):** `RELIEF_CANONICAL_SPEC`
+объявляет scope `global`, identity `template_uid`, `global_fill_missing` и
+явно пустой источник тел/паков. Библиотечные find/get/list вызывают общий
+`ensure_canonical` без мира; при пустом источнике SQL и FS не меняются.
+Повторные/конкурентные чтения сохраняют пользовательские тела и `source_file`.
+Корень явного FS-импорта: `RELIEF_TEMPLATES_ROOT` → repo-relative
+`relief_templates/`, независимо от cwd. Generation остаётся на эффективном
+каталоге мира, без административного global lookup; отказ R21 сохраняется.
 Context pick-кандидата берётся из body, порядок — template_uid; pins не
 фильтр. Fixed ref — member UID; R21 отказ сохраняется, warning не дублируется.
 
@@ -195,6 +203,13 @@ Runtime: `EarthenCanal` XOR `StructureCanal` (`dataModel/terrain/relief/canal.py
 Плоский `structure_refs` на knobs с earthen = BAR-1 fence, не тело canal.
 
 **`worlds.canal_template_registry`** (не inline в каждом case):
+
+**Opt-out global canonical attach (шаг 7):** это inline world-реестр,
+источник — `WorldCanalTemplateRegistry.canonical_defaults()` (пустой список)
+и явно заданные world entries, identity — `system_type`. Отдельной SQL
+library/FS-паков и global spec нет; WorldSlice сохраняет существующую
+валидацию/полный список мира. Перевод в pack library — deferred per-domain
+миграция из `library-packs-model`, не autoattach relief-паков.
 
 | Поле | |
 |---|---|

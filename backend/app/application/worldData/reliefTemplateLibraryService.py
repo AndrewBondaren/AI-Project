@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from app.application.worldData.libraryPacks.writeResults import PolicyRequired
 
 from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
+from app.application.canonicalLibrary import ensure_canonical
+from app.application.worldData.libraryPacks.reliefCanonicalSpec import RELIEF_CANONICAL_SPEC
 
 import logging
 import os
@@ -46,7 +48,7 @@ def resolve_relief_domain_root() -> Path:
     env = os.environ.get(_ENV_ROOT)
     if env:
         return Path(env).expanduser().resolve()
-    return (Path.cwd() / DOMAIN_ROOT).resolve()
+    return Path(__file__).resolve().parents[4] / DOMAIN_ROOT
 
 
 class ReliefTemplateLibraryService:
@@ -65,6 +67,7 @@ class ReliefTemplateLibraryService:
         self._write_provider = write_provider
 
     async def find_by_uid(self, template_uid: str) -> ReliefTemplateRow | None:
+        await ensure_canonical(RELIEF_CANONICAL_SPEC, self._db)
         return await self._repo.get_by_uid(template_uid)
 
     async def get_by_uid(self, template_uid: str) -> ReliefTemplateRow:
@@ -74,6 +77,7 @@ class ReliefTemplateLibraryService:
         return row
 
     async def list_all(self) -> list[ReliefTemplateRow]:
+        await ensure_canonical(RELIEF_CANONICAL_SPEC, self._db)
         return await self._repo.list_all()
 
     async def persist_prepared(self, outline, *, template_uid, source_file, added):

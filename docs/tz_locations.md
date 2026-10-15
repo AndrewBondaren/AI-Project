@@ -1397,6 +1397,13 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 ### `worlds.barrier_template_registry` (N+1)
 
+**Opt-out global canonical attach (library-packs, шаг 7, 2026-10-16):**
+barrier templates остаются inline world-реестром. Источник —
+`WorldBarrierTemplateRegistry.canonical_defaults()` + world entries,
+identity — `system_type`; runtime T-29 объединяет канон и overrides по этому
+ключу. SQL library/FS-паков и global spec нет. Перенос в pack library —
+отдельная deferred per-domain миграция; текущую семантику WorldSlice не менять.
+
 Чертежи барьеров без interior. Любой инстанс `PerimeterBarrier.template` ссылается сюда (`wooden_fence`, `stone_fence`, **`city_wall`** — шаблон для **поселения**, не «вместо» класса). Не несущие стены комнат.
 
 ```json

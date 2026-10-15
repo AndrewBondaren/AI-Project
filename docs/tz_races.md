@@ -12,6 +12,16 @@ metadata:
 
 ## Назначение
 
+**Global library audit (library-packs, шаг 7, 2026-10-16):** актуальное
+хранение — `race_templates`, wire body `RaceTemplateOutline`, identity
+`template_uid`; world availability — `race_template_registry` pointers
+(`system_template_uid`), согласно WB-13 в [world bundle](tz_world_bundle.md).
+**Opt-out canonical autoattach:** источник тел — явный import/create,
+объявленного набора default bodies/FS-паков нет, global spec отсутствует.
+POJO defaults полей не создают библиотечных записей. Перевод race в pack
+membership — deferred per-domain миграция, существующая семантика не меняется.
+Ниже legacy-описание `races`/`race_uid` следует читать с rename WB-13.
+
 Race contract — **отдельная подсистема**, не N1-W vocabulary на `worlds`.
 
 | | N1-W (`material_registry` on `worlds`) | **Race contract** |
