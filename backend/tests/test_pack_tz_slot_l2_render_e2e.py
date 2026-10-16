@@ -24,7 +24,7 @@ from app.application.worldData.pack.refine.fineTileContext import (
 from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.application.worldData.render.packMapGridRender import PackMapGridRender
 from app.application.worldData.render.renderPayloads import LEVEL_SURFACE_GRADE, LEVEL_SURFACE_Z
 from app.db.models.mapCell import MapCell

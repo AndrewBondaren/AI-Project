@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from app.api.schemas.imports import ImportResult
-from app.application.worldData.mapCellService import LayerKind, MapCellService
+from app.application.worldData.mapCells.mapCellService import LayerKind, MapCellService
 from app.db.models.mapCell import MapCell
 
 

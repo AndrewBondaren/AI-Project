@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.application.worldData.render.locationGridRenderer import LocationGridRenderer
 from app.application.worldData.render.renderPayloads import (
     LocationEntryPayload,

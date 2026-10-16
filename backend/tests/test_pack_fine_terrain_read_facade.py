@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.worldPack import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun, WorldMapCellWire
 
 

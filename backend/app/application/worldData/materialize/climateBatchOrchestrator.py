@@ -27,7 +27,7 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
     run_pole_resolve_pass,
 )
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_climate_batch_done,
@@ -40,7 +40,7 @@ from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
 if TYPE_CHECKING:
-    from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
+    from app.application.worldData.mapCells.bootstrapMapCellWriter import BootstrapMapCellWriter
 
 logger = logging.getLogger(__name__)
 

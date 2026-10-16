@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.db.database import Database
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World

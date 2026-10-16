@@ -24,7 +24,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.timings
 )
 from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,

@@ -78,8 +78,8 @@ from app.application.worldBundle.registry import build_bundle_handlers
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
-from app.application.worldData.mapCellService import MapCellService
-from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
+from app.application.worldData.mapCells.mapCellService import MapCellService
+from app.application.worldData.mapCells.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.materialize.climateBatchOrchestrator import ClimateBatchOrchestrator
 from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
@@ -106,10 +106,10 @@ from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
-from app.application.worldData.mapCellReadService import MapCellReadService
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellReadService import MapCellReadService
 from app.application.worldData.pack.read.packReadServices import PackReadServices, build_pack_read_services
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator

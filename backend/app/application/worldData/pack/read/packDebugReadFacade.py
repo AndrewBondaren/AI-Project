@@ -12,14 +12,14 @@ from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackR
 from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, tile_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.patchCellContribution import map_cell_to_patch_contribution
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.worldPack.layerPriority import MapLayerKind
 from app.dataModel.worldPack.mergeMapCells import LayerSlice, merge_layers
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 if TYPE_CHECKING:
-    from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+    from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 
 
 class PackDebugReadFacade:

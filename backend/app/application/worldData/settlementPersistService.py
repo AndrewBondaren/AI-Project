@@ -20,7 +20,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementLayout,
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.application.worldData.settlementPersistScope import (
     OUTDOOR_SCOPES,
     SettlementPersistScope,

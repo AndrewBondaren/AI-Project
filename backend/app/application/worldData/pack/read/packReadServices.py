@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.read.packDebugReadFacade import PackDebugReadFacade
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
 from app.application.worldData.pack.read.packFineTerrainReadFacade import PackFineTerrainReadFacade
 from app.application.worldData.pack.read.packLoadingProgressFacade import PackLoadingProgressFacade
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.packRenderReadFacade import PackRenderReadFacade
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 
 
 @dataclass(frozen=True)

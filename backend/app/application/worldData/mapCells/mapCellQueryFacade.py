@@ -10,7 +10,7 @@ from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackR
 from app.application.worldData.pack.read.packMapHelpers import tile_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to_map_cell
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.layerPriority import MapLayerKind
 from app.dataModel.worldPack.mergeMapCells import CellContribution, LayerSlice, MergedCellView, merge_layers

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
+from app.application.worldData.mapCells.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.db.database import Database
 from app.db.models.mapCell import MapCell
 from app.db.repositories.sqlite.mapCellRepository import SqliteMapCellRepository

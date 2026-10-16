@@ -25,7 +25,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy

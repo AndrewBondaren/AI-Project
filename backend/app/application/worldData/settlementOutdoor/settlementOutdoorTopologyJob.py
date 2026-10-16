@@ -11,7 +11,7 @@ from app.application.jsonValidation.worldRow import transition_types
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_topology_batch_done,
     log_pack_settlement_topology_batch_start,

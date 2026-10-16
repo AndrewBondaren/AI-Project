@@ -12,7 +12,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementGeneratorService,
 )
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_c11_start,
     log_pack_settlement_skip_not_in_index,
