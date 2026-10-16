@@ -1,4 +1,4 @@
-from app.api.schemas.imports import ImportError, ImportResult
+from app.application.imports.result import ImportError, ImportResult
 from app.application.worldData.errors import WorldDataValidationError
 from app.db.database import Database
 

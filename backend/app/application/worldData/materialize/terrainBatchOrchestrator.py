@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, replace
 
-from app.api.schemas.imports import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
 )

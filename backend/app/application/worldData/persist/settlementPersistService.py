@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 
-from app.api.schemas.imports import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.worldData.persist.connectionPersistService import (
     ConnectionPersistResult,
     ConnectionPersistService,

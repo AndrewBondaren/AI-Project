@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 
-from app.api.schemas.imports import ImportResult
+from app.application.imports.result import ImportResult
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionEdgeCell import ConnectionEdgeCell
 from app.db.models.connectionNode import ConnectionNode

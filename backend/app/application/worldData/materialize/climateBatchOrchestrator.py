@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from app.api.schemas.imports import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.worldData.materialize.chunkComputePool import ChunkComputePool, split_contiguous_batches
 from app.application.worldData.generators.assemblers.climateAssembler.passes.anchorCollectPass import (
     run_anchor_collect_pass,
