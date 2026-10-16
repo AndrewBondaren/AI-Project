@@ -9,7 +9,7 @@ from app.application.worldData.pack.read.packMapHelpers import (
     world_map_sample_index,
 )
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.lightMosaicFrame import MosaicFrame
+from app.application.worldData.render.light.lightMosaicFrame import MosaicFrame
 from app.dataModel.locations.locationFootprintPolicy import is_settlement_map_site
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry

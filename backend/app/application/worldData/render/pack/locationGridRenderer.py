@@ -6,7 +6,7 @@ from app.application.worldData.generators.structure.gridRenderer import render_a
 from app.application.worldData.render.gridAxes import format_grid_header
 from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.structureAsciiSymbols import render_structure_legend
-from app.application.worldData.render.worldGridRenderer import cell_symbol
+from app.application.worldData.render.worldMap.worldGridRenderer import cell_symbol
 from app.db.models.mapCell import MapCell
 
 

@@ -5,12 +5,12 @@ from __future__ import annotations
 import unittest
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.lightMapCells import wire_symbol
-from app.application.worldData.render.locationPinOverlay import (
+from app.application.worldData.render.light.lightMapCells import wire_symbol
+from app.application.worldData.render.pack.locationPinOverlay import (
     l0_settlement_glyph,
     overlay_location_pins,
 )
-from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
+from app.application.worldData.render.pack.worldMapPackRenderer import WorldMapPackRenderer
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.namedLocation import NamedLocation

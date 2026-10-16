@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
 from app.application.worldData.render.fineTerrainAsciiKernel import draw_symbol_grid
-from app.application.worldData.render.lightMapCells import wire_grade_symbol
-from app.application.worldData.render.lightMosaicFrame import (
+from app.application.worldData.render.light.lightMapCells import wire_grade_symbol
+from app.application.worldData.render.light.lightMosaicFrame import (
     MosaicFrame,
     TileIndex,
     cell_at_world,

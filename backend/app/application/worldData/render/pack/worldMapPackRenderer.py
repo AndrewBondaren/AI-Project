@@ -9,16 +9,16 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_int_grid,
     draw_symbol_grid,
 )
-from app.application.worldData.render.lightMapCells import wire_grade_symbol, wire_symbol
-from app.application.worldData.render.lightMapPins import location_mark_pins, pin_macros, pin_world_xy
-from app.application.worldData.render.lightMosaic import (
+from app.application.worldData.render.light.lightMapCells import wire_grade_symbol, wire_symbol
+from app.application.worldData.render.light.lightMapPins import location_mark_pins, pin_macros, pin_world_xy
+from app.application.worldData.render.light.lightMosaic import (
     collect_height_values,
     collect_mask_symbols,
     collect_tile_height_values,
     collect_tile_mask_symbols,
     render_all_tiles,
 )
-from app.application.worldData.render.lightMosaicFrame import (
+from app.application.worldData.render.light.lightMosaicFrame import (
     MosaicFrame,
     resolve_mosaic_frame,
 )
@@ -27,11 +27,11 @@ from app.application.worldData.render.mapSymbols import (
     render_height_legend,
     render_map_legend,
 )
-from app.application.worldData.render.worldMapGradeOverlay import (
+from app.application.worldData.render.worldMap.worldMapGradeOverlay import (
     render_light_grade_mosaic as _grade_mosaic,
     render_tile_light_grade_grid as _tile_grade,
 )
-from app.application.worldData.render.worldMapMacroRender import (
+from app.application.worldData.render.worldMap.worldMapMacroRender import (
     render_macro as _macro,
     render_macro_bbox as _macro_bbox,
 )

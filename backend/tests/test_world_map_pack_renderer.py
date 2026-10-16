@@ -3,7 +3,7 @@
 import unittest
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.worldMapPackRenderer import (
+from app.application.worldData.render.pack.worldMapPackRenderer import (
     WorldMapPackRenderer,
     wire_symbol,
 )
@@ -32,7 +32,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         self.assertEqual(wire_symbol(earth), "_")
 
     def test_wire_grade_symbol_arrows(self):
-        from app.application.worldData.render.worldMapPackRenderer import wire_grade_symbol
+        from app.application.worldData.render.pack.worldMapPackRenderer import wire_grade_symbol
 
         empty = WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains")
         slope = WorldMapCellWire(

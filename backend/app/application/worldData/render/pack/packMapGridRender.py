@@ -10,9 +10,9 @@ from app.application.worldData.pack.read.packRenderReadFacade import (
     PackWorldMapRenderSource,
 )
 from app.application.worldData.render.gradeRayDump import GradeSlotIndex
-from app.application.worldData.render.locationCityPackRenderer import LocationCityPackRenderer
-from app.application.worldData.render.locationPinOverlay import overlay_location_pins
-from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
+from app.application.worldData.render.pack.locationCityPackRenderer import LocationCityPackRenderer
+from app.application.worldData.render.pack.locationPinOverlay import overlay_location_pins
+from app.application.worldData.render.pack.locationTerrainPackRenderer import LocationTerrainPackRenderer
 from app.application.worldData.render.renderPayloads import (
     LEVEL_GRADE,
     LEVEL_HEIGHT,
@@ -26,8 +26,8 @@ from app.application.worldData.render.renderPayloads import (
     WorldTileGridsPayload,
 )
 from app.application.worldData.render.structureAsciiSymbols import render_structure_legend
-from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
-from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
+from app.application.worldData.render.pack.wildernessTilePackRenderer import WildernessTilePackRenderer
+from app.application.worldData.render.pack.worldMapPackRenderer import WorldMapPackRenderer
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.worldBounds import WorldBounds
 from app.db.models.namedLocation import NamedLocation

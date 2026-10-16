@@ -3,7 +3,7 @@
 import unittest
 
 from app.application.worldData.render.gradeRayDump import GradeRayIndex
-from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
+from app.application.worldData.render.pack.locationTerrainPackRenderer import LocationTerrainPackRenderer
 from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE,
     LEVEL_SURFACE_GRADE,

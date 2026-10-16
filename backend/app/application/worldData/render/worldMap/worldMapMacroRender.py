@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
 from app.application.worldData.render.fineTerrainAsciiKernel import draw_symbol_grid
-from app.application.worldData.render.lightMapCells import wire_symbol
-from app.application.worldData.render.lightMosaicFrame import TileIndex
-from app.application.worldData.render.locationPinOverlay import l0_settlement_glyph, pin_at
+from app.application.worldData.render.light.lightMapCells import wire_symbol
+from app.application.worldData.render.light.lightMosaicFrame import TileIndex
+from app.application.worldData.render.pack.locationPinOverlay import l0_settlement_glyph, pin_at
 from app.application.worldData.render.mapSymbols import LOCATION_PIN_SYMBOL
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,

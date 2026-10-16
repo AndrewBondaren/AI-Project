@@ -20,7 +20,7 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE_Z,
 )
 from app.application.worldData.render.gradeRayDump import GradeRayIndex
-from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
+from app.application.worldData.render.pack.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay

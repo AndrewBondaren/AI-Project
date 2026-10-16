@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.lightMapCells import wire_symbol
-from app.application.worldData.render.lightMapPins import pin_light_xy_on_tile
-from app.application.worldData.render.lightMosaicFrame import (
+from app.application.worldData.render.light.lightMapCells import wire_symbol
+from app.application.worldData.render.light.lightMapPins import pin_light_xy_on_tile
+from app.application.worldData.render.light.lightMosaicFrame import (
     MosaicFrame,
     TileIndex,
     cell_at_world,

@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.render.locationGridRenderer import LocationGridRenderer
+from app.application.worldData.render.pack.locationGridRenderer import LocationGridRenderer
 from app.db.models.mapCell import MapCell
 
 

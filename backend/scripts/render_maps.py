@@ -279,7 +279,7 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
     from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
     from app.application.worldData.pack.io.worldPackReader import WorldPackReader
     from app.application.worldData.render.gradeRayDump import GradeSlotIndex
-    from app.application.worldData.render.wildernessTilePackRenderer import (
+    from app.application.worldData.render.pack.wildernessTilePackRenderer import (
         WildernessTilePackRenderer,
     )
 

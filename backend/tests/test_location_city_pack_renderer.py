@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.render.locationCityPackRenderer import LocationCityPackRenderer
+from app.application.worldData.render.pack.locationCityPackRenderer import LocationCityPackRenderer
 from app.application.worldData.render.renderPayloads import (
     city_level_key,
     parse_city_level_key,

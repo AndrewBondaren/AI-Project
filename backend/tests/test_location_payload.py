@@ -13,7 +13,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import is
 from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import is_district_location
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.application.worldData.render.lightMapPins import location_mark_pins
+from app.application.worldData.render.light.lightMapPins import location_mark_pins
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry

@@ -22,7 +22,7 @@ from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.application.worldData.render.mapGridRenderService import MapGridRenderService
-from app.application.worldData.render.packMapGridRender import PackMapGridRender
+from app.application.worldData.render.pack.packMapGridRender import PackMapGridRender
 from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

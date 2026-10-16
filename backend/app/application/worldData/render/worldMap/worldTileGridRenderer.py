@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.application.worldData.render.gridAxes import format_grid_header
-from app.application.worldData.render.worldGridRenderer import cell_symbol
+from app.application.worldData.render.worldMap.worldGridRenderer import cell_symbol
 from app.db.models.mapCell import MapCell
 
 
@@ -32,7 +32,7 @@ class WorldTileGridRenderer:
 
     @staticmethod
     def render_legend() -> str:
-        from app.application.worldData.render.worldGridRenderer import WorldGridRenderer
+        from app.application.worldData.render.worldMap.worldGridRenderer import WorldGridRenderer
         return WorldGridRenderer.render_legend()
 
     def _local_xy(self, cell: MapCell) -> tuple[int, int]:
