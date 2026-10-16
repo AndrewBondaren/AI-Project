@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Awaitable, Callable, TypeVar
 from inspect import signature
 
-from app.application.importResult import ImportError, ImportResult
+from app.application.imports.result import ImportError, ImportResult
 from app.application.worldData.errors import WorldDataError
 
 T = TypeVar("T")
