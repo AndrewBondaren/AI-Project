@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
-from app.application.worldData.terrainParallelLog import current_cpu_core
+from app.application.worldData.materialize.terrainParallelLog import current_cpu_core
 
 from ._shared import _debug, _info
 

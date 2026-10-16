@@ -10,12 +10,12 @@ import time
 from dataclasses import replace
 from functools import partial
 
-from app.application.worldData.chunkComputePool import ChunkComputePool
+from app.application.worldData.materialize.chunkComputePool import ChunkComputePool
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import log_pack_l2_formation_done
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
@@ -24,7 +24,7 @@ from app.application.worldData.pack.refine.fineGradeCatalog import emit_fine_gra
 from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
 from app.application.worldData.pack.refine.fineTileContext import ChunkComputeResult
 from app.application.worldData.pack.refine.fineTilePrep import prepare_fine_tile
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume

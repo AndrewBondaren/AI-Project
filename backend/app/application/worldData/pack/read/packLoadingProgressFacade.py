@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from app.application.worldData.loadingProgress import (
+from app.application.worldData.materialize.loadingProgress import (
     LoadingPhase,
     LoadingProgressSnapshot,
     LocalGridLoading,

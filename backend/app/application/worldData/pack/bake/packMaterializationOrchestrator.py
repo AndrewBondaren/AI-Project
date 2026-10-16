@@ -10,14 +10,14 @@ import logging
 import time
 from collections.abc import Callable
 
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     require_surface_terrain_context,
 )
-from app.application.worldData.materializationContext import (
+from app.application.worldData.materialize.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
@@ -35,7 +35,7 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.parallelPolicy import (
+from app.application.worldData.materialize.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )
@@ -45,7 +45,7 @@ from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.db.database import Database
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.db.models.connectionEdge import ConnectionEdge

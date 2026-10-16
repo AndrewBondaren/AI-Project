@@ -16,7 +16,7 @@ from app.application.worldData.pack.refine.detailedGradeHalo import grade_halo_c
 from app.application.worldData.pack.refine.detailedGradeResult import DetailedGradeResult
 from app.application.worldData.pack.refine.gridNeighborHalo import overlay_halo_from_surface
 from app.application.worldData.pack.refine.meterGradeSurface import Coord
-from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.persistResult import PersistResult
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )

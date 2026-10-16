@@ -16,7 +16,7 @@ _BACKEND = Path(__file__).resolve().parents[1]
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from app.application.worldData.materializationContext import resolve_materialization_context
+from app.application.worldData.materialize.materializationContext import resolve_materialization_context
 from app.core.configManager import ConfigManager
 from app.core.container import Container
 from app.db.database import Database

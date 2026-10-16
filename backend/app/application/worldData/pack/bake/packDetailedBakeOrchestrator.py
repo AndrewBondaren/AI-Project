@@ -16,7 +16,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.detailedBakeRefine import (
     DetailedRefineAggregate,
     persist_detailed_grades,
@@ -36,9 +36,9 @@ from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
 )
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.detailedBakeScope import (

@@ -10,7 +10,7 @@ from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     SettlementOutdoorExtractError,
 )
@@ -18,7 +18,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
     MaterializeResult,
     SettlementOutdoorError,
 )
-from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
+from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
@@ -110,7 +110,7 @@ class PackBakeResultSettlementTests(TestCase):
 
 class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_city_location_calls_materialize_with_skip(self, _ctx):
@@ -138,7 +138,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         )
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_wilderness_does_not_call_c11(self, _ctx):
@@ -162,7 +162,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         outdoor.materialize.assert_not_called()
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_non_city_location_does_not_call_c11(self, _ctx):
@@ -193,7 +193,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         outdoor.materialize.assert_not_called()
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_district_uid_does_not_call_c11(self, _ctx):
@@ -224,7 +224,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         outdoor.materialize.assert_not_called()
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_outdoor_none_skips_c11(self, _ctx):
@@ -242,7 +242,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         self.assertIsNone(settlement)
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_c11_error_keeps_l2_and_records_settlement(self, _ctx):
@@ -265,7 +265,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         self.assertEqual(settlement.error, "no pack")
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_extract_error_is_settlement_error_not_raise(self, _ctx):
@@ -288,7 +288,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         self.assertIn("bad layout", settlement.error)
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
+        "app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator"
         ".require_surface_terrain_context",
     )
     async def test_bake_pack_attaches_settlement(self, _ctx):

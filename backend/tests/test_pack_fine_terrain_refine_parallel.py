@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.db.models.mapCell import MapCell
 
 

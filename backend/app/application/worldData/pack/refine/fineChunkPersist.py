@@ -35,7 +35,7 @@ from app.application.worldData.pack.refine.fineTileContext import (
     FineTileContext,
     VertexSlotSeam,
 )
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate import (
     grade_slot_validate_enabled,
     validate_grade_cell_slots,

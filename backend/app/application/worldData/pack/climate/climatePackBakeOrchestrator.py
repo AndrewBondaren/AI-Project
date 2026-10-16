@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import TypeVar
 
-from app.application.worldData.chunkComputePool import ChunkComputePool, split_contiguous_batches
+from app.application.worldData.materialize.chunkComputePool import ChunkComputePool, split_contiguous_batches
 from app.application.worldData.generators.coordinates import (
     grid_tile_origin_x,
     grid_tile_origin_y,
@@ -16,7 +16,7 @@ from app.application.worldData.generators.coordinates import (
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.climate.climateCoarseBake import (
     build_climate_coarse_wire,
@@ -39,8 +39,8 @@ from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.parentLightLoad import load_parent_light
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.parallelPolicy import resolve_climate_workers
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.parallelPolicy import resolve_climate_workers
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.dataModel.worldPack.climateFieldWire import ClimateSampleWire
 from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 from app.dataModel.worldPack.parentLightTile import ParentLightTile

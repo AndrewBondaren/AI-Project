@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay

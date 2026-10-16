@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.api.schemas.imports import ImportResult
-from app.application.worldData.chunkComputePool import ChunkComputePool, split_contiguous_batches
+from app.application.worldData.materialize.chunkComputePool import ChunkComputePool, split_contiguous_batches
 from app.application.worldData.generators.assemblers.climateAssembler.passes.anchorCollectPass import (
     run_anchor_collect_pass,
 )
@@ -28,12 +28,12 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
 )
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
 from app.application.worldData.mapCellService import MapCellService
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_climate_batch_done,
     log_pack_climate_batch_start,
 )
-from app.application.worldData.parallelPolicy import resolve_climate_workers
+from app.application.worldData.materialize.parallelPolicy import resolve_climate_workers
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

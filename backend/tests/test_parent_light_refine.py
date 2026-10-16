@@ -28,7 +28,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect, Surfa
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.parentLightLoad import load_parent_light
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
@@ -303,7 +303,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
             FineTerrainRefineOrchestrator,
         )
         from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
-        from app.application.worldData.materializationContext import MaterializationContext
+        from app.application.worldData.materialize.materializationContext import MaterializationContext
 
         terrain = MagicMock()
         writer = MagicMock()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.application.jsonValidation import climate_scalars, terrain_scalars
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.db.models.world import World
 
 

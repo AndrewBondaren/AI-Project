@@ -20,7 +20,7 @@ from app.application.worldData.pack.refine.columnBounds import (
     rect_contains,
 )
 from app.application.worldData.pack.refine.entryRingGeom import wilderness_chunk_origin
-from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire
 from app.dataModel.worldPack.parentLightTile import ParentLightTile

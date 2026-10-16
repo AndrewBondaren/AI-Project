@@ -29,7 +29,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     require_surface_terrain_context,
 )
 from app.application.worldData.pack.refine.entryAnchorTracker import ANCHOR_KINDS, parse_anchor_kind
-from app.application.worldData.materializationContext import resolve_materialization_context
+from app.application.worldData.materialize.materializationContext import resolve_materialization_context
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log

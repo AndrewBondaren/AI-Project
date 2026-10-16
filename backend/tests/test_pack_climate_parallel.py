@@ -12,7 +12,7 @@ from app.application.worldData.generators.climate.climatePoleField import (
     ClimatePoleField,
     GridBBox,
 )
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )

@@ -13,7 +13,7 @@ from app.application.worldData.generators.terrain.worldMapSettings import (
     force_serial_terrain_generate,
     terrain_chunk_columns,
 )
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import log_pack_fine_terrain_workers
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -26,8 +26,8 @@ from app.application.worldData.pack.refine.detailedGradeHalo import grade_halo_c
 from app.application.worldData.pack.refine.entryRingGeom import wilderness_chunk_origin
 from app.application.worldData.pack.refine.fineTileContext import FineTileContext
 from app.application.worldData.pack.refine.gridNeighborHalo import overlay_grid_neighbor_halos
-from app.application.worldData.parallelPolicy import resolve_terrain_workers
-from app.application.worldData.terrainBatchOrchestrator import (
+from app.application.worldData.materialize.parallelPolicy import resolve_terrain_workers
+from app.application.worldData.materialize.terrainBatchOrchestrator import (
     TerrainBatchOrchestrator,
     refresh_tile_gaps,
 )

@@ -7,12 +7,12 @@ corridor select to ``pathCorridorSelect``. Public method names stable for
 
 from __future__ import annotations
 
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_fine_terrain_phase_done,
     log_pack_fine_terrain_phase_start,
@@ -46,7 +46,7 @@ from app.application.worldData.pack.refine.fineChunkGeom import (
     rects_for_macro_tile,
 )
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume

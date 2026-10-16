@@ -80,9 +80,9 @@ from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrchestrator
-from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.climateBatchOrchestrator import ClimateBatchOrchestrator
+from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.application.worldBundle.connectionGraphService import ConnectionGraphService

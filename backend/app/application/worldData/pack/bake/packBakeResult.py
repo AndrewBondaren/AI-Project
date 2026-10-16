@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.application.worldData.materializationContext import MaterializationJobReport
+from app.application.worldData.materialize.materializationContext import MaterializationJobReport
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     MaterializeResult,
 )

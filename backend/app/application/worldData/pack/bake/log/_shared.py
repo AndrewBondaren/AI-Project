@@ -7,7 +7,7 @@ import logging
 import threading
 from typing import Any
 
-from app.application.worldData.terrainParallelLog import current_cpu_core
+from app.application.worldData.materialize.terrainParallelLog import current_cpu_core
 
 # Historical name kept verbatim: loggingConfig routes this prefix to the
 # ``pack/packBakeLog`` sink and tests attach to this exact logger.
