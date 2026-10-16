@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.connectionUids import connection_node_uid
+from app.application.worldData.persist.connectionUids import connection_node_uid
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import (
     AreaThreshold,
     AreaThresholdKind,

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from app.application.worldData.connectionPersistService import ConnectionPersistService
+from app.application.worldData.persist.connectionPersistService import ConnectionPersistService
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import SettlementAssembleTimings
 from app.application.worldData.generators.structure.physicalTransition import physical_transition
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths

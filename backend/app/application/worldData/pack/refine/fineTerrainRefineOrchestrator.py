@@ -28,7 +28,7 @@ from app.application.worldData.pack.refine.entryRingGeom import (
 )
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
-from app.application.worldData.persistReliefGrades import persist_relief_grades
+from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.refine.pathCorridorSelect import (
     select_path_corridor_rects,
 )

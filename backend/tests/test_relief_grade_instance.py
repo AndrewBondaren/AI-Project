@@ -13,7 +13,7 @@ from app.application.worldData.generators.terrain.relief.volume.volumeMaterializ
     RibbonColumnPlan,
     RibbonVolumePlan,
 )
-from app.application.worldData.persistReliefGrades import instance_to_row
+from app.application.worldData.persist.persistReliefGrades import instance_to_row
 from app.dataModel.terrain.relief import ReliefGradeInstance, ReliefGradeSystem
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length

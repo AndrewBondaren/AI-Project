@@ -25,7 +25,7 @@ from app.application.worldData.pack.climate.climatePackBakeOrchestrator import C
 from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
-from app.application.worldData.persistReliefGrades import persist_relief_grades
+from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator

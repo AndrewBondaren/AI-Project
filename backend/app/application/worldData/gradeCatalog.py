@@ -10,7 +10,7 @@ Write path: ``emit_relief_grade_systems`` then ``persist_relief_grades``.
 
 from __future__ import annotations
 
-from app.application.worldData.persistReliefGrades import (
+from app.application.worldData.persist.persistReliefGrades import (
     instance_from_row,
     system_from_row,
 )

@@ -7,7 +7,7 @@ from dataclasses import replace
 from app.application.worldData.locationPayloadAccess import district_payload
 from app.dataModel.locations.settlement.district.districtPayload import DistrictPayload
 
-from app.application.worldData.connectionPersistService import ConnectionPersistService
+from app.application.worldData.persist.connectionPersistService import ConnectionPersistService
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     ExtractedSettlement,
     ExtractedTopology,

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import random
 
-from app.application.worldData.connectionUids import connection_node_uid
+from app.application.worldData.persist.connectionUids import connection_node_uid
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,

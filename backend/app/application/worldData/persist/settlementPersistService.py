@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass, field
 
 from app.api.schemas.imports import ImportResult
-from app.application.worldData.connectionPersistService import (
+from app.application.worldData.persist.connectionPersistService import (
     ConnectionPersistResult,
     ConnectionPersistService,
 )
@@ -21,7 +21,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.application.worldData.mapCells.mapCellService import MapCellService
-from app.application.worldData.settlementPersistScope import (
+from app.application.worldData.persist.settlementPersistScope import (
     OUTDOOR_SCOPES,
     SettlementPersistScope,
 )

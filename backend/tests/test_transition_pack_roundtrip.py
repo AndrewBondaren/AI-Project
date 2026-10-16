@@ -7,7 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from app.application.worldData.connectionPersistService import ConnectionPersistService
+from app.application.worldData.persist.connectionPersistService import ConnectionPersistService
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader

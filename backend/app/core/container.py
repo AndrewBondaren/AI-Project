@@ -86,8 +86,8 @@ from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrat
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.application.worldBundle.connectionGraphService import ConnectionGraphService
-from app.application.worldData.connectionPersistService import ConnectionPersistService
-from app.application.worldData.settlementPersistService import SettlementPersistService
+from app.application.worldData.persist.connectionPersistService import ConnectionPersistService
+from app.application.worldData.persist.settlementPersistService import SettlementPersistService
 from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
     SettlementOutdoorOrchestrator,
 )

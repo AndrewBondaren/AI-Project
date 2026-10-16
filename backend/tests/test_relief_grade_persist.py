@@ -13,7 +13,7 @@ from unittest import IsolatedAsyncioTestCase
 
 from app.application.worldData.gradeCatalog import load_grade_membership
 from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
-from app.application.worldData.persistReliefGrades import persist_relief_grades
+from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
 from app.core.generationLogging import generation_world_log
@@ -210,7 +210,7 @@ class SqliteReliefGradePersistTest(IsolatedAsyncioTestCase):
 
     async def test_per_row_upsert_commits_without_session(self) -> None:
         inst = _sheer("g-patch", [(0, 0)])
-        from app.application.worldData.persistReliefGrades import instance_to_row
+        from app.application.worldData.persist.persistReliefGrades import instance_to_row
 
         self._counts["txn"] = 0
         self._counts["commit"] = 0
