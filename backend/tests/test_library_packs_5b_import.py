@@ -5,7 +5,7 @@ from unittest.mock import patch
 from uuid import uuid5, NAMESPACE_DNS
 
 from tests.test_library_packs_4b import _ServiceCase, _relief_body
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.templateLibrary.packs.legacy.legacyPack import (
     legacy_member_uid,
     legacy_pack_uid,

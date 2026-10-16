@@ -247,7 +247,7 @@ class LibraryWriteApiTests(_ServiceCase):
         from app.application.templateLibrary.packs.errors import (
             LibraryPackPolicyRequiredError, require_no_policy)
         from app.api.routes.worlds import router as worlds_router
-        from app.application.importResult import ImportResult
+        from app.application.imports.result import ImportResult
 
         container = self.container
         body = _relief_body("meadow")
@@ -289,7 +289,7 @@ class LibraryWriteApiTests(_ServiceCase):
     async def test_bundle_later_entity_failure_rolls_back_library_apply(self):
         from app.application.worldBundle.entity.sections import WorldSectionHandler
         from app.application.worldBundle.worldBundleService import WorldBundleService
-        from app.application.importResult import ImportResult
+        from app.application.imports.result import ImportResult
         from app.application.templateLibrary.packs.errors import require_no_policy
         container = self.container
         class SeedLibraries:

@@ -9,7 +9,7 @@ from dataclasses import asdict, replace
 from typing import TYPE_CHECKING, Protocol
 
 from app.api.schemas.imports import ImportResult
-from app.application.import_helpers import import_list
+from app.application.imports.helpers import import_list
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.application.worldData.pack.read.patchCellContribution import patch_kind_for_save_pass

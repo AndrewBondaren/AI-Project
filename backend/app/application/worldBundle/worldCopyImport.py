@@ -1,7 +1,7 @@
 """Atomic world → common library writer → entities import (TZ §4.1/4.2)."""
 from dataclasses import replace
 
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.worldBundle.copyTokens import WorldCopyTokens
 from app.application.worldBundle.worldLibraries import import_libraries
 from app.application.worldBundle.bundleRemapService import build_bundle_uid_map, remap_bundle

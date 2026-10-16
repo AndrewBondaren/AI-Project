@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.worldBundle.errors import BundleValidationError
 from app.application.worldBundle.connectionGraphService import ConnectionGraphService
 from app.application.worldData.locations.namedLocationService import NamedLocationService

@@ -10,7 +10,7 @@ from app.application.worldBundle.archive import read_archive
 from app.application.worldBundle.worldLibraries import import_libraries
 from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire
 from app.application.templateLibrary.packs.errors import LibraryPackValidationError
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.templateLibrary.packs.legacy.legacyPack import legacy_pack_row
 from app.ids import library_uid
 from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, LibraryArchiveMember, LibraryArchivePack

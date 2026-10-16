@@ -8,7 +8,7 @@ from pathlib import Path
 from app.application.worldBundle.archive import BundleArchiveError, read_archive, write_archive
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleWorldSource
 from app.dataModel.worldBundle.bundleSections import SECTION_PATHS
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire, packs_from_wire
 from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.application.worldBundle.worldCopyImport import WorldCopyImport

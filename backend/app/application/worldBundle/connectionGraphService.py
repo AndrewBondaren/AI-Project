@@ -3,7 +3,7 @@
 from dataclasses import asdict
 
 from app.api.schemas.imports import ImportResult
-from app.application.import_helpers import import_list, prepare_import_row
+from app.application.imports.helpers import import_list, prepare_import_row
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository

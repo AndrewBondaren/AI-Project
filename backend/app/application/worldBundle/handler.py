@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.db.models.world import World
 from app.application.jsonValidation.resolve import ResolveContext
 

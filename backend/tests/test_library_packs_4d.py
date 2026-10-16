@@ -14,7 +14,7 @@ from app.api.errorMapping import install_error_handlers
 from app.api.routes.libraryPacks import router as packs_router
 from app.api.routes.libraryArchives import router as archives_router
 from app.api.routes.worlds import router as worlds_router
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.worldBundle.archive import read_archive
 from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire
 from app.application.templateLibrary.packs.errors import LibraryPackPolicyRequiredError

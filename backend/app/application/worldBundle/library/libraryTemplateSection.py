@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 if TYPE_CHECKING:
     from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 from app.application.templateLibrary.packs.errors import require_no_policy

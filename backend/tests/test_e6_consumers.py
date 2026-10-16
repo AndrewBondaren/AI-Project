@@ -25,7 +25,7 @@ from app.dataModel.terrain.relief import ReliefTemplate
 from app.application.worldData.relief.parseObjectReliefPickPolicy import parse_object_relief_pick_policy
 from app.application.worldData.registries.raceService import RaceService, _to_race
 from app.application.worldData.registries.worldPerkService import WorldPerkService, _to_perk
-from app.application.import_helpers import import_list
+from app.application.imports.helpers import import_list
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload

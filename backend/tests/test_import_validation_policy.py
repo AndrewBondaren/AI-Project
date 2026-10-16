@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from app.api.deps import get_container
 from app.api.routes.worlds import router
-from app.application.importResult import ImportResult
+from app.application.imports.result import ImportResult
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport
 from app.core.container import Container
 from app.db.database import Database

@@ -10,8 +10,8 @@ from app.dataModel.perks.worldPerkTemplateRegistry import WorldPerkTemplateRegis
 from app.dataModel.perks.perkTemplateOutline import PerkTemplateOutline
 from datetime import datetime, timezone
 
-from app.application.importResult import ImportResult
-from app.application.import_helpers import import_list
+from app.application.imports.result import ImportResult
+from app.application.imports.helpers import import_list
 from app.application.worldBundle.errors import BundleValidationError
 from app.application.worldData.registries.worldColumnWrite import apply_world_column
 from app.application.worldData.registries.worldLookup import require_world
