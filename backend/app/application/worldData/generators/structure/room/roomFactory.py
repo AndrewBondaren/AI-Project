@@ -17,11 +17,11 @@ from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.dataModel.locations.structure.building.levelDef import LevelDef
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
+from app.application.worldData.generators.structure.shape.shapeResolver import SizeShapeResolver
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
-from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
-from app.application.worldData.generators.structure.shapes import resolve_stem_wall
+from app.application.worldData.generators.structure.shape.shapeType import ShapeType, _V1_SHAPES
+from app.application.worldData.generators.structure.shape.shapes import resolve_stem_wall
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)

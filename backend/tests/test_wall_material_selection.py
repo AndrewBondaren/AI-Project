@@ -7,10 +7,10 @@ from app.application.economy.materialPolicies.defaultMaterialPolicyConsumer impo
 from app.application.economy.materialPolicies.materialPolicyConsumer import (
     MaterialPolicyConsumer,
 )
-from app.application.worldData.generators.structure.wallMaterials import (
+from app.application.worldData.generators.structure.walls.wallMaterials import (
     select_wall_materials,
 )
-from app.application.worldData.generators.structure.wallRegions import (
+from app.application.worldData.generators.structure.walls.wallRegions import (
     classify_wall_regions,
 )
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand

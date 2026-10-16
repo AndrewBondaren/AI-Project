@@ -3,8 +3,8 @@ import unittest
 from copy import deepcopy
 
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.application.worldData.generators.structure.layoutEngine import layout_level, _place_next_to_any
-from app.application.worldData.generators.structure.layoutEntry import entries_exterior
+from app.application.worldData.generators.structure.layout.layoutEngine import layout_level, _place_next_to_any
+from app.application.worldData.generators.structure.layout.layoutEntry import entries_exterior
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
@@ -56,7 +56,7 @@ class EntryLayoutTests(unittest.TestCase):
         blocker = room("blocker", x=10, y=26, width=3, depth=7)
         candidate = unplaced("candidate", width=3)
         candidate.entry_point = entry(Facing.NORTH)
-        with self.assertNoLogs("app.application.worldData.generators.structure.layoutEntry", "WARNING"):
+        with self.assertNoLogs("app.application.worldData.generators.structure.layout.layoutEntry", "WARNING"):
             self.assertTrue(_place_next_to_any(candidate, [anchor, blocker]))
         self.assertEqual(candidate.origin_y, 26)
         self.assertGreater(candidate.origin_x, 10)
@@ -66,7 +66,7 @@ class EntryLayoutTests(unittest.TestCase):
         anchor, candidate = room("anchor"), unplaced("candidate", width=9, depth=3)
         authored = entry(Facing.EAST, width=3)
         candidate.entry_point = authored
-        with self.assertLogs("app.application.worldData.generators.structure.layoutEntry", "WARNING") as logs:
+        with self.assertLogs("app.application.worldData.generators.structure.layout.layoutEntry", "WARNING") as logs:
             self.assertTrue(_place_next_to_any(candidate, [anchor]))
         self.assertEqual(len(logs.records), 1)
         self.assertIn("entry_point.wall=east unreachable", logs.output[0])

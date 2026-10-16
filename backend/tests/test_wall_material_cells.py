@@ -11,10 +11,10 @@ from app.application.worldData.debugStructureRotations import RotationProbe
 from app.application.worldData.generators.structure.cellBuilder import (
     build_level_cells,
 )
-from app.application.worldData.generators.structure.wallMaterials import (
+from app.application.worldData.generators.structure.walls.wallMaterials import (
     select_wall_materials,
 )
-from app.application.worldData.generators.structure.wallRegions import (
+from app.application.worldData.generators.structure.walls.wallRegions import (
     classify_wall_regions,
 )
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand

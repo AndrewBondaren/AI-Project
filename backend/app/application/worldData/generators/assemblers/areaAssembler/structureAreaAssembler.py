@@ -56,7 +56,7 @@ from app.application.worldData.generators.coordinates.columnSurface import (
     column_surface,
     median_surface_z,
 )
-from app.application.worldData.generators.structure.layoutTranslate import translate_layout
+from app.application.worldData.generators.structure.layout.layoutTranslate import translate_layout
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,

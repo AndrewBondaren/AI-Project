@@ -44,7 +44,7 @@ from app.application.worldData.generators.coordinates.columnSurface import (
 )
 from app.application.worldData.generators.coordinates.gridRay import walk_grid_ray
 from app.application.worldData.generators.road.streetCells import rasterize_street_xy
-from app.application.worldData.generators.structure.layoutTranslate import translate_layout
+from app.application.worldData.generators.structure.layout.layoutTranslate import translate_layout
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
     StructureLayout,

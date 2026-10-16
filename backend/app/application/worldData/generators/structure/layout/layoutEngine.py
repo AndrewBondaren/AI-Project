@@ -16,7 +16,7 @@ import logging
 from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.application.worldData.generators.structure.layoutEntry import (
+from app.application.worldData.generators.structure.layout.layoutEntry import (
     blocks_entries, entries_exterior, resolve_entry_walls,
 )
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
