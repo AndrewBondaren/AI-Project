@@ -1,7 +1,7 @@
 """Assemble source/resolved skeleton POJOs — tz_locations §Payload per type."""
 
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.db.models.namedLocation import NamedLocation

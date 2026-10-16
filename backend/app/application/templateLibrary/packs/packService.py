@@ -48,7 +48,7 @@ from app.application.templateLibrary.packs.packResults import (
     PackRemapResult,
 )
 from app.application.templateLibrary.packs.packScope import _PackScope, _coerce_kind
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.registries.worldService import WorldService
 from app.db.database import Database
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow

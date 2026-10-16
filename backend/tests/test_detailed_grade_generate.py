@@ -965,7 +965,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
 
     def test_write_set_reconcile_merge_and_clip(self) -> None:
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.gradeInstanceMerge import merge_grade_instances
+        from app.application.worldData.relief.gradeInstanceMerge import merge_grade_instances
         from app.application.worldData.pack.refine.detailedGradeResult import (
             DetailedGradeResult,
         )
@@ -1151,7 +1151,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         )
 
     def test_merge_cell_refs_unions_sql_and_tuples(self) -> None:
-        from app.application.worldData.gradeInstanceMerge import (
+        from app.application.worldData.relief.gradeInstanceMerge import (
             apply_prior_cell_refs,
             merge_cell_refs,
         )

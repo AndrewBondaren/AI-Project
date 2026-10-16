@@ -9,8 +9,8 @@ from test_library_packs_4b import _ServiceCase
 from app.application.jsonValidation.resolve import resolve_model
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.worldData.errors import WorldDataNotFoundError
-from app.application.worldData.raceService import RaceService
-from app.application.worldData.worldPerkService import WorldPerkService
+from app.application.worldData.registries.raceService import RaceService
+from app.application.worldData.registries.worldPerkService import WorldPerkService
 from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World

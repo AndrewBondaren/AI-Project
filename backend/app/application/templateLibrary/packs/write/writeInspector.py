@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.application.templateLibrary.packs.defaults import is_default_pack_uid
 from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.registries.worldService import WorldService
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.application.templateLibrary.packs.packIdentity import instance_system_name, published_system_name
 from app.application.templateLibrary.packs.write.writeContracts import (

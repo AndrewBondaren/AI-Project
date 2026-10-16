@@ -73,7 +73,7 @@ class ClimateBatchOrchestrator:
 
         Returns ``(import_result, batches_done, batches_total)``.
         """
-        from app.application.worldData.repairWorldDefaults import (
+        from app.application.worldData.registries.repairWorldDefaults import (
             ensure_world_climate_defaults,
         )
 

@@ -9,7 +9,7 @@ location domain's boundary wiring — one per scope level.
 """
 
 from dataclasses import asdict
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from random import Random
 
 from app.application.jsonValidation import economic_tiers, location_types
@@ -19,7 +19,7 @@ from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.cascade.cascadeLink import EmptyLink, Link
 from app.application.cascade.contextResolver import extend, scope_sequence
 from app.ids import UidKind, entity_rng
-from app.application.worldData.settlementSkeletonAccess import settlement_skeleton_pojo
+from app.application.worldData.locations.settlementSkeletonAccess import settlement_skeleton_pojo
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults
 from app.dataModel.locations.context.scopeLevel import ScopeLevel

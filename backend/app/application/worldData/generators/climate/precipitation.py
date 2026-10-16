@@ -32,7 +32,7 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
     ``ensure_world_climate_defaults`` (import normalize + persist), not invent
     a synthetic liquid here.
     """
-    from app.application.worldData.repairWorldDefaults import WorldClimateDefaultsError
+    from app.application.worldData.registries.repairWorldDefaults import WorldClimateDefaultsError
 
     registry = materials(world)
     key = _precipitation_liquid_key(world)

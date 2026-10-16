@@ -17,7 +17,7 @@ from app.application.jsonValidation.worldRow import (
     location_types,
 )
 from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )

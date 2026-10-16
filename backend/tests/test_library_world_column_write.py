@@ -9,7 +9,7 @@ from app.application.jsonValidation.types import ImportValidationError
 from app.application.templateLibrary.packs.errors import LibraryPackConflictError
 from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteRequest
 from app.application.templateLibrary.packs.write.writeRetentionPlanner import WriteRetentionPlanner
-from app.application.worldData.worldColumnWrite import invalidated_world_tables
+from app.application.worldData.registries.worldColumnWrite import invalidated_world_tables
 
 
 class LibraryWorldColumnWriteTests(_ServiceCase):

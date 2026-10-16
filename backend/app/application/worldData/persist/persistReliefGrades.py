@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     utc_now_iso,
 )
-from app.application.worldData.gradeInstanceMerge import apply_prior_cell_refs
+from app.application.worldData.relief.gradeInstanceMerge import apply_prior_cell_refs
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_relief_grades_persist_done,
     log_pack_relief_grades_persist_progress,

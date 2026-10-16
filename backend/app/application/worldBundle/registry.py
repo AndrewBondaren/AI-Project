@@ -16,11 +16,11 @@ from app.application.worldBundle.library.libraryTemplateSection import (
 )
 from app.application.worldBundle.order import BUNDLE_IMPORT_ORDER
 from app.application.worldBundle.connectionGraphService import ConnectionGraphService
-from app.application.worldData.namedLocationService import NamedLocationService
-from app.application.worldData.raceService import RaceService
-from app.application.worldData.stateService import StateService
-from app.application.worldData.worldPerkService import WorldPerkService
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
+from app.application.worldData.registries.raceService import RaceService
+from app.application.worldData.registries.stateService import StateService
+from app.application.worldData.registries.worldPerkService import WorldPerkService
+from app.application.worldData.registries.worldService import WorldService
 from app.dataModel.worldBundle.bundleSections import BundleSection
 
 

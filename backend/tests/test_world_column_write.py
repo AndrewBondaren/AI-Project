@@ -15,10 +15,10 @@ from app.application.jsonValidation.worldColumnResolve import resolve_world_colu
 from app.application.jsonValidation.worldSlices import (
     WORLD_SLICE_BY_KEY, WorldSlice, slice_for_world_key,
 )
-from app.application.worldData.worldColumnWrite import (
+from app.application.worldData.registries.worldColumnWrite import (
     COLUMN_INVALIDATES, apply_world_column, invalidated_world_tables,
 )
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.registries.worldService import WorldService
 from app.dataModel.annotationPolicy import DefaultWhenMissing, IgnoreOnWire
 from app.dataModel.climate.worldClimateScalars import SeasonTempOffsets
 from app.db.models.world import World

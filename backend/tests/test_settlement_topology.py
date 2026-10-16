@@ -6,7 +6,7 @@ import random
 import unittest
 from pathlib import Path
 
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
     plan_district_slots,
 )

@@ -7,7 +7,7 @@ from app.application.jsonValidation import (
     economic_tiers,
 )
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     check_district_economic_compat,

@@ -58,7 +58,7 @@ from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberR
 from app.db.repositories.sqlite.libraryPackMemberRepository import SqliteLibraryPackMemberRepository
 from app.db.repositories.iLibraryPackDependencyRepository import ILibraryPackDependencyRepository
 from app.db.repositories.sqlite.libraryPackDependencyRepository import SqliteLibraryPackDependencyRepository
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.registries.worldService import WorldService
 from app.application.templateLibrary.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
 from app.application.templateLibrary.buildingTemplateLibraryService import BuildingTemplateLibraryService
@@ -75,9 +75,9 @@ from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
 from app.application.worldBundle.registry import build_bundle_handlers
-from app.application.worldData.raceService import RaceService
-from app.application.worldData.worldPerkService import WorldPerkService
-from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.registries.raceService import RaceService
+from app.application.worldData.registries.worldPerkService import WorldPerkService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
 from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.application.worldData.mapCells.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
@@ -97,8 +97,8 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist imp
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.stateService import StateService
-from app.application.worldData.seedService import SeedService
+from app.application.worldData.registries.stateService import StateService
+from app.application.worldData.registries.seedService import SeedService
 from app.application.worldBundle.worldBundleService import WorldBundleService
 from app.application.session.playerService import PlayerService
 from app.application.session.gameSessionService import GameSessionService

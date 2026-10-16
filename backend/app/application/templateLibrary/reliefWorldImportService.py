@@ -32,8 +32,8 @@ from app.application.templateLibrary.reliefTemplateLibraryService import (
 from app.application.templateLibrary.reliefWorldRefValidation import (
     validate_relief_world_refs,
 )
-from app.application.worldData.worldColumnWrite import apply_world_column
-from app.application.worldData.worldLookup import require_world
+from app.application.worldData.registries.worldColumnWrite import apply_world_column
+from app.application.worldData.registries.worldLookup import require_world
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos

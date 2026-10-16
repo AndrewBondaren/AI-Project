@@ -18,7 +18,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from app.db.models.world import World
 
 

@@ -9,8 +9,8 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.errors import WorldDataValidationError
-from app.application.worldData.worldColumnWrite import apply_world_column
-from app.application.worldData.worldLookup import require_world
+from app.application.worldData.registries.worldColumnWrite import apply_world_column
+from app.application.worldData.registries.worldLookup import require_world
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository

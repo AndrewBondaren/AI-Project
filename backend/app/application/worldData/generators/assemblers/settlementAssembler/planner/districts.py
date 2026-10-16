@@ -7,7 +7,7 @@ from app.application.jsonValidation.worldRow import (
     settlement_specializations,
 )
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,

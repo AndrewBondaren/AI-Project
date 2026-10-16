@@ -11,12 +11,12 @@ from fastapi import HTTPException
 from app.application.jsonValidation.settlementVolumeSeparation import (
     log_settlement_volume_separation,
 )
-from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
-from app.application.worldData.settlementMapOccupancy import (
+from app.application.worldData.locations.settlementMapOccupancy import (
     occupancy_locations,
     pick_occupants,
 )

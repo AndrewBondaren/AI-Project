@@ -5,10 +5,10 @@ Skeleton на NamedLocation — фаза 1 (world create).
 Полная геометрия — SettlementAssembler + map_cells persist при первом входе.
 """
 
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 import logging
 
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
     collect_geometry_fine_cells,
     collect_map_cells_from_layout,

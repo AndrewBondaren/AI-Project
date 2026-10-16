@@ -33,7 +33,7 @@ from app.application.worldData.pack.import_.importLevels import (
     filter_bundle_for_export,
     validate_bundle_for_import,
 )
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.registries.worldService import WorldService
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.db.database import Database
 

@@ -9,8 +9,8 @@ from __future__ import annotations
 import time
 from collections.abc import Sequence
 
-from app.application.worldData.gradeInstanceMerge import merge_grade_instances
-from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
+from app.application.worldData.relief.gradeInstanceMerge import merge_grade_instances
+from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_grade_systems_emit_done,

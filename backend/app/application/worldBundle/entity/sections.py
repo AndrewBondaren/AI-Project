@@ -8,9 +8,9 @@ from typing import Any
 from app.application.importResult import ImportResult
 from app.application.worldBundle.errors import BundleValidationError
 from app.application.worldBundle.connectionGraphService import ConnectionGraphService
-from app.application.worldData.namedLocationService import NamedLocationService
-from app.application.worldData.stateService import StateService
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
+from app.application.worldData.registries.stateService import StateService
+from app.application.worldData.registries.worldService import WorldService
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.db.models.world import World
 from app.utils.graph import topo_sort

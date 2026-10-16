@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from app.application.jsonValidation import terrain_masks
-from app.application.worldData.parseObjectReliefPickPolicy import (
+from app.application.worldData.relief.parseObjectReliefPickPolicy import (
     parse_object_relief_pick_policy,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext

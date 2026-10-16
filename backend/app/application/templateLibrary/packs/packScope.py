@@ -21,7 +21,7 @@ from app.application.templateLibrary.packs.errors import (
     LibraryPackValidationError,
 )
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
-from app.application.worldData.worldService import WorldService
+from app.application.worldData.registries.worldService import WorldService
 from app.db.database import Database
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.world import World

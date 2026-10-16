@@ -11,8 +11,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.gradeCatalog import load_grade_membership
-from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
+from app.application.worldData.relief.gradeCatalog import load_grade_membership
+from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam

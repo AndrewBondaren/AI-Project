@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 from app.application.importResult import ImportResult
 from app.application.import_helpers import import_list, with_default_created_at
 from app.application.worldBundle.errors import BundleValidationError
-from app.application.worldData.worldColumnWrite import apply_world_column
-from app.application.worldData.worldLookup import require_world
+from app.application.worldData.registries.worldColumnWrite import apply_world_column
+from app.application.worldData.registries.worldLookup import require_world
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.dataModel.races.raceTemplateRegistryEntry import RaceTemplateRegistryEntry
 from app.db.models.race import Race

@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )

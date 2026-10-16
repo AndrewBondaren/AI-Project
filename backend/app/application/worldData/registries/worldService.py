@@ -15,7 +15,7 @@ from app.application.worldData.errors import (
     WorldDataNotFoundError,
     WorldDataValidationError,
 )
-from app.application.worldData.worldColumnWrite import invalidated_world_tables
+from app.application.worldData.registries.worldColumnWrite import invalidated_world_tables
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
@@ -99,7 +99,7 @@ class WorldService:
 
     async def repair_defaults(self, world: World) -> World:
         """Re-apply import ``normalize_world`` defaults and persist if climate liquid missing."""
-        from app.application.worldData.repairWorldDefaults import ensure_world_climate_defaults
+        from app.application.worldData.registries.repairWorldDefaults import ensure_world_climate_defaults
 
         return await ensure_world_climate_defaults(world, repo=self._repo)
 

@@ -7,8 +7,8 @@ import unittest
 from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     make_grade_system_uid,
 )
-from app.application.worldData.gradeInstanceMerge import merge_grade_instances
-from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
+from app.application.worldData.relief.gradeInstanceMerge import merge_grade_instances
+from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.pack.refine.detailedGradeCatalog import (
     TileFaceCatalog,
     build_tile_face_catalog,

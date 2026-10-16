@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 
 from collections.abc import Sequence
 

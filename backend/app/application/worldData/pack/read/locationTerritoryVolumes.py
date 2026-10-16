@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     footprint_side_fine,
@@ -71,7 +71,7 @@ def territory_volumes_by_location(
     world: World,
     locations: list[NamedLocation],
 ) -> list[tuple[str, TerritoryVolume]]:
-    from app.application.worldData.settlementMapOccupancy import occupancy_locations
+    from app.application.worldData.locations.settlementMapOccupancy import occupancy_locations
 
     out: list[tuple[str, TerritoryVolume]] = []
     for location in occupancy_locations(world, locations):

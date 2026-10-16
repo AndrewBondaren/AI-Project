@@ -278,7 +278,7 @@ class TestRegistryKey(unittest.TestCase):
             )
 
     def test_city_skeleton_resolved_tier_overrides_nl_and_keeps_size_brand(self) -> None:
-        from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+        from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
         from app.db.models.namedLocation import NamedLocation
 
         loc = NamedLocation(

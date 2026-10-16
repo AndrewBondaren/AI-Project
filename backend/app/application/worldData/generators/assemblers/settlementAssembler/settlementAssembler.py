@@ -14,13 +14,13 @@ SettlementAssembler — оркестратор генерации поселен
 
 ТЗ: docs/tz_assembler_hierarchy.md, tz_city_generation.md, tz_structure_connections.md §5
 """
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 import logging
 import time
 from dataclasses import replace
 
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtAssembler import DistrictAssembler
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot

@@ -6,7 +6,7 @@ from app.application.jsonValidation.worldRow import location_types
 from app.application.importResult import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at
 from app.application.worldData.errors import WorldDataNotFoundError
-from app.application.worldData.settlementMapOccupancy import (
+from app.application.worldData.locations.settlementMapOccupancy import (
     emit_settlement_volume_conflicts,
     pick_occupants,
 )

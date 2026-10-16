@@ -10,7 +10,7 @@ from app.application.jsonValidation.resolve import ResolveContext, UnresolvedMod
 from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.cascade.locationScope import (
     area_context, building_context, district_context, settlement_context, empty_location_chain)
-from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
@@ -22,9 +22,9 @@ from app.application.templateLibrary.templateContracts import (
     TemplateEntry,
 )
 from app.dataModel.terrain.relief import ReliefTemplate
-from app.application.worldData.parseObjectReliefPickPolicy import parse_object_relief_pick_policy
-from app.application.worldData.raceService import RaceService, _to_race
-from app.application.worldData.worldPerkService import WorldPerkService, _to_perk
+from app.application.worldData.relief.parseObjectReliefPickPolicy import parse_object_relief_pick_policy
+from app.application.worldData.registries.raceService import RaceService, _to_race
+from app.application.worldData.registries.worldPerkService import WorldPerkService, _to_perk
 from app.application.import_helpers import import_list
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate

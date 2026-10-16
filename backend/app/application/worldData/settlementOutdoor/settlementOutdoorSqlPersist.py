@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-from app.application.worldData.locationPayloadAccess import district_payload
+from app.application.worldData.locations.locationPayloadAccess import district_payload
 from app.dataModel.locations.settlement.district.districtPayload import DistrictPayload
 
 from app.application.worldData.persist.connectionPersistService import ConnectionPersistService

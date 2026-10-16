@@ -8,7 +8,7 @@ import unittest
 from app.application.worldData.generators.climate.precipitation import (
     resolve_world_precipitation_liquid,
 )
-from app.application.worldData.repairWorldDefaults import (
+from app.application.worldData.registries.repairWorldDefaults import (
     WorldClimateDefaultsError,
     apply_import_normalize_to_world,
     ensure_world_climate_defaults,

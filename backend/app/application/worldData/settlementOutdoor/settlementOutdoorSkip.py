@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from app.application.jsonValidation.worldRow import location_types
 
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.settlementMapOccupancy import settlement_map_occupants
+from app.application.worldData.locations.settlementMapOccupancy import settlement_map_occupants
 from app.application.worldData.settlementOutdoor.settlementOutdoorTopology import (
     has_authored_non_district_children,
     resolve_district_uid,

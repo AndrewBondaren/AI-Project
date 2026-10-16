@@ -27,7 +27,7 @@ from app.application.cascade.locationScope import (
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import SettlementAssembler
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import _pick_template_material
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (

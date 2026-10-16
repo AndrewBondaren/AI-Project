@@ -5,7 +5,7 @@ import sqlite3
 from app.application.templateLibrary.packs.errors import LibraryPackConflictError
 from app.application.templateLibrary.packs.write.writeResults import WriteResult
 from app.application.templateLibrary.packs.write.writePlanContracts import LibraryWritePlan
-from app.application.worldData.worldColumnWrite import apply_prepared_world_columns
+from app.application.worldData.registries.worldColumnWrite import apply_prepared_world_columns
 from app.db.database import _in_transaction
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.ids import LibraryKind

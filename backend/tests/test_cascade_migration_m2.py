@@ -29,7 +29,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (
     StructureAreaAssembler,
 )
-from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,
 )

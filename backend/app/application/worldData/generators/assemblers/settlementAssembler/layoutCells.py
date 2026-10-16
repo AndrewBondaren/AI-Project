@@ -1,6 +1,6 @@
 """Flatten SettlementLayout → map_cells for persist."""
 
-from app.application.worldData.locationPayloadAccess import settlement_payload
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 import logging
 from dataclasses import replace
 
