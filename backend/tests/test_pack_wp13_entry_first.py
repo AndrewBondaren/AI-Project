@@ -6,8 +6,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import (
+from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import (
     FineTerrainRefineOrchestrator,
 )
 from app.application.worldData.generators.coordinates.worldTile import (

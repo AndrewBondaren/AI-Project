@@ -35,7 +35,7 @@ from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator

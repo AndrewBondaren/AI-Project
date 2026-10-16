@@ -18,7 +18,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 from app.application.worldData.pack.read.locationsIndexRead import (
     location_uid_in_pack_index,
 )
-from app.application.worldData.pack.refine.fineChunkGeom import (
+from app.application.worldData.pack.refine.fine.fineChunkGeom import (
     expected_fine_chunks,
     rects_for_macro_tile,
     rects_overlapping_volume,

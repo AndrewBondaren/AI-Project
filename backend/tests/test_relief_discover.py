@@ -937,7 +937,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             self.assertIn(Facing.EAST, outwards)
 
     def test_occupancy_cap_is_l_tpl_not_envelope_floor(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeHalo import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
             length_cap_for_context,
         )

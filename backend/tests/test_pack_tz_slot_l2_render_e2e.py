@@ -15,9 +15,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
-from app.application.worldData.pack.refine.detailedGradeCatalog import catalog_for_surface
-from app.application.worldData.pack.refine.fineChunkPersist import FineChunkPersist
-from app.application.worldData.pack.refine.fineTileContext import (
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import catalog_for_surface
+from app.application.worldData.pack.refine.fine.fineChunkPersist import FineChunkPersist
+from app.application.worldData.pack.refine.fine.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
 )

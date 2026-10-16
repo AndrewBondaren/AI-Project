@@ -9,12 +9,12 @@ from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFac
 )
 from app.application.worldData.relief.gradeInstanceMerge import merge_grade_instances
 from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
-from app.application.worldData.pack.refine.detailedGradeCatalog import (
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
     TileFaceCatalog,
     build_tile_face_catalog,
 )
-from app.application.worldData.pack.refine.detailedGradeDiscover import discover_and_paint
-from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.detailed.detailedGradeDiscover import discover_and_paint
+from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
 from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
 from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.application.worldData.generators.climate.climatePoleField import GridBBox

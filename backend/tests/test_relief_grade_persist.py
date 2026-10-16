@@ -15,7 +15,7 @@ from app.application.worldData.relief.gradeCatalog import load_grade_membership
 from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance

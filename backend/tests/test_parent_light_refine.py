@@ -299,7 +299,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
 
 class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
     async def test_refine_rects_missing_parent_raises(self) -> None:
-        from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import (
+        from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import (
             FineTerrainRefineOrchestrator,
         )
         from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
@@ -317,7 +317,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
             terrain_parallel_workers=None,
         )
         with patch(
-            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
+            "app.application.worldData.pack.refine.fine.fineTilePrep.require_parent_light",
             side_effect=MissingParentLightError("w-miss", 0, 0),
         ):
             with self.assertRaises(MissingParentLightError):

@@ -18,8 +18,8 @@ from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFac
     build_relief_grade_system,
 )
 from app.application.worldData.pack.refine.columnBounds import ColumnBounds
-from app.application.worldData.pack.refine.detailedGradeCatalog import FaceKey, TileFaceCatalog
-from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import FaceKey, TileFaceCatalog
+from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.packJobUid import FaceGridAxis

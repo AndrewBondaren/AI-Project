@@ -22,7 +22,7 @@ from app.application.worldData.pack.bake.detailedBakeScope import DetailedScopeP
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
-from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.materialize.persistResult import PersistResult
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
