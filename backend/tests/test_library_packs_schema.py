@@ -1,4 +1,4 @@
-"""Library pack catalog — plan library-packs-model.md step B-2 (TZ §3, §6).
+"""Library pack catalog — plan library-packs-model-done.md step B-2 (TZ §3, §6).
 
 Runs against a real temp SQLite migrated by ``0001_initial.sql`` — no
 copied DDL: schema validation, same names across packs, single owner,

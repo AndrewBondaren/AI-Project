@@ -66,6 +66,19 @@ class TemplateDomainArchiveTests(_ServiceCase):
         self.assertFalse(await self.packs.list_engine())
         self.assertEqual(await self.bundle.export("source"), original)
 
+    async def test_world_export_skips_empty_world_owned_pack(self):
+        await self._world("source")
+        pack, _, *_ = await create_graph(self, owner="source")
+        empty = await self.service.create_pack(system_name="world.source.empty",
+                                               owner_world_uid="source")
+        bundle = await self.bundle.export("source")
+        uids = {p["manifest"]["pack_uid"] for p in bundle["library_packs"]}
+        self.assertIn(pack.pack_uid, uids)
+        self.assertNotIn(empty.pack_uid, uids)
+        # Single-pack export keeps the empty-pack guard.
+        with self.assertRaises(LibraryPackValidationError):
+            await self.service.archives.export_pack(empty.pack_uid)
+
     async def test_flat_legacy_plot_uses_converter_and_packed_structure_name_resolution(self):
         pack, _, structure, _, _, _ = await create_graph(self)
         wire = pack_to_wire(await self.service.archives.export_pack(pack.pack_uid))

@@ -1,4 +1,4 @@
-"""Canonical-defaults engine — plan canonical-defaults-engine.md step 2.
+"""Canonical-defaults engine — plan canonical-defaults-engine-done.md step 2.
 
 World scope: wire-overlay merge before validation. Global scope:
 fill-missing over a persistence double on a real temp SQLite (real

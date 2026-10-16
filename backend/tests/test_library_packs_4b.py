@@ -1,4 +1,4 @@
-"""Library packs — plan library-packs-model.md step 4b.
+"""Library packs — plan library-packs-model-done.md step 4b.
 
 Remap operations (TZ §1.1/§2/§4.1): ``instantiate_pack`` engine→world
 snapshot with deterministic member remap + provenance, internal/external

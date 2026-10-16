@@ -1,4 +1,4 @@
-"""Pack application service — plan library-packs-model.md steps 4a–4c,
+"""Pack application service — plan library-packs-model-done.md steps 4a–4c,
 TZ §0.2/§1.1/§2/§3.
 
 Single CRUD/ownership boundary over ``library_packs`` +

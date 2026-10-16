@@ -2116,7 +2116,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 **Ревью шага B3 плана 5b (2026-10-14):** находки по коммитам `a7d01a7f`/`9522f962` (snapshot loader, packing identity по `template_uid`) — packing-литералы (`Facing.SOUTH`, district-метки), ложный `catalog=None`, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, private-имена как межмодульный API. Подробности и шаги — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md).
 
-**Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model.md`](../.cursor/plans/library-packs-model.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt.md`](../.cursor/plans/library-packs-4a-review-debt.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
+**Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model-done.md`](../.cursor/plans/library-packs-model-done.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt-done.md`](../.cursor/plans/library-packs-4a-review-debt-done.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -2131,7 +2131,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 **Related (info):** member identity иммутабельна (update = замена тела) и `source_pack_uid`/`source_template_uid` колонки заведены, но не пишутся — это контракт, не долг; remap заполняет их в 4b.
 
-**Agent pointer:** [`.cursor/plans/library-packs-model.md`](../.cursor/plans/library-packs-model.md) **шаг 4a**; SoT [`tz_template_library_packs.md`](./tz_template_library_packs.md) §0.2/§1.1/§3.
+**Agent pointer:** [`.cursor/plans/library-packs-model-done.md`](../.cursor/plans/library-packs-model-done.md) **шаг 4a**; SoT [`tz_template_library_packs.md`](./tz_template_library_packs.md) §0.2/§1.1/§3.
 
 ---
 
@@ -2153,7 +2153,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-10-11 | **LIBPACK-T-2** **resolved** — оба шага `libpack-t2-relief-import-instantiate-done.md`; interim-метод и caller удалены, engine→world relief только через `instantiate_pack`. |
 | 2026-10-11 | **LIBPACK-T-7** open: R34-upsert был мёртв под T-29 overlay (resolved-scan всегда полон); шаг 1 libpack-t2 ввёл raw-scan и реальный persist. Открытый вопрос к R34: persist vs удалить рудимент. |
 | 2026-10-11 | **LIBPACK-T-2** → план `libpack-t2-relief-import-instantiate.md` (2 шага: R34→adapter, роут→instantiate). Решения: `template_uid`→member→pack→`instantiate_pack`; member-level engine→world отклонён по ТЗ §0.1; R34 в `remap_world_refs`. |
-| 2026-10-10 | **LIBPACK-T** open: шаг 4a `library-packs-model` — ownerless write-paths (T-1), interim `import_library_uid_into_world` → 4b (T-2), `get_by_system_name` deprecated → 5b (T-3), `_swap_pointer` O(members×registry) accepted (T-4), referenced-set used-check → 4c (T-5), `_in_transaction` convention (T-6). Code smells шага — `library-packs-4a-review-debt.md`. |
+| 2026-10-10 | **LIBPACK-T** open: шаг 4a `library-packs-model` — ownerless write-paths (T-1), interim `import_library_uid_into_world` → 4b (T-2), `get_by_system_name` deprecated → 5b (T-3), `_swap_pointer` O(members×registry) accepted (T-4), referenced-set used-check → 4c (T-5), `_in_transaction` convention (T-6). Code smells шага — `library-packs-4a-review-debt-done.md`. |
 | 2026-10-06 | **NC-10** гидрология ✅: loader fine, coarse view в `build_hydrology_master_input`, `resolve_declared_river_intents(space=)`, rename `*_meter*` → `*_fine*`; `tz_terrain_hydrology` U20/U21/C1. Остались горы, pack, locals. |
 | 2026-09-07 | **NC-10** open: leftover `_m` / «метры» вне coordinate hub (горы, гидрология, pack `light_m`/`tile_m`, `sparse_meter_hydro`) после rename на fine grid. Не NC-1a/c/g, не NC-2 parcel. Слайс по кластеру. |
 | 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |

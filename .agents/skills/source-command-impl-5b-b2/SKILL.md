@@ -1,6 +1,6 @@
 ---
 name: "source-command-impl-5b-b2"
-description: "Имплементирует шаг B2 плана domain-template-libraries-5b-implementation.md: применение legacy world migration plan через существующий 4d writer в world import UOW. Входы закрыты: A0–A7 и B1. Новый чат: /impl-5b-b2."
+description: "Имплементирует шаг B2 плана domain-template-libraries-5b-implementation-done.md: применение legacy world migration plan через существующий 4d writer в world import UOW. Входы закрыты: A0–A7 и B1. Новый чат: /impl-5b-b2."
 ---
 
 # source-command-impl-5b-b2
@@ -17,8 +17,8 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b2
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/domain-template-libraries-5b-implementation.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation.md) — **единственный SoT этой задачи**: §1–4 (границы, целевая архитектура, data flow, правила исполнения) и шаг **B2** (§6). Также статусы A6/A7/B1 — они описывают входные контракты. Не отклоняться.
-2. [`.cursor/plans/library-packs-model.md`](../../../.cursor/plans/library-packs-model.md) — §5b (исходная формулировка шага) и §4d (writer, который B2 переиспользует).
+1. [`.cursor/plans/domain-template-libraries-5b-implementation-done.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation-done.md) — **единственный SoT этой задачи**: §1–4 (границы, целевая архитектура, data flow, правила исполнения) и шаг **B2** (§6). Также статусы A6/A7/B1 — они описывают входные контракты. Не отклоняться.
+2. [`.cursor/plans/library-packs-model-done.md`](../../../.cursor/plans/library-packs-model-done.md) — §5b (исходная формулировка шага) и §4d (writer, который B2 переиспользует).
 3. [`.cursor/plans/library-packs-5b-analysis.md`](../../../.cursor/plans/library-packs-5b-analysis.md) — анализ разрывов, основание декомпозиции B1–B7.
 4. [`docs/tz_template_library_packs.md`](../../../docs/tz_template_library_packs.md) — §0.3 (write-политика/409/token), §4.1/§4.2 (bundle/archive), §5 (resolve).
 5. [`docs/tz_world_bundle.md`](../../../docs/tz_world_bundle.md) — «Порядок секций», «Domain errors», «Два рода handlers».

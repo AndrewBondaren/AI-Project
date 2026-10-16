@@ -1,6 +1,6 @@
 ---
 name: "source-command-impl-5b-b4"
-description: "Имплементирует шаг B4 плана domain-template-libraries-5b-implementation.md: building materialize и persist template refs — system_template_uid реального member + новое system_structure_template_uid (SQL/DTO/remap/usage). Входы закрыты: A0–A7, B1–B3. Новый чат: /impl-5b-b4."
+description: "Имплементирует шаг B4 плана domain-template-libraries-5b-implementation-done.md: building materialize и persist template refs — system_template_uid реального member + новое system_structure_template_uid (SQL/DTO/remap/usage). Входы закрыты: A0–A7, B1–B3. Новый чат: /impl-5b-b4."
 ---
 
 # source-command-impl-5b-b4
@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b4
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/domain-template-libraries-5b-implementation.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation.md) — **единственный SoT этой задачи**: §1–4 и шаг **B4** (§6), включая §2.4 (persist refs: `system_template_uid` = UID реально применённого шаблона; `system_structure_template_uid` = UID фактически применённой structure, identity не снимок). Статусы B1–B3 описывают входные контракты.
+1. [`.cursor/plans/domain-template-libraries-5b-implementation-done.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation-done.md) — **единственный SoT этой задачи**: §1–4 и шаг **B4** (§6), включая §2.4 (persist refs: `system_template_uid` = UID реально применённого шаблона; `system_structure_template_uid` = UID фактически применённой structure, identity не снимок). Статусы B1–B3 описывают входные контракты.
 2. [`docs/tz_building_generator.md`](../../../docs/tz_building_generator.md) — §3.1 (plot wire), §7 (BuildingLayout result/template refs), §11.1/§11.6 (building context).
 3. [`docs/tz_city_generation.md`](../../../docs/tz_city_generation.md) — §11.3 (materialize), §11.5 (persist).
 4. [`docs/project_data_storage_tz.md`](../../../docs/project_data_storage_tz.md) — «named_locations», «DET-1» (детерминированные uid).

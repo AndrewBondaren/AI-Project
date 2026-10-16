@@ -1,6 +1,6 @@
 ---
 name: "source-command-impl-libpack-6"
-description: "Имплементирует шаг 6 плана library-packs-model.md: global-scope attach structure_templates через CanonicalLibrarySpec (A5 уже сдан), удаление runtime FS-fallback, фикс resolve domain root. Входы закрыты: A0–A7, B1–B7 (5b), A-2. Новый чат: /impl-libpack-6."
+description: "Имплементирует шаг 6 плана library-packs-model-done.md: global-scope attach structure_templates через CanonicalLibrarySpec (A5 уже сдан), удаление runtime FS-fallback, фикс resolve domain root. Входы закрыты: A0–A7, B1–B7 (5b), A-2. Новый чат: /impl-libpack-6."
 ---
 
 # source-command-impl-libpack-6
@@ -17,8 +17,8 @@ Use this skill when the user asks to run the migrated source command `impl-libpa
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/library-packs-model.md`](../../../.cursor/plans/library-packs-model.md) — **единственный SoT этой задачи**: шаг **6** (§964). Внимание: абзац про POJO-only plots/default selector — исторический контракт 2026-10-09, **заменён уточнением A0** (canonical spec/attach перенесён в A5 плана 5b; специальный builtin/default selector не вводится).
-2. [`.cursor/plans/domain-template-libraries-5b-implementation.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation.md) — статусы A0–A7 и B1–B7 описывают входные контракты: membership — единственный availability source, canonical attach-механизм (A5) уже реализован, реестры-указатели сняты.
+1. [`.cursor/plans/library-packs-model-done.md`](../../../.cursor/plans/library-packs-model-done.md) — **единственный SoT этой задачи**: шаг **6** (§964). Внимание: абзац про POJO-only plots/default selector — исторический контракт 2026-10-09, **заменён уточнением A0** (canonical spec/attach перенесён в A5 плана 5b; специальный builtin/default selector не вводится).
+2. [`.cursor/plans/domain-template-libraries-5b-implementation-done.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation-done.md) — статусы A0–A7 и B1–B7 описывают входные контракты: membership — единственный availability source, canonical attach-механизм (A5) уже реализован, реестры-указатели сняты.
 3. [`docs/tz_template_library_packs.md`](../../../docs/tz_template_library_packs.md) — pack-модель, canonical spec, attach-политика.
 4. [`docs/tz_building_generator.md`](../../../docs/tz_building_generator.md) — §5.1 «Глобальная библиотека», §6.1 «Загрузка» в редакции A0.
 5. [`docs/tz_json_validation.md`](../../../docs/tz_json_validation.md) — «Wire projection → WorldSlice» (engine, scope global).

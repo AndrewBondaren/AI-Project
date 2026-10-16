@@ -1,5 +1,5 @@
 """Effective catalog of one world — runtime read facade (plan
-``library-packs-model.md`` step 5a-1; TZ packs §1, §1.1, §5, §7).
+``library-packs-model-done.md`` step 5a-1; TZ packs §1, §1.1, §5, §7).
 
 Membership = the world's own packs ∪ declared defaults
 (``membership.membership_pack_uids``); nothing else is a candidate — no

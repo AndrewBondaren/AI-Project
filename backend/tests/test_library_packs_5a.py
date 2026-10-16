@@ -1,4 +1,4 @@
-"""Library packs — plan library-packs-model.md step 5a-1.
+"""Library packs — plan library-packs-model-done.md step 5a-1.
 
 ``EffectiveCatalog``: membership-scoped runtime read facade (TZ §1/§1.1):
 world-owned packs ∪ declared defaults, isolation from other worlds and

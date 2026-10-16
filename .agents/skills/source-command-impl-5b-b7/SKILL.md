@@ -1,6 +1,6 @@
 ---
 name: "source-command-impl-5b-b7"
-description: "Имплементирует шаг B7 плана domain-template-libraries-5b-implementation.md: schema/legacy API cleanup — колонки building_template_registry/relief_template_registry, registry POJO, accessors, ambiguous parse_body, legacy denorm, member name lookup, судьба flat bundle-секций, итоговая приёмка трека. Входы закрыты: A0–A7, B1–B6. Новый чат: /impl-5b-b7."
+description: "Имплементирует шаг B7 плана domain-template-libraries-5b-implementation-done.md: schema/legacy API cleanup — колонки building_template_registry/relief_template_registry, registry POJO, accessors, ambiguous parse_body, legacy denorm, member name lookup, судьба flat bundle-секций, итоговая приёмка трека. Входы закрыты: A0–A7, B1–B6. Новый чат: /impl-5b-b7."
 ---
 
 # source-command-impl-5b-b7
@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b7
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/domain-template-libraries-5b-implementation.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation.md) — **единственный SoT этой задачи**: §1–4 и шаг **B7** (§6). Статусы B1–B6 описывают входные контракты; B6 уже убрал pointer dual-write и перевёл export на membership — registry-колонки с этого момента только compatibility-данные для legacy input.
+1. [`.cursor/plans/domain-template-libraries-5b-implementation-done.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation-done.md) — **единственный SoT этой задачи**: §1–4 и шаг **B7** (§6). Статусы B1–B6 описывают входные контракты; B6 уже убрал pointer dual-write и перевёл export на membership — registry-колонки с этого момента только compatibility-данные для legacy input.
 2. [`docs/tz_template_library_packs.md`](../../../docs/tz_template_library_packs.md) — §3/4/5 (bundle/library archive, import, usage).
 3. [`docs/tz_building_generator.md`](../../../docs/tz_building_generator.md) — §5–6 в редакции A0.
 4. [`docs/tz_json_validation.md`](../../../docs/tz_json_validation.md) — «Wire projection», «WorldSlice», «Runtime path».

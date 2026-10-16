@@ -1,8 +1,12 @@
 """Archive application boundary over the common library write pipeline (TZ §4)."""
+import logging
+
 from app.application.worldData.libraryPacks.archiveSources import archive_source, export_pack
 from app.application.worldData.libraryPacks.packIdentity import instance_system_name
 from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, WriteSource, validated_write_request
 from app.application.worldData.libraryPacks.writeFacade import require_result
+
+logger = logging.getLogger(__name__)
 
 
 class LibraryArchiveService:
@@ -36,9 +40,17 @@ class LibraryArchiveService:
         return write_archive({}, root, path=path, library_packs=(pack,))
 
     async def export_world(self, world_uid):
-        return tuple([await self.export_pack(pack.pack_uid)
-                      for pack in sorted(await self._scope.packs.list_world_owned(world_uid),
-                                         key=lambda p: p.pack_uid)])
+        packs = []
+        for pack in sorted(await self._scope.packs.list_world_owned(world_uid),
+                           key=lambda p: p.pack_uid):
+            if not await self._scope.members.list_by_pack(pack.pack_uid):
+                # Empty world-owned packs are legal (instantiate with missing
+                # deps); one must not cancel the whole world export.
+                logger.warning("export | world %s skips empty pack %s",
+                               world_uid, pack.pack_uid)
+                continue
+            packs.append(await self.export_pack(pack.pack_uid))
+        return tuple(packs)
 
     def sources(self, packs, *, source_owner, target_owner):
         imports, items = {}, []

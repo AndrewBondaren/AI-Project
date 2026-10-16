@@ -1,4 +1,4 @@
-"""Library packs — plan library-packs-model.md step 4a.
+"""Library packs — plan library-packs-model-done.md step 4a.
 
 ``LibraryPackService``: pack/member CRUD with ownership enforcement
 (TZ §0.2/§1.1/§3), FS pack import into engine libraries, and the

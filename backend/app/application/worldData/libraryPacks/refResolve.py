@@ -1,5 +1,5 @@
 """``resolve_ref`` — runtime template-ref resolve over the effective catalog
-(plan ``library-packs-model.md`` step 5a-2; TZ packs §1.1, §5, §7).
+(plan ``library-packs-model-done.md`` step 5a-2; TZ packs §1.1, §5, §7).
 
 Path: UID → membership → availability → body. Three input states of a ref
 field (§5): a member ``uid``; an explicit ``default`` marker (the domain's

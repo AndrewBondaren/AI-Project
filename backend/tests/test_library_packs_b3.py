@@ -1,4 +1,4 @@
-"""Library packs — plan library-packs-model.md step B-3.
+"""Library packs — plan library-packs-model-done.md step B-3.
 
 Covers the step-3 contracts: typed ``pack.manifest.json`` loading and
 validation (TZ §4, template-pack-layout), manifest-aware FS importers

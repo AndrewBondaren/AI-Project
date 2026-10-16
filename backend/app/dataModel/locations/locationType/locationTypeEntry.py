@@ -32,8 +32,9 @@ class LocationTypeEntry(BaseModel):
     def serialize_overrides(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         data = handler(self)
         # An omitted override must survive world JSON normalization as omitted.
-        if "is_inhabited" not in self.model_fields_set:
-            data.pop("is_inhabited", None)
+        for name in ("is_inhabited", "payload_kind", "is_outdoor"):
+            if name not in self.model_fields_set:
+                data.pop(name, None)
         return data
 
     def fixture_identity(self) -> LocationTypeEntry:

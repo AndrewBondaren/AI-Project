@@ -1,4 +1,4 @@
-"""Explicit old→new UID map — plan library-packs-model.md step 3.
+"""Explicit old→new UID map — plan library-packs-model-done.md step 3.
 
 File-level, one-shot migration artifact (TZ §4 «Legacy fixtures/bundle»);
 no runtime owner guessing and no dual UID support for migrated content.

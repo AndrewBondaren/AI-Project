@@ -2,7 +2,7 @@
 
 Дата: 2026-10-16. Статус: подготовлена; ручной прогон не выполнялся.
 
-Источник требований: `.cursor/plans/library-packs-model.md`, шаги 6–7;
+Источник требований: `.cursor/plans/library-packs-model-done.md`, шаги 6–7;
 `tz_template_library_packs.md` §0.3/1/2/4/5/6;
 `tz_domain_template_libraries.md`; `tz_terrain_relief.md` R21/R29;
 `tz_json_validation.md` — global canonical defaults.

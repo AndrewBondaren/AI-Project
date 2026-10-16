@@ -1,6 +1,6 @@
 """Canonical-defaults engine — domain-agnostic canonical attach.
 
-Plan: ``.cursor/plans/canonical-defaults-engine.md`` (step 2).
+Plan: ``.cursor/plans/canonical-defaults-engine-done.md`` (step 2).
 SoT: ``docs/tz_json_validation.md`` § «Единый движок canonical defaults»,
 ``docs/tz_template_library_packs.md`` §6.
 

@@ -1,6 +1,6 @@
 ---
 name: "source-command-impl-5b-b3"
-description: "Имплементирует шаг B3 плана domain-template-libraries-5b-implementation.md: WorldTemplateSnapshot loader и переключение packing/district planner с name-based на member UID identity. Входы закрыты: A0–A7, B1–B2. Новый чат: /impl-5b-b3."
+description: "Имплементирует шаг B3 плана domain-template-libraries-5b-implementation-done.md: WorldTemplateSnapshot loader и переключение packing/district planner с name-based на member UID identity. Входы закрыты: A0–A7, B1–B2. Новый чат: /impl-5b-b3."
 ---
 
 # source-command-impl-5b-b3
@@ -17,8 +17,8 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b3
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/domain-template-libraries-5b-implementation.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation.md) — **единственный SoT**: §1–4 (границы, целевая архитектура, data flow, правила) и шаг **B3** (§6). Статусы A1/A5/B1/B2 описывают входные контракты. Не отклоняться.
-2. [`.cursor/plans/library-packs-model.md`](../../../.cursor/plans/library-packs-model.md) — §5b (pointer-миграция/pins) и §5a (effective catalog, который B3 потребляет).
+1. [`.cursor/plans/domain-template-libraries-5b-implementation-done.md`](../../../.cursor/plans/domain-template-libraries-5b-implementation-done.md) — **единственный SoT**: §1–4 (границы, целевая архитектура, data flow, правила) и шаг **B3** (§6). Статусы A1/A5/B1/B2 описывают входные контракты. Не отклоняться.
+2. [`.cursor/plans/library-packs-model-done.md`](../../../.cursor/plans/library-packs-model-done.md) — §5b (pointer-миграция/pins) и §5a (effective catalog, который B3 потребляет).
 3. [`docs/tz_template_library_packs.md`](../../../docs/tz_template_library_packs.md) — §1/1.1 (availability = membership, pins ≠ фильтр), §3, §5 (resolve).
 4. [`docs/tz_domain_template_libraries.md`](../../../docs/tz_domain_template_libraries.md) — §1 (композиция), §5 (runtime refs), §6 (selectors/legacy).
 5. [`docs/tz_city_generation.md`](../../../docs/tz_city_generation.md) — §3, §9.2/9.4 (selectors, required plots).
