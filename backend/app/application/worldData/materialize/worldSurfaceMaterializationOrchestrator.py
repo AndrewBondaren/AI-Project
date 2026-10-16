@@ -33,14 +33,14 @@ from app.application.worldData.materialize.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
-from app.dataModel.worldPack.detailedBakeScope import (
+from app.dataModel.worldPack.bake.detailedBakeScope import (
     DetailedBakeRequest,
     DetailedBakeScopeKind,
     resolve_detailed_bake_request,
 )
-from app.dataModel.worldPack.packBakeDefaults import resolve_detailed_grade_stages
-from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
-from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
+from app.dataModel.worldPack.bake.packBakeDefaults import resolve_detailed_grade_stages
+from app.dataModel.worldPack.bake.packBakeMode import PackBakeApiMode
+from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation

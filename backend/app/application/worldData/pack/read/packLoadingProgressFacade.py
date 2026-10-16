@@ -16,7 +16,7 @@ from app.application.worldData.pack.bake.packCompletenessClassifier import (
     PackCompletenessClassifier,
 )
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

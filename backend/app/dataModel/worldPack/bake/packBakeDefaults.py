@@ -6,8 +6,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
-from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.lightFineTilePolicy import LightFineTilePolicy
 
 PACK_CODEC_VERSION = 1
 

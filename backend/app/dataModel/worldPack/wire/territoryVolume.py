@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 
 
 class TerritoryVolume(BaseModel):

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.dataModel.spatial.facing import Facing, parse_facing
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
 from app.db.models.mapCell import MapCell
 
 # Location flush is one FineTerrain blob; chunk index is always origin.

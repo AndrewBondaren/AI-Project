@@ -28,7 +28,7 @@ from app.application.worldData.materialize.persistResult import PersistResult
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository

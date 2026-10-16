@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.dataModel.worldPack.worldPackManifest import WildernessRefineStatus
+from app.dataModel.worldPack.meta.worldPackManifest import WildernessRefineStatus
 
 
 def wilderness_refine_status_for_counts(

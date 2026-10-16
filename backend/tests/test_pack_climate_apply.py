@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
-from app.dataModel.worldPack.mergeMapCells import MergedCellView
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire, ClimateSampleWire
+from app.dataModel.worldPack.wire.mergeMapCells import MergedCellView
 
 
 class TestClimateFieldSampleAt(unittest.TestCase):

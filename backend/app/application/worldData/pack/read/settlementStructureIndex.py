@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.dataModel.worldPack.settlementStructureWire import (
+from app.dataModel.worldPack.wire.settlementStructureWire import (
     BuildingShellWire,
     SettlementStructureWire,
     ShellCellWire,

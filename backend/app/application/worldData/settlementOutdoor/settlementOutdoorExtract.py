@@ -33,7 +33,7 @@ from app.dataModel.locations.settlement.district.districtTopologySlot import (
     DistrictTopologySlot,
 )
 from app.dataModel.locations.transitions.transition import Transition
-from app.dataModel.worldPack.settlementStructureWire import (
+from app.dataModel.worldPack.wire.settlementStructureWire import (
     AreaSlotWire,
     AreaStructureWire,
     BuildingShellWire,

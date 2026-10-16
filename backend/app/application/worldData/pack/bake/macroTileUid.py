@@ -6,7 +6,7 @@ Format SoT: ``PackJobUid``. This module only reads world → seed namespace.
 from __future__ import annotations
 
 from app.ids import seed_root
-from app.dataModel.worldPack.packJobUid import PackJobUid
+from app.dataModel.worldPack.bake.packJobUid import PackJobUid
 from app.db.models.world import World
 
 

@@ -15,7 +15,7 @@ from app.application.worldData.render.mapSymbols import (
     symbol_for_role_or_terrain,
 )
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
+from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.db.models.mapCell import MapCell
 
 

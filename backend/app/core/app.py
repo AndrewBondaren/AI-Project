@@ -59,9 +59,9 @@ def make_lifespan(db: Database):
             validate_world_row_relief_obstacle_columns,
         )
         from app.dataModel.terrain.worldTerrainScalars import validate_world_row_terrain_columns
-        from app.dataModel.worldPack.worldGridSettings import validate_world_row_grid_columns
-        from app.dataModel.worldPack.worldPackMetadata import validate_world_row_pack_metadata_columns
-        from app.dataModel.worldPack.worldMapResolutionSettings import validate_world_row_map_resolution_columns
+        from app.dataModel.worldPack.meta.worldGridSettings import validate_world_row_grid_columns
+        from app.dataModel.worldPack.meta.worldPackMetadata import validate_world_row_pack_metadata_columns
+        from app.dataModel.worldPack.meta.worldMapResolutionSettings import validate_world_row_map_resolution_columns
         validate_world_row_climate_columns(World)
         validate_world_row_terrain_columns(World)
         validate_world_row_grid_columns(World)

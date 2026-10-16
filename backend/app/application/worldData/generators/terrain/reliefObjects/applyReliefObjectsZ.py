@@ -12,7 +12,7 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
 )
 from app.application.worldData.generators.terrain.reliefObjects.mountainZ import apply_mountain_z
 from app.application.worldData.generators.terrain.reliefObjects.ravineZ import apply_ravine_z
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_side
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_side
 
 if TYPE_CHECKING:
     from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField

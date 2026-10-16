@@ -19,7 +19,7 @@ from app.application.worldData.generators.terrain.reliefObjects.elevationResolve
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
 from app.dataModel.terrainMasks.mountain.enums import MountainKind
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
-from app.dataModel.worldPack.worldMapCellsPerTile import (
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
     light_m_for,
     resolve_world_map_cells_per_tile,
 )

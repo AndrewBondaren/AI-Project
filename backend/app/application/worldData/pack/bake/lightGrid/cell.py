@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.worldSeamCopy import WorldSeamCopy
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldSeamCopy import WorldSeamCopy
 
 
 @dataclass

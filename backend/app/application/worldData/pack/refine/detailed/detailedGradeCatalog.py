@@ -28,7 +28,7 @@ from app.application.worldData.pack.refine.detailed.detailedJobUid import (
     tile_edge_job_uid,
 )
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-from app.dataModel.worldPack.packJobUid import FaceGridAxis, PackJobUid
+from app.dataModel.worldPack.bake.packJobUid import FaceGridAxis, PackJobUid
 from app.db.models.world import World
 
 Coord = tuple[int, int]

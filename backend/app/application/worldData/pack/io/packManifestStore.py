@@ -7,7 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
+from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
 
 
 class PackManifestStore:

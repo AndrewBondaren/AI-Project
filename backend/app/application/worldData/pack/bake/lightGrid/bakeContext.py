@@ -9,12 +9,12 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     SurfaceTerrainContext,
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.dataModel.worldPack.paintedRoadEdge import PaintedRoadEdge
+from app.dataModel.worldPack.wire.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 

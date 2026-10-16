@@ -11,7 +11,7 @@ from app.application.worldData.locations.settlementMapOccupancy import (
     pick_occupants,
 )
 from app.dataModel.locations.namedLocation import BundleNamedLocation
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository

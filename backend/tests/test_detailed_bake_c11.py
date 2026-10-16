@@ -24,7 +24,7 @@ from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrat
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.worldPack.detailedBakeScope import DetailedBakeRequest
+from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
 from app.db.models.namedLocation import NamedLocation
 
 

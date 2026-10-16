@@ -18,7 +18,7 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import paint_role
 from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 _PRESERVE_DECLARED_RIVER = frozenset({WorldMapHydrologyRole.RIVER})
 _OPEN_WATER = frozenset({WorldMapHydrologyRole.SEA, WorldMapHydrologyRole.LAKE})

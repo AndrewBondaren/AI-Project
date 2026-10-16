@@ -21,8 +21,8 @@ from app.application.worldData.generators.coordinates.worldTile import (
     tile_origin_x,
     tile_origin_y,
 )
-from app.dataModel.worldPack.climateFieldWire import ClimateSampleWire
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateSampleWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

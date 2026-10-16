@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
+from app.dataModel.worldPack.bake.pathHeadingPolicy import PathHeadingPolicy
 
 AnchorKind = Literal["session_start", "tile_cross", "location_entry"]
 

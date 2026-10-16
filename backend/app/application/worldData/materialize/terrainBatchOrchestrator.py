@@ -28,8 +28,8 @@ from app.application.worldData.generators.terrain.types import ColumnRect, Surfa
 from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell

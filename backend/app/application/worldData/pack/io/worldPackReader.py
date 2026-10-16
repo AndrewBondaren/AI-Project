@@ -23,12 +23,12 @@ from app.application.worldData.pack.io.tileCodec import (
     TileCodec,
 )
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
-from app.dataModel.worldPack.settlementStructureWire import BuildingShellWire
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
+from app.dataModel.worldPack.wire.settlementStructureWire import BuildingShellWire
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.application.worldData.pack.read.settlementStructureIndex import building_with_interior_transitions
 

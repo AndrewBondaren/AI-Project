@@ -7,12 +7,12 @@ from typing import ClassVar, Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.core.constants import FINE_CELL_SIZE
-from app.dataModel.worldPack.climateFieldWire import ClimateBakeStatusMixin
-from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
-from app.dataModel.worldPack.packBakeDefaults import PACK_CODEC_VERSION
-from app.dataModel.worldPack.packBakeMode import PackBakeMode
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateBakeStatusMixin
+from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
+from app.dataModel.worldPack.bake.packBakeDefaults import PACK_CODEC_VERSION
+from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE
 
 PACK_WIRE_VERSION = "1.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"

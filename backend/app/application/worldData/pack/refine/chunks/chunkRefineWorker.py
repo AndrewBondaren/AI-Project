@@ -17,7 +17,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_worker_chunk,
 )
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository

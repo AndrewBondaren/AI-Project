@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
+from app.dataModel.worldPack.bake.pathHeadingPolicy import PathHeadingPolicy
 
 
 class _RectLike(Protocol):

@@ -7,9 +7,9 @@ from app.application.worldData.render.worldMapPackRenderer import (
     WorldMapPackRenderer,
     wire_symbol,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 class TestWorldMapPackRenderer(unittest.TestCase):

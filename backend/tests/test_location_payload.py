@@ -14,7 +14,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import i
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.application.worldData.render.lightMapPins import location_mark_pins
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 from app.dataModel.locations.payloadKind import PayloadKind

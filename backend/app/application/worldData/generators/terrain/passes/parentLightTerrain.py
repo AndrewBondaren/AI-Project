@@ -15,9 +15,9 @@ from app.application.worldData.generators.terrain.resolveWorldMapTerrain import 
     resolve_world_map_terrain,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
 
 T = TypeVar("T")

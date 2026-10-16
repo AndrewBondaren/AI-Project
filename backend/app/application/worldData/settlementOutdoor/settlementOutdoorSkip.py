@@ -14,7 +14,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTopology impor
 from app.dataModel.locations.locationFootprintPolicy import (
     named_location_is_settlement_map_site,
 )
-from app.dataModel.worldPack.worldPackManifest import SettlementStructureEntry
+from app.dataModel.worldPack.meta.worldPackManifest import SettlementStructureEntry
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository

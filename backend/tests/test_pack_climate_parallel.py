@@ -16,7 +16,7 @@ from app.application.worldData.materialize.materializationContext import Materia
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )
-from app.dataModel.worldPack.climateFieldWire import ClimateSampleWire
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateSampleWire
 
 
 def _world(**kwargs) -> SimpleNamespace:

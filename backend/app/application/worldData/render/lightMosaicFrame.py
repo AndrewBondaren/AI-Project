@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 TileIndex = dict[tuple[int, int], PackTileLightView]
 

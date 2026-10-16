@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from app.dataModel.terrain.worldTerrainScalars import TERRAIN_CHUNK_COLUMNS_DEFAULT
-from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
+from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.db.mapper import bool_col, json_list_col, json_col, json_nullable_col
 
 

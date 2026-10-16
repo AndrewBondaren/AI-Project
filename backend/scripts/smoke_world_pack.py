@@ -37,7 +37,7 @@ from debug_api_helpers import (
     api_client,
     api_pack_bake,
 )
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
 DEFAULT_FIXTURE = REPO / "fixtures" / "world_terrain_test.json"
 DEFAULT_WORLD = "world-terrain-test-001"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
-from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
+from app.dataModel.worldPack.bake.lightFineTilePolicy import LightFineTilePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

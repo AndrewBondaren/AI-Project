@@ -13,12 +13,12 @@ from app.application.worldData.render.renderPayloads import (
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
-from app.dataModel.worldPack.fineTerrainChunkWire import (
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import (
     FineTerrainChunkWire,
     FineTerrainColumnWire,
     FineTerrainZRun,
 )
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 
 
 class TestLocationTerrainPackRenderer(unittest.TestCase):

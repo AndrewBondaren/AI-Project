@@ -22,7 +22,7 @@ from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import 
 from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
-from app.dataModel.worldPack.packJobUid import FaceGridAxis
+from app.dataModel.worldPack.bake.packJobUid import FaceGridAxis
 
 SlotKey = tuple[int, int, int]
 ChunkTrace = tuple[ColumnBounds, Sequence[VertexSlotSeam]]

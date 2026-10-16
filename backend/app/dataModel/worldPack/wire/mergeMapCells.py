@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.worldPack.layerPriority import LAYER_PRIORITY_ORDER, MapLayerKind
+from app.dataModel.worldPack.bake.layerPriority import LAYER_PRIORITY_ORDER, MapLayerKind
 
 _MERGE_FIELDS: tuple[str, ...] = (
     "system_terrain",

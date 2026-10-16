@@ -19,11 +19,11 @@ from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.core.appSettings import app_settings
-from app.dataModel.worldPack.worldMapCellsPerTile import WorldMapCellsPerTilePolicy
-from app.dataModel.worldPack.worldMapResolutionSettings import (
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import WorldMapCellsPerTilePolicy
+from app.dataModel.worldPack.meta.worldMapResolutionSettings import (
     WorldMapResolutionSettings, validate_world_row_map_resolution_columns,
 )
-from app.dataModel.worldPack.worldPackMetadata import WorldPackMetadata, validate_world_row_pack_metadata_columns
+from app.dataModel.worldPack.meta.worldPackMetadata import WorldPackMetadata, validate_world_row_pack_metadata_columns
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 

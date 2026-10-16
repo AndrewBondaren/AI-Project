@@ -19,7 +19,7 @@ from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
 from app.dataModel.locations.transitions.transitionSide import TransitionSide
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire, BuildingInteriorTransitionsWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire, BuildingInteriorTransitionsWire
 
 
 class TransitionReadTest(unittest.IsolatedAsyncioTestCase):

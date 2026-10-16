@@ -9,7 +9,7 @@ from app.application.jsonValidation.resolve import ResolveContext, UnresolvedMod
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldSliceMerge import merge_world_slice
 from app.application.jsonValidation.worldSlices import slice_for_pojo, world_wire_from_row
-from app.dataModel.worldPack.worldGridSettings import WorldGridSettings
+from app.dataModel.worldPack.meta.worldGridSettings import WorldGridSettings
 from app.application.worldData.errors import (
     WorldDataError,
     WorldDataNotFoundError,

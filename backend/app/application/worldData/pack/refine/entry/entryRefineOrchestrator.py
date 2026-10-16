@@ -30,7 +30,7 @@ from app.application.worldData.pack.refine.pathHeading import PathHeading, resol
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.core.appSettings import app_settings
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository

@@ -7,7 +7,7 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.dataModel.spatial.facing import Facing, coerce_facing_wire
-from app.dataModel.worldPack.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
 
 
 class WorldMapCellWire(BaseModel):

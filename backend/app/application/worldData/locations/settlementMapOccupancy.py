@@ -19,8 +19,8 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
 from app.dataModel.locations.locationFootprintPolicy import named_location_is_settlement_map_site
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume, empty_inclusive, volumes_conflict
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume, empty_inclusive, volumes_conflict
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

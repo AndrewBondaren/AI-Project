@@ -10,7 +10,7 @@ from app.application.worldData.render.mapSymbols import SETTLEMENT_FOOTPRINT_SYM
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 from app.db.models.namedLocation import NamedLocation
 
 

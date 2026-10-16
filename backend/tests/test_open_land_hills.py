@@ -21,9 +21,9 @@ from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.masks.enums.maskDomainId import MaskDomainId
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 def _square_host(x0: int, x1: int, y0: int, y1: int) -> set[tuple[int, int]]:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 PRESERVE_HYDROLOGY_ROLES: frozenset[WorldMapHydrologyRole] = frozenset(
     {

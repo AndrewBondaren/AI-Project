@@ -24,12 +24,12 @@ from app.application.worldData.pack.refine.fine.fineChunkGeom import (
     rects_overlapping_volume,
     tiles_covering_volume,
 )
-from app.dataModel.worldPack.detailedBakeScope import (
+from app.dataModel.worldPack.bake.detailedBakeScope import (
     DetailedBakeRequest,
     refine_role_for_detailed_scope,
 )
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 
 from app.application.worldData.locations.settlementMapOccupancy import occupancy_locations
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

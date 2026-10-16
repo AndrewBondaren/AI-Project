@@ -15,11 +15,11 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.read.packMapHelpers import world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)

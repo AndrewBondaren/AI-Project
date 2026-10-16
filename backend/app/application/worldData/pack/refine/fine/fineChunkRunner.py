@@ -26,9 +26,9 @@ from app.application.worldData.pack.refine.fine.fineTileContext import ChunkComp
 from app.application.worldData.pack.refine.fine.fineTilePrep import prepare_fine_tile
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

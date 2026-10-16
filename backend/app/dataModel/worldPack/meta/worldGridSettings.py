@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
-from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
+from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.dataModel.worldScalarWire import (
     pojo_wire_keys,
     scalar_wire_from_mapping,

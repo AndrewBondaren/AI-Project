@@ -7,8 +7,8 @@ from typing import ClassVar, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE, light_m_for
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE, light_m_for
 
 
 class ParentLightTile(BaseModel):

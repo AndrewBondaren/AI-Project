@@ -9,8 +9,8 @@ from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.read.fineTerrainDecodeCache import FineTerrainDecodeCache
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
-from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.bake.packReadPolicy import PackReadPolicy
 
 
 def _chunk(cx: int, cy: int) -> FineTerrainChunkWire:

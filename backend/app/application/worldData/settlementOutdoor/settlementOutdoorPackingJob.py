@@ -56,10 +56,10 @@ from app.application.worldData.settlementOutdoor.settlementPipelineTimings impor
     WallClock,
 )
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.worldPack.settlementStructureStatus import (
+from app.dataModel.worldPack.wire.settlementStructureStatus import (
     settlement_structure_status_for,
 )
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell

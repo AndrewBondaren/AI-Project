@@ -7,9 +7,9 @@ from app.dataModel.locations.locationFootprintPolicy import (
     uses_settlement_fine_footprint,
 )
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.bake.pathHeadingPolicy import PathHeadingPolicy
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 class TestPojoPolicies(unittest.TestCase):

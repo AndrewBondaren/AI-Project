@@ -39,7 +39,7 @@ from app.application.worldData.registries.seedService import SeedService
 from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
 
 class WorldDataWiring:

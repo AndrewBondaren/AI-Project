@@ -42,9 +42,9 @@ from app.application.worldData.materialize.parallelPolicy import (
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-from app.dataModel.worldPack.packBakeMode import PackBakeMode
-from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
+from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.db.database import Database
 from app.db.repositories.iWorldRepository import IWorldRepository

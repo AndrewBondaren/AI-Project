@@ -22,7 +22,7 @@ from app.dataModel.terrainMasks import (
     MountainSpec,
     WorldTerrainMasks,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from types import SimpleNamespace
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 

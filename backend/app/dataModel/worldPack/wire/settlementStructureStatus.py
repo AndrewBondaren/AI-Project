@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.dataModel.worldPack.worldPackManifest import SettlementStructureStatus
+from app.dataModel.worldPack.meta.worldPackManifest import SettlementStructureStatus
 
 
 def settlement_structure_status_for(

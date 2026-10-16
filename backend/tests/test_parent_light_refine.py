@@ -31,10 +31,10 @@ from app.application.worldData.pack.read.parentLightLoad import load_parent_ligh
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 def _parent_mixed_terrain(*, side: int = 2, tile_m: int = 8) -> ParentLightTile:

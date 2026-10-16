@@ -38,7 +38,7 @@ from app.application.worldData.render.worldMapMacroRender import (
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 def _mosaic_title(kind: str, frame: MosaicFrame) -> str:

@@ -34,15 +34,15 @@ from app.dataModel.terrain.worldTerrainScalars import (
     WorldTerrainScalars,
     terrain_scalar_wire_from_mapping,
 )
-from app.dataModel.worldPack.worldGridSettings import (
+from app.dataModel.worldPack.meta.worldGridSettings import (
     GRID_SETTINGS_WIRE_KEYS,
     WorldGridSettings,
     grid_settings_wire_from_mapping,
 )
-from app.dataModel.worldPack.worldPackMetadata import (
+from app.dataModel.worldPack.meta.worldPackMetadata import (
     PACK_METADATA_WIRE_KEYS, WorldPackMetadata, pack_metadata_wire_from_mapping,
 )
-from app.dataModel.worldPack.worldMapResolutionSettings import (
+from app.dataModel.worldPack.meta.worldMapResolutionSettings import (
     MAP_RESOLUTION_WIRE_KEYS, WorldMapResolutionSettings, map_resolution_wire_from_mapping,
 )
 from app.dataModel import (

@@ -12,9 +12,9 @@ from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to_map_cell
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-from app.dataModel.worldPack.layerPriority import MapLayerKind
-from app.dataModel.worldPack.mergeMapCells import CellContribution, LayerSlice, MergedCellView, merge_layers
-from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
+from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
+from app.dataModel.worldPack.wire.mergeMapCells import CellContribution, LayerSlice, MergedCellView, merge_layers
+from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

@@ -12,16 +12,16 @@ from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_SETTLEMENT_STRUCTURE,
     TileCodec,
 )
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.settlementStructureWire import (
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.wire.settlementStructureWire import (
     BuildingShellWire,
     DistrictStructureWire,
     SettlementStructureWire,
     ShellCellWire,
 )
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 SETTLEMENT_STRUCTURE_FRAMES_MAGIC = b"SSF1"
 _RECORD_LEN = struct.Struct("!I")

@@ -32,7 +32,7 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE_GRADE,
     LEVEL_SURFACE_Z,
 )
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
 
 
 def _z_in_window(z: int, z_min: int | None, z_max: int | None) -> bool:

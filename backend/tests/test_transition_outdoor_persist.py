@@ -21,7 +21,7 @@ from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.application.worldData.transitions.transitionIdentity import transition_uid
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.db.database import Database
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.world import World

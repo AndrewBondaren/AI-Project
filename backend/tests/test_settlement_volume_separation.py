@@ -20,12 +20,12 @@ from app.application.worldData.locations.settlementMapOccupancy import (
     occupancy_locations,
     pick_occupants,
 )
-from app.dataModel.worldPack.territoryVolume import (
+from app.dataModel.worldPack.wire.territoryVolume import (
     TerritoryVolume,
     empty_inclusive,
     volumes_conflict,
 )
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

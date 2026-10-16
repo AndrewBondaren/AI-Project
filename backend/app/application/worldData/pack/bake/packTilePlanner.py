@@ -12,11 +12,11 @@ from app.application.worldData.pack.bake.packTileCollect import (
     light_l0_tiles,
     world_bounds_l0_tiles,
 )
-from app.dataModel.worldPack.packBakeDefaults import (
+from app.dataModel.worldPack.bake.packBakeDefaults import (
     PackBakeDefaults,
     resolve_light_tile_cap,
 )
-from app.dataModel.worldPack.packTilePlan import (
+from app.dataModel.worldPack.bake.packTilePlan import (
     PackTilePlan,
     PackTilePlanScope,
     PackTileRef,

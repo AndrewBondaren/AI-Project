@@ -16,8 +16,8 @@ from app.application.worldData.render.mapSymbols import LOCATION_PIN_SYMBOL
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 def _mask_glyph(

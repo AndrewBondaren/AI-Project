@@ -12,8 +12,8 @@ from app.dataModel.locations.locationFootprintPolicy import (
     named_location_is_settlement_map_site,
 )
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
-from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.dataModel.worldPack.wire.lightSettlementFootprint import LightSettlementFootprintPolicy
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
 from app.db.models.namedLocation import NamedLocation
 from app.application.jsonValidation.worldRow import location_types
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry

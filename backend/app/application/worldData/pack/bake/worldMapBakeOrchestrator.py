@@ -6,7 +6,7 @@ import time
 from collections import Counter
 
 from app.application.jsonValidation import terrain_system_keys
-from app.dataModel.worldPack.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
+from app.dataModel.worldPack.bake.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
@@ -35,9 +35,9 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.connectionEdge import ConnectionEdge

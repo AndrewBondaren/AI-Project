@@ -21,7 +21,7 @@ from app.application.worldData.transitions.transitionStoragePolicy import Buildi
 from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
 from app.db.database import Database
 from app.db.models.connectionNode import ConnectionNode
 from app.db.repositories.iTransitionRepository import TransitionRepositoryContext

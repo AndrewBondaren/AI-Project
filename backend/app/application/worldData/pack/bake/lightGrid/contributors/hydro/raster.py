@@ -11,7 +11,7 @@ from app.application.worldData.pack.bake.lightGrid.coords import (
     light_to_macro_local,
     meters_to_light,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
 
 
 def dilate(cells: set[tuple[int, int]], radius: int) -> set[tuple[int, int]]:

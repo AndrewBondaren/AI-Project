@@ -10,8 +10,8 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
 from app.dataModel.locations.locationFootprintPolicy import named_location_uses_settlement_fine_footprint
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.application.jsonValidation.worldRow import location_types

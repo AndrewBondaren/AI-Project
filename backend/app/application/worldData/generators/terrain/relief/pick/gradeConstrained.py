@@ -44,7 +44,7 @@ from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
     ReliefOntologyEnvelopes,
     ReliefTerrainEnvelope,
 )
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
 
 
 def _skip(

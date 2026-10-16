@@ -10,8 +10,8 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
-from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 
 DetailedBakeScopeKind = Literal["location", "wilderness"]
 

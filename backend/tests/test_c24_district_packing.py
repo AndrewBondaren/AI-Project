@@ -48,13 +48,13 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
 )
 from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.settlementStructureWire import (
+from app.dataModel.worldPack.wire.settlementStructureWire import (
     AreaSlotWire,
     AreaStructureWire,
     DistrictStructureWire,
     SettlementStructureWire,
 )
-from app.dataModel.worldPack.worldPackManifest import SettlementStructureEntry
+from app.dataModel.worldPack.meta.worldPackManifest import SettlementStructureEntry
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from pathlib import Path
@@ -405,7 +405,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
         with TemporaryDirectory() as tmp:
             paths = WorldPackPaths(Path(tmp), "w1")
             paths.ensure_dirs()
-            from app.dataModel.worldPack.locationsIndexWire import (
+            from app.dataModel.worldPack.wire.locationsIndexWire import (
                 LocationsIndexPin,
                 LocationsIndexWire,
             )
@@ -423,7 +423,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
         with TemporaryDirectory() as tmp:
             paths = WorldPackPaths(Path(tmp), "w1")
             paths.ensure_dirs()
-            from app.dataModel.worldPack.locationsIndexWire import (
+            from app.dataModel.worldPack.wire.locationsIndexWire import (
                 LocationsIndexPin,
                 LocationsIndexWire,
             )

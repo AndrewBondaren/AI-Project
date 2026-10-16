@@ -8,7 +8,7 @@ from app.application.worldData.pack.read.settlementStructureIndex import transit
 from app.application.worldData.transitions.transitionService import TransitionService
 from app.application.worldData.transitions.transitionValidation import validate_transitions
 from app.dataModel.locations.transitions.transition import Transition
-from app.dataModel.worldPack.settlementStructureWire import BuildingShellWire
+from app.dataModel.worldPack.wire.settlementStructureWire import BuildingShellWire
 from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
 
 

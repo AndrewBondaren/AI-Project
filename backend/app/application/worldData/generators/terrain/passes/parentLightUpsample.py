@@ -9,8 +9,8 @@ from app.application.worldData.generators.coordinates.worldTile import (
 )
 from app.application.worldData.generators.terrain.noise import cell_z_noise
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.db.models.world import World
 
 

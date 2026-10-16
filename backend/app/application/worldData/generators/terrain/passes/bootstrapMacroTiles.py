@@ -8,7 +8,7 @@ from app.application.worldData.pack.bake.packTileCollect import (
     declared_hydro_tiles,
     location_anchor_tiles,
 )
-from app.dataModel.worldPack.packBakeDefaults import (
+from app.dataModel.worldPack.bake.packBakeDefaults import (
     PackBakeDefaults,
     resolve_light_tile_cap,
 )

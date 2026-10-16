@@ -12,7 +12,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
     light_polyline_from_meters,
     paint_role,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
 
 # Intent corridors without explicit width — HydrologyMaskWire clamp is SoT.
 _INTENT_RIVER_WIDTH = HydrologyMaskWire(

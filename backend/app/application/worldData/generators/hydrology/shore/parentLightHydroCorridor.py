@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from app.application.worldData.generators.coordinates.worldTile import world_fine_xy
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 
 
 def hydro_mask_from_parent(

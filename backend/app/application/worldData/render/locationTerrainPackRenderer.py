@@ -30,8 +30,8 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE_Z,
     grade_level_key,
 )
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 
 
 class LocationTerrainPackRenderer:

@@ -11,7 +11,7 @@ from app.application.worldData.materialize.terrainBatchOrchestrator import TileS
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
@@ -52,8 +52,8 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
     def test_build_tile_surface_state_no_grade_from_parent(self) -> None:
         from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
-        from app.dataModel.worldPack.parentLightTile import ParentLightTile
-        from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+        from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+        from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
         cells = [
             WorldMapCellWire(
@@ -143,7 +143,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailed.detailedJobUid import (
             front_grade_site,
         )
-        from app.dataModel.worldPack.packJobUid import PackJobUid
+        from app.dataModel.worldPack.bake.packJobUid import PackJobUid
         wire = PackJobUid.canonical_defaults()
         for inst in result.grade_instances:
             self.assertIsNotNone(inst.site_id)
@@ -712,7 +712,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             tile_edge_job_uid,
         )
         from app.dataModel.spatial.facing import COMPACT_LETTER, Facing
-        from app.dataModel.worldPack.packJobUid import PackJobUid
+        from app.dataModel.worldPack.bake.packJobUid import PackJobUid
 
         wire = PackJobUid.canonical_defaults()
         cat = build_tile_face_catalog(

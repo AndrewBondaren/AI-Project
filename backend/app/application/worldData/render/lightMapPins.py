@@ -11,7 +11,7 @@ from app.application.worldData.pack.read.packMapHelpers import (
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
 from app.application.worldData.render.lightMosaicFrame import MosaicFrame
 from app.dataModel.locations.locationFootprintPolicy import is_settlement_map_site
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 
 

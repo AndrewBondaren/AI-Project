@@ -10,13 +10,13 @@ from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.locationsIndexRead import (
     load_locations_index as load_locations_index_from_paths,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.packCompleteness import (
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.bake.packCompleteness import (
     PackCompleteness,
     PackCompletenessSnapshot,
 )
-from app.dataModel.worldPack.packTilePlan import PackTileRef
-from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
+from app.dataModel.worldPack.bake.packTilePlan import PackTileRef
+from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

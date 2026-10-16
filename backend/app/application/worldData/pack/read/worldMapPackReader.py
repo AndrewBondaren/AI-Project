@@ -11,16 +11,16 @@ from app.application.worldData.generators.terrain.worldMapSettings import n_base
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.layerPriority import MapLayerKind
-from app.dataModel.worldPack.mergeMapCells import (
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
+from app.dataModel.worldPack.wire.mergeMapCells import (
     CellContribution,
     LayerSlice,
     MergedCellView,
     merge_layers,
 )
 from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to_map_cell
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

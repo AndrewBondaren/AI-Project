@@ -8,7 +8,7 @@ from app.application.worldData.generators.coordinates import (
     fine_to_grid_y,
 )
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.dataModel.worldPack.mergeMapCells import MergedCellView
+from app.dataModel.worldPack.wire.mergeMapCells import MergedCellView
 from app.db.models.world import World
 
 

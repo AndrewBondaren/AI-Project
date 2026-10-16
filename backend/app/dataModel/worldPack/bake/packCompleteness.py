@@ -6,7 +6,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.worldPack.packTilePlan import PackTileRef
+from app.dataModel.worldPack.bake.packTilePlan import PackTileRef
 
 PackCompleteness = Literal[
     "absent",

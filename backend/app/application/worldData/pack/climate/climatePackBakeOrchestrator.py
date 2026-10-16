@@ -41,12 +41,12 @@ from app.application.worldData.pack.read.parentLightLoad import load_parent_ligh
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.materialize.parallelPolicy import resolve_climate_workers
 from app.application.worldData.materialize.persistResult import PersistResult
-from app.dataModel.worldPack.climateFieldWire import ClimateSampleWire
-from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateSampleWire
+from app.dataModel.worldPack.bake.lightFineTilePolicy import LightFineTilePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

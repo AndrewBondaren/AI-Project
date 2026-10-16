@@ -24,19 +24,19 @@ from app.application.worldData.pack.io.tileCodec import (
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths, pack_storage_reference
 from app.application.worldData.pack.io.settlementStructureTmp import SettlementStructureTmpRef
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.wildernessRefineStatus import (
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.bake.wildernessRefineStatus import (
     wilderness_refine_status_for_counts,
     wilderness_refine_status_without_expected,
 )
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
-from app.dataModel.worldPack.worldPackManifest import (
+from app.dataModel.worldPack.meta.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
     SettlementStructureEntry,
@@ -215,7 +215,7 @@ class WorldPackWriter:
         *,
         territory_volume,
     ) -> str:
-        from app.dataModel.worldPack.worldPackManifest import LocationTerrainEntry
+        from app.dataModel.worldPack.meta.worldPackManifest import LocationTerrainEntry
 
         blob = self._codec.encode(PAYLOAD_KIND_FINE_TERRAIN, fine_terrain_chunk_payload(columns))
         path = self._paths.location_terrain_path(location_uid)

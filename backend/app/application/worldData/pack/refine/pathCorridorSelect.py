@@ -18,7 +18,7 @@ from app.application.worldData.pack.refine.pathHeading import (
     PathHeading,
     filter_corridor_rects,
 )
-from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
+from app.dataModel.worldPack.bake.pathHeadingPolicy import PathHeadingPolicy
 from app.db.models.world import World
 
 

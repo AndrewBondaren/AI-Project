@@ -34,10 +34,10 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-from app.dataModel.worldPack.detailedBakeScope import DetailedBakeScopeKind
-from app.dataModel.worldPack.packBakeDefaults import resolve_detailed_grade_stages
-from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
-from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
+from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeScopeKind
+from app.dataModel.worldPack.bake.packBakeDefaults import resolve_detailed_grade_stages
+from app.dataModel.worldPack.bake.packBakeMode import PackBakeApiMode
+from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
 
 router = APIRouter()
 _hydrology_generator = HydrologyGeneratorService()

@@ -17,8 +17,8 @@ from app.application.worldData.pack.climate.climatePackSample import (
     resolve_pack_surface_z,
     sample_pack_climate_at,
 )
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 def _world(**overrides):
@@ -183,7 +183,7 @@ class TestSamplePackClimateVolcanicHigh(unittest.TestCase):
 
 class TestPackBakeDefaultsFinePolicy(unittest.TestCase):
     def test_defaults_spawn_player_and_full_none(self) -> None:
-        from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+        from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
         d = PackBakeDefaults.canonical_defaults()
         self.assertEqual(d.light_fine_tile_policy, "spawn_player")

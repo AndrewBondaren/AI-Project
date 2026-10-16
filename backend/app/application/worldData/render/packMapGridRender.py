@@ -28,8 +28,8 @@ from app.application.worldData.render.renderPayloads import (
 from app.application.worldData.render.structureAsciiSymbols import render_structure_legend
 from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.worldBounds import WorldBounds
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.worldBounds import WorldBounds
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

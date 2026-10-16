@@ -22,9 +22,9 @@ from app.application.worldData.pack.refine.columnBounds import (
 from app.application.worldData.pack.refine.entry.entryRingGeom import wilderness_chunk_origin
 from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldBounds import WorldBounds
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainColumnWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldBounds import WorldBounds
 
 Coord = tuple[int, int]
 

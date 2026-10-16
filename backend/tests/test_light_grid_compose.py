@@ -17,9 +17,9 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.db.models.namedLocation import NamedLocation
 
 

@@ -11,8 +11,8 @@ from app.application.worldData.render.locationPinOverlay import (
     overlay_location_pins,
 )
 from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.namedLocation import NamedLocation
 
 

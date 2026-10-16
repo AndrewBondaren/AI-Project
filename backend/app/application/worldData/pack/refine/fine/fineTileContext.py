@@ -20,9 +20,9 @@ from app.application.worldData.materialize.terrainBatchOrchestrator import TileS
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

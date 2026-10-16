@@ -6,7 +6,7 @@ import logging
 
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 
 logger = logging.getLogger(__name__)
 

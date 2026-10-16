@@ -10,7 +10,7 @@ from app.application.worldData.generators.coordinates import (
     fine_to_grid_y,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import grid_bbox_padding
-from app.dataModel.worldPack.worldBounds import WorldBounds
+from app.dataModel.worldPack.wire.worldBounds import WorldBounds
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

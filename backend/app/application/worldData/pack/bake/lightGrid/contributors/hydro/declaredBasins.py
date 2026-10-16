@@ -18,7 +18,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
     meter_segments_to_light,
     paint_role,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 
 def _lake_interior_light(

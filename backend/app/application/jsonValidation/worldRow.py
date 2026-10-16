@@ -66,7 +66,7 @@ from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
-from app.dataModel.worldPack.worldGridSettings import WorldGridSettings
+from app.dataModel.worldPack.meta.worldGridSettings import WorldGridSettings
 from app.dataModel.terrainMasks import WorldTerrainMasks
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid

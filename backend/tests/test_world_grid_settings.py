@@ -21,8 +21,8 @@ from app.application.jsonValidation.worldColumnResolve import resolve_world_colu
 from app.application.jsonValidation.worldSlices import slice_for_pojo
 from app.application.worldData.registries.worldColumnWrite import apply_world_column
 from app.application.worldData.registries.worldService import WorldService
-from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
-from app.dataModel.worldPack.worldGridSettings import (
+from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
+from app.dataModel.worldPack.meta.worldGridSettings import (
     WorldGridSettings, grid_settings_wire_from_mapping, validate_world_row_grid_columns,
 )
 from app.db.models.world import World

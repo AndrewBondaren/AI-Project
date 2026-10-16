@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.dataModel.worldPack.mapCellPatchLayerKind import MapCellPatchLayerKind
-from app.dataModel.worldPack.mergeMapCells import CellContribution
+from app.dataModel.worldPack.wire.mapCellPatchLayerKind import MapCellPatchLayerKind
+from app.dataModel.worldPack.wire.mergeMapCells import CellContribution
 from app.db.models.mapCell import MapCell
 
 _SAVE_PASS_MAP: dict[str, MapCellPatchLayerKind] = {

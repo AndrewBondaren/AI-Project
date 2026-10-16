@@ -29,7 +29,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.mountain import 
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.terrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.db.models.mapCell import MapCell
 
 

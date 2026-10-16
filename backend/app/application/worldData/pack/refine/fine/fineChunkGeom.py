@@ -19,7 +19,7 @@ from app.application.worldData.pack.refine.columnBounds import (
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.db.models.world import World
 
 

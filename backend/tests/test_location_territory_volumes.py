@@ -10,7 +10,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     footprint_side_fine,
 )
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 
 
 def _world(**kwargs):

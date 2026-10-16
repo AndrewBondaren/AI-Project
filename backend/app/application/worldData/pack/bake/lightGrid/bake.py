@@ -12,7 +12,7 @@ from app.application.worldData.pack.bake.lightGrid.contributor import LightGridC
 from app.application.worldData.pack.bake.lightGrid.maskDomainRegistry import (
     build_default_contributors,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 logger = logging.getLogger(__name__)
 

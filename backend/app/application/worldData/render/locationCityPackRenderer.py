@@ -16,9 +16,9 @@ from app.application.worldData.render.structureAsciiSymbols import (
     render_structure_legend,
     symbol_for_building_element,
 )
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire, ShellCellWire
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire, ShellCellWire
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 
 
 class LocationCityPackRenderer:

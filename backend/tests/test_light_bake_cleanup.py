@@ -27,9 +27,9 @@ from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack import WorldMapCellWire
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
-from app.dataModel.worldPack.worldMapCellsPerTile import (
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.lightSettlementFootprint import LightSettlementFootprintPolicy
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
 )
@@ -41,7 +41,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.db.models.namedLocation import NamedLocation
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 class TestLightBakeCleanup(unittest.TestCase):

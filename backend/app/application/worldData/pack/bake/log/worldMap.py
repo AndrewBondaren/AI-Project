@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 from ._shared import _diag_extra, _info, logger
 

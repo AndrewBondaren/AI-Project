@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 from app.application.worldData.pack.bake.lightGrid.cell import LightGridCell
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 class LightGridCompose:

@@ -4,7 +4,7 @@ from typing import Annotated, Any, ClassVar
 from pydantic import BaseModel, BeforeValidator, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing
-from app.dataModel.worldPack.worldMapCellsPerTile import coerce_world_map_override
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import coerce_world_map_override
 from app.dataModel.worldScalarWire import pojo_wire_keys, scalar_wire_from_mapping, validate_world_row_pojo_columns
 
 

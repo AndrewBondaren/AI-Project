@@ -12,7 +12,7 @@ from app.dataModel.spatial.facing import (
     Facing,
     parse_facing,
 )
-from app.dataModel.worldPack.packJobUid import PackJobUid
+from app.dataModel.worldPack.bake.packJobUid import PackJobUid
 
 
 def chunk_job_uid(

@@ -21,7 +21,7 @@ from app.application.worldData.pack.refine.detailed.detailedGradeMaterialize imp
     inherit_segment_uid,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.packJobUid import FaceGridAxis
+from app.dataModel.worldPack.bake.packJobUid import FaceGridAxis
 
 
 def _axis_for_outward(outward: Facing) -> FaceGridAxis | None:

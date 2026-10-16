@@ -23,7 +23,7 @@ from app.dataModel.worldPack import (
     TerritoryVolume,
     WorldMapCellWire,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 def _world(uid: str = "w-render-read", **kwargs):

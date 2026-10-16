@@ -13,8 +13,8 @@ from app.application.worldData.pack.read.packMapHelpers import world_map_sample_
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.patchCellContribution import map_cell_to_patch_contribution
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
-from app.dataModel.worldPack.layerPriority import MapLayerKind
-from app.dataModel.worldPack.mergeMapCells import LayerSlice, merge_layers
+from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
+from app.dataModel.worldPack.wire.mergeMapCells import LayerSlice, merge_layers
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

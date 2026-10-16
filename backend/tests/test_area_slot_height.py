@@ -9,7 +9,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
     height_from_levels,
     z_deep_from_levels,
 )
-from app.dataModel.worldPack.settlementStructureWire import AreaSlotWire
+from app.dataModel.worldPack.wire.settlementStructureWire import AreaSlotWire
 from app.dataModel.spatial.facing import Facing
 
 

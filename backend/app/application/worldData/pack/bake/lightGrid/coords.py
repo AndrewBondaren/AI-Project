@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-from app.dataModel.worldPack.worldMapCellsPerTile import light_m_for
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import light_m_for
 
 
 @dataclass(frozen=True)

@@ -18,9 +18,9 @@ from app.application.worldData.pack.climate.climatePackSample import (
     sample_pack_climate_at,
     sample_pack_climate_at_macro,
 )
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire, ClimateSampleWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

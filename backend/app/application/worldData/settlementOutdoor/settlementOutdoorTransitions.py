@@ -10,7 +10,7 @@ from app.application.worldData.transitions.transitionValidation import validate_
 from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
-from app.dataModel.worldPack.settlementStructureWire import BuildingInteriorTransitionsWire
+from app.dataModel.worldPack.wire.settlementStructureWire import BuildingInteriorTransitionsWire
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.namedLocation import NamedLocation

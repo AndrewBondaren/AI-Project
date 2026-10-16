@@ -11,7 +11,7 @@ from app.application.worldData.pack.io.packBlobWire import (
 )
 from app.application.worldData.pack.io.tileCodec import PAYLOAD_KIND_SETTLEMENT_STRUCTURE, TileCodec
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
-from app.dataModel.worldPack.settlementStructureWire import BuildingInteriorTransitionsWire, SettlementStructureWire
+from app.dataModel.worldPack.wire.settlementStructureWire import BuildingInteriorTransitionsWire, SettlementStructureWire
 
 
 class TransitionPackWireTest(unittest.TestCase):

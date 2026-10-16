@@ -6,14 +6,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
-from app.dataModel.worldPack.packBakeDefaults import (
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.packBakeDefaults import (
     PackBakeDefaults,
     resolve_detailed_grade_stages,
     resolve_light_tile_cap,
 )
-from app.dataModel.worldPack.packTilePlan import PackTileRef
-from app.dataModel.worldPack.worldPackManifest import (
+from app.dataModel.worldPack.bake.packTilePlan import PackTileRef
+from app.dataModel.worldPack.meta.worldPackManifest import (
     TileManifestEntry,
     WorldPackManifest,
 )
@@ -84,7 +84,7 @@ class TestResolveDetailedGradeStages(unittest.TestCase):
 
 class TestDetailedBakeRequestGradeStages(unittest.TestCase):
     def test_paint_without_mill_coerced_off(self):
-        from app.dataModel.worldPack.detailedBakeScope import DetailedBakeRequest
+        from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
 
         req = DetailedBakeRequest(
             scope="wilderness",
@@ -98,7 +98,7 @@ class TestDetailedBakeRequestGradeStages(unittest.TestCase):
         self.assertEqual(req.stages, GradePipelineStages.off())
 
     def test_location_coerce_same(self):
-        from app.dataModel.worldPack.detailedBakeScope import (
+        from app.dataModel.worldPack.bake.detailedBakeScope import (
             resolve_detailed_bake_request,
         )
 

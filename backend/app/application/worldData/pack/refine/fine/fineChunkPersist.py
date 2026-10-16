@@ -44,7 +44,7 @@ from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume, inside_location_volume
 from app.db.bulkSql import EXECUTEMANY_BATCH_SIZE
 from app.db.models.mapCell import MapCell
 

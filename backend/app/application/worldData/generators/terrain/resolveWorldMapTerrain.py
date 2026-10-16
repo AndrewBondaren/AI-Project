@@ -8,7 +8,7 @@ from __future__ import annotations
 from app.application.jsonValidation import terrain_system_keys
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
 
 

@@ -25,8 +25,8 @@ from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 
 
 class TestStubElevationResolve(unittest.TestCase):

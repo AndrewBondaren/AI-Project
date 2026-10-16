@@ -41,12 +41,12 @@ from app.application.templateLibrary.templateSnapshotLoader import TemplateSnaps
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.worldPack.detailedBakeScope import (
+from app.dataModel.worldPack.bake.detailedBakeScope import (
     DetailedBakeRequest,
     DetailedBakeScopeKind,
 )
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository

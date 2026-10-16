@@ -13,7 +13,7 @@ from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     MaterializeResult,
 )
-from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
+from app.dataModel.worldPack.bake.packBakeMode import PackBakeApiMode
 
 
 @dataclass
