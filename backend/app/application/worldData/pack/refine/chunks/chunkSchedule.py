@@ -14,8 +14,8 @@ from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
 from app.application.worldData.pack.bake.packBakeLog import log_pack_queue_scheduled
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.entryRingGeom import (
+from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.entry.entryRingGeom import (
     chunk_within_ring,
     tile_local_chunk_indices,
 )

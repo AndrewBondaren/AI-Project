@@ -25,12 +25,12 @@ from app.application.worldData.pack.read.mapCellToFineTerrainWire import (
     LOCATION_TERRAIN_CHUNK_CY,
     cells_to_fine_terrain_chunk,
 )
-from app.application.worldData.pack.refine.entryRingGeom import (
+from app.application.worldData.pack.refine.entry.entryRingGeom import (
     tile_local_chunk_indices,
     wilderness_chunk_origin,
 )
-from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
-from app.application.worldData.pack.refine.fineTileContext import (
+from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
+from app.application.worldData.pack.refine.fine.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
     VertexSlotSeam,

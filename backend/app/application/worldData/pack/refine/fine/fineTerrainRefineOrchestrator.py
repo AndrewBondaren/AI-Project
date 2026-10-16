@@ -17,17 +17,17 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_fine_terrain_phase_done,
     log_pack_fine_terrain_phase_start,
 )
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.chunkSchedule import (
+from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.chunks.chunkSchedule import (
     schedule_path_ahead_tiles as schedule_path_ahead_tiles_fn,
     schedule_tile_background as schedule_tile_background_fn,
 )
-from app.application.worldData.pack.refine.entryRingGeom import (
+from app.application.worldData.pack.refine.entry.entryRingGeom import (
     chunk_within_ring,
     scene_chunk_indices as geom_scene_chunk_indices,
 )
-from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
+from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.refine.pathCorridorSelect import (
     select_path_corridor_rects,
@@ -41,7 +41,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
-from app.application.worldData.pack.refine.fineChunkGeom import (
+from app.application.worldData.pack.refine.fine.fineChunkGeom import (
     fine_chunk_rect,
     rects_for_macro_tile,
 )

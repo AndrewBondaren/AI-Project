@@ -7,10 +7,10 @@ from app.application.worldData.materialize.materializationContext import Materia
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_drain_queue_done,
     log_pack_drain_queue_start,

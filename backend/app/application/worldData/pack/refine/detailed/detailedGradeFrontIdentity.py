@@ -25,7 +25,7 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
 from app.application.worldData.generators.terrain.relief.sample.terrainMap import (
     map_system_terrain,
 )
-from app.application.worldData.pack.refine.detailedJobUid import front_grade_site
+from app.application.worldData.pack.refine.detailed.detailedJobUid import front_grade_site
 
 
 @dataclass(frozen=True, slots=True)

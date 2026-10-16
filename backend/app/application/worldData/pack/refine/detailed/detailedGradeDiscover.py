@@ -43,17 +43,17 @@ from app.application.worldData.pack.refine.columnBounds import (
     expand_rect,
     rect_contains,
 )
-from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
-from app.application.worldData.pack.refine.detailedGradeFrontIdentity import (
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontIdentity import (
     discovered_front_from,
     front_bake_identity,
 )
-from app.application.worldData.pack.refine.detailedGradeFrontPick import pick_front_grade
-from app.application.worldData.pack.refine.detailedGradeFrontUid import uid_for_front
-from app.application.worldData.pack.refine.detailedGradeHalo import length_cap_for_context
-from app.application.worldData.pack.refine.detailedGradePaint import apply_grade_paint_spec
-from app.application.worldData.pack.refine.detailedGradeResult import DetailedGradeResult
-from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontPick import pick_front_grade
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontUid import uid_for_front
+from app.application.worldData.pack.refine.detailed.detailedGradeHalo import length_cap_for_context
+from app.application.worldData.pack.refine.detailed.detailedGradePaint import apply_grade_paint_spec
+from app.application.worldData.pack.refine.detailed.detailedGradeResult import DetailedGradeResult
+from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
 from app.application.worldData.pack.refine.gradeRimRays import (
     rim_rays_from_front,
 )

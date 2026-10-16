@@ -20,7 +20,7 @@ from app.application.worldData.pack.bake.macroTileUid import (
     pack_job_seed,
 )
 from app.application.worldData.pack.refine.columnBounds import ColumnBounds
-from app.application.worldData.pack.refine.detailedJobUid import (
+from app.application.worldData.pack.refine.detailed.detailedJobUid import (
     canonical_tile_edge,
     chunk_job_uid,
     face_grade_site,

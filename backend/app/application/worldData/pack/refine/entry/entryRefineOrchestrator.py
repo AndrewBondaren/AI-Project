@@ -18,14 +18,14 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.chunkRefineWorker import ChunkRefineWorker
-from app.application.worldData.pack.refine.entryAnchorTracker import (
+from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.chunks.chunkRefineWorker import ChunkRefineWorker
+from app.application.worldData.pack.refine.entry.entryAnchorTracker import (
     AnchorKind,
     EntryAnchor,
     EntryAnchorTracker,
 )
-from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.refine.pathHeading import PathHeading, resolve_path_heading
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.core.appSettings import app_settings

@@ -22,7 +22,7 @@ from app.application.worldData.generators.terrain.relief.pick.templatePick impor
     pick_template,
     resolve_picked_template,
 )
-from app.application.worldData.pack.refine.detailedGradeFrontIdentity import (
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontIdentity import (
     FrontBakeIdentity,
 )
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate

@@ -14,7 +14,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     SurfaceTerrainContext,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.meterGradeSurface import Coord
 from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
