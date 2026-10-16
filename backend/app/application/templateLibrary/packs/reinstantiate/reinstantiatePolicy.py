@@ -1,8 +1,8 @@
 """Pure retention closure and dependency policy over the projected catalog."""
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.lifecycleContracts import (
     CatalogSnapshot, MemberProjection, ReinstantiateSnapshot, RetentionPlan,
 )
-from app.application.worldData.libraryPacks.referenceResolver import collect_refs, pin_index
+from app.application.templateLibrary.packs.referenceResolver import collect_refs, pin_index
 
 
 def hold_candidates(refs, members, candidates, pins):

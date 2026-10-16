@@ -2,11 +2,11 @@
 from copy import deepcopy
 from dataclasses import replace
 
-from app.application.worldData.libraryPacks.bodyDiff import body_diff
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
-from app.application.worldData.libraryPacks.writeContracts import WriteAction, WriteSourceKind
-from app.application.worldData.libraryPacks.writeInspectionContracts import InspectedMember
-from app.application.worldData.libraryPacks.writePlanContracts import MemberWrite, WriteItemPlan, WriteProjection
+from app.application.templateLibrary.packs.write.bodyDiff import body_diff
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError
+from app.application.templateLibrary.packs.write.writeContracts import WriteAction, WriteSourceKind
+from app.application.templateLibrary.packs.write.writeInspectionContracts import InspectedMember
+from app.application.templateLibrary.packs.write.writePlanContracts import MemberWrite, WriteItemPlan, WriteProjection
 from app.ids import LibraryKind, library_uid, runtime_uid
 
 

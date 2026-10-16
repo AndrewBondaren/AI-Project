@@ -1,10 +1,10 @@
 """Shared typed body seam; identity/policy/transactions stay in the common writer."""
 
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
+from app.application.templateLibrary.packs.domainAdapters.contract import (
     SYSTEM_NAME_FIELD,
     PackDomainAdapter,
 )
-from app.application.worldData.libraryPacks.domainAdapters.mixins import LibraryBodyMixin
+from app.application.templateLibrary.packs.domainAdapters.mixins import LibraryBodyMixin
 
 
 class TemplateBodyAdapter(LibraryBodyMixin, PackDomainAdapter):
@@ -26,7 +26,7 @@ class TemplateBodyAdapter(LibraryBodyMixin, PackDomainAdapter):
 
     def prepare_world_refs(self, world, uid_map, members):
         from copy import deepcopy
-        from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
+        from app.application.templateLibrary.packs.domainAdapters.remapRefs import remap_pins
         result = deepcopy(world)
         pins = remap_pins(result, uid_map)
         if pins is not None:

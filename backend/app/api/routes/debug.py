@@ -20,7 +20,7 @@ from app.application.worldData.generators.structure.gridRenderer import render_a
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.transitions.transitionType import TransitionType
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
@@ -58,7 +58,7 @@ async def debug_generate_structure_rotations(
     from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
     from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
     from app.application.worldData.debugStructureRotations import generate_rotations
-    from app.application.worldData.structureTemplateLibraryService import (
+    from app.application.templateLibrary.structureTemplateLibraryService import (
         StructureTemplateNotFoundError,
     )
 

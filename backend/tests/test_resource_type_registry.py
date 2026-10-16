@@ -9,10 +9,10 @@ from pydantic import ValidationError
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import resource_types
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import (
     TemplatePreparationError,
 )
-from app.application.worldData.libraryPacks.domainAdapters.plot import (
+from app.application.templateLibrary.packs.domainAdapters.plot import (
     PlotBodyPreparation,
 )
 from app.dataModel.resources.enums.resourceKind import ResourceKind

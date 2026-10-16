@@ -5,19 +5,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
+from app.application.templateLibrary.packs.domainAdapters.contract import (
     SYSTEM_NAME_FIELD,
     PackDomainAdapter,
 )
-from app.application.worldData.libraryPacks.domainAdapters.mixins import LibraryBodyMixin
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import remap_pins
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.packs.domainAdapters.mixins import LibraryBodyMixin
+from app.application.templateLibrary.packs.domainAdapters.remapRefs import remap_pins
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.world import World
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplateBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplateBodyPreparation
 
 
 class StructureBodyPreparation(TemplateBodyPreparation[StructureTemplate]):

@@ -5,9 +5,9 @@ from dataclasses import replace
 from pydantic import ValidationError
 
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.worldData.libraryPacks.legacyDomainContracts import LegacyDomainRecord, LegacyDomainShape
-from app.application.worldData.libraryPacks.legacyDomainSplit import split_legacy_domains
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LegacyDomainRecord, LegacyDomainShape
+from app.application.templateLibrary.packs.legacy.legacyDomainSplit import split_legacy_domains
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.ids import LibraryKind
 

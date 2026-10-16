@@ -4,9 +4,9 @@ from copy import deepcopy
 from pydantic import ValidationError
 
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError, ReferenceIssueContext, ReferenceIssueReason
-from app.application.worldData.libraryPacks.domainAdapters.refFields import RELIEF_POLICY_REF_FIELDS
-from app.application.worldData.libraryPacks.legacyDomainRefs import is_canonical_uid
-from app.application.worldData.libraryPacks.lifecycleContracts import world_consumer
+from app.application.templateLibrary.packs.domainAdapters.refFields import RELIEF_POLICY_REF_FIELDS
+from app.application.templateLibrary.packs.legacy.legacyDomainRefs import is_canonical_uid
+from app.application.templateLibrary.packs.lifecycleContracts import world_consumer
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
 from app.ids import LibraryKind

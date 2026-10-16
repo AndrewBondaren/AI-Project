@@ -12,33 +12,33 @@ from copy import deepcopy
 from dataclasses import replace
 
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.libraryPacks.domainAdapters.contract import PackDomainAdapter
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.legacyDomainContracts import (
+from app.application.templateLibrary.packs.domainAdapters.contract import PackDomainAdapter
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import (
     LEGACY_PLOT_FIELDS,
     LegacyDomainShape,
 )
-from app.application.worldData.libraryPacks.legacyPack import legacy_member_uid
-from app.application.worldData.libraryPacks.legacyWorldBodies import target_kind
-from app.application.worldData.libraryPacks.legacyWorldContracts import (
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_member_uid
+from app.application.templateLibrary.packs.legacy.legacyWorldBodies import target_kind
+from app.application.templateLibrary.packs.legacy.legacyWorldContracts import (
     LegacyPackRoute,
     LegacyWorldFacts,
     LegacyWorldMigrationPlan,
 )
-from app.application.worldData.libraryPacks.legacyWorldInput import LegacyWorldInput
-from app.application.worldData.libraryPacks.legacyWorldPlan import plan_legacy_world_migration
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.uidMap import (
+from app.application.templateLibrary.packs.legacy.legacyWorldInput import LegacyWorldInput
+from app.application.templateLibrary.packs.legacy.legacyWorldPlan import plan_legacy_world_migration
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.uidMap import (
     RELIEF_SMOKE_003_FORMER_UIDS,
     STRUCTURE_MEMBER_RENAMES,
     former_template_uid,
     mapped_template_uid,
 )
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem,
     WriteSource,
 )
-from app.application.worldData.libraryPacks.writeInspectionContracts import (
+from app.application.templateLibrary.packs.write.writeInspectionContracts import (
     WriteImportMember,
     WriteImportSource,
 )

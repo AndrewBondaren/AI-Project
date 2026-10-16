@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.defaults import default_pack_names
-from app.application.worldData.libraryPacks.manifest import (
+from app.application.templateLibrary.packs.defaults import default_pack_names
+from app.application.templateLibrary.packs.manifest import (
     LoadedMember,
     PackManifestError,
     load_pack_manifest,
@@ -32,11 +32,11 @@ from app.application.worldData.libraryPacks.manifest import (
     resolve_owning_pack,
     source_file_label,
 )
-from app.application.worldData.structureTemplateErrors import (
+from app.application.templateLibrary.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
 )
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.structureTemplateLibraryService import (
     DOMAIN_ROOT,
     resolve_structures_domain_root,
 )

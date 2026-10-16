@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from app.application.worldData.bundle.entity.sections import (
+from app.application.worldBundle.entity.sections import (
     ConnectionEdgesSectionHandler,
     ConnectionNodesSectionHandler,
     LocationsSectionHandler,
     StatesSectionHandler,
     WorldSectionHandler,
 )
-from app.application.worldData.bundle.handler import IBundleSectionHandler
-from app.application.worldData.bundle.library.libraryTemplateSection import (
+from app.application.worldBundle.handler import IBundleSectionHandler
+from app.application.worldBundle.library.libraryTemplateSection import (
     LibrarySectionAdapter,
     LibraryTemplateSectionHandler,
 )
-from app.application.worldData.bundle.order import BUNDLE_IMPORT_ORDER
-from app.application.worldData.connectionGraphService import ConnectionGraphService
+from app.application.worldBundle.order import BUNDLE_IMPORT_ORDER
+from app.application.worldBundle.connectionGraphService import ConnectionGraphService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.stateService import StateService

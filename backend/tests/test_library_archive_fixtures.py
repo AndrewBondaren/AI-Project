@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.application.worldData.bundle.archive import read_archive
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
+from app.application.worldBundle.archive import read_archive
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
 from app.dataModel.worldBundle.bundleManifest import BundleKind
 from scripts.build_library_test_fixtures import OUTPUT, SOURCES, build, load_fixture_source
 

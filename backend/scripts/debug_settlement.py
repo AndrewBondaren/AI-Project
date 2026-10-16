@@ -26,7 +26,7 @@ def _debug_catalog():
     """Canonical-pack catalog — the script has no DB, so it hydrates the
     declared defaults straight from the SoT fixtures (same bodies the
     canonical packs serve)."""
-    from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+    from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
     from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
     from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
     from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog

@@ -4,8 +4,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.libraryPacks.legacyDomainContracts import LEGACY_PLOT_FIELDS, LegacyDomainShape, SourcePath
-from app.application.worldData.libraryPacks.legacyDomainRefs import is_canonical_uid
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LEGACY_PLOT_FIELDS, LegacyDomainShape, SourcePath
+from app.application.templateLibrary.packs.legacy.legacyDomainRefs import is_canonical_uid
 from app.ids import LibraryKind
 
 REGISTRY_KINDS = {"building_template_registry": LibraryKind.BUILDING_TEMPLATES,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
 from app.application.jsonValidation.types import FieldPathError
 
-from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+from app.application.templateLibrary.reliefGeomWarn import warn_template_invalid_geom
 
 from dataclasses import dataclass
 

@@ -26,17 +26,17 @@ from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.worldData.generators.terrain.relief.pick.templatePick import (
     pick_template,
 )
-from app.application.worldData.libraryPacks.domainAdapters.factory import (
+from app.application.templateLibrary.packs.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
-from app.application.worldData.libraryPacks.effectiveCatalog import (
+from app.application.templateLibrary.packs.effectiveCatalog import (
     EffectiveCatalogLoader,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.loadReliefTemplatesForWorld import (
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.container import Container
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate

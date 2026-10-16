@@ -16,23 +16,23 @@ import unittest
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.libraryPacks.domainAdapters.factory import (
+from app.application.templateLibrary.packs.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
-from app.application.worldData.libraryPacks.effectiveCatalog import (
+from app.application.templateLibrary.packs.effectiveCatalog import (
     EffectiveCatalog,
     EffectiveCatalogLoader,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.membership import membership_pack_uids
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.refResolve import (
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.membership import membership_pack_uids
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.refResolve import (
     RefOutcome,
     RefRejected,
     RefResolver,
     TemplateRef,
 )
-from app.application.worldData.libraryPacks.uidMap import pin_for_member
+from app.application.templateLibrary.packs.uidMap import pin_for_member
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ReferenceIssueReason
 from app.core.container import Container
@@ -43,7 +43,7 @@ from app.db.repositories.sqlite.reliefTemplateRepository import (
 )
 from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
 from app.ids import LibraryKind, library_uid
-from app.application.worldData.libraryPacks.defaults import default_pack_uids
+from app.application.templateLibrary.packs.defaults import default_pack_uids
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STRUCTURES_ROOT = _REPO_ROOT / "structures_templates"

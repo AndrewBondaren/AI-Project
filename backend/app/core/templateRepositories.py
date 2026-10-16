@@ -19,14 +19,14 @@ class TemplateRepositoryProviders:
         self._template_canonical_service = None
 
     async def ensure_template_canonical(self):
-        from app.application.worldData.libraryPacks.templateCanonicalService import TemplateCanonicalService
+        from app.application.templateLibrary.packs.templateCanonicalService import TemplateCanonicalService
         if self._template_canonical_service is None:
             self._template_canonical_service = TemplateCanonicalService(
                 db=self._db, catalog=self.pack_catalog_repos())
         return await self._template_canonical_service.ensure()
 
     def plot_template_library_service(self):
-        from app.application.worldData.plotTemplateLibraryService import PlotTemplateLibraryService
+        from app.application.templateLibrary.plotTemplateLibraryService import PlotTemplateLibraryService
         if self._plot_template_library_service is None:
             self._plot_template_library_service = PlotTemplateLibraryService(
                 self.plot_template_repository(), write_provider=self.library_pack_service,

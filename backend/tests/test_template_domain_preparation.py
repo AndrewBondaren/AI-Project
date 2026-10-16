@@ -4,12 +4,12 @@ from copy import deepcopy
 import unittest
 
 from app.application.jsonValidation.types import ReferenceIssueReason
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplatePreparationError
-from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.structure import StructureBodyPreparation
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
-from app.application.worldData.libraryPacks.templateGraphValidation import template_graph_issues
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplatePreparationError
+from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.structure import StructureBodyPreparation
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot
+from app.application.templateLibrary.packs.templateGraphValidation import template_graph_issues
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind, runtime_uid

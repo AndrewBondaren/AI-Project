@@ -1,5 +1,5 @@
 """Persisted provenance and computed display status are separate concerns."""
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberStatus
+from app.application.templateLibrary.packs.lifecycleContracts import MemberStatus
 
 
 async def member_status(scope, member):

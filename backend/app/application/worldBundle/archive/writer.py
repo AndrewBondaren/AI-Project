@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile, ZipInfo
 
-from app.application.worldData.bundle.archive.errors import BundleArchiveError
-from app.application.worldData.bundle.archive.libraryLayout import write_library_entries, reject_flat_duplicates
-from app.application.worldData.bundle.archive.validation import (
+from app.application.worldBundle.archive.errors import BundleArchiveError
+from app.application.worldBundle.archive.libraryLayout import write_library_entries, reject_flat_duplicates
+from app.application.worldBundle.archive.validation import (
     encode_json,
     validate_blob_paths,
     validate_manifest,

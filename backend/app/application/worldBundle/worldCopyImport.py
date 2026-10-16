@@ -2,16 +2,16 @@
 from dataclasses import replace
 
 from app.application.importResult import ImportResult
-from app.application.worldData.bundle.copyTokens import WorldCopyTokens
-from app.application.worldData.bundle.worldLibraries import import_libraries
-from app.application.worldData.bundleRemapService import build_bundle_uid_map, remap_bundle
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
+from app.application.worldBundle.copyTokens import WorldCopyTokens
+from app.application.worldBundle.worldLibraries import import_libraries
+from app.application.worldBundle.bundleRemapService import build_bundle_uid_map, remap_bundle
+from app.application.templateLibrary.packs.domainAdapters.remapRefs import (
     remap_locations_section,
 )
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.errors import (
     LibraryPackConflictError, LibraryPackPolicyRequiredError, require_no_policy,
 )
-from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.ids import state_fingerprint
 

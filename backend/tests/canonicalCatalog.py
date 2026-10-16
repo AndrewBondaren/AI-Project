@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
 from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog

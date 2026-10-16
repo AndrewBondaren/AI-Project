@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from app.application.jsonValidation.worldRow import relief_pick_policy
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.lifecycleContracts import (
     MemberRef,
     RELIEF_POLICY_FIELD,
     named_location_consumer,

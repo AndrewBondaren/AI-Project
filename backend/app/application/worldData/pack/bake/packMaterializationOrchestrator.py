@@ -22,7 +22,7 @@ from app.application.worldData.materializationContext import (
     MaterializationJobReport,
 )
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-from app.application.worldData.loadReliefTemplatesForWorld import (
+from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
 from app.application.worldData.persistReliefGrades import persist_relief_grades
@@ -39,7 +39,7 @@ from app.application.worldData.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults

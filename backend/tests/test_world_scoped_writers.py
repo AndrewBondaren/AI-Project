@@ -11,7 +11,7 @@ from app.application.jsonValidation.types import ImportValidationError
 from app.application.worldData.errors import WorldDataNotFoundError
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
-from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
+from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository

@@ -2,12 +2,12 @@
 
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import (
     TemplateBodyPreparation, TemplatePreparationError,
 )
 from app.dataModel.locations.structure.building.plotTemplate import PlotTemplate
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
+from app.application.templateLibrary.packs.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
 
 
 class PlotBodyPreparation(TemplateBodyPreparation[PlotTemplate]):

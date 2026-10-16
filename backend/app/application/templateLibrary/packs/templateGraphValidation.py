@@ -9,16 +9,16 @@ from collections.abc import Mapping
 from app.application.jsonValidation.types import (
     FieldPathError, ReferenceIssueContext, ReferenceIssueReason,
 )
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplatePreparationError
-from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.relief import ReliefBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.structure import StructureBodyPreparation
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplatePreparationError
+from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.relief import ReliefBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.structure import StructureBodyPreparation
+from app.application.templateLibrary.packs.lifecycleContracts import (
     CatalogSnapshot,
     PreparedTemplateGraph,
 )
-from app.application.worldData.libraryPacks.referenceResolver import (
+from app.application.templateLibrary.packs.referenceResolver import (
     contextualize_reference_issues, reference_index,
 )
 from app.db.models.libraryPackMember import LibraryPackMemberRow

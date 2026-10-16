@@ -15,10 +15,10 @@ from app.api.routes.libraryPacks import router as packs_router
 from app.api.routes.libraryArchives import router as archives_router
 from app.api.routes.worlds import router as worlds_router
 from app.application.importResult import ImportResult
-from app.application.worldData.bundle.archive import read_archive
-from app.application.worldData.libraryPacks.archiveSources import pack_to_wire
-from app.application.worldData.libraryPacks.errors import LibraryPackPolicyRequiredError
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteSelection, WriteStatus
+from app.application.worldBundle.archive import read_archive
+from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire
+from app.application.templateLibrary.packs.errors import LibraryPackPolicyRequiredError
+from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteSelection, WriteStatus
 from app.ids import LibraryKind, library_uid, remapped_library_uid
 
 

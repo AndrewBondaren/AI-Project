@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, UnresolvedModelError
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
 
 
 def validate_rows(data: Any, prepare: Callable[..., Any], *, ctx: ResolveContext, contextual: bool = False) -> None:

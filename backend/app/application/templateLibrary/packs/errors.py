@@ -33,7 +33,7 @@ class LibraryPackPolicyRequiredError(LibraryPackConflictError):
 
 def require_no_policy(result):
     """Unwind caller UOW when a legacy result consumer cannot apply yet."""
-    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+    from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
     if isinstance(result, PolicyRequired):
         raise LibraryPackPolicyRequiredError(result)
     return result

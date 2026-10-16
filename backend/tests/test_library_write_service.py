@@ -8,12 +8,12 @@ from unittest.mock import patch
 import test_library_write_plan as plan_fixture
 import test_library_packs_b3 as fs_fixture
 from test_library_packs_4b import _ServiceCase
-from app.application.worldData.libraryPacks.writeInspector import LibraryWriteInspector
-from app.application.worldData.libraryPacks.writePlanner import LibraryWritePlanner
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteRequest, LibraryWriteSelection, WriteAction
-from app.application.worldData.libraryPacks.writeResults import PolicyRequired, WriteResult, WriteRejected
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError, LibraryPackPolicyRequiredError, LibraryPackReadOnlyError
+from app.application.templateLibrary.packs.write.writeInspector import LibraryWriteInspector
+from app.application.templateLibrary.packs.write.writePlanner import LibraryWritePlanner
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteRequest, LibraryWriteSelection, WriteAction
+from app.application.templateLibrary.packs.write.writeResults import PolicyRequired, WriteResult, WriteRejected
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError, LibraryPackPolicyRequiredError, LibraryPackReadOnlyError
 from app.db.models.reliefTemplate import ReliefTemplateRow
 from app.ids import LibraryKind
 from app.db.database import Database
@@ -219,7 +219,7 @@ class LibraryWriteServiceTests(_ServiceCase):
         raw = self.imported()
         request = self.request(self.item("raw", imported=True))
         await self.writer.execute(request, imports={"raw": raw})
-        with patch("app.application.worldData.libraryPacks.memberWritePlanner.runtime_uid", side_effect=AssertionError("allocated")):
+        with patch("app.application.templateLibrary.packs.write.memberWritePlanner.runtime_uid", side_effect=AssertionError("allocated")):
             preview = await self.writer.execute(request, imports={"raw": raw})
         copy = next(p.copy for p in preview.preview if p.copy)
         self.assertTrue(copy.remaps_internal_references)
@@ -261,7 +261,7 @@ class LibraryWriteServiceTests(_ServiceCase):
         self.assertEqual((await self.packs.get_by_uid(raw.pack.pack_uid)).version, "2.0")
 
     async def test_copy_only_match_does_not_hide_other_replace_preview(self):
-        from app.application.worldData.libraryPacks.fsWriteSource import read_fs_write_source
+        from app.application.templateLibrary.packs.write.fsWriteSource import read_fs_write_source
         root = Path(__file__).resolve().parents[2] / "structures_templates"
         await self.service.import_fs_pack(LibraryKind.STRUCTURE_TEMPLATES, root / "base", domain_root=root)
         default = read_fs_write_source(LibraryKind.STRUCTURE_TEMPLATES, root / "base", domain_root=root).source

@@ -10,7 +10,7 @@ Identity is fully derived from ``world_uid`` through the central
 from __future__ import annotations
 
 from app.ids import LibraryKind, library_uid, remapped_library_uid
-from app.application.worldData.libraryPacks.uidMap import former_template_uid
+from app.application.templateLibrary.packs.uidMap import former_template_uid
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository

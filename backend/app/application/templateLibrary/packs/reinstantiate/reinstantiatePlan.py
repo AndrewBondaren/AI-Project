@@ -1,16 +1,16 @@
 """Update planning: read a snapshot, then build a plan without repository I/O."""
 from collections.abc import Mapping
 
-from app.application.worldData.libraryPacks.bodyDiff import body_diff
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.lifecycleContracts import ReinstantiatePreview, ReinstantiateSnapshot
-from app.application.worldData.libraryPacks.referenceResolver import (
+from app.application.templateLibrary.packs.write.bodyDiff import body_diff
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.lifecycleContracts import ReinstantiatePreview, ReinstantiateSnapshot
+from app.application.templateLibrary.packs.referenceResolver import (
     contextualize_reference_issues, dependency_issues, reference_index,
 )
-from app.application.worldData.libraryPacks.reinstantiateFingerprint import update_fingerprint
-from app.application.worldData.libraryPacks.reinstantiateMembers import prepare_members
-from app.application.worldData.libraryPacks.reinstantiatePolicy import hold_candidates, plan_retention
-from app.application.worldData.libraryPacks.reinstantiateSnapshot import load_update_snapshot
+from app.application.templateLibrary.packs.reinstantiate.reinstantiateFingerprint import update_fingerprint
+from app.application.templateLibrary.packs.reinstantiate.reinstantiateMembers import prepare_members
+from app.application.templateLibrary.packs.reinstantiate.reinstantiatePolicy import hold_candidates, plan_retention
+from app.application.templateLibrary.packs.reinstantiate.reinstantiateSnapshot import load_update_snapshot
 from app.ids import LibraryKind
 
 

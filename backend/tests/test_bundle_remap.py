@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.bundleRemapService import remap_bundle
+from app.application.worldBundle.bundleRemapService import remap_bundle
 
 
 def _minimal_bundle() -> dict:

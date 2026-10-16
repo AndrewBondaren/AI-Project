@@ -4,13 +4,13 @@ from dataclasses import replace
 import unittest
 from unittest.mock import patch
 
-from app.application.worldData.libraryPacks.defaults import PLOTS_BASE_SYSTEM_NAME
-from app.application.worldData.libraryPacks.legacyDomainContracts import LegacyDomainShape
-from app.application.worldData.libraryPacks.legacyWorldContracts import LegacyPackRoute, LegacyWorldFacts
-from app.application.worldData.libraryPacks.legacyWorldInput import extract_legacy_world_input
-from app.application.worldData.libraryPacks.legacyWorldPlan import plan_legacy_world_migration
-from app.application.worldData.libraryPacks.legacyWorldProjection import project_pack
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
+from app.application.templateLibrary.packs.defaults import PLOTS_BASE_SYSTEM_NAME
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LegacyDomainShape
+from app.application.templateLibrary.packs.legacy.legacyWorldContracts import LegacyPackRoute, LegacyWorldFacts
+from app.application.templateLibrary.packs.legacy.legacyWorldInput import extract_legacy_world_input
+from app.application.templateLibrary.packs.legacy.legacyWorldPlan import plan_legacy_world_migration
+from app.application.templateLibrary.packs.legacy.legacyWorldProjection import project_pack
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember, WriteImportSource
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, library_uid, runtime_uid

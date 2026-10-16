@@ -1,8 +1,8 @@
 """Application write outcomes; transport serialization belongs to L-5."""
 from dataclasses import dataclass
 
-from app.application.worldData.libraryPacks.writeContracts import WriteChoice, WriteItemDecision
-from app.application.worldData.libraryPacks.writePlanContracts import LibraryWritePlan
+from app.application.templateLibrary.packs.write.writeContracts import WriteChoice, WriteItemDecision
+from app.application.templateLibrary.packs.write.writePlanContracts import LibraryWritePlan
 
 
 @dataclass(frozen=True)

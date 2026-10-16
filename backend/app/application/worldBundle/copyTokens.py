@@ -5,7 +5,7 @@ import hmac
 import json
 import secrets
 
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 
 
 class WorldCopyTokens:

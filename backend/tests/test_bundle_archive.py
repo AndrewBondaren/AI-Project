@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile, ZipInfo
 
-from app.application.worldData.bundle.archive import (
+from app.application.worldBundle.archive import (
     BundleArchiveError,
     read_archive,
     write_archive,
@@ -278,7 +278,7 @@ class TestBundleArchive(unittest.TestCase):
         sections = _sections()
         self.path.write_bytes(b"original")
         with patch(
-            "app.application.worldData.bundle.archive.writer.ZipFile.writestr",
+            "app.application.worldBundle.archive.writer.ZipFile.writestr",
             side_effect=OSError("simulated disk failure"),
         ):
             with self.assertRaises(OSError):

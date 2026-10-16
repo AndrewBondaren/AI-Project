@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
-from app.application.worldData.bundle.errors import BundleValidationError
+from app.application.worldBundle.errors import BundleValidationError
 
 router = APIRouter()
 

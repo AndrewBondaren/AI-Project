@@ -5,12 +5,12 @@ from unittest import TestCase
 
 from pydantic import ValidationError
 
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteAction,
     WriteItemSnapshot, WriteObjectKind, WritePolicy, WriteSnapshot, WriteSource,
     WriteSourceKind, WriteStatus, WriteTarget,
 )
-from app.application.worldData.libraryPacks.writePolicy import LibraryWritePolicy
+from app.application.templateLibrary.packs.write.writePolicy import LibraryWritePolicy
 from app.ids import LibraryKind
 
 

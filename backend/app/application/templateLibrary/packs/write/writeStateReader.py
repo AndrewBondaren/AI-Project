@@ -1,18 +1,18 @@
 """Read scope/usage facts for preview and retention; no policy (packs TZ §1.2)."""
 from collections.abc import Mapping
 
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.writeSourceReader import LibraryWriteSourceReader
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.write.writeSourceReader import LibraryWriteSourceReader
 from app.db.models.world import World
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.defaults import default_pack_uids
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
-from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+from app.application.templateLibrary.packs.defaults import default_pack_uids
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot
+from app.application.templateLibrary.packs.domainAdapters.refFields import (
     named_location_template_refs,
 )
-from app.application.worldData.libraryPacks.referenceResolver import collect_refs, pin_index
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteScopeState
+from app.application.templateLibrary.packs.referenceResolver import collect_refs, pin_index
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteScopeState
 
 
 class LibraryWriteStateReader:

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
 from app.application.import_helpers import import_list
-from app.application.worldData.bundle.errors import BundleValidationError
+from app.application.worldBundle.errors import BundleValidationError
 from app.application.worldData.worldColumnWrite import apply_world_column
 from app.application.worldData.worldLookup import require_world
 from app.db.repositories.iWorldRepository import IWorldRepository

@@ -9,7 +9,7 @@ only rewrite pins and declared ref fields.
 
 from __future__ import annotations
 
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
+from app.application.templateLibrary.packs.domainAdapters.contract import (
     DomainLibrary,
 )
 

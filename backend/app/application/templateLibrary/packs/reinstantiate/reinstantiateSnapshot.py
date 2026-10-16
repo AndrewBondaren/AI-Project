@@ -1,13 +1,13 @@
 """Read all inputs for update planning inside the caller's transaction."""
 from copy import deepcopy
 
-from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+from app.application.templateLibrary.packs.domainAdapters.refFields import (
     named_location_template_refs,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot, ReinstantiateSnapshot
-from app.application.worldData.libraryPacks.referenceResolver import collect_refs, load_catalog
-from app.application.worldData.libraryPacks.reinstantiateMembers import member_identity
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot, ReinstantiateSnapshot
+from app.application.templateLibrary.packs.referenceResolver import collect_refs, load_catalog
+from app.application.templateLibrary.packs.reinstantiate.reinstantiateMembers import member_identity
 from app.ids import LibraryKind
 
 

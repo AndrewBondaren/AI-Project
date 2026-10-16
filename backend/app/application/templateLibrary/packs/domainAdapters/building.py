@@ -1,7 +1,7 @@
 """Strict building member bodies; legacy outlines/plots require explicit conversion."""
 
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplateBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplateBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
 from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.ids import LibraryKind
 

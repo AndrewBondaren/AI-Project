@@ -10,12 +10,12 @@ from zipfile import BadZipFile, LargeZipFile, ZipFile, ZipInfo
 
 from pydantic import ValidationError
 
-from app.application.worldData.bundle.archive.contents import ArchiveContents
-from app.application.worldData.bundle.archive.errors import BundleArchiveError
-from app.application.worldData.bundle.archive.libraryLayout import (
+from app.application.worldBundle.archive.contents import ArchiveContents
+from app.application.worldBundle.archive.errors import BundleArchiveError
+from app.application.worldBundle.archive.libraryLayout import (
     discover_library_layout, read_library_packs, reject_flat_duplicates,
 )
-from app.application.worldData.bundle.archive.validation import (
+from app.application.worldBundle.archive.validation import (
     decode_json,
     validate_blob_paths,
     validate_path,

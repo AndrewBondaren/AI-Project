@@ -1,9 +1,9 @@
 """UID archives to common writer inputs; no FS import or persistence (TZ §4)."""
 from dataclasses import asdict
 
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember, WriteImportSource
 from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, LibraryArchiveMember, LibraryArchivePack
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
@@ -71,7 +71,7 @@ def archive_source(pack: LibraryArchivePack, *, owner: str | None, supported) ->
 async def export_pack(scope, uid) -> LibraryArchivePack:
     pack = await scope.packs.get_by_uid(uid)
     if pack is None:
-        from app.application.worldData.libraryPacks.errors import LibraryPackNotFoundError
+        from app.application.templateLibrary.packs.errors import LibraryPackNotFoundError
         raise LibraryPackNotFoundError(f"pack '{uid}' not found")
     members, bodies = [], {}
     for row in sorted(await scope.members.list_by_pack(uid), key=lambda m: m.template_uid):

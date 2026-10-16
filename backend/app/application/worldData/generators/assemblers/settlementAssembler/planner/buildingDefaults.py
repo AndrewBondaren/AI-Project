@@ -7,7 +7,7 @@ async boundary.
 
 from __future__ import annotations
 
-from app.application.worldData.templateContracts import WorldTemplateSnapshot
+from app.application.templateLibrary.templateContracts import WorldTemplateSnapshot
 from app.dataModel.locations.structure.building.buildingCatalog import (
     BuildingCatalog,
     CatalogPlot,

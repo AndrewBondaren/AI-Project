@@ -2,12 +2,12 @@
 from copy import deepcopy
 from collections.abc import Mapping
 
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, WriteObjectKind, WriteSourceKind
-from app.application.worldData.libraryPacks.writeInspectionContracts import (
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteItem, WriteObjectKind, WriteSourceKind
+from app.application.templateLibrary.packs.write.writeInspectionContracts import (
     InspectedMember, InspectedSource, WriteImportMember, WriteImportSource,
 )
 from app.ids import LibraryKind, UID_PART_SEPARATOR, library_uid

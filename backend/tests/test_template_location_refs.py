@@ -18,8 +18,8 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (
     StructureAreaAssembler,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackInUseError
-from app.application.worldData.libraryPacks.legacyPack import legacy_pack_uid
+from app.application.templateLibrary.packs.errors import LibraryPackInUseError
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_pack_uid
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     area_uid, building_location_uid,
 )

@@ -23,10 +23,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.membership import membership_pack_uids
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.membership import membership_pack_uids
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind
 

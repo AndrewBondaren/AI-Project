@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.application.worldData.bundle.archive.errors import BundleArchiveError
+from app.application.worldBundle.archive.errors import BundleArchiveError
 from app.dataModel.worldBundle.bundleManifest import (
     BundleKind,
     BundleManifest,

@@ -6,16 +6,16 @@ from dataclasses import replace
 from app.application.jsonValidation.resolve import log_issues
 from app.application.jsonValidation.types import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 
-from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+from app.application.templateLibrary.packs.domainAdapters.refFields import (
     named_location_template_refs,
 )
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.lifecycleContracts import (
     CatalogSnapshot,
     MemberRef,
     world_consumer,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.membership import membership_pack_uids
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.membership import membership_pack_uids
 from app.ids import LibraryKind
 
 

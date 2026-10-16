@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+    from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 
 from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 from app.application.canonicalLibrary import ensure_canonical
-from app.application.worldData.libraryPacks.reliefCanonicalSpec import RELIEF_CANONICAL_SPEC
+from app.application.templateLibrary.packs.reliefCanonicalSpec import RELIEF_CANONICAL_SPEC
 
 import logging
 import os
@@ -20,12 +20,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from app.ids import LibraryKind, library_uid
-from app.application.worldData.libraryPacks.packCatalog import (
+from app.application.templateLibrary.packs.packCatalog import (
     PackCatalogRepos,
     attach_pack_catalog,
 )
-from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
-from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+from app.application.templateLibrary.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.application.templateLibrary.reliefGeomWarn import warn_template_invalid_geom
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.database import Database
 from app.db.models.reliefTemplate import ReliefTemplateRow
@@ -81,7 +81,7 @@ class ReliefTemplateLibraryService:
         return await self._repo.list_all()
 
     async def persist_prepared(self, outline, *, template_uid, source_file, added):
-        from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+        from app.application.templateLibrary.packs.write.preparedPersistence import persist_body_row
         row = ReliefTemplateRow(template_uid=template_uid, system_name=outline.system_name,
             display_name=outline.display_name, context=outline.context.value, version=outline.version,
             data=outline.model_dump(mode="json"), source_file=source_file)
@@ -97,7 +97,7 @@ class ReliefTemplateLibraryService:
         world_uid: str | None = None,
     ) -> ReliefTemplateRow:
         if self._write_provider is not None:
-            from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+            from app.application.templateLibrary.packs.write.domainWriteEntry import write_domain_body
             return await write_domain_body(self._write_provider(), LibraryKind.RELIEF_TEMPLATES,
                 outline, pack_uid=pack_uid, template_uid=template_uid, source_file=source_file, world_uid=world_uid)
         if self._db is not None:
@@ -161,7 +161,7 @@ class ReliefTemplateLibraryService:
         decisions=(), preview_token=None,
     ) -> list[ReliefTemplateRow] | PolicyRequired:
         if self._write_provider is not None:
-            from app.application.worldData.libraryPacks.packResults import PackImportResult
+            from app.application.templateLibrary.packs.packResults import PackImportResult
             result = await self._write_provider().import_path(LibraryKind.RELIEF_TEMPLATES,
                 path, domain_root=domain_root, enforce_domain_root=enforce_domain_root,
                 decisions=decisions, preview_token=preview_token)
@@ -178,7 +178,7 @@ class ReliefTemplateLibraryService:
         domain_root: Path | None,
         enforce_domain_root: bool,
     ) -> list[ReliefTemplateRow]:
-        from app.application.worldData.reliefTemplateFsImport import import_relief_path
+        from app.application.templateLibrary.reliefTemplateFsImport import import_relief_path
 
         outcome = await import_relief_path(
             path,

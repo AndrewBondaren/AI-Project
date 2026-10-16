@@ -12,31 +12,31 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+    from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
-from app.application.worldData.bundle import SOURCE_FILE_BUNDLE
-from app.application.worldData.reliefTerrainSync import (
+from app.application.worldBundle import SOURCE_FILE_BUNDLE
+from app.application.templateLibrary.reliefTerrainSync import (
     merge_missing_terrain_entries,
 )
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.legacyPack import (
+from app.application.templateLibrary.packs.legacy.legacyPack import (
     ensure_legacy_pack,
     legacy_member_row,
 )
-from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
-from app.application.worldData.reliefTemplateLibraryService import (
+from app.application.templateLibrary.reliefGeomWarn import warn_template_invalid_geom
+from app.application.templateLibrary.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
-from app.application.worldData.reliefWorldRefValidation import (
+from app.application.templateLibrary.reliefWorldRefValidation import (
     validate_relief_world_refs,
 )
 from app.application.worldData.worldColumnWrite import apply_world_column
 from app.application.worldData.worldLookup import require_world
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.db.database import Database
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.reliefTemplate import ReliefTemplateRow
@@ -81,7 +81,7 @@ class ReliefWorldImportService:
     ) -> dict | PolicyRequired:
         world = await require_world(self._worlds, world_uid)
         if self._write_provider is not None:
-            from app.application.worldData.libraryPacks.writeResults import WriteResult
+            from app.application.templateLibrary.packs.write.writeResults import WriteResult
             prepared = [self.prepare_body(world, raw) for raw in outlines]
             if not prepared:
                 return {"imported": 0, "uids": []}

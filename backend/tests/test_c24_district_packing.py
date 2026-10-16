@@ -29,7 +29,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator i
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import SettlementOutdoorPackingJob
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.application.worldData.templateContracts import WorldTemplateSnapshot
+from app.application.templateLibrary.templateContracts import WorldTemplateSnapshot
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     packing_queue,

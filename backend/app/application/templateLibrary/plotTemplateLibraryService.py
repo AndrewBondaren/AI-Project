@@ -1,6 +1,6 @@
 """Plot body storage; all public mutations delegate to the common pack writer."""
 
-from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+from app.application.templateLibrary.packs.write.preparedPersistence import persist_body_row
 from app.dataModel.locations.structure.building.plotTemplate import PlotTemplate
 from app.db.database import _in_transaction
 from app.db.models.plotTemplate import PlotTemplateRow
@@ -29,7 +29,7 @@ class PlotTemplateLibraryService:
 
     async def write_body(self, body: PlotTemplate, *, pack_uid, template_uid=None,
                          source_file=None, world_uid=None) -> PlotTemplateRow:
-        from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+        from app.application.templateLibrary.packs.write.domainWriteEntry import write_domain_body
         return await write_domain_body(self._write_provider(), LibraryKind.PLOT_TEMPLATES,
             body, pack_uid=pack_uid, template_uid=template_uid,
             source_file=source_file, world_uid=world_uid)

@@ -2,17 +2,17 @@
 from collections import defaultdict
 from dataclasses import asdict, replace
 
-from app.application.worldData.libraryPacks.bodyDiff import body_diff
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.write.bodyDiff import body_diff
+from app.application.templateLibrary.packs.lifecycleContracts import (
     CatalogSnapshot,
     WORLD_CONSUMER_PREFIX,
 )
-from app.application.worldData.libraryPacks.domainAdapters.contract import RemappedMember
-from app.application.worldData.libraryPacks.referenceResolver import (
+from app.application.templateLibrary.packs.domainAdapters.contract import RemappedMember
+from app.application.templateLibrary.packs.referenceResolver import (
     collect_refs, contextualize_reference_issues, dependency_issues, pin_index, reference_index,
 )
-from app.application.worldData.libraryPacks.reinstantiatePolicy import hold_candidates
-from app.application.worldData.libraryPacks.writePlanContracts import LibraryWritePlan, WorldWrite
+from app.application.templateLibrary.packs.reinstantiate.reinstantiatePolicy import hold_candidates
+from app.application.templateLibrary.packs.write.writePlanContracts import LibraryWritePlan, WorldWrite
 from app.ids import LibraryKind
 
 

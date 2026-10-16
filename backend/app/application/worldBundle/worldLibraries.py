@@ -1,13 +1,13 @@
 """World-owned archive inputs and explicit legacy body migration (TZ §4)."""
-from app.application.worldData.bundle import SOURCE_FILE_BUNDLE
-from app.application.worldData.libraryPacks.archiveSources import pack_to_wire, packs_from_wire
-from app.application.worldData.libraryPacks.legacyPack import legacy_pack_row, legacy_member_row
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldBundle import SOURCE_FILE_BUNDLE
+from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire, packs_from_wire
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_pack_row, legacy_member_row
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, LibraryArchiveMember, LibraryArchivePack
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.ids import LibraryKind
-from app.application.worldData.bundle.legacyTemplateBodies import convert_flat_template_bodies
-from app.application.worldData.libraryPacks.legacyWorldInput import TEMPLATE_KINDS
+from app.application.worldBundle.legacyTemplateBodies import convert_flat_template_bodies
+from app.application.templateLibrary.packs.legacy.legacyWorldInput import TEMPLATE_KINDS
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
 
 

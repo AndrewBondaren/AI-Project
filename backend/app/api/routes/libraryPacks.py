@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import get_container
 from app.api.libraryWrite import WriteNegotiation, policy_response, write_response
-from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 from app.ids import LibraryKind
 
 router = APIRouter()
@@ -93,7 +93,7 @@ async def publish(world_uid: str, pack_uid: str, body: Publish, container=Depend
     service = container.library_pack_service()
     pack = await service.get_pack(pack_uid)
     if pack.owner_world_uid != world_uid:
-        from app.application.worldData.libraryPacks.errors import LibraryPackOwnershipError
+        from app.application.templateLibrary.packs.errors import LibraryPackOwnershipError
         raise LibraryPackOwnershipError("publish source does not belong to the route world")
     result = await service.copy_pack(pack_uid, system_name=body.system_name,
                                      decisions=body.decisions, preview_token=body.preview_token)

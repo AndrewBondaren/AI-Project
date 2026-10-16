@@ -2,13 +2,13 @@
 from copy import deepcopy
 from dataclasses import asdict, replace
 
-from app.application.worldData.libraryPacks.bodyDiff import body_diff
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
-from app.application.worldData.libraryPacks.memberWritePlanner import MemberWritePlanner, new_member_uid
-from app.application.worldData.libraryPacks.packIdentity import instance_system_name, published_system_name
-from app.application.worldData.libraryPacks.reinstantiateMembers import member_identity
-from app.application.worldData.libraryPacks.writeContracts import WriteAction, WriteSourceKind
-from app.application.worldData.libraryPacks.writePlanContracts import PackWrite, WriteItemPlan, WriteProjection
+from app.application.templateLibrary.packs.write.bodyDiff import body_diff
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError
+from app.application.templateLibrary.packs.write.memberWritePlanner import MemberWritePlanner, new_member_uid
+from app.application.templateLibrary.packs.packIdentity import instance_system_name, published_system_name
+from app.application.templateLibrary.packs.reinstantiate.reinstantiateMembers import member_identity
+from app.application.templateLibrary.packs.write.writeContracts import WriteAction, WriteSourceKind
+from app.application.templateLibrary.packs.write.writePlanContracts import PackWrite, WriteItemPlan, WriteProjection
 from app.ids import LibraryKind, library_uid, remapped_library_uid
 
 

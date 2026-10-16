@@ -8,9 +8,9 @@ from typing import Any, TYPE_CHECKING
 
 from app.application.importResult import ImportResult
 if TYPE_CHECKING:
-    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
-from app.application.worldData.libraryPacks.errors import require_no_policy
-from app.application.worldData.bundle.errors import BundleValidationError
+    from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
+from app.application.templateLibrary.packs.errors import require_no_policy
+from app.application.worldBundle.errors import BundleValidationError
 from app.db.models.world import World
 from app.application.jsonValidation.bundle.preflight import validate_rows
 from app.application.jsonValidation.resolve import ResolveContext

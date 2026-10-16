@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.errors import (
     LibraryPackConflictError,
     LibraryPackInUseError,
     LibraryPackNotFoundError,
@@ -24,8 +24,8 @@ from app.application.worldData.libraryPacks.errors import (
     LibraryPackReadOnlyError,
     LibraryPackValidationError,
 )
-from app.application.worldData.libraryPacks.uidMap import pin_for_member
-from app.application.worldData.loadReliefTemplatesForWorld import (
+from app.application.templateLibrary.packs.uidMap import pin_for_member
+from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
 from app.core.container import Container

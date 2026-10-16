@@ -4,16 +4,16 @@ from dataclasses import replace
 from unittest.mock import patch
 
 from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _plot_body, _relief_body
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError, LibraryPackValidationError
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError, LibraryPackValidationError
+from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteSource, WriteStatus,
 )
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
-from app.application.worldData.libraryPacks.writeInspector import LibraryWriteInspector
-from app.application.worldData.libraryPacks.writePlanner import LibraryWritePlanner
-from app.application.worldData.libraryPacks.writePolicy import LibraryWritePolicy
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember, WriteImportSource
+from app.application.templateLibrary.packs.write.writeInspector import LibraryWriteInspector
+from app.application.templateLibrary.packs.write.writePlanner import LibraryWritePlanner
+from app.application.templateLibrary.packs.write.writePolicy import LibraryWritePolicy
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, library_uid, remapped_library_uid, runtime_uid
@@ -265,7 +265,7 @@ class LibraryWritePlanTests(_ServiceCase):
         source = await self.service.create_member(pack.pack_uid, library_kind=_RELIEF, local_uid="meadow",
                                                   body=_relief_body("meadow"), world_uid="w1")
         fresh = runtime_uid()
-        with patch("app.application.worldData.libraryPacks.memberWritePlanner.runtime_uid",
+        with patch("app.application.templateLibrary.packs.write.memberWritePlanner.runtime_uid",
                    side_effect=[source.template_uid, fresh]) as allocator:
             plan = await self.plan([self.item(source.template_uid, target=pack.pack_uid, kind=_RELIEF)],
                                    selections=[self.select()])

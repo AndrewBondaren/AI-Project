@@ -8,7 +8,7 @@ the container seam. The contract names are re-exported here so callers
 keep importing ``libraryPacks.domainAdapters``.
 """
 
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
+from app.application.templateLibrary.packs.domainAdapters.contract import (
     DomainLibrary,
     DomainOutline,
     PackDomainAdapter,

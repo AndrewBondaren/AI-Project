@@ -4,17 +4,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.application.canonicalLibrary import CanonicalEntry, CanonicalSourceError
-from app.application.worldData.libraryPacks.defaults import (
+from app.application.templateLibrary.packs.defaults import (
     BUILDINGS_BASE_SYSTEM_NAME, PLOTS_BASE_SYSTEM_NAME, STRUCTURES_BASE_SYSTEM_NAME,
 )
-from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.structure import StructureBodyPreparation
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
-from app.application.worldData.libraryPacks.manifest import load_pack_manifest, source_file_label
-from app.application.worldData.libraryPacks.packCatalog import member_rows_for
-from app.application.worldData.libraryPacks.templateGraphValidation import template_graph_issues
-from app.application.worldData.structureTemplateLibraryService import resolve_structures_domain_root
+from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.structure import StructureBodyPreparation
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot
+from app.application.templateLibrary.packs.manifest import load_pack_manifest, source_file_label
+from app.application.templateLibrary.packs.packCatalog import member_rows_for
+from app.application.templateLibrary.packs.templateGraphValidation import template_graph_issues
+from app.application.templateLibrary.structureTemplateLibraryService import resolve_structures_domain_root
 from app.dataModel.libraryPacks.packManifest import LibraryPackManifest, LibraryPackManifestMember
 from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import (
     CANONICAL_PLOT_NAMES, canonical_defaults,

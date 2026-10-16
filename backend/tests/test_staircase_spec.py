@@ -162,7 +162,7 @@ class StaircaseSpecTests(unittest.TestCase):
         self.assertEqual(resolved[1].staircase_id, "cellar_ladder")
 
     def test_all_stdlib_structures_validate(self):
-        from app.application.worldData.libraryPacks.manifest import PACK_MANIFEST_FILENAME
+        from app.application.templateLibrary.packs.manifest import PACK_MANIFEST_FILENAME
         root = Path(__file__).resolve().parents[2] / "structures_templates/base"
         paths = [p for p in root.glob("*.json") if p.name != PACK_MANIFEST_FILENAME]
         self.assertTrue(paths)

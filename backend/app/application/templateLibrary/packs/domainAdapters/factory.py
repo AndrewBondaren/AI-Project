@@ -4,33 +4,33 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.application.worldData.libraryPacks.domainAdapters.building import (
+from app.application.templateLibrary.packs.domainAdapters.building import (
     BuildingPackAdapter,
 )
-from app.application.worldData.libraryPacks.domainAdapters.relief import (
+from app.application.templateLibrary.packs.domainAdapters.relief import (
     ReliefPackAdapter,
 )
-from app.application.worldData.libraryPacks.domainAdapters.structure import (
+from app.application.templateLibrary.packs.domainAdapters.structure import (
     StructurePackAdapter,
 )
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.domainAdapters.plot import PlotPackAdapter
+from app.application.templateLibrary.packs.domainAdapters.plot import PlotPackAdapter
 
 if TYPE_CHECKING:
-    from app.application.worldData.plotTemplateLibraryService import PlotTemplateLibraryService
-    from app.application.worldData.buildingTemplateLibraryService import (
+    from app.application.templateLibrary.plotTemplateLibraryService import PlotTemplateLibraryService
+    from app.application.templateLibrary.buildingTemplateLibraryService import (
         BuildingTemplateLibraryService,
     )
-    from app.application.worldData.libraryPacks.domainAdapters.contract import (
+    from app.application.templateLibrary.packs.domainAdapters.contract import (
         PackDomainAdapter,
     )
-    from app.application.worldData.reliefTemplateLibraryService import (
+    from app.application.templateLibrary.reliefTemplateLibraryService import (
         ReliefTemplateLibraryService,
     )
-    from app.application.worldData.reliefWorldImportService import (
+    from app.application.templateLibrary.reliefWorldImportService import (
         ReliefWorldImportService,
     )
-    from app.application.worldData.structureTemplateLibraryService import (
+    from app.application.templateLibrary.structureTemplateLibraryService import (
         StructureTemplateLibraryService,
     )
 

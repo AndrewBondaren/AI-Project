@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from app.application.jsonValidation.facade import normalize_world
-from app.application.worldData.deriveWorldUid import derive_world_uid
+from app.application.worldBundle.deriveWorldUid import derive_world_uid
 
 
 class DeriveWorldUidTests(unittest.TestCase):

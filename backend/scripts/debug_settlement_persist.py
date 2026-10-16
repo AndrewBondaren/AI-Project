@@ -81,7 +81,7 @@ async def test_persist_outdoor_inprocess() -> None:
         await container.location_repository().create(settlement)
 
         from app.application.jsonValidation.worldRow import transition_types
-        from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+        from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
         from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
         from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
         from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog

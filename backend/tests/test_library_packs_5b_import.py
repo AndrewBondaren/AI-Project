@@ -6,7 +6,7 @@ from uuid import uuid5, NAMESPACE_DNS
 
 from tests.test_library_packs_4b import _ServiceCase, _relief_body
 from app.application.importResult import ImportResult
-from app.application.worldData.libraryPacks.legacyPack import (
+from app.application.templateLibrary.packs.legacy.legacyPack import (
     legacy_member_uid,
     legacy_pack_uid,
 )
@@ -113,7 +113,7 @@ class LegacyWorldImportTests(_ServiceCase):
         member = await self.service.create_member(src.pack_uid, library_kind=_R,
             local_uid="meadow", body=_relief_body("meadow"))
         wire = (await self.service.archives.export_pack(src.pack_uid))
-        from app.application.worldData.libraryPacks.archiveSources import pack_to_wire
+        from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire
         data = {"world": {"world_uid": "src", "name": "Src", "created_at": "2026-10-10"},
                 "library_packs": [pack_to_wire(wire)]}
         results, rolled = await self.bundle.import_bundle(data)

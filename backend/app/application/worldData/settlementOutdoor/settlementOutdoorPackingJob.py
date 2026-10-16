@@ -15,7 +15,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     building_catalog_from_snapshot,
 )
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )

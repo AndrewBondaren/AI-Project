@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from app.api.routes.debug import debug_generate_structure_rotations, _LogCapture
 from app.application.worldData.debugStructureRotations import generate_rotations, RotationProbe
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateNotFoundError,
 )
 from app.dataModel.spatial.facing import Facing

@@ -10,7 +10,7 @@ from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize
 from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import (
     grade_ribbon_segments,
 )
-from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
 from app.dataModel.terrain.relief import ReliefTemplate
 from app.db.models.world import World
 

@@ -13,9 +13,9 @@ from app.api.deps import get_container
 from app.api.errorMapping import install_error_handlers
 from app.api.routes.reliefTemplates import router as relief_router
 from app.api.routes.structureTemplates import router as structure_router
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteSelection
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError, LibraryPackConflictError
-from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteSelection
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError, LibraryPackConflictError
+from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 from app.ids import LibraryKind, library_uid
 
 
@@ -74,7 +74,7 @@ class LibraryWriteApiTests(_ServiceCase):
 
     async def test_fs_import_negotiation(self):
         root, path, manifest = self.fs_pack()
-        with patch("app.application.worldData.reliefTemplateLibraryService.resolve_relief_domain_root", return_value=root):
+        with patch("app.application.templateLibrary.reliefTemplateLibraryService.resolve_relief_domain_root", return_value=root):
             data = {"path": str(path)}
             first = await self.client.post("/relief-templates/import", data=data)
             self.assertEqual(first.status_code, 200, first.text)
@@ -160,7 +160,7 @@ class LibraryWriteApiTests(_ServiceCase):
         member = manifest["members"][0]
         path = fs_fixture._write_pack(root, "user", manifest=manifest, bodies={member["local_uid"]:
             {"system_name": member["template_uid"], "display_name": "House"}})
-        with patch("app.application.worldData.structureTemplateLibraryService.resolve_structures_domain_root", return_value=root):
+        with patch("app.application.templateLibrary.structureTemplateLibraryService.resolve_structures_domain_root", return_value=root):
             url = "/structure-templates/import"
             body = {"path": str(path)}
             first = await self.client.post(url, json=body)
@@ -242,9 +242,9 @@ class LibraryWriteApiTests(_ServiceCase):
                           for m in before_members}, before_bodies)
 
     async def test_bundle_policy_conflict_rolls_back_world_and_members(self):
-        from app.application.worldData.bundle.entity.sections import WorldSectionHandler
-        from app.application.worldData.worldBundleService import WorldBundleService
-        from app.application.worldData.libraryPacks.errors import (
+        from app.application.worldBundle.entity.sections import WorldSectionHandler
+        from app.application.worldBundle.worldBundleService import WorldBundleService
+        from app.application.templateLibrary.packs.errors import (
             LibraryPackPolicyRequiredError, require_no_policy)
         from app.api.routes.worlds import router as worlds_router
         from app.application.importResult import ImportResult
@@ -287,10 +287,10 @@ class LibraryWriteApiTests(_ServiceCase):
         self.assertEqual(await self.packs.list_all(), [])
 
     async def test_bundle_later_entity_failure_rolls_back_library_apply(self):
-        from app.application.worldData.bundle.entity.sections import WorldSectionHandler
-        from app.application.worldData.worldBundleService import WorldBundleService
+        from app.application.worldBundle.entity.sections import WorldSectionHandler
+        from app.application.worldBundle.worldBundleService import WorldBundleService
         from app.application.importResult import ImportResult
-        from app.application.worldData.libraryPacks.errors import require_no_policy
+        from app.application.templateLibrary.packs.errors import require_no_policy
         container = self.container
         class SeedLibraries:
             key = "relief_templates"

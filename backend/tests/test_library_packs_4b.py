@@ -17,12 +17,12 @@ import unittest
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.errors import (
     LibraryPackConflictError,
     LibraryPackNotFoundError,
     LibraryPackValidationError,
 )
-from app.application.worldData.loadReliefTemplatesForWorld import (
+from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
 from app.core.container import Container

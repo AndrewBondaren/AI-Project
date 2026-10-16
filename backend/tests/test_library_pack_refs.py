@@ -5,13 +5,13 @@ from unittest import TestCase
 from pydantic import ValidationError
 
 from test_library_packs_4b import _ServiceCase, _plot_body, _PLOT, _STRUCT
-from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+from app.application.templateLibrary.packs.domainAdapters.refFields import (
     remap_template_body, relief_policy_refs, template_body_refs,
 )
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
+from app.application.templateLibrary.packs.domainAdapters.remapRefs import (
     remap_relief_pick_policy,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackInUseError
+from app.application.templateLibrary.packs.errors import LibraryPackInUseError
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.world import World
 from app.ids import runtime_uid

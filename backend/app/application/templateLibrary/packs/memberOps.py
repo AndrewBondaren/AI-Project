@@ -8,13 +8,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.errors import (
     LibraryPackInUseError,
     LibraryPackNotFoundError,
     LibraryPackValidationError,
 )
-from app.application.worldData.libraryPacks.packResults import MemberDeleteResult
-from app.application.worldData.libraryPacks.packScope import _PackScope
+from app.application.templateLibrary.packs.packResults import MemberDeleteResult
+from app.application.templateLibrary.packs.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, UID_PART_SEPARATOR
@@ -58,7 +58,7 @@ class _MemberOps:
         scope.require_owner_scope(pack, world_uid)
         adapter = scope.adapter_for(LibraryKind(member.library_kind))
         world = await scope.world_for(pack)
-        from app.application.worldData.libraryPacks.referenceResolver import member_usages
+        from app.application.templateLibrary.packs.referenceResolver import member_usages
         usages = await member_usages(scope, member, world)
         if usages and not allow_used:
             raise LibraryPackInUseError(

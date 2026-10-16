@@ -1,18 +1,18 @@
 """Legacy operation arguments/results translated to the common L-4 pipeline."""
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.errors import (
     LibraryPackConflictError, LibraryPackOwnershipError, LibraryPackReadOnlyError,
     LibraryPackValidationError,
 )
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.lifecycleContracts import (
     MemberCopyResult, PreparedMember, ReinstantiatePreview,
 )
-from app.application.worldData.libraryPacks.packResults import PackRemapResult
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.packResults import PackRemapResult
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteSource, validated_write_request,
 )
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
-from app.application.worldData.libraryPacks.writeResults import PolicyRequired, WriteRejected, WriteResult
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember, WriteImportSource
+from app.application.templateLibrary.packs.write.writeResults import PolicyRequired, WriteRejected, WriteResult
 from app.ids import LibraryKind
 
 
@@ -130,7 +130,7 @@ class LibraryWriteFacade:
         return await self.submit_member(member, pack, body, owner=owner, source_file=source_file)
 
     async def submit_member(self, member, pack, body, *, owner=None, source_file=None):
-        from app.application.worldData.libraryPacks.errors import LibraryPackPolicyRequiredError
+        from app.application.templateLibrary.packs.errors import LibraryPackPolicyRequiredError
         raw = WriteImportSource(pack, (WriteImportMember(member, body, source_file),))
         request = LibraryWriteRequest(items=(LibraryWriteItem(item_key="member", object_kind="member",
             source=WriteSource(kind="authoring", key="create"), owner_world_uid=owner,

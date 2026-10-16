@@ -3,29 +3,29 @@ from copy import deepcopy
 from dataclasses import replace
 
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError, ReferenceIssueContext, ReferenceIssueReason
-from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
-from app.application.worldData.libraryPacks.bodyDiff import body_diff
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.domainAdapters.refFields import DirectRefField, RELIEF_POLICY_REF_FIELDS, template_body_refs
-from app.application.worldData.libraryPacks.legacyDomainRefs import is_canonical_uid
-from app.application.worldData.libraryPacks.legacyDomainContracts import LegacyDomainShape
-from app.application.worldData.libraryPacks.legacyPack import legacy_member_row, legacy_pack_row, legacy_source_member_row
-from app.application.worldData.libraryPacks.legacyWorldBodies import LegacyWorldBodyTools, target_kind
-from app.application.worldData.libraryPacks.legacyWorldContracts import (
+from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation
+from app.application.templateLibrary.packs.write.bodyDiff import body_diff
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.domainAdapters.refFields import DirectRefField, RELIEF_POLICY_REF_FIELDS, template_body_refs
+from app.application.templateLibrary.packs.legacy.legacyDomainRefs import is_canonical_uid
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LegacyDomainShape
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_member_row, legacy_pack_row, legacy_source_member_row
+from app.application.templateLibrary.packs.legacy.legacyWorldBodies import LegacyWorldBodyTools, target_kind
+from app.application.templateLibrary.packs.legacy.legacyWorldContracts import (
     LegacyBodyComparison, LegacyPackProjection, LegacyPackRoute, LegacyPointerDecision,
     LegacyWorldMigrationPlan, LegacyWorldFacts,
 )
-from app.application.worldData.libraryPacks.legacyWorldProjection import existing_instance, project_pack
-from app.application.worldData.libraryPacks.legacyWorldRefs import project_world_refs
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.legacy.legacyWorldProjection import existing_instance, project_pack
+from app.application.templateLibrary.packs.legacy.legacyWorldRefs import project_world_refs
+from app.application.templateLibrary.packs.lifecycleContracts import (
     CatalogSnapshot,
     RELIEF_POLICY_FIELD,
     world_consumer,
 )
-from app.application.worldData.libraryPacks.referenceResolver import contextualize_reference_issues, dependency_issues, reference_index
-from app.application.worldData.libraryPacks.uidMap import compose_template_uid_maps
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember
+from app.application.templateLibrary.packs.referenceResolver import contextualize_reference_issues, dependency_issues, reference_index
+from app.application.templateLibrary.packs.uidMap import compose_template_uid_maps
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
 from app.ids import LibraryKind, UID_PART_SEPARATOR

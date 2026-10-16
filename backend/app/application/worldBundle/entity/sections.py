@@ -6,8 +6,8 @@ from dataclasses import asdict
 from typing import Any
 
 from app.application.importResult import ImportResult
-from app.application.worldData.bundle.errors import BundleValidationError
-from app.application.worldData.connectionGraphService import ConnectionGraphService
+from app.application.worldBundle.errors import BundleValidationError
+from app.application.worldBundle.connectionGraphService import ConnectionGraphService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.worldService import WorldService

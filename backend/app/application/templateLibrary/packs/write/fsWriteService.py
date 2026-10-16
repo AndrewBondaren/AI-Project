@@ -1,11 +1,11 @@
 """FS input adapter; user writes use L-4, trusted defaults remain additive."""
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.fsWriteSource import read_fs_write_source
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
-from app.application.worldData.libraryPacks.packResults import PackImportResult
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, validated_write_request, WriteSource
-from app.application.worldData.libraryPacks.writeResults import WriteResult, PolicyRequired
-from app.application.worldData.libraryPacks.writeFacade import require_result
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.write.fsWriteSource import read_fs_write_source
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError
+from app.application.templateLibrary.packs.packResults import PackImportResult
+from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteItem, validated_write_request, WriteSource
+from app.application.templateLibrary.packs.write.writeResults import WriteResult, PolicyRequired
+from app.application.templateLibrary.packs.write.writeFacade import require_result
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.ids import LibraryKind
 
@@ -16,7 +16,7 @@ class LibraryFsWriteService:
 
     async def import_path(self, kind, path, *, domain_root=None, enforce_domain_root=True,
                           decisions=(), preview_token=None) -> PackImportResult | PolicyRequired:
-        from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+        from app.application.templateLibrary.packs.errors import LibraryPackValidationError
         try:
             loaded = read_fs_write_source(kind, path, domain_root=domain_root,
                                           enforce_domain_root=enforce_domain_root)

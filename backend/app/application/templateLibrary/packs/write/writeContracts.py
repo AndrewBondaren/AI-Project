@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.ids import LibraryKind, UID_PART_SEPARATOR
 
 if TYPE_CHECKING:
-    from app.application.worldData.libraryPacks.writeInspectionContracts import WriteInspectionState
+    from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteInspectionState
 
 
 class WriteObjectKind(StrEnum):
@@ -121,7 +121,7 @@ class LibraryWriteRequest(BaseModel):
 
 def validated_write_request(**kwargs) -> LibraryWriteRequest:
     """Turn invalid external selections into a domain validation failure."""
-    from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+    from app.application.templateLibrary.packs.errors import LibraryPackValidationError
     try:
         return LibraryWriteRequest(**kwargs)
     except ValueError as exc:

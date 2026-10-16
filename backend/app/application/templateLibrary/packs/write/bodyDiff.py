@@ -1,5 +1,5 @@
 """Domain-independent structural diff of already prepared bodies."""
-from app.application.worldData.libraryPacks.lifecycleContracts import FieldChange
+from app.application.templateLibrary.packs.lifecycleContracts import FieldChange
 
 
 def body_diff(before, after, path=()) -> tuple[FieldChange, ...]:

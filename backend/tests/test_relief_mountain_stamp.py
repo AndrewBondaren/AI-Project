@@ -7,7 +7,7 @@ import unittest
 from app.application.worldData.generators.terrain.mountains.reliefSidesStamp import (
     stamp_mountain_sides_from_relief,
 )
-from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
 from app.dataModel.terrain.relief import ReliefSideKind, ReliefSideSpec, ReliefTemplate
 from app.dataModel.terrainMasks.mountain.specs import MountainFormBySides, MountainSpec
 from app.db.models.world import World

@@ -5,9 +5,9 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _PLOT
-from app.application.worldData.libraryPacks.errors import LibraryPackInUseError, LibraryPackOwnershipError
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
-from app.application.worldData.libraryPacks.reinstantiatePlan import hold_candidates
+from app.application.templateLibrary.packs.errors import LibraryPackInUseError, LibraryPackOwnershipError
+from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
+from app.application.templateLibrary.packs.reinstantiate.reinstantiatePlan import hold_candidates
 from app.db.database import Database, _in_transaction
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import remapped_library_uid, runtime_uid, state_fingerprint
@@ -57,7 +57,7 @@ class LifecycleTests(_ServiceCase):
     async def test_random_uid_collision_retries(self):
         pack, (member,) = await self._relief_engine_pack(members=('meadow',))
         fresh = runtime_uid()
-        with patch('app.application.worldData.libraryPacks.memberWritePlanner.runtime_uid',
+        with patch('app.application.templateLibrary.packs.write.memberWritePlanner.runtime_uid',
                    side_effect=[member.template_uid, fresh]):
             result = await self.service.copy_member(member.template_uid, pack.pack_uid)
         self.assertEqual(result.member.template_uid, fresh)
@@ -261,7 +261,7 @@ class LifecycleTests(_ServiceCase):
         await self._world('w1')
         source, (member,) = await self._relief_engine_pack(members=('meadow',))
         old_uid = runtime_uid()
-        with patch('app.application.worldData.libraryPacks.packWritePlanner.remapped_library_uid', return_value=old_uid):
+        with patch('app.application.templateLibrary.packs.write.packWritePlanner.remapped_library_uid', return_value=old_uid):
             result = await self.service.instantiate_pack(source.pack_uid, world_uid='w1')
         self.assertEqual(result.uid_map[member.template_uid], old_uid)
         await self.service.update_member_body(member.template_uid, _relief_body('meadow', display_name='Updated'))

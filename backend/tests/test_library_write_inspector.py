@@ -4,15 +4,15 @@ from dataclasses import replace
 from unittest.mock import AsyncMock
 
 from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _PLOT, _plot_body, _relief_body
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.defaults import STRUCTURES_BASE_SYSTEM_NAME
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.defaults import STRUCTURES_BASE_SYSTEM_NAME
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteObjectKind,
     WritePolicy, WriteSource, WriteSourceKind, WriteStatus,
 )
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
-from app.application.worldData.libraryPacks.writeInspector import LibraryWriteInspector
-from app.application.worldData.libraryPacks.writePolicy import LibraryWritePolicy
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember, WriteImportSource
+from app.application.templateLibrary.packs.write.writeInspector import LibraryWriteInspector
+from app.application.templateLibrary.packs.write.writePolicy import LibraryWritePolicy
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, library_uid, runtime_uid

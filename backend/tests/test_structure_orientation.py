@@ -174,7 +174,7 @@ class StructureOrientationTests(unittest.TestCase):
     def test_full_generation_four_sides_matches_author_frame(self):
         root = Path(__file__).resolve().parents[2] / "structures_templates/base"
         structures = [simple_structure("east"), simple_structure("south")]
-        from app.application.worldData.libraryPacks.uidMap import base_member_uid
+        from app.application.templateLibrary.packs.uidMap import base_member_uid
         for uid in (base_member_uid("tavern_1"), base_member_uid("manor_1")):
             structures.append(StructureTemplate.model_validate(json.loads((root / (uid + ".json")).read_text(encoding="utf-8"))))
         world, building = test_world_building()

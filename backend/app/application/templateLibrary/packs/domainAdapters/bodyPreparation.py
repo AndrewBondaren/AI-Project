@@ -13,13 +13,13 @@ from pydantic import BaseModel, ValidationError
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_prepared_source
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
+from app.application.templateLibrary.packs.domainAdapters.contract import (
     SYSTEM_NAME_FIELD,
 )
-from app.application.worldData.libraryPacks.domainAdapters.refFields import (
+from app.application.templateLibrary.packs.domainAdapters.refFields import (
     remap_template_body, template_body_refs,
 )
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.ids import LibraryKind
 
 

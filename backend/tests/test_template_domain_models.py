@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 
 from pydantic import ValidationError
 
-from app.application.worldData.templateContracts import (
+from app.application.templateLibrary.templateContracts import (
     ReliefTemplateSnapshot, TemplateEntry, WorldTemplateSnapshot,
 )
 from app.dataModel.cascade.cascadeVerify import verify_cascade_contract

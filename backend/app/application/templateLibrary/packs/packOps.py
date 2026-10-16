@@ -7,17 +7,17 @@ import logging
 from collections.abc import Iterable
 from dataclasses import replace
 
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.errors import (
     LibraryPackInUseError,
     LibraryPackNotFoundError,
     LibraryPackValidationError,
 )
-from app.application.worldData.libraryPacks.memberOps import _MemberOps
-from app.application.worldData.libraryPacks.packResults import (
+from app.application.templateLibrary.packs.memberOps import _MemberOps
+from app.application.templateLibrary.packs.packResults import (
     PackDeleteResult,
 )
-from app.application.worldData.libraryPacks.packIdentity import PACK_NAME_SEPARATOR
-from app.application.worldData.libraryPacks.packScope import _PackScope
+from app.application.templateLibrary.packs.packIdentity import PACK_NAME_SEPARATOR
+from app.application.templateLibrary.packs.packScope import _PackScope
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackDependency import LibraryPackDependencyRow
 from app.ids import UID_PART_SEPARATOR

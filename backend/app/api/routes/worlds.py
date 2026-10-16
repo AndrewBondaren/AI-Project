@@ -11,8 +11,8 @@ from app.api.deps import get_container
 from app.api.utils.bundleSource import resolve_bundle_source
 from app.api.libraryWrite import parse_negotiation
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, import_validation_http_detail
-from app.application.worldData.bundle.errors import BundleValidationError
-from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.application.worldBundle.errors import BundleValidationError
+from app.application.templateLibrary.reliefErrors import ReliefNotFoundError, ReliefValidationError
 
 router = APIRouter()
 

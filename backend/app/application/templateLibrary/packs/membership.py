@@ -10,7 +10,7 @@ candidate, whatever its presence in SQL.
 
 from __future__ import annotations
 
-from app.application.worldData.libraryPacks.defaults import default_pack_uids
+from app.application.templateLibrary.packs.defaults import default_pack_uids
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 
 

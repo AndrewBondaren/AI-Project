@@ -12,7 +12,7 @@ from app.application.canonicalLibrary import (
     CanonicalSourceError,
     SqlCanonicalPersistence,
 )
-from app.application.worldData.libraryPacks.defaults import default_pack_names
+from app.application.templateLibrary.packs.defaults import default_pack_names
 from app.db.models.reliefTemplate import ReliefTemplateRow
 from app.ids import LibraryKind
 

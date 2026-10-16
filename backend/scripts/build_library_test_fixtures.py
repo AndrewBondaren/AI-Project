@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.application.jsonValidation.resolve import resolve_model
-from app.application.worldData.bundle.archive import read_archive, write_archive
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.manifest import load_pack_manifest
+from app.application.worldBundle.archive import read_archive, write_archive
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.manifest import load_pack_manifest
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleLibraryPackSource

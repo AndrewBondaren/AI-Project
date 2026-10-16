@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.worldData.libraryPacks.domainAdapters.contract import DomainOutline
+from app.application.templateLibrary.packs.domainAdapters.contract import DomainOutline
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind
 

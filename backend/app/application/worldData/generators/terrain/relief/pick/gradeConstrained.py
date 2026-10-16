@@ -7,7 +7,7 @@ when the envelope requires a gentle slope (R36i tails).
 
 from __future__ import annotations
 
-from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
+from app.application.templateLibrary.reliefGeomWarn import warn_template_invalid_geom
 
 from dataclasses import replace
 from app.application.jsonValidation.resolve import ResolveContext

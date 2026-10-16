@@ -9,13 +9,13 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.libraryWrite import WriteNegotiation, parse_negotiation
-from app.application.worldData.libraryPacks.errors import require_no_policy
+from app.application.templateLibrary.packs.errors import require_no_policy
 from app.ids import LibraryKind
-from app.application.worldData.structureTemplateErrors import (
+from app.application.templateLibrary.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
 )
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
 from app.db.models.structureTemplate import StructureTemplateRow

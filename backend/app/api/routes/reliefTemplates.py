@@ -10,10 +10,10 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.libraryWrite import parse_negotiation
-from app.application.worldData.libraryPacks.errors import require_no_policy
+from app.application.templateLibrary.packs.errors import require_no_policy
 from app.ids import LibraryKind
-from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
-from app.application.worldData.reliefTemplateLibraryService import (
+from app.application.templateLibrary.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.application.templateLibrary.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
 

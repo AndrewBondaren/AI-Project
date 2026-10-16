@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from app.api.deps import get_container
 from app.api.routes.worlds import router
-from app.application.worldData.bundle.archive import BundleArchiveError, read_archive, write_archive
+from app.application.worldBundle.archive import BundleArchiveError, read_archive, write_archive
 from app.core.container import Container
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleLibraryPackSource, BundleManifest
 from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, LibraryArchivePack
@@ -177,7 +177,7 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(path.is_file())
             return original(path)
 
-        with patch("app.application.worldData.worldBundleService.WorldBundleService.read_archive", side_effect=capture):
+        with patch("app.application.worldBundle.worldBundleService.WorldBundleService.read_archive", side_effect=capture):
             response = await self.send(self.archive, upload=True, query="?validate_only=true")
             self.assertEqual(response.status_code, 200, response.text)
             broken = self.root / "broken.wpack"
@@ -199,7 +199,7 @@ class BundleArchiveRouteTests(unittest.IsolatedAsyncioTestCase):
             paths.append(path)
             return original(sections, path=path)
 
-        target = "app.application.worldData.worldBundleService.WorldBundleService.write_archive"
+        target = "app.application.worldBundle.worldBundleService.WorldBundleService.write_archive"
         with patch(target, side_effect=capture):
             response = await self.client.get(f"/worlds/{self.uid}/export?download=true")
             self.assertEqual(response.status_code, 200, response.text)

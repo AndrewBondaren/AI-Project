@@ -20,15 +20,15 @@ from unittest import IsolatedAsyncioTestCase
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     building_catalog_from_snapshot,
 )
-from app.application.worldData.libraryPacks.domainAdapters.factory import (
+from app.application.templateLibrary.packs.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
-from app.application.worldData.libraryPacks.effectiveCatalog import (
+from app.application.templateLibrary.packs.effectiveCatalog import (
     EffectiveCatalogLoader,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.uidMap import pin_for_member
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.uidMap import pin_for_member
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.container import Container
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,

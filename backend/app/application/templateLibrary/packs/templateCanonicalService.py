@@ -2,10 +2,10 @@
 from pathlib import Path
 
 from app.application.canonicalLibrary import ensure_canonical
-from app.application.worldData.libraryPacks.templateCanonicalPersistence import (
+from app.application.templateLibrary.packs.templateCanonicalPersistence import (
     TemplateCanonicalContext, template_canonical_spec,
 )
-from app.application.worldData.libraryPacks.templateCanonicalSource import (
+from app.application.templateLibrary.packs.templateCanonicalSource import (
     load_canonical_template_graph,
 )
 

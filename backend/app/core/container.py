@@ -59,22 +59,22 @@ from app.db.repositories.sqlite.libraryPackMemberRepository import SqliteLibrary
 from app.db.repositories.iLibraryPackDependencyRepository import ILibraryPackDependencyRepository
 from app.db.repositories.sqlite.libraryPackDependencyRepository import SqliteLibraryPackDependencyRepository
 from app.application.worldData.worldService import WorldService
-from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
-from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
-from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.effectiveCatalog import EffectiveCatalogLoader
-from app.application.worldData.libraryPacks.refResolve import RefResolver
+from app.application.templateLibrary.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
+from app.application.templateLibrary.buildingTemplateLibraryService import BuildingTemplateLibraryService
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.effectiveCatalog import EffectiveCatalogLoader
+from app.application.templateLibrary.packs.refResolve import RefResolver
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.domainAdapters.factory import (
+from app.application.templateLibrary.packs.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
-from app.application.worldData.libraryPacks.packService import LibraryPackService
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.packs.packService import LibraryPackService
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
-from app.application.worldData.bundle.registry import build_bundle_handlers
+from app.application.worldBundle.registry import build_bundle_handlers
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
@@ -85,7 +85,7 @@ from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrche
 from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
-from app.application.worldData.connectionGraphService import ConnectionGraphService
+from app.application.worldBundle.connectionGraphService import ConnectionGraphService
 from app.application.worldData.connectionPersistService import ConnectionPersistService
 from app.application.worldData.settlementPersistService import SettlementPersistService
 from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
@@ -99,9 +99,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.application.worldData.stateService import StateService
 from app.application.worldData.seedService import SeedService
-from app.application.worldData.worldBundleService import WorldBundleService
-from app.application.worldData.playerService import PlayerService
-from app.application.worldData.gameSessionService import GameSessionService
+from app.application.worldBundle.worldBundleService import WorldBundleService
+from app.application.session.playerService import PlayerService
+from app.application.session.gameSessionService import GameSessionService
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -720,7 +720,7 @@ class Container(TemplateRepositoryProviders):
         return self._library_pack_service
 
     def library_write_service(self):
-        from app.application.worldData.libraryPacks.writeServiceFactory import build_library_write_service
+        from app.application.templateLibrary.packs.write.writeServiceFactory import build_library_write_service
         return build_library_write_service(db=self._db, catalog=self.pack_catalog_repos(),
             adapters=self.pack_domain_adapters(), worlds=self.world_service(), world_repository=self.world_repository(),
             locations=self.location_repository())
@@ -736,7 +736,7 @@ class Container(TemplateRepositoryProviders):
 
     def template_snapshot_loader(self):
         """B3 async boundary: world template snapshot for packing."""
-        from app.application.worldData.templateSnapshotLoader import (
+        from app.application.templateLibrary.templateSnapshotLoader import (
             TemplateSnapshotLoader,
         )
         if getattr(self, "_template_snapshot_loader", None) is None:
@@ -942,7 +942,7 @@ class Container(TemplateRepositoryProviders):
 
     def legacy_world_migration(self):
         """B2 seam: legacy extraction/plan application through the 4d writer."""
-        from app.application.worldData.libraryPacks.legacyWorldMigration import LegacyWorldMigration
+        from app.application.templateLibrary.packs.legacy.legacyWorldMigration import LegacyWorldMigration
         return LegacyWorldMigration(
             catalog=self.pack_catalog_repos(),
             adapters=self.pack_domain_adapters(),

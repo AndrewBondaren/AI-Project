@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
 )
-from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
 from tests.canonicalCatalog import canonical_building_catalog, canonical_plot_uid
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,

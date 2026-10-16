@@ -47,13 +47,13 @@ class BuildingTemplateLibraryService:
 
     async def write_body(self, body: BuildingTemplate, *, pack_uid, template_uid=None,
                          source_file=None, world_uid=None) -> BuildingTemplateRow:
-        from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+        from app.application.templateLibrary.packs.write.domainWriteEntry import write_domain_body
         return await write_domain_body(self._write_provider(), LibraryKind.BUILDING_TEMPLATES,
             body, pack_uid=pack_uid, template_uid=template_uid,
             source_file=source_file, world_uid=world_uid)
 
     async def persist_prepared(self, outline, *, template_uid, source_file, added):
-        from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+        from app.application.templateLibrary.packs.write.preparedPersistence import persist_body_row
         row = BuildingTemplateRow(template_uid=template_uid, system_name=outline.system_name,
             display_name=outline.display_name,
             data=outline.model_dump(mode="json"), source_file=source_file)

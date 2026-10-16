@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World
 

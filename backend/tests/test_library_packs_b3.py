@@ -18,25 +18,25 @@ from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
 from app.application.jsonValidation.types import ImportValidationError
-from app.application.worldData.bundle.legacyTemplateBodies import (
+from app.application.worldBundle.legacyTemplateBodies import (
     convert_flat_template_bodies,
 )
 from app.ids import LibraryKind, library_uid
-from app.application.worldData.libraryPacks.defaults import default_pack_names
-from app.application.worldData.libraryPacks.legacyPack import (
+from app.application.templateLibrary.packs.defaults import default_pack_names
+from app.application.templateLibrary.packs.legacy.legacyPack import (
     LEGACY_PACK_NAME,
     ensure_legacy_pack,
     legacy_member_row,
     legacy_member_uid,
     legacy_pack_uid,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.manifest import (
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.manifest import (
     PACK_MANIFEST_FILENAME,
     PackManifestError,
     load_pack_manifest,
 )
-from app.application.worldData.libraryPacks.uidMap import (
+from app.application.templateLibrary.packs.uidMap import (
     RELIEF_SMOKE_003_FORMER_UIDS,
     STRUCTURE_MEMBER_RENAMES,
     base_member_uid,
@@ -45,12 +45,12 @@ from app.application.worldData.libraryPacks.uidMap import (
     pin_for_member,
     smoke_003_member_uid,
 )
-from app.application.worldData.reliefErrors import ReliefValidationError
-from app.application.worldData.reliefTemplateFsImport import import_relief_path
-from app.application.worldData.structureTemplateErrors import (
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefTemplateFsImport import import_relief_path
+from app.application.templateLibrary.structureTemplateErrors import (
     StructureTemplateValidationError,
 )
-from app.application.worldData.structureTemplateFsImport import (
+from app.application.templateLibrary.structureTemplateFsImport import (
     import_structure_templates_path,
     load_structure_stdlib,
 )
@@ -640,7 +640,7 @@ class LegacyBodyImportTests(_DbCase):
     """Manifest-less bundle bodies → world legacy members + pointers."""
 
     async def test_relief_bodies_become_legacy_members(self):
-        from app.application.worldData.reliefWorldImportService import (
+        from app.application.templateLibrary.reliefWorldImportService import (
             ReliefWorldImportService,
         )
 
@@ -674,8 +674,8 @@ class LegacyBodyImportTests(_DbCase):
         self.assertIn(uid, {m.template_uid for m in await self.members.list_for_world("w-relief")})
 
         # Re-import negotiates; explicit replace keeps the saved identity.
-        from app.application.worldData.libraryPacks.writeResults import PolicyRequired
-        from app.application.worldData.libraryPacks.writeContracts import LibraryWriteSelection
+        from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
+        from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteSelection
         preview = await service.import_outlines_into_world("w-relief", [body])
         self.assertIsInstance(preview, PolicyRequired)
         again = await service.import_outlines_into_world("w-relief", [body],

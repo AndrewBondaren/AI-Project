@@ -3,12 +3,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.application.worldData.libraryPacks.manifest import (
+from app.application.templateLibrary.packs.manifest import (
     load_pack_manifest, resolve_owning_pack, require_declared_member, source_file_label,
 )
-from app.application.worldData.libraryPacks.packCatalog import pack_row_for, member_rows_for
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportMember, WriteImportSource
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.packCatalog import pack_row_for, member_rows_for
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportMember, WriteImportSource
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.ids import LibraryKind
 
 
@@ -21,10 +21,10 @@ class FsWriteSource:
 def read_fs_write_source(kind, path, *, domain_root=None, enforce_domain_root=True):
     kind = LibraryKind(kind)
     if kind is LibraryKind.STRUCTURE_TEMPLATES:
-        from app.application.worldData.structureTemplateLibraryService import resolve_structures_domain_root, DOMAIN_ROOT
+        from app.application.templateLibrary.structureTemplateLibraryService import resolve_structures_domain_root, DOMAIN_ROOT
         root = domain_root or resolve_structures_domain_root()
     elif kind is LibraryKind.RELIEF_TEMPLATES:
-        from app.application.worldData.reliefTemplateLibraryService import resolve_relief_domain_root, DOMAIN_ROOT
+        from app.application.templateLibrary.reliefTemplateLibraryService import resolve_relief_domain_root, DOMAIN_ROOT
         root = domain_root or resolve_relief_domain_root()
     else:
         raise LibraryPackValidationError(f"{kind.value} has no FS pack root")

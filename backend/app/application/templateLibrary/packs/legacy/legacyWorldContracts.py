@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.worldData.libraryPacks.legacyDomainContracts import LegacyDomainShape, SourcePath
-from app.application.worldData.libraryPacks.legacyWorldInput import LegacyWorldInput
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot, FieldChange
-from app.application.worldData.libraryPacks.writeInspectionContracts import WriteImportSource, WriteImportMember
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LegacyDomainShape, SourcePath
+from app.application.templateLibrary.packs.legacy.legacyWorldInput import LegacyWorldInput
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot, FieldChange
+from app.application.templateLibrary.packs.write.writeInspectionContracts import WriteImportSource, WriteImportMember
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.db.models.libraryPack import LibraryPackRow
 

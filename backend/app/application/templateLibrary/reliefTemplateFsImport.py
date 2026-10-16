@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.manifest import (
+from app.application.templateLibrary.packs.manifest import (
     LoadedMember,
     PackManifestError,
     load_pack_manifest,
@@ -26,8 +26,8 @@ from app.application.worldData.libraryPacks.manifest import (
     resolve_owning_pack,
     source_file_label,
 )
-from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
-from app.application.worldData.reliefTemplateLibraryService import (
+from app.application.templateLibrary.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.application.templateLibrary.reliefTemplateLibraryService import (
     DOMAIN_ROOT,
     resolve_relief_domain_root,
 )

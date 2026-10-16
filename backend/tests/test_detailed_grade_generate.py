@@ -87,7 +87,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
     def test_generate_stamps_with_templates(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -158,7 +158,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
     def test_generate_stamps_ravine_mask(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -226,7 +226,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -292,7 +292,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -363,7 +363,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         beyond is not a C18 obstacle.
         """
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -444,7 +444,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             FaceKey,
             build_tile_face_catalog,
         )
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -519,7 +519,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
     def test_two_tile_road_shoulder_along_seam_one_uid(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.dataModel.terrain.relief.enums import ReliefContext
         from app.db.models.world import World
@@ -765,7 +765,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
         from app.dataModel.terrain.relief import ReliefTemplate
@@ -831,7 +831,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
         from app.dataModel.terrain.relief import ReliefTemplate
@@ -1226,7 +1226,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         })
 
     def _world(self, uid: str, tpl, *, canal_policy=None):
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
         from app.db.models.world import World
@@ -1271,7 +1271,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         )
 
     def test_ramp_z_not_parent_cliff(self) -> None:
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
 

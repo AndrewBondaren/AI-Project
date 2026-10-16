@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from app.application.worldData.generators.terrain.relief.pick.gradePass import grade_from_template
-from app.application.worldData.reliefErrors import ReliefValidationError
-from app.application.worldData.reliefTemplateLibraryService import (
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
     resolve_relief_domain_root,
 )

@@ -9,8 +9,8 @@ from starlette.background import BackgroundTask
 from app.api.deps import get_container
 from app.api.libraryWrite import parse_negotiation, write_response
 from app.api.utils.bundleSource import resolve_bundle_source
-from app.application.worldData.bundle.errors import BundleValidationError
-from app.application.worldData.libraryPacks.archiveSources import packs_from_wire
+from app.application.worldBundle.errors import BundleValidationError
+from app.application.templateLibrary.packs.archive.archiveSources import packs_from_wire
 
 router = APIRouter()
 

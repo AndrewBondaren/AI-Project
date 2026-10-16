@@ -39,10 +39,10 @@ from app.application.jsonValidation.types import (
     ReferenceIssueContext,
     ReferenceIssueReason,
 )
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.effectiveCatalog import EffectiveCatalog
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.effectiveCatalog import EffectiveCatalog
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind
 

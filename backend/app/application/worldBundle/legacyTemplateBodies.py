@@ -1,13 +1,13 @@
 """Flat bundle compatibility boundary; modern manifest kinds never use shape inference."""
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.worldData.libraryPacks.legacyDomainContracts import LEGACY_PLOT_FIELDS, LegacyDomainRecord, LegacyDomainShape
-from app.application.worldData.libraryPacks.legacyDomainSplit import split_legacy_domains
-from app.application.worldData.libraryPacks.legacyPack import legacy_member_row
-from app.application.worldData.libraryPacks.uidMap import STRUCTURE_MEMBER_RENAMES, mapped_template_uid
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LEGACY_PLOT_FIELDS, LegacyDomainRecord, LegacyDomainShape
+from app.application.templateLibrary.packs.legacy.legacyDomainSplit import split_legacy_domains
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_member_row
+from app.application.templateLibrary.packs.uidMap import STRUCTURE_MEMBER_RENAMES, mapped_template_uid
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.domainAdapters.refFields import template_body_refs
+from app.application.templateLibrary.packs.domainAdapters.refFields import template_body_refs
 
 TEMPLATE_FLAT_KINDS = (LibraryKind.PLOT_TEMPLATES, LibraryKind.BUILDING_TEMPLATES)
 

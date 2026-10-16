@@ -30,7 +30,7 @@ from __future__ import annotations
 from typing import Mapping
 
 from app.ids import LibraryKind, library_uid
-from app.application.worldData.libraryPacks.defaults import STRUCTURES_BASE_SYSTEM_NAME
+from app.application.templateLibrary.packs.defaults import STRUCTURES_BASE_SYSTEM_NAME
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 
 # Globally stable pack keys (TZ §2): system_name is the author's global key;

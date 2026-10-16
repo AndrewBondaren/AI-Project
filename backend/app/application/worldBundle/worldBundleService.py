@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.application.worldData.bundle.archive import BundleArchiveError, read_archive, write_archive
+from app.application.worldBundle.archive import BundleArchiveError, read_archive, write_archive
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleWorldSource
 from app.dataModel.worldBundle.bundleSections import SECTION_PATHS
 from app.application.importResult import ImportResult
-from app.application.worldData.libraryPacks.archiveSources import pack_to_wire, packs_from_wire
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.bundle.worldCopyImport import WorldCopyImport
-from app.application.worldData.bundle.worldLibraries import (
+from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire, packs_from_wire
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.worldBundle.worldCopyImport import WorldCopyImport
+from app.application.worldBundle.worldLibraries import (
     LIBRARY_CONSUMED_SECTIONS,
     export_libraries,
     import_libraries,
@@ -22,12 +22,12 @@ from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.types import FieldPathError, ImportValidationReport
 from app.application.jsonValidation.resolve import ResolveContext, StrictFieldError, UnresolvedModelError, reject_unresolved
-from app.application.worldData.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from pydantic import ValidationError
-from app.application.worldData.bundle.handler import IBundleSectionHandler
-from app.application.worldData.bundleRemapService import remap_bundle
-from app.application.worldData.deriveWorldUid import derive_world_uid
-from app.application.worldData.libraryPacks.legacyWorldInput import extract_legacy_world_input
+from app.application.worldBundle.handler import IBundleSectionHandler
+from app.application.worldBundle.bundleRemapService import remap_bundle
+from app.application.worldBundle.deriveWorldUid import derive_world_uid
+from app.application.templateLibrary.packs.legacy.legacyWorldInput import extract_legacy_world_input
 from app.application.worldData.pack.import_.importLevels import (
     ImportLevel,
     filter_bundle_for_export,

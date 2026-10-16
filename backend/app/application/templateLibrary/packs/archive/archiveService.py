@@ -1,10 +1,10 @@
 """Archive application boundary over the common library write pipeline (TZ §4)."""
 import logging
 
-from app.application.worldData.libraryPacks.archiveSources import archive_source, export_pack
-from app.application.worldData.libraryPacks.packIdentity import instance_system_name
-from app.application.worldData.libraryPacks.writeContracts import LibraryWriteItem, WriteSource, validated_write_request
-from app.application.worldData.libraryPacks.writeFacade import require_result
+from app.application.templateLibrary.packs.archive.archiveSources import archive_source, export_pack
+from app.application.templateLibrary.packs.packIdentity import instance_system_name
+from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteItem, WriteSource, validated_write_request
+from app.application.templateLibrary.packs.write.writeFacade import require_result
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +17,9 @@ class LibraryArchiveService:
         return await export_pack(self._scope, uid)
 
     def read_engine_archive(self, path):
-        from app.application.worldData.bundle.archive import read_archive, BundleArchiveError
+        from app.application.worldBundle.archive import read_archive, BundleArchiveError
         from app.dataModel.worldBundle.bundleManifest import BundleKind
-        from app.application.worldData.libraryPacks.archiveSources import pack_to_wire
+        from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire
         contents = read_archive(path)
         if contents.manifest.kind != BundleKind.LIBRARY_PACK:
             raise BundleArchiveError("library import requires a library_pack archive")
@@ -27,9 +27,9 @@ class LibraryArchiveService:
 
     async def write_engine_archive(self, uid, *, path):
         from datetime import datetime, timezone
-        from app.application.worldData.bundle.archive import write_archive
+        from app.application.worldBundle.archive import write_archive
         from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleLibraryPackSource
-        from app.application.worldData.libraryPacks.errors import LibraryPackOwnershipError
+        from app.application.templateLibrary.packs.errors import LibraryPackOwnershipError
         row = await self._scope.packs.get_by_uid(uid)
         pack = await self.export_pack(uid)
         if row.owner_world_uid is not None:
@@ -58,7 +58,7 @@ class LibraryArchiveService:
         for pack in packs:
             uid = pack.manifest.pack_uid
             if uid in seen:
-                from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+                from app.application.templateLibrary.packs.errors import LibraryPackValidationError
                 raise LibraryPackValidationError("duplicate archive pack UID")
             seen.add(uid)
             source = archive_source(pack, owner=source_owner, supported=self._scope.adapters)

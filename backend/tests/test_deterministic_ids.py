@@ -191,12 +191,12 @@ _BANNED = (
 
 # Permanent exceptions — not entity/rng identity sites.
 _EXEMPT = (
-    "application/worldData/deriveWorldUid.py",                 # world_uid derivation
+    "application/worldBundle/deriveWorldUid.py",               # world_uid derivation
     "application/worldData/pack/io/",                          # content_hash integrity
     "application/worldData/pack/import_/packImportService.py", # content_hash
     "application/chat/chatService.py",                         # runtime ids (D8)
-    "application/worldData/playerService.py",                  # runtime ids (D8)
-    "application/worldData/gameSessionService.py",             # runtime ids (D8)
+    "application/session/playerService.py",                    # runtime ids (D8)
+    "application/session/gameSessionService.py",               # runtime ids (D8)
     "core/logMiddleware.py",                                   # request id
     # dataModel cannot import application/worldData/ids (layer) — authored
     # fallback mint; system_name is UNIQUE in perk/race_templates (step 8)
@@ -249,7 +249,7 @@ class StaircaseReplayTests(unittest.TestCase):
         self.assertEqual(previous, selected)
 
     def test_generate_replays_u_shape_anchors_and_cells(self):
-        from app.application.worldData.libraryPacks.uidMap import base_member_uid
+        from app.application.templateLibrary.packs.uidMap import base_member_uid
         path = Path(__file__).resolve().parents[2] / f"structures_templates/base/{base_member_uid('manor_1')}.json"
         structure = StructureTemplate.model_validate(json.loads(path.read_text(encoding="utf-8")))
         original = structure.model_dump()

@@ -11,7 +11,7 @@ import logging
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_c11_start,

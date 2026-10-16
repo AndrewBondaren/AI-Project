@@ -3,7 +3,7 @@
 The inspector supplies facts; the planner allocates identities and prepares
 content; the executor writes. This class does none of those jobs.
 """
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteRequest, LibraryWriteSelection, WriteAction, WriteChoice,
     WriteDecision, WriteItemDecision, WriteItemSnapshot, WriteObjectKind,
     WriteOption, WritePolicy, WriteSnapshot, WriteSourceKind, WriteStatus, WriteTarget,

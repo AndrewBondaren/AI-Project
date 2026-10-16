@@ -1,7 +1,7 @@
 """Significant-input contract for preview confirmation; no I/O or policy."""
 from dataclasses import asdict
 
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.lifecycleContracts import (
     MemberProjection, ReinstantiateSnapshot, RetentionPlan,
 )
 from app.ids import state_fingerprint

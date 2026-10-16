@@ -1,5 +1,5 @@
 """Strict body-row persistence shared by domain libraries, no policy or upsert."""
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError
 from app.db.database import _in_transaction
 
 

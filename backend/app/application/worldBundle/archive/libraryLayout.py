@@ -6,8 +6,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.application.worldData.bundle.archive.errors import BundleArchiveError
-from app.application.worldData.bundle.archive.validation import decode_json, encode_json, validate_path
+from app.application.worldBundle.archive.errors import BundleArchiveError
+from app.application.worldBundle.archive.validation import decode_json, encode_json, validate_path
 from app.dataModel.worldBundle.bundleManifest import BundleKind, BundleManifest, BundleLibraryPackSource
 from app.dataModel.worldBundle.bundleSections import BundleArchiveLayout
 from app.dataModel.worldBundle.libraryArchive import (

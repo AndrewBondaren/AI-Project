@@ -9,21 +9,21 @@ from dataclasses import fields, is_dataclass
 
 from pydantic import BaseModel
 
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
 from app.application.worldData.worldService import WorldService
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
-from app.application.worldData.libraryPacks.packIdentity import instance_system_name, published_system_name
-from app.application.worldData.libraryPacks.writeContracts import (
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.packIdentity import instance_system_name, published_system_name
+from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem, LibraryWriteRequest, WriteItemSnapshot, WriteObjectKind, WriteSnapshot,
     WriteSourceKind, WriteTarget,
 )
-from app.application.worldData.libraryPacks.writeInspectionContracts import (
+from app.application.templateLibrary.packs.write.writeInspectionContracts import (
     InspectedSource, WriteImportSource, WriteInspectionState,
 )
-from app.application.worldData.libraryPacks.writeSourceReader import LibraryWriteSourceReader
-from app.application.worldData.libraryPacks.writeStateReader import LibraryWriteStateReader
+from app.application.templateLibrary.packs.write.writeSourceReader import LibraryWriteSourceReader
+from app.application.templateLibrary.packs.write.writeStateReader import LibraryWriteStateReader
 from app.ids import LibraryKind, library_uid, state_fingerprint
 from app.db.models.libraryPack import LibraryPackRow
 

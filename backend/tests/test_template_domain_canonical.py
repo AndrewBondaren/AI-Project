@@ -10,18 +10,18 @@ from unittest.mock import patch
 
 from test_library_packs_4b import _ServiceCase
 from app.application.canonicalLibrary import CanonicalContractError, CanonicalSourceError
-from app.application.worldData.libraryPacks.defaults import default_pack_uids
-from app.application.worldData.libraryPacks.templateCanonicalPersistence import TemplateCanonicalPersistence
-from app.application.worldData.libraryPacks.templateCanonicalService import TemplateCanonicalService
-from app.application.worldData.libraryPacks.templateCanonicalSource import SOURCE_ROOT, load_canonical_template_graph
-from app.application.worldData.libraryPacks.templateGraphValidation import template_graph_issues
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
+from app.application.templateLibrary.packs.defaults import default_pack_uids
+from app.application.templateLibrary.packs.templateCanonicalPersistence import TemplateCanonicalPersistence
+from app.application.templateLibrary.packs.templateCanonicalService import TemplateCanonicalService
+from app.application.templateLibrary.packs.templateCanonicalSource import SOURCE_ROOT, load_canonical_template_graph
+from app.application.templateLibrary.packs.templateGraphValidation import template_graph_issues
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot
 from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import CANONICAL_PLOT_NAMES
 from app.ids import LibraryKind, runtime_uid
-from app.application.worldData.libraryPacks.refResolve import TemplateRef
+from app.application.templateLibrary.packs.refResolve import TemplateRef
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.worldData.libraryPacks.errors import LibraryPackReadOnlyError
-from app.application.worldData.structureTemplateLibraryService import resolve_structures_domain_root
+from app.application.templateLibrary.packs.errors import LibraryPackReadOnlyError
+from app.application.templateLibrary.structureTemplateLibraryService import resolve_structures_domain_root
 
 S, B, P = LibraryKind.STRUCTURE_TEMPLATES, LibraryKind.BUILDING_TEMPLATES, LibraryKind.PLOT_TEMPLATES
 

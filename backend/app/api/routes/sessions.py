@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.api.deps import get_container
 from app.application.cancellation.snapshotStore import snapshot_store
-from app.application.worldData.gameSessionService import GameSessionService
+from app.application.session.gameSessionService import GameSessionService
 
 router = APIRouter()
 

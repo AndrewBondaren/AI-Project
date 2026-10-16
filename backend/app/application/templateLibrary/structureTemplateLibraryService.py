@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from app.application.worldData.libraryPacks.writeResults import PolicyRequired
+    from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
 
 from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
 
@@ -20,11 +20,11 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from app.application.worldData.libraryPacks.packCatalog import (
+from app.application.templateLibrary.packs.packCatalog import (
     PackCatalogRepos,
     attach_pack_catalog,
 )
-from app.application.worldData.structureTemplateErrors import (
+from app.application.templateLibrary.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
 )
@@ -85,7 +85,7 @@ class StructureTemplateLibraryService:
         return await self._repo.list_all()
 
     async def persist_prepared(self, outline, *, template_uid, source_file, added):
-        from app.application.worldData.libraryPacks.preparedPersistence import persist_body_row
+        from app.application.templateLibrary.packs.write.preparedPersistence import persist_body_row
         row = StructureTemplateRow(template_uid=template_uid, display_name=outline.display_name,
             version=outline.version, data=outline.model_dump(mode="json"), source_file=source_file)
         return await persist_body_row(self._repo, row, added=added)
@@ -98,7 +98,7 @@ class StructureTemplateLibraryService:
         pack_uid: str | None = None, local_uid: str | None = None, world_uid: str | None = None,
     ) -> StructureTemplateRow:
         if self._write_provider is not None:
-            from app.application.worldData.libraryPacks.domainWriteEntry import write_domain_body
+            from app.application.templateLibrary.packs.write.domainWriteEntry import write_domain_body
             return await write_domain_body(self._write_provider(), LibraryKind.STRUCTURE_TEMPLATES,
                 outline, pack_uid=pack_uid, local_uid=local_uid, source_file=source_file, world_uid=world_uid)
         if self._db is not None:
@@ -177,7 +177,7 @@ class StructureTemplateLibraryService:
         decisions=(), preview_token=None,
     ) -> list[StructureTemplateRow] | PolicyRequired:
         if self._write_provider is not None:
-            from app.application.worldData.libraryPacks.packResults import PackImportResult
+            from app.application.templateLibrary.packs.packResults import PackImportResult
             result = await self._write_provider().import_path(LibraryKind.STRUCTURE_TEMPLATES,
                 path, domain_root=domain_root, enforce_domain_root=enforce_domain_root,
                 decisions=decisions, preview_token=preview_token)
@@ -194,7 +194,7 @@ class StructureTemplateLibraryService:
         domain_root: Path | None,
         enforce_domain_root: bool,
     ) -> list[StructureTemplateRow]:
-        from app.application.worldData.structureTemplateFsImport import (
+        from app.application.templateLibrary.structureTemplateFsImport import (
             import_structure_templates_path,
         )
 

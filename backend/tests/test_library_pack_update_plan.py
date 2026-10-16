@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _PLOT
 from app.application.jsonValidation.types import ReferenceIssueReason
-from app.application.worldData.libraryPacks.reinstantiatePlan import build_update_plan, prepare_update
-from app.application.worldData.libraryPacks.reinstantiateSnapshot import load_update_snapshot
+from app.application.templateLibrary.packs.reinstantiate.reinstantiatePlan import build_update_plan, prepare_update
+from app.application.templateLibrary.packs.reinstantiate.reinstantiateSnapshot import load_update_snapshot
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import remapped_library_uid
 

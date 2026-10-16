@@ -35,14 +35,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     PackingStep,
     packing_warning,
 )
-from app.application.worldData.libraryPacks.effectiveCatalog import (
+from app.application.templateLibrary.packs.effectiveCatalog import (
     EffectiveCatalogLoader,
 )
-from app.application.worldData.libraryPacks.lifecycleContracts import CatalogSnapshot
-from app.application.worldData.libraryPacks.templateGraphValidation import (
+from app.application.templateLibrary.packs.lifecycleContracts import CatalogSnapshot
+from app.application.templateLibrary.packs.templateGraphValidation import (
     prepare_template_graph,
 )
-from app.application.worldData.templateContracts import (
+from app.application.templateLibrary.templateContracts import (
     ReliefTemplateSnapshot,
     TemplateEntry,
     WorldTemplateSnapshot,

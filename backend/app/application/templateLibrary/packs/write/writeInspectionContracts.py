@@ -1,8 +1,8 @@
 """Read-side inputs and retained state for write planning (packs TZ §0.3)."""
 from dataclasses import dataclass
 
-from app.application.worldData.libraryPacks.domainAdapters.contract import DomainOutline
-from app.application.worldData.libraryPacks.lifecycleContracts import MemberRef
+from app.application.templateLibrary.packs.domainAdapters.contract import DomainOutline
+from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
 from app.db.models.libraryPack import LibraryPackRow
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World

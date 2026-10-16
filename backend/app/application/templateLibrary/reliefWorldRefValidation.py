@@ -15,7 +15,7 @@ from app.application.worldData.generators.terrain.relief.canal.outlineCollect im
     collect_outline_structure_canal_refs,
     collect_outline_structure_refs,
 )
-from app.application.worldData.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
 

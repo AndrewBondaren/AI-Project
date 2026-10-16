@@ -12,26 +12,26 @@ from copy import deepcopy
 
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import (
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import (
     TemplateBodyPreparation,
     TemplatePreparationError,
 )
-from app.application.worldData.libraryPacks.domainAdapters.contract import (
+from app.application.templateLibrary.packs.domainAdapters.contract import (
     SYSTEM_NAME_FIELD,
 )
-from app.application.worldData.libraryPacks.domainAdapters.remapRefs import (
+from app.application.templateLibrary.packs.domainAdapters.remapRefs import (
     remap_relief_pick_policy,
     remap_pins,
 )
-from app.application.worldData.libraryPacks.domainAdapters.refFields import relief_policy_refs
-from app.application.worldData.libraryPacks.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
-from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision
-from app.application.worldData.reliefErrors import ReliefValidationError
-from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
-from app.application.worldData.reliefTemplateLibraryService import (
+from app.application.templateLibrary.packs.domainAdapters.refFields import relief_policy_refs
+from app.application.templateLibrary.packs.domainAdapters.templateBodyAdapter import TemplateBodyAdapter
+from app.application.templateLibrary.packs.lifecycleContracts import FallbackDecision
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefGeomWarn import warn_template_invalid_geom
+from app.application.templateLibrary.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
-from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
+from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.ids import LibraryKind
 
@@ -123,7 +123,7 @@ class ReliefPackAdapter(TemplateBodyAdapter):
         return result
 
     def prepare_world_refs(self, world, uid_map, members):
-        from app.application.worldData.reliefTerrainSync import missing_terrain_entries
+        from app.application.templateLibrary.reliefTerrainSync import missing_terrain_entries
         result = deepcopy(world)
         pins = remap_pins(result, uid_map)
         if pins is not None:

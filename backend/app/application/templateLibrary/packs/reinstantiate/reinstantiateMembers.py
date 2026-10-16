@@ -1,10 +1,10 @@
 """Pure identity matching and domain-body preparation for re-instantiate."""
 from collections.abc import Mapping
 
-from app.application.worldData.libraryPacks.bodyDiff import body_diff
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.errors import LibraryPackConflictError
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.write.bodyDiff import body_diff
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.errors import LibraryPackConflictError
+from app.application.templateLibrary.packs.lifecycleContracts import (
     MemberProjection, PreparedMember, ReinstantiateSnapshot,
 )
 from app.db.models.libraryPackMember import LibraryPackMemberRow

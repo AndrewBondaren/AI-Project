@@ -1,5 +1,5 @@
 """Legacy domain entry points delegate to the pack boundary; no persistence here."""
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.ids import LibraryKind, library_uid
 
 

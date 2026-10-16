@@ -45,7 +45,7 @@ from app.application.worldData.pack.refine.fineChunkGeom import (
     fine_chunk_rect,
     rects_for_macro_tile,
 )
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
@@ -274,7 +274,7 @@ class FineTerrainRefineOrchestrator:
         visible to the next job; nothing is cached across operations."""
         out: dict[str, ReliefTemplate] = {}
         if self._relief_loader is not None:
-            from app.application.worldData.loadReliefTemplatesForWorld import (
+            from app.application.templateLibrary.loadReliefTemplatesForWorld import (
                 load_relief_templates_for_world,
             )
 

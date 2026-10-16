@@ -5,10 +5,10 @@ from app.application.canonicalLibrary import (
     CanonicalAttachPolicy, CanonicalAttachResult, CanonicalContractError,
     CanonicalLibrarySpec, CanonicalScope, CanonicalSnapshot, SqlCanonicalPersistence,
 )
-from app.application.worldData.libraryPacks.packCatalog import (
+from app.application.templateLibrary.packs.packCatalog import (
     PackCatalogRepos, attach_pack_catalog, pack_row_for,
 )
-from app.application.worldData.libraryPacks.templateCanonicalSource import CanonicalTemplatePack
+from app.application.templateLibrary.packs.templateCanonicalSource import CanonicalTemplatePack
 from app.db.database import Database
 
 

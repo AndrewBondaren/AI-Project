@@ -23,16 +23,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import ClassVar
 
-from app.application.worldData.buildingTemplateLibraryService import (
+from app.application.templateLibrary.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
 )
-from app.application.worldData.reliefTemplateLibraryService import (
+from app.application.templateLibrary.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
-from app.application.worldData.plotTemplateLibraryService import PlotTemplateLibraryService
+from app.application.templateLibrary.plotTemplateLibraryService import PlotTemplateLibraryService
 from app.dataModel.locations.structure.building.buildingTemplate import BuildingTemplate
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
@@ -40,7 +40,7 @@ from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.world import World
 from app.ids import LibraryKind
-from app.application.worldData.libraryPacks.lifecycleContracts import FallbackDecision, MemberRef
+from app.application.templateLibrary.packs.lifecycleContracts import FallbackDecision, MemberRef
 
 DomainLibrary = (
     ReliefTemplateLibraryService

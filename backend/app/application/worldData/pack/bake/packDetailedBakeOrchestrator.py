@@ -37,7 +37,7 @@ from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.templateSnapshotLoader import TemplateSnapshotLoader
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -119,7 +119,7 @@ class PackDetailedBakeOrchestrator:
     ) -> PackDetailedBakeResult:
         relief_templates: dict[str, ReliefTemplate] = {}
         if request.stages.mill and self._relief_loader is not None:
-            from app.application.worldData.loadReliefTemplatesForWorld import (
+            from app.application.templateLibrary.loadReliefTemplatesForWorld import (
                 load_relief_templates_for_world,
             )
 

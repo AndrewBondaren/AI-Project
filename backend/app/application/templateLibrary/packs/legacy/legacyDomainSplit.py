@@ -6,17 +6,17 @@ from dataclasses import replace
 from pydantic import BaseModel, ValidationError
 
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.libraryPacks.domainAdapters.bodyPreparation import TemplatePreparationError
-from app.application.worldData.libraryPacks.domainAdapters.building import BuildingBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.plot import PlotBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.structure import StructureBodyPreparation
-from app.application.worldData.libraryPacks.domainAdapters.refFields import BUILDING_STRUCTURE_REF, STRUCTURE_REF_FIELDS
-from app.application.worldData.libraryPacks.legacyDomainContracts import (
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplatePreparationError
+from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.structure import StructureBodyPreparation
+from app.application.templateLibrary.packs.domainAdapters.refFields import BUILDING_STRUCTURE_REF, STRUCTURE_REF_FIELDS
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import (
     ConvertedDomainRecord, EmbeddedBodyPath, LegacyDomainProvenance, LegacyDomainRecord,
     LegacyDomainShape, LegacyDomainSplitResult, LegacyReferenceResolution,
 )
-from app.application.worldData.libraryPacks.legacyDomainRefs import LegacyDomainRefResolver, is_canonical_uid
-from app.application.worldData.libraryPacks.uidMap import compose_template_uid_maps
+from app.application.templateLibrary.packs.legacy.legacyDomainRefs import LegacyDomainRefResolver, is_canonical_uid
+from app.application.templateLibrary.packs.uidMap import compose_template_uid_maps
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, UID_PART_SEPARATOR
 

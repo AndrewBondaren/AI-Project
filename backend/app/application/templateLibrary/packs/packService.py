@@ -30,24 +30,24 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from app.application.worldData.libraryPacks.writeResults import PolicyRequired, WriteResult
+    from app.application.templateLibrary.packs.write.writeResults import PolicyRequired, WriteResult
 
 from collections.abc import Iterable
 from pathlib import Path
 
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.memberOps import _MemberOps
-from app.application.worldData.libraryPacks.lifecycleContracts import (
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.memberOps import _MemberOps
+from app.application.templateLibrary.packs.lifecycleContracts import (
     MemberCopyResult, MemberStatus, ReinstantiatePreview,
 )
-from app.application.worldData.libraryPacks.packOps import _PackOps
-from app.application.worldData.libraryPacks.packResults import (
+from app.application.templateLibrary.packs.packOps import _PackOps
+from app.application.templateLibrary.packs.packResults import (
     MemberDeleteResult,
     PackDeleteResult,
     PackImportResult,
     PackRemapResult,
 )
-from app.application.worldData.libraryPacks.packScope import _PackScope, _coerce_kind
+from app.application.templateLibrary.packs.packScope import _PackScope, _coerce_kind
 from app.application.worldData.worldService import WorldService
 from app.db.database import Database
 from app.db.models.libraryPack import LibraryPackRow
@@ -86,16 +86,16 @@ class LibraryPackService:
         )
         self._member_ops = _MemberOps(self._scope)
         self._pack_ops = _PackOps(self._scope, self._member_ops)
-        from app.application.worldData.libraryPacks.writeFacade import LibraryWriteFacade
+        from app.application.templateLibrary.packs.write.writeFacade import LibraryWriteFacade
         self._writes = LibraryWriteFacade(self._scope, write_service)
-        from app.application.worldData.libraryPacks.fsWriteService import LibraryFsWriteService
+        from app.application.templateLibrary.packs.write.fsWriteService import LibraryFsWriteService
         self._fs_writes = LibraryFsWriteService(self._scope, write_service)
         self._write_service = write_service
-        from app.application.worldData.libraryPacks.archiveService import LibraryArchiveService
+        from app.application.templateLibrary.packs.archive.archiveService import LibraryArchiveService
         self.archives = LibraryArchiveService(self._scope, write_service)
 
     async def import_legacy_bodies(self, kind, world_uid, outlines, *, decisions=(), preview_token=None) -> WriteResult | PolicyRequired:
-        from app.application.worldData.libraryPacks.legacyWrite import import_legacy_bodies
+        from app.application.templateLibrary.packs.legacy.legacyWrite import import_legacy_bodies
         return await import_legacy_bodies(self._scope, self._write_service, kind, world_uid, outlines,
                                           decisions=decisions, preview_token=preview_token)
 
@@ -270,7 +270,7 @@ class LibraryPackService:
 
     async def write_authored_bodies(self, kind, pack_uid, bodies, *, local_uid=None,
                                     decisions=(), preview_token=None, source_file=None, world_uid=None) -> WriteResult | PolicyRequired:
-        from app.application.worldData.libraryPacks.authoringWrite import write_authored_bodies
+        from app.application.templateLibrary.packs.write.authoringWrite import write_authored_bodies
         return await write_authored_bodies(self, _coerce_kind(kind), pack_uid, bodies,
             local_uid=local_uid, decisions=decisions, preview_token=preview_token, source_file=source_file,
             world_uid=world_uid)
@@ -286,7 +286,7 @@ class LibraryPackService:
                                               target_pack_uid, owner=world_uid)
 
     async def member_status(self, template_uid: str) -> MemberStatus:
-        from app.application.worldData.libraryPacks.provenanceResolver import member_status
+        from app.application.templateLibrary.packs.provenanceResolver import member_status
         return await member_status(self._scope, await self.get_member(template_uid))
 
     # ------------------------------------------------------------------

@@ -4,10 +4,10 @@ from dataclasses import replace
 import unittest
 
 from app.application.jsonValidation.types import ImportValidationError
-from app.application.worldData.libraryPacks.legacyDomainContracts import LegacyDomainRecord, LegacyDomainShape
-from app.application.worldData.libraryPacks.legacyDomainSplit import split_legacy_domains
-from app.application.worldData.libraryPacks.legacyPack import legacy_member_row
-from app.application.worldData.libraryPacks.uidMap import compose_template_uid_maps
+from app.application.templateLibrary.packs.legacy.legacyDomainContracts import LegacyDomainRecord, LegacyDomainShape
+from app.application.templateLibrary.packs.legacy.legacyDomainSplit import split_legacy_domains
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_member_row
+from app.application.templateLibrary.packs.uidMap import compose_template_uid_maps
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.ids import LibraryKind, library_uid, runtime_uid
 

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from app.application.worldData.bundle.archive import BundleArchiveError, read_archive, write_archive
+from app.application.worldBundle.archive import BundleArchiveError, read_archive, write_archive
 from app.dataModel.worldBundle.bundleManifest import BundleManifest
 from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, LibraryArchivePack
 

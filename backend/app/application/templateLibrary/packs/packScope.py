@@ -12,15 +12,15 @@ import sqlite3
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from app.application.worldData.libraryPacks.defaults import is_default_pack_uid
-from app.application.worldData.libraryPacks.domainAdapters import PackDomainAdapter
-from app.application.worldData.libraryPacks.errors import (
+from app.application.templateLibrary.packs.defaults import is_default_pack_uid
+from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
+from app.application.templateLibrary.packs.errors import (
     LibraryPackConflictError,
     LibraryPackOwnershipError,
     LibraryPackReadOnlyError,
     LibraryPackValidationError,
 )
-from app.application.worldData.libraryPacks.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.application.worldData.worldService import WorldService
 from app.db.database import Database
 from app.db.models.libraryPack import LibraryPackRow
@@ -32,7 +32,7 @@ from app.db.repositories.iLibraryPackMemberRepository import ILibraryPackMemberR
 from app.db.repositories.iLibraryPackRepository import ILibraryPackRepository
 from app.ids import LibraryKind, library_uid
 from app.application.jsonValidation.resolve import log_issues
-from app.application.worldData.libraryPacks.referenceResolver import dependency_issues
+from app.application.templateLibrary.packs.referenceResolver import dependency_issues
 
 
 def _coerce_kind(library_kind: str | LibraryKind) -> LibraryKind:

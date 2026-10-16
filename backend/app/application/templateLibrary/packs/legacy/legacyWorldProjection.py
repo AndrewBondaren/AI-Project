@@ -3,9 +3,9 @@ from copy import deepcopy
 from dataclasses import replace
 
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.worldData.libraryPacks.legacyPack import legacy_pack_row, legacy_source_member_row
-from app.application.worldData.libraryPacks.legacyWorldContracts import LegacyPackRoute
-from app.application.worldData.libraryPacks.packIdentity import instance_system_name
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_pack_row, legacy_source_member_row
+from app.application.templateLibrary.packs.legacy.legacyWorldContracts import LegacyPackRoute
+from app.application.templateLibrary.packs.packIdentity import instance_system_name
 from app.ids import LibraryKind, library_uid, remapped_library_uid
 
 

@@ -12,11 +12,11 @@ from test_library_packs_4b import _ServiceCase
 from app.application.canonicalLibrary import CanonicalSourceError, ensure_canonical
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.worldData.generators.terrain.relief.pick.templatePick import pick_template
-from app.application.worldData.libraryPacks.defaults import default_pack_names, is_default_pack_uid
-from app.application.worldData.libraryPacks.reliefCanonicalSpec import RELIEF_CANONICAL_SPEC
-from app.application.worldData.loadReliefTemplatesForWorld import load_relief_templates_for_world
-from app.application.worldData.reliefErrors import ReliefNotFoundError
-from app.application.worldData.reliefTemplateLibraryService import resolve_relief_domain_root
+from app.application.templateLibrary.packs.defaults import default_pack_names, is_default_pack_uid
+from app.application.templateLibrary.packs.reliefCanonicalSpec import RELIEF_CANONICAL_SPEC
+from app.application.templateLibrary.loadReliefTemplatesForWorld import load_relief_templates_for_world
+from app.application.templateLibrary.reliefErrors import ReliefNotFoundError
+from app.application.templateLibrary.reliefTemplateLibraryService import resolve_relief_domain_root
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy, WorldReliefPickPolicy
 from app.ids import LibraryKind, runtime_uid
 
@@ -33,7 +33,7 @@ class ReliefCanonicalTests(_ServiceCase):
         library = self.container.relief_template_library_service()
         uid = runtime_uid()
         with patch.dict(os.environ, {"RELIEF_TEMPLATES_ROOT": str(root)}), patch(
-            "app.application.worldData.reliefTemplateLibraryService.ensure_canonical",
+            "app.application.templateLibrary.reliefTemplateLibraryService.ensure_canonical",
             wraps=ensure_canonical,
         ) as attach:
             self.assertEqual(await library.list_all(), [])
@@ -130,7 +130,7 @@ class ReliefCanonicalTests(_ServiceCase):
         self.assertIsNone(await self.worlds.get_by_id("rolled-back"))
 
     async def test_changed_default_declaration_requires_a_real_source(self):
-        with patch("app.application.worldData.libraryPacks.reliefCanonicalSpec.default_pack_names",
+        with patch("app.application.templateLibrary.packs.reliefCanonicalSpec.default_pack_names",
                    return_value=("unexpected",)):
             with self.assertRaises(CanonicalSourceError):
                 await self.container.relief_template_library_service().list_all()

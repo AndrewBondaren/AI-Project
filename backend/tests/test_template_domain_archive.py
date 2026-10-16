@@ -6,12 +6,12 @@ from unittest.mock import patch
 
 from tests.test_library_packs_4b import _ServiceCase
 from tests.template_domain_transport_fixture import create_graph, S, B, P
-from app.application.worldData.bundle.archive import read_archive
-from app.application.worldData.bundle.worldLibraries import import_libraries
-from app.application.worldData.libraryPacks.archiveSources import pack_to_wire
-from app.application.worldData.libraryPacks.errors import LibraryPackValidationError
+from app.application.worldBundle.archive import read_archive
+from app.application.worldBundle.worldLibraries import import_libraries
+from app.application.templateLibrary.packs.archive.archiveSources import pack_to_wire
+from app.application.templateLibrary.packs.errors import LibraryPackValidationError
 from app.application.importResult import ImportResult
-from app.application.worldData.libraryPacks.legacyPack import legacy_pack_row
+from app.application.templateLibrary.packs.legacy.legacyPack import legacy_pack_row
 from app.ids import library_uid
 from app.dataModel.worldBundle.libraryArchive import LibraryArchiveManifest, LibraryArchiveMember, LibraryArchivePack
 

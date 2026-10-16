@@ -14,10 +14,10 @@ from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
-from app.application.worldData.structureTemplateLibraryService import StructureTemplateLibraryService
-from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
-from app.application.worldData.loadReliefTemplatesForWorld import load_relief_templates_for_world
-from app.application.worldData.templateContracts import (
+from app.application.templateLibrary.structureTemplateLibraryService import StructureTemplateLibraryService
+from app.application.templateLibrary.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.templateLibrary.loadReliefTemplatesForWorld import load_relief_templates_for_world
+from app.application.templateLibrary.templateContracts import (
     ReliefTemplateSnapshot,
     TemplateEntry,
 )
