@@ -37,6 +37,7 @@ def paint_system_terrain(
         if not may_paint_terrain(cell.system_terrain, system_terrain, registry):
             continue
         cell.system_terrain = system_terrain
+        cell.region_uid = None
         painted += 1
     return painted
 
@@ -58,4 +59,5 @@ def paint_system_terrain_cell(
     if not may_paint_terrain(cell.system_terrain, system_terrain, registry):
         return False
     cell.system_terrain = system_terrain
+    cell.region_uid = None
     return True

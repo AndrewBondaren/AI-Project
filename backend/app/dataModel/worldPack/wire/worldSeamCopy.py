@@ -15,3 +15,4 @@ class WorldSeamCopy(BaseModel):
 
     surface_z: int
     system_terrain: str | None = None
+    region_uid: str | None = None

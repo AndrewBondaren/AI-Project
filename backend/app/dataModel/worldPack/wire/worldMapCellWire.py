@@ -21,6 +21,7 @@ class WorldMapCellWire(BaseModel):
     ty: int
     surface_z: int = 0
     system_terrain: str | None = None
+    region_uid: str | None = None
     dominant_terrain_id: int = 0
     hydrology_role: WorldMapHydrologyRole = WorldMapHydrologyRole.NONE
     hydrology_width: int | None = None

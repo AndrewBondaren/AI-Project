@@ -38,6 +38,7 @@ class LightContributorId(StrEnum):
 
 # Mask domain → contributor that materializes it (forests+plains share landcover).
 MASK_DOMAIN_CONTRIBUTOR: dict[MaskDomainId, LightContributorId] = {
+    MaskDomainId.LANDCOVER: LightContributorId.LANDCOVER,
     MaskDomainId.FORESTS: LightContributorId.LANDCOVER,
     MaskDomainId.PLAINS: LightContributorId.LANDCOVER,
     MaskDomainId.MOUNTAINS: LightContributorId.MOUNTAIN,

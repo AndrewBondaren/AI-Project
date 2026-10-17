@@ -14,6 +14,7 @@ from app.dataModel.worldPack.wire.worldSeamCopy import WorldSeamCopy
 class LightGridCell:
     surface_z: int = 0
     system_terrain: str | None = None
+    region_uid: str | None = None
     dominant_terrain_id: int = 0
     hydrology_role: WorldMapHydrologyRole = WorldMapHydrologyRole.NONE
     hydrology_width: int | None = None
@@ -28,6 +29,7 @@ class LightGridCell:
             ty=ty,
             surface_z=self.surface_z,
             system_terrain=self.system_terrain,
+            region_uid=self.region_uid,
             dominant_terrain_id=self.dominant_terrain_id,
             hydrology_role=self.hydrology_role,
             hydrology_width=self.hydrology_width,
@@ -40,11 +42,13 @@ class LightGridCell:
     def seam_copy(self) -> WorldSeamCopy:
         return WorldSeamCopy(
             surface_z=self.surface_z, system_terrain=self.system_terrain,
+            region_uid=self.region_uid,
         )
 
     def apply_seam_copy(self, snap: WorldSeamCopy) -> None:
         self.surface_z = snap.surface_z
         self.system_terrain = snap.system_terrain
+        self.region_uid = snap.region_uid
 
     @classmethod
     def from_wire_defaults(cls) -> LightGridCell:
@@ -52,6 +56,7 @@ class LightGridCell:
         return cls(
             surface_z=d.surface_z,
             system_terrain=d.system_terrain,
+            region_uid=d.region_uid,
             dominant_terrain_id=d.dominant_terrain_id,
             hydrology_role=d.hydrology_role,
             hydrology_width=d.hydrology_width,

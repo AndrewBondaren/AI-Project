@@ -23,6 +23,8 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
             continue
         if state is not None:
             region = replace(region, current_type=state.current_type)
+        logger.debug("landcover | paint_key_source | region_uid=%s source=%s key=%s",
+                     region.region_uid, "state" if state is not None else "spec", region.current_type)
         if registry.entry_for(region.current_type) is None:
             logger.warning("landcover | collect_unresolved | WarningError | region_uid=%s reason=unknown_terrain key=%s",
                            region.region_uid, region.current_type)
