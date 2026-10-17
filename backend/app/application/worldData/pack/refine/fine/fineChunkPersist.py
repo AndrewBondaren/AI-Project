@@ -133,6 +133,7 @@ class FineChunkPersist:
             )
             chunk = cells_to_fine_terrain_chunk(
                 cx, cy, ctx.chunk_size, origin_x, origin_y, wilderness,
+                region_uid_by_xy=ctx.surface_state.surface_region_uid,
             )
             self._writer.write_wilderness_chunk(
                 ctx.tile_gx, ctx.tile_gy, chunk,
@@ -186,6 +187,7 @@ class FineChunkPersist:
                 volume.x0,
                 volume.y0,
                 loc_cells,
+                region_uid_by_xy=ctx.surface_state.surface_region_uid,
             )
             self._writer.write_location_terrain(
                 location_uid, chunk, territory_volume=volume,

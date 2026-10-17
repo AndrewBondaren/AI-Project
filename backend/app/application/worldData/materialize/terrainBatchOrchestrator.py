@@ -47,6 +47,7 @@ class TileSurfaceState:
     surface_terrain: dict[tuple[int, int], str] | None = None
     surface_facing: dict[tuple[int, int], Facing] | None = None
     surface_grade_uid: dict[tuple[int, int], str] | None = None
+    surface_region_uid: dict[tuple[int, int], str] | None = None
 
 
 def refresh_tile_gaps(world: World, state: TileSurfaceState) -> TileSurfaceState:
@@ -125,6 +126,9 @@ class TerrainBatchOrchestrator:
             merge_hydro_hard_corridor,
         )
         from app.application.worldData.generators.terrain.hills import place_hills
+        from app.application.worldData.generators.terrain.landcover.finePaint import (
+            paint_regions_fine,
+        )
         from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
             upsample_facing_from_parent_light,
             upsample_terrain_from_parent_light,
@@ -157,7 +161,18 @@ class TerrainBatchOrchestrator:
                 hi = base + policy.z_band
                 fine_z[(xm, ym)] = max(lo, min(hi, int(z)))
 
+        fine_bbox = fine_bbox_for_parent(parent_light)
         l0_hydro = hydro_mask_from_parent(parent_light)
+        # L0 carry is the background only; regions paint pointwise in fine cells.
+        fine_region_uid = paint_regions_fine(
+            world,
+            locations,
+            ctx,
+            parent_light,
+            fine_terrain=fine_terrain,
+            l0_hydro=l0_hydro,
+            tile_bbox=(fine_bbox.x_min, fine_bbox.y_min, fine_bbox.x_max, fine_bbox.y_max),
+        )
         masks = terrain_masks(world)
         place_hills(
             fine_z,
@@ -172,7 +187,6 @@ class TerrainBatchOrchestrator:
             z_max=world_z_max(world),
         )
 
-        fine_bbox = fine_bbox_for_parent(parent_light)
         heightmap = SurfaceHeightmap(
             world_uid=world.world_uid,
             bbox=fine_bbox,
@@ -187,6 +201,7 @@ class TerrainBatchOrchestrator:
             surface_terrain=fine_terrain,
             surface_facing=fine_facing or None,
             surface_grade_uid=None,
+            surface_region_uid=fine_region_uid or None,
         )
 
     async def generate_chunk_cells(

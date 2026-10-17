@@ -75,6 +75,7 @@ def cells_to_fine_terrain_chunk(
     origin_x: int,
     origin_y: int,
     cells: list[MapCell],
+    region_uid_by_xy: dict[tuple[int, int], str] | None = None,
 ) -> FineTerrainChunkWire:
     by_column: dict[tuple[int, int], list[MapCell]] = {}
     for cell in cells:
@@ -91,6 +92,9 @@ def cells_to_fine_terrain_chunk(
                 runs=_compress_z_runs(col_cells),
                 system_facing=facing,
                 system_grade_uid=grade_uid,
+                region_uid=(
+                    (region_uid_by_xy or {}).get((origin_x + lx, origin_y + ly))
+                ),
             ),
         )
     return FineTerrainChunkWire(cx=cx, cy=cy, chunk_columns=chunk_columns, columns=columns)

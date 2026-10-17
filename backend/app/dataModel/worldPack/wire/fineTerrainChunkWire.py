@@ -54,6 +54,8 @@ class FineTerrainColumnWire(BaseModel):
     """Column-level uphill cache (tz_terrain_relief R16); not per-run."""
     system_grade_uid: str | None = None
     """Ref → ReliefGradeInstance (R24 / PAR-G7/G10); omit if column not in grade."""
+    region_uid: str | None = None
+    """Winning coverage region uid (tz_map_light_bake § Регионы покрытия › L0/L2)."""
 
     @field_validator("system_facing", mode="before")
     @classmethod
