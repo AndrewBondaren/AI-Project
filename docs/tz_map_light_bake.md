@@ -632,7 +632,7 @@ RegionShape = BboxShape | EllipseShape | PolygonShape | AnchorRadiusShape   # ki
 | Источник | Key | Примечание |
 |---|---|---|
 | declared | `name` — `strip()` + Unicode NFC, без casefold; `\|` в имени — ошибка валидации | обязателен при author-валидации (`validate_only`); два declared с одним нормализованным именем — ошибка |
-| declared без `name` (runtime) | `bbox_min=(x_min, y_min)` из `shape.bbox()` + `kind=<shape.kind>`; для `anchor_radius` — `anchor_uid` | **degraded**: регион красится, в лог WarningError (`FieldPathError` → `log_issues`); сдвиг min-угла = новая сущность |
+| declared без `name` (runtime) | `bbox_min=(x_min, y_min)` из `shape.bbox()` + `shape_kind=<shape.kind>` (`kind` занят параметром DET-1); для `anchor_radius` — `anchor_uid` | **degraded**: регион красится, в лог WarningError (`FieldPathError` → `log_issues`); сдвиг min-угла = новая сущность |
 | anchor | `anchor_uid` | by design |
 | autoresolve | `seed_xy=(x, y)` canonical min seed компоненты | саблокация — свой uid от своего seed'а |
 

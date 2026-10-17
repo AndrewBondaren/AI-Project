@@ -14,11 +14,13 @@ from app.ids.deterministicIds import (
     seeded_u01,
 )
 from app.ids.regionRngChannel import RegionRngChannel
+from app.ids.regionIdentity import region_uid
 from app.ids.uidKind import LibraryKind, UidKind
 
 __all__ = [
     "LibraryKind",
     "RegionRngChannel",
+    "region_uid",
     "UID_PART_SEPARATOR",
     "UidKind",
     "entity_rng",

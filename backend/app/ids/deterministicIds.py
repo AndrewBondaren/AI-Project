@@ -15,7 +15,7 @@ Three roots, one canonical string ``"{root}|{kind}|{k}={v}"`` hashed by
 (interim until a ``World.seed`` column — tz_terrain_relief §334);
 ``seed_int`` keeps the legacy md5 derivation used by terrain noise.
 
-Future ``UidKind.REGION`` streams (wilderness plan §5 #4) require a
+``UidKind.REGION`` streams (wilderness plan §5 #4) require a
 named ``channel`` key: identical root/kind/keys replay the same stream.
 With ``seed = seed_root(world)``, the channel contract is:
 
@@ -25,8 +25,8 @@ With ``seed = seed_root(world)``, the channel contract is:
 - density mask: ``seeded_u01(seed, REGION, channel=RegionRngChannel.DENSITY, uid=region_uid, x=x, y=y)``
 
 ``RegionRngChannel`` is exported by ``app.ids``; Enum keys normalize to
-their string values. ``REGION`` denotes the future ``UidKind`` member;
-it is not introduced here.
+their string values. ``UidKind.REGION`` also scopes stable region identities;
+the source-key adapter is in ``app.ids.regionIdentity``.
 """
 
 from __future__ import annotations

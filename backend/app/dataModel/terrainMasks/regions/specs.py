@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from typing import Annotated, ClassVar, Literal
-from unicodedata import normalize
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, RegionShape
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.ids.regionIdentity import normalize_region_name
 
 
 class RegionSpecBase(BaseModel):
@@ -24,9 +24,7 @@ class RegionSpecBase(BaseModel):
     @field_validator("name")
     @classmethod
     def declared_name(cls, value: str | None, info: ValidationInfo) -> str | None:
-        name = normalize("NFC", value.strip()) if value is not None else None
-        if name is not None and "|" in name:
-            raise ValueError("region name must not contain '|'")
+        name = normalize_region_name(value)
         if not name and info.context and info.context.get("validate_only"):
             raise ValueError("declared region name is required for author validation")
         return name or None

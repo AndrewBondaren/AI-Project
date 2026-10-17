@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
+from app.dataModel.terrain.eligibilityRule import EligibilityRule
+from app.dataModel.terrain.hillPolicy import HillPolicy
 
 if TYPE_CHECKING:
     from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
@@ -30,3 +32,7 @@ class TerrainRegistryEntry(BaseModel):
     default_state: DefaultWhenMissing[str | None] = None
     default_material: DefaultWhenMissing[str | None] = None
     gap_width: DefaultWhenMissing[Annotated[int, Field(ge=1)] | None] = constrained_field(default=None)
+    merge_rank: DefaultWhenMissing[int] = 0
+    eligibility: DefaultWhenMissing[list[EligibilityRule]] = Field(default_factory=list)
+    inertia: DefaultWhenMissing[float] = Field(default=1.0, gt=0, allow_inf_nan=False)
+    hills: DefaultWhenMissing[HillPolicy | None] = None

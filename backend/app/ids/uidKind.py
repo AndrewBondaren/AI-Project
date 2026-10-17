@@ -23,6 +23,7 @@ class UidKind(StrEnum):
     TRANSITION = "transition"
     GRADE = "grade"
     GRADE_SYSTEM = "grade_system"
+    REGION = "region"
 
     # Bake reproducibility — world_seed root (seed_uid / seed_rng)
     JOB_TILE = "tile"

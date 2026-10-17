@@ -116,7 +116,7 @@ class DetIdsContractTests(unittest.TestCase):
         )
 
     def test_region_channels_preserve_string_rng_streams(self):
-        # REGION is introduced in wilderness step 3; key normalization is shared.
+        # Region streams preserve the DET-1 normalization of enum/string channels.
         for channel, value in (
             (RegionRngChannel.SEED, "seed"),
             (RegionRngChannel.CLAIM, "claim"),
@@ -125,11 +125,11 @@ class DetIdsContractTests(unittest.TestCase):
         ):
             with self.subTest(channel=channel):
                 self.assertEqual(
-                    seed_uid("seed", UidKind.RELIEF_PICK, channel=channel),
-                    str(uuid5(NAMESPACE_DNS, f"seed|relief_pick|channel={value}")),
+                    seed_uid("seed", UidKind.REGION, channel=channel),
+                    str(uuid5(NAMESPACE_DNS, f"seed|region|channel={value}")),
                 )
-                enum_rng = seed_rng("seed", UidKind.RELIEF_PICK, channel=channel)
-                string_rng = seed_rng("seed", UidKind.RELIEF_PICK, channel=value)
+                enum_rng = seed_rng("seed", UidKind.REGION, channel=channel)
+                string_rng = seed_rng("seed", UidKind.REGION, channel=value)
                 self.assertEqual(
                     [enum_rng.random() for _ in range(8)],
                     [string_rng.random() for _ in range(8)],

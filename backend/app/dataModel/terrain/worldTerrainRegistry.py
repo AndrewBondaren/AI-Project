@@ -9,6 +9,7 @@ from pydantic import RootModel
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.terrain import terrainRegistryEntry as _terrain_entry_mod
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
+from app.dataModel.terrain.hillPolicy import HillPolicy
 
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
@@ -96,6 +97,8 @@ _PLAINS_ENTRY = TerrainRegistryEntry(
     terrain_category="solid",
     travel_modifier=1.5,
     default_material="earth",
+    merge_rank=1,
+    hills=HillPolicy.canonical_plains(),
 )
 _FOREST_ENTRY = TerrainRegistryEntry(
     system_terrain="forest",
@@ -104,6 +107,8 @@ _FOREST_ENTRY = TerrainRegistryEntry(
     travel_modifier=2.5,
     danger_level="medium",
     default_material="wood",
+    merge_rank=2,
+    hills=HillPolicy.canonical_forest(),
 )
 _FARMLAND_ENTRY = TerrainRegistryEntry(
     system_terrain="farmland",
@@ -121,6 +126,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         travel_modifier=3.0,
         danger_level="medium",
         default_material="stone",
+        merge_rank=3,
     ),
     TerrainRegistryEntry(
         system_terrain="ravine",
@@ -129,6 +135,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         travel_modifier=2.5,
         danger_level="medium",
         default_material="earth",
+        merge_rank=4,
     ),
     TerrainRegistryEntry(
         system_terrain="road",
@@ -137,6 +144,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         travel_modifier=1.0,
         danger_level="none",
         default_material="earth",
+        merge_rank=5,
     ),
     TerrainRegistryEntry(
         system_terrain="shore",
