@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.dataModel.terrain.eligibilityRule import EligibilityRule
+from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp
 from app.dataModel.terrain.hillPolicy import HillPolicy
 from app.dataModel.terrain.hillShape import HillShape
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
@@ -46,6 +47,20 @@ class TerrainRegionRegistryTests(unittest.TestCase):
         self.assertTrue(entry.eligibility[0].required)
         self.assertIsInstance(entry.hills, HillPolicy)
         self.assertEqual(TerrainRegistryEntry.model_validate_json(entry.model_dump_json()), entry)
+
+    def test_eligibility_operations_are_enum_members_with_unchanged_wire_values(self):
+        expected = (EligibilityOp.GTE, EligibilityOp.LTE, EligibilityOp.IN_RANGE, EligibilityOp.FLAG)
+        for wire, operation in zip(self.wire["eligibility"], expected, strict=True):
+            with self.subTest(operation=operation):
+                rule = EligibilityRule.model_validate(wire)
+                self.assertIs(rule.op, operation)
+                self.assertEqual(rule.model_dump(mode="json"), {
+                    **wire, "lo": wire.get("lo"), "hi": wire.get("hi"),
+                    "weight": wire.get("weight", 1.0), "required": wire.get("required", False),
+                })
+                self.assertIs(EligibilityRule.model_validate_json(rule.model_dump_json()).op, operation)
+        for entry in self.registry.root:
+            self.assertTrue(all(isinstance(rule.op, EligibilityOp) for rule in entry.eligibility))
 
     def test_canonical_ranks_preserve_builtin_paint_order(self):
         order = tuple(policy.system_terrain for policy in (

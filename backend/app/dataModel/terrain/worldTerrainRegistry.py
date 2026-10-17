@@ -10,6 +10,8 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.terrain import terrainRegistryEntry as _terrain_entry_mod
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.hillPolicy import HillPolicy
+from app.dataModel.terrain.eligibilityRule import EligibilityRule
+from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp
 
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
@@ -40,6 +42,11 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     def forest_terrain_key(cls) -> str:
         """Builtin key for the forest declaration branch."""
         return _FOREST_ENTRY.system_terrain
+
+    @classmethod
+    def forest_min_rainfall(cls) -> int:
+        """Legacy mask-policy default shares the canonical eligibility threshold."""
+        return int(_FOREST_RAINFALL_RULE.lo)
 
     @classmethod
     def plains_terrain_key(cls) -> str:
@@ -91,6 +98,11 @@ type TerrainKey = RegistryKey[WorldTerrainRegistry]
 _terrain_entry_mod.WorldTerrainRegistry = WorldTerrainRegistry
 TerrainRegistryEntry.model_rebuild()
 
+# interim; цель — rules мира + flora suitability (flora.* канал).
+_FOREST_RAINFALL_RULE = EligibilityRule(
+    fact="climate.rainfall", op=EligibilityOp.GTE, lo=45, required=True,
+)
+
 _PLAINS_ENTRY = TerrainRegistryEntry(
     system_terrain="plains",
     glossary_ref="terrain_plains",
@@ -99,6 +111,8 @@ _PLAINS_ENTRY = TerrainRegistryEntry(
     default_material="earth",
     merge_rank=1,
     hills=HillPolicy.canonical_plains(),
+    # interim; цель — rules мира + flora suitability (flora.* канал).
+    eligibility=[EligibilityRule(fact="climate.rainfall", op=EligibilityOp.LTE, hi=_FOREST_RAINFALL_RULE.lo)],
 )
 _FOREST_ENTRY = TerrainRegistryEntry(
     system_terrain="forest",
@@ -109,6 +123,8 @@ _FOREST_ENTRY = TerrainRegistryEntry(
     default_material="wood",
     merge_rank=2,
     hills=HillPolicy.canonical_forest(),
+    # interim; цель — rules мира + flora suitability (flora.* канал).
+    eligibility=[_FOREST_RAINFALL_RULE],
 )
 _FARMLAND_ENTRY = TerrainRegistryEntry(
     system_terrain="farmland",

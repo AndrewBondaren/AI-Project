@@ -86,7 +86,10 @@ class ForestsCategoryPolicy(MaskCategoryPolicy):
     """Climate rainfall → forest (cold biomes stay on climate_zone_id, not terrain)."""
 
     system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("forest"))
-    forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)
+    forest_min_rainfall: DefaultWhenMissing[int] = Field(
+        default_factory=WorldTerrainRegistry.forest_min_rainfall,
+        ge=0,
+    )
     hills: DefaultWhenMissing[HillPolicy] = Field(
         default_factory=HillPolicy.canonical_forest,
     )
