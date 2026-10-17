@@ -6,6 +6,7 @@ Not the DAG ``application/engine`` runtime — L0 mountain Spec → footprint �
 from __future__ import annotations
 
 from app.application.jsonValidation import terrain_masks as read_terrain_masks
+from app.application.jsonValidation import terrain
 from app.application.worldData.generators.terrain.mountains.collect import (
     autoresolve_mountain_specs,
     load_declared_mountains,
@@ -118,7 +119,7 @@ class MountainMaskMaterializer:
             compose,
             footprint,
             system_terrain=policy.system_terrain,
-            masks=masks,
+            registry=terrain(ctx.world),
             tile_set=tile_set,
             preserve_hydro=True,
         )

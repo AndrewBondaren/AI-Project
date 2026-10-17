@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 
-from app.application.jsonValidation import terrain_masks
+from app.application.jsonValidation import terrain, terrain_masks
 from app.application.worldData.masks.resolveForestPlains import (
     profile_for_zone_key,
     resolve_forest_plains,
@@ -38,6 +38,7 @@ class LandcoverContributor:
         if not terrain_set:
             return
         forest_key = forests.system_terrain
+        registry = terrain(ctx.world)
         terrain_hist: Counter[str] = Counter()
         cells = 0
         for gx, gy in ctx.tiles:
@@ -65,7 +66,7 @@ class LandcoverContributor:
                 if key is None:
                     continue
                 if paint_system_terrain_cell(
-                    compose, gx, gy, tx, ty, key, masks=masks, preserve_hydro=False,
+                    compose, gx, gy, tx, ty, key, registry=registry, preserve_hydro=False,
                 ):
                     terrain_hist[key] += 1
                     cells += 1

@@ -35,15 +35,6 @@ class LightContributorId(StrEnum):
     # open_land / shore / road_shoulder — not L0 contributors (R36u-T-8); detailed_bake only
 
 
-# Domains that compete on ``system_terrain`` — high → low (road wins over plains).
-TERRAIN_MERGE_RANK_HIGH_TO_LOW: tuple[MaskDomainId, ...] = (
-    MaskDomainId.ROADS,
-    MaskDomainId.RAVINES,
-    MaskDomainId.MOUNTAINS,
-    MaskDomainId.FORESTS,
-    MaskDomainId.PLAINS,
-)
-
 # Mask domain → contributor that materializes it (forests+plains share landcover).
 MASK_DOMAIN_CONTRIBUTOR: dict[MaskDomainId, LightContributorId] = {
     MaskDomainId.FORESTS: LightContributorId.LANDCOVER,

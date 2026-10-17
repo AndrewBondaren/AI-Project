@@ -13,7 +13,7 @@ from app.application.worldData.masks.terrainMerge import terrain_merge_rank
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EllipseShape, PolygonShape
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.terrainMasks import WorldTerrainMasks
+from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrainMasks.regions import ForestSpec
 
 LOG = "app.application.worldData.masks.regionPrecedence"
@@ -26,8 +26,13 @@ class RegionPrecedenceTests(unittest.TestCase):
         self.forest_key = WorldTerrainRegistry.forest_terrain_key()
         self.plains_key = WorldTerrainRegistry.plains_terrain_key()
         self.farmland_key = WorldTerrainRegistry.farmland_terrain_key()
-        self.masks = WorldTerrainMasks.canonical_defaults()
-        self.rank = partial(terrain_merge_rank, masks=self.masks)
+        self.steppe_key = "steppe"
+        self.registry = WorldTerrainRegistry.canonical_defaults()
+        farmland_rank = self.registry.entry_for(self.farmland_key).merge_rank
+        steppe = TerrainRegistryEntry(system_terrain=self.steppe_key, terrain_category="solid",
+                                     merge_rank=farmland_rank)
+        self.registry = WorldTerrainRegistry(self.registry.root + [steppe])
+        self.rank = partial(terrain_merge_rank, registry=self.registry)
         self.compare = partial(compare_region_candidates, merge_rank=self.rank)
 
     def candidate(self, uid, *, specificity=None, side=10, current_type=None, shape=None):
@@ -114,9 +119,9 @@ class RegionPrecedenceTests(unittest.TestCase):
         self.assertEqual(tuple(c.spec.model_dump(mode="json") for c in candidates), before)
 
     def test_equal_rank_different_keys_warn_with_same_winner_in_either_order(self):
-        # Farmland and a custom N+1 terrain both have the transitional unknown rank.
+        # Two explicitly registered keys have the same authored rank.
         farmland = self.candidate(self.uid_last, current_type=self.farmland_key)
-        steppe = self.candidate(self.uid_first, current_type="steppe")
+        steppe = self.candidate(self.uid_first, current_type=self.steppe_key)
         winner_message = f"winner_uid={steppe.region_uid} winner_type={steppe.current_type}"
         loser_message = f"loser_uid={farmland.region_uid} loser_type={farmland.current_type}"
         for left, right in ((farmland, steppe), (steppe, farmland)):

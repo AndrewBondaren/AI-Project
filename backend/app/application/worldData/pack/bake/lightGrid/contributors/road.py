@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.jsonValidation import terrain_masks
+from app.application.jsonValidation import terrain, terrain_masks
 from app.application.worldData.relief.parseObjectReliefPickPolicy import (
     parse_object_relief_pick_policy,
 )
@@ -69,6 +69,7 @@ class RoadContributor:
         level_set = set(policy.graph_levels)
         painted = 0
         edges_used = 0
+        registry = terrain(ctx.world)
 
         for edge in ctx.edges:
             if edge.connection_type not in type_set:
@@ -87,7 +88,7 @@ class RoadContributor:
                 compose,
                 light_cells,
                 policy.system_terrain,
-                masks=masks,
+                registry=registry,
                 tile_set=tile_set,
                 preserve_hydro=True,
             )

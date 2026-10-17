@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.jsonValidation import terrain_masks
+from app.application.jsonValidation import terrain, terrain_masks
 from app.application.worldData.generators.terrain.reliefObjects import resolve_ravine_surface_z
 from app.application.worldData.generators.terrain.reliefObjects.depressionDetect import (
     NEIGHBORS_8,
@@ -71,6 +71,7 @@ class RavineContributor:
             return out
 
         painted = 0
+        registry = terrain(ctx.world)
         for key in detect_depression_cells(
             surface_z, policy, neighbor_z=_neighbor_z,
         ):
@@ -85,7 +86,7 @@ class RavineContributor:
                 tx,
                 ty,
                 policy.system_terrain,
-                masks=masks,
+                registry=registry,
                 preserve_hydro=True,
             ):
                 painted += 1

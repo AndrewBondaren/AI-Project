@@ -8,7 +8,7 @@ from app.application.worldData.masks.terrainMerge import (
     may_paint_terrain,
 )
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
 
 def apply_terrain_footprint(
@@ -16,7 +16,7 @@ def apply_terrain_footprint(
     footprint: MaskFootprint,
     *,
     system_terrain: str,
-    masks: WorldTerrainMasks,
+    registry: WorldTerrainRegistry,
     tile_set: set[tuple[int, int]] | None = None,
     preserve_hydro: bool = True,
 ) -> int:
@@ -28,7 +28,7 @@ def apply_terrain_footprint(
         cell = compose.ensure(ref.gx, ref.gy, ref.tx, ref.ty)
         if preserve_hydro and cell.hydrology_role in PRESERVE_HYDROLOGY_ROLES:
             continue
-        if not may_paint_terrain(cell.system_terrain, system_terrain, masks):
+        if not may_paint_terrain(cell.system_terrain, system_terrain, registry):
             continue
         cell.system_terrain = system_terrain
         painted += 1

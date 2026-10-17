@@ -40,8 +40,8 @@ def compare_region_candidates(
 ) -> int:
     """Negative: left wins; positive: right wins; zero: equal precedence.
 
-    Rank is supplied by the caller: today ``terrain_merge_rank`` bound to
-    ``WorldTerrainMasks``, after cutover a registry-entry lookup. No world
+    Rank is supplied by the caller: ``terrain_merge_rank`` bound to the
+    resolved world's terrain registry. No world
     reads, geometry changes, or error defaults occur here. The only side
     effect is the required diagnostic for equal-rank, different-key outcomes.
     """

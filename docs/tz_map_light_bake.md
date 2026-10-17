@@ -1134,7 +1134,7 @@ Writer: **mountain**. Relief — база.
 road > ravine > mountain > forest > plains      # builtin-ранги
 ```
 
-**Источник ранга — `TerrainRegistryEntry.merge_rank` (world data, 2026-10-17)**, не домен-писатель: домен — writer, приоритет — у ключа. Builtin-значения выше — canonical defaults реестра; N+1-ключи (степь, болото) получают ранг в своей записи. `TERRAIN_MERGE_RANK_HIGH_TO_LOW` / `merge_rank_order()` / `system_terrain_for_domain()` — transitional до плана wilderness шаг 3b. При равном ранге внутри landcover — цепочка § Регионы покрытия › Пересечения и приоритет.
+**Источник ранга — `TerrainRegistryEntry.merge_rank` (world data, 2026-10-17)**, не домен-писатель: домен — writer, приоритет — у ключа. Builtin-значения выше — canonical defaults реестра; N+1-ключи (степь, болото) получают ранг в своей записи. Ранг читается из разрешённого реестра мира; отсутствующий builtin может использовать запись canonical engine-реестра, отсутствующий N+1-ключ — ошибка контракта без подстановки ранга. Пустая клетка (`system_terrain=None`) не имеет ранга и допускает запись зарегистрированного ключа. При равном ранге внутри landcover — цепочка § Регионы покрытия › Пересечения и приоритет.
 
 | Поле | Merge |
 |---|---|
@@ -1166,9 +1166,8 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | `MaskDomainId` | [`maskDomainId.py`](../backend/app/dataModel/masks/enums/maskDomainId.py) — engine enum доменов |
 | `LightContributorId` | тот же модуль — `contributor.name` |
 | `COMPOSE_CONTRIBUTOR_ORDER` | **единственный** SoT порядка compose |
-| `TERRAIN_MERGE_RANK_HIGH_TO_LOW` | **transitional** → `TerrainRegistryEntry.merge_rank` (§ Merge `system_terrain`; план wilderness шаг 3b) |
+| `TerrainRegistryEntry.merge_rank` | единственный SoT ранга terrain-ключа из реестра мира (§ Merge `system_terrain`) |
 | `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (`LANDCOVER` → landcover; `FORESTS`/`PLAINS` transitional до шага 10b) |
-| `WorldTerrainMasks.merge_rank_order()` | **transitional** → ранг из реестра |
 | Корни JSON | typed `default_*` / `declared_*` — не free-form domain map |
 
 **Application**

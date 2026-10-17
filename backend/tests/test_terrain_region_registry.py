@@ -47,8 +47,11 @@ class TerrainRegionRegistryTests(unittest.TestCase):
         self.assertIsInstance(entry.hills, HillPolicy)
         self.assertEqual(TerrainRegistryEntry.model_validate_json(entry.model_dump_json()), entry)
 
-    def test_canonical_ranks_match_transitional_rank_order_without_consumer_change(self):
-        order = self.masks.merge_rank_order()
+    def test_canonical_ranks_preserve_builtin_paint_order(self):
+        order = tuple(policy.system_terrain for policy in (
+            self.masks.default_roads, self.masks.default_ravines, self.masks.default_mountains,
+            self.masks.default_forests, self.masks.default_plains,
+        ))
         ranks = [self.registry.entry_for(key).merge_rank for key in order]
         self.assertEqual(ranks, sorted(set(ranks), reverse=True))
         for key, rank in zip(order, ranks):
