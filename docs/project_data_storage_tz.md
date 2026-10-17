@@ -1310,6 +1310,16 @@ catalog/interior — `seed_uid` (R36w bake-репродукция).
 
 Uid сущности от `world_seed` или bake-rng от `world_uid` — ошибка контракта.
 
+Типизированные обёртки над `seed_rng` — **часть этого модуля** (target
+2026-10-17; сейчас в `generators/terrain/relief/geom/seededHash.py`, перенос —
+план wilderness шаг 0): `seeded_u01(world_seed, kind, **keys) -> float` в
+`[0, 1)`, `seeded_index(world_seed, kind, n, **keys) -> int` в `[0, n)`.
+Отдельный `bake_seed(world)` с тихим fallback `"world"` **снимается** — только
+`seed_root(world)` (объект без `world_uid` = ошибка вызова, не дефолтный seed).
+Несколько потоков под одним `kind` различаются именованным ключом
+(например `channel="edge"` / `"density"` у `UidKind.REGION`): одинаковые
+root/kind/keys дают один и тот же `Random`.
+
 **Контракт функций:**
 
 - `kind: UidKind` — **закрытый** `StrEnum` тегов доменов (`district`, `area`,

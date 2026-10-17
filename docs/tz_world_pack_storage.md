@@ -249,6 +249,8 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 **Политика knobs — consumer, не домен холмов.** Helper не читает JSON. Wire **совпадает** с POJO `HillPolicy`. Живёт на `PlainsCategoryPolicy.hills` / `ForestsCategoryPolicy.hills` — [`hillPolicy.py`](../backend/app/dataModel/terrainMasks/hillPolicy.py). Нет `MaskDomainId.HILLS`.
 
+**Target (2026-10-17, регионы покрытия):** holder переезжает на **ключ** — `TerrainRegistryEntry.hills: HillPolicy | None` (world data, N+1): `place_hills` выбирает политику по `system_terrain` клетки, а не по паре `plains_key`/`forest_key`, иначе клетка `steppe`/`swamp` холмов не получает. `default_plains.hills` / `default_forests.hills` остаются wire-совместимым источником для builtin-ключей до миграции данных мира (план wilderness шаг 7b); canonical defaults реестра — тот же единственный литерал. Локационный override не меняется.
+
 `HillPolicy` (встроена в `default_plains` / `default_forests` как `hills`; тот же объект на локации):
 
 | Поле | Смысл | Единица |
@@ -1376,6 +1378,7 @@ effective_climate(x,y) =
 | `map_cell_fine_span`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
 | `location_terrain_entries[]` | per-location L2 terrain — см. § `LocationTerrainEntry` |
 | `settlement_structure_entries[]` | per-settlement city structure — см. § `SettlementStructureEntry` |
+| `wilderness_region_entries[]` | индекс регионов покрытия (uid/entry_type/current_type/bbox/status) — см. § `WildernessRegionEntry`; состояние — § Region state store |
 | `tiles[]` | per macro-tile — см. § `TileManifestEntry` |
 | `world_map_cells`, `wilderness_tiles_total`, `wilderness_chunks_baked` | progress |
 
@@ -1428,9 +1431,46 @@ Authored outdoor city (**C15** / **C24**). Оглавление packed-райо�
 | `refine_role` | enum? | `scene` \| `background` \| `path` |
 | `content_hash`, `bytes` | | hash и размер wilderness chunk blob |
 
+#### `WildernessRegionEntry` (`wilderness_region_entries[]`) — target (2026-10-17)
+
+Spatial index resolved coverage-регионов (контракт — [`tz_map_light_bake.md`](./tz_map_light_bake.md) § Регионы покрытия). **Индекс, не SoT**: resolved Specs derive-on-read из world data; записи переписываются при bake.
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `region_uid` | str | `entity_uid(world_uid, UidKind.REGION, …)` — стабилен при правке shape/смене типа |
+| `entry_type` | str | вид декларации / выведенный вид autoresolve на момент bake |
+| `current_type` | str | ключ состояния на момент bake (snapshot; актуальное — `region_states`) |
+| `bbox` | AABB | пространство мира (fine-координаты), seam-aware |
+| `status` | enum | `declared` \| `anchor` \| `autoresolved` \| `sublocation` |
+| `parent_region_uid` | str? | для `sublocation` — регион-родитель |
+| `state_fingerprint` | str? | fingerprint spec на момент bake — быстрый revision-check без чтения store |
+
+#### Region state store (target, 2026-10-17)
+
+`RegionState` — runtime-эволюция поверх authored declaration. Хранится в SQL-таблице **`region_states`**, keyed by `(world_uid, region_uid)` — **entity-store рядом с Patch Store, не WP-20** (`map_cell_patches` — дельты клеток `(x,y,z)`; состояние сущности туда не ложится). Схема — `0001_initial.sql` + `db/models/regionState.py` + repo; массовая запись — `app.db.bulkSql`.
+
+Поля: `current_type`, `pending_target`, `progress`, `last_eval_tick`, `overrides` (JSON), `history` (JSON append-only: `{from_type, to_type, cause, at}`), `state_fingerprint`, `tombstone`. **Единый writer — `StateChangeConsumer`** (не генератор, не bake). Revision-check: при bake/refine тайла `state_fingerprint(spec_wire)` ≠ сохранённому → клетки региона **в этом тайле** перекрашиваются; немедленной перепечки всего мира нет. `remove` declared → `tombstone` + чистка при следующем чтении/bake; rename → новая сущность (старый state — orphan → tombstone).
+
+#### Region state overlay (read, target 2026-10-17)
+
+Pack остаётся immutable snapshot. Клетка L0 (`WorldMapCellWire`) и колонка L2 (`FineTerrainColumnWire`) при bake получают **`region_uid`** победителя (optional поле) и `system_terrain` = paint на момент bake (snapshot самодостаточен для raw-читателей). На read — **один фасад** overlay:
+
+```text
+cell.region_uid is None            → system_terrain как в pack
+state(region_uid).tombstone        → policy-fallback ключ (LandcoverRegionsCategoryPolicy)
+state.current_type != baked key    → current_type
+иначе                              → system_terrain как в pack
+```
+
+Применяется ко всем слоям Layer priority **ниже `patch`**: `terrain_delta` (взрыв, раскопки) остаётся сверху. Overlay подменяет только `system_terrain`; доменные эффекты морфинга (роль воды, bed carve, z) — при materialize/refine чанков, не на read.
+
+**Известный gap — overlap re-rank:** клетка в двух регионах, у одного из которых сменился `current_type`, не пересчитывает победителя (overlay по uid, не по геометрии) до ближайшего refine чанка / re-bake тайла. `StateChangeConsumer` логирует `region_state | overlap_rerank_deferred | region_uid=… neighbors=…` при пересечении bbox по индексу.
+
+Отвергнуто (2026-10-17): re-bake тайлов на смену типа (мастерский рычаг WP-7 — симуляция невидима); flood `terrain_delta` на footprint (10⁶ строк на регион, WP-FIX-DEBT-1); геометрия на read (дублирует bake-paint).
+
 ### Fine terrain column (внутри zstd)
 
-`(lx, ly)` + z-runs + **`system_terrain`** / **`system_material`** (registry keys, строки). Legacy wire с `terrain_id: u8` — мигрируется при read (`FineTerrainZRun._migrate_legacy_wire`). См. `dataModel/worldPack/fineTerrainChunkWire.py`.
+`(lx, ly)` + z-runs + **`system_terrain`** / **`system_material`** (registry keys, строки) + **`region_uid?`** (target, § Region state overlay). Legacy wire с `terrain_id: u8` — мигрируется при read (`FineTerrainZRun._migrate_legacy_wire`). См. `dataModel/worldPack/wire/fineTerrainChunkWire.py`.
 
 ---
 

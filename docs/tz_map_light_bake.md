@@ -262,10 +262,10 @@ flowchart TB
 | Корень | Домены | Статус |
 |---|---|---|
 | `world.hydrology` | реки / озёра / моря / shore / landforms hydro | уже есть (`WorldHydrology`) |
-| `world.terrain_masks` | mountains / forests / plains / ravines / roads (+ later farmland declare) | **норматив этого §** |
+| `world.terrain_masks` | mountains / landcover (`declared_regions[]`: forest / plains / farmland) / ravines / roads | **норматив этого §** |
 | structure graph (`connection_*`) + policy enable | road | enable в `terrain_masks.default_roads`; geometry — edges |
 | settlement pins / footprint | `MaskDomainId.SETTLEMENT` | L0 Spec→pin/footprint; L2 layout — не mask domain |
-| farmland (later) | новый `MaskDomainId.FARMLAND` | тот же materialize; crops — flora, не маска |
+| farmland | `FarmlandSpec` внутри `MaskDomainId.LANDCOVER` (отдельного `FARMLAND` нет — 2026-10-17) | тот же materialize; crops — flora, не маска |
 
 Не дублировать hydro-флаги вторым деревом: light bake **читает** `world.hydrology.*`. Terrain-типы — отдельный корень с **той же формой category policy**. Не mega-dict доменов: typed fields `default_*` / `declared_*`.
 
@@ -424,8 +424,7 @@ flowchart LR
 | **mountains** | `MountainSpec` \| `MountainRangeSpec` | FormGeometry→FormRaster→SideFill → footprint (+ fractions) | terrain + KindElevation z | **первый полный plugin**; stub disk/score→paint **удалить** |
 | **ravines** | `RavineSpec` | depression/path → footprint | terrain + drop z | тем же каркасом после гор |
 | **settlement** | `SettlementSpec` (origin, radius_m / size, `location_uid`) | disk / later outline | `location_pin` (index из `locations_index`) | pin→Spec; **не** SQL районов / gates (C23) |
-| **farmland** | `FarmlandSpec` (region) | region fill | terrain key | **новый** `MaskDomainId.FARMLAND` (PR); flora/crops — отдельно ([`tz_flora`](./tz_flora.md)) |
-| **forests / plains** | `ForestSpec` / `PlainSpec` | region / climate | terrain | **отложено**; landcover interim OK до Spec |
+| **landcover** (forests / plains / farmland) | `LandcoverDeclareEntry` (`declared_regions[]`) | `RegionShape` → `RegionRasterizer`; autoresolve seed/claim | terrain (`paint_key`) + `region_uid` | **один** `MaskDomainId.LANDCOVER` (2026-10-17; отдельного `FARMLAND` нет); контракт — § Регионы покрытия; per-cell climate paint — только fallback вне регионов. flora/crops — отдельно ([`tz_flora`](./tz_flora.md)) |
 | **roads** | geometry = structure edges | polyline (+ dilate) | terrain | edges SoT; enable в policy; тот же apply_terrain |
 | **hydrology** | already declared Specs | raster roles | `hydrology_*` (+ bathymetry) | эталон; не переписывать под terrain types |
 
@@ -551,12 +550,10 @@ NamedLocation(geographic.mountain) → disk paint  # interim; убрать
 | Поддомен | `system_terrain` | Declare SoT (`declared_*[]`) | Autoresolve (enabled, даже без declare) |
 |---|---|---|---|
 | **mountains** | `mountain` (+ summit по kind) | `declared_mountains[]`: `MountainSpec` \| `MountainRangeSpec` | placement → Spec → § Mountain engine |
-| **forests** | `forest` | `declared_forests[]`: `ForestSpec` | region + [`tz_flora`](./tz_flora.md) → paint forest. Hill knobs на `default_forests` — L2; локация перекрывает мир |
-| **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши. Hill knobs на `default_plains` — L2; локация перекрывает мир |
+| **landcover** (`LANDCOVER`; forest / plains / farmland — **один** домен, 2026-10-17) | `paint_key` региона: `current_type` → `entry_type` → policy fallback (`forest`, `plains`, `farmland`, N+1-ключи) | `declared_regions[]`: `LandcoverDeclareEntry` = `ForestSpec` \| `PlainSpec` \| `FarmlandSpec` — § Регионы покрытия | seed-решётка + claim → регионы/саблокации; клетки вне регионов — per-cell fallback. `FORESTS`/`PLAINS` и `default_forests`/`default_plains` — transitional (план шаги 7b/10b); hills — `TerrainRegistryEntry.hills` |
 | **ravines** | `ravine` | `declared_ravines[]`: `RavineSpec` (path / polygon) | депрессии → RavineSpec |
 | **roads** | `road` | geometry = structure edges; enable в `default_roads` | без edges маска пуста; `enabled: false` запрещает paint |
 | **settlement** (mask) | pin / optional terrain later | `SettlementSpec` (или declared list) | pins → Spec → footprint; не L2 assembler; не C23 topology |
-| **farmland** (later) | farmland terrain key | `declared_fields[]`: `FarmlandSpec` | region → mask; crops via flora |
 
 Каждый `*Spec` — POJO домена (поля footprint/knobs свои); materialize → `MaskFootprint` → shared apply (§ MaskDomain materialize).  
 Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в location.
@@ -573,7 +570,7 @@ Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в l
 | **A** | мир **хочет** класс forest | `terrain_masks.default_forests.forest_min_rainfall` (+ enable / declare) |
 | **B** | в климате клетки есть eligible **trees** | `FloraSuitabilityIndex.query` ← `tree_registry` ∩ `FloraClimateSuitability` |
 
-`paint forest` = **A ∧ B**. Если A прошло, а B=∅ (все деревья требуют другой rainfall/temp) → **не** красить `forest` (fallback plains), warn в generation log. Запрещены: лес без деревьев, builtin-вид, свой скан реестра в landcover.
+`paint forest` = **A ∧ B** — **для автоматического возникновения леса (autoresolve)**. Если A прошло, а B=∅ (все деревья требуют другой rainfall/temp) → autoresolve **не** красит `forest` (fallback plains), warn в generation log. **Declared/anchor регионы veto не проходят** (2026-10-17): авторский лес ставится как начальное состояние, B=∅ → `declared_without_suitability` warning, paint выполняется; деградация — через state-change. См. § Регионы покрытия › Declaration и suitability. Запрещены: лес без деревьев у autoresolve, builtin-вид, свой скан реестра в landcover.
 
 **Stub (2026-07-17):** flora index **отложен**; сейчас paint только по A. Target после flora: A∧B + type refs.
 
@@ -590,6 +587,104 @@ Target: forest/landcover зовут **тот же** index + FloraGenerator; сп
 `MountainKind` / Form / Sides / Range — **алгоритм materialize внутри** `default_mountains` + entries из `declared_mountains[]`.  
 Те же: `enabled` / declare / autoresolve / `IgnoreOnWire` / merge rank / `paint_system_terrain`.  
 Запрещено: параллельный «mountain pipeline» мимо `WorldTerrainMasks` / `MaskCategoryPolicy`.
+
+### Регионы покрытия (wilderness regions) — целевой контракт (утверждено 2026-10-17)
+
+Декомпозиция реализации — [`.cursor/plans/wilderness-regions-mechanic.md`](../.cursor/plans/wilderness-regions-mechanic.md); здесь — норматив.
+
+**Сущность и домен.** Регион — доменно-нейтральная географическая сущность (shape + declaration + состояние), выше отдельных доменов маски. `WorldTerrainMasks.declared_regions[]` — **одна плоская коллекция** (не `declared_forests`/`declared_plains` по отдельности): конфликты размещения между типами покрытия решаются совместно. `MaskDomainId.LANDCOVER` — единый домен покрытия; `FORESTS`/`PLAINS` — transitional policy-категории до cutover; `default_forests`/`default_plains` остаются fallback-политикой.
+
+#### Spec union (engine, закрытый)
+
+```text
+RegionSpecBase:
+  name: str | None                   # identity declared; обязателен при author-валидации (› Identity)
+  shape: RegionShape                 # координаты — только в shape; origin-полей нет
+  entry_type                         # discriminator
+  density: float = 1.0
+  placement_specificity: int | None  # ge=0; tie-break равного merge_rank (› Пересечения и приоритет)
+  location_uid: str | None           # optional link, как MountainSpec
+ForestSpec   (entry_type="forest")    # состав — tz_flora (› Точки расширения); поля flora нет
+PlainSpec    (entry_type="plains")    # покрытие; рельефная плоскость = elevation_plain (факт elevation)
+FarmlandSpec (entry_type="farmland")  # культура — crops_registry (› Точки расширения); поля crop нет
+LandcoverDeclareEntry = ForestSpec | PlainSpec | FarmlandSpec | …   # discriminated by entry_type
+```
+
+- `entry_type` — закрытый union видов декларации (typed knobs, engine PR).
+- `current_type` — **открытый** N+1 ключ `system_terrain` из `WorldTerrainRegistry`: степь/болото/… без новых Spec-классов.
+- `paint_key` = `current_type` (RegionState) → `entry_type` → policy fallback.
+- `density` — доля заполнения: paint = `contains(x,y)` ∧ seeded-маска (`seeded_u01(…, channel="density", uid, x, y) < density`); «чаща»/состав — семантика флоры.
+- `placement_specificity` — отсутствие (`None`) означает «автор не выразил намерение» и проигрывает любому явному значению, включая `0`; wire default не подставляется. Autoresolve-регионы и саблокации — всегда `None`.
+
+#### RegionShape — resolution-independent геометрия (SoT формы)
+
+```text
+RegionShape = BboxShape | EllipseShape | PolygonShape | AnchorRadiusShape   # kind
+  + edge_noise: {amplitude, scale}   # seeded по uid региона (channel="edge") — органичный край
+```
+
+Координаты — мировая fine-сетка (unrolled); `contains(x,y)` поточечно; растеризация независимо на L0 (`MaskFootprint`) и L2 (fine) — одна shape, два растра; `bbox()` для spatial index; `area()` — площадь геометрического примитива **без** edge_noise (`anchor_radius` → `π·r²`) для tie-break. Seam — через `WorldTopology.canonicalize`; контракт топологии — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Форма мира (`world_topology_mode`; реализация — план `surface-topology`). `AnchorRadiusShape` резолвит именованный anchor в `collect` materializer'а (не в `materialize(spec, scale)`). Author-валидация: `rx/ry>0`, `vertices>=3`, не-самопересечение, `x_min<=x_max` — ошибки, не fallback.
+
+#### Identity
+
+`region_uid` — `entity_uid(world_uid, UidKind.REGION, **keys)`; геометрия, `entry_type`/`current_type`, домен в uid **не входят** — сущность переживает правки и морфинг. Keys по источнику:
+
+| Источник | Key | Примечание |
+|---|---|---|
+| declared | `name` — `strip()` + Unicode NFC, без casefold; `\|` в имени — ошибка валидации | обязателен при author-валидации (`validate_only`); два declared с одним нормализованным именем — ошибка |
+| declared без `name` (runtime) | `bbox_min=(x_min, y_min)` из `shape.bbox()` + `kind=<shape.kind>`; для `anchor_radius` — `anchor_uid` | **degraded**: регион красится, в лог WarningError (`FieldPathError` → `log_issues`); сдвиг min-угла = новая сущность |
+| anchor | `anchor_uid` | by design |
+| autoresolve | `seed_xy=(x, y)` canonical min seed компоненты | саблокация — свой uid от своего seed'а |
+
+Revision — `state_fingerprint(spec_wire)` (`app.ids`), отдельный токен.
+
+#### Autoresolve — поле в мировых координатах
+
+Partial и full bake идентичны (контекст — чистая функция `(x,y)` + world data).
+
+- seed-решётка `(sx, sy)` (не `gx, gy` — alias макро-тайла) + джиттер `seeded_u01(seed_root(world), UidKind.REGION, channel="seed", sx, sy)`; шаг сетки = масштаб региона (knob);
+- каналы рандома `UidKind.REGION` различаются обязательным ключом `channel`: `seed` / `claim` / `edge` / `density` — одинаковые keys дали бы один `Random`;
+- вид seed'а — `CoverageResolver` по контексту (domain fact consumers: climate/hydrology/relief/flora);
+- claim: клетка к seed'у с лучшим `w = f(dist) + seeded-шум` (`channel="claim"`, по координатам клетки), кап `max_radius`; declared/anchor выигрывают через `placement_specificity` (`None` у autoresolve) — отдельного правила нет;
+- обход соседей решётки — `WorldTopology.neighbor` (шов), не ручной `mod`;
+- соседние seed'ы одного вида сливаются в один регион; каждый seed — **саблокация** со своим uid, адресуемая через `Facing` («Северный/Южный Тёмный лес»); `region_uid` = canonical min `seed_xy`.
+
+#### Пересечения и приоритет
+
+Overlap разрешён (авторское слоение; покрытие — не владение): регионы не сдвигаются и не обрезаются. Конфликт **клетки** решается одной функцией сравнения (L0 и L2 — одна и та же):
+
+```text
+1. merge_rank(current_type)   по убыванию   # TerrainRegistryEntry, разные ключи
+2. placement_specificity      по убыванию   # None ниже любого явного
+3. RegionShape.area()         по убыванию
+4. region_uid                 по возрастанию (каноническая строка)
+```
+
+Это § Placement priority, применённый на клетке после rank. Отдельного `priority`-поля нет. Equal-rank + разные ключи → исход по п.2–4 **и** WarningError в лог. Саблокации наследуют specificity родителя; child-регион частичного перехода (› Состояние) при равном ранге с родителем получает specificity родителя + 1. Границы — seeded-шум в приграничной зоне (регионы «входят» друг в друга). Клетка в двух регионах — факты входят в контекст обоих. Клетка хранит `region_uid` победителя (› L0/L2).
+
+#### Реестр и CoverageResolver (world data, N+1)
+
+`TerrainRegistryEntry` += `merge_rank`, `eligibility: list[EligibilityRule]` (`{fact, op: gte|lte|in_range|flag, lo/hi, weight, required}`), `inertia` (сопротивление переходу как текущего типа), `hills: HillPolicy | None` (L2 холмы по ключу — см. `tz_world_pack_storage` § L2 open-land hills). Builtin-значения (`road > ravine > mountain > forest > plains`, hills forest/plains) — в canonical defaults реестра, не литералы в application. `CoverageResolver` — scorer: `required` провалено → кандидат отпадает; `score = Σ weightᵢ·satisfactionᵢ` (0..1); `target = argmax`, `strength` → темп прогресса; все отпали → WarningError, тип не меняется (без default). Interim eligibility — climate-правила как canonical `eligibility` builtin-ключей с комментарием «цель — rules мира + flora suitability (`flora.*`)».
+
+#### Declaration и suitability
+
+Climate-gate A∧B (§ Forest mask → flora) применяется только к **autoresolve**-кандидатам `CoverageResolver` (B — канал `flora.*` в `eligibility`; до flora-трека — interim climate). **Declared** и **anchor** регионы задают начальное состояние без veto: `current_type = entry_type` независимо от suitability. Если для declared forest B = ∅, bake пишет `landcover | declared_without_suitability | region_uid=… entry_type=forest` (`logger.warning`, тот же sink), paint выполняется. Дальнейшая судьба — `StateChangeConsumer`: пустая suitability входит в контекст как факт, `DeclarationFacts.strength` её компенсирует или нет.
+
+#### L0/L2
+
+L0: materialize → `MaskFootprint` → `apply_terrain_footprint` пишет `system_terrain` (paint_key) **и** `region_uid` победителя (`WorldMapCellWire.region_uid`). L2: `upsample_terrain_from_parent_light` — fallback-фон; region paint поточечно в `build_tile_surface_state` **между upsample и `place_hills`**, `FineTerrainColumnWire.region_uid`; hydro-роли старше landcover (`PRESERVE_HYDROLOGY_ROLES`). `place_hills` видит landcover на момент build чанка; последующая смена типа холмы не убирает (рельеф ≠ покрытие).
+
+#### Состояние и переходы
+
+SoT хранения — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § `WildernessRegionEntry` / § Region state store / § Region state overlay. `RegionState{current_type, pending_target, progress, last_eval_tick, overrides, history[], state_fingerprint, tombstone}` — таблица `region_states` keyed by `region_uid` (entity-store, **не** WP-20); единый writer — `StateChangeConsumer` (typed `RegionFacts`, не dict). Смена `current_type` достигает клеток через overlay по `region_uid` на read; доменные эффекты морфинга (роль воды, z) — на materialize/refine, не на read. Морфинг — та же сущность/uid; частичный переход — child-регион (саблокация); интенсивность — `overrides`. `elapsed_ticks` — рабочая заглушка-параметр до унифицированной LOD/время механики.
+
+#### Точки расширения (поля не вводятся до владельца)
+
+| Что | Владелец | Статус |
+|---|---|---|
+| состав леса (`ForestSpec` ↔ flora) | [`tz_flora.md`](./tz_flora.md) § ForestComposition (target) | ключ `flora` в wire — unknown key |
+| культура пашни (`FarmlandSpec`) | `crops_registry` в dataModel | ключ `crop` в wire — unknown key |
+| триггер оценки state-change / время | единый LOD/время трек | `elapsed_ticks` параметр |
 
 ### Mountain (engine) — kind / form / sides / range + elevation (утверждено 2026-07-16)
 
@@ -1036,13 +1131,15 @@ Writer: **mountain**. Relief — база.
 При включённых доменах, одна light cell:
 
 ```text
-road > ravine > mountain > forest > plains
+road > ravine > mountain > forest > plains      # builtin-ранги
 ```
+
+**Источник ранга — `TerrainRegistryEntry.merge_rank` (world data, 2026-10-17)**, не домен-писатель: домен — writer, приоритет — у ключа. Builtin-значения выше — canonical defaults реестра; N+1-ключи (степь, болото) получают ранг в своей записи. `TERRAIN_MERGE_RANK_HIGH_TO_LOW` / `merge_rank_order()` / `system_terrain_for_domain()` — transitional до плана wilderness шаг 3b. При равном ранге внутри landcover — цепочка § Регионы покрытия › Пересечения и приоритет.
 
 | Поле | Merge |
 |---|---|
 | `surface_z` | relief → **mountain поднимает** (формула выше); later writers не понижают гору без своего контракта |
-| `system_terrain` | как таблица приоритета |
+| `system_terrain` | `may_paint_terrain` по `merge_rank` ключа |
 
 (hydro пишет только `hydrology_*`, не затирает terrain; road/ravine **не** красят SEA/LAKE/RIVER.)
 
@@ -1054,7 +1151,7 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 - **Open (blocker):** ~~нет shared MaskDomain materialize~~ — **shipped** (`MaskFootprint` / `run_mask_domain` / Spec→apply) — § **MaskDomain materialize**.  
 - **Mountain plugin:** core ✅ — § **Реализовано vs target**. PassBuilder / topology SoT — [`tz_mountain_architecture.md`](./tz_mountain_architecture.md). Paint follow-ups: ridge noise; kind summit; cap `t`; ущелья / cliff.  
 - ~~**INTERIM Q3-B / Q12 corridor**~~ — closed (FormRaster+SideFill; Range sides).  
-- **Deferred:** forest Spec + flora gate B; farmland `MaskDomainId`; settlement Spec pipeline (сейчас pin disk в contributor); **ravine** / standalone **cliff** builders.  
+- **Deferred:** ~~forest Spec~~ → § Регионы покрытия (план wilderness); flora gate B для autoresolve; ~~farmland `MaskDomainId`~~ — снято, внутри `LANDCOVER`; settlement Spec pipeline (сейчас pin disk в contributor); **ravine** / standalone **cliff** builders.  
 - **Open (2026-07-17):** coarse **relief_objects_z до hydrology** — § Coarse planning ↔ light compose; без этого procedural lakes/rivers на flat z.  
 - ~~Debt: landcover `tundra` as terrain~~ — **fixed** (cold = climate_zone_id; landcover forest|plains).  
 - **Stub:** flora type refs / FloraGenerator — [`tz_flora.md`](./tz_flora.md).  
@@ -1069,9 +1166,9 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | `MaskDomainId` | [`maskDomainId.py`](../backend/app/dataModel/masks/enums/maskDomainId.py) — engine enum доменов |
 | `LightContributorId` | тот же модуль — `contributor.name` |
 | `COMPOSE_CONTRIBUTOR_ORDER` | **единственный** SoT порядка compose |
-| `TERRAIN_MERGE_RANK_HIGH_TO_LOW` | порядок доменов, пишущих `system_terrain` |
-| `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (forests+plains → landcover) |
-| `WorldTerrainMasks.merge_rank_order()` | rank → ключи `system_terrain` из policy |
+| `TERRAIN_MERGE_RANK_HIGH_TO_LOW` | **transitional** → `TerrainRegistryEntry.merge_rank` (§ Merge `system_terrain`; план wilderness шаг 3b) |
+| `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (`LANDCOVER` → landcover; `FORESTS`/`PLAINS` transitional до шага 10b) |
+| `WorldTerrainMasks.merge_rank_order()` | **transitional** → ранг из реестра |
 | Корни JSON | typed `default_*` / `declared_*` — не free-form domain map |
 
 **Application**
@@ -1087,12 +1184,12 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 |---|---|---|
 | 1 Base | `relief` | — |
 | 2 Context | `climate` | — |
-| 3 Landcover | `landcover` | `FORESTS`, `PLAINS` |
+| 3 Landcover | `landcover` | `LANDCOVER` (forest / plains / farmland — § Регионы покрытия); `FORESTS`, `PLAINS` transitional |
 | 4 Structural | `mountain` → `ravine` | `MOUNTAINS`, `RAVINES` |
 | 5 Hydro | `hydro` | `HYDROLOGY` |
 | ~~5b Ribbon~~ | ~~`open_land` → `shore`~~ | **removed** (R36u-T-8); grade → detailed **R36v** |
 | 6 Culture | `settlement` → `road` | `SETTLEMENT`, `ROADS` (~~`road_shoulder`~~ **removed**; T-10 later on detailed) |
-| (later) Land-use | `farmland` | `FARMLAND` (новый MaskDomainId) |
+| ~~(later) Land-use~~ | ~~`farmland`~~ | **снято 2026-10-17**: farmland — `FarmlandSpec` внутри `LANDCOVER`, отдельного `FARMLAND` нет |
 | (later) Flora | type refs | — flora TZ |
 
 **Shared paint / materialize**
