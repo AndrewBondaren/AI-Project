@@ -100,7 +100,7 @@ def rasterize_fine(shape: RegionShape, world: RasterWorld,
     return {coord for raw, coord in samples if contains(raw, coord)}
 
 
-def _claim_owners(claim: RegionClaim, root: str,
+def claim_owners(claim: RegionClaim, root: str,
                   topology: WorldTopology) -> dict[Coord, ClaimSeed]:
     """Bounded graph distance, then w = radius-distance + coherent noise.
 
@@ -142,7 +142,7 @@ def _claim_membership(claim: RegionClaim, world: RasterWorld,
                      spec_ctx: RegionRasterContext, *, scope: Bounds | None = None) -> set[Coord]:
     """Cells won by this UID. Scope filters output only; it cannot alter w."""
     root = seed_root(world)
-    owners = _claim_owners(claim, root, spec_ctx.fine_topology())
+    owners = claim_owners(claim, root, spec_ctx.fine_topology())
     return {coord for coord, seed in owners.items()
             if seed.region_uid == spec_ctx.region_uid
             and (scope is None or scope[0] <= coord[0] <= scope[2] and scope[1] <= coord[1] <= scope[3])

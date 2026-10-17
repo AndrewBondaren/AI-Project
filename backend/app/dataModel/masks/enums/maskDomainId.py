@@ -14,6 +14,7 @@ class MaskDomainId(StrEnum):
 
     HYDROLOGY = "hydrology"
     MOUNTAINS = "mountains"
+    LANDCOVER = "landcover"
     FORESTS = "forests"
     PLAINS = "plains"
     RAVINES = "ravines"

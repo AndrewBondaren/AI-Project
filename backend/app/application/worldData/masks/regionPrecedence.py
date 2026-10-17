@@ -19,6 +19,9 @@ class RegionCandidate:
     current_type: TerrainKey
     spec: RegionSpecBase
     region_uid: str
+    # Original graph-claim geometry is a union of fine-cell squares. Its area
+    # is supplied before L0 sampling/clipping; declared primitives use area().
+    claim_area: float | None = None
 
 
 def _precedence_key(candidate: RegionCandidate, rank: int) -> tuple[int, bool, int, float, str]:
@@ -27,7 +30,7 @@ def _precedence_key(candidate: RegionCandidate, rank: int) -> tuple[int, bool, i
         -rank,
         specificity is None,
         -(specificity or 0),
-        -candidate.spec.shape.area(),
+        -(candidate.claim_area if candidate.claim_area is not None else candidate.spec.shape.area()),
         candidate.region_uid,
     )
 

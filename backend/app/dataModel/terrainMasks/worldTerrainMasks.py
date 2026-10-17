@@ -24,6 +24,7 @@ from app.dataModel.terrainMasks.mountain.specs import (
 )
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 
 
 def _terrain_key(system_terrain: str) -> str:
@@ -135,6 +136,7 @@ class WorldTerrainMasks(BaseModel):
     )
     declared_mountains: DefaultWhenMissing[list[MountainDeclareEntry]] = Field(default_factory=list)
     declared_regions: list[LandcoverDeclareEntry] = Field(default_factory=list)
+    default_landcover: DefaultWhenMissing[LandcoverRegionsCategoryPolicy | None] = None
     default_forests: DefaultWhenMissing[ForestsCategoryPolicy] = Field(
         default_factory=ForestsCategoryPolicy,
     )

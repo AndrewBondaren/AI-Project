@@ -75,6 +75,12 @@ class RegionPrecedenceTests(unittest.TestCase):
                 self.assert_precedes(self.candidate(self.uid_last, specificity=specificity, side=20),
                                      self.candidate(self.uid_first, specificity=specificity, side=10))
 
+    def test_claim_area_uses_source_geometry_instead_of_envelope(self):
+        claim = replace(self.candidate(self.uid_first, side=100), claim_area=10)
+        declared = self.candidate(self.uid_last, side=4)
+        self.assert_precedes(declared, claim)
+        self.assert_precedes(replace(claim, claim_area=20), declared)
+
     def test_area_is_primitive_area_not_bbox_or_noise(self):
         vertices = [(0, 0), (10, 0), (0, 10)]
         triangle = self.candidate(self.uid_first, shape=PolygonShape(vertices=vertices))
