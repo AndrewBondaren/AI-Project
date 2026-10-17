@@ -797,6 +797,26 @@ CREATE TABLE IF NOT EXISTS map_cell_patches (
 );
 
 -- ============================================================
+-- region_states (entity store; StateChangeConsumer is the sole state writer)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS region_states (
+    world_uid               TEXT NOT NULL,
+    region_uid              TEXT NOT NULL,
+    current_type            TEXT NOT NULL,
+    pending_target          TEXT,
+    progress                REAL NOT NULL DEFAULT 0,
+    last_eval_tick          INTEGER NOT NULL DEFAULT 0,
+    overrides               TEXT NOT NULL DEFAULT '{}',
+    history                 TEXT NOT NULL DEFAULT '[]',
+    state_fingerprint       TEXT,
+    tombstone               INTEGER NOT NULL DEFAULT 0,
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    PRIMARY KEY (world_uid, region_uid),
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
+);
+
+-- ============================================================
 -- chunk_refine_jobs (L2 background refine queue state)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS chunk_refine_jobs (
