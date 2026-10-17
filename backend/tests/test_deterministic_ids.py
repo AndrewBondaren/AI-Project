@@ -22,6 +22,7 @@ from app.application.worldData.generators.structure.staircase.uShape.uShapeHelpe
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.ids import (
     LibraryKind,
+    RegionRngChannel,
     UidKind,
     entity_rng,
     entity_uid,
@@ -113,6 +114,26 @@ class DetIdsContractTests(unittest.TestCase):
                 "seed|grade_face|site=tile:0,0|face:V|1,2",
             )),
         )
+
+    def test_region_channels_preserve_string_rng_streams(self):
+        # REGION is introduced in wilderness step 3; key normalization is shared.
+        for channel, value in (
+            (RegionRngChannel.SEED, "seed"),
+            (RegionRngChannel.CLAIM, "claim"),
+            (RegionRngChannel.EDGE, "edge"),
+            (RegionRngChannel.DENSITY, "density"),
+        ):
+            with self.subTest(channel=channel):
+                self.assertEqual(
+                    seed_uid("seed", UidKind.RELIEF_PICK, channel=channel),
+                    str(uuid5(NAMESPACE_DNS, f"seed|relief_pick|channel={value}")),
+                )
+                enum_rng = seed_rng("seed", UidKind.RELIEF_PICK, channel=channel)
+                string_rng = seed_rng("seed", UidKind.RELIEF_PICK, channel=value)
+                self.assertEqual(
+                    [enum_rng.random() for _ in range(8)],
+                    [string_rng.random() for _ in range(8)],
+                )
 
     def test_library_uid(self):
         a = library_uid(LibraryKind.BUILDING_TEMPLATES, "house")

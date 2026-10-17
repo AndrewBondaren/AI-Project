@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, DefaultEnumWhenMissing, DefaultWhenMissing
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
@@ -27,6 +27,7 @@ from app.dataModel.terrainMasks.mountain.specs import (
     form_side_count,
 )
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
+from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry
 
 
 def _terrain_key(system_terrain: str) -> str:
@@ -134,6 +135,7 @@ class WorldTerrainMasks(BaseModel):
         default_factory=MountainsCategoryPolicy,
     )
     declared_mountains: DefaultWhenMissing[list[MountainDeclareEntry]] = Field(default_factory=list)
+    declared_regions: list[LandcoverDeclareEntry] = Field(default_factory=list)
     default_forests: DefaultWhenMissing[ForestsCategoryPolicy] = Field(
         default_factory=ForestsCategoryPolicy,
     )
@@ -146,6 +148,17 @@ class WorldTerrainMasks(BaseModel):
     default_roads: DefaultWhenMissing[RoadsCategoryPolicy] = Field(
         default_factory=RoadsCategoryPolicy,
     )
+
+    @field_validator("declared_regions")
+    @classmethod
+    def unique_region_names(cls, regions: list[LandcoverDeclareEntry]) -> list[LandcoverDeclareEntry]:
+        names: set[str] = set()
+        for region in regions:
+            if region.name is not None:
+                if region.name in names:
+                    raise ValueError(f"duplicate declared region name: {region.name!r}")
+                names.add(region.name)
+        return regions
 
     @classmethod
     def canonical_defaults(cls) -> WorldTerrainMasks:

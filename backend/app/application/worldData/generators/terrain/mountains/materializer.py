@@ -12,7 +12,7 @@ from app.application.worldData.generators.terrain.mountains.collect import (
     merge_mountain_spec_sources,
     specs_from_geographic_locations,
 )
-from app.application.worldData.generators.terrain.relief.geom.bakeSeed import bake_seed
+from app.ids import seed_root
 from app.application.worldData.generators.terrain.mountains.reliefSidesStamp import (
     stamp_entries_from_relief,
 )
@@ -92,7 +92,7 @@ class MountainMaskMaterializer:
         merged = merge_mountain_spec_sources(
             declared=declared, anchors=list(anchors), auto=auto,
         )
-        seed = bake_seed(ctx.world)
+        seed = seed_root(ctx.world)
         return stamp_entries_from_relief(
             merged,
             world=ctx.world,

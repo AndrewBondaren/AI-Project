@@ -20,7 +20,7 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
 
     @classmethod
     def canonical_defaults(cls) -> WorldTerrainRegistry:
-        """Fixture outdoor set — fixtures/world_template.json."""
+        """Engine outdoor defaults: fixture set plus declared farmland."""
         return cls(list(_CANONICAL_ENTRIES))
 
     @classmethod
@@ -34,6 +34,21 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     def occupancy_terrain_key(cls) -> str:
         """Settlement footprint ``system_terrain`` — not wilderness."""
         return _URBAN_ENTRY.system_terrain
+
+    @classmethod
+    def forest_terrain_key(cls) -> str:
+        """Builtin key for the forest declaration branch."""
+        return _FOREST_ENTRY.system_terrain
+
+    @classmethod
+    def plains_terrain_key(cls) -> str:
+        """Builtin key for the plains declaration branch."""
+        return _PLAINS_ENTRY.system_terrain
+
+    @classmethod
+    def farmland_terrain_key(cls) -> str:
+        """Builtin key for the farmland declaration branch."""
+        return _FARMLAND_ENTRY.system_terrain
 
     def entry_for(self, system_terrain: str) -> TerrainRegistryEntry | None:
         for entry in self.root:
@@ -75,23 +90,30 @@ type TerrainKey = RegistryKey[WorldTerrainRegistry]
 _terrain_entry_mod.WorldTerrainRegistry = WorldTerrainRegistry
 TerrainRegistryEntry.model_rebuild()
 
-# Outdoor + hydrology-facing set — fixtures/world_template.json
+_PLAINS_ENTRY = TerrainRegistryEntry(
+    system_terrain="plains",
+    glossary_ref="terrain_plains",
+    terrain_category="solid",
+    travel_modifier=1.5,
+    default_material="earth",
+)
+_FOREST_ENTRY = TerrainRegistryEntry(
+    system_terrain="forest",
+    glossary_ref="terrain_forest",
+    terrain_category="solid",
+    travel_modifier=2.5,
+    danger_level="medium",
+    default_material="wood",
+)
+_FARMLAND_ENTRY = TerrainRegistryEntry(
+    system_terrain="farmland",
+    terrain_category="solid",
+)
+
+# Outdoor + hydrology-facing set, including declared farmland coverage.
 _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
-    TerrainRegistryEntry(
-        system_terrain="plains",
-        glossary_ref="terrain_plains",
-        terrain_category="solid",
-        travel_modifier=1.5,
-        default_material="earth",
-    ),
-    TerrainRegistryEntry(
-        system_terrain="forest",
-        glossary_ref="terrain_forest",
-        terrain_category="solid",
-        travel_modifier=2.5,
-        danger_level="medium",
-        default_material="wood",
-    ),
+    _PLAINS_ENTRY,
+    _FOREST_ENTRY,
     TerrainRegistryEntry(
         system_terrain="mountain",
         glossary_ref="terrain_mountain",
@@ -168,6 +190,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         glossary_ref="terrain_open_space",
         terrain_category="aerial",
     ),
+    _FARMLAND_ENTRY,
 )
 
 # Interior / structure types — engine delta beyond world_template outdoor slice.

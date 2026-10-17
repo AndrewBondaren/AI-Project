@@ -30,7 +30,7 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     Coord,
     ReliefVertices,
 )
-from app.application.worldData.generators.terrain.relief.geom.bakeSeed import bake_seed
+from app.ids import seed_root
 from app.application.worldData.generators.terrain.relief.log.log import relief_debug
 from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
     open_land_terrain_keys,
@@ -171,7 +171,7 @@ def discover_and_paint(
     vertices = discovered.vertices
     fronts = discovered.fronts
 
-    world_seed = bake_seed(world)
+    world_seed = seed_root(world)
     policy = relief_pick_policy(world)
     pick_seq = 0
     acc = DetailedGradeResult.empty()

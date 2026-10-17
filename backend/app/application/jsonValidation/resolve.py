@@ -406,7 +406,9 @@ def resolve_model[ModelT: BaseModel](
     if active_ctx.partial:
         raise TypeError("partial input is a patch; use resolve_patch and validate the merged object")
     try:
-        result = model_cls.model_validate(raw, by_name=True, context=validation_context)
+        result = model_cls.model_validate(raw, by_name=True, context={
+            **(validation_context or {}), "validate_only": active_ctx.validate_only,
+        })
     except ValidationError as exc:
         reject_unresolved(active_ctx, [_validation_issue(active_ctx,
             active_ctx.path_prefix + tuple(part for part in e["loc"]

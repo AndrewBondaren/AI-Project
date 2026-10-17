@@ -1320,6 +1320,12 @@ Uid сущности от `world_seed` или bake-rng от `world_uid` — ош
 (например `channel="edge"` / `"density"` у `UidKind.REGION`): одинаковые
 root/kind/keys дают один и тот же `Random`.
 
+Каналы регионов задаются `RegionRngChannel(StrEnum)` из `app.ids`:
+`SEED="seed"`, `CLAIM="claim"`, `EDGE="edge"`, `DENSITY="density"`.
+Передача enum в `channel` сохраняет каноническую строку и RNG: общий
+нормализатор ключей использует `.value`. Это именованные значения каналов,
+не отдельная проверка произвольных `**keys` в det-функциях.
+
 **Контракт функций:**
 
 - `kind: UidKind` — **закрытый** `StrEnum` тегов доменов (`district`, `area`,

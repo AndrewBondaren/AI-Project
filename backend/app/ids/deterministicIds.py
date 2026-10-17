@@ -14,6 +14,19 @@ Three roots, one canonical string ``"{root}|{kind}|{k}={v}"`` hashed by
 ``world_seed`` today = ``seed_root(world)`` = ``str(world.world_uid)``
 (interim until a ``World.seed`` column — tz_terrain_relief §334);
 ``seed_int`` keeps the legacy md5 derivation used by terrain noise.
+
+Future ``UidKind.REGION`` streams (wilderness plan §5 #4) require a
+named ``channel`` key: identical root/kind/keys replay the same stream.
+With ``seed = seed_root(world)``, the channel contract is:
+
+- seed grid: ``seeded_u01(seed, REGION, channel=RegionRngChannel.SEED, sx=sx, sy=sy)``
+- claim noise: ``seeded_u01(seed, REGION, channel=RegionRngChannel.CLAIM, x=x, y=y)``
+- edge noise: ``seed_rng(seed, REGION, channel=RegionRngChannel.EDGE, uid=region_uid, x=x, y=y)``
+- density mask: ``seeded_u01(seed, REGION, channel=RegionRngChannel.DENSITY, uid=region_uid, x=x, y=y)``
+
+``RegionRngChannel`` is exported by ``app.ids``; Enum keys normalize to
+their string values. ``REGION`` denotes the future ``UidKind`` member;
+it is not introduced here.
 """
 
 from __future__ import annotations
@@ -75,6 +88,18 @@ def seed_uid(world_seed: str, kind: UidKind, **keys: Any) -> str:
 def seed_rng(world_seed: str, kind: UidKind, **keys: Any) -> Random:
     """Independent rng stream under the bake root (world_seed)."""
     return Random(seed_uid(world_seed, kind, **keys))
+
+
+def seeded_u01(world_seed: str, kind: UidKind, **keys: Any) -> float:
+    """Uniform ``[0, 1)`` from the scoped stream."""
+    return seed_rng(world_seed, kind, **keys).random()
+
+
+def seeded_index(world_seed: str, kind: UidKind, n: int, **keys: Any) -> int:
+    """Index in ``[0, n)`` from the scoped stream."""
+    if n < 1:
+        raise ValueError(f"seeded_index n must be >= 1; got {n}")
+    return seed_rng(world_seed, kind, **keys).randrange(n)
 
 
 def library_uid(

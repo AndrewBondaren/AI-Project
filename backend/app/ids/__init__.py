@@ -10,11 +10,15 @@ from app.ids.deterministicIds import (
     seed_rng,
     seed_root,
     seed_uid,
+    seeded_index,
+    seeded_u01,
 )
+from app.ids.regionRngChannel import RegionRngChannel
 from app.ids.uidKind import LibraryKind, UidKind
 
 __all__ = [
     "LibraryKind",
+    "RegionRngChannel",
     "UID_PART_SEPARATOR",
     "UidKind",
     "entity_rng",
@@ -27,4 +31,6 @@ __all__ = [
     "seed_rng",
     "seed_root",
     "seed_uid",
+    "seeded_index",
+    "seeded_u01",
 ]

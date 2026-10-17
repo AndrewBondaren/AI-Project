@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from app.application.worldData.generators.terrain.relief.log.log import (
     relief_info,
 )
-from app.application.worldData.generators.terrain.relief.geom.seededHash import seeded_index
-from app.ids import UidKind
+from app.ids import UidKind, seeded_index
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (

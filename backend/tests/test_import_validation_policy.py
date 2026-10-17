@@ -65,6 +65,35 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(error.exception.errors), report.issues)
         self.assertEqual(self.db.conn.total_changes, before)
 
+    async def test_declared_regions_preview_validates_names_shapes_and_unknown_keys(self):
+        fixture = self.fixture("world_defaults_test")
+        shapes = (
+            {"kind": "bbox", "x_min": 0, "y_min": 0, "x_max": 10, "y_max": 10},
+            {"kind": "ellipse", "cx": 0, "cy": 0, "rx": 10, "ry": 5},
+            {"kind": "polygon", "vertices": [[0, 0], [10, 0], [0, 10]]},
+            {"kind": "anchor_radius", "anchor_uid": "anchor-1", "radius": 10},
+        )
+        entries = [{"entry_type": kind, "name": f"{kind}-{i}", "shape": shape}
+                   for kind in ("forest", "plains", "farmland") for i, shape in enumerate(shapes)]
+        fixture["world"]["terrain_masks"] = {"declared_regions": entries}
+        before = (self.db.conn.total_changes, self.db.bootstrap_conn.total_changes)
+        report = await self.service.import_bundle(fixture, validate_only=True)
+        self.assertTrue(report.valid, report.issues)
+        invalid_entries = (
+            {key: value for key, value in entries[0].items() if key != "name"},
+            {**entries[0], "flora": {}},
+            {**entries[-1], "crop": "wheat"},
+            {**entries[0], "shape": {**shapes[1], "rx": 0}},
+        )
+        for entry in invalid_entries:
+            fixture["world"]["terrain_masks"]["declared_regions"] = [entry]
+            with self.subTest(entry=entry):
+                report = await self.service.import_bundle(fixture, validate_only=True)
+                self.assertFalse(report.valid)
+                self.assertTrue(any("declared_regions" in issue.path for issue in report.issues))
+        self.assertEqual((self.db.conn.total_changes, self.db.bootstrap_conn.total_changes), before)
+        self.assertEqual(await self.worlds.get_all(), [])
+
     async def test_material_transparency_percent_import_and_invalid_no_write(self):
         fixture = self.fixture()
         fixture["world"]["material_registry"][0]["transparent"] = 37.5
