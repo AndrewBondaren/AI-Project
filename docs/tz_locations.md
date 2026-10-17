@@ -564,6 +564,18 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 
 ### `worlds.location_type_registry` (N+1)
 
+Runtime-контракт семейства ключей: `LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]`.
+`LocationTypeEntry.system_type` — собственный ключ этого реестра,
+`parent_types` — `list[LocationTypeKey | None]` (`None` означает отсутствие
+родителя). `BundleNamedLocation.system_location_type` — `StrictOnWire[LocationTypeKey]`.
+`display_type` остаётся локализованным текстом. JSON и SQL остаются строковыми;
+membership проверяется на существующих границах REF-W, а не при создании
+номинального ключа. Цикл entry↔registry разрывается через `TYPE_CHECKING`
+и `model_rebuild` до создания canonical-записей. При построении REF-W vocabulary
+списки ссылок не становятся identity-ключами; допустимый `null` в списке
+родителей не проверяется как ссылка. Historical pins — snapshot по
+[`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Locations index.
+
 ```json
 [
   { "system_type": "region",     "display_type": "Регион",     "parent_types": [null],                       "is_outdoor": true,  "subtypes": [] },

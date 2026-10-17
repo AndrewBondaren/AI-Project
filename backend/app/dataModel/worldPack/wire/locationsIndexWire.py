@@ -6,6 +6,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.dataModel.annotationPolicy import DefaultWhenMissing
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import LocationTypeKey
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 
 
@@ -21,7 +23,8 @@ class LocationsIndexPin(BaseModel):
     map_y: int
     map_z: int = 0
     display_name: str | None = None
-    system_location_type: str | None = None
+    # Historical pack snapshot: membership is checked when building a new index.
+    system_location_type: DefaultWhenMissing[LocationTypeKey | None] = None
     system_location_subtype: str | None = None
     system_city_size: SettlementSizeKey | None = None
 

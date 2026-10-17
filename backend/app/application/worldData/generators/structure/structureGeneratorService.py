@@ -9,6 +9,7 @@ from pydantic import ValidationError
 logger = logging.getLogger(__name__)
 
 from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.levelDef import LevelDef, validate_room_ids
@@ -227,7 +228,7 @@ def _room_to_named_location(
         location_uid=room_uid,
         world_uid=building.world_uid,
         display_name=room.display_name,
-        system_location_type="room",
+        system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_ROOM,
         system_location_subtype=room.room_type,
         created_at=datetime.now(timezone.utc).isoformat(),
         parent_location_uid=building.location_uid,

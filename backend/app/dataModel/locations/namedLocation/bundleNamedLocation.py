@@ -26,7 +26,7 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
 )
 from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.dataModel.locations.locationPayload import LocationPayload
-from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import LocationTypeKey, WorldLocationTypeRegistry
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.locations.settlement.district.districtPayload import DistrictPayload
 
@@ -47,7 +47,7 @@ class BundleNamedLocation(BaseModel):
 
     location_uid: StrictOnWire[str]
     display_name: StrictOnWire[str]
-    system_location_type: StrictOnWire[str]
+    system_location_type: StrictOnWire[LocationTypeKey]
 
     parent_location_uid: DefaultWhenMissing[str | None] = None
     system_location_subtype: DefaultWhenMissing[str | None] = None

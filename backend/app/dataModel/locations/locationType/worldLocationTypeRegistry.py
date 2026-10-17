@@ -6,9 +6,11 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
+from app.dataModel.locations.locationType import locationTypeEntry as _location_type_entry_mod
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
 from app.dataModel.locations.payloadKind import PayloadKind
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
@@ -17,12 +19,79 @@ _SIZE = WorldSettlementSizeRegistry.canonical_defaults()
 _SMALL = _SIZE.root[0].system_size
 _MEDIUM = _SIZE.root[1].system_size
 _LARGE = _SIZE.root[-1].system_size
+_SYSTEM_TYPE_ROOM = "room"
 
 # tz_locations.md § Размер поселения (LOC-T-2) — metres on settlement subtypes only.
 _FOOTPRINT_VILLAGE: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 0.75}
 _FOOTPRINT_CITY: dict[str, float] = {_SMALL: 1.00, _MEDIUM: 2.00, _LARGE: 4.00}
 _FOOTPRINT_COMPLEX: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 1.00}
 _FOOTPRINT_UNDERGROUND_CITY: dict[str, float] = dict(_FOOTPRINT_CITY)
+
+class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
+    """Root POJO for `worlds.location_type_registry`. Wire shape: JSON array (map normalized on import)."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LOC-TYPE"
+    SYSTEM_TYPE_SETTLEMENT: ClassVar[str] = "settlement"
+    SYSTEM_TYPE_DISTRICT: ClassVar[str] = "district"
+    SYSTEM_TYPE_BUILDING: ClassVar[str] = "building"
+    SYSTEM_TYPE_ROOM: ClassVar[str] = _SYSTEM_TYPE_ROOM
+
+    root: list[LocationTypeEntry]
+
+    @classmethod
+    def canonical_defaults(cls) -> WorldLocationTypeRegistry:
+        """fixtures/world_template.json — minimal map rows after JV normalize."""
+        return cls(list(_CANONICAL_ENTRIES))
+
+    @classmethod
+    def canonical_engine(cls) -> WorldLocationTypeRegistry:
+        """tz_locations.md § location_type_registry — full hierarchy + subtypes."""
+        return cls(list(_ENGINE_ENTRIES))
+
+    def entry_for(self, system_type: str) -> LocationTypeEntry | None:
+        for entry in self.root:
+            if entry.system_type == system_type:
+                return entry
+        return None
+
+    def subtype_for(self, system_type: str, system_subtype: str) -> LocationTypeSubtypeEntry | None:
+        entry = self.entry_for(system_type)
+        if entry is None:
+            return None
+        for subtype in entry.subtypes:
+            if subtype.system_subtype == system_subtype:
+                return subtype
+        return None
+
+    def allows_parent(self, child_system_type: str, parent_system_type: str | None) -> bool:
+        entry = self.entry_for(child_system_type)
+        if entry is None:
+            return False
+        return parent_system_type in entry.parent_types
+
+    def merged_with_engine(self) -> WorldLocationTypeRegistry:
+        """Engine hierarchy + recipes; world types/subtypes overlay by key (CITY-T-2d)."""
+        engine = type(self).canonical_engine()
+        world_by_type = {entry.system_type: entry for entry in self.root}
+        merged: list[LocationTypeEntry] = []
+        seen: set[str] = set()
+        for engine_entry in engine.root:
+            world_entry = world_by_type.get(engine_entry.system_type)
+            if world_entry is None:
+                merged.append(engine_entry)
+            else:
+                merged.append(_overlay_location_type(engine_entry, world_entry))
+            seen.add(engine_entry.system_type)
+        for world_entry in self.root:
+            if world_entry.system_type not in seen:
+                merged.append(world_entry)
+        return WorldLocationTypeRegistry(merged)
+
+
+type LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]
+
+_location_type_entry_mod.WorldLocationTypeRegistry = WorldLocationTypeRegistry
+LocationTypeEntry.model_rebuild()
 
 # tz_locations.md § location_type_registry — full hierarchy + subtypes (engine SoT).
 _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
@@ -136,7 +205,7 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         ],
     ),
     LocationTypeEntry(
-        system_type="room",
+        system_type=_SYSTEM_TYPE_ROOM,
         display_type="Помещение",
         parent_types=["building"],
         is_outdoor=False,
@@ -175,66 +244,6 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
 _CANONICAL_ENTRIES: tuple[LocationTypeEntry, ...] = tuple(
     entry.fixture_identity() for entry in _ENGINE_ENTRIES
 )
-
-
-class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
-    """Root POJO for `worlds.location_type_registry`. Wire shape: JSON array (map normalized on import)."""
-
-    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LOC-TYPE"
-    SYSTEM_TYPE_SETTLEMENT: ClassVar[str] = "settlement"
-    SYSTEM_TYPE_DISTRICT: ClassVar[str] = "district"
-    SYSTEM_TYPE_BUILDING: ClassVar[str] = "building"
-
-    root: list[LocationTypeEntry]
-
-    @classmethod
-    def canonical_defaults(cls) -> WorldLocationTypeRegistry:
-        """fixtures/world_template.json — minimal map rows after JV normalize."""
-        return cls(list(_CANONICAL_ENTRIES))
-
-    @classmethod
-    def canonical_engine(cls) -> WorldLocationTypeRegistry:
-        """tz_locations.md § location_type_registry — full hierarchy + subtypes."""
-        return cls(list(_ENGINE_ENTRIES))
-
-    def entry_for(self, system_type: str) -> LocationTypeEntry | None:
-        for entry in self.root:
-            if entry.system_type == system_type:
-                return entry
-        return None
-
-    def subtype_for(self, system_type: str, system_subtype: str) -> LocationTypeSubtypeEntry | None:
-        entry = self.entry_for(system_type)
-        if entry is None:
-            return None
-        for subtype in entry.subtypes:
-            if subtype.system_subtype == system_subtype:
-                return subtype
-        return None
-
-    def allows_parent(self, child_system_type: str, parent_system_type: str | None) -> bool:
-        entry = self.entry_for(child_system_type)
-        if entry is None:
-            return False
-        return parent_system_type in entry.parent_types
-
-    def merged_with_engine(self) -> WorldLocationTypeRegistry:
-        """Engine hierarchy + recipes; world types/subtypes overlay by key (CITY-T-2d)."""
-        engine = type(self).canonical_engine()
-        world_by_type = {entry.system_type: entry for entry in self.root}
-        merged: list[LocationTypeEntry] = []
-        seen: set[str] = set()
-        for engine_entry in engine.root:
-            world_entry = world_by_type.get(engine_entry.system_type)
-            if world_entry is None:
-                merged.append(engine_entry)
-            else:
-                merged.append(_overlay_location_type(engine_entry, world_entry))
-            seen.add(engine_entry.system_type)
-        for world_entry in self.root:
-            if world_entry.system_type not in seen:
-                merged.append(world_entry)
-        return WorldLocationTypeRegistry(merged)
 
 
 def _overlay_location_type(

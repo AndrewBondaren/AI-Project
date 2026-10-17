@@ -87,6 +87,7 @@ type SettlementSpecializationKey = RegistryKey[WorldSettlementSpecializationRegi
 type DistrictTemplateKey = RegistryKey[WorldDistrictTemplateRegistry]
 type BarrierTemplateKey = RegistryKey[WorldBarrierTemplateRegistry]
 type MaterialKey = RegistryKey[WorldMaterialRegistry]
+type LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]
 
 class SettlementSizeEntry:
     system_size: StrictOnWire[RegistryKey[WorldSettlementSizeRegistry]]
@@ -119,6 +120,7 @@ class PerimeterBarrier:
     template: DefaultWhenMissing[BarrierTemplateKey | None]  # omit/null/blank → None (скип)
 
 class BundleNamedLocation:
+    system_location_type: StrictOnWire[LocationTypeKey]
     system_settlement_size: DefaultWhenMissing[SettlementSizeKey | None]  # код до rename: system_city_size
     system_economic_tier: DefaultWhenMissing[EconomyTierKey | None]
     parent_wall_material: DefaultWhenMissing[MaterialKey | None]  # omit/null → None; "" → reject
@@ -142,6 +144,11 @@ class PlacementCondition:
     tier: DefaultWhenMissing[EconomyTierKey | None]
     zone: DefaultWhenMissing[CellZone | None]  # ENUM-E, не RegistryKey
     district_type: DefaultWhenMissing[str | None]  # нет реестра типов ткани
+
+class LocationTypeEntry:
+    system_type: StrictOnWire[LocationTypeKey]
+    parent_types: DefaultWhenMissing[list[LocationTypeKey | None]]
+    display_type: StrictOnWire[str]  # локализованный текст
 ```
 
 JSON на проводе — строка (`"small"`). Тип — номинальный: `RegistryKey[WorldSettlementSizeRegistry]` ≠ `str` ≠ `RegistryKey[WorldLocationTypeRegistry]`.
@@ -164,6 +171,33 @@ JSON на проводе — строка (`"small"`). Тип — номинал
 Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
 
 Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, NL `parent_wall_material` / `parent_floor_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Очередь leftover city `str` — [`tz_pojo_city_typing.md`](./tz_pojo_city_typing.md) (`POJO-C-*`), при касании, не массово.
+
+### Contract hygiene — отложенные строковые поля
+
+AST-проверка `tests/test_contract_hygiene.py` фиксирует существующий долг
+`*_type`/`*_kind` (также полей `type`/`kind`) вне SQL-моделей. Allowlist
+не разрешает новые строковые контракты; исправленное поле удаляется из
+него. Поля шагов миграции перечислены в
+[`type-kind-str-fields-debt.md`](../.cursor/plans/type-kind-str-fields-debt.md).
+
+Осознанные исключения и отложенные границы разбора:
+
+- `LocationTypeEntry.display_type` — локализованный текст названия, а не
+  ключ реестра; остаётся `str`, разбирается как текст wire-поля.
+- `VastHullContext.hull_type`, `ResourceExtractionContext.extraction_type`,
+  `RuinsContext.base_structure_type` — scaffold без producer. Enum и
+  проверка вводятся вместе с producer по разделу Scaffold плана;
+  `base_structure_type` проверяется по `BUILDING_ASSEMBLER_REGISTRY`,
+  список engine-ключей не дублируется. `resource_type` исключением не
+  является: его типизация принадлежит шагу 4.
+- `SizeSpec.size_type`, `ShaftSize.size_type` — отложенный dependent-key
+  контракт: namespace зависит от вида комнаты/лестницы. До согласования
+  resolver parent→namespace сохраняются текущие wire-строки и существующие
+  проверки пресетов на границе разбора; новый enum этим исключением
+  не вводится.
+- `WorldTileEntryPayload.grid_kind` — единственный текущий producer
+  задаёт `world_map_light`; enum/Literal вводится при появлении второго
+  вида. Текущая граница — построение render payload и `to_dict()`.
 
 ### REF-W → N1-W (cross-ref, import-only)
 

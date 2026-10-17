@@ -35,8 +35,11 @@ def registry_vocabulary(world, registry_cls: type, ctx: ResolveContext, path: tu
     keys = set()
     for row in registry.root:
         for name, info in type(row).model_fields.items():
-            if registry_key_target(info.annotation) is registry_cls:
-                keys.add(str(getattr(row, name)))
+            value = getattr(row, name)
+            # A same-registry list (e.g. LocationTypeEntry.parent_types) contains
+            # references, not another identity. Never stringify it into a key.
+            if registry_key_target(info.annotation) is registry_cls and isinstance(value, str):
+                keys.add(str(value))
     return frozenset(keys)
 
 
@@ -50,6 +53,8 @@ def validate_reference_value(world, annotation, value, ctx, path, cache=None):
             cache.registry_vocabularies[target] = registry_vocabulary(world, target, ctx, path)
         tokens = list(enumerate(value)) if isinstance(value, (list, tuple)) else [(None, value)]
         for index, token in tokens:
+            if token is None:
+                continue
             if str(token) not in cache.keys_for_registry(target):
                 reject_unresolved(ctx, [FieldPathError(path if index is None else path + (index,),
                     f"unknown reference: {token!r}", code="REF_W_UNKNOWN")])

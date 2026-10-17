@@ -246,6 +246,8 @@ def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistry
                 keys = references.keys_for_registry(target)
                 tokens = list(enumerate(item)) if isinstance(item, list) else [(None, item)]
                 for index, token in tokens:
+                    if token is None:
+                        continue  # A validated optional list member is not a reference.
                     if keys is None or str(token) not in keys:
                         path = child.path_prefix if index is None else child.path_prefix + (index,)
                         issues.append(_validation_issue(child, path,

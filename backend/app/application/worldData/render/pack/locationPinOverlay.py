@@ -27,8 +27,9 @@ def overlay_location_pins(
             pins.append(pin)
             continue
         pins.append(
-            pin.model_copy(
-                update={
+            LocationsIndexPin.model_validate(
+                {
+                    **pin.model_dump(),
                     "system_location_type": loc.system_location_type,
                     "system_location_subtype": loc.system_location_subtype,
                     "system_city_size": settlement_payload(loc).system_city_size,

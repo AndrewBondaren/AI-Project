@@ -1406,6 +1406,27 @@ effective_climate(x,y) =
 | **L2 location** | Fine terrain территории локации | `location_terrain`, `LocationTerrainEntry`, `location_terrain_entries[]`, `terrain_path`, `terrain_hash` | `locations/l.{uid}.terrain.zst` |
 | **Merge fallback** | Coarse cell при отсутствии fine | `MapLayerKind.WORLD_MAP` | `merge_layers` / `MapCellQueryFacade` |
 
+### Locations index — тип ключа локации
+
+`LocationsIndexPin.system_location_type` —
+`DefaultWhenMissing[LocationTypeKey | None]`, где
+`LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]`. JSON остаётся
+строкой; исторические пропуск и `null` допустимы. `system_location_subtype`
+сохраняет текущий строковый контракт до дизайна parent→namespace.
+
+Граница построения нового индекса — `build_locations_index`: membership
+проверяется через REF-W по разрешённому `location_types(world)` (включая
+пользовательские ключи и engine-типы). Вызов без мира допускает только
+engine-типы. Неизвестный ключ даёт `REF_W_UNKNOWN`, без подстановки типа.
+`WorldPackWriter` сериализует подготовленный индекс.
+
+Чтение `locations_index.json` — snapshot-семантика: принадлежность ключа
+сегодняшнему реестру не проверяется; удалённый или переименованный тип
+не делает старый pack нечитаемым. Read-overlay SQL identity повторно
+разбирает `LocationsIndexPin`, сохраняя номинальный тип, без live-membership.
+SQL-модели и wire-имена полей не меняются. Тип генерируемой комнаты берётся
+из `WorldLocationTypeRegistry.SYSTEM_TYPE_ROOM`.
+
 **Payload kinds (`tileCodec`):** `PAYLOAD_KIND_WORLD_MAP` (0), `PAYLOAD_KIND_FINE_TERRAIN` (1).
 
 **Debug read API:** `GET …/map/pack/fine-terrain-read` — probe merged fine terrain; **не** `l2-probe`.
