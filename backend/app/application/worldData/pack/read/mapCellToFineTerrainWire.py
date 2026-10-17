@@ -83,8 +83,10 @@ def cells_to_fine_terrain_chunk(
         ly = cell.y - origin_y
         by_column.setdefault((lx, ly), []).append(cell)
     columns: list[FineTerrainColumnWire] = []
+    region_uid_by_xy = region_uid_by_xy or {}
     for (lx, ly), col_cells in sorted(by_column.items()):
         facing, grade_uid = _column_surface_attrs(col_cells)
+        uid = region_uid_by_xy.get((origin_x + lx, origin_y + ly))
         columns.append(
             FineTerrainColumnWire(
                 lx=lx,
@@ -92,9 +94,7 @@ def cells_to_fine_terrain_chunk(
                 runs=_compress_z_runs(col_cells),
                 system_facing=facing,
                 system_grade_uid=grade_uid,
-                region_uid=(
-                    (region_uid_by_xy or {}).get((origin_x + lx, origin_y + ly))
-                ),
+                region_uid=uid if isinstance(uid, str) else None,
             ),
         )
     return FineTerrainChunkWire(cx=cx, cy=cy, chunk_columns=chunk_columns, columns=columns)

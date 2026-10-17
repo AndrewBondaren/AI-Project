@@ -111,6 +111,8 @@ _PLAINS_ENTRY = TerrainRegistryEntry(
     default_material="earth",
     merge_rank=1,
     hills=HillPolicy.canonical_plains(),
+    supports_open_land_grade=True,
+    open_land_profile="plains",
     # interim; цель — rules мира + flora suitability (flora.* канал).
     eligibility=[EligibilityRule(fact="climate.rainfall", op=EligibilityOp.LTE, hi=_FOREST_RAINFALL_RULE.lo)],
 )
@@ -123,6 +125,8 @@ _FOREST_ENTRY = TerrainRegistryEntry(
     default_material="wood",
     merge_rank=2,
     hills=HillPolicy.canonical_forest(),
+    supports_open_land_grade=True,
+    open_land_profile="forest",
     # interim; цель — rules мира + flora suitability (flora.* канал).
     eligibility=[_FOREST_RAINFALL_RULE],
 )

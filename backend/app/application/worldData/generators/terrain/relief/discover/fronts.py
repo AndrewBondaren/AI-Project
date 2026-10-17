@@ -10,6 +10,8 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
     GRID_OUTWARD_DELTA,
     is_cardinal,
@@ -138,6 +140,7 @@ class FrontStage:
     cell_blocked: CellBlocked
     cap_front: CapFront | None = None
     envelopes: ReliefOntologyEnvelopes | None = None
+    terrain_registry: WorldTerrainRegistry | None = None
 
     def propose(
         self,
@@ -286,7 +289,7 @@ class FrontStage:
         sx, sy = run[0]
         downhill = (sx + dx, sy + dy)
         raw = self.surface.terrain_at(downhill) or self.surface.terrain_at((sx, sy))
-        mapped = map_system_terrain(raw)
+        mapped = map_system_terrain(raw, self.terrain_registry)
         if mapped is None or not mapped.is_shore_class():
             mapped = (
                 shore_condition_at(downhill, self.surface)

@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 import time
 
+from app.application.jsonValidation import terrain
 from app.application.jsonValidation import (
     relief_pick_policy,
     terrain_masks,
@@ -137,6 +138,7 @@ def discover_and_paint(
         apply_grade_uids(grid, known)
 
     contexts = frozenset(tpl.context for tpl in templates.values())
+    registry = terrain(world)
     masks = terrain_masks(world)
     road_key = str(masks.default_roads.system_terrain)
     plugins = plugins_for_keys(
@@ -167,6 +169,7 @@ def discover_and_paint(
         cell_blocked=cell_blocked,
         existing_uids=known,
         cap_front=cap_front,
+        terrain_registry=registry,
     )
     vertices = discovered.vertices
     fronts = discovered.fronts
@@ -201,6 +204,7 @@ def discover_and_paint(
                 world_seed=world_seed,
                 templates=templates,
                 occurrence_seq=pick_seq,
+                terrain_registry=registry,
             )
             pick_seq += 1
             if picked is None:

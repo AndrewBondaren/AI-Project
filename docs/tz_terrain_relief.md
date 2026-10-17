@@ -146,6 +146,14 @@ R11 ниже — legacy до cutover 5b. Тела **не** внутри world JS
 
 У шаблона **ровно один** `context` (**R17**), не список. v1: `mountain` \| `open_land` \| `shore` \| `road_shoulder` \| `ravine` (**R13**). Приоритет context на клетке: `road_shoulder > shore > mountain > ravine > open_land` (один шаблон, не blend).
 
+**N+1 open-land (7b, 2026-10-17):** допуск определяется
+`TerrainRegistryEntry.supports_open_land_grade`, независимо от физической
+`terrain_category` и наличия `hills`. Обязательный при допуске
+`open_land_profile` (`plains`/`forest`) определяет envelope discover/pick
+и condition шаблона; builtin лес сохраняет профиль forest, равнина — plains.
+Неизвестный ключ с допуском не использует unrestricted envelope. Фактический
+terrain и identity сохраняются. Wire-контракт — `tz_world_pack_storage` § L2 open-land hills.
+
 ### Pick: мир → локация / объект
 
 На **каждый** context — `fixed` \| `random` \| `round_robin` (**R19**).

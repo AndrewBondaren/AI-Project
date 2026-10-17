@@ -21,6 +21,7 @@ from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.masks.enums.maskDomainId import MaskDomainId
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
@@ -113,6 +114,14 @@ class TestPlaceHills(unittest.TestCase):
         self.plains = self.masks.default_plains.system_terrain
         self.forest = self.masks.default_forests.system_terrain
 
+    def _registry(self, plains: HillPolicy, forest: HillPolicy) -> WorldTerrainRegistry:
+        policies = {self.plains: plains, self.forest: forest}
+        return WorldTerrainRegistry([
+            e.model_copy(update={"hills": policies[e.system_terrain]})
+            if e.system_terrain in policies else e
+            for e in WorldTerrainRegistry.canonical_defaults().root
+        ])
+
     def _grid(
         self,
         n: int,
@@ -132,10 +141,7 @@ class TestPlaceHills(unittest.TestCase):
         before = dict(t)
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=8, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=8, radius=2, height=2), HillPolicy(min_spacing=64, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -148,10 +154,7 @@ class TestPlaceHills(unittest.TestCase):
         z, t, hydro = self._grid(12, self.plains)
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=64, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=6, radius=2, height=3),
+            terrain_registry=self._registry(HillPolicy(min_spacing=64, radius=2, height=2), HillPolicy(min_spacing=6, radius=2, height=3)),
             seed=2,
             z_min=0,
             z_max=20,
@@ -167,10 +170,7 @@ class TestPlaceHills(unittest.TestCase):
         policy = HillPolicy(min_spacing=6, radius=2, height=2)
         place_hills(
             z, t, {},
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=policy,
-            forest_hills=policy,
+            terrain_registry=self._registry(policy, policy),
             seed=9,
             z_min=0,
             z_max=20,
@@ -188,10 +188,7 @@ class TestPlaceHills(unittest.TestCase):
         }
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=4, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=4, radius=2, height=2), HillPolicy(min_spacing=64, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -202,10 +199,7 @@ class TestPlaceHills(unittest.TestCase):
         z, t, hydro = self._grid(12, "mountain")
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=4, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=4, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=4, radius=2, height=2), HillPolicy(min_spacing=4, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -217,12 +211,9 @@ class TestPlaceHills(unittest.TestCase):
         spacing = 10
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(
+            terrain_registry=self._registry(HillPolicy(
                 min_spacing=spacing, radius=2, height=2, shapes=("circle",),
-            ),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=1),
+            ), HillPolicy(min_spacing=64, radius=2, height=1)),
             seed=3,
             z_min=0,
             z_max=20,
@@ -237,10 +228,7 @@ class TestPlaceHills(unittest.TestCase):
         z, t, hydro = self._grid(16, self.plains)
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=8, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=8, radius=2, height=2), HillPolicy(min_spacing=64, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -266,6 +254,8 @@ class TestHillsInTilePrep(unittest.TestCase):
         w.seed = 1
         w.z_min = 0
         w.z_max = 20
+        w.world_topology_mode = "planar"
+        w.world_bounds = {"x_min": 0, "y_min": 0, "x_max": 0, "y_max": 0}
         w.terrain_registry = None
         w.terrain_scalars = None
         w.terrain_masks = {

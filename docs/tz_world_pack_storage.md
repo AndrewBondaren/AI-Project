@@ -251,6 +251,19 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 **Target (2026-10-17, регионы покрытия):** holder переезжает на **ключ** — `TerrainRegistryEntry.hills: HillPolicy | None` (world data, N+1): `place_hills` выбирает политику по `system_terrain` клетки, а не по паре `plains_key`/`forest_key`, иначе клетка `steppe`/`swamp` холмов не получает. `default_plains.hills` / `default_forests.hills` остаются wire-совместимым источником для builtin-ключей до миграции данных мира (план wilderness шаг 7b); canonical defaults реестра — тот же единственный литерал. Локационный override не меняется.
 
+**Уточнение 7b (2026-10-17):** физическая `terrain_category` не определяет
+open-land grade. `TerrainRegistryEntry.supports_open_land_grade: bool = False`
+задаёт допуск; `open_land_profile: Literal["plains", "forest"] | None = None`
+выбирает существующие envelope и condition шаблона. Допуск true требует профиль,
+false — отсутствующего профиля. Canonical plains/forest включены со своими
+профилями; остальные builtin выключены. N+1 явно выбирает профиль, без
+неявного unrestricted envelope. Hills и допуск grade независимы: отсутствие
+hills не запрещает grade на существующих перепадах. Профиль не переписывает
+system_terrain и identity grade. Discover и pick используют одинаковый профиль.
+Явное hills в записи реестра (включая null) приоритетнее transitional default_*.hills;
+если поле опущено, builtin получают политику из default_* по их system_terrain.
+Числа canonical остаются только в HillPolicy. Локационный override не меняется.
+
 `HillPolicy` (встроена в `default_plains` / `default_forests` как `hills`; тот же объект на локации):
 
 | Поле | Смысл | Единица |

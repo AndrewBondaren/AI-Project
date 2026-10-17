@@ -119,7 +119,7 @@ class TerrainBatchOrchestrator:
         refine_policy: ParentLightRefinePolicy | None = None,
     ) -> TileSurfaceState:
         """L2 surface: upsample + terrain carry + hills + hydro + gap (before chunk pool)."""
-        from app.application.jsonValidation import terrain_masks
+        from app.application.jsonValidation.terrainHillRegistry import terrain_with_hills
         from app.application.worldData.generators.climate.math import world_seed
         from app.application.worldData.generators.hydrology.shore.parentLightHydroCorridor import (
             hydro_mask_from_parent,
@@ -173,15 +173,11 @@ class TerrainBatchOrchestrator:
             l0_hydro=l0_hydro,
             tile_bbox=(fine_bbox.x_min, fine_bbox.y_min, fine_bbox.x_max, fine_bbox.y_max),
         )
-        masks = terrain_masks(world)
         place_hills(
             fine_z,
             fine_terrain,
             l0_hydro,
-            plains_key=masks.default_plains.system_terrain,
-            forest_key=masks.default_forests.system_terrain,
-            plains_hills=masks.default_plains.hills,
-            forest_hills=masks.default_forests.hills,
+            terrain_registry=terrain_with_hills(world),
             seed=world_seed(world),
             z_min=world_z_min(world),
             z_max=world_z_max(world),

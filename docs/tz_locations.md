@@ -874,6 +874,13 @@ else:
 
 ### `worlds.terrain_registry` (N+1)
 
+Для L2 на записи также: `hills: HillPolicy | None`,
+`supports_open_land_grade: bool = False`,
+`open_land_profile: Literal["plains", "forest"] | None = None`.
+Допуск требует явно выбранного профиля; при выключенном допуске профиль отсутствует.
+Физическая `terrain_category` сохраняет свой смысл. Контракт и transitional
+источник builtin hills — `tz_world_pack_storage.md` § L2 open-land hills.
+
 Как у material_registry: автоматическое подключение канонической библиотеки и
 overlay явно указанных world-полей по `system_terrain`. Канонические shore_*
 доступны defaults гидрологии без повторения их определений в fixture.

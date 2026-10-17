@@ -5,6 +5,9 @@ Does not run inside ``fronts.py``. Does not mint uid or paint.
 
 from __future__ import annotations
 
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.application.worldData.generators.terrain.relief.sample.terrainMap import map_system_terrain
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -43,6 +46,7 @@ def pick_front_grade(
     world_seed: str,
     templates: Mapping[str, ReliefTemplate],
     occurrence_seq: int,
+    terrain_registry: WorldTerrainRegistry | None = None,
 ) -> PickedFrontGrade | None:
     """Template pick + envelope constrain. ``None`` = skip this front."""
     pick = pick_template(
@@ -54,10 +58,11 @@ def pick_front_grade(
         occurrence_seq=occurrence_seq,
     )
     template = resolve_picked_template(pick, templates)
+    profile = map_system_terrain(identity.terrain_key, terrain_registry)
     decision = grade_constrained(
         template=template,
         template_uid=pick.template_uid,
-        terrain_key=identity.terrain_key,
+        terrain_key=profile.value if profile is not None else identity.terrain_key,
         dz=identity.dz,
         world_seed=world_seed,
         site_id=identity.site_id,
