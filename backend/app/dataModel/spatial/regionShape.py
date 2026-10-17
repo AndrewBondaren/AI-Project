@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from math import pi
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+class RegionShapeKind(StrEnum):
+    BBOX = "bbox"
+    ELLIPSE = "ellipse"
+    POLYGON = "polygon"
+    ANCHOR_RADIUS = "anchor_radius"
+
 
 Point = tuple[int, int]
 Bounds = tuple[int, int, int, int]
@@ -43,7 +51,7 @@ class RegionShapeBase(BaseModel):
 
 
 class BboxShape(RegionShapeBase):
-    kind: Literal["bbox"] = "bbox"
+    kind: Literal[RegionShapeKind.BBOX] = RegionShapeKind.BBOX
     x_min: int
     y_min: int
     x_max: int
@@ -66,7 +74,7 @@ class BboxShape(RegionShapeBase):
 
 
 class EllipseShape(RegionShapeBase):
-    kind: Literal["ellipse"] = "ellipse"
+    kind: Literal[RegionShapeKind.ELLIPSE] = RegionShapeKind.ELLIPSE
     cx: int
     cy: int
     rx: int = Field(gt=0)
@@ -85,7 +93,7 @@ class EllipseShape(RegionShapeBase):
 class PolygonShape(RegionShapeBase):
     """Simple closed ring; last-to-first edge is implicit or explicitly repeated."""
 
-    kind: Literal["polygon"] = "polygon"
+    kind: Literal[RegionShapeKind.POLYGON] = RegionShapeKind.POLYGON
     vertices: list[Point] = Field(min_length=3)
 
     def _ring(self) -> list[Point]:
@@ -138,7 +146,7 @@ class PolygonShape(RegionShapeBase):
 class AnchorRadiusShape(RegionShapeBase):
     """Unresolved anchor reference; collect resolves it to absolute geometry."""
 
-    kind: Literal["anchor_radius"] = "anchor_radius"
+    kind: Literal[RegionShapeKind.ANCHOR_RADIUS] = RegionShapeKind.ANCHOR_RADIUS
     anchor_uid: str = Field(min_length=1)
     radius: int = Field(gt=0)
 

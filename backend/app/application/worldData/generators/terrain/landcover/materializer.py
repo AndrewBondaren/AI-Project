@@ -4,6 +4,7 @@ from app.application.jsonValidation import hydrology, terrain, terrain_masks
 from app.application.worldData.generators.terrain.landcover.apply import apply_region
 from app.application.worldData.generators.terrain.landcover.autoresolve.claim import autoresolve_regions
 from app.application.worldData.generators.terrain.landcover.collect import resolve_collected
+from app.application.worldData.generators.terrain.landcover.regionIdentityCheck import require_unique_region_uids
 from app.application.worldData.generators.terrain.landcover.hydrologyIndex import index_hydrology
 from app.application.worldData.generators.terrain.landcover.types import LandcoverInputs, RegionSource, ResolvedRegion
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
@@ -30,9 +31,11 @@ class LandcoverMaterializer:
         self.inputs = inputs
         self.winners: dict[LightCellRef, RegionCandidate] = {}
         self.hydrology_entries = ()
+        self.resolved_regions: list[ResolvedRegion] = []
 
     def begin_pass(self) -> None:
         self.winners.clear()
+        self.resolved_regions.clear()
         self.hydrology_entries = ()
 
     def category_policy(self, masks: WorldTerrainMasks) -> LandcoverRegionsCategoryPolicy:
@@ -42,12 +45,12 @@ class LandcoverMaterializer:
 
     def load_declared(self, ctx: LightGridBakeContext) -> list[ResolvedRegion]:
         return [ResolvedRegion(ctx.world.world_uid, declared_region_identity(ctx.world.world_uid, spec).region_uid,
-                                spec, spec.entry_type, RegionSource.DECLARED, self.inputs.topology)
+                                spec, spec.entry_type, RegionSource.DECLARED, self.inputs.topology, entry_type=spec.entry_type)
                 for spec in terrain_masks(ctx.world).declared_regions]
 
     def load_anchor_specs(self, ctx: LightGridBakeContext) -> list[ResolvedRegion]:
         return [ResolvedRegion(ctx.world.world_uid, region_uid(ctx.world.world_uid, anchor_uid=anchor.anchor_uid),
-                                anchor.spec, anchor.spec.entry_type, RegionSource.ANCHOR, self.inputs.topology)
+                                anchor.spec, anchor.spec.entry_type, RegionSource.ANCHOR, self.inputs.topology, entry_type=anchor.spec.entry_type)
                 for anchor in self.inputs.anchor_specs]
 
     def autoresolve_specs(self, ctx: LightGridBakeContext, policy: MaskCategoryPolicy) -> list[ResolvedRegion]:
@@ -59,11 +62,13 @@ class LandcoverMaterializer:
     def collect(self, ctx: LightGridBakeContext, policy: MaskCategoryPolicy) -> list[ResolvedRegion]:
         regions = default_collect(
             self, ctx, policy,
-            key=lambda region: ((region.source, region.region_uid) if region.source == RegionSource.AUTORESOLVE
+            key=lambda region: ((region.source, tuple(s.seed_xy for s in region.sublocations)) if region.source == RegionSource.AUTORESOLVE
                                 else region.spec.identity_key()),
         )
         self.hydrology_entries = index_hydrology(ctx.world.world_uid, hydrology(ctx.world), ctx.surface_planning)
-        return resolve_collected(regions, ctx, self.inputs, terrain(ctx.world))
+        require_unique_region_uids(regions)
+        self.resolved_regions = resolve_collected(regions, ctx, self.inputs, terrain(ctx.world))
+        return self.resolved_regions
 
     def materialize(self, spec: ResolvedRegion, scale: LightGridScale) -> MaskFootprint:
         raster_context = RegionRasterContext(spec.region_uid, spec.spec, scale, spec.topology)

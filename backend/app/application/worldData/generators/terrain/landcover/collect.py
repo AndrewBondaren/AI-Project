@@ -1,6 +1,8 @@
 """Resolve anchors/state after the shared source merge, without persistence."""
 
 from dataclasses import replace
+from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+from app.application.worldData.generators.terrain.landcover.regionCoverageValidation import validate_region_coverage
 import logging
 
 from app.application.worldData.generators.terrain.landcover.types import LandcoverInputs, ResolvedRegion
@@ -25,9 +27,10 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
             region = replace(region, current_type=state.current_type)
         logger.debug("landcover | paint_key_source | region_uid=%s source=%s key=%s",
                      region.region_uid, "state" if state is not None else "spec", region.current_type)
-        if registry.entry_for(region.current_type) is None:
-            logger.warning("landcover | collect_unresolved | WarningError | region_uid=%s reason=unknown_terrain key=%s",
-                           region.region_uid, region.current_type)
+        try:
+            region = validate_region_coverage(region, registry, ctx=ResolveContext(
+                path_prefix=(ctx.world.world_uid, "regions", region.region_uid)))
+        except UnresolvedModelError:
             continue
         shape = region.spec.shape
         if isinstance(shape, AnchorRadiusShape):

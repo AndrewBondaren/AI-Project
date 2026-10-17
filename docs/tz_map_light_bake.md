@@ -634,7 +634,14 @@ RegionShape = BboxShape | EllipseShape | PolygonShape | AnchorRadiusShape   # ki
 | declared | `name` — `strip()` + Unicode NFC, без casefold; `\|` в имени — ошибка валидации | обязателен при author-валидации (`validate_only`); два declared с одним нормализованным именем — ошибка |
 | declared без `name` (runtime) | `bbox_min=(x_min, y_min)` из `shape.bbox()` + `shape_kind=<shape.kind>` (`kind` занят параметром DET-1); для `anchor_radius` — `anchor_uid` | **degraded**: регион красится, в лог WarningError (`FieldPathError` → `log_issues`); сдвиг min-угла = новая сущность |
 | anchor | `anchor_uid` | by design |
-| autoresolve | `seed_xy=(x, y)` canonical min seed компоненты | саблокация — свой uid от своего seed'а |
+| autoresolve-регион | `region_seed_xy=(x, y)` canonical min seed компоненты | отдельное пространство ключей агрегата |
+| seed-саблокация | `seed_xy=(x, y)` своего seed | UID не зависит от родителя; merge/split меняет parent-ссылку |
+
+**Уникальность (2026-10-18):** регион и саблокация — разные сущности.
+Источники `region_seed_xy` и `seed_xy` различаются в DET-1. До paint collect
+проверяет все UID, включая саблокации; дубликат — диагностируемый отказ
+операции, без молчаливого merge по UID и без случайной пересолки. UID ранее
+baked autoresolve-родителей меняется при re-bake; seed UID саблокаций сохраняются.
 
 Revision — `state_fingerprint(spec_wire)` (`app.ids`), отдельный токен.
 

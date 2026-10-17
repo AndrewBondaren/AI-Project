@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
 
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
@@ -31,6 +32,7 @@ class LightGridBakeContext:
     surface_planning: SurfaceTerrainContext | None = None
     pole_field: ClimatePoleField | None = None
     terrain_system_keys: set[str] = field(default_factory=set)
+    wilderness_region_entries: list[WildernessRegionEntry] = field(default_factory=list)
     # Preloaded relief library bodies for mountain/road consumers (R33/R35)
     relief_templates_by_uid: dict[str, ReliefTemplate] = field(default_factory=dict)
     # Road paint → shoulder grade handoff for detailed later (R36u-T-10)

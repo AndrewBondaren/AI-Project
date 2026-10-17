@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.core.constants import FINE_CELL_SIZE
 from app.dataModel.worldPack.wire.climateFieldWire import ClimateBakeStatusMixin
@@ -13,6 +13,8 @@ from app.dataModel.worldPack.bake.packBakeDefaults import PACK_CODEC_VERSION
 from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE
+
+from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry, require_region_index
 
 PACK_WIRE_VERSION = "1.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
@@ -87,10 +89,20 @@ class WorldPackManifest(BaseModel):
     map_subsurface_depth: int = 0
     location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)
     settlement_structure_entries: list[SettlementStructureEntry] = Field(default_factory=list)
+    wilderness_region_entries: list[WildernessRegionEntry] = Field(default_factory=list)
     tiles: list[TileManifestEntry] = Field(default_factory=list)
     world_map_cells: int = 0
     wilderness_tiles_total: int = 0
     wilderness_chunks_baked: int = 0
+
+    @field_validator("wilderness_region_entries")
+    @classmethod
+    def valid_region_index(cls, entries: list[WildernessRegionEntry]) -> list[WildernessRegionEntry]:
+        require_region_index(entries)
+        return entries
+
+    def wilderness_region_entry(self, region_uid: str) -> WildernessRegionEntry | None:
+        return next((e for e in self.wilderness_region_entries if e.region_uid == region_uid), None)
 
     def tile_entry(self, gx: int, gy: int) -> TileManifestEntry | None:
         for tile in self.tiles:

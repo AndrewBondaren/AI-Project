@@ -6,6 +6,7 @@ import time
 from collections import Counter
 
 from app.application.jsonValidation import terrain_system_keys
+from app.application.worldData.pack.io.wildernessRegionIndexWriter import replace_region_index
 from app.dataModel.worldPack.bake.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
@@ -142,6 +143,7 @@ class WorldMapBakeOrchestrator:
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
         )
         compose = compose_light_grid(bake_ctx)
+        replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
         if bake_mode == PACK_BAKE_FULL:
             bounds = world_bounds_from_world(world, locations)
             if bounds is not None:
@@ -227,6 +229,7 @@ class WorldMapBakeOrchestrator:
             terrain_system_keys=terrain_system_keys(world),
         )
         compose = compose_light_grid(bake_ctx)
+        replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
         cells = compose.to_wire_tile(gx, gy)
         content_hash = writer.write_world_map_tile(gx, gy, cells, cells_per_side=side)
         return cells, content_hash

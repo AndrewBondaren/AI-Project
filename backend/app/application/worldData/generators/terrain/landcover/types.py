@@ -1,7 +1,10 @@
 """Resolved plugin inputs, separate from authored declarations and future SQL rows."""
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pydantic import ConfigDict
+from pydantic.dataclasses import dataclass as validated_dataclass
+from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 from enum import StrEnum
 
 from app.application.worldData.masks.regionRasterContext import RegionClaim
@@ -18,9 +21,9 @@ class RegionSource(StrEnum):
     AUTORESOLVE = "autoresolve"
 
 
-@dataclass(frozen=True)
+@validated_dataclass(frozen=True, config=ConfigDict(extra="forbid", revalidate_instances="always"))
 class StateSnapshotEntry:
-    current_type: str
+    current_type: TerrainKey
     tombstone: bool = False
 
 
@@ -38,17 +41,18 @@ class Sublocation:
     placement_specificity: int | None = None
 
 
-@dataclass(frozen=True)
+@validated_dataclass(frozen=True, config=ConfigDict(extra="forbid", revalidate_instances="always"))
 class ResolvedRegion:
     world_uid: str
     region_uid: str
     spec: RegionSpecBase
-    current_type: str
+    current_type: TerrainKey
     source: RegionSource
     topology: WorldTopology
     claim: RegionClaim | None = None
     sublocations: tuple[Sublocation, ...] = ()
     claim_area: float | None = None
+    entry_type: TerrainKey = field(kw_only=True)
 
 
 @dataclass(frozen=True)

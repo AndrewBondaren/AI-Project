@@ -198,7 +198,7 @@ class LandcoverMaterializerTests(unittest.TestCase):
             regions = merge_sublocations(order, topology, self.policy, self.world.world_uid)
             self.assertEqual(len(regions), 1)
             region = regions[0]
-            self.assertEqual(region.region_uid, region_uid(self.world.world_uid, seed_xy=(0, 1)))
+            self.assertEqual(region.region_uid, region_uid(self.world.world_uid, region_seed_xy=(0, 1)))
             self.assertEqual(len(region.sublocations), 2)
             self.assertTrue(all(sub.facing is not None for sub in region.sublocations))
             for sub in region.sublocations:

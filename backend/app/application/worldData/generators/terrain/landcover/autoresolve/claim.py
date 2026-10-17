@@ -54,4 +54,4 @@ def autoresolve_regions(world_uid: str, root: str, tile_m: int, inputs: Landcove
                          x_max=bounds.x_max, y_max=bounds.y_max)
     return [ResolvedRegion(world_uid, region.region_uid, RegionSpecBase(shape=envelope),
                             region.target_key, RegionSource.AUTORESOLVE, inputs.topology,
-                            claim, region.sublocations, float(areas[region.region_uid])) for region in regions]
+                            claim, region.sublocations, float(areas[region.region_uid]), entry_type=region.target_key) for region in regions]

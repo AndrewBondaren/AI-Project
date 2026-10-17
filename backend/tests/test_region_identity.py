@@ -3,9 +3,12 @@
 import unittest
 from dataclasses import replace
 
+from pydantic import TypeAdapter
+
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EllipseShape, PolygonShape
+from app.dataModel.spatial.regionShape import RegionShape, RegionShapeKind
 from app.dataModel.terrainMasks.regions import ForestSpec, PlainSpec
 from app.ids import UID_PART_SEPARATOR, UidKind, entity_uid, state_fingerprint
 from app.ids.regionIdentity import region_uid
@@ -97,6 +100,43 @@ class RegionIdentityTests(unittest.TestCase):
         self.assertEqual(region_uid(self.world_uid, seed_xy=self.seed_xy), expected)
         self.assertNotEqual(region_uid(self.world_uid, seed_xy=(21, -10)), expected)
         self.assertNotEqual(region_uid(self.world_uid, bbox_min=self.seed_xy, shape_kind=self.shape.kind), expected)
+
+    def test_shape_discriminator_round_trip_produces_enum_and_preserves_wire(self):
+        adapter = TypeAdapter(RegionShape)
+        shapes = (
+            BboxShape(x_min=0, y_min=0, x_max=5, y_max=5),
+            self.shape,
+            PolygonShape(vertices=[(0, 0), (5, 0), (0, 5)]),
+            AnchorRadiusShape(anchor_uid=self.anchor_uid, radius=10),
+        )
+        for shape in shapes:
+            with self.subTest(kind=shape.kind):
+                wire = shape.model_dump(mode="json")
+                self.assertIs(type(wire["kind"]), str)
+                self.assertEqual(wire["kind"], shape.kind.value)
+                restored = adapter.validate_json(adapter.dump_json(shape))
+                self.assertIs(restored.kind, shape.kind)
+                self.assertIsInstance(restored.kind, RegionShapeKind)
+                self.assertEqual(restored, shape)
+
+    def test_typed_shape_kind_preserves_existing_uid_formula(self):
+        for kind in RegionShapeKind:
+            if kind is RegionShapeKind.ANCHOR_RADIUS:
+                continue
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    region_uid(self.world_uid, bbox_min=self.seed_xy, shape_kind=kind),
+                    entity_uid(self.world_uid, UidKind.REGION,
+                               bbox_min=self.seed_xy, shape_kind=kind.value),
+                )
+
+    def test_shape_identity_rejects_untyped_kind_and_anchor_bbox(self):
+        for invalid in ("bbox", "garbage", "", 1, object()):
+            with self.subTest(kind=invalid), self.assertRaises(TypeError):
+                region_uid(self.world_uid, bbox_min=self.seed_xy, shape_kind=invalid)
+        with self.assertRaises(ValueError):
+            region_uid(self.world_uid, bbox_min=self.seed_xy,
+                       shape_kind=RegionShapeKind.ANCHOR_RADIUS)
 
     def test_missing_name_is_author_error_without_degraded_uid(self):
         author_ctx = replace(self.ctx, validate_only=True)

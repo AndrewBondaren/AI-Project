@@ -60,6 +60,6 @@ def merge_sublocations(seeds: tuple[CoverageSeed, ...], topology: WorldTopology,
             delta = (x > cx) - (x < cx), (y > cy) - (y < cy)
             sublocations.append(Sublocation(coord, region_uid(world_uid, seed_xy=coord),
                                             GRID_DELTA_TO_FACING.get(delta)))
-        regions.append(SeedRegion(region_uid(world_uid, seed_xy=owner), target,
+        regions.append(SeedRegion(region_uid(world_uid, region_seed_xy=owner), target,
                                   tuple(by_coord[c] for c in coords), tuple(sublocations)))
     return tuple(regions)

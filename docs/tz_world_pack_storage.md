@@ -1526,6 +1526,35 @@ Spatial index resolved coverage-регионов (контракт — [`tz_map_
 | `parent_region_uid` | str? | для `sublocation` — регион-родитель |
 | `state_fingerprint` | str? | fingerprint spec на момент bake — быстрый revision-check без чтения store |
 
+**Шаг 8 (2026-10-18):** bake заменяет индекс целиком из world-scoped collect,
+включая при partial bake; отсутствие anchor в конкретном мире допустимо.
+Все UID уникальны между регионами и саблокациями. Sublocation требует
+существующего родителя другого UID; parent не может быть саблокацией.
+Дубликаты и некорректные ссылки отклоняются до замены индекса и при чтении/
+сохранении manifest. При отказе публикации старый manifest остаётся целым.
+`bbox` — `{x_min,y_min,x_max,y_max}` в canonical fine cells; для разорванного
+швом footprint один AABB консервативно включает все части. Это индекс, не контур.
+`current_type` — snapshot, `entry_type` сохраняет первоначальный тип collect,
+даже если state snapshot его уже изменил. Fingerprint declared/anchor —
+`state_fingerprint(spec_wire)`; autoresolve включает исходный claim и entry_type.
+Hydro-наблюдения без достоверных UID/типа/геометрии не превращаются в coverage entries.
+
+**Типизация покрытия (WR-TD-1, 2026-10-18):** `entry_type` и `current_type`
+в resolved/index-моделях — обязательные `TerrainKey = RegistryKey[WorldTerrainRegistry]`;
+wire остаётся строковым. `entry_type` фиксирует исходный ключ, а не live state.
+Collect и построение нового индекса проверяют оба ключа по разрешённому реестру
+мира через REF-W (`REF_W_UNKNOWN`), без подстановки ошибочных значений. State override
+меняет только current_type и не отменяет проверку исходного ключа. Отсутствующий/
+null исходный ключ не создаёт ResolvedRegion. Старый manifest читается как
+исторический snapshot без проверки membership по сегодняшнему реестру.
+
+Debug HTTP: `GET /worlds/{world_uid}/map/regions/{region_uid}` возвращает
+`{snapshot:true,entry:WildernessRegionEntry}`; нет мира/индекса/UID → 404.
+`GET .../{region_uid}/outline` пересобирает collect/rasterize из world data,
+возвращает `{region_uid,source:"derived_world_data",resolution:"L0",outline}`.
+ASCII `#` — контур, `.` — внутренность. Отсутствующий в текущих данных регион
+при наличии baked snapshot → 409 (устаревший индекс), без выдумывания Spec из bbox.
+
 #### Region state store (target, 2026-10-17)
 
 `RegionState` — runtime-эволюция поверх authored declaration. Хранится в SQL-таблице **`region_states`**, keyed by `(world_uid, region_uid)` — **entity-store рядом с Patch Store, не WP-20** (`map_cell_patches` — дельты клеток `(x,y,z)`; состояние сущности туда не ложится). Схема — `0001_initial.sql` + `db/models/regionState.py` + repo; массовая запись — `app.db.bulkSql`.

@@ -16,6 +16,8 @@ class PackManifestStore:
         return WorldPackManifest.model_validate(raw)
 
     def save(self, path: Path, manifest: WorldPackManifest) -> None:
+        # Revalidate mutable lists before touching the published manifest.
+        manifest = WorldPackManifest.model_validate(manifest.model_dump(mode="json"))
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = manifest.model_dump_json(indent=2)
         staged = None

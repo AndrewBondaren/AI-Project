@@ -711,3 +711,35 @@ async def schedule_chunk_refine_route(
             SceneVolumePolicy.canonical_defaults().background_expand_radius_m
         ),
     })
+
+
+@router.get("/worlds/{world_uid}/map/regions/{region_uid}")
+async def get_wilderness_region(world_uid: str, region_uid: str, container=Depends(get_container)) -> JSONResponse:
+    from app.application.worldData.pack.read.wildernessRegionReadService import WildernessRegionReadService
+    world = await container.world_service().get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context)
+    snapshot = service.get_snapshot(world, region_uid)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail=f"Region '{region_uid}' not found in pack snapshot")
+    return JSONResponse(content=snapshot.model_dump(mode="json"))
+
+
+@router.get("/worlds/{world_uid}/map/regions/{region_uid}/outline")
+async def get_wilderness_region_outline(world_uid: str, region_uid: str, container=Depends(get_container)) -> JSONResponse:
+    from app.application.worldData.pack.read.wildernessRegionReadService import (
+        WildernessRegionReadService, RegionOutlineStaleError,
+    )
+    world = await container.world_service().get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context)
+    locations = await container.location_service().get_all(world_uid)
+    try:
+        outline = service.outline(world, locations, region_uid)
+    except RegionOutlineStaleError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if outline is None:
+        raise HTTPException(status_code=404, detail=f"Region '{region_uid}' not found in pack snapshot")
+    return JSONResponse(content=outline.model_dump(mode="json"))
