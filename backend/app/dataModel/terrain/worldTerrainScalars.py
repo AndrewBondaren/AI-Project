@@ -11,7 +11,8 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing, StrictOnWire
+from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.worldScalarWire import (
     pojo_wire_keys,
@@ -51,6 +52,7 @@ class WorldTerrainScalars(BaseModel):
     elevation_lapse_rate: DefaultWhenMissing[float | None] = None
     g: DefaultWhenMissing[float] = constrained_field(default=1.0, greater=0.0)
     closed_planet_grid: DefaultWhenMissing[bool] = False
+    world_topology_mode: DefaultEnumWhenMissing[WorldTopologyMode] = WorldTopologyMode.WRAPPED
     magma_band_thickness: DefaultWhenMissing[int | None] = None  # см. elevation_lapse_rate
 
     @classmethod

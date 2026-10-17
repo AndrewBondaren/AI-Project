@@ -473,7 +473,11 @@ flowchart TB
 | **on-demand grade (не bake)** | Product: DAG **только** когда сцена требует grade и в pack нет — 1…N чанков (не тайл/мир; mill спекулятивно **дорого**). Debug: `POST …/refine-chunk`. Тот же `FineChunkRunner` (R41) | mill на каждый scene/entry; GradeBakeOrchestrator; `generate_detailed_grade` + ручная запись pack; `detailed_bake` `max_tiles=1` как «один чанк» |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`. Повторный materialize / patch на объёме с grade → **сброс** stale relief ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). Не mill в том же fill-only проходе | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=`; stamp старого grade на новые колонки |
 
-**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w**. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder-done.md`](../.cursor/plans/full-bake-seam-halo-shoulder-done.md) ✅.
+**Шов мира L0** задаётся режимом `world_topology_mode`, а не безусловным
+тором: пары, facings, partial bake и invalidation определены в
+[§ Шов мира L0](#шов-мира-l0). Координатная карта и typed lookup —
+[`tz_terrain_generation.md` § Форма мира](./tz_terrain_generation.md#форма-мира--world_bounds-утверждено-2026-07-19).
+**`detailed_bake` шов мира не считает и не пишет.**
 
 **Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
 
@@ -587,6 +591,70 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 | Разрешение внутри tile | **`world_map_cells_per_tile = 32`** (константа маски L0) |
 | Физический шаг light cell | `light_m = fine_cells_per_map_cell // 32` — **масштаб** маски плывёт с размером tile |
 | Файл pack | `tiles/r.{gx}.{gy}.world_map.zst` + глобальный `climate_coarse.zst` |
+
+#### Шов мира L0
+
+Seam — стык **макро-тайлов на краях `world_bounds`**, общий контракт
+`light_bake`/`full_bake` с разным bake-scope. Пары и facings определяет
+`WorldTopology` (`dataModel/worldPack/wire/worldTopology.py`);
+`grid_neighbor`/`antagonist_tile` — делегаты. Координатная карта,
+`NeighborResult`, чётность ширины для sphere и `canonicalize` заданы в
+[`tz_terrain_generation.md` § Форма мира](./tz_terrain_generation.md#форма-мира--world_bounds-утверждено-2026-07-19).
+Стороны задаются typed `Facing`; собственного mode/wrap-ветвления в
+writer нет. Идентичность тайла остаётся существующей pack tile identity.
+
+**Пары и грани:**
+
+| Режим / край | Пара тайлов | Соответствие rim |
+|---|---|---|
+| `wrapped`, x | `(x_min, gy) ↔ (x_max, gy)` | `WEST ↔ EAST` |
+| `wrapped`, y | `(gx, y_min) ↔ (gx, y_max)` | `SOUTH ↔ NORTH` |
+| `sphere`, x | как у `wrapped` | `WEST ↔ EAST` |
+| `sphere`, север | `(gx, y_max) ↔ (x_half, y_max)` | **`NORTH ↔ NORTH`** |
+| `sphere`, юг | `(gx, y_min) ↔ (x_half, y_min)` | **`SOUTH ↔ SOUTH`** |
+| `planar`, любой край | пары нет | seam — no-op |
+
+Здесь `x_half = x_min + ((gx - x_min + w/2) mod w)`,
+`w = x_max - x_min + 1`, после нормализации чётности sphere.
+В `wrapped` и на x-краях `sphere` грань партнёра — `opposite(facing)`;
+на y-краях `sphere` это **та же** грань, применять `opposite` нельзя.
+Оба facings приходят из topology, writer не выводит второй сам.
+
+**Canonical owner → antagonist.** Для каждой seam-пары переиспользуется
+идиома `wrap_owner_and_other`: неупорядоченная identity пары — `frozenset`
+двух координат тайлов; owner — минимальная координата `(gx, gy)`,
+`other` (antagonist) — вторая. Источник rim всегда owner, получатель —
+antagonist. Набор bake-тайлов не меняет owner.
+`WorldSeamCopy` переносит существующие `surface_z` и `system_terrain`;
+климат, гидрология и grade этим seam-копированием не перезаписываются.
+Это не magma antipode и не технический стык fine chunks / `ColumnRect`.
+
+**Pull-строчка частичного bake** (тот же контракт для light и full):
+
+- Оба тайла входят в bake-scope: owner-rim из текущего compose копируется
+  в соответствующий rim antagonist в том же scope.
+- Запекается только `other` (antagonist): caller читает owner-rim из пака
+  и применяет его `WorldSeamCopy` **к себе**; владение записью остаётся
+  у запекаемого тайла. Чтение чужого tile state — по идиоме detailed halo.
+- Запекается только owner: он ничего не строчит за пределами scope;
+  его rim — источник. Antagonist подтянет owner при собственном bake
+  (self-healing).
+
+**Pack-write за пределы bake-scope не вводится.** Направление owner →
+antagonist не разворачивается ради partial bake; per-tile persist
+ownership сохраняется.
+
+**Смена `world_topology_mode` — pack invalidation.** Меняется карта
+соседей, поэтому seam-пары и halo **всех** уже испечённых тайлов становятся
+невалидны. Требуется **full re-bake**; частичный light/detailed bake не
+восстанавливает валидность всего пака. При worldEdit смены режима мастер
+получает warning об этой invalidation и необходимости full re-bake,
+как при смене размеров мира. Это изменение версии/настроек мира,
+не игровая дельта Patch Store.
+
+Отсутствующее поле сохраняет default `wrapped`: это текущее тор-поведение,
+а не смена режима; такие старые миры и паки не инвалидируются самим
+добавлением скаляра.
 
 #### Масштаб light grid (утверждено 2026-07-15)
 

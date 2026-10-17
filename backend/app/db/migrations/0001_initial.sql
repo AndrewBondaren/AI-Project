@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     terrain_chunk_columns       INTEGER NOT NULL DEFAULT 32,
     terrain_parallel_workers    INTEGER,
     world_bounds                TEXT,
+    world_topology_mode         TEXT NOT NULL DEFAULT 'wrapped',
     magma_band_thickness        INTEGER,
     closed_planet_grid          INTEGER NOT NULL DEFAULT 0,
     elevation_lapse_rate        REAL,

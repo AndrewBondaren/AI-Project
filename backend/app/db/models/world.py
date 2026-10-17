@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from app.dataModel.terrain.worldTerrainScalars import TERRAIN_CHUNK_COLUMNS_DEFAULT
+from app.dataModel.terrain.worldTerrainScalars import TERRAIN_CHUNK_COLUMNS_DEFAULT, WorldTerrainScalars
 from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.db.mapper import bool_col, json_list_col, json_col, json_nullable_col
 
@@ -122,6 +122,9 @@ class World:
     terrain_chunk_columns:          int = TERRAIN_CHUNK_COLUMNS_DEFAULT  # column-fill persist chunk side
     terrain_parallel_workers:       int | None = None   # cap TR-PAR pool; NULL = free_cores only
     world_bounds:                   dict | None = json_nullable_col(default=None)
+    world_topology_mode:            str = field(
+        default_factory=lambda: WorldTerrainScalars.canonical_defaults().world_topology_mode.value,
+    )
     magma_band_thickness:           int | None = None   # 0/null = skip magma band
     closed_planet_grid:             bool = bool_col(default=False)
     elevation_lapse_rate:           float | None = None

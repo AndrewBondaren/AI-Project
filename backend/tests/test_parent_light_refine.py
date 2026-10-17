@@ -31,10 +31,17 @@ from app.application.worldData.pack.read.parentLightLoad import load_parent_ligh
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
+
+
+def _world_stub() -> MagicMock:
+    return MagicMock(
+        world_topology_mode=WorldTerrainScalars.canonical_defaults().world_topology_mode,
+    )
 
 
 def _parent_mixed_terrain(*, side: int = 2, tile_m: int = 8) -> ParentLightTile:
@@ -120,7 +127,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
     def test_z_band_respected(self) -> None:
         parent = _parent_with_river(side=4, tile_m=16)
         policy = ParentLightRefinePolicy(z_band=1, detail_noise_amplitude=1)
-        w = MagicMock()
+        w = _world_stub()
         w.world_uid = "w-parent"
         w.fine_cells_per_map_cell = 16
         w.seed = 7
@@ -161,7 +168,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             )
 
         parent = _parent_with_river(side=2, tile_m=8)
-        w = MagicMock()
+        w = _world_stub()
         w.world_uid = "w-parent"
         w.fine_cells_per_map_cell = 8
         w.seed = 1
@@ -205,7 +212,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
 class TestTerrainMaskCarry(unittest.TestCase):
     def test_upsample_terrain_nearest_preserves_l0_mask(self) -> None:
         parent = _parent_mixed_terrain(side=2, tile_m=8)
-        w = MagicMock()
+        w = _world_stub()
         w.world_uid = "w-mask"
         w.terrain_registry = None
         fine = upsample_terrain_from_parent_light(parent, w)
@@ -223,7 +230,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
 
     def test_column_fill_uses_surface_terrain_not_default_forest(self) -> None:
         parent = _parent_mixed_terrain(side=2, tile_m=4)
-        w = MagicMock()
+        w = _world_stub()
         w.world_uid = "w-mask"
         w.terrain_registry = None
         w.terrain_masks = None
@@ -259,7 +266,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
     def test_build_tile_surface_state_carries_mixed_mask(self) -> None:
         terrain = TerrainBatchOrchestrator(MagicMock())
         parent = _parent_mixed_terrain(side=2, tile_m=8)
-        w = MagicMock()
+        w = _world_stub()
         w.world_uid = "w-mask"
         w.fine_cells_per_map_cell = 8
         w.seed = 1

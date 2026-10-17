@@ -7,6 +7,7 @@ See docs/tz_terrain_generation.md § Охват мира / Форма мира.
 from __future__ import annotations
 
 from typing import ClassVar
+from collections.abc import Iterator
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
@@ -47,6 +48,49 @@ Neighbor lookup (no bake literals): ``contains``, ``grid_neighbor``,
 
     def contains(self, gx: int, gy: int) -> bool:
         return self.x_min <= gx <= self.x_max and self.y_min <= gy <= self.y_max
+
+    @property
+    def width(self) -> int:
+        return self.x_max - self.x_min + 1
+
+    @property
+    def height(self) -> int:
+        return self.y_max - self.y_min + 1
+
+    def even_width(self) -> WorldBounds:
+        """Resolve the half-width invariant by extending only the high x bound."""
+        if self.width % 2:
+            return self.model_copy(update={"x_max": self.x_max + 1})
+        return self
+
+    def wrapped_coordinate(self, gx: int, gy: int) -> tuple[int, int]:
+        """Local-mod idiom of antipode_xy, without the antipodal offset."""
+        return (self.x_min + (gx - self.x_min) % self.width,
+                self.y_min + (gy - self.y_min) % self.height)
+
+    def half_width_partner(self, gx: int, gy: int) -> tuple[int, int]:
+        """Half-turn in longitude; preserve the latitude coordinate."""
+        return self.wrapped_coordinate(gx + self.width // 2, gy)
+
+    def folded_coordinate(self, gx: int, gy: int) -> tuple[int, int]:
+        """Fold unrolled rows at each edge; an odd fold makes a half-turn in x.
+
+        divmod handles either sign and arbitrarily many edge crossings. Unlike
+        a torus wrap, the first row past a boundary maps to that same edge row.
+        """
+        folds, offset = divmod(gy - self.y_min, self.height)
+        if folds % 2:
+            return self.half_width_partner(gx, self.y_max - offset)
+        return self.wrapped_coordinate(gx, self.y_min + offset)
+
+    def edge_tiles(self) -> Iterator[tuple[int, int, Facing]]:
+        """Boundary tiles with their outward faces, including both corner faces."""
+        for gy in range(self.y_min, self.y_max + 1):
+            yield self.x_min, gy, Facing.WEST
+            yield self.x_max, gy, Facing.EAST
+        for gx in range(self.x_min, self.x_max + 1):
+            yield gx, self.y_min, Facing.SOUTH
+            yield gx, self.y_max, Facing.NORTH
 
     def grid_neighbor(
         self, gx: int, gy: int, facing: Facing,

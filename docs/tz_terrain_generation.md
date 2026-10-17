@@ -81,11 +81,93 @@ metadata:
 **Заполнение ячеек внутри extent** — progressive bake ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Bake modes):
 
 - `light_bake` — **все** macro-tiles с `named_locations` (тайлы с локациями);
-- `full_bake` — **весь** `world_bounds` (полное заполнение прямоугольника мира). Край AABB без соседа смыкается с антагонистом — lookup [`WorldBounds.antagonist_tile`](../backend/app/dataModel/worldPack/worldBounds.py) (`Facing`, не литералы min/max). Шов **мира на макро-тайлах**. Не detailed grade; не magma antipode (§ Planet topology).
+- `full_bake` — **весь** `world_bounds` (полное заполнение прямоугольника мира). Смежность на краях задаёт `world_topology_mode` через `WorldTopology`; seam-пары и запись шва — [`tz_world_pack_storage.md` § Шов мира L0](./tz_world_pack_storage.md#шов-мира-l0). Шов **мира на макро-тайлах**. Не detailed grade; не magma antipode (§ Planet topology).
 
 Отдельного product bake stage «wilderness» **нет**. Дыры на world map после light — **незапечённые** клетки внутри прямоугольника, не другая форма мира. Render/ASCII frame предпочтительно = declared/`resolved` bounds — [`tz_map_light_bake.md`](./tz_map_light_bake.md).
 
 Lazy gameplay (`generate_z_slice`) в v2 может генерировать **тот же column API**, но порциями; eager materialization — весь declared extent (или bbox в v1).
+
+##### Топология поверхности: `world_topology_mode`
+
+`world_bounds` задаёт прямоугольный extent; `world.world_topology_mode`
+задаёт **координатную карту соседей** на его краях. Это независимые части
+контракта формы мира. Скаляр хранится на `worlds`, typed-контракт —
+`WorldTerrainScalars`; wire-значения: `planar`, `wrapped`, `sphere`.
+При отсутствии поля используется **`wrapped`** — текущее тор-поведение.
+Миры без поля не требуют миграции данных; их старые паки остаются валидны.
+Явно переданное неизвестное значение — ошибка валидации, не переключение
+на другой режим.
+
+`WorldTopology` (`dataModel/worldPack/wire/worldTopology.py`) владеет
+режимом и разрешённым `WorldBounds`. Это единая точка lookup для seam,
+halo, транзита, растеризации регионов, pathfinding/дистанций,
+hydrology/z-continuity и climate field на краях. `grid_neighbor` и
+`antagonist_tile` становятся делегатами; потребители не ветвятся по mode
+и не вычисляют собственный wrap.
+
+**Координатная карта.** Границы включительные;
+`w = x_max - x_min + 1`, `h = y_max - y_min + 1`. `NORTH` направлен к
+`y_max`, `SOUTH` — к `y_min`. Внутри extent кардинальный сосед — обычная
+соседняя клетка во всех режимах.
+
+| Режим | За краем x | За краем y |
+|---|---|---|
+| `planar` | соседа нет | соседа нет |
+| `wrapped` | `x_max ↔ x_min`, тот же y | `y_max ↔ y_min`, тот же x |
+| `sphere` | как у `wrapped` | каждый край сшит **сам с собой**: за северным/южным краем остаётся та же краевая строка, x сдвигается на половину ширины, Δy-intent инвертируется |
+
+Для `sphere` северный сосед `(x, y_max)` равен `(x_half, y_max)`, южный
+сосед `(x, y_min)` — `(x_half, y_min)`, где
+`x_half = x_min + ((x - x_min + w/2) mod w)`. Это local-mod относительно
+начала extent, корректный и при ненулевом/отрицательном `x_min`.
+Виртуальной строки или отдельной edge-сущности нет; «полюс» в этой
+топологии — шов-кромка, а `climate_pole` остаётся термином climate-домена.
+В `wrapped`/`sphere` у каждой клетки четыре кардинальных соседа.
+
+**Чётность sphere.** Ширина по x должна быть чётной для целочисленного
+сдвига на `w/2`. При resolve `world_bounds` движок расширяет нечётный
+extent на одну колонку (`x_max += 1`); мастер чётность не рассчитывает,
+authored-ввод из-за неё не отклоняется. Нормализация выполняется до
+создания `WorldTopology`, планирования bake и построения seam-пар.
+
+**Typed lookup:** `neighbor(x, y, facing) -> NeighborResult | None`, где
+`facing` — кардинальный `Facing`, а
+`NeighborResult{coord: (x, y), edge_crossing: bool, invert_dy: bool}`.
+
+- Внутренний шаг: координата соседа, оба флага `False`.
+- Переход через край `wrapped` или x-край `sphere`: каноническая координата,
+  `edge_crossing=True`, `invert_dy=False`.
+- Переход через y-край `sphere`: координата на той же краевой строке со
+  сдвигом x, оба флага `True`.
+- За краем `planar`: `None` — **impassable void**, движение невозможно,
+  ребра пути нет. Визуальное представление края не меняет этот контракт.
+
+`invert_dy` — флаг, не метод преобразования intent. Потребитель сам меняет
+знак своей Δy-компоненты; x-компонента сохраняется. Признак пересечения
+края приходит из lookup, повторно детектировать его по координатам нельзя.
+Транзит за край — обычный шаг по lookup, отдельного обязательного события
+нет; наррационное `world_edge_crossing` опционально и ортогонально.
+
+**Канонизация:** `canonicalize(x, y) -> (x', y') | None` переводит unrolled
+координаты в тот же extent по той же карте соседей. Внутри extent это
+тождественное преобразование; в `planar` координата за краем даёт `None`.
+Для `wrapped` применяется local-mod по обеим осям:
+`x' = x_min + ((x - x_min) mod w)`, аналогично для y. Для `sphere`
+x заворачивается, а выходы по y подчиняются описанному самосшиванию
+соответствующей кромки и сдвигу x на `w/2`, а не тор-переходу на
+противоположную строку.
+
+Геометрия `RegionShape` хранится в unrolled-координатах; канонизация
+выполняется на границе rasterize/lookup, общей для L0 и fine-сетки.
+Переиспользуются идиомы `wrap_owner_and_other` (canonical owner,
+`frozenset`-identity пары) и `antipode_xy` (local-mod относительно начала
+extent), без отдельного механизма wrap в потребителях. У seam-региона
+одна identity и anchor на canonical owner-стороне.
+
+`closed_planet_grid`, magma и антипод нижнего слоя — отдельная ось;
+`world_topology_mode` их контракт не меняет. Смена режима у существующего
+мира инвалидирует pack — правила full re-bake и worldEdit warning в
+[`tz_world_pack_storage.md` § Шов мира L0](./tz_world_pack_storage.md#шов-мира-l0).
 
 ### Column semantics (surface + subsurface band)
 
