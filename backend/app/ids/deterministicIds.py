@@ -20,7 +20,7 @@ named ``channel`` key: identical root/kind/keys replay the same stream.
 With ``seed = seed_root(world)``, the channel contract is:
 
 - seed grid: ``seeded_u01(seed, REGION, channel=RegionRngChannel.SEED, sx=sx, sy=sy)``
-- claim noise: ``seeded_u01(seed, REGION, channel=RegionRngChannel.CLAIM, x=x, y=y)``
+- claim noise: ``seeded_u01(seed, REGION, channel=RegionRngChannel.CLAIM, seed_xy=seed_xy, x=x, y=y)``
 - edge noise: ``seed_rng(seed, REGION, channel=RegionRngChannel.EDGE, uid=region_uid, x=x, y=y)``
 - density mask: ``seeded_u01(seed, REGION, channel=RegionRngChannel.DENSITY, uid=region_uid, x=x, y=y)``
 

@@ -1,0 +1,53 @@
+"""Resolved inputs for pure region rasterization; no world-policy defaults here."""
+
+from dataclasses import dataclass
+from typing import Protocol
+
+from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.dataModel.spatial.regionShape import EdgeNoise, Point
+from app.dataModel.terrainMasks.regions import RegionSpecBase
+from app.dataModel.worldPack.wire.worldBounds import WorldBounds
+from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+
+
+class RasterWorld(Protocol):
+    world_uid: str
+
+
+@dataclass(frozen=True)
+class RegionRasterContext:
+    region_uid: str
+    spec: RegionSpecBase
+    scale: LightGridScale
+    topology: WorldTopology
+    """Resolved topology in macro-tile coordinates, including sphere parity."""
+
+    def fine_topology(self) -> WorldTopology:
+        bounds = self.topology.bounds
+        tile = self.scale.tile_m
+        return WorldTopology(mode=self.topology.mode, bounds=WorldBounds(
+            x_min=bounds.x_min * tile, x_max=(bounds.x_max + 1) * tile - 1,
+            y_min=bounds.y_min * tile, y_max=(bounds.y_max + 1) * tile - 1,
+        ))
+
+
+@dataclass(frozen=True, order=True)
+class ClaimSeed:
+    coord: Point
+    region_uid: str
+
+
+@dataclass(frozen=True)
+class RegionClaim:
+    """Given seeds, a graph-distance cap in fine cells, and boundary noise.
+
+    No seed generation, region merging or implicit claim-policy values.
+    """
+
+    seeds: tuple[ClaimSeed, ...]
+    max_radius: int
+    noise: EdgeNoise
+
+    def __post_init__(self) -> None:
+        if self.max_radius < 0:
+            raise ValueError("claim max_radius must be nonnegative")
