@@ -68,7 +68,9 @@ class WorldDataWiring:
 
     def world_service(self) -> WorldService:
         if self._world_service is None:
-            self._world_service = WorldService(repo=self.world_repository())
+            from app.application.worldData.regions.declaredRegionEdit import DeclaredRegionEditor
+            self._world_service = WorldService(repo=self.world_repository(),
+                region_editor=DeclaredRegionEditor(self._db, SqliteRegionStateRepository(self._db)))
         return self._world_service
 
     def transition_service(

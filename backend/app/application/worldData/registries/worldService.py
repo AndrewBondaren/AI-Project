@@ -1,5 +1,8 @@
 import dataclasses
 import re
+from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager, nullcontext
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 
 from app.application.imports.helpers import with_default_created_at, prepare_import_row
@@ -19,6 +22,10 @@ from app.application.worldData.registries.worldColumnWrite import invalidated_wo
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
+if TYPE_CHECKING:
+    from app.application.worldData.regions.declaredRegionEdit import DeclaredRegionEditor
+    from app.dataModel.terrainMasks.regions.edit import DeclaredRegionEdit
+
 
 @dataclass
 class WorldUpdateResult:
@@ -30,8 +37,42 @@ class WorldUpdateResult:
 
 class WorldService:
 
-    def __init__(self, repo: IWorldRepository) -> None:
+    def __init__(self, repo: IWorldRepository, *, region_editor: "DeclaredRegionEditor | None" = None) -> None:
         self._repo = repo
+        self._region_editor = region_editor
+
+    @asynccontextmanager
+    async def _write_scope(self):
+        if self._region_editor is None:
+            yield
+        else:
+            async with self._region_editor.transaction():
+                yield
+
+    async def _save(self, world: World, method: Callable[[World], Awaitable[None]]) -> None:
+        async with self._write_scope():
+            before = await self._repo.get_by_id(world.world_uid)
+            await method(world)
+            if self._region_editor is not None:
+                await self._region_editor.reconcile(before, world)
+
+    async def edit_region(self, world_uid: str, operation: "DeclaredRegionEdit", *,
+                          validate_only: bool = False) -> World:
+        from app.application.jsonValidation.worldRow import terrain_masks
+        from app.application.worldData.regions.declaredRegionEdit import apply_region_operation
+        async with nullcontext() if validate_only else self._write_scope():
+            world = await self.get_by_id(world_uid)
+            ctx = ResolveContext.for_import(validate_only=validate_only)
+            try:
+                patch = apply_region_operation(terrain_masks(world), operation,
+                    ctx.child("terrain_masks").child("declared_regions"))
+            except UnresolvedModelError as exc:
+                raise ImportValidationError(list(exc.issues)) from exc
+            merged = merge_world_patch(world_wire_from_row(world), patch)
+            self.prepare_import(normalize_world(merged, ctx=ctx), ctx=ctx)
+            if validate_only:
+                return world
+            return (await self._update(world_uid, patch)).world
 
     # ------------------------------------------------------------------
     # CRUD
@@ -51,14 +92,17 @@ class WorldService:
 
     async def create(self, data: dict) -> World:
         data = _normalize_world_data(with_default_created_at(data))
-        world = World(**data)
-        self._validate(world)
-        await self._repo.create(world)
+        world = self.prepare_import(data)
+        await self._save(world, self._repo.create)
         return world
 
     _IMMUTABLE = frozenset({"world_uid", "created_at"})
 
     async def update(self, world_uid: str, data: dict) -> WorldUpdateResult:
+        async with self._write_scope():
+            return await self._update(world_uid, data)
+
+    async def _update(self, world_uid: str, data: dict) -> WorldUpdateResult:
         data = dict(data)
         force = bool(data.pop("force", False))
         data = _normalize_world_data(data, partial=True)
@@ -91,7 +135,7 @@ class WorldService:
                 requires_force=True,
             )
 
-        await self._repo.update(world)
+        await self._save(world, self._repo.update)
         return WorldUpdateResult(
             world=world,
             map_cells_invalidated=map_cells_invalidated,
@@ -115,7 +159,7 @@ class WorldService:
         data = _normalize_world_data(with_default_created_at(data))
         try:
             world = self.prepare_import(data)
-            await self._repo.upsert(world)
+            await self._save(world, self._repo.upsert)
             return ImportResult(total=1, succeeded=1, failed=0)
         except WorldDataError:
             raise
@@ -126,18 +170,27 @@ class WorldService:
             )
 
     @classmethod
-    def prepare_import(cls, data: dict) -> World:
+    def prepare_import(cls, data: dict, *, ctx: ResolveContext | None = None) -> World:
+        from app.application.jsonValidation.declaredRegions import validate_declared_regions
+
+        ctx = ctx if ctx is not None else ResolveContext.for_import()
         data = dict(data)
         # Direct preflight callers do not necessarily pass facade-normalized wire.
         # Validate the authored mapping before SQL projection can omit explicit null.
         grid_slice = slice_for_pojo(WorldGridSettings)
         assert grid_slice is not None
         try:
-            merge_world_slice(data, grid_slice, ResolveContext.for_import())
+            merge_world_slice(data, grid_slice, ctx)
         except UnresolvedModelError as exc:
             raise ImportValidationError(list(exc.issues)) from exc
         world = prepare_import_row(World, with_default_created_at(data))
         cls._validate(world)
+        try:
+            validate_declared_regions(world, ctx)
+        except UnresolvedModelError as exc:
+            raise ImportValidationError(list(exc.issues)) from exc
+        if ctx.errors:
+            raise ImportValidationError(list(ctx.errors))
         return world
 
     # ------------------------------------------------------------------

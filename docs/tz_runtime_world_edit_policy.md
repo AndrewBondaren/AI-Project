@@ -122,6 +122,36 @@ WarningError — семантика доменной диагностики, н�
 - Неразрешённые изменения не применяются молча, исправления не записываются вместо авторских данных без явного действия.
 - Сохранение draft и UI действия могут определяться отдельными планами редактора, но вызов validate_only ничего не сохраняет. Данный контракт не вводит HTTP-коды или новый transport reject-path; response DTO/status проверки фиксируются до реализации API.
 
+## Операции declared-регионов (wilderness 10c)
+
+`POST /worlds/{world_uid}/regions` принимает discriminated union по `op`:
+`add` / `update` — `{op, name, region: LandcoverDeclareEntry}`;
+`remove` — `{op, name}`. `name` адресует существующий элемент после strip+NFC;
+для add имя должно быть свободным и совпадать с `region.name`. Update заменяет
+элемент целиком; новое `region.name` означает rename. Частичную правку формы
+клиент собирает в полное описание элемента до отправки. Коллизия нового имени
+отклоняет всю операцию. Overlap геометрии разрешён.
+
+Без `validate_only` успех возвращает 200 с обновлённым миром; доменные ошибки
+операции/коллекции — 422 с тем же issue detail, что импорт. С
+`?validate_only=true` завершённая проверка возвращает 200 с
+`{validate_only: true, valid, issues}` и не открывает write-транзакцию.
+Ошибки wire/request остаются 422, отсутствующий мир — 404.
+
+Проверка результирующего мира использует общую `normalize_world` и POJO
+коллекции, как import preflight и PUT мира. Runtime импорт без имени остаётся
+разрешённым с degraded UID и WarningError; draft требует имя. Дубликаты имён
+и ошибочная геометрия отклоняются в обоих режимах.
+
+Запись мира и reconciliation состояний выполняются в одном UOW. Единственный
+writer состояния — `StateChangeConsumer`: remove/rename оставляют tombstone
+старого UID, включая случай без прежней строки state. Явный add после remove
+создаёт чистое состояние, обычная runtime-оценка tombstone не воскрешает.
+Resize/params edit сохраняет current_type и сбрасывает pending/progress;
+смена entry_type сбрасывает current_type с append-only declared_edit history.
+Read-overlay и collect/bake используют существующую обработку tombstone;
+worldEdit не запускает bake и не удаляет tombstone до очистки baked membership.
+
 ## Обязательный раздел последующих планов
 
 В начале каждого применимого плана размещается раздел «Базовая политика runtime/worldEdit» со ссылкой на этот документ. Он должен определить:

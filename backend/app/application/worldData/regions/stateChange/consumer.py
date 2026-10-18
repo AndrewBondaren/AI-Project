@@ -1,7 +1,7 @@
 """Single state writer; external owners trigger evaluation and consume signals.
 
-Callers serialize evaluation per world/region in their UOW. No sweep, read-time
-evaluation, worldEdit wiring or background clock is installed here (10c / LOD).
+Callers serialize evaluation per world/region in their UOW. The declaration
+owner uses explicit add/remove methods; no sweep or background clock is installed.
 """
 
 from dataclasses import dataclass
@@ -149,3 +149,21 @@ class StateChangeConsumer:
     async def tombstone(self, world_uid: str, region_uid: str, *, updated_at: str) -> int:
         """Explicit removal/orphan decision by the owner; no automatic resurrection."""
         return await self._repo.mark_tombstone(world_uid, region_uid, updated_at=updated_at)
+
+    async def add_declared(self, world_uid: str, request: RegionEvaluation) -> None:
+        """Explicit author add starts a fresh entity, even after remove/cleanup.
+
+        This is not the runtime evaluate path: only the collection owner, after
+        proving absence from the old declaration, may call it in the write UOW.
+        """
+        self._require_key(request.entry_type)
+        state = RegionState(region_uid=request.region_uid, current_type=request.entry_type,
+                            spec_fingerprint=request.spec_fingerprint)
+        await self._repo.upsert_bulk([state_to_row(state, world_uid=world_uid,
+            created_at=request.updated_at, updated_at=request.updated_at)])
+
+    async def remove_declared(self, world_uid: str, request: RegionEvaluation) -> None:
+        """Removal must mask baked membership even if no simulation row exists."""
+        if await self._repo.get(world_uid, request.region_uid) is None:
+            await self.add_declared(world_uid, request)
+        await self.tombstone(world_uid, request.region_uid, updated_at=request.updated_at)

@@ -36,7 +36,7 @@ class WorldSectionHandler:
         return await self._worlds.import_from_json(data)
 
     def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
-        self._worlds.prepare_import(data)
+        self._worlds.prepare_import(data, ctx=ctx)
 
 
 class StatesSectionHandler:

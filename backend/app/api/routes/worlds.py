@@ -13,8 +13,25 @@ from app.api.libraryWrite import parse_negotiation
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, import_validation_http_detail
 from app.application.worldBundle.errors import BundleValidationError
 from app.application.templateLibrary.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.dataModel.terrainMasks.regions.edit import DeclaredRegionEdit
 
 router = APIRouter()
+
+
+@router.post("/worlds/{world_uid}/regions")
+async def edit_declared_region(world_uid: str, operation: DeclaredRegionEdit,
+                              validate_only: bool = Query(default=False),
+                              container=Depends(get_container)) -> JSONResponse:
+    try:
+        world = await container.world_service().edit_region(
+            world_uid, operation, validate_only=validate_only)
+    except ImportValidationError as exc:
+        if validate_only:
+            return JSONResponse(content=ImportValidationReport(issues=exc.errors).to_dict())
+        raise HTTPException(status_code=422, detail=import_validation_http_detail(exc)) from exc
+    if validate_only:
+        return JSONResponse(content=ImportValidationReport().to_dict())
+    return JSONResponse(content=asdict(world))
 
 
 @router.get("/worlds")

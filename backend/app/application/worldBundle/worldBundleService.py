@@ -162,7 +162,7 @@ class WorldBundleService:
         if BundleSection.MAP_CELLS in data:
             raise ImportValidationError([FieldPathError((BundleSection.MAP_CELLS,), "use World Pack import", code="BUNDLE_INVALID")])
         try:
-            world = self._world.prepare_import(data[BundleSection.WORLD])
+            world = self._world.prepare_import(data[BundleSection.WORLD], ctx=ctx)
         except ValidationError as exc:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,) + tuple(e["loc"]), e["msg"], code=e["type"]) for e in exc.errors()]) from exc
         except ValueError as exc:
