@@ -15,7 +15,7 @@ from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
-_PLAINS = _MASKS.default_plains.system_terrain
+_PLAINS = _MASKS.default_landcover.fallback_terrain
 _RAVINE = _MASKS.default_ravines.system_terrain
 
 
@@ -68,12 +68,13 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         w = MagicMock()
         w.world_uid = "w"
         w.fine_cells_per_map_cell = 4
+        w.world_topology_mode = "planar"
         w.seed = 1
         w.z_min = -2
         w.z_max = 20
         w.map_subsurface_depth = 0
         w.terrain_registry = None
-        w.terrain_masks = None
+        w.terrain_masks = {"default_landcover": {"seed_spacing": 1000, "enabled": False}}
         w.terrain_scalars = None
         w.closed_planet_grid = False
         w.magma_band_thickness = None
@@ -1382,6 +1383,7 @@ class GradeFormationApplyTest(unittest.TestCase):
 
         w = MagicMock()
         w.world_uid = "w_fill"
+        w.world_topology_mode = "planar"
         w.terrain_registry = None
         w.terrain_masks = None
         w.terrain_scalars = None

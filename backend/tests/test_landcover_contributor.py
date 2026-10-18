@@ -200,11 +200,11 @@ class LandcoverContributorTests(unittest.TestCase):
         partial = self.bake(replace(self.ctx, tiles=[(1, 0)]))
         self.assertEqual(full[(1, 0)], partial[(1, 0)])
 
-    def test_disabled_region_policy_keeps_transitional_background(self):
+    def test_disabled_landcover_policy_disables_regions_and_background(self):
         self.policy = self.policy.model_copy(update={"enabled": False})
         self.declare(ForestSpec(name="off", shape=BboxShape(x_min=0, y_min=0, x_max=31, y_max=31)))
         cells = self.bake()[(0, 0)]
-        self.assertTrue(all(c.region_uid is None and c.system_terrain is not None for c in cells))
+        self.assertTrue(all(c.region_uid is None and c.system_terrain is None for c in cells))
 
 
 if __name__ == "__main__":

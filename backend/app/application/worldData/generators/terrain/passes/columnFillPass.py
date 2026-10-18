@@ -1,5 +1,6 @@
-from app.application.jsonValidation import terrain_masks, terrain_scalars, terrain_system_keys
+from app.application.jsonValidation import terrain as terrain_registry_for, terrain_masks, terrain_scalars, terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
+from app.application.worldData.generators.climate.registry import profile_for
 from app.application.worldData.generators.hydrology.shore.shoreProfile import (
     apply_shore_surface,
     infer_shore_kind,
@@ -77,6 +78,7 @@ def run_column_fill(
     use_magma   = magma_thick > 0 and bool(terrain_scalars(world).closed_planet_grid)
     default_zone = WorldClimateScalars.canonical_defaults().default_climate_zone
     masks = terrain_masks(world)
+    registry = terrain_registry_for(world)
     plains_fallback = default_surface_terrain(world)
 
     x_lo = rect.x_min if rect else heightmap.bbox.x_min
@@ -104,9 +106,11 @@ def run_column_fill(
                             terrain_set,
                             system_climate_zone=default_zone,
                             masks=masks,
+                            terrain_registry=registry,
+                            climate_profile=profile_for(world, default_zone),
                         )
                 else:
-                    terrain = subsurface_terrain_at_z(terrain_set)
+                    terrain = subsurface_terrain_at_z(terrain_set, registry=registry)
                 hydrology_entry = hydrology_by_cell.get(key) if hydrology_by_cell else None
                 hydrology_wire = None
                 material = None
@@ -163,7 +167,7 @@ def run_column_fill(
                         x=gx,
                         y=gy,
                         z=z,
-                        system_terrain=magma_terrain(terrain_set),
+                        system_terrain=magma_terrain(terrain_set, registry=registry),
                     ))
 
     return cells

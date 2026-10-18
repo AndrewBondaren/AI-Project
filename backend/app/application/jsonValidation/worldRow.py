@@ -126,9 +126,12 @@ def livestock(world: Any) -> WorldLivestockRegistry:
 
 
 def terrain(world: Any) -> WorldTerrainRegistry:
-    return resolve_registry_list_world(
+    registry = resolve_registry_list_world(
         world, WorldTerrainRegistry, world_uid=_uid(world),
     )
+    from app.application.jsonValidation.terrainHillRegistry import apply_landcover_policies
+    return apply_landcover_policies(registry, terrain_masks(world).default_landcover,
+                                    getattr(world, "terrain_registry", None))
 
 
 def terrain_rows(world: Any) -> list[dict]:

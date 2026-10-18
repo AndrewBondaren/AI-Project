@@ -1,27 +1,26 @@
-"""Resolve transitional builtin hill policies at the world wire boundary."""
+"""One world boundary for landcover wire aliases and registry metadata."""
 from __future__ import annotations
 
-from app.application.jsonValidation.worldRow import terrain, terrain_masks
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 from app.db.models.world import World
 
 
+def apply_landcover_policies(registry: WorldTerrainRegistry,
+                            policy: LandcoverRegionsCategoryPolicy, raw) -> WorldTerrainRegistry:
+    explicit_hills = registry.authored_hill_keys_from_wire(raw)
+    entries = {entry.system_terrain: entry for entry in registry.root}
+    for source, override in policy.terrain_policies.items():
+        key = override.system_terrain
+        entry = entries.get(key)
+        if entry is None:
+            continue
+        source_entry = entries.get(source) or WorldTerrainRegistry.canonical_defaults().entry_for(source)
+        entries[key] = override.apply_to(entry, source=source_entry,
+                                         registry_hills_authored=key in explicit_hills)
+    return WorldTerrainRegistry(list(entries.values()))
+
+
 def terrain_with_hills(world: World) -> WorldTerrainRegistry:
-    """Explicit registry hills (including null) win over legacy world knobs."""
-    registry = terrain(world)
-    raw = world.terrain_registry
-    explicit = {
-        row["system_terrain"] for row in raw
-        if isinstance(row, dict) and "system_terrain" in row and "hills" in row
-    } if isinstance(raw, list) else set()
-    masks = terrain_masks(world)
-    legacy = {
-        WorldTerrainRegistry.plains_terrain_key(): masks.default_plains.hills,
-        WorldTerrainRegistry.forest_terrain_key(): masks.default_forests.hills,
-    }
-    return WorldTerrainRegistry([
-        entry.model_copy(update={"hills": legacy[entry.system_terrain]})
-        if entry.system_terrain in legacy and entry.system_terrain not in explicit
-        else entry
-        for entry in registry.root
-    ])
+    from app.application.jsonValidation.worldRow import terrain
+    return terrain(world)

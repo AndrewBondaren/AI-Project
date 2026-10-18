@@ -78,12 +78,6 @@ def paint_regions_fine(
     """Paint region winners onto ``fine_terrain`` in place; return uid map."""
     masks = terrain_masks(world)
     policy = masks.default_landcover
-    if policy is None:
-        if masks.enabled and masks.declared_regions:
-            raise ValueError(
-                "declared_regions require explicit default_landcover generation parameters",
-            )
-        return {}
     if not masks.category_enabled(policy):
         return {}
 
@@ -147,7 +141,7 @@ def paint_regions_fine(
         tx_ty = (int(cell.tx), int(cell.ty))
         if tx_ty not in background_cache:
             background_cache[tx_ty] = background_key_for_zone(
-                cell.climate_zone_id, masks, terrain_set,
+                cell.climate_zone_id, masks, terrain_set, registry, world=world,
             )
         return background_cache[tx_ty]
 

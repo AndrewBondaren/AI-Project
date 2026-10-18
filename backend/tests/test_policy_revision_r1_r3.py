@@ -87,7 +87,7 @@ class PolicyRevisionTests(unittest.TestCase):
         for partial in (False, True):
             with self.subTest(partial=partial), self.assertRaises(ImportValidationError) as caught:
                 normalize_world(raw, partial=partial)
-            self.assertTrue(any(i.path == ("terrain_masks", "default_forests", "hills", "shapes")
+            self.assertTrue(any(i.path == ("terrain_masks", "default_landcover", "terrain_policies", "forest", "hills", "shapes")
                                 for i in caught.exception.errors))
 
     def test_hill_missing_empty_weights_and_invalid_tokens(self):

@@ -1,5 +1,6 @@
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.jsonValidation import terrain_masks, terrain_system_keys
+from app.application.worldData.generators.climate.registry import profile_for
+from app.application.jsonValidation import terrain, terrain_masks, terrain_system_keys
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.terrainZ import surface_biome_terrain
 from app.db.models.mapCell import MapCell
@@ -19,6 +20,7 @@ def run_heightmap_pass(
 
     terrain_set = terrain_system_keys(world)
     masks = terrain_masks(world)
+    registry = terrain(world)
     cells: list[MapCell] = []
     for (gx, gy), z in heightmap.surface_z.items():
         sample = pole_field.sample(world, gx, gy)
@@ -31,6 +33,8 @@ def run_heightmap_pass(
                 terrain_set,
                 system_climate_zone=sample.system_climate_zone,
                 masks=masks,
+                terrain_registry=registry,
+                climate_profile=profile_for(world, sample.system_climate_zone),
             ),
         ))
     return cells

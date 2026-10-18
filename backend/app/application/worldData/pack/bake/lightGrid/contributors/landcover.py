@@ -1,4 +1,4 @@
-"""LANDCOVER runner with transitional per-cell background."""
+"""Unified LANDCOVER runner and per-cell background."""
 
 from app.application.jsonValidation import terrain_masks, terrain
 from app.application.worldData.pack.bake.wildernessRegionIndex import build_region_index
@@ -17,10 +17,10 @@ class LandcoverContributor:
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         ctx.wilderness_region_entries.clear()
         masks = terrain_masks(ctx.world)
-        if masks.default_landcover is not None and masks.category_enabled(masks.default_landcover):
+        if masks.category_enabled(masks.default_landcover) and (
+            masks.declared_regions or masks.default_landcover.autoresolve
+        ):
             materializer = LandcoverMaterializer(prepare_landcover_inputs(ctx))
             run_mask_domain(compose, ctx, materializer, masks)
             ctx.wilderness_region_entries = build_region_index(materializer.resolved_regions, ctx.scale, registry=terrain(ctx.world))
-        elif masks.enabled and masks.declared_regions and masks.default_landcover is None:
-            raise ValueError("declared_regions require explicit default_landcover generation parameters")
         apply_background(compose, ctx)

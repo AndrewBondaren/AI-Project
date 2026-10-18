@@ -1,0 +1,126 @@
+{
+  "world": {
+    "world_uid": "landcover-custom",
+    "name": "Landcover: explicit custom policy",
+    "created_at": "2026-10-18T00:00:00",
+    "fine_cells_per_map_cell": 2000,
+    "terrain_registry": [
+      {
+        "system_terrain": "steppe",
+        "fill_roles": ["subsurface", "magma"],
+        "fill_priority": 10,
+        "glossary_ref": null,
+        "terrain_category": "solid",
+        "travel_modifier": 1.8,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null,
+        "gap_width": null,
+        "merge_rank": 1,
+        "eligibility": [
+          {
+            "fact": "climate.rainfall",
+            "op": "lte",
+            "lo": null,
+            "hi": 60.0,
+            "weight": 2.0,
+            "required": true
+          }
+        ],
+        "inertia": 3.0,
+        "hills": {
+          "min_spacing": 700,
+          "radius": 30,
+          "height": 3,
+          "shapes": [
+            "double_circle"
+          ]
+        },
+        "morph_hydrology_role": null,
+        "supports_open_land_grade": true,
+        "open_land_profile": "plains"
+      }
+    ],
+    "terrain_masks": {
+      "enabled": true,
+      "default_mountains": {
+        "enabled": false,
+        "autoresolve": false,
+        "system_terrain": "mountain",
+        "threshold": 0.82,
+        "elevation_bias_weight": 0.04,
+        "relief_weight": 0.05,
+        "ridge_cell_m": 250,
+        "default_kind": "rocky",
+        "default_form": {
+          "form_type": "by_sides",
+          "side_count": 6
+        },
+        "default_radius_m": 500,
+        "sides": [],
+        "default_range_style": "broken",
+        "hybrid_smooth_edge_factor": 1.5,
+        "range_gap_length_fraction": 0.25,
+        "range_gap_height_factor": 1.0,
+        "range_gap_spread": 1.4,
+        "range_gap_other_radius_factor": 0.25,
+        "enable_secondary_ridges": true
+      },
+      "declared_mountains": [],
+      "declared_regions": [],
+      "default_landcover": {
+        "enabled": true,
+        "autoresolve": true,
+        "transition_threshold": 0.75,
+        "seed_spacing": 1000,
+        "max_radius": 1500,
+        "claim_noise": {
+          "amplitude": 90,
+          "scale": 180
+        },
+        "fallback_terrain": "steppe",
+        "terrain_policies": {
+          "forest": {
+            "enabled": true,
+            "autoresolve": true,
+            "system_terrain": "forest",
+            "min_rainfall": 60,
+            "hills": {
+              "min_spacing": 800,
+              "radius": 35,
+              "height": 3,
+              "shapes": [
+                "oval"
+              ]
+            }
+          }
+        }
+      },
+      "default_ravines": {
+        "enabled": false,
+        "autoresolve": false,
+        "system_terrain": "ravine",
+        "min_drop": 1,
+        "min_neighbors": 3,
+        "drop_z": 1
+      },
+      "default_roads": {
+        "enabled": false,
+        "autoresolve": false,
+        "system_terrain": "road",
+        "connection_types": [
+          "trail",
+          "dirt_road",
+          "road",
+          "highway",
+          "bridge"
+        ],
+        "graph_levels": [
+          "world"
+        ],
+        "dilate_radius_light": 0
+      }
+    }
+  }
+}

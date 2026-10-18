@@ -111,8 +111,8 @@ class TestHillRaster(unittest.TestCase):
 class TestPlaceHills(unittest.TestCase):
     def setUp(self) -> None:
         self.masks = WorldTerrainMasks.canonical_defaults()
-        self.plains = self.masks.default_plains.system_terrain
-        self.forest = self.masks.default_forests.system_terrain
+        self.plains = self.masks.default_landcover.fallback_terrain
+        self.forest = self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()).system_terrain
 
     def _registry(self, plains: HillPolicy, forest: HillPolicy) -> WorldTerrainRegistry:
         policies = {self.plains: plains, self.forest: forest}
@@ -258,7 +258,9 @@ class TestHillsInTilePrep(unittest.TestCase):
         w.world_bounds = {"x_min": 0, "y_min": 0, "x_max": 0, "y_max": 0}
         w.terrain_registry = None
         w.terrain_scalars = None
+        w.hydrology = {"enabled": False}
         w.terrain_masks = {
+            "default_landcover": {"seed_spacing": 1000, "autoresolve": False},
             "default_plains": {"hills": {"min_spacing": 8, "radius": 2, "height": 2}},
             "default_forests": {"hills": {"min_spacing": 64, "radius": 2, "height": 2}},
         }

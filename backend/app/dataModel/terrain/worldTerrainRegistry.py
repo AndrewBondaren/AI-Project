@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import ClassVar
+from copy import replace
+from collections.abc import Set
 
 from pydantic import RootModel
 
@@ -12,6 +14,7 @@ from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.hillPolicy import HillPolicy
 from app.dataModel.terrain.eligibilityRule import EligibilityRule
 from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp
+from app.dataModel.terrain.enums.terrainFillRole import TerrainFillRole
 
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
@@ -47,6 +50,27 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     def forest_min_rainfall(cls) -> int:
         """Legacy mask-policy default shares the canonical eligibility threshold."""
         return int(_FOREST_RAINFALL_RULE.lo)
+
+    @classmethod
+    def minimum_rainfall_rule(cls, minimum: float) -> EligibilityRule:
+        """Parameterize the existing canonical rule; preserve all other metadata."""
+        return EligibilityRule.model_validate(replace(_FOREST_RAINFALL_RULE, lo=minimum).model_dump())
+
+    @classmethod
+    def authored_hill_keys_from_wire(cls, raw: object) -> frozenset[TerrainKey]:
+        if not isinstance(raw, list):
+            return frozenset()
+        return frozenset(key for row in raw
+                         if (key := TerrainRegistryEntry.authored_hills_key_from_wire(row)) is not None)
+
+    def column_terrain_key(self, role: TerrainFillRole, available: Set[str]) -> TerrainKey:
+        candidates = [entry for entry in self.root
+                      if role in entry.fill_roles and entry.system_terrain in available]
+        if candidates:
+            return min(candidates, key=lambda entry: (-entry.fill_priority, entry.system_terrain)).system_terrain
+        if role.fallback_role is not None:
+            return self.column_terrain_key(role.fallback_role, available)
+        raise ValueError(f"no available terrain supplies column fill role {role.value}")
 
     @classmethod
     def plains_terrain_key(cls) -> str:
@@ -110,6 +134,7 @@ _PLAINS_ENTRY = TerrainRegistryEntry(
     travel_modifier=1.5,
     default_material="earth",
     merge_rank=1,
+    fill_roles=(TerrainFillRole.SUBSURFACE,),
     hills=HillPolicy.canonical_plains(),
     supports_open_land_grade=True,
     open_land_profile="plains",

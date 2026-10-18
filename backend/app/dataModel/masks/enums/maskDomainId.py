@@ -15,8 +15,6 @@ class MaskDomainId(StrEnum):
     HYDROLOGY = "hydrology"
     MOUNTAINS = "mountains"
     LANDCOVER = "landcover"
-    FORESTS = "forests"
-    PLAINS = "plains"
     RAVINES = "ravines"
     ROADS = "roads"
     SETTLEMENT = "settlement"
@@ -36,11 +34,9 @@ class LightContributorId(StrEnum):
     # open_land / shore / road_shoulder — not L0 contributors (R36u-T-8); detailed_bake only
 
 
-# Mask domain → contributor that materializes it (forests+plains share landcover).
+# Mask domain → contributor that materializes it (one landcover domain).
 MASK_DOMAIN_CONTRIBUTOR: dict[MaskDomainId, LightContributorId] = {
     MaskDomainId.LANDCOVER: LightContributorId.LANDCOVER,
-    MaskDomainId.FORESTS: LightContributorId.LANDCOVER,
-    MaskDomainId.PLAINS: LightContributorId.LANDCOVER,
     MaskDomainId.MOUNTAINS: LightContributorId.MOUNTAIN,
     MaskDomainId.RAVINES: LightContributorId.RAVINE,
     MaskDomainId.HYDROLOGY: LightContributorId.HYDRO,

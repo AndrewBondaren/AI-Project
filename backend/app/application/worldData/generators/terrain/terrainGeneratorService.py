@@ -91,7 +91,8 @@ class TerrainGeneratorService:
         uid_map: dict[str, NamedLocation] | None = None,
     ) -> list[MapCell]:
         from app.application.worldData.generators.climate import ClimateGeneratorService
-        from app.application.jsonValidation import terrain_system_keys
+        from app.application.jsonValidation import terrain, terrain_masks, terrain_system_keys
+        from app.application.worldData.generators.climate.registry import profile_for
 
         climate     = ClimateGeneratorService()
         terrain_set = terrain_system_keys(world)
@@ -110,6 +111,9 @@ class TerrainGeneratorService:
             system_terrain=surface_biome_terrain(
                 terrain_set,
                 system_climate_zone=climate_zone,
+                masks=terrain_masks(world),
+                terrain_registry=terrain(world),
+                climate_profile=profile_for(world, climate_zone),
             ),
             temperature_base=temp,
             rainfall=rainfall,

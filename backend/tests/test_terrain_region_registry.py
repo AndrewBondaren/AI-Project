@@ -65,7 +65,7 @@ class TerrainRegionRegistryTests(unittest.TestCase):
     def test_canonical_ranks_preserve_builtin_paint_order(self):
         order = tuple(policy.system_terrain for policy in (
             self.masks.default_roads, self.masks.default_ravines, self.masks.default_mountains,
-            self.masks.default_forests, self.masks.default_plains,
+            self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()), self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.plains_terrain_key()),
         ))
         ranks = [self.registry.entry_for(key).merge_rank for key in order]
         self.assertEqual(ranks, sorted(set(ranks), reverse=True))
@@ -75,8 +75,9 @@ class TerrainRegionRegistryTests(unittest.TestCase):
     def test_canonical_hills_reuse_existing_policy_and_preserve_import_identity(self):
         self.assertIs(LegacyHillPolicy, HillPolicy)
         self.assertIs(LegacyHillShape, HillShape)
-        for policy in (self.masks.default_forests, self.masks.default_plains):
-            self.assertEqual(self.registry.entry_for(policy.system_terrain).hills, policy.hills)
+        for policy in (self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()), self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.plains_terrain_key())):
+            self.assertEqual(self.registry.entry_for(policy.system_terrain).hills,
+                             self.masks.default_landcover.hills_for(policy.system_terrain))
         self.assertTrue(all(entry.inertia > 0 for entry in self.registry.root))
 
     def test_missing_fields_have_model_defaults_and_collections_are_independent(self):

@@ -231,6 +231,21 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 #### L2 open-land hills (locked 2026-08-20)
 
+Column fill (уточнение 10b по замечанию мастера): subsurface/magma terrain
+выбирается по TerrainRegistryEntry.fill_roles и fill_priority. Ни materialize,
+ни pack read не сравнивают ключи с earth/magma; оба получают typed registry
+мира. MAGMA без кандидата использует SUBSURFACE, отсутствие SUBSURFACE
+диагностируется WarningError без произвольной подстановки terrain-ключа.
+
+**Cutover 10b (2026-10-18):** runtime holder — TerrainRegistryEntry.hills.
+Старые default_plains/default_forests.hills — read aliases, преобразуемые
+в одну LandcoverRegionsCategoryPolicy.terrain_policies и разрешаемые на
+world boundary. Самостоятельных forest/plains policy-классов и mask-доменов
+больше нет. Явный registry hills (включая null) приоритетнее alias;
+этот приоритет применяется до canonical registry dump при импорте.
+Фон для read tombstone и L0/L2 — default_landcover.fallback_terrain.
+Локационный hills override сохраняется.
+
 Холм — **утилита / pure helper**. Не mask domain, не L0 contributor, не ReliefContext / не writer `system_grade_uid`.
 
 **Только L2** (meter grid на `detailed_bake` / entry refine). L0 light compose **не** ставит холмы и **не** солит равнину/лес под них ([`tz_map_light_bake.md`](./tz_map_light_bake.md)).
@@ -247,7 +262,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 **Шум consumer = посадка холмов с `min_spacing`**, не `cell_z_noise` `amplitude=1` на каждую метровую клетку. Одиночный `±1` — тот же helper с минимальным geom, если consumer так задал смесь; не второй канал белого шума.
 
-**Политика knobs — consumer, не домен холмов.** Helper не читает JSON. Wire **совпадает** с POJO `HillPolicy`. Живёт на `PlainsCategoryPolicy.hills` / `ForestsCategoryPolicy.hills` — [`hillPolicy.py`](../backend/app/dataModel/terrainMasks/hillPolicy.py). Нет `MaskDomainId.HILLS`.
+**Политика knobs — consumer, не домен холмов.** Helper не читает JSON. Wire **совпадает** с POJO `HillPolicy`. Runtime holder — `TerrainRegistryEntry.hills`; legacy policy-поля читаются через alias (§ Cutover 10b выше). Модель — [`hillPolicy.py`](../backend/app/dataModel/terrainMasks/hillPolicy.py). Нет `MaskDomainId.HILLS`.
 
 **Target (2026-10-17, регионы покрытия):** holder переезжает на **ключ** — `TerrainRegistryEntry.hills: HillPolicy | None` (world data, N+1): `place_hills` выбирает политику по `system_terrain` клетки, а не по паре `plains_key`/`forest_key`, иначе клетка `steppe`/`swamp` холмов не получает. `default_plains.hills` / `default_forests.hills` остаются wire-совместимым источником для builtin-ключей до миграции данных мира (план wilderness шаг 7b); canonical defaults реестра — тот же единственный литерал. Локационный override не меняется.
 

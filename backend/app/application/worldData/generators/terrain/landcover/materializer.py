@@ -1,4 +1,4 @@
-"""LANDCOVER plugin, ready for caller wiring in wilderness step 6."""
+"""Unified LANDCOVER plugin."""
 
 from app.application.jsonValidation import hydrology, terrain, terrain_masks
 from app.application.worldData.generators.terrain.landcover.apply import apply_region
@@ -13,6 +13,7 @@ from app.application.worldData.masks.regionPrecedence import RegionCandidate
 from app.application.worldData.masks.regionRasterContext import RegionRasterContext
 from app.application.worldData.masks.regionRasterizer import rasterize_claim_light, rasterize_light
 from app.application.worldData.masks.runMaskDomain import default_collect
+from app.application.worldData.regions.coverageBackground import coverage_registry
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
@@ -39,8 +40,6 @@ class LandcoverMaterializer:
         self.hydrology_entries = ()
 
     def category_policy(self, masks: WorldTerrainMasks) -> LandcoverRegionsCategoryPolicy:
-        if masks.default_landcover is None:
-            raise ValueError("LANDCOVER requires explicit default_landcover generation parameters")
         return masks.default_landcover
 
     def load_declared(self, ctx: LightGridBakeContext) -> list[ResolvedRegion]:
@@ -57,7 +56,7 @@ class LandcoverMaterializer:
         if not isinstance(policy, LandcoverRegionsCategoryPolicy):
             raise TypeError("landcover expects LandcoverRegionsCategoryPolicy")
         return autoresolve_regions(ctx.world.world_uid, seed_root(ctx.world), ctx.scale.tile_m,
-                                   self.inputs, policy, terrain(ctx.world))
+                                   self.inputs, policy, coverage_registry(terrain(ctx.world), policy, autoresolve=True))
 
     def collect(self, ctx: LightGridBakeContext, policy: MaskCategoryPolicy) -> list[ResolvedRegion]:
         regions = default_collect(

@@ -36,6 +36,17 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
     def fixture(self, name="world_template"):
         return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
+    async def test_landcover_fixture_matrix_and_existing_world_002_import(self):
+        for name in ("world_landcover_default", "world_landcover_custom", "world_landcover_mixed", "world_test_002"):
+            fixture = self.fixture(name)
+            original = copy.deepcopy(fixture)
+            report = await self.service.import_bundle(fixture, validate_only=True)
+            self.assertTrue(report.valid, (name, report.issues))
+            results, rolled_back = await self.service.import_bundle(fixture)
+            self.assertFalse(rolled_back, (name, results))
+            self.assertEqual(results["world"].succeeded, 1, (name, results))
+            self.assertEqual(fixture, original)
+
     async def test_preview_all_sections_cannot_reach_write_or_version_paths(self):
         fixture = self.fixture()
         original = copy.deepcopy(fixture)
@@ -175,8 +186,9 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         uid = (await self.worlds.get_all())[0].world_uid
         await self.worlds.update(uid, {"terrain_masks": {"default_forests": {"enabled": False}}})
         world = await self.worlds.get_by_id(uid)
-        self.assertEqual(world.terrain_masks["default_forests"]["forest_min_rainfall"], 60)
-        self.assertFalse(world.terrain_masks["default_forests"]["enabled"])
+        policy = world.terrain_masks["default_landcover"]["terrain_policies"]["forest"]
+        self.assertEqual(policy["min_rainfall"], 60)
+        self.assertFalse(policy["enabled"])
         with self.assertRaises(ImportValidationError):
             await self.worlds.update(uid, {"terrain_masks": {"default_forests": {"forest_min_rainfall": -1}}})
         self.assertEqual((await self.worlds.get_by_id(uid)).terrain_masks, world.terrain_masks)

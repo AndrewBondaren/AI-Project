@@ -27,7 +27,7 @@ from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.db.models.world import World
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
-_PLAINS = _MASKS.default_plains.system_terrain
+_PLAINS = _MASKS.default_landcover.fallback_terrain
 _ROAD = _MASKS.default_roads.system_terrain
 
 

@@ -186,8 +186,8 @@ class LandcoverMaterializerTests(unittest.TestCase):
         self.assertTrue(all(topology.bounds.contains(*seed.coord) for seed in seeds))
         with self.assertRaises(ValidationError):
             LandcoverRegionsCategoryPolicy()
-        with self.assertRaises(ValueError):
-            self.plugin().category_policy(WorldTerrainMasks())
+        self.assertEqual(self.plugin().category_policy(WorldTerrainMasks()),
+                         LandcoverRegionsCategoryPolicy.canonical_defaults())
 
     def test_merge_canonical_owner_sublocation_uids_facings_and_seam(self):
         topology = WorldTopology(mode=WorldTopologyMode.WRAPPED,

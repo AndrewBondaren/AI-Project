@@ -50,7 +50,7 @@ class RegionStateOverlay:
         if not states:
             return [merge_layers(x, y, z, layers) for (x, y, z), layers in cells.items()]
         # Transitional policy interface until the 10b landcover cutover.
-        fallback = _terrain_key.validate_python(terrain_masks(world).default_plains.system_terrain)
+        fallback = _terrain_key.validate_python(terrain_masks(world).default_landcover.fallback_terrain)
         changed: set[str] = set()
         result = []
         for (x, y, z), layers in cells.items():

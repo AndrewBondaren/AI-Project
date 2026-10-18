@@ -69,7 +69,8 @@ class TerrainMergeTests(unittest.TestCase):
         world = SimpleNamespace(
             world_uid="world-custom-rank",
             terrain_registry=[self.custom.model_dump(mode="json")],
-            terrain_masks={"default_forests": {"system_terrain": self.custom_key}},
+            terrain_masks={"default_forests": {"system_terrain": self.custom_key},
+                "default_landcover": {"seed_spacing": 1000, "autoresolve": False}},
         )
         ctx = LightGridBakeContext(
             world=world, locations=[], locations_index=LocationsIndexWire(locations=[]),

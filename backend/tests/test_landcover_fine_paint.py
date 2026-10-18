@@ -154,7 +154,8 @@ class FineRegionPaintTests(unittest.TestCase):
 
     def test_no_regions_no_paint(self) -> None:
         world = _world()
-        world.terrain_masks = WorldTerrainMasks().model_dump(mode="json")
+        world.terrain_masks = WorldTerrainMasks(default_landcover=LandcoverRegionsCategoryPolicy.canonical_defaults().model_copy(
+            update={"enabled": False})).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             world, [], _surface_ctx(), 0, 0, parent_light=_parent(),
         )
@@ -162,15 +163,14 @@ class FineRegionPaintTests(unittest.TestCase):
         self.assertEqual(state.surface_terrain[(0, 6)], FOREST)  # pure upsample
         self.assertIsNone(state.surface_region_uid)
 
-    def test_declared_without_policy_raises(self) -> None:
+    def test_declared_without_explicit_policy_uses_canonical(self) -> None:
         world = _world(self.spec)
         world.terrain_masks = WorldTerrainMasks(
             declared_regions=[self.spec],
         ).model_dump(mode="json")
-        with self.assertRaises(ValueError):
-            TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-                world, [], _surface_ctx(), 0, 0, parent_light=_parent(),
-            )
+        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+            world, [], _surface_ctx(), 0, 0, parent_light=_parent())
+        self.assertIn(self.uid, state.surface_region_uid.values())
 
 
 if __name__ == "__main__":

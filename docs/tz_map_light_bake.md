@@ -269,6 +269,73 @@ flowchart TB
 
 Не дублировать hydro-флаги вторым деревом: light bake **читает** `world.hydrology.*`. Terrain-типы — отдельный корень с **той же формой category policy**. Не mega-dict доменов: typed fields `default_*` / `declared_*`.
 
+### Landcover cutover 10b (2026-10-18)
+
+**Уточнение по замечанию мастера:** application shim не создаёт собственных
+eligibility rules и не обновляет поля POJO через строковый changes-dict.
+LandcoverTerrainPolicy применяет overrides через typed TerrainRegistryEntry
+API. Legacy rainfall threshold параметризует canonical forest rule реестра,
+сохраняя его fact/op/weight/required. Чтение authored hills presence и wire
+проекция принадлежат dataModel, включая различие omit/null.
+
+TerrainRegistryEntry.fill_roles: tuple[TerrainFillRole, ...] (default пусто)
+и fill_priority: int = 0 задают использование terrain в колонках.
+TerrainFillRole = subsurface | magma; canonical plains имеет subsurface.
+Среди доступных ключей выбирается роль с большим priority, затем ключ по
+возрастанию. Если magma не задана, используется subsurface; если нет ни
+одного доступного subsurface terrain, результат неразрешён, WarningError
+без выбора первого ключа. Terrain names не участвуют в выборе роли.
+Роли принадлежат terrain registry, не terrain_masks; SQL не расширяется.
+
+Единственный домен покрытия — `MaskDomainId.LANDCOVER`; его policy —
+`WorldTerrainMasks.default_landcover: LandcoverRegionsCategoryPolicy`.
+`enabled` выключает и регионы, и фоновый paint; `autoresolve` выключает
+автоматические регионы, оставляя declared и фон. Новая policy содержит
+`fallback_terrain: TerrainKey` (canonical plains), `transition_threshold`
+и параметры генерации. Выбор покрытия использует общий `CoverageResolver`
+с typed climate facts и eligibility реестра; ключи без eligibility не
+становятся автоматическими кандидатами с нулевым score. При отсутствии
+климатического контекста фон берётся из policy, без выбора первого ключа.
+
+Canonical root factory задаёт seed_spacing=1000, max_radius=2250,
+claim_noise={amplitude:125, scale:250}; transition_threshold=1.0.
+Контракт самого `seed_spacing` не изменён: обязательный `int > 0` в явно
+заданной policy; это не fine_cells_per_map_cell (последний >=1000 и кратен
+1000). При отсутствии всего default_landcover применяется canonical root
+factory. При явной policy seed_spacing обязателен, остальные knobs могут
+наследоваться. Частичный claim_noise заполняет только отсутствующие поля.
+Все размеры — fine-клетки, без зависимости от разбиения bake на тайлы.
+Обоснование: шаг 1000 соответствует стандартной стороне макро-тайла;
+cap 2250 покрывает собственный seed-участок при jitter и оставляет запас
+для шума; амплитуда 125 и scale 250 равны 1/8 и 1/4 шага. Cap ограничивает
+распространение seed, но не размер региона после слияния.
+
+Legacy JSON `default_forests`/`default_plains` принимаются только на чтение
+и преобразуются в `default_landcover.terrain_policies` — typed overrides
+по исходному terrain-ключу. У generic LandcoverTerrainPolicy есть
+system_terrain: TerrainKey, enabled/autoresolve, optional min_rainfall и
+hills. `forest_min_rainfall` читается как alias min_rainfall; null legacy
+threshold отклоняется. system_terrain старого default_plains также задаёт
+fallback_terrain. Явные новые поля имеют приоритет над совпавшими alias.
+Сериализация выдаёт только новый корень; второго runtime policy-объекта нет.
+Патчи alias нормализуются до merge, отсутствующие значения сохраняются.
+
+Hills/eligibility разрешаются на world boundary в TerrainRegistryEntry,
+после чего потребители читают реестр. Явные registry hills, включая null,
+приоритетнее alias hills; authored presence учитывается до materialization
+canonical registry rows при импорте. Отсутствие override и явный null
+сохраняют разный смысл после round-trip. Fallback и target keys проходят REF-W.
+
+Три fixtures для проверки этого контракта: world_landcover_default.json
+(минимальный мир), world_landcover_custom.json (все поля terrain_masks,
+landcover policy, вложенных overrides/noise/hills и custom terrain entry
+заданы явно), world_landcover_mixed.json (явные и наследуемые поля, в том
+числе внутри claim_noise). Custom assertions не выводятся из canonical
+defaults; completeness проверяется по schema, а независимость — через
+валидацию с изменёнными defaults. По указанию мастера существующая БД пуста,
+миры генерируются заново: тождество legacy bake-карты не требуется;
+совместимость чтения исходных JSON остаётся обязательной.
+
 ### Шаблон MaskDomain (единственный способ роста)
 
 ```text
@@ -567,7 +634,7 @@ Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в l
 
 | Gate | Смысл | SoT |
 |---|---|---|
-| **A** | мир **хочет** класс forest | `terrain_masks.default_forests.forest_min_rainfall` (+ enable / declare) |
+| **A** | мир **хочет** класс forest | `TerrainRegistryEntry.eligibility` (+ enable / declare); legacy rainfall читается через alias в `default_landcover.terrain_policies` |
 | **B** | в климате клетки есть eligible **trees** | `FloraSuitabilityIndex.query` ← `tree_registry` ∩ `FloraClimateSuitability` |
 
 `paint forest` = **A ∧ B** — **для автоматического возникновения леса (autoresolve)**. Если A прошло, а B=∅ (все деревья требуют другой rainfall/temp) → autoresolve **не** красит `forest` (fallback plains), warn в generation log. **Declared/anchor регионы veto не проходят** (2026-10-17): авторский лес ставится как начальное состояние, B=∅ → `declared_without_suitability` warning, paint выполняется; деградация — через state-change. См. § Регионы покрытия › Declaration и suitability. Запрещены: лес без деревьев у autoresolve, builtin-вид, свой скан реестра в landcover.
@@ -1209,7 +1276,7 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | `LightContributorId` | тот же модуль — `contributor.name` |
 | `COMPOSE_CONTRIBUTOR_ORDER` | **единственный** SoT порядка compose |
 | `TerrainRegistryEntry.merge_rank` | единственный SoT ранга terrain-ключа из реестра мира (§ Merge `system_terrain`) |
-| `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (`LANDCOVER` → landcover; `FORESTS`/`PLAINS` transitional до шага 10b) |
+| `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (`LANDCOVER` → landcover; единственный домен покрытия после 10b) |
 | Корни JSON | typed `default_*` / `declared_*` — не free-form domain map |
 
 **Application**
@@ -1225,7 +1292,7 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 |---|---|---|
 | 1 Base | `relief` | — |
 | 2 Context | `climate` | — |
-| 3 Landcover | `landcover` | `LANDCOVER` (forest / plains / farmland — § Регионы покрытия); `FORESTS`, `PLAINS` transitional |
+| 3 Landcover | `landcover` | `LANDCOVER` (forest / plains / farmland — § Регионы покрытия) |
 | 4 Structural | `mountain` → `ravine` | `MOUNTAINS`, `RAVINES` |
 | 5 Hydro | `hydro` | `HYDROLOGY` |
 | ~~5b Ribbon~~ | ~~`open_land` → `shore`~~ | **removed** (R36u-T-8); grade → detailed **R36v** |
@@ -1290,7 +1357,7 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 
 1. `relief` — `surface_z` (phase Base)
 2. `climate` — `climate_zone_id` (**обязательно до landcover/flora**; phase Context — не MaskDomain)
-3. `landcover` — plains/forest по climate **если** `terrain_masks.default_forests|plains.enabled` (не biome-as-terrain)
+3. `landcover` — покрытие через общий scorer **если** `terrain_masks.default_landcover.enabled` (не biome-as-terrain)
 4. `flora` — type refs через FloraGenerator — **stub** / later ([`tz_flora`](./tz_flora.md))
 5. `mountain` — declare + autoresolve; target: `system_terrain` **и** `surface_z` (§ Mountain elevation); **сейчас stub**
 6. `ravine` — **если** `default_ravines.enabled`

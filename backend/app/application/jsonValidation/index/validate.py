@@ -14,6 +14,7 @@ from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,20 @@ def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[Re
             ),
         )
     return checks
+
+
+def _landcover_checks(normalized: dict[str, Any]) -> list[RefCheck]:
+    policy = normalized.get("terrain_masks", {}).get("default_landcover", {})
+    values = []
+    if "fallback_terrain" in policy:
+        values.append((("terrain_masks", "default_landcover", "fallback_terrain"), policy["fallback_terrain"]))
+    for key, override in policy.get("terrain_policies", {}).items():
+        if "system_terrain" in override:
+            values.append((("terrain_masks", "default_landcover", "terrain_policies", key, "system_terrain"),
+                           override["system_terrain"]))
+    return [RefCheck(ref_kind=RefKind.TERRAIN, schema_id=WorldTerrainMasks.SCHEMA_ID,
+        path=path, value_getter=lambda data, target=value: target,
+        registry_present_key="terrain_registry") for path, value in values]
 
 
 def _nested_dict(root: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any] | None:
@@ -218,6 +233,7 @@ def validate_ref_w(
         *_climate_scalar_checks(normalized, partial),
         *_hydrology_checks(normalized, partial),
         *_material_tier_checks(normalized, partial),
+        *_landcover_checks(normalized),
     ]
 
     errors: list[FieldPathError] = []

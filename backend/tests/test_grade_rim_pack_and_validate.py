@@ -155,7 +155,7 @@ def _leftover_from_fronts(
 def _discover_open_land(
     z: dict[tuple[int, int], int],
 ) -> tuple[FrontGeometry, ...]:
-    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
     surface = MeterGradeSurface(

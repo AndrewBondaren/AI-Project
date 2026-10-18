@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultWhenMissing, DefaultEnumWhenMissing, DefaultWhenMissing
+from app.dataModel.annotationPolicy import DefaultWhenMissing, DefaultEnumWhenMissing
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -22,7 +22,6 @@ from app.dataModel.terrainMasks.mountain.specs import (
     default_sides_for_count,
     form_side_count,
 )
-from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 
@@ -83,28 +82,6 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
         return default_sides_for_count(n)
 
 
-class ForestsCategoryPolicy(MaskCategoryPolicy):
-    """Climate rainfall → forest (cold biomes stay on climate_zone_id, not terrain)."""
-
-    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("forest"))
-    forest_min_rainfall: DefaultWhenMissing[int] = Field(
-        default_factory=WorldTerrainRegistry.forest_min_rainfall,
-        ge=0,
-    )
-    hills: DefaultWhenMissing[HillPolicy] = Field(
-        default_factory=HillPolicy.canonical_forest,
-    )
-
-
-class PlainsCategoryPolicy(MaskCategoryPolicy):
-    """Background land where higher-rank masks absent."""
-
-    system_terrain: DefaultWhenMissing[str] = Field(default_factory=lambda: _terrain_key("plains"))
-    hills: DefaultWhenMissing[HillPolicy] = Field(
-        default_factory=HillPolicy.canonical_plains,
-    )
-
-
 class RavinesCategoryPolicy(MaskCategoryPolicy):
     """Local depression → ravine."""
 
@@ -136,12 +113,8 @@ class WorldTerrainMasks(BaseModel):
     )
     declared_mountains: DefaultWhenMissing[list[MountainDeclareEntry]] = Field(default_factory=list)
     declared_regions: list[LandcoverDeclareEntry] = Field(default_factory=list)
-    default_landcover: DefaultWhenMissing[LandcoverRegionsCategoryPolicy | None] = None
-    default_forests: DefaultWhenMissing[ForestsCategoryPolicy] = Field(
-        default_factory=ForestsCategoryPolicy,
-    )
-    default_plains: DefaultWhenMissing[PlainsCategoryPolicy] = Field(
-        default_factory=PlainsCategoryPolicy,
+    default_landcover: DefaultWhenMissing[LandcoverRegionsCategoryPolicy] = Field(
+        default_factory=LandcoverRegionsCategoryPolicy.canonical_defaults,
     )
     default_ravines: DefaultWhenMissing[RavinesCategoryPolicy] = Field(
         default_factory=RavinesCategoryPolicy,
@@ -149,6 +122,12 @@ class WorldTerrainMasks(BaseModel):
     default_roads: DefaultWhenMissing[RoadsCategoryPolicy] = Field(
         default_factory=RoadsCategoryPolicy,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_legacy_landcover(cls, value):
+        from app.dataModel.terrainMasks.landcoverWire import normalize_landcover_wire
+        return normalize_landcover_wire(value)
 
     @field_validator("declared_regions")
     @classmethod

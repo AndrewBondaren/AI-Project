@@ -16,7 +16,7 @@ MISSING_SYSTEM_TERRAIN = "?"
 def terrain_hist_is_only_plains(terrain_hist: dict[str, int] | None) -> bool:
     if terrain_hist is None:
         return False
-    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     return set(terrain_hist) <= {plains, MISSING_SYSTEM_TERRAIN}
 
 

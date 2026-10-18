@@ -67,8 +67,8 @@ from app.dataModel.terrain.relief.reliefTerrainEnvelope import ReliefOntologyEnv
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
-_PLAINS = _MASKS.default_plains.system_terrain
-_FOREST = _MASKS.default_forests.system_terrain
+_PLAINS = _MASKS.default_landcover.fallback_terrain
+_FOREST = _MASKS.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()).system_terrain
 _ROAD = _MASKS.default_roads.system_terrain
 _RAVINE = ravine_terrain_key()
 _LAND = open_land_terrain_keys()

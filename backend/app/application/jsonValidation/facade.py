@@ -20,6 +20,9 @@ def merge_world_patch(existing: dict[str, Any], patch: dict[str, Any]) -> dict[s
         for key, value in changes.items():
             result[key] = merge(result.get(key), value)
         return result
+    if "terrain_masks" in patch:
+        from app.dataModel.terrainMasks.landcoverWire import normalize_landcover_wire
+        patch = {**patch, "terrain_masks": normalize_landcover_wire(patch["terrain_masks"], partial=True)}
     out = {**existing, **patch}
     for sl in facade_world_slices():
         if sl.wire_kind == "json_blob":
@@ -39,7 +42,25 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
         out["fine_cells_per_map_cell"] = out.pop("map_cell_size_m")
     ctx = ctx if ctx is not None else ResolveContext(mode=ResolveMode.IMPORT, partial=partial)
 
+    if partial and "terrain_masks" in out:
+        from app.dataModel.terrainMasks.landcoverWire import normalize_landcover_wire
+        try:
+            out["terrain_masks"] = normalize_landcover_wire(out["terrain_masks"], partial=True)
+        except ValueError:
+            from dataclasses import replace
+            from app.application.jsonValidation.resolve import resolve_model, UnresolvedModelError
+            from app.dataModel.terrainMasks import WorldTerrainMasks
+            try:
+                resolve_model(WorldTerrainMasks, out["terrain_masks"],
+                              ctx=replace(ctx.child("terrain_masks"), partial=False))
+            except UnresolvedModelError:
+                pass  # Preserve the shared report and reject below like other slices.
+
     merge_facade_slices(out, ctx)
+
+    if partial and "terrain_masks" in out:
+        from app.dataModel.terrainMasks.landcoverWire import landcover_patch_to_wire
+        out["terrain_masks"] = landcover_patch_to_wire(out["terrain_masks"])
 
     errors: list[FieldPathError] = list(ctx.errors)
     if not errors:
@@ -47,5 +68,16 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
 
     if errors:
         raise ImportValidationError(errors)
+
+    if not partial and "terrain_masks" in out and "terrain_registry" in out:
+        # Resolve alias hills before normalized canonical rows lose authored
+        # field-presence information. Explicit authored registry hills still win.
+        from app.application.jsonValidation.terrainHillRegistry import apply_landcover_policies
+        from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+        from app.dataModel.terrainMasks import WorldTerrainMasks
+        registry = apply_landcover_policies(WorldTerrainRegistry.model_validate(out["terrain_registry"]),
+            WorldTerrainMasks.model_validate(out["terrain_masks"]).default_landcover,
+            data.get("terrain_registry"))
+        out["terrain_registry"] = registry.model_dump(mode="json")
 
     return out

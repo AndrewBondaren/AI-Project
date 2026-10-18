@@ -14,7 +14,7 @@ from app.db.models.world import World
 
 def default_surface_terrain(world: World) -> str:
     """Plains (or first registry key) when wire has no ``system_terrain``."""
-    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     registry = WorldTerrainRegistry.canonical_defaults()
     entry = registry.entry_for(plains)
     if entry is not None:

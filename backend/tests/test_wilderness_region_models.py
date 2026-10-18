@@ -138,8 +138,8 @@ class RegionWireTests(unittest.TestCase):
     def test_new_collection_default_preserves_existing_policies(self):
         masks = WorldTerrainMasks.canonical_defaults()
         self.assertEqual(masks.declared_regions, [])
-        self.assertEqual(masks.default_forests.system_terrain, "forest")
-        self.assertEqual(masks.default_plains.system_terrain, "plains")
+        self.assertEqual(masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()).system_terrain, "forest")
+        self.assertEqual(masks.default_landcover.fallback_terrain, "plains")
         with self.assertRaises(ValidationError):
             masks.declared_regions = []
 

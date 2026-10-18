@@ -9,7 +9,7 @@ from app.dataModel.terrain.eligibilityRule import EligibilityRule
 from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.terrainMasks.worldTerrainMasks import ForestsCategoryPolicy
+
 
 
 def candidate(key, *rules):
@@ -103,7 +103,7 @@ class CoverageResolverTests(unittest.TestCase):
     def test_canonical_climate_rules_match_legacy_threshold(self):
         registry = WorldTerrainRegistry.canonical_defaults()
         forest = registry.entry_for(registry.forest_terrain_key())
-        threshold = ForestsCategoryPolicy().forest_min_rainfall
+        threshold = WorldTerrainRegistry.forest_min_rainfall()
         self.assertEqual(forest.eligibility[0].lo, threshold)
         self.assertTrue(forest.eligibility[0].required)
         for rain in (0, threshold - 1, threshold, threshold + 1, 100):

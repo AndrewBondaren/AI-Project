@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.jsonValidation import terrain_system_keys
+from app.application.jsonValidation import terrain
 from app.application.worldData.generators.terrain.terrainZ import subsurface_terrain_at_z
 from app.application.worldData.generators.terrain.resolveWorldMapTerrain import (
     resolve_world_map_terrain,
@@ -62,7 +62,8 @@ class WorldMapPackReader:
         cell = next((c for c in cells if c.tx == tx and c.ty == ty), None)
         if cell is None:
             return None
-        terrain_set = terrain_system_keys(world)
+        registry = terrain(world)
+        terrain_set = {entry.system_terrain for entry in registry.root}
         surface_z = cell.surface_z
         depth = n_base(world)
         if z == surface_z:
@@ -86,7 +87,7 @@ class WorldMapPackReader:
                 x=x,
                 y=y,
                 z=z,
-                system_terrain=subsurface_terrain_at_z(terrain_set),
+                system_terrain=subsurface_terrain_at_z(terrain_set, registry=registry),
             )
         return None
 

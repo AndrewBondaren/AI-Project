@@ -14,35 +14,36 @@ from app.application.cascade.locationScope import empty_location_chain, room_con
 from app.dataModel.annotationPolicy import DefaultWhenMissing, field_policy, WireFieldPolicy
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.room.roomDef import RoomDef
-from app.dataModel.terrainMasks.worldTerrainMasks import ForestsCategoryPolicy, WorldTerrainMasks
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 from tests.test_context_extend import _world, _room
 
 
 class RuntimeWorldEditPolicyTests(unittest.TestCase):
     def test_missing_and_supplied_valid(self):
-        for raw, expected in (({}, 45), ({"forest_min_rainfall": 60}, 60)):
-            result = resolve_result(ForestsCategoryPolicy, raw)
+        for raw, expected in (({"seed_spacing": 1000}, 2250), ({"seed_spacing": 1000, "max_radius": 60}, 60)):
+            result = resolve_result(LandcoverRegionsCategoryPolicy, raw)
             self.assertTrue(result.resolved)
-            self.assertEqual(result.value.forest_min_rainfall, expected)
+            self.assertEqual(result.value.max_radius, expected)
 
     def test_invalid_has_same_fact_and_no_value_in_both_contexts(self):
         for invalid in (-1, "abc", None):
             facts = []
             for mode in ResolveMode:
                 ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT,
-                                     path_prefix=("terrain_masks", "default_forests"))
+                                     path_prefix=("terrain_masks", "default_landcover"))
                 with patch("app.application.jsonValidation.resolve.logger") as log:
-                    result = resolve_result(ForestsCategoryPolicy, {"forest_min_rainfall": invalid}, ctx=ctx)
+                    result = resolve_result(LandcoverRegionsCategoryPolicy, {"seed_spacing": 1000, "max_radius": invalid}, ctx=ctx)
                 self.assertFalse(result.resolved)
                 self.assertIsNone(result.value)
                 self.assertEqual(len(ctx.errors), 1)
                 self.assertEqual(log.warning.called, mode == ResolveMode.RUNTIME)
                 facts.append(result.issues)
             self.assertEqual(facts[0], facts[1])
-            self.assertEqual(facts[0][0].path, ("terrain_masks", "default_forests", "forest_min_rainfall"))
+            self.assertEqual(facts[0][0].path, ("terrain_masks", "default_landcover", "max_radius"))
 
     def test_nested_parent_must_not_replace_invalid_child(self):
-        raw = {"default_forests": {"forest_min_rainfall": -1}}
+        raw = {"default_landcover": {"max_radius": -1}}
         with self.assertRaises(UnresolvedModelError):
             resolve_model(WorldTerrainMasks, raw)
         with self.assertRaises(ImportValidationError):
@@ -50,10 +51,10 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
 
     def test_patch_preserves_absence_nested(self):
         ctx = ResolveContext(mode=ResolveMode.IMPORT, partial=True)
-        self.assertEqual(resolve_patch(ForestsCategoryPolicy, {}, ctx=ctx), {})
-        self.assertEqual(resolve_patch(WorldTerrainMasks, {"default_forests": {}}, ctx=ctx), {"default_forests": {}})
+        self.assertEqual(resolve_patch(LandcoverRegionsCategoryPolicy, {}, ctx=ctx), {})
+        self.assertEqual(resolve_patch(WorldTerrainMasks, {"default_landcover": {}}, ctx=ctx), {"default_landcover": {}})
         with self.assertRaises(UnresolvedModelError):
-            resolve_patch(ForestsCategoryPolicy, {"forest_min_rainfall": None}, ctx=ctx)
+            resolve_patch(LandcoverRegionsCategoryPolicy, {"max_radius": None}, ctx=ctx)
 
     def test_alias_and_field_metadata(self):
         class Aliased(BaseModel):
@@ -64,10 +65,10 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
         self.assertEqual(resolve_result(Aliased, {"wire_amount": 3}).value.amount, 3)
 
     def test_collection_never_returns_partial_registry(self):
-        class Rows(RootModel[list[ForestsCategoryPolicy]]):
+        class Rows(RootModel[list[LandcoverRegionsCategoryPolicy]]):
             pass
         with self.assertRaises(UnresolvedModelError):
-            resolve_root_list(Rows, [{}, {"forest_min_rainfall": -1}], empty_factory=lambda: Rows([]), label="rows")
+            resolve_root_list(Rows, [{"seed_spacing": 1000}, {"seed_spacing": 1000, "max_radius": -1}], empty_factory=lambda: Rows([]), label="rows")
 
     def test_cascade_metadata_and_real_membership_boundary(self):
         self.assertEqual(field_policy(RoomDef.model_fields["economic_tier"].annotation), WireFieldPolicy.DEFAULT_WHEN_MISSING)
@@ -111,13 +112,13 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
             self.assertEqual(error.exception.issues[0].code, "REF_W_UNAVAILABLE")
 
     def test_bad_parent_shape_cannot_hide_child_contract(self):
-        for raw in (None, {"default_forests": "invalid"}):
+        for raw in (None, {"default_landcover": "invalid"}):
             self.assertFalse(resolve_result(WorldTerrainMasks, raw).resolved)
 
     def test_report_is_shared_only_with_children(self):
         ctx = ResolveContext(mode=ResolveMode.IMPORT)
-        resolve_result(ForestsCategoryPolicy, {"forest_min_rainfall": -1}, ctx=ctx.child("forest"))
-        self.assertEqual(ctx.errors[0].path, ("forest", "forest_min_rainfall"))
+        resolve_result(LandcoverRegionsCategoryPolicy, {"seed_spacing": 1000, "max_radius": -1}, ctx=ctx.child("forest"))
+        self.assertEqual(ctx.errors[0].path, ("forest", "max_radius"))
         self.assertFalse(ResolveContext().errors)
 
     def test_model_invariant_never_produces_unchecked_success(self):
