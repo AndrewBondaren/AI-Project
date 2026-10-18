@@ -5,6 +5,7 @@ from typing import NoReturn
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
 from app.application.jsonValidation.types import FieldPathError
+from app.application.jsonValidation.worldSlices import slice_column_key
 from app.application.jsonValidation.worldRow import terrain_masks, terrain
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.application.worldData.regions.factConsumers.context import FactConsumerContext
@@ -12,6 +13,9 @@ from app.application.worldData.regions.regionFacts import DeclarationFacts
 from app.application.worldData.regions.stateChange.consumer import StateChangeConsumer
 from app.application.worldData.regions.stateChange.contracts import RegionEvaluation
 from app.dataModel.terrainMasks import WorldTerrainMasks
+from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.terrainMasks.worldTerrainMasks import DECLARED_REGIONS
+from app.dataModel.terrainMasks.regions.specs import REGION_NAME
 from app.dataModel.terrainMasks.regions import RegionSpecBase
 from app.dataModel.terrainMasks.regions.edit import AddRegion, RemoveRegion, DeclaredRegionEdit
 from app.db.database import Database
@@ -22,7 +26,7 @@ from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 def apply_region_operation(masks: WorldTerrainMasks, operation: DeclaredRegionEdit,
                            ctx: ResolveContext) -> dict:
     def invalid(message: str) -> NoReturn:
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + ("name",), message,
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (bind_field(REGION_NAME).field,), message,
                                              code="REGION_EDIT_INVALID")])
     entries = list(masks.declared_regions)
     index = next((i for i, entry in enumerate(entries) if entry.name == operation.name), None)
@@ -39,7 +43,8 @@ def apply_region_operation(masks: WorldTerrainMasks, operation: DeclaredRegionEd
             if operation.region.name is None:
                 invalid("update requires region.name")
             entries[index] = operation.region
-    return {"terrain_masks": {"declared_regions": [entry.model_dump(mode="json") for entry in entries]}}
+    return {slice_column_key(WorldTerrainMasks): {
+        bind_field(DECLARED_REGIONS).field: [entry.model_dump(mode="json") for entry in entries]}}
 
 
 class DeclaredRegionEditor:

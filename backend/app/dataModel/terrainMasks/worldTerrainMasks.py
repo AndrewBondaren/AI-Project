@@ -24,6 +24,7 @@ from app.dataModel.terrainMasks.mountain.specs import (
 )
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
+from app.dataModel.cascade.cascadeSpec import FieldRef
 
 
 def _terrain_key(system_terrain: str) -> str:
@@ -151,3 +152,6 @@ class WorldTerrainMasks(BaseModel):
 
     def category_enabled(self, category: MaskCategoryPolicy) -> bool:
         return bool(self.enabled) and bool(category.enabled)
+
+
+DECLARED_REGIONS = FieldRef(lambda: WorldTerrainMasks, lambda masks: masks.declared_regions)

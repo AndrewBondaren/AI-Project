@@ -8,6 +8,8 @@ from app.application.jsonValidation.resolve import ResolveContext, report_issues
 from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.spatial.regionShape import AnchorRadiusShape
 from app.dataModel.terrainMasks.regions import RegionSpecBase
+from app.dataModel.terrainMasks.regions.specs import REGION_NAME
+from app.dataModel.cascade.cascadeGraph import bind_field
 from app.ids.deterministicIds import state_fingerprint
 from app.ids.regionIdentity import region_uid
 
@@ -37,7 +39,7 @@ def declared_region_identity(
             x_min, y_min, _, _ = spec.shape.bbox()
             uid = region_uid(world_uid, bbox_min=(x_min, y_min), shape_kind=spec.shape.kind)
         report_issues(active, [FieldPathError(
-            path=active.path_prefix + ("name",),
+            path=active.path_prefix + (bind_field(REGION_NAME).field,),
             message=f"landcover | degraded_identity | region_uid={uid}; declared region has no name",
             schema_id=active.schema_id,
             code="REGION_DEGRADED_IDENTITY",

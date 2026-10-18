@@ -59,13 +59,16 @@ class WorldService:
     async def edit_region(self, world_uid: str, operation: "DeclaredRegionEdit", *,
                           validate_only: bool = False) -> World:
         from app.application.jsonValidation.worldRow import terrain_masks
+        from app.application.jsonValidation.worldSlices import slice_column_key
+        from app.dataModel.cascade.cascadeGraph import bind_field
+        from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks, DECLARED_REGIONS
         from app.application.worldData.regions.declaredRegionEdit import apply_region_operation
         async with nullcontext() if validate_only else self._write_scope():
             world = await self.get_by_id(world_uid)
             ctx = ResolveContext.for_import(validate_only=validate_only)
             try:
                 patch = apply_region_operation(terrain_masks(world), operation,
-                    ctx.child("terrain_masks").child("declared_regions"))
+                    ctx.child(slice_column_key(WorldTerrainMasks)).child(bind_field(DECLARED_REGIONS).field))
             except UnresolvedModelError as exc:
                 raise ImportValidationError(list(exc.issues)) from exc
             merged = merge_world_patch(world_wire_from_row(world), patch)
