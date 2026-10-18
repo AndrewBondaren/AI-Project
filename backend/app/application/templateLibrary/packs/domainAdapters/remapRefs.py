@@ -20,7 +20,7 @@ from app.application.templateLibrary.packs.domainAdapters.refFields import (
     RELIEF_POLICY_REF_FIELDS,
 )
 from app.application.templateLibrary.packs.errors import LibraryPackValidationError
-from app.application.templateLibrary.packs.legacy.legacyDomainRefs import is_canonical_uid
+from app.ids import is_canonical_uid
 from app.application.templateLibrary.packs.lifecycleContracts import RELIEF_POLICY_FIELD
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ReliefContextPickPolicy,

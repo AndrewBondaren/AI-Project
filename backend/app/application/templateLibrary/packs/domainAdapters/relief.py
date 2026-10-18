@@ -7,7 +7,7 @@ Membership is the single availability source — the legacy
 
 from __future__ import annotations
 
-import logging
+
 from copy import deepcopy
 
 from app.application.jsonValidation.resolve import UnresolvedModelError
@@ -31,18 +31,18 @@ from app.application.templateLibrary.reliefGeomWarn import warn_template_invalid
 from app.application.templateLibrary.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
 )
-from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
+from app.application.templateLibrary.reliefWorldRefValidation import (
+    validate_relief_world_refs,
+)
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.ids import LibraryKind
-
-logger = logging.getLogger(__name__)
 
 
 class ReliefBodyPreparation(TemplateBodyPreparation[ReliefTemplate]):
     """Name-keyed relief bodies — pure schema/body checks only (B5).
 
     World-side barrier/canal validation lives on the write seam
-    (``ReliefPackAdapter`` → ``ReliefWorldImportService``); the read
+    (``ReliefPackAdapter`` → ``validate_relief_world_refs``); the read
     boundary never sees it (B7 review decision 2026-10-15, variant B).
     """
 
@@ -71,7 +71,7 @@ class ReliefPackAdapter(TemplateBodyAdapter):
     """Name-keyed relief bodies; availability is membership-only (B6).
 
     Barrier/canal world-refs run only on this write/import seam — the
-    read boundary stays free of ``ReliefWorldImportService``.
+    read boundary stays free of world-refs validation.
     """
 
     library_kind = LibraryKind.RELIEF_TEMPLATES
@@ -80,26 +80,16 @@ class ReliefPackAdapter(TemplateBodyAdapter):
     def __init__(
         self,
         library: ReliefTemplateLibraryService,
-        world_import: ReliefWorldImportService | None = None,
     ) -> None:
         self._library = library
-        self._world_import = world_import
-        self._unwired_warned = False
 
     def prepare_body(self, raw, *, local_uid, template_uid, world=None):
         outline = super().prepare_body(raw, local_uid=local_uid,
             template_uid=template_uid, world=world)
         if world is None:
             return outline
-        if self._world_import is None:
-            if not self._unwired_warned:
-                self._unwired_warned = True
-                logger.warning(
-                    "packs | relief world checks skipped: "
-                    "ReliefWorldImportService is not wired")
-            return outline
         try:
-            self._world_import.validate_world_refs(world, outline)
+            validate_relief_world_refs(world, outline)
         except ReliefValidationError as exc:
             raise TemplatePreparationError((FieldPathError(
                 (self.library_kind.value, template_uid), str(exc),

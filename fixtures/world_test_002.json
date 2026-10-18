@@ -40,22 +40,25 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "location_type_registry": {
-      "continent": {
-        "display_name": "Континент",
+    "location_type_registry": [
+      {
+        "system_type": "continent",
+        "display_type": "Континент",
         "parent_types": [
           null
         ]
       },
-      "region": {
-        "display_name": "Регион",
+      {
+        "system_type": "region",
+        "display_type": "Регион",
         "parent_types": [
           null,
           "continent"
         ]
       },
-      "settlement": {
-        "display_name": "Поселение",
+      {
+        "system_type": "settlement",
+        "display_type": "Поселение",
         "subtypes": [
           {
             "system_subtype": "city",
@@ -77,16 +80,19 @@
           }
         ]
       },
-      "district": {
-        "display_name": "Район"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "building": {
-        "display_name": "Здание"
+      {
+        "system_type": "building",
+        "display_type": "Здание"
       },
-      "room": {
-        "display_name": "Комната"
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       }
-    },
+    ],
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {
@@ -304,10 +310,22 @@
       }
     ],
     "city_size_registry": [
-      { "system_size": "small", "display_size": "Малый" },
-      { "system_size": "medium", "display_size": "Средний" },
-      { "system_size": "large", "display_size": "Большой" },
-      { "system_size": "huge", "display_size": "Огромный" }
+      {
+        "system_size": "small",
+        "display_size": "Малый"
+      },
+      {
+        "system_size": "medium",
+        "display_size": "Средний"
+      },
+      {
+        "system_size": "large",
+        "display_size": "Большой"
+      },
+      {
+        "system_size": "huge",
+        "display_size": "Огромный"
+      }
     ]
   },
   "states": [
@@ -427,12 +445,16 @@
         {
           "system_specialization": "extract",
           "subjects": {
-            "resource": ["iron_ore"]
+            "resource": [
+              "iron_ore"
+            ]
           }
         }
       ],
       "typical_districts": [
-        { "district_type": "civic" }
+        {
+          "district_type": "civic"
+        }
       ]
     },
     {
@@ -469,7 +491,9 @@
         "process"
       ],
       "typical_districts": [
-        { "district_type": "port" }
+        {
+          "district_type": "port"
+        }
       ]
     }
   ]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, IgnoreOnWire, StrictOnWire
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
@@ -20,11 +20,9 @@ class LocationTypeEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     system_type: StrictOnWire[RegistryKey[WorldLocationTypeRegistry]]
-    # validation_alias — wire contract on POJO (not generator hardcode): canonical
-    # key display_type; display_name — legacy import alias (tz_locations.md § registry).
-    display_type: StrictOnWire[str] = Field(
-        validation_alias=AliasChoices("display_type", "display_name"),
-    )
+    # Wire contract on POJO (not generator hardcode): canonical key
+    # display_type only (tz_locations.md § registry).
+    display_type: StrictOnWire[str]
     parent_types: DefaultWhenMissing[list[RegistryKey[WorldLocationTypeRegistry] | None]] = Field(default_factory=list)
     is_outdoor: DefaultWhenMissing[bool | None] = None
     payload_kind: DefaultWhenMissing[PayloadKind | None] = None

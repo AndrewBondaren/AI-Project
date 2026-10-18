@@ -27,9 +27,6 @@ if TYPE_CHECKING:
     from app.application.templateLibrary.reliefTemplateLibraryService import (
         ReliefTemplateLibraryService,
     )
-    from app.application.templateLibrary.reliefWorldImportService import (
-        ReliefWorldImportService,
-    )
     from app.application.templateLibrary.structureTemplateLibraryService import (
         StructureTemplateLibraryService,
     )
@@ -41,14 +38,11 @@ def build_pack_domain_adapters(
     structure_library: StructureTemplateLibraryService,
     building_library: BuildingTemplateLibraryService,
     plot_library: PlotTemplateLibraryService,
-    relief_world_import: ReliefWorldImportService | None = None,
 ) -> dict[LibraryKind, PackDomainAdapter]:
     """Container seam — one adapter per supported ``library_kind``."""
     return {
         LibraryKind.PLOT_TEMPLATES: PlotPackAdapter(plot_library),
-        LibraryKind.RELIEF_TEMPLATES: ReliefPackAdapter(
-            relief_library, relief_world_import
-        ),
+        LibraryKind.RELIEF_TEMPLATES: ReliefPackAdapter(relief_library),
         LibraryKind.STRUCTURE_TEMPLATES: StructurePackAdapter(structure_library),
         LibraryKind.BUILDING_TEMPLATES: BuildingPackAdapter(building_library),
     }

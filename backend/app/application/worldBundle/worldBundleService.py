@@ -25,9 +25,7 @@ from app.application.jsonValidation.resolve import ResolveContext, StrictFieldEr
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from pydantic import ValidationError
 from app.application.worldBundle.handler import IBundleSectionHandler
-from app.application.worldBundle.bundleRemapService import remap_bundle
 from app.application.worldBundle.deriveWorldUid import derive_world_uid
-from app.application.templateLibrary.packs.legacy.legacyWorldInput import extract_legacy_world_input
 from app.application.worldData.pack.import_.importLevels import (
     ImportLevel,
     filter_bundle_for_export,
@@ -42,15 +40,6 @@ class _ImportFailed(Exception):
     pass
 
 
-def _cleanse_consumed_rows(world: dict) -> dict:
-    """Legacy registry columns are pure migration input (B2/B7): after
-    extraction nothing may reach ``World`` — the fields no longer exist."""
-    cleansed = dict(world)
-    cleansed.pop("building_template_registry", None)
-    cleansed.pop("relief_template_registry", None)
-    return cleansed
-
-
 class WorldBundleService:
 
     def __init__(
@@ -59,15 +48,13 @@ class WorldBundleService:
         world_service: WorldService,
         handlers: list[IBundleSectionHandler],
         library_archives=None,
-        legacy_migration=None,
     ) -> None:
         self._db = db
         self._world = world_service
         self._handlers = handlers
         self._by_key = {h.key: h for h in handlers}
         self._archives = library_archives
-        self._migration = legacy_migration
-        self._copy_import = WorldCopyImport(db, world_service, handlers, library_archives, legacy_migration)
+        self._copy_import = WorldCopyImport(db, world_service, handlers, library_archives)
 
     async def export(self, world_uid: str, *, level: ImportLevel = "skeleton") -> dict:
         world = await self._world.get_by_id(world_uid)
@@ -122,7 +109,7 @@ class WorldBundleService:
     ) -> tuple[dict[str, ImportResult], bool] | ImportValidationReport:
         ctx = ResolveContext.for_import(validate_only=validate_only)
         try:
-            data, legacy = self._prepare_bundle(data, level=level, ctx=ctx)
+            data = self._prepare_bundle(data, level=level, ctx=ctx)
         except ImportValidationError as exc:
             if validate_only:
                 return ImportValidationReport(tuple(exc.errors))
@@ -131,21 +118,15 @@ class WorldBundleService:
             return ImportValidationReport()
 
         return await self._copy_import.run(data, level=level, decisions=decisions,
-                                         preview_token=preview_token, legacy=legacy)
+                                         preview_token=preview_token)
 
     def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext):
         """Shared pipeline. This phase has no repository/Pack/task access."""
         if not isinstance(data.get(BundleSection.WORLD), dict):
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,), "expected world object", code="EXPECTED_OBJECT")])
-        raw_world = data[BundleSection.WORLD]
-        if self._migration is not None:
-            raw_for_normalize = _cleanse_consumed_rows(raw_world)
-        else:
-            raw_for_normalize = raw_world
-
         try:
             validate_bundle_for_import(data, level)
-            world_data = normalize_world(dict(raw_for_normalize), ctx=ctx)
+            world_data = normalize_world(dict(data[BundleSection.WORLD]), ctx=ctx)
             if not world_data.get("world_uid"):
                 world_data["world_uid"] = derive_world_uid(world_data)
             data = {**data, BundleSection.WORLD: world_data}
@@ -167,23 +148,11 @@ class WorldBundleService:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,) + tuple(e["loc"]), e["msg"], code=e["type"]) for e in exc.errors()]) from exc
         except ValueError as exc:
             raise ImportValidationError([FieldPathError((BundleSection.WORLD,), str(exc), code="VALIDATION_ERROR")]) from exc
-        legacy = None
-        if self._migration is not None:
-            # Raw extraction before the consumed sections/registry rows are normalized away.
-            legacy = extract_legacy_world_input(
-                {**raw_world, "world_uid": world_data["world_uid"]}, data)
         consumed = set()
         if self._archives is not None:
-            migrate = self._migration is not None and self._migration.has_content(legacy)
-            # Convert raw compatibility bodies before the legacy section handlers can normalize them.
             try:
-                packs, consumed = import_libraries(data, legacy_migration=migrate)
+                packs, consumed = import_libraries(data)
                 self._archives.validate_bodies(packs, world)
-                if migrate:
-                    if legacy.issues:
-                        ctx.errors.extend(legacy.issues)
-                    else:
-                        ctx.errors.extend(self._migration.plan_wire(legacy, packs))
             except ImportValidationError as exc:
                 ctx.errors.extend(exc.errors)
                 consumed = LIBRARY_CONSUMED_SECTIONS
@@ -205,4 +174,4 @@ class WorldBundleService:
                     continue
         if ctx.errors:
             raise ImportValidationError(list(ctx.errors))
-        return data, legacy
+        return data

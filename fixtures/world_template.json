@@ -39,7 +39,6 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-
     "default_passage_height": 2,
     "map_subsurface_depth": 0,
     "grid_bbox_padding": 2,
@@ -157,10 +156,26 @@
         {
           "location_uid": "loc-template-lake-declared",
           "shoreline": [
-            {"x": 15000, "y": 9000, "z": 0},
-            {"x": 16800, "y": 9600, "z": 0},
-            {"x": 16200, "y": 7800, "z": 0},
-            {"x": 13800, "y": 8400, "z": 0}
+            {
+              "x": 15000,
+              "y": 9000,
+              "z": 0
+            },
+            {
+              "x": 16800,
+              "y": 9600,
+              "z": 0
+            },
+            {
+              "x": 16200,
+              "y": 7800,
+              "z": 0
+            },
+            {
+              "x": 13800,
+              "y": 8400,
+              "z": 0
+            }
           ]
         }
       ],
@@ -168,10 +183,26 @@
         {
           "location_uid": "loc-template-sea-declared",
           "path": [
-            {"x": 21000, "y": 6000, "z": 0},
-            {"x": 24000, "y": 6000, "z": 0},
-            {"x": 30000, "y": 6000, "z": 0},
-            {"x": 36000, "y": 6000, "z": 0}
+            {
+              "x": 21000,
+              "y": 6000,
+              "z": 0
+            },
+            {
+              "x": 24000,
+              "y": 6000,
+              "z": 0
+            },
+            {
+              "x": 30000,
+              "y": 6000,
+              "z": 0
+            },
+            {
+              "x": 36000,
+              "y": 6000,
+              "z": 0
+            }
           ]
         }
       ],
@@ -197,16 +228,28 @@
           "system_role": "stem",
           "parent_location_uid": "loc-template-river-basin-north",
           "declare_mode": "endpoints",
-          "source": {"x": 21000, "y": 18000, "z": 120},
-          "mouth": {"location_uid": "loc-template-lake-declared"}
+          "source": {
+            "x": 21000,
+            "y": 18000,
+            "z": 120
+          },
+          "mouth": {
+            "location_uid": "loc-template-lake-declared"
+          }
         },
         {
           "location_uid": "loc-template-river-tributary-demo",
           "system_role": "tributary",
           "parent_location_uid": "loc-template-river-volga",
           "declare_mode": "endpoints",
-          "source": {"x": 18000, "y": 15000, "z": 80},
-          "mouth": {"location_uid": "loc-template-coast-declared"}
+          "source": {
+            "x": 18000,
+            "y": 15000,
+            "z": 80
+          },
+          "mouth": {
+            "location_uid": "loc-template-coast-declared"
+          }
         },
         {
           "location_uid": "loc-template-river-declared",
@@ -214,32 +257,72 @@
           "declare_mode": "segments",
           "segments": [
             {
-              "from": {"x": 6000, "y": 18000, "z": 0},
-              "to": {"x": 9000, "y": 18000, "z": 0},
+              "from": {
+                "x": 6000,
+                "y": 18000,
+                "z": 0
+              },
+              "to": {
+                "x": 9000,
+                "y": 18000,
+                "z": 0
+              },
               "connection_type": "mountain_river",
               "width_cells": 1
             },
             {
-              "from": {"x": 9000, "y": 18000, "z": 0},
-              "to": {"x": 12000, "y": 15000, "z": 0},
+              "from": {
+                "x": 9000,
+                "y": 18000,
+                "z": 0
+              },
+              "to": {
+                "x": 12000,
+                "y": 15000,
+                "z": 0
+              },
               "connection_type": "mountain_river",
               "width_cells": 1
             },
             {
-              "from": {"x": 12000, "y": 15000, "z": 0},
-              "to": {"x": 15000, "y": 12000, "z": 0},
+              "from": {
+                "x": 12000,
+                "y": 15000,
+                "z": 0
+              },
+              "to": {
+                "x": 15000,
+                "y": 12000,
+                "z": 0
+              },
               "connection_type": "mountain_river",
               "width_cells": 1
             },
             {
-              "from": {"x": 15000, "y": 12000, "z": 0},
-              "to": {"x": 18000, "y": 9000, "z": 0},
+              "from": {
+                "x": 15000,
+                "y": 12000,
+                "z": 0
+              },
+              "to": {
+                "x": 18000,
+                "y": 9000,
+                "z": 0
+              },
               "connection_type": "river",
               "width_cells": 1
             },
             {
-              "from": {"x": 18000, "y": 9000, "z": 0},
-              "to": {"x": 21000, "y": 6000, "z": 0},
+              "from": {
+                "x": 18000,
+                "y": 9000,
+                "z": 0
+              },
+              "to": {
+                "x": 21000,
+                "y": 6000,
+                "z": 0
+              },
               "connection_type": "river",
               "width_cells": 1
             }
@@ -250,17 +333,51 @@
           "system_role": "tributary",
           "parent_location_uid": "loc-template-river-declared",
           "declare_mode": "endpoints",
-          "source": {"x": 7500, "y": 16500, "z": 0},
-          "mouth": {"x": 9000, "y": 18000, "z": 0}
+          "source": {
+            "x": 7500,
+            "y": 16500,
+            "z": 0
+          },
+          "mouth": {
+            "x": 9000,
+            "y": 18000,
+            "z": 0
+          }
         }
       ]
     },
     "terrain_masks": {
-      "default_plains": {
-        "hills": { "min_spacing": 500, "radius": 40, "height": 2, "shapes": [] }
-      },
-      "default_forests": {
-        "hills": { "min_spacing": 500, "radius": 25, "height": 2, "shapes": [] }
+      "default_landcover": {
+        "enabled": true,
+        "autoresolve": true,
+        "transition_threshold": 1.0,
+        "seed_spacing": 1000,
+        "max_radius": 2250,
+        "claim_noise": {
+          "amplitude": 125,
+          "scale": 250
+        },
+        "fallback_terrain": "plains",
+        "terrain_policies": {
+          "forest": {
+            "hills": {
+              "min_spacing": 500,
+              "radius": 25,
+              "height": 2,
+              "shapes": []
+            },
+            "system_terrain": "forest"
+          },
+          "plains": {
+            "hills": {
+              "min_spacing": 500,
+              "radius": 40,
+              "height": 2,
+              "shapes": []
+            },
+            "system_terrain": "plains"
+          }
+        }
       }
     },
     "caves": {
@@ -273,27 +390,34 @@
         "materialize_named_locations": false
       }
     },
-    "location_type_registry": {
-      "region": {
-        "display_name": "Регион"
+    "location_type_registry": [
+      {
+        "system_type": "region",
+        "display_type": "Регион"
       },
-      "territory": {
-        "display_name": "Территория"
+      {
+        "system_type": "territory",
+        "display_type": "Территория"
       },
-      "settlement": {
-        "display_name": "Поселение"
+      {
+        "system_type": "settlement",
+        "display_type": "Поселение"
       },
-      "district": {
-        "display_name": "Район"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "building": {
-        "display_name": "Строение"
+      {
+        "system_type": "building",
+        "display_type": "Строение"
       },
-      "room": {
-        "display_name": "Помещение"
+      {
+        "system_type": "room",
+        "display_type": "Помещение"
       },
-      "geographic": {
-        "display_name": "География",
+      {
+        "system_type": "geographic",
+        "display_type": "География",
         "parent_types": [
           null,
           "region",
@@ -301,10 +425,11 @@
           "geographic"
         ]
       },
-      "climate_pole": {
-        "display_name": "Климатический полюс"
+      {
+        "system_type": "climate_pole",
+        "display_type": "Климатический полюс"
       }
-    },
+    ],
     "connection_type_registry": [
       {
         "system_connection_type": "trail",
@@ -733,8 +858,12 @@
         "system_material": "dirt_road",
         "display_name": "Грунтовое покрытие дороги",
         "material_category": "solid",
-        "tags": ["raw"],
-        "use_type": ["road"]
+        "tags": [
+          "raw"
+        ],
+        "use_type": [
+          "road"
+        ]
       }
     ]
   },

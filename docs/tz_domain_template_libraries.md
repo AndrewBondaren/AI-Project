@@ -147,7 +147,7 @@ SQL/model/bundle DTO меняются согласованно. Export/import и
 проверкой удаления/удержанием. Не менять семантику прочих location types
 без их доменного контракта. Новых generic provenance/version полей нет.
 
-## 6. Recipe refs, legacy и migration
+## 6. Recipe refs и migration (legacy снято 2026-10-18)
 
 District required_structures[].plot_template — plot UID. Plot_counts и
 plot_priority на settlement/district адресуются plot UID. Aliases
@@ -159,30 +159,14 @@ Priority: district priority → settlement priority → 0. Missing key не
 равен нулю; explicit 0 и порядок required сохраняются. Все UID keys
 участвуют в composed remap и declared ref usage.
 
-Legacy names принимаются только compatibility import: по явной карте или
-однозначному доступному совпадению с диагностическим path. Несколько
-members — ошибка с кандидатами, не first/last wins; неизвестное required
-значение — ошибка, не runtime fallback в importer.
-
-Legacy registry извлекается до world normalization; pointers → pins /
-полные instances по owner/default status; authored/edited тела сохраняются.
-Извлечение building body в отдельный member не обязательно: действовать
-по declared source identity, не по одному наличию вложенности.
-Modern world-owned manifests/bodies сохраняются целиком; пользовательский
-engine-пак не публикуется world import'ом. Общий writer/policy/token/UOW,
-без отдельного миграционного confirm или скрытого hydrate-write.
-
-Pure converter получает raw body до normalization, явно объявленную source
-shape, destination member и scoped membership от caller. Legacy plot из
-смешанной building-библиотеки переносится в plot_templates вместе с вложенными
-main/secondary bodies. Legacy outline можно перенести в building_templates
-только с конкретной structure и полями, имеющими target mapping; geometry
-и прочие непереносимые поля не отбрасываются молча, а дают ошибку с path.
-Modern тела и provenance сохраняются; remap касается объявленных UID refs.
-Old → intermediate → final карты композируются с проверкой конфликтов/циклов.
-Результат сохраняет все исходники, paths и сведения о resolution legacy names;
-при ошибке runnable converted batch отсутствует. Converter не пишет SQL,
-не выполняет attach/instantiate и не придумывает identity для inline body.
+**Legacy/migration снята (2026-10-18):** compatibility import старых имён,
+извлечение legacy registry pointers, converter смешанных building/plot тел
+и карта старых/новых UID удалены. Импорт принимает только канонические
+UID refs и pack membership (`tz_template_library_packs` §4); старые
+форматы — ошибка импорта, без runtime fallback. Modern world-owned
+manifests/bodies сохраняются целиком; пользовательский engine-пак не
+публикуется world import'ом. Общий writer/policy/token/UOW без отдельного
+миграционного confirm.
 
 ## 7. Ошибки и ограничения
 

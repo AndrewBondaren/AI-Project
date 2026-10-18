@@ -111,42 +111,25 @@ def world_wire_from_row(world: Any) -> dict[str, Any]:
 
 
 def climate_zone_wire_from_raw(raw: Any) -> Any:
-    """Normalize ``climate_zone_registry`` wire (array or legacy dict map).
+    """``climate_zone_registry`` wire: canonical list only — dict-map removed.
 
     ``None`` → absent (caller may skip or use empty_factory).
-    Empty list / empty dict → ``[]`` so import merge materializes canonical
-    via ``resolve_root_list`` (same as other registry_list slices).
     """
-    if raw is None:
-        return None
-    if isinstance(raw, list):
+    if raw is None or isinstance(raw, list):
         return raw
     if isinstance(raw, dict):
-        if not raw:
-            return []
-        values = list(raw.values())
-        if values and all(isinstance(value, dict) for value in values):
-            return values
-        return [raw]
+        raise ValueError(
+            "climate_zone_registry expects a list; the dict-map form was removed")
     return raw
 
 
 def registry_map_to_list(raw: Any, *, id_field: str) -> Any:
-    """Normalize legacy registry wire map ``{id: row}`` → list with ``id_field`` injected."""
-    if raw is None:
-        return None
-    if isinstance(raw, list):
+    """``*_registry`` wire: canonical list only — the dict-map form was removed."""
+    if raw is None or isinstance(raw, list):
         return raw
     if isinstance(raw, dict):
-        rows: list[Any] = []
-        for key, value in raw.items():
-            if isinstance(value, dict):
-                row = dict(value)
-                row.setdefault(id_field, key)
-                rows.append(row)
-            else:
-                rows.append(value)
-        return rows
+        raise ValueError(
+            f"{id_field} registry expects a list; the dict-map form was removed")
     return raw
 
 

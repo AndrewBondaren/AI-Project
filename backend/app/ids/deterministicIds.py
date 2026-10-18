@@ -36,7 +36,7 @@ import json
 from enum import Enum
 from random import Random
 from typing import Any
-from uuid import NAMESPACE_DNS, uuid4, uuid5
+from uuid import NAMESPACE_DNS, UUID, uuid4, uuid5
 
 from app.ids.uidKind import LibraryKind, UidKind
 
@@ -155,6 +155,14 @@ def remapped_library_uid(
         f"{target_pack_uid}{UID_PART_SEPARATOR}{LibraryKind(library).value}"
         f"{UID_PART_SEPARATOR}source_template_uid={source_template_uid}"
     )
+
+
+def is_canonical_uid(value: Any) -> bool:
+    """Wire-shape check: the value is a canonical UUID string."""
+    try:
+        return isinstance(value, str) and str(UUID(value)) == value
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 def state_fingerprint(value: Any) -> str:

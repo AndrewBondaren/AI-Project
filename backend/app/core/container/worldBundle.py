@@ -36,6 +36,5 @@ class WorldBundleWiring:
                 world_service=self.world_service(),
                 handlers=handlers,
                 library_archives=self.library_pack_service().archives,
-                legacy_migration=self.legacy_world_migration(),
             )
         return self._world_bundle_service

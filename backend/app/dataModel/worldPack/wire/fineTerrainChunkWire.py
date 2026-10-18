@@ -19,24 +19,6 @@ class FineTerrainZRun(BaseModel):
     system_terrain: str
     system_material: str | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_legacy_wire(cls, data: object) -> object:
-        if not isinstance(data, dict):
-            return data
-        if data.get("system_terrain"):
-            return data
-        terrain_id = data.get("terrain_id")
-        material_id = data.get("material_id")
-        migrated = dict(data)
-        if terrain_id is not None and "system_terrain" not in migrated:
-            migrated["system_terrain"] = f"terrain_{int(terrain_id)}"
-            migrated.pop("terrain_id", None)
-        if material_id and int(material_id) != 0:
-            migrated["system_material"] = f"material_{int(material_id)}"
-            migrated.pop("material_id", None)
-        return migrated
-
     def cells(self) -> list[tuple[int, int, int]]:
         z_lo, z_hi = min(self.z0, self.z1), max(self.z0, self.z1)
         return [(0, 0, z) for z in range(z_lo, z_hi + 1)]

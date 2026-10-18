@@ -5,28 +5,19 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Self
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 
 
 class RaceTemplateOutline(BaseModel):
-    """Wire/library body for one race template.
-
-    Legacy aliases: ``race_uid`` → ``template_uid``, ``display_race`` → ``display_name``.
-    """
+    """Wire/library body for one race template."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    template_uid: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("template_uid", "race_uid"),
-    )
+    template_uid: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = None
     system_name: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = None
-    display_name: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("display_name", "display_race"),
-    )
+    display_name: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = None
     created_at: DefaultWhenMissing[str | None] = None
     race_traits: DefaultWhenMissing[dict[str, Any] | None] = None
     male: DefaultWhenMissing[dict[str, Any] | None] = None

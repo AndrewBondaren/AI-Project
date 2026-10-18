@@ -8,10 +8,8 @@ from typing import Annotated, Any, get_args, get_origin
 _WIRE_ALIAS_NAMES = frozenset({
     "StrictOnWire",
     "IgnoreOnWire",
-    "DefaultOnWire",
     "DefaultWhenMissing",
     "StrictEnumOnWire",
-    "DefaultEnumOnWire",
     "DefaultEnumWhenMissing",
 })
 
@@ -25,9 +23,6 @@ class WireFieldPolicy(StrEnum):
     IGNORE_ON_WIRE = "ignore_on_wire"
     """Wire only when present — no ``Field`` default fill."""
 
-    DEFAULT = "default"
-    """Deprecated metadata value; no error-default execution path remains."""
-
     DEFAULT_WHEN_MISSING = "default_when_missing"
     """Missing wire → schema default; supplied invalid value → unresolved."""
 
@@ -38,8 +33,6 @@ class EnumWire:
 
 type StrictOnWire[T] = Annotated[T, WireFieldPolicy.STRICT_ON_WIRE]
 type IgnoreOnWire[T] = Annotated[T, WireFieldPolicy.IGNORE_ON_WIRE]
-# Deprecated import names retain source compatibility, with the migrated policy.
-type DefaultOnWire[T] = Annotated[T, WireFieldPolicy.DEFAULT_WHEN_MISSING]
 type DefaultWhenMissing[T] = Annotated[T, WireFieldPolicy.DEFAULT_WHEN_MISSING]
 type DefaultEnumWhenMissing[E] = Annotated[
     E, WireFieldPolicy.DEFAULT_WHEN_MISSING, EnumWire(),
@@ -48,11 +41,6 @@ type DefaultEnumWhenMissing[E] = Annotated[
 type StrictEnumOnWire[E: StrEnum] = Annotated[
     E,
     WireFieldPolicy.STRICT_ON_WIRE,
-    EnumWire(),
-]
-type DefaultEnumOnWire[E: StrEnum] = Annotated[
-    E,
-    WireFieldPolicy.DEFAULT_WHEN_MISSING,
     EnumWire(),
 ]
 

@@ -40,19 +40,22 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "location_type_registry": {
-      "region": {
-        "display_name": "Регион",
+    "location_type_registry": [
+      {
+        "system_type": "region",
+        "display_type": "Регион",
         "parent_types": [
           null,
           "continent"
         ]
       },
-      "territory": {
-        "display_name": "Территория"
+      {
+        "system_type": "territory",
+        "display_type": "Территория"
       },
-      "settlement": {
-        "display_name": "Поселение",
+      {
+        "system_type": "settlement",
+        "display_type": "Поселение",
         "subtypes": [
           {
             "system_subtype": "city",
@@ -74,17 +77,21 @@
           }
         ]
       },
-      "district": {
-        "display_name": "Район"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "building": {
-        "display_name": "Здание"
+      {
+        "system_type": "building",
+        "display_type": "Здание"
       },
-      "room": {
-        "display_name": "Комната"
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       },
-      "geographic": {
-        "display_name": "География",
+      {
+        "system_type": "geographic",
+        "display_type": "География",
         "parent_types": [
           null,
           "region",
@@ -92,16 +99,18 @@
           "geographic"
         ]
       },
-      "climate_pole": {
-        "display_name": "Климатический полюс"
+      {
+        "system_type": "climate_pole",
+        "display_type": "Климатический полюс"
       },
-      "continent": {
-        "display_name": "Континент",
+      {
+        "system_type": "continent",
+        "display_type": "Континент",
         "parent_types": [
           null
         ]
       }
-    },
+    ],
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {

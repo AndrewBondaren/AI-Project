@@ -8,23 +8,17 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Self
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 
 
 class PerkTemplateOutline(BaseModel):
-    """Wire/library body for one perk template.
-
-    Legacy alias: ``perk_uid`` → ``template_uid``.
-    """
+    """Wire/library body for one perk template."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    template_uid: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("template_uid", "perk_uid"),
-    )
+    template_uid: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = None
     system_name: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = None
     display_name: DefaultWhenMissing[Annotated[str, Field(min_length=1)] | None] = None
     system_description: DefaultWhenMissing[str | None] = None

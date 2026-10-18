@@ -118,32 +118,18 @@ async def import_relief_into_world(
     container=Depends(get_container),
     negotiation=Depends(parse_negotiation),
 ) -> JSONResponse:
-    """Instantiate the pack owning ``template_uid``, or import outline body(ies)."""
-    svc = container.relief_world_import_service()
-    try:
-        uid = template_uid
-        if uid is None and isinstance(data, dict) and set(data) == {"template_uid"}:
-            uid = data["template_uid"]
-        if uid is not None:
-            result = await _instantiate_member_pack(container, world_uid, uid,
-                decisions=negotiation.decisions, preview_token=negotiation.preview_token)
-            return JSONResponse(status_code=200, content=result)
-        body = data
-        if body is None:
-            raise HTTPException(status_code=422, detail="Provide template_uid or JSON body")
-        if isinstance(body, dict):
-            outlines = [body]
-        elif isinstance(body, list):
-            outlines = body
-        else:
-            raise HTTPException(status_code=422, detail="Expected object or array")
-        if any(not isinstance(outline, dict) for outline in outlines):
-            raise HTTPException(status_code=422, detail="Array items must be objects")
-        result = require_no_policy(await svc.import_outlines_into_world(world_uid, outlines,
-            decisions=negotiation.decisions, preview_token=negotiation.preview_token))
-        return JSONResponse(status_code=200, content=result)
-    except (ReliefNotFoundError, ReliefValidationError) as exc:
-        raise _http_from_relief(exc) from exc
+    """Instantiate the pack owning ``template_uid`` into the world."""
+    uid = template_uid
+    if uid is None and isinstance(data, dict) and set(data) == {"template_uid"}:
+        uid = data["template_uid"]
+    if uid is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide template_uid; loose outline bodies are not accepted",
+        )
+    result = await _instantiate_member_pack(container, world_uid, uid,
+        decisions=negotiation.decisions, preview_token=negotiation.preview_token)
+    return JSONResponse(status_code=200, content=result)
 
 
 @router.delete("/relief-templates/{template_uid}", status_code=204)

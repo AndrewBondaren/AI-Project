@@ -40,30 +40,35 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "location_type_registry": {
-      "continent": {
-        "display_name": "Континент",
+    "location_type_registry": [
+      {
+        "system_type": "continent",
+        "display_type": "Континент",
         "parent_types": [
           null
         ]
       },
-      "region": {
-        "display_name": "Регион",
+      {
+        "system_type": "region",
+        "display_type": "Регион",
         "parent_types": [
           null,
           "continent"
         ]
       },
-      "district": {
-        "display_name": "Район"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "building": {
-        "display_name": "Здание"
+      {
+        "system_type": "building",
+        "display_type": "Здание"
       },
-      "room": {
-        "display_name": "Комната"
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       }
-    },
+    ],
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {

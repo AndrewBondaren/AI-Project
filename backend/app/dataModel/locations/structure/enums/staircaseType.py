@@ -22,9 +22,6 @@ class StaircaseType(StrEnum):
     @classmethod
     def from_wire(cls, key: str) -> StaircaseType | None:
         norm = (key or "").strip().lower()
-        legacy = _LEGACY_WIRE_ALIASES.get(norm)
-        if legacy is not None:
-            return legacy
         for member in cls:
             if member.value == norm:
                 return member
@@ -45,11 +42,6 @@ class StaircaseType(StrEnum):
         return cls.from_wire(str(key))
 
 
-_LEGACY_WIRE_ALIASES: dict[str, StaircaseType] = {
-    "trapdoor": StaircaseType.VERTICAL_LADDER,
-}
-
-
 _SPECS: dict[StaircaseType, StaircaseTypeSpec] = {
     StaircaseType.STRAIGHT: StaircaseTypeSpec(default_shaft_size_type="standard"),
     StaircaseType.U_SHAPE: StaircaseTypeSpec(default_shaft_size_type="sq_small"),
@@ -62,11 +54,6 @@ _SPECS: dict[StaircaseType, StaircaseTypeSpec] = {
         default_shaft_size_type="sq_small",
         requires_shaft=False,
     ),
-}
-
-# Legacy wire alias: staircase_type "standard" → straight size preset key.
-_STAIRCASE_TYPE_SIZE_ALIASES: dict[str, str] = {
-    "standard": "standard",
 }
 
 _FALLBACK_SHAFT_SIZE_TYPE = "sq_small"
@@ -84,9 +71,6 @@ def requires_shaft(staircase_type: str | StaircaseType | None) -> bool:
 def default_shaft_size_type(staircase_type: str | StaircaseType | None) -> str:
     if isinstance(staircase_type, StaircaseType):
         return _SPECS[staircase_type].default_shaft_size_type
-    alias = _STAIRCASE_TYPE_SIZE_ALIASES.get((staircase_type or "").strip().lower())
-    if alias is not None:
-        return alias
     member = StaircaseType.parse_template(staircase_type)
     if member is not None:
         return _SPECS[member].default_shaft_size_type

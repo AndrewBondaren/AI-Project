@@ -20,16 +20,12 @@ metadata:
 **A0, 2026-10-14:** [доменные библиотеки](tz_domain_template_libraries.md).
 Modern world archive переносит world-owned packs/members/bodies целиком
 с domain kinds plot/building/structure; plot содержит building templates,
-явные refs внутри тел — UID. Legacy flat sections/pointers читаются только
-compatibility importer, а не служат современным источником доступности.
+явные refs внутри тел — UID. Flat sections/pointers сняты (2026-10-18):
+compatibility importer и world-owned `legacy` pack удалены, импорт
+отвергает старые секции ошибкой.
 Archive root для plot — plot_templates; для structure — structures_templates.
 Modern library_packs всегда адресует members по UID и определяет body domain
-через library_kind. Flat plot_templates — compatibility input, переносимый
-в world-owned legacy pack; старые flat building_templates с явными plot-полями
-проходят converter до outline parser. Bare outline без structure отвергается.
-Структуры такого self-contained flat input должны иметь incoming pack membership;
-converter не ищет их по глобальной SQL-библиотеке. Совпадение имён неоднозначно
-при нескольких кандидатах. validate_only выполняет ту же подготовку без записи.
+через library_kind. validate_only выполняет ту же подготовку без записи.
 Entity DTO переносит system_template_uid и system_structure_template_uid;
 world copy remap обеих ссылок согласован с library uid_map. Engine defaults
 обеспечиваются доверенными spec, не публикуются world import'ом.
@@ -43,8 +39,8 @@ members, POJO-defaults полей не являются отдельной эк�
 - тонкий `WorldBundleService` (validate → normalize → remap → transaction → порядок);
 - секции = handlers двух родов (entity / library-template);
 - **self-contained skeleton** возит world-owned manifests/members/bodies
-  в library subtree; pins/refs в world — UID. Старые flat body/pointer
-  sections ниже описывают legacy-compatible wire до A0/cutover.
+  в library subtree; pins/refs в world — UID. Flat body/pointer
+  sections сняты (2026-10-18): импорт их отвергает.
 
 **Не slice:** не проектируем «сначала только то, что уже в коде». Каркас handlers и allowlist описывают **полный** целевой skeleton; имплементация идёт **слоями архитектуры** (errors → protocol → kinds → все handlers), не «v1 без building_templates».
 
@@ -88,7 +84,8 @@ engine-библиотеки идут отдельным архивом `kind:"li
 Первая версия конверта — `format_version: 1`; индекс секций, согласованность
 `source` и правила воспроизводимости заданы в §4.2 связанного ТЗ.
 `download=false` сохраняет inline JSON-preview sections dict; файловый экспорт
-пишет `.wpack`, импорт также читает legacy flat JSON. Проверка ZIP-конверта
+пишет `.wpack`; legacy flat JSON импортом отвергается (2026-10-18).
+Проверка ZIP-конверта
 предшествует JSON resolver; дальнейший pipeline handlers остаётся общим.
 
 ---
@@ -141,10 +138,11 @@ engine-библиотеки идут отдельным архивом `kind:"li
 
 ### B. Library-template секции (G4-паттерн)
 
-**Уточнение B7 (2026-10-15):** для пак-доменов (plot/building/structure/
-relief) G4-паттерн отменён. Flat-ключи `building_templates` /
-`relief_templates` / `plot_templates` / `structure_templates` — только
-compatibility input `import_libraries` → world-owned `legacy` pack; современный
+**Уточнение B7 (2026-10-15), дополнено 2026-10-18:** для пак-доменов
+(plot/building/structure/relief) G4-паттерн отменён. Flat-ключи
+`building_templates` / `relief_templates` / `plot_templates` /
+`structure_templates` — ошибка импорта: compatibility input
+`import_libraries` → world-owned `legacy` pack снят целиком (2026-10-18);
 экспорт тел идёт `library/`-subtree архива, а не секциями. World
 pointer-реестры `building_template_registry` / `relief_template_registry`
 удалены из schema и `World`-модели: availability = membership, явный выбор =
@@ -157,8 +155,8 @@ Registry на world = pointers; top-level секция = полные тела �
 
 | # | Ключ (цель) | Library SQL (цель) | World pointer registry | Product SoT / gap |
 |---|---|---|---|---|
-| 6 | `relief_templates` | `relief_templates` | ~~`relief_template_registry`~~ удалён (B7); compat flat input → `legacy` pack | R35 ✅ wire уже есть |
-| 7 | `building_templates` | `building_templates` | ~~`building_template_registry`~~ удалён (B7); compat flat input → `legacy` pack | [`tz_building_generator.md`](./tz_building_generator.md) §5–6 |
+| 6 | `relief_templates` | `relief_templates` | ~~`relief_template_registry`~~ удалён (B7); flat-секция отвергается (2026-10-18) | R35 ✅ wire уже есть |
+| 7 | `building_templates` | `building_templates` | ~~`building_template_registry`~~ удалён (B7); flat-секция отвергается (2026-10-18) | [`tz_building_generator.md`](./tz_building_generator.md) §5–6 |
 | 8 | `race_templates` | global race library (**без** `world_uid` на теле) | `race_template_registry` | [`tz_races.md`](./tz_races.md): сегодня world-scoped `races` + `races[]` — **мигрировать** |
 | 9 | `perk_templates` | global perk library | `perk_template_registry` | сегодня world-scoped perks + section `perks` — **мигрировать** (WB-14); удобный import между мирами |
 
@@ -170,8 +168,8 @@ world:
   library_pins:               [ { library_kind, template_uid }, … ]
 race_templates:     [ { full contract… }, … ]
 perk_templates:     [ { full perk… }, … ]
-building_templates: [ … ]   # legacy flat input → world-owned legacy pack
-relief_templates:   [ … ]   # legacy flat input → world-owned legacy pack
+building_templates: [ … ]   # ❌ flat-секция отвергается импортом (снято 2026-10-18)
+relief_templates:   [ … ]   # ❌ flat-секция отвергается импортом (снято 2026-10-18)
 
 # ❌ world-scoped full rows races/perks как «entity секции»
 # ❌ тела внутри world registry JSON
@@ -179,7 +177,7 @@ relief_templates:   [ … ]   # legacy flat input → world-owned legacy pack
 # ❌ world.building_template_registry / relief_template_registry (удалены, B7)
 ```
 
-**Wire rename (канон):** `race_templates`, `perk_templates` (симметрия с `building_templates` / `relief_templates`). Legacy `races` / `perks` — только optional transitional alias; в чистой архитектуре один канон.
+**Wire rename (канон):** `race_templates`, `perk_templates` (симметрия с `building_templates` / `relief_templates`). Transitional-алиасы `races` / `perks` сняты (2026-10-18) — один канон.
 
 ### C. Пока не library-секции
 
@@ -409,8 +407,8 @@ Facade **не** держит 8–10 domain services для inline `if section` �
 | | Сейчас | Цель |
 |---|---|---|
 | Orchestration | inline if/dict + HTTP | handlers loop, no HTTP |
-| `relief_templates` | compat flat input → `legacy` pack ✅ (B7) | library/-subtree архива |
-| `building_templates` | compat flat input → `legacy` pack ✅ (B7) | library/-subtree архива |
+| `relief_templates` | compat flat input снят (2026-10-18) | library/-subtree архива |
+| `building_templates` | compat flat input снят (2026-10-18) | library/-subtree архива |
 | `races` / `perks` | world-scoped full rows | `race_templates` / `perk_templates` + pointer registries |
 | `locations` | entity ✅ | остаётся entity (WB-15) |
 | Barriers | inline на world | без изменений (C) |

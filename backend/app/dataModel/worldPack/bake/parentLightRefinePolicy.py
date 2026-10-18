@@ -23,24 +23,11 @@ class ParentLightRefinePolicy(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _migrate_terrain_resample_alias(cls, data: object) -> object:
-        """Legacy wire key ``terrain_resample`` → ``categorical_resample`` (PAR-T-2)."""
-        if not isinstance(data, dict):
-            return data
-        if "categorical_resample" in data:
-            return data
-        legacy = data.get("terrain_resample")
-        if legacy is not None:
-            migrated = dict(data)
-            migrated["categorical_resample"] = legacy
-            migrated.pop("terrain_resample", None)
-            return migrated
+    def _reject_terrain_resample(cls, data: object) -> object:
+        """Removed wire key ``terrain_resample`` reads as an error (PAR-T-2)."""
+        if isinstance(data, dict) and "terrain_resample" in data:
+            raise ValueError("terrain_resample was removed; use categorical_resample")
         return data
-
-    @property
-    def terrain_resample(self) -> Literal["nearest"]:
-        """Deprecated alias — use ``categorical_resample`` (PAR-T-2)."""
-        return self.categorical_resample
 
     @classmethod
     def canonical_defaults(cls) -> ParentLightRefinePolicy:

@@ -8,33 +8,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 ClimateBakeStatus = Literal["coarse", "fine"]
 
-_LEGACY_STATUS = {
-    "a": "coarse",
-    "coarse": "coarse",
-    "b": "fine",
-    "fine": "fine",
-}
-
 
 def normalize_climate_bake_status(value: Any) -> ClimateBakeStatus:
     key = str(value).strip().lower()
-    status = _LEGACY_STATUS.get(key)
-    if status is None:
+    if key not in ("coarse", "fine"):
         raise ValueError("climate_status must be coarse or fine")
-    return status  # type: ignore[return-value]
+    return key  # type: ignore[return-value]
 
 
-def promote_legacy_climate_status(data: Any, *, legacy_key: str) -> Any:
-    """If ``climate_status`` is absent, copy ``legacy_key`` onto it."""
-    if not isinstance(data, dict):
-        return data
-    if "climate_status" not in data and legacy_key in data:
-        return {**data, "climate_status": data[legacy_key]}
+def reject_legacy_climate_status(data: Any, *, legacy_key: str) -> Any:
+    """The removed ``legacy_key`` reads as an explicit error, not a silent drop."""
+    if isinstance(data, dict) and "climate_status" not in data and legacy_key in data:
+        raise ValueError(f"{legacy_key} was removed; use climate_status")
     return data
 
 
 class ClimateBakeStatusMixin(BaseModel):
-    """Shared ``climate_status`` wire + one legacy-key promotion (POJO-D-9)."""
+    """Shared ``climate_status`` wire + removed-key strictness guard."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -44,8 +34,8 @@ class ClimateBakeStatusMixin(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _promote_legacy_climate_status(cls, data: Any) -> Any:
-        return promote_legacy_climate_status(
+    def _reject_legacy_climate_status(cls, data: Any) -> Any:
+        return reject_legacy_climate_status(
             data, legacy_key=cls._climate_status_legacy_key,
         )
 

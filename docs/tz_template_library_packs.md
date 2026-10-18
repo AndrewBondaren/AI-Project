@@ -305,9 +305,9 @@ UID с `creation_kind=member_copy` проверяется на формат,
 (решение 2026-10-09): owner-less — `"{library}|{system_name}"` (прежняя,
 bit-compatible); pack-owned — владелец в root-слоте формы DET-1,
 `"{pack_uid}|{library}|local_uid={system_name}"`; разделитель `|` во входах
-отвергается — сериализация остаётся однозначной. Legacy-вызов без
-владельца остаётся только для ещё не мигрированных доменов; он не используется
-новыми pack-owned импортёрами. UID не зависит от мира, seed, display name,
+отвергается — сериализация остаётся однозначной. Вызов без
+владельца не используется pack-owned импортёрами; legacy-миграция
+снята (2026-10-18). UID не зависит от мира, seed, display name,
 версии, абсолютного пути или порядка импорта.
 
 Для детерминированного пути один локальный ключ в одном домене/паке = один
@@ -593,9 +593,9 @@ FS manifest хранится отдельно от JSON-тел как `pack.mani
 World bundle расширяется секцией `library_packs` (только world-owned
 manifests — инстансы и авторские паки с `owner_world_uid` импортируемого
 мира). Flat body-секции (`plot_templates`, `building_templates`,
-`structure_templates`, `relief_templates`) — только compatibility input,
-потребляемый `import_libraries` в world-owned `legacy` pack (B7);
-современный экспорт тел идёт `library/`-subtree архива §4.2, а не секциями.
+`structure_templates`, `relief_templates`) сняты (решение 2026-10-18) —
+import отвергает их ошибкой; compatibility importer и world-owned `legacy`
+pack удалены. Экспорт тел идёт `library/`-subtree архива §4.2, а не секциями.
 Engine user-паки (`owner_world_uid=NULL`) в world bundle не
 входят: перенос библиотеки движка идёт отдельным архивом
 `kind:"library_pack"` (§4.2) либо явным publish (§4.1); импорт мира никогда
@@ -629,8 +629,9 @@ world-owned UID стабильны по формуле от владельца �
 Defaults доступны из деклараций движка; pack identity пользовательского контента
 при переносе сохраняется и не превращается в default.
 
-Legacy fixtures/bundle переводятся отдельным явным этапом: карта старых/новых
-UID применяется ко всем refs, manifests/bindings добавляются явно. Не угадывать
+Legacy fixtures/bundle: отдельный миграционный этап снят (2026-10-18) —
+старого формата в обращении нет, карта старых/новых UID и transitional read
+удалены; fixtures переведены на новый формат. Не угадывать
 пак по `source_file`, не присваивать всем импортируемым телам default-пак.
 
 ### 4.1 Разделение импорта мира и публикации библиотек
@@ -680,8 +681,8 @@ handlers и модель `dict {section_key: payload}` не меняются, co
     locations.json
     connection_nodes.json
     connection_edges.json
-    {section_key}.json        # transitional: плоские body-секции —
-                              # до переезда world-owned тел в library/;
+    {section_key}.json        # entity-секции; плоских body-секций нет —
+                              # world-owned тела живут в library/;
                               # pack-owned тела плоскими не дублируются
   library/                    # библиотеки мира — self-contained
     {domain_root}/
@@ -817,9 +818,9 @@ handlers и модель `dict {section_key: payload}` не меняются, co
   zst-payloads на шаге C-6: если remapped UID хранятся внутри блобов,
   потребуется переупаковка и пересчёт их хешей. До этой проверки
   побайтное сохранение блобов при copy не считается доказанным.
-- **Legacy:** flat-JSON bundle остаётся допустимым входом импорта
-  (transitional read, карта старых/новых UID — §4 legacy-этап); запись —
-  только архив.
+- **Формат входа:** запись — только архив; импорт принимает архив и
+  канонический JSON без legacy-полей. Flat-JSON bundle со старыми секциями —
+  ошибка импорта (transitional read снят 2026-10-18).
 
 ## 5. Разрешение ссылок и fallback
 

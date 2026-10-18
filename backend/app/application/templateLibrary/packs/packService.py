@@ -94,11 +94,6 @@ class LibraryPackService:
         from app.application.templateLibrary.packs.archive.archiveService import LibraryArchiveService
         self.archives = LibraryArchiveService(self._scope, write_service)
 
-    async def import_legacy_bodies(self, kind, world_uid, outlines, *, decisions=(), preview_token=None) -> WriteResult | PolicyRequired:
-        from app.application.templateLibrary.packs.legacy.legacyWrite import import_legacy_bodies
-        return await import_legacy_bodies(self._scope, self._write_service, kind, world_uid, outlines,
-                                          decisions=decisions, preview_token=preview_token)
-
     # ------------------------------------------------------------------
     # Pack CRUD — delegated to the pack write job
     # ------------------------------------------------------------------

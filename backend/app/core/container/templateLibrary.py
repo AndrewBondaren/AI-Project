@@ -1,7 +1,6 @@
 """Template-library wiring: pack catalog, adapters, library services."""
 
 from app.application.templateLibrary.reliefTemplateLibraryService import ReliefTemplateLibraryService
-from app.application.templateLibrary.reliefWorldImportService import ReliefWorldImportService
 from app.application.templateLibrary.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
@@ -23,7 +22,6 @@ class TemplateLibraryWiring:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._relief_template_library_service: ReliefTemplateLibraryService | None = None
-        self._relief_world_import_service: ReliefWorldImportService | None = None
         self._building_template_library_service: BuildingTemplateLibraryService | None = None
         self._structure_template_library_service: StructureTemplateLibraryService | None = None
         self._library_pack_service: LibraryPackService | None = None
@@ -85,7 +83,6 @@ class TemplateLibraryWiring:
                 structure_library=self.structure_template_library_service(),
                 building_library=self.building_template_library_service(),
                 plot_library=self.plot_template_library_service(),
-                relief_world_import=self.relief_world_import_service(),
             )
         return self._pack_domain_adapters
 
@@ -138,25 +135,4 @@ class TemplateLibraryWiring:
             )
         return self._ref_resolver
 
-    def relief_world_import_service(self) -> ReliefWorldImportService:
-        if self._relief_world_import_service is None:
-            self._relief_world_import_service = ReliefWorldImportService(
-                world_repository=self.world_repository(),
-                library=self.relief_template_library_service(),
-                catalog=PackCatalogRepos(
-                    packs=self.library_pack_repository(),
-                    members=self.library_pack_member_repository(),
-                ),
-                write_provider=self.library_pack_service,
-                db=self._db,
-            )
-        return self._relief_world_import_service
 
-    def legacy_world_migration(self):
-        """B2 seam: legacy extraction/plan application through the 4d writer."""
-        from app.application.templateLibrary.packs.legacy.legacyWorldMigration import LegacyWorldMigration
-        return LegacyWorldMigration(
-            catalog=self.pack_catalog_repos(),
-            adapters=self.pack_domain_adapters(),
-            archives=self.library_pack_service().archives,
-        )
