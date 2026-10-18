@@ -8,7 +8,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire, DefaultEnumWhenMissing
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.terrain.eligibilityRule import EligibilityRule
@@ -36,12 +37,15 @@ class TerrainRegistryEntry(BaseModel):
     eligibility: DefaultWhenMissing[list[EligibilityRule]] = Field(default_factory=list)
     inertia: DefaultWhenMissing[float] = Field(default=1.0, gt=0, allow_inf_nan=False)
     hills: DefaultWhenMissing[HillPolicy | None] = None
+    morph_hydrology_role: DefaultEnumWhenMissing[HydrologyCellRole | None] = None
 
     supports_open_land_grade: DefaultWhenMissing[bool] = False
     open_land_profile: DefaultWhenMissing[Literal["plains", "forest"] | None] = None
 
     @model_validator(mode="after")
     def _open_land_contract(self) -> TerrainRegistryEntry:
+        if self.morph_hydrology_role not in (None, HydrologyCellRole.LAKE):
+            raise ValueError("region morph supports lake only; sea/river need separate contracts")
         if self.supports_open_land_grade != (self.open_land_profile is not None):
             raise ValueError("open_land_profile is required exactly when supports_open_land_grade is true")
         return self

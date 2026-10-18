@@ -687,6 +687,41 @@ SoT хранения — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md
 
 #### Точки расширения (поля не вводятся до владельца)
 
+Контракт шага 10a: `StateChangeConsumer.evaluate(world_uid, RegionEvaluation)`
+вызывается внешним владельцем операции, который сериализует оценки одного
+региона в своём UOW. Автоматический tick/read-триггер не устанавливается.
+`elapsed_ticks >= 0` передаётся явно; `at: str | int` и SQL `updated_at`
+также приходят от caller до появления доменов времени/событий.
+`LandcoverRegionsCategoryPolicy.transition_threshold` — конечный порог
+`0 < threshold <= 1`, canonical default `1.0` (прогресс POJO ограничен 0..1).
+Effective inertia = `inertia(current) + declaration.strength`, если
+`declaration.present`; при target==current прогресс затухает с тем же темпом.
+Смена pending target начинает накопление с нуля. Unresolved scorer сохраняет
+тип и прогресс. Declared revision требует `previous_entry_type`, поскольку
+старый authored тип нельзя восстановить из уже эволюционировавшего current.
+Revision reset не тратит elapsed на новый переход в той же оценке.
+
+Для частичной оценки caller передаёт `SpatialEvaluation` по устойчивым
+lowland-кластерам: seed, Spec с разрешённой геометрией и observation context.
+Каждый кластер оценивается тем же scorer и hysteresis; родитель сохраняет
+тип снаружи. Child UID = DET-1 `entity_uid(world_uid, REGION,
+parent_region_uid=…, seed_xy=…)`, без target/type/time в identity.
+Равный merge rank даёт child specificity `parent+1`; для `parent=None`
+child получает `0` (первое явное значение). Остальные ранги наследуют
+specificity родителя. История и прогресс child сохраняются в entity store;
+Spec не персистится. Caller сохраняет/повторно выводит пространственные
+области при следующих оценках и передаёт возвращённые child-дескрипторы
+в materialize/refine вместе с сигналами. Неполный набор областей не означает
+удаления отсутствующих child; удаление — явный `consumer.tombstone`.
+
+`EvaluationResult.materialize` — typed-сигналы с прежним/новым состоянием,
+Spec и записью terrain registry; отправка в refine принадлежит внешнему
+owner. `TerrainRegistryEntry.morph_hydrology_role` — optional
+`HydrologyCellRole`, сейчас допускается только `LAKE`: N+1 ключ озера
+помечается метаданными, а не сравнением имени ключа. Hydrology materializer
+получает форму для lake role/bed carve; consumer и read-overlay не исполняют
+эффект. Морфинг в море/реку остаётся вне этого контракта.
+
 | Что | Владелец | Статус |
 |---|---|---|
 | состав леса (`ForestSpec` ↔ flora) | [`tz_flora.md`](./tz_flora.md) § ForestComposition (target) | ключ `flora` в wire — unknown key |
