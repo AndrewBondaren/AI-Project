@@ -78,9 +78,9 @@ class WildernessRegionIndexTests(unittest.TestCase):
         changed = replace(declared,current_type="steppe")
         entry = build_region_index([changed],self.f.scale, registry=self.f.registry)[0]
         self.assertEqual((entry.entry_type,entry.current_type),("forest","steppe"))
-        self.assertEqual(entry.state_fingerprint,state_fingerprint(changed.spec.model_dump(mode="json")))
-        self.assertNotEqual(entry.state_fingerprint,build_region_index([
-            replace(changed,spec=changed.spec.model_copy(update={"density":0.5}))],self.f.scale, registry=self.f.registry)[0].state_fingerprint)
+        self.assertEqual(entry.spec_fingerprint,state_fingerprint(changed.spec.model_dump(mode="json")))
+        self.assertNotEqual(entry.spec_fingerprint,build_region_index([
+            replace(changed,spec=changed.spec.model_copy(update={"density":0.5}))],self.f.scale, registry=self.f.registry)[0].spec_fingerprint)
 
     def test_collisions_and_self_parent_are_rejected_before_publication(self):
         regions = self.regions()

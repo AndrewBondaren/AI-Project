@@ -10,7 +10,7 @@ from enum import StrEnum
 from app.application.worldData.masks.regionRasterContext import RegionClaim
 from app.application.worldData.regions.regionFacts import RegionFacts
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.spatial.regionShape import Point
+from app.dataModel.spatial.regionShape import AnchorRadiusShape, Point
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry, RegionSpecBase
 from app.dataModel.worldPack.wire.worldTopology import WorldTopology
 
@@ -25,6 +25,7 @@ class RegionSource(StrEnum):
 class StateSnapshotEntry:
     current_type: TerrainKey
     tombstone: bool = False
+    spec_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,11 @@ class ResolvedRegion:
     sublocations: tuple[Sublocation, ...] = ()
     claim_area: float | None = None
     entry_type: TerrainKey = field(kw_only=True)
+    spec_fingerprint: str | None = None
+    # Read-only signal for the future single writer; collect never resets state.
+    revision_changed: bool = False
+    # Preserve authored anchor reference when collect replaces it with geometry.
+    authored_anchor_shape: AnchorRadiusShape | None = None
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,5 @@
 """Pure adapter: resolved collect results → canonical fine-coordinate index."""
 from collections.abc import Iterable
-from pydantic import TypeAdapter
-from app.application.worldData.masks.regionRasterContext import RegionClaim
 
 from app.application.worldData.generators.terrain.landcover.types import RegionSource, ResolvedRegion
 from app.application.worldData.generators.terrain.landcover.regionIdentityCheck import require_unique_region_uids
@@ -11,7 +9,8 @@ from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.worldPack.meta.wildernessRegionEntry import (
     RegionIndexBounds, WildernessRegionEntry, WildernessRegionStatus, require_region_index,
 )
-from app.ids import seed_root, state_fingerprint
+from app.ids import seed_root
+from app.application.worldData.generators.terrain.landcover.regionRevision import region_fingerprint
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.generators.terrain.landcover.regionCoverageValidation import validate_region_coverage
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
@@ -81,13 +80,10 @@ def build_region_index(regions: list[ResolvedRegion], scale: LightGridScale, *,
             bbox = _shape_bounds(region, ctx)
         if bbox is None:
             continue
-        spec_wire = region.spec.model_dump(mode="json")
-        fingerprint = state_fingerprint(spec_wire if region.claim is None else {
-            "spec": spec_wire, "entry_type": region.entry_type,
-            "claim": TypeAdapter(RegionClaim).dump_python(region.claim, mode="json")})
+        fingerprint = region_fingerprint(region)
         entries.append(WildernessRegionEntry(region_uid=region.region_uid, entry_type=region.entry_type,
             current_type=region.current_type, bbox=bbox, status=_STATUS[region.source],
-            state_fingerprint=fingerprint))
+            spec_fingerprint=fingerprint))
         for sub in region.sublocations:
             sub_bbox = seed_boxes.get((region.region_uid,sub.seed_xy))
             if sub_bbox is None:
@@ -98,6 +94,6 @@ def build_region_index(regions: list[ResolvedRegion], scale: LightGridScale, *,
                 sub_bbox = _bounds([coord])
             entries.append(WildernessRegionEntry(region_uid=sub.region_uid, entry_type=region.entry_type,
                 current_type=region.current_type, bbox=sub_bbox, status=WildernessRegionStatus.SUBLOCATION,
-                parent_region_uid=region.region_uid, state_fingerprint=fingerprint))
+                parent_region_uid=region.region_uid, spec_fingerprint=fingerprint))
     require_region_index(entries)
     return sorted(entries, key=lambda e: e.region_uid)

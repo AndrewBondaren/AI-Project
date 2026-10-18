@@ -47,7 +47,7 @@ class RegionIdentityTests(unittest.TestCase):
         for changed in changes:
             with self.subTest(spec=changed):
                 identity = declared_region_identity(self.world_uid, changed)
-                self.assertNotEqual(identity.state_fingerprint, original.state_fingerprint)
+                self.assertNotEqual(identity.spec_fingerprint, original.spec_fingerprint)
                 self.assertEqual(identity.region_uid == original.region_uid, changed.name == self.name)
 
     def test_anonymous_bbox_shift_changes_uid_and_reports_degraded_identity(self):
@@ -91,7 +91,7 @@ class RegionIdentityTests(unittest.TestCase):
         expected = entity_uid(self.world_uid, UidKind.REGION, anchor_uid=self.anchor_uid)
         self.assertEqual(original.region_uid, expected)
         self.assertEqual(changed.region_uid, expected)
-        self.assertNotEqual(original.state_fingerprint, changed.state_fingerprint)
+        self.assertNotEqual(original.spec_fingerprint, changed.spec_fingerprint)
         with self.assertNoLogs(LOG, level="WARNING"):
             self.assertEqual(region_uid(self.world_uid, anchor_uid=self.anchor_uid), expected)
 
@@ -161,7 +161,7 @@ class RegionIdentityTests(unittest.TestCase):
         wire = self.spec.model_dump(mode="json")
         expected = state_fingerprint(wire)
         first = declared_region_identity(self.world_uid, self.spec)
-        self.assertEqual(first.state_fingerprint, expected)
+        self.assertEqual(first.spec_fingerprint, expected)
         self.assertEqual(first, declared_region_identity(self.world_uid, self.spec))
         self.assertEqual(state_fingerprint(dict(reversed(list(wire.items())))), expected)
 

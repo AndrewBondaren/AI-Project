@@ -6,6 +6,7 @@ from app.application.worldData.generators.terrain.landcover.regionCoverageValida
 import logging
 
 from app.application.worldData.generators.terrain.landcover.types import LandcoverInputs, ResolvedRegion
+from app.application.worldData.generators.terrain.landcover.regionRevision import region_fingerprint
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.regions.coverageResolver import resolve
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, EllipseShape
@@ -19,12 +20,22 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
     locations = {loc.location_uid: loc for loc in ctx.locations}
     resolved = []
     for region in regions:
+        # Fingerprint authored input before resolving anchor geometry or live type.
+        fingerprint = region_fingerprint(region)
         state = inputs.state_snapshot.get(region.region_uid)
         if state is not None and state.tombstone:
             logger.debug("landcover | collect_tombstone | region_uid=%s", region.region_uid)
             continue
         if state is not None:
             region = replace(region, current_type=state.current_type)
+        mismatch = state is not None and fingerprint != state.spec_fingerprint
+        region = replace(region, spec_fingerprint=fingerprint, revision_changed=mismatch)
+        if mismatch:
+            logger.debug("region_state | revision_mismatch | region_uid=%s tiles=%s stored=%s current=%s",
+                         region.region_uid, ctx.tiles, state.spec_fingerprint, fingerprint)
+        # Materialization already derives the current footprint every pass. A
+        # mismatch must never restore geometry from the store/manifest, enqueue
+        # a world bake, or write progress/history (single writer: step 10a).
         logger.debug("landcover | paint_key_source | region_uid=%s source=%s key=%s",
                      region.region_uid, "state" if state is not None else "spec", region.current_type)
         try:
@@ -41,7 +52,8 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
                 continue
             shape = EllipseShape(cx=anchor.map_x, cy=anchor.map_y, rx=shape.radius, ry=shape.radius,
                                  edge_noise=shape.edge_noise)
-            region = replace(region, spec=region.spec.model_copy(update={"shape": shape}))
+            region = replace(region, authored_anchor_shape=region.spec.shape,
+                             spec=region.spec.model_copy(update={"shape": shape}))
         if region.claim is None and region.current_type == registry.forest_terrain_key():
             # Same eligibility contract as autoresolve; only diagnostics here, never a veto.
             x_min, y_min, x_max, y_max = shape.bbox()

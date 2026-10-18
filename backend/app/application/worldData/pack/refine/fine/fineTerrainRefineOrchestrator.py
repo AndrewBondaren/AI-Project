@@ -54,6 +54,7 @@ from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 
 
 class FineTerrainRefineOrchestrator:
@@ -64,9 +65,10 @@ class FineTerrainRefineOrchestrator:
         runner: FineChunkRunner | None = None,
         relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
+        region_state_repo: IRegionStateRepository | None = None,
     ) -> None:
         self._terrain = terrain
-        self._runner = runner or FineChunkRunner(terrain)
+        self._runner = runner or FineChunkRunner(terrain, region_state_repo=region_state_repo)
         self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
 

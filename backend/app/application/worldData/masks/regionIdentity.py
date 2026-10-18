@@ -15,7 +15,7 @@ from app.ids.regionIdentity import region_uid
 @dataclass(frozen=True)
 class RegionIdentity:
     region_uid: str
-    state_fingerprint: str
+    spec_fingerprint: str
 
 
 def declared_region_identity(

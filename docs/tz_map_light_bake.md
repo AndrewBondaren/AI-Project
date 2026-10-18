@@ -683,7 +683,7 @@ L0: materialize → `MaskFootprint` → `apply_terrain_footprint` пишет `sy
 
 #### Состояние и переходы
 
-SoT хранения — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § `WildernessRegionEntry` / § Region state store / § Region state overlay. `RegionState{current_type, pending_target, progress, last_eval_tick, overrides, history[], state_fingerprint, tombstone}` — таблица `region_states` keyed by `region_uid` (entity-store, **не** WP-20); единый writer — `StateChangeConsumer` (typed `RegionFacts`, не dict). Смена `current_type` достигает клеток через overlay по `region_uid` на read; доменные эффекты морфинга (роль воды, z) — на materialize/refine, не на read. Морфинг — та же сущность/uid; частичный переход — child-регион (саблокация); интенсивность — `overrides`. `elapsed_ticks` — рабочая заглушка-параметр до унифицированной LOD/время механики.
+SoT хранения — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § `WildernessRegionEntry` / § Region state store / § Region state overlay. `RegionState{current_type, pending_target, progress, last_eval_tick, overrides, history[], spec_fingerprint, tombstone}` — таблица `region_states` keyed by `region_uid` (entity-store, **не** WP-20); единый writer — `StateChangeConsumer` (typed `RegionFacts`, не dict). Смена `current_type` достигает клеток через overlay по `region_uid` на read; доменные эффекты морфинга (роль воды, z) — на materialize/refine, не на read. Морфинг — та же сущность/uid; частичный переход — child-регион (саблокация); интенсивность — `overrides`. `elapsed_ticks` — рабочая заглушка-параметр до унифицированной LOD/время механики.
 
 #### Точки расширения (поля не вводятся до владельца)
 

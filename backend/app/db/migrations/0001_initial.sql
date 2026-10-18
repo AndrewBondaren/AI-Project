@@ -808,7 +808,7 @@ CREATE TABLE IF NOT EXISTS region_states (
     last_eval_tick          INTEGER NOT NULL DEFAULT 0,
     overrides               TEXT NOT NULL DEFAULT '{}',
     history                 TEXT NOT NULL DEFAULT '[]',
-    state_fingerprint       TEXT,
+    spec_fingerprint       TEXT,
     tombstone               INTEGER NOT NULL DEFAULT 0,
     created_at              TEXT NOT NULL,
     updated_at              TEXT NOT NULL,

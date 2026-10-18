@@ -38,7 +38,7 @@ class RegionStateRepositoryTest(unittest.IsolatedAsyncioTestCase):
             current_type="forest", pending_target="steppe", progress=0.25,
             last_eval_tick=42, overrides={"density": 0.7, "label": "Тёмный лес"},
             history=[{"from_type": "plains", "to_type": "forest", "cause": "rain", "at": 40}],
-            state_fingerprint=state_fingerprint({"name": name}),
+            spec_fingerprint=state_fingerprint({"name": name}),
             created_at="2026-10-18T00:00:00Z", updated_at="2026-10-18T01:00:00Z",
         ), **changes)
 
@@ -63,7 +63,7 @@ class RegionStateRepositoryTest(unittest.IsolatedAsyncioTestCase):
                           progress=0.0, last_eval_tick=100, overrides={},
                           history=[*state.history, {"from_type": "forest", "to_type": "steppe",
                                                    "cause": "dry", "at": 100}],
-                          state_fingerprint=None, updated_at="later")
+                          spec_fingerprint=None, updated_at="later")
         await self.repo.upsert(changed)
         self.assertEqual(await self.repo.get(state.world_uid, state.region_uid), changed)
         self.assertEqual(await self.repo.get_by_world("world"), [changed])

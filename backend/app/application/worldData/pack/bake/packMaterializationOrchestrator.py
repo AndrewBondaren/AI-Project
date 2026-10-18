@@ -48,6 +48,8 @@ from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.db.database import Database
 from app.db.repositories.iWorldRepository import IWorldRepository
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
+from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
@@ -79,6 +81,7 @@ class PackMaterializationOrchestrator:
         tile_planner: PackTilePlanner | None = None,
         relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
+        region_state_repo: IRegionStateRepository | None = None,
     ) -> None:
         self._terrain = terrain
         self._world_map = world_map or WorldMapBakeOrchestrator()
@@ -92,6 +95,7 @@ class PackMaterializationOrchestrator:
         self._read_context_for = read_context_for
         self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
+        self._region_state_repo = region_state_repo
         if entry is not None:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
@@ -105,6 +109,7 @@ class PackMaterializationOrchestrator:
                 climate_bake=climate_bake,
                 relief_loader=relief_loader,
                 relief_grade_repo=relief_grade_repo,
+                region_state_repo=region_state_repo,
             )
 
     @property
@@ -237,6 +242,7 @@ class PackMaterializationOrchestrator:
         writer.write_locations_index(locations_index)
 
         relief_templates = await _load_relief_templates(self._relief_loader, world)
+        region_states = await load_region_state_snapshot(self._region_state_repo, world_uid)
 
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
@@ -246,6 +252,7 @@ class PackMaterializationOrchestrator:
             nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
             bake_mode=bake_mode,
             relief_templates_by_uid=relief_templates,
+            region_state_snapshot=region_states,
         )
         await _persist_bake_relief_grades(
             self._relief_grade_repo,
@@ -350,6 +357,7 @@ def _default_entry_stack(
     climate_bake: ClimatePackBakeOrchestrator | None,
     relief_loader: TemplateSnapshotLoader | None,
     relief_grade_repo: IReliefGradeRepository | None,
+    region_state_repo: IRegionStateRepository | None,
 ) -> tuple[EntryRefineOrchestrator, ClimatePackBakeOrchestrator]:
     """Default refine stack wiring when ``entry`` is not injected."""
     climate = climate_bake or ClimatePackBakeOrchestrator(
@@ -360,6 +368,7 @@ def _default_entry_stack(
         terrain,
         relief_loader=relief_loader,
         relief_grade_repo=relief_grade_repo,
+        region_state_repo=region_state_repo,
     )
     return EntryRefineOrchestrator(
         fine,

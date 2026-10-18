@@ -7,6 +7,8 @@ See ``docs/tz_terrain_generation.md`` § multi-pass skeleton; WP-PERF-22 Parent 
 """
 
 from __future__ import annotations
+from collections.abc import Mapping
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 import logging
 from dataclasses import dataclass, replace
@@ -117,6 +119,7 @@ class TerrainBatchOrchestrator:
         *,
         parent_light: ParentLightTile,
         refine_policy: ParentLightRefinePolicy | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
     ) -> TileSurfaceState:
         """L2 surface: upsample + terrain carry + hills + hydro + gap (before chunk pool)."""
         from app.application.jsonValidation.terrainHillRegistry import terrain_with_hills
@@ -172,6 +175,7 @@ class TerrainBatchOrchestrator:
             fine_terrain=fine_terrain,
             l0_hydro=l0_hydro,
             tile_bbox=(fine_bbox.x_min, fine_bbox.y_min, fine_bbox.x_max, fine_bbox.y_max),
+            region_state_snapshot=region_state_snapshot,
         )
         place_hills(
             fine_z,

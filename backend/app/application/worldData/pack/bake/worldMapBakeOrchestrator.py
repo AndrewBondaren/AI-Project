@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 from collections import Counter
+from collections.abc import Mapping
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.pack.io.wildernessRegionIndexWriter import replace_region_index
@@ -93,6 +95,7 @@ class WorldMapBakeOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         bake_mode: PackBakeMode = PACK_BAKE_LIGHT,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
     ) -> int:
         world_uid = world.world_uid
         ctx_t0 = time.perf_counter()
@@ -141,6 +144,7 @@ class WorldMapBakeOrchestrator:
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
+            region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
         )
         compose = compose_light_grid(bake_ctx)
         replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
@@ -209,6 +213,7 @@ class WorldMapBakeOrchestrator:
         cells_per_side: int | None = None,
         locations: list[NamedLocation] | None = None,
         locations_index: LocationsIndexWire | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
     ) -> tuple[list[WorldMapCellWire], str]:
         """Single-tile convenience wrapper around compose pipeline."""
         locs = locations or []
@@ -227,6 +232,7 @@ class WorldMapBakeOrchestrator:
             surface_planning=surface_ctx,
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
+            region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
         )
         compose = compose_light_grid(bake_ctx)
         replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)

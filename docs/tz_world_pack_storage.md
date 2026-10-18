@@ -1545,7 +1545,7 @@ Spatial index resolved coverage-регионов (контракт — [`tz_map_
 | `bbox` | AABB | пространство мира (fine-координаты), seam-aware |
 | `status` | enum | `declared` \| `anchor` \| `autoresolved` \| `sublocation` |
 | `parent_region_uid` | str? | для `sublocation` — регион-родитель |
-| `state_fingerprint` | str? | fingerprint spec на момент bake — быстрый revision-check без чтения store |
+| `spec_fingerprint` | str? | fingerprint spec на момент bake — быстрый revision-check без чтения store |
 
 **Шаг 8 (2026-10-18):** bake заменяет индекс целиком из world-scoped collect,
 включая при partial bake; отсутствие anchor в конкретном мире допустимо.
@@ -1558,6 +1558,9 @@ Spatial index resolved coverage-регионов (контракт — [`tz_map_
 `current_type` — snapshot, `entry_type` сохраняет первоначальный тип collect,
 даже если state snapshot его уже изменил. Fingerprint declared/anchor —
 `state_fingerprint(spec_wire)`; autoresolve включает исходный claim и entry_type.
+Поле называется `spec_fingerprint`; `app.ids.state_fingerprint(value)` — общая
+hash-утилита, не имя поля. Старый ключ `state_fingerprint` принимается только
+при чтении исторического manifest; новая сериализация пишет `spec_fingerprint`.
 Hydro-наблюдения без достоверных UID/типа/геометрии не превращаются в coverage entries.
 
 **Типизация покрытия (WR-TD-1, 2026-10-18):** `entry_type` и `current_type`
@@ -1580,7 +1583,39 @@ ASCII `#` — контур, `.` — внутренность. Отсутству
 
 `RegionState` — runtime-эволюция поверх authored declaration. Хранится в SQL-таблице **`region_states`**, keyed by `(world_uid, region_uid)` — **entity-store рядом с Patch Store, не WP-20** (`map_cell_patches` — дельты клеток `(x,y,z)`; состояние сущности туда не ложится). Схема — `0001_initial.sql` + `db/models/regionState.py` + repo; массовая запись — `app.db.bulkSql`.
 
-Поля: `current_type`, `pending_target`, `progress`, `last_eval_tick`, `overrides` (JSON), `history` (JSON append-only: `{from_type, to_type, cause, at}`), `state_fingerprint`, `tombstone`. **Единый writer — `StateChangeConsumer`** (не генератор, не bake). Revision-check: при bake/refine тайла `state_fingerprint(spec_wire)` ≠ сохранённому → клетки региона **в этом тайле** перекрашиваются; немедленной перепечки всего мира нет. `remove` declared → `tombstone` + чистка при следующем чтении/bake; rename → новая сущность (старый state — orphan → tombstone).
+Поля: `current_type`, `pending_target`, `progress`, `last_eval_tick`, `overrides` (JSON), `history` (JSON append-only: `{from_type, to_type, cause, at}`), `spec_fingerprint`, `tombstone`. **Единый writer — `StateChangeConsumer`** (не генератор, не bake). Revision-check: при bake/refine тайла `state_fingerprint(spec_wire)` ≠ сохранённому → клетки региона **в этом тайле** перекрашиваются; немедленной перепечки всего мира нет. `remove` declared → `tombstone` + чистка при следующем чтении/bake; rename → новая сущность (старый state — orphan → tombstone).
+
+Контракт 9b: `RegionState` — frozen Pydantic в `dataModel/regions/`;
+`region_uid: str` (opaque identity), `current_type`/`pending_target` и
+`history.from_type`/`to_type` — `TerrainKey`. `progress` — конечное число
+0..1, `last_eval_tick >= 0`. `RegionStateOverrides` содержит только optional
+`density` (конечное число 0..1); применение density override — вне 9b.
+История — JSON-массив, в POJO immutable tuple frozen-переходов: writer
+сохраняет старый префикс и добавляет новые записи. `RegionTransitionCause` —
+закрытый enum `drift | declared_edit | event`; `at: str | int` — явная
+временная заглушка до доменов событий/времени (строка — временная метка или
+opaque event reference). `spec_fingerprint: str | None` — opaque revision
+token; NULL существующих строк 9a означает неизвестную ревизию и mismatch.
+Пустой SQL overrides `{}` соответствует отсутствию overrides; JSON читается
+через typed модели, неизвестные поля/причины отклоняются.
+
+Async owner L0/L2 читает repo один раз перед compute и передаёт snapshot в
+collect; отсутствующий repo/строка означает отсутствие override. Collect
+проверяет исходный/текущий ключи через REF-W. Fingerprint вычисляется из
+исходного spec wire до резолва anchor (для auto — также claim и entry_type),
+одинаково для collect и нового manifest. `ResolvedRegion.spec_fingerprint`
+и `revision_changed` — read-only сигнал следующему writer; mismatch не
+меняет store. Материализация уже всегда выводит footprint из текущего Spec;
+для anchor `authored_anchor_shape` сохраняет исходную ссылку формы до
+резолва координат, чтобы индекс пересчитывал токен по authored wire даже
+при дальнейшей правке density/прочих параметров resolved Spec.
+matching fingerprint не меняет state/type/геометрию. Shape-edit сохраняет
+current_type, reset progress/pending выполняет writer 10a; type-edit reset
+к новому entry_type и history `declared_edit` также выполняет только writer.
+Tombstone не материализуется; в L2 старое region-покрытие parent восстанавливается
+policy-фоном даже при отсутствии других живых регионов. Геометрия/paint
+ограничены scope bake/refine, глобальный re-bake не запускается. Historical
+manifest остаётся snapshot и при чтении не получает live state.
 
 #### Region state overlay (read, target 2026-10-17)
 

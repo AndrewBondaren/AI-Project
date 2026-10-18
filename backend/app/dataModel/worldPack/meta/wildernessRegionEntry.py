@@ -2,7 +2,7 @@
 from __future__ import annotations
 from collections.abc import Sequence
 from enum import StrEnum
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 
 
@@ -36,7 +36,9 @@ class WildernessRegionEntry(BaseModel):
     bbox: RegionIndexBounds
     status: WildernessRegionStatus
     parent_region_uid: str | None = None
-    state_fingerprint: str | None = None
+    spec_fingerprint: str | None = Field(
+        default=None, validation_alias=AliasChoices("spec_fingerprint", "state_fingerprint"),
+    )
 
     @model_validator(mode="after")
     def parent_contract(self) -> WildernessRegionEntry:

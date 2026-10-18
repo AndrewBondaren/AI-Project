@@ -20,5 +20,5 @@ class RegionStateRow:
     last_eval_tick: int = 0
     overrides: dict = json_col(default_factory=dict)
     history: list[dict] = json_list_col()
-    state_fingerprint: str | None = None
+    spec_fingerprint: str | None = None
     tombstone: bool = bool_col(default=False)

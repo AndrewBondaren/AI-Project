@@ -11,6 +11,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
 from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
+from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
 from app.application.worldData.registries.worldService import WorldService
 from app.application.worldData.registries.raceService import RaceService
 from app.application.worldData.registries.worldPerkService import WorldPerkService
@@ -215,6 +216,7 @@ class WorldDataWiring:
             self._entry_refine_orchestrator = EntryRefineOrchestrator(
                 FineTerrainRefineOrchestrator(
                     terrain,
+                    region_state_repo=SqliteRegionStateRepository(self._db),
                     relief_loader=self.template_snapshot_loader(),
                     relief_grade_repo=self.relief_grade_repository(),
                 ),
@@ -228,6 +230,7 @@ class WorldDataWiring:
             entry = self.entry_refine_orchestrator()
             self._pack_materialization_orchestrator = PackMaterializationOrchestrator(
                 self.terrain_batch_orchestrator(),
+                region_state_repo=SqliteRegionStateRepository(self._db),
                 entry=entry,
                 climate_bake=entry.climate_bake,
                 job_repo=self.chunk_refine_job_repository(),

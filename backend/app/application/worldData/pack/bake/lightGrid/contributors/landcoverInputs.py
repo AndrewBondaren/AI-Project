@@ -13,8 +13,8 @@ from app.dataModel.worldPack.wire.worldTopology import WorldTopology
 
 
 def read_region_state_snapshot(ctx: LightGridBakeContext) -> Mapping[str, StateSnapshotEntry]:
-    """Step 9a will supply the store reader here; no region state store exists yet."""
-    return {}
+    """The async bake/refine owner has already read the entity repository."""
+    return ctx.region_state_snapshot
 
 
 def prepare_landcover_inputs(ctx: LightGridBakeContext) -> LandcoverInputs:

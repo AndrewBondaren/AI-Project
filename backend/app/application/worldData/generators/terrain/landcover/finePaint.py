@@ -7,6 +7,8 @@ cell was region-painted, in which case the per-cell fallback is restored.
 """
 
 from __future__ import annotations
+from collections.abc import Mapping
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 import logging
 from functools import cmp_to_key, partial
@@ -71,6 +73,7 @@ def paint_regions_fine(
     fine_terrain: dict[Coord, str],
     l0_hydro: dict[Coord, MapCellHydrology],
     tile_bbox: Bounds,
+    region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
 ) -> dict[Coord, str]:
     """Paint region winners onto ``fine_terrain`` in place; return uid map."""
     masks = terrain_masks(world)
@@ -94,12 +97,13 @@ def paint_regions_fine(
         tiles=[(parent_light.gx, parent_light.gy)],
         scale=scale,
         surface_planning=surface,
+        region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
     )
     materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))
     materializer.begin_pass()
     regions = materializer.collect(bake_ctx, policy)
-    if not regions:
-        return {}
+    # Even with no surviving regions, restore parent-painted cells after a
+    # removal/tombstone rather than carrying their stale terrain into L2.
 
     registry = terrain(world)
     merge_rank = partial(terrain_merge_rank, registry=registry)
