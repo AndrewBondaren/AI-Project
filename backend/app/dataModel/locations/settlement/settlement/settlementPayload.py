@@ -1,6 +1,6 @@
 """Authored and type-stamped settlement data — tz_locations §Payload per type."""
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Annotated, Self
 from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef
 from app.dataModel.locations.context.cascadeParams import CITY_SIZE, SETTLEMENT_DENSITY, DOMINANT_MATERIAL
@@ -27,18 +27,24 @@ class SettlementPayloadFields(BaseModel):
     dominant_material: DefaultWhenMissing[MaterialKey | None] = None
     architectural_style: DefaultWhenMissing[str | None] = None
     frontage_type_order: DefaultWhenMissing[list[ConnectionTypeKey] | None] = None
-    plot_counts: DefaultWhenMissing[dict[DrawingKey, int] | None] = Field(
-        default=None, validation_alias=AliasChoices("plot_counts", "structure_counts"),
-    )
-    plot_priority: DefaultWhenMissing[dict[DrawingKey, int] | None] = Field(
-        default=None, validation_alias=AliasChoices("plot_priority", "structure_priority"),
-    )
+    plot_counts: DefaultWhenMissing[dict[DrawingKey, int] | None] = None
+    plot_priority: DefaultWhenMissing[dict[DrawingKey, int] | None] = None
     perimeter_barrier: DefaultWhenMissing[PerimeterBarrier | None] = None
     typical_districts: DefaultWhenMissing[list[TypicalDistrictRef] | None] = None
     system_settlement_specializations: DefaultWhenMissing[list[SettlementSpecializationBind] | None] = None
     # Economic gate flag. Economic filters are NOT wired to it yet;
     # recheck current wiring before implementing that gate.
     is_inhabited: DefaultWhenMissing[bool] = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_plot_aliases(cls, data):
+        """Removed keys read as an error, not a silent drop."""
+        if isinstance(data, dict):
+            for old in ("structure_counts", "structure_priority"):
+                if old in data:
+                    raise ValueError(f"{old} was removed; use the plot_* key")
+        return data
 
 
 # Selectors live outside Annotated so static checkers inspect attributes.

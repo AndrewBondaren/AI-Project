@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.constants import FINE_CELL_SIZE
 from app.dataModel.worldPack.wire.climateFieldWire import ClimateBakeStatusMixin
@@ -77,15 +77,9 @@ class WorldPackManifest(BaseModel):
     payload_format: str = "json"
     registry_hash: str | None = None
     bake_mode: BakeMode = "light"
-    fine_cells_per_map_cell: int = Field(
-        default=FINE_CELLS_PER_MAP_CELL_DEFAULT,
-        validation_alias=AliasChoices("fine_cells_per_map_cell", "map_cell_size_m"),
-    )
+    fine_cells_per_map_cell: int = FINE_CELLS_PER_MAP_CELL_DEFAULT
     world_map_cells_per_tile: int = WORLD_MAP_CELLS_PER_TILE
-    fine_cell_size: int = Field(
-        default=FINE_CELL_SIZE,
-        validation_alias=AliasChoices("fine_cell_size", "cell_size_m"),
-    )
+    fine_cell_size: int = FINE_CELL_SIZE
     map_subsurface_depth: int = 0
     location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)
     settlement_structure_entries: list[SettlementStructureEntry] = Field(default_factory=list)
@@ -94,6 +88,17 @@ class WorldPackManifest(BaseModel):
     world_map_cells: int = 0
     wilderness_tiles_total: int = 0
     wilderness_chunks_baked: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_size_keys(cls, data):
+        """Removed wire keys read as an error, not a silent default."""
+        if isinstance(data, dict):
+            for old in ("map_cell_size_m", "cell_size_m"):
+                if old in data:
+                    raise ValueError(
+                        f"{old} was removed; use fine_cells_per_map_cell/fine_cell_size")
+        return data
 
     @field_validator("wilderness_region_entries")
     @classmethod

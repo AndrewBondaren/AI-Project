@@ -223,8 +223,8 @@ settlement-семантику без смены имени типа. `subtype` �
 а явно заданное значение (включая `null`) имеет приоритет.
 
 Payload-модели используют общие определения полей со старым skeleton
-(`SettlementPayloadFields`), сохраняя wire-имена и legacy aliases
-`structure_counts` / `structure_priority`. Generic `economic_tier` и
+(`SettlementPayloadFields`), сохраняя wire-имена
+(`structure_counts` / `structure_priority` сняты 2026-10-18, только `plot_*`). Generic `economic_tier` и
 `system_location_mood` остаются в skeleton, не входят в settlement payload.
 До P4 каскадные аннотации остаются на skeleton; новые payload-модели
 не создают дополнительных узлов каскада. Перенос import/persist и SQL —

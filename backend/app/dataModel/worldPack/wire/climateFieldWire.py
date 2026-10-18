@@ -18,7 +18,7 @@ def normalize_climate_bake_status(value: Any) -> ClimateBakeStatus:
 
 def reject_legacy_climate_status(data: Any, *, legacy_key: str) -> Any:
     """The removed ``legacy_key`` reads as an explicit error, not a silent drop."""
-    if isinstance(data, dict) and "climate_status" not in data and legacy_key in data:
+    if isinstance(data, dict) and legacy_key in data:
         raise ValueError(f"{legacy_key} was removed; use climate_status")
     return data
 

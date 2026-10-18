@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -77,16 +77,20 @@ class DistrictTemplateEntry(BaseModel):
     connections: DefaultWhenMissing[list[DistrictConnection] | None] = None
     required_structures: DefaultWhenMissing[list[RequiredStructure] | None] = None
     frontage_type_order: DefaultWhenMissing[list[ConnectionTypeKey] | None] = None
-    plot_counts: DefaultWhenMissing[dict[DrawingKey, int] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("plot_counts", "structure_counts"),
-    )
-    plot_priority: DefaultWhenMissing[dict[DrawingKey, int] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("plot_priority", "structure_priority"),
-    )
+    plot_counts: DefaultWhenMissing[dict[DrawingKey, int] | None] = None
+    plot_priority: DefaultWhenMissing[dict[DrawingKey, int] | None] = None
     perimeter_barrier: DefaultWhenMissing[PerimeterBarrier | None] = None
     deck: DefaultWhenMissing[int] = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_plot_aliases(cls, data: Any) -> Any:
+        """Removed keys read as an error, not a silent drop."""
+        if isinstance(data, dict):
+            for old in ("structure_counts", "structure_priority"):
+                if old in data:
+                    raise ValueError(f"{old} was removed; use the plot_* key")
+        return data
 
     @field_validator("allowed_structure_types", mode="before")
     @classmethod

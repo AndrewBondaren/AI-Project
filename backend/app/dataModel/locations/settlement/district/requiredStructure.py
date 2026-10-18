@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.locations.settlement.enums.requiredStructurePosition import (
@@ -28,9 +28,7 @@ class RequiredStructure(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
-    plot_template: StrictOnWire[DrawingKey] = Field(
-        validation_alias=AliasChoices("plot_template", "building_template"),
-    )
+    plot_template: StrictOnWire[DrawingKey]
     structure_type: DefaultWhenMissing[BuildingPurpose | None] = None
     count: DefaultWhenMissing[int] = 1
     position: DefaultWhenMissing[RequiredStructurePosition] = POSITION_ANY

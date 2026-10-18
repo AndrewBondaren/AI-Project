@@ -676,7 +676,7 @@ SoT полного порядка района (C22). Внутренность *
 
 #### Число токенов (копии plot template_uid)
 
-SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.plot_counts`), §9.2 / §9.4 (район). Здесь — резолв **N** для каждого чертежа (plot template_uid). Wire alias: `structure_counts`.
+SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.plot_counts`), §9.2 / §9.4 (район). Здесь — резолв **N** для каждого чертежа (plot template_uid). Wire alias `structure_counts` снят 2026-10-18.
 
 Пул: для каждого кандидата cache — **N** одинаковых токенов (один footprint). Кандидаты = `allowed_structure_types` ∩ тир ∪ шаблоны из `required_structures`. Нет в cache — нет токенов.
 
@@ -691,7 +691,7 @@ SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`Ci
 
 Нет поля / нет ключа — **не** ноль: смотреть уровень ниже. Явный `0` — ноль токенов (не сажать). Запись в `required_structures` включает уровень 1 (нет `count` → 1) и **не** смотрит `plot_counts` для этого UID, даже если там больше.
 
-`plot_counts` — `{ "<plot template_uid>": int }`, optional. Район перекрывает город **по ключу**, не целиком map. Import: `structure_counts` — alias.
+`plot_counts` — `{ "<plot template_uid>": int }`, optional. Район перекрывает город **по ключу**, не целиком map. Import: `structure_counts` — alias снят 2026-10-18, только `plot_counts`.
 
 Не добивать район копиями «пока есть место». Не влезло — `warning`; лишние токены не превращаются в ещё N копий других шаблонов.
 
@@ -706,7 +706,7 @@ SoT. Не путать с N: priority **не** меняет число токе�
 1. **Приоритетные** (проход 1, до рамки пустых кварталов): `required_structures` (порядок массива) и шаблоны с `plot_priority` **> 0**. Для каждого — бронь во внутреннем bbox. Не «взять первый из кучи». Не «сначала нарезать район, потом втиснуть».
 2. **Остальная коллекция** (проход 2, после рамки): остальные токены (`priority` ≤ 0 и не required).
 
-`plot_priority` — `{ "<plot template_uid>": int }`, optional. Больше = раньше **внутри прохода 1**. Нет поля / нет ключа — **0** (проход 2). Район перекрывает город **по ключу**. Явный `0` = остальная коллекция. Отрицательное — тоже проход 2, после нуля в списке коллекции. Import: `structure_priority` — alias.
+`plot_priority` — `{ "<plot template_uid>": int }`, optional. Больше = раньше **внутри прохода 1**. Нет поля / нет ключа — **0** (проход 2). Район перекрывает город **по ключу**. Явный `0` = остальная коллекция. Отрицательное — тоже проход 2, после нуля в списке коллекции. Import: `structure_priority` — alias снят 2026-10-18, только `plot_priority`.
 
 Не делает шаблон `required_structures`. Не встал в проходе 1 — `warning`, в проход 2 как затычку щели **не** класть.
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
@@ -39,12 +39,8 @@ class DistrictTopologySlot(BaseModel):
     cell_y: StrictOnWire[int]
     origin_x: StrictOnWire[int]
     origin_y: StrictOnWire[int]
-    width_fine: StrictOnWire[int] = Field(
-        validation_alias=AliasChoices("width_fine", "width_m"),
-    )
-    depth_fine: StrictOnWire[int] = Field(
-        validation_alias=AliasChoices("depth_fine", "depth_m"),
-    )
+    width_fine: StrictOnWire[int]
+    depth_fine: StrictOnWire[int]
     ground_z: StrictOnWire[int]
     template_system_name: StrictOnWire[DistrictTemplateKey]
     slot_index: StrictOnWire[int]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, ValidationInfo, model_validator
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, IgnoreOnWire, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -51,10 +51,7 @@ class BundleNamedLocation(BaseModel):
 
     parent_location_uid: DefaultWhenMissing[str | None] = None
     system_location_subtype: DefaultWhenMissing[str | None] = None
-    system_description: IgnoreOnWire[str | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("system_description", "description"),
-    )
+    system_description: IgnoreOnWire[str | None] = None
     display_description: IgnoreOnWire[str | None] = None
     glossary_ref: DefaultWhenMissing[str | None] = None
     tag_refs: DefaultWhenMissing[list[str] | None] = None
