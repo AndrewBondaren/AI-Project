@@ -9,6 +9,7 @@ from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFa
 from app.application.worldData.mapCells.mapCellReadService import MapCellReadService
 from app.db.models.world import World
 from app.core.appSettings import app_settings
+from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
 
 
 class PacksWiring:
@@ -26,6 +27,7 @@ class PacksWiring:
                 world_uid,
                 self.patch_store_service(),
                 db_path=app_settings.db_path,
+                region_state_repo=SqliteRegionStateRepository(self._db),
             )
             self._pack_read_services[world_uid] = services
         return services

@@ -68,6 +68,16 @@ policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и re
 
 ## Каталог консьюмеров
 
+Шаг wilderness 9c (согласовано 2026-10-18): `regions/regionStateLog.py`
+эмитит WARNING `region_state | overlap_rerank_deferred | world_uid=… region_uid=… neighbors=…`.
+Маршрут общего фасада: `app.application.worldData.regions.regionStateLog` →
+домен `region_state`, сервис `regionStateLog`, файл
+`logs/region_state/regionStateLog.log` (server). JSON содержит `activity`,
+`world_uid`, `region_uid`, отсортированный список `neighbors`. Один record на
+изменившийся UID за batch-запрос, не на клетку. Событие file-only по L8;
+отдельных handlers/форматтеров у доменного хелпера нет. Семантика —
+`tz_world_pack_storage.md` § Region state overlay.
+
 Писатель: **server** = процесс uvicorn (`npm run backend` / `dev`). **script** = `backend/scripts/*.py`.
 
 | Домен | Сервис | Файл (target) | Процесс | События (SoT) | Код (ориентир) |

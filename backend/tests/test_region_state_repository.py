@@ -68,6 +68,17 @@ class RegionStateRepositoryTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.repo.get(state.world_uid, state.region_uid), changed)
         self.assertEqual(await self.repo.get_by_world("world"), [changed])
 
+    async def test_get_many_scopes_deduplicates_includes_tombstones_and_batches(self):
+        states = [self.state(str(i), tombstone=(i == 0)) for i in range(405)]
+        await self.repo.upsert_bulk([*states, replace(states[0], world_uid="other")])
+        requested = [state.region_uid for state in states]
+        found = await self.repo.get_many("world", [*requested, requested[0], "missing"])
+        self.assertEqual({state.region_uid for state in found}, set(requested))
+        self.assertEqual(len(found), len(states))
+        self.assertTrue(all(state.world_uid == "world" for state in found))
+        self.assertTrue(next(state for state in found if state.region_uid == requested[0]).tombstone)
+        self.assertEqual(await self.repo.get_many("world", []), [])
+
     async def test_all_keyed_operations_isolate_worlds(self):
         state = self.state()
         other = replace(state, world_uid="other", current_type="swamp")

@@ -78,6 +78,7 @@ class WorldMapPackReader:
                 y=y,
                 z=z,
                 system_terrain=resolve_world_map_terrain(world, cell),
+                region_uid=cell.region_uid,
                 hydrology=hydro,
             )
         if surface_z - depth <= z < surface_z:

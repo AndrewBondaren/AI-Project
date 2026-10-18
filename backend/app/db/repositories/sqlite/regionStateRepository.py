@@ -7,7 +7,7 @@ delete explicitly tombstoned rows; it never decides which regions are orphaned.
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.db.bulkSql import executemany_rows
+from app.db.bulkSql import executemany_rows, iter_batches
 from app.db.database import Database
 from app.db.mapper import to_row
 from app.db.models.regionState import RegionStateRow
@@ -43,6 +43,17 @@ class SqliteRegionStateRepository(IRegionStateRepository):
         return await self._rows.fetch_all(
             "world_uid = ?", [world_uid], order="region_uid ASC",
         )
+
+    async def get_many(self, world_uid: str, region_uids: Sequence[str]) -> list[RegionStateRow]:
+        rows = []
+        # Bound IN clauses below SQLite's bind limit (one bind is world_uid).
+        for batch in iter_batches(sorted(set(region_uids)), size=400):
+            placeholders = ", ".join("?" for _ in batch)
+            rows.extend(await self._rows.fetch_all(
+                f"world_uid = ? AND region_uid IN ({placeholders})",
+                [world_uid, *batch], order="region_uid ASC",
+            ))
+        return rows
 
     async def upsert(self, state: RegionStateRow) -> None:
         async with self._db.transaction_if_needed():

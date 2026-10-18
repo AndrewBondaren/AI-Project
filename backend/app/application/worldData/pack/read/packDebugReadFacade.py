@@ -11,10 +11,9 @@ from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
 from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, tile_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.application.worldData.pack.read.patchCellContribution import map_cell_to_patch_contribution
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
-from app.dataModel.worldPack.wire.mergeMapCells import LayerSlice, merge_layers
+from app.dataModel.worldPack.wire.mergeMapCells import LayerSlice
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -73,7 +72,11 @@ class PackDebugReadFacade:
             return []
         layers_by_key: dict[tuple[int, int, int], list[LayerSlice]] = {}
         for cell in self.get_world_map_surface_cells(world):
-            contrib = map_cell_to_patch_contribution(cell)
+            tile_size = world_map_cell_span(world)
+            gx, lx = tile_index(cell.x, tile_size)
+            gy, ly = tile_index(cell.y, tile_size)
+            contrib = self._world_map.world_map_contribution(
+                world, gx, gy, lx, ly, cell.x, cell.y, cell.z)
             key = (cell.x, cell.y, cell.z)
             layers_by_key.setdefault(key, []).append(
                 LayerSlice(kind=MapLayerKind.WORLD_MAP, cell=contrib),
@@ -83,12 +86,11 @@ class PackDebugReadFacade:
             layers_by_key.setdefault(key, []).append(
                 LayerSlice(kind=MapLayerKind.PATCH, cell=patch),
             )
-        out: list[MapCell] = []
-        for (x, y, z), layers in layers_by_key.items():
-            merged = self._world_map.apply_climate(world, merge_layers(x, y, z, layers))
-            if merged.has_any_data():
-                out.append(merged_view_to_map_cell(world.world_uid, merged))
-        return out
+        if self._gameplay is None:
+            raise RuntimeError("PackDebugReadFacade: gameplay facade not bound")
+        return [merged_view_to_map_cell(world.world_uid, view)
+                for view in await self._gameplay.merge_layer_batches(world, layers_by_key)
+                if view.has_any_data()]
 
     async def get_merged_z_slice(
         self,
@@ -106,17 +108,13 @@ class PackDebugReadFacade:
         patch_map = await self._patches.get_patches_map_in_bbox(
             world.world_uid, x_min, x_max, y_min, y_max, z_min, z_max,
         )
-        out: list[MapCell] = []
-        for x in range(x_min, x_max + 1):
-            for y in range(y_min, y_max + 1):
-                for z in range(z_min, z_max + 1):
-                    merged = await self._gameplay.get_cell(
-                        world, x, y, z,
-                        patch=patch_map.get((x, y, z)),
-                    )
-                    if merged.has_any_data():
-                        out.append(merged_view_to_map_cell(world.world_uid, merged))
-        return out
+        patches = {(x, y, z): patch_map.get((x, y, z))
+                 for x in range(x_min, x_max + 1)
+                 for y in range(y_min, y_max + 1)
+                 for z in range(z_min, z_max + 1)}
+        return [merged_view_to_map_cell(world.world_uid, view)
+                for view in await self._gameplay.get_cells(world, patches)
+                if view.has_any_data()]
 
     async def column_has_merged_data(self, world: World, x: int, y: int) -> bool:
         if not self._ctx.has_pack_for(world):

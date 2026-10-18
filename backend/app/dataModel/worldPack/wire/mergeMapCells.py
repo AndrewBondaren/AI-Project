@@ -28,6 +28,8 @@ class CellContribution(BaseModel):
     x: int
     y: int
     z: int
+    # Pack membership metadata; never participates in field merging.
+    region_uid: str | None = None
     system_terrain: str | None = None
     system_material: str | None = None
     system_building_element: str | None = None

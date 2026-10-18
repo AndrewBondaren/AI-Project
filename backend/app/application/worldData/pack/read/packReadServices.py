@@ -12,6 +12,7 @@ from app.application.worldData.pack.read.packLoadingProgressFacade import PackLo
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.packRenderReadFacade import PackRenderReadFacade
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 
 
 @dataclass(frozen=True)
@@ -29,11 +30,12 @@ def build_pack_read_services(
     patches: PatchStoreService,
     *,
     db_path: str,
+    region_state_repo: IRegionStateRepository | None = None,
 ) -> PackReadServices:
     context = PackReadContext(world_uid, db_path=db_path)
     world_map = WorldMapPackReader(context)
     debug = PackDebugReadFacade(context, patches, world_map)
-    gameplay = MapCellQueryFacade(context, patches, world_map)
+    gameplay = MapCellQueryFacade(context, patches, world_map, region_state_repo=region_state_repo)
     debug.bind_gameplay(gameplay)
     loading = PackLoadingProgressFacade(context)
     fine_terrain_read = PackFineTerrainReadFacade(context, gameplay)

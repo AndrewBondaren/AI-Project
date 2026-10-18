@@ -18,6 +18,11 @@ class IRegionStateRepository(ABC):
     async def get(self, world_uid: str, region_uid: str) -> RegionStateRow | None: ...
 
     @abstractmethod
+    async def get_many(self, world_uid: str, region_uids: Sequence[str]) -> list[RegionStateRow]:
+        """Requested identities, including tombstones, scoped to one world."""
+        ...
+
+    @abstractmethod
     async def get_by_world(self, world_uid: str) -> list[RegionStateRow]:
         """Include tombstones so overlay readers can apply their fallback policy."""
         ...

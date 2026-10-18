@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 
+from app.application.worldData.pack.read.terrainContributions import column_surface, fine_terrain_contribution
+
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns, world_z_min
 from app.application.worldData.pack.read.settlementStructureRaster import SettlementStructureRaster
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
@@ -13,7 +15,9 @@ from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
-from app.dataModel.worldPack.wire.mergeMapCells import CellContribution, LayerSlice, MergedCellView, merge_layers
+from app.dataModel.worldPack.wire.mergeMapCells import CellContribution, LayerSlice, MergedCellView
+from app.application.worldData.pack.read.regionStateOverlay import CellLayers, RegionStateOverlay
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
@@ -31,7 +35,9 @@ class MapCellQueryFacade:
         world_map_reader: WorldMapPackReader,
         *,
         city_raster: SettlementStructureRaster | None = None,
+        region_state_repo: IRegionStateRepository | None = None,
     ) -> None:
+        self._overlay = RegionStateOverlay(region_state_repo)
         self._ctx = context
         self._patches = patch_store
         self._world_map = world_map_reader
@@ -52,13 +58,26 @@ class MapCellQueryFacade:
         *,
         patch: CellContribution | None = None,
     ) -> MergedCellView:
-        layers: list[LayerSlice] = []
-        patch_contrib = patch
-        if patch_contrib is None:
-            patch_contrib = await self._patches.get_patch_at(world.world_uid, x, y, z)
-        if patch_contrib is not None:
-            layers.append(LayerSlice(kind=MapLayerKind.PATCH, cell=patch_contrib))
+        if patch is None:
+            patch = await self._patches.get_patch_at(world.world_uid, x, y, z)
+        views = await self.merge_layer_batches(world, {(x, y, z): self._layers_at(world, x, y, z, patch)})
+        return views[0]
 
+    async def merge_layer_batches(self, world: World, cells: CellLayers) -> list[MergedCellView]:
+        entries = (self._ctx.reader_for(world).manifest.wilderness_region_entries
+                   if self._ctx.has_pack_for(world) else [])
+        views = await self._overlay.merge(world, cells, entries)
+        return [self._world_map.apply_climate(world, view) for view in views]
+
+    async def get_cells(self, world: World,
+                        patches: dict[tuple[int, int, int], CellContribution | None]) -> list[MergedCellView]:
+        """Read a coordinate batch with an already loaded patch snapshot."""
+        cells = {coord: self._layers_at(world, *coord, patch) for coord, patch in patches.items()}
+        return await self.merge_layer_batches(world, cells)
+
+    def _layers_at(self, world: World, x: int, y: int, z: int,
+                   patch: CellContribution | None = None) -> list[LayerSlice]:
+        layers = [LayerSlice(kind=MapLayerKind.PATCH, cell=patch)] if patch is not None else []
         tile_size = world_map_cell_span(world)
         gx, lx = tile_index(x, tile_size)
         gy, ly = tile_index(y, tile_size)
@@ -74,7 +93,7 @@ class MapCellQueryFacade:
             try:
                 chunk = reader.read_wilderness_chunk(gx, gy, cx, cy)
                 kind = self._chunk_layer_kind(chunk_role)
-                contrib = self._fine_terrain_contribution(chunk, col_lx, col_ly, x, y, z)
+                contrib = fine_terrain_contribution(chunk, col_lx, col_ly, x, y, z)
                 if contrib is not None:
                     layers.append(LayerSlice(kind=kind, cell=contrib))
             except FileNotFoundError:
@@ -95,7 +114,7 @@ class MapCellQueryFacade:
                     loc_chunk = reader.read_location_terrain(loc.location_uid)
                     lx_loc = x - loc.territory_volume.x0
                     ly_loc = y - loc.territory_volume.y0
-                    contrib = self._fine_terrain_contribution(loc_chunk, lx_loc, ly_loc, x, y, z)
+                    contrib = fine_terrain_contribution(loc_chunk, lx_loc, ly_loc, x, y, z)
                     if contrib is not None:
                         layers.append(LayerSlice(kind=MapLayerKind.LOCATION, cell=contrib))
                         break
@@ -107,8 +126,7 @@ class MapCellQueryFacade:
         if world_map is not None:
             layers.append(LayerSlice(kind=MapLayerKind.WORLD_MAP, cell=world_map))
 
-        merged = merge_layers(x, y, z, layers)
-        return self._world_map.apply_climate(world, merged)
+        return layers
 
     async def get_scene_volume(
         self,
@@ -128,17 +146,11 @@ class MapCellQueryFacade:
         patch_map = await self._patches.get_patches_map_in_bbox(
             world.world_uid, x - r, x + r, y - r, y + r, z_lo, z_hi,
         )
-        out: list[MergedCellView] = []
-        for cx in range(x - r, x + r + 1):
-            for cy in range(y - r, y + r + 1):
-                for cz in range(z_lo, z_hi + 1):
-                    merged = await self.get_cell(
-                        world, cx, cy, cz,
-                        patch=patch_map.get((cx, cy, cz)),
-                    )
-                    if merged.has_any_data():
-                        out.append(merged)
-        return out
+        patches = {(cx, cy, cz): patch_map.get((cx, cy, cz))
+                 for cx in range(x - r, x + r + 1)
+                 for cy in range(y - r, y + r + 1)
+                 for cz in range(z_lo, z_hi + 1)}
+        return [view for view in await self.get_cells(world, patches) if view.has_any_data()]
 
     async def get_scene_volume_as_map_cells(
         self,
@@ -166,6 +178,7 @@ class MapCellQueryFacade:
     ) -> list[MapCell]:
         """Surface columns in AABB for settlement assembler — no city layer, no z-flood."""
         cells_by_xy: dict[tuple[int, int], MapCell] = {}
+        region_uids: dict[tuple[int, int], str | None] = {}
         if self._ctx.has_pack_for(world):
             reader = self._ctx.reader_for(world)
             manifest = reader.manifest
@@ -188,10 +201,11 @@ class MapCellQueryFacade:
                     wy = vol.y0 + column.ly
                     if wx < x0 or wx > x1 or wy < y0 or wy > y1:
                         continue
-                    surface = self._column_surface(column)
+                    surface = column_surface(column)
                     if surface is None:
                         continue
                     sz, terrain, material = surface
+                    region_uids[(wx, wy)] = column.region_uid
                     cells_by_xy[(wx, wy)] = MapCell(
                         world_uid=world.world_uid,
                         x=wx,
@@ -223,26 +237,27 @@ class MapCellQueryFacade:
         patch_map = await self._patches.get_patches_map_in_bbox(
             world.world_uid, x0, x1, y0, y1, z_lo, z_hi,
         )
+        cells: CellLayers = {}
+        tile_size = world_map_cell_span(world)
         for cell in out:
-            patch = patch_map.get((cell.x, cell.y, cell.z))
-            if patch is None:
-                continue
-            if patch.system_terrain is not None:
-                cell.system_terrain = patch.system_terrain
-            if patch.system_material is not None:
-                cell.system_material = patch.system_material
-            if patch.location_uid is not None:
-                cell.location_uid = patch.location_uid
-        return out
-
-    @staticmethod
-    def _column_surface(column) -> tuple[int, str, str | None] | None:
-        best: tuple[int, str, str | None] | None = None
-        for run in column.runs:
-            z_hi = max(run.z0, run.z1)
-            if best is None or z_hi > best[0]:
-                best = (z_hi, run.system_terrain, run.system_material)
-        return best
+            key = (cell.x, cell.y, cell.z)
+            if (cell.x, cell.y) in region_uids:
+                base = CellContribution(x=cell.x, y=cell.y, z=cell.z,
+                                        system_terrain=cell.system_terrain,
+                                        system_material=cell.system_material,
+                                        location_uid=cell.location_uid,
+                                        region_uid=region_uids[(cell.x, cell.y)])
+                kind = MapLayerKind.LOCATION
+            else:
+                gx, lx = tile_index(cell.x, tile_size)
+                gy, ly = tile_index(cell.y, tile_size)
+                base = self._world_map.world_map_contribution(
+                    world, gx, gy, lx, ly, cell.x, cell.y, cell.z)
+                kind = MapLayerKind.WORLD_MAP
+            cells[key] = [LayerSlice(kind=kind, cell=base),
+                          LayerSlice(kind=MapLayerKind.PATCH, cell=patch_map.get(key))]
+        return [merged_view_to_map_cell(world.world_uid, view)
+                for view in await self.merge_layer_batches(world, cells)]
 
     @staticmethod
     def _chunk_layer_kind(role: ChunkRefineRole | None) -> MapLayerKind:
@@ -260,27 +275,3 @@ class MapCellQueryFacade:
             return None
         ref = manifest.chunk_ref(gx, gy, cx, cy)
         return ref.refine_role if ref is not None else None
-
-    def _fine_terrain_contribution(
-        self,
-        chunk,
-        col_lx: int,
-        col_ly: int,
-        x: int,
-        y: int,
-        z: int,
-    ) -> CellContribution | None:
-        column = next((c for c in chunk.columns if c.lx == col_lx and c.ly == col_ly), None)
-        if column is None:
-            return None
-        for run in column.runs:
-            z_lo, z_hi = min(run.z0, run.z1), max(run.z0, run.z1)
-            if z_lo <= z <= z_hi:
-                return CellContribution(
-                    x=x,
-                    y=y,
-                    z=z,
-                    system_terrain=run.system_terrain,
-                    system_material=run.system_material,
-                )
-        return None
