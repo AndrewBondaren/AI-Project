@@ -91,7 +91,7 @@ def render_light_grade_mosaic(
             f"macro Gx{frame.gx0}..Gx{frame.gx1} Gy{frame.gy0}..Gy{frame.gy1})"
         ),
         coord_prefix="light ",
-        fine_span=frame.light_m,
+        fine_span=frame.light_span,
         x_rulers=True,
     )
     return ascii_g, render_grade_legend()

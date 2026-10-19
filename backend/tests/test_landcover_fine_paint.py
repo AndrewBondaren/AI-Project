@@ -35,7 +35,7 @@ from app.ids.regionIdentity import region_uid
 FOREST = WorldTerrainRegistry.forest_terrain_key()
 PLAINS = WorldTerrainRegistry.plains_terrain_key()
 TILE_M = 8
-SIDE = 2  # light_m = 4
+SIDE = 2  # light_span = 4
 
 
 def _world(*specs) -> SimpleNamespace:
@@ -92,7 +92,7 @@ def _parent() -> ParentLightTile:
                          region_uid=uid, climate_zone_id=zone),
     ]
     return ParentLightTile.from_cells(
-        world_uid="wilderness-7", gx=0, gy=0, side=SIDE, tile_m=TILE_M,
+        world_uid="wilderness-7", gx=0, gy=0, side=SIDE, tile_macro=TILE_M,
         cells=cells,
     )
 

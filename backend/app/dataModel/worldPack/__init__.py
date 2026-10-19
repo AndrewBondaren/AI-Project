@@ -38,7 +38,7 @@ from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
     WORLD_MAP_CELLS_PER_TILE,
     WorldMapCellsPerTilePolicy,
-    light_m_for,
+    light_span_for,
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
 )
@@ -156,7 +156,7 @@ __all__ = [
     "ParentLightRefinePolicy",
     "WorldPackManifest",
     "inside_location_volume",
-    "light_m_for",
+    "light_span_for",
     "merge_layers",
     "refine_role_for_detailed_scope",
     "resolve_detailed_bake_request",

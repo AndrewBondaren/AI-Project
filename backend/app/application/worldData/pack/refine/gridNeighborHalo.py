@@ -52,7 +52,7 @@ def overlay_grid_neighbor_halos(
     bounds: WorldBounds,
     reader: WorldPackReader,
     cache: ParentLightCache,
-    tile_m: int,
+    tile_macro: int,
     writer: WorldPackWriter | None = None,
     chunk_size: int | None = None,
 ) -> TileSurfaceState:
@@ -66,7 +66,7 @@ def overlay_grid_neighbor_halos(
             continue
         ngx, ngy = neighbor
         parent = load_parent_light(
-            world_uid, ngx, ngy, reader=reader, cache=cache, tile_m=tile_m,
+            world_uid, ngx, ngy, reader=reader, cache=cache, tile_macro=tile_macro,
         )
         if parent is not None:
             out = overlay_halo_from_parent(
@@ -79,7 +79,7 @@ def overlay_grid_neighbor_halos(
                 neighbor_gy=ngy,
                 this_bbox=this_bbox,
                 halo=halo,
-                tile_m=tile_m,
+                tile_macro=tile_macro,
                 chunk_size=chunk_size,
                 reader=reader,
                 writer=writer,
@@ -102,9 +102,9 @@ def overlay_halo_from_parent(
     new_facing = dict(state.surface_facing or {})
     wrote = False
     for x, y in iter_halo_meters(this_bbox, halo):
-        if macro_tile_of(x, y, parent.tile_m) != (parent.gx, parent.gy):
+        if macro_tile_of(x, y, parent.tile_macro) != (parent.gx, parent.gy):
             continue
-        tx, ty = parent.meters_to_tx_ty(x, y)
+        tx, ty = parent.fine_to_tx_ty(x, y)
         cell = parent.cell_at(tx, ty)
         if cell is None:
             continue
@@ -160,7 +160,7 @@ def overlay_halo_from_wilderness(
     neighbor_gy: int,
     this_bbox: ColumnBounds,
     halo: int,
-    tile_m: int,
+    tile_macro: int,
     chunk_size: int,
     reader: WorldPackReader,
     writer: WorldPackWriter,
@@ -173,7 +173,7 @@ def overlay_halo_from_wilderness(
     halo_set = set(iter_halo_meters(this_bbox, halo))
     if not halo_set:
         return state
-    fine_bbox = fine_bbox_for_tile(neighbor_gx, neighbor_gy, tile_m)
+    fine_bbox = fine_bbox_for_tile(neighbor_gx, neighbor_gy, tile_macro)
     new_z = dict(state.heightmap.surface_z)
     new_terrain = dict(state.surface_terrain or {})
     new_facing = dict(state.surface_facing or {})

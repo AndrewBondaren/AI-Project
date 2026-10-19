@@ -68,9 +68,9 @@ class TestPackFineTerrainReadFacade(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["sample_columns"][0]["runs"][0]["system_terrain"], "forest")
 
     async def test_read_merged_cell_reads_fine_layer(self) -> None:
-        tile_m = self.world.fine_cells_per_map_cell
-        x = 12 * tile_m + 1
-        y = 12 * tile_m + 2
+        tile_macro = self.world.fine_cells_per_map_cell
+        x = 12 * tile_macro + 1
+        y = 12 * tile_macro + 2
         payload = await self.facade.read_merged_cell(self.world, x, y, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["read_mode"], "merged_cell")

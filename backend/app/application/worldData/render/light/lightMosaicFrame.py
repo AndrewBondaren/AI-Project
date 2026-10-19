@@ -17,7 +17,7 @@ class MosaicFrame:
     gx1: int
     gy1: int
     side: int
-    light_m: int
+    light_span: int
     lx0: int
     lx1: int
     ly0: int
@@ -74,7 +74,7 @@ def resolve_mosaic_frame(
         gx1=gx1,
         gy1=gy1,
         side=side,
-        light_m=max(1, int(tile_size_m) // side),
+        light_span=max(1, int(tile_size_m) // side),
         lx0=gx0 * side,
         lx1=(gx1 + 1) * side - 1,
         ly0=gy0 * side,

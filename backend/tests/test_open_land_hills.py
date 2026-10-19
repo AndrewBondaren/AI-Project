@@ -246,7 +246,7 @@ class TestHillsInTilePrep(unittest.TestCase):
             for ty in range(2) for tx in range(2)
         ]
         parent = ParentLightTile.from_cells(
-            world_uid="w-hills", gx=0, gy=0, side=2, tile_m=16, cells=cells,
+            world_uid="w-hills", gx=0, gy=0, side=2, tile_macro=16, cells=cells,
         )
         w = MagicMock()
         w.world_uid = "w-hills"

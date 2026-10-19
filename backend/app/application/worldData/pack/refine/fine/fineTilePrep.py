@@ -76,7 +76,7 @@ def prepare_fine_tile(
         tile_gy,
         reader=reader,
         cache=writer.parent_light_cache,
-        tile_m=cell_m,
+        tile_macro=cell_m,
     )
     surface_state = terrain.build_tile_surface_state(
         world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
@@ -123,7 +123,7 @@ def prepare_fine_tile(
             bounds=bounds,
             reader=reader,
             cache=writer.parent_light_cache,
-            tile_m=cell_m,
+            tile_macro=cell_m,
             writer=writer,
             chunk_size=chunk_size,
         )

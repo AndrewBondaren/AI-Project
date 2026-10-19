@@ -1,7 +1,7 @@
 """WP-10 v2: world_map_cells_per_tile — constant mask side (default 32).
 
 See ``docs/tz_world_pack_storage.md`` § L0 / WP-10 v2.
-``light_m = fine_cells_per_map_cell // side`` — physical scale drifts with tile size;
+``light_span = fine_cells_per_map_cell // side`` — physical scale drifts with tile size;
 ``side`` itself does **not** depend on ``fine_cells_per_map_cell``.
 """
 
@@ -45,7 +45,7 @@ class WorldMapCellsPerTilePolicy(BaseModel):
         return max(1, int(self.cells_per_tile))
 
     def resolve(self, fine_cells_per_map_cell: int, override: int | None = None) -> int:
-        """Compat wrapper — ``fine_cells_per_map_cell`` ignored (affects ``light_m``, not side)."""
+        """Compat wrapper — ``fine_cells_per_map_cell`` ignored (affects ``light_span``, not side)."""
         del fine_cells_per_map_cell
         return self.resolve_side(override)
 
@@ -66,14 +66,14 @@ def resolve_world_map_side(
     *,
     policy: WorldMapCellsPerTilePolicy | None = None,
 ) -> int:
-    """Preferred API — side only, no misleading tile_m argument."""
+    """Preferred API — side only, no misleading tile_macro argument."""
     pol = policy or WorldMapCellsPerTilePolicy.canonical_defaults()
     return pol.resolve_side(override)
 
 
-def light_m_for(tile_m: int, side: int) -> int:
+def light_span_for(tile_macro: int, side: int) -> int:
     """Fine cells per light cell: ``fine_cells_per_map_cell // side`` (WP-10).
 
-    Single SoT for ``LightGridScale.light_m`` and ``ParentLightTile.light_m``.
+    Single SoT for ``LightGridScale.light_span`` and ``ParentLightTile.light_span``.
     """
-    return max(1, int(tile_m) // max(1, int(side)))
+    return max(1, int(tile_macro) // max(1, int(side)))

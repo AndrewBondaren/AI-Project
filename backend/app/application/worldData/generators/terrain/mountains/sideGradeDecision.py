@@ -28,10 +28,10 @@ def explain_side_grade_at_xy(
     px: float,
     py: float,
     *,
-    light_m: float,
+    light_span: float,
 ) -> SideGradeDecision:
     """Ownership B + profile — same math as ``side_fill_fraction_at_xy``, with reason."""
-    return side_fill_grade_at_xy(geometry, sides, px, py, light_m=light_m)
+    return side_fill_grade_at_xy(geometry, sides, px, py, light_span=light_span)
 
 
 __all__ = [

@@ -156,16 +156,16 @@ class WorldPackWriter:
         if self._manifest.fine_cells_per_map_cell is None or int(self._manifest.fine_cells_per_map_cell) < 1:
             raise ValueError(
                 "manifest.fine_cells_per_map_cell required before write_world_map_tile "
-                "(cannot cache parent light with tile_m fallback)",
+                "(cannot cache parent light with tile_macro fallback)",
             )
-        tile_m = int(self._manifest.fine_cells_per_map_cell)
+        tile_macro = int(self._manifest.fine_cells_per_map_cell)
         self._parent_light_cache.put(
             ParentLightTile.from_cells(
                 world_uid=self._paths.world_uid,
                 gx=gx,
                 gy=gy,
                 side=cells_per_side,
-                tile_m=tile_m,
+                tile_macro=tile_macro,
                 cells=cells,
             ),
         )

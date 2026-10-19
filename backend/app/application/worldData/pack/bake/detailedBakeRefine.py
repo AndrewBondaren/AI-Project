@@ -61,13 +61,13 @@ async def refine_detailed_tiles(
     stages: GradePipelineStages | None = None,
 ) -> DetailedRefineAggregate:
     """Require L0 parent light per tile, then refine every rect of the plan."""
-    tile_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     reader = WorldPackReader(writer.paths)
     cache = writer.parent_light_cache
     for gx, gy in plan.tiles:
         require_parent_light(
             world.world_uid, gx, gy,
-            reader=reader, cache=cache, tile_m=tile_m,
+            reader=reader, cache=cache, tile_macro=tile_macro,
         )
 
     aggregate = DetailedRefineAggregate()

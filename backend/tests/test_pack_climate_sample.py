@@ -42,7 +42,7 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
             gx=0,
             gy=0,
             side=2,
-            tile_m=1000,
+            tile_macro=1000,
             cells=[
                 WorldMapCellWire(tx=0, ty=0, surface_z=5),
                 WorldMapCellWire(tx=1, ty=0, surface_z=5),
@@ -53,18 +53,18 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             parent_light=parent,
             l2_surface_z={(0, 0): 9},
-            light_m=500,
+            light_span=500,
         )
         self.assertEqual(z, 9)
         z2 = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             parent_light=parent,
@@ -73,7 +73,7 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z3 = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
         )
@@ -83,11 +83,11 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             l2_surface_z={(10, 20): 7, (50, 50): 12, (500, 0): 99},
-            light_m=100,
+            light_span=100,
         )
         self.assertEqual(z, 12)
 
@@ -101,11 +101,11 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             l2_surface_z=bucket,
-            light_m=100,
+            light_span=100,
         )
         self.assertEqual(z, 12)
 
@@ -163,13 +163,13 @@ class TestSamplePackClimateVolcanicHigh(unittest.TestCase):
 
         low = sample_pack_climate_at(
             world, pole, local,
-            xm=0, ym=0, tile_m=1000,
+            xm=0, ym=0, tile_macro=1000,
             l2_surface_z={(0, 0): 0},
             climate=climate,
         )
         high = sample_pack_climate_at(
             world, pole, local,
-            xm=0, ym=0, tile_m=1000,
+            xm=0, ym=0, tile_macro=1000,
             l2_surface_z={(0, 0): 2000},
             climate=climate,
         )

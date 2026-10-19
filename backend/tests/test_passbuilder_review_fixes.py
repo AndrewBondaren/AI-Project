@@ -120,7 +120,7 @@ class TestCorridorFacing(unittest.TestCase):
         )
         # Point north of spine → uphill south toward spine
         points = [(0, 50.0, 15.0)]
-        fractions, facing = compose_range_corridor(spec, points, light_m=1.0)
+        fractions, facing = compose_range_corridor(spec, points, light_span=1.0)
         self.assertIn(0, fractions)
         self.assertEqual(facing[0], Facing.SOUTH.value)
 
@@ -134,7 +134,7 @@ class TestCorridorFacing(unittest.TestCase):
             ),
         )
         points = [(0, 50.0, 5.0)]
-        _frac, facing = compose_range_corridor(spec, points, light_m=1.0)
+        _frac, facing = compose_range_corridor(spec, points, light_span=1.0)
         self.assertIn(0, facing)
         self.assertIsNone(facing[0])
 

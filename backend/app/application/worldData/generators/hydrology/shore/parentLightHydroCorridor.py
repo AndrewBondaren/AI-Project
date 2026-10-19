@@ -13,9 +13,9 @@ def hydro_mask_from_parent(
 ) -> dict[tuple[int, int], MapCellHydrology]:
     """Expand L0 hydrology_role (+ width) to fine cells via ``to_fine_role``."""
     out: dict[tuple[int, int], MapCellHydrology] = {}
-    tile_m = parent.tile_m
+    tile_macro = parent.tile_macro
     side = parent.side
-    light_m = parent.light_m
+    light_span = parent.light_span
 
     for ty in range(side):
         for tx in range(side):
@@ -30,13 +30,13 @@ def hydro_mask_from_parent(
                 continue
             entry = MapCellHydrology(role=fine)
             # Paint fine cells covered by this light cell.
-            for dty in range(light_m):
-                for dtx in range(light_m):
-                    lx = tx * light_m + dtx
-                    ly = ty * light_m + dty
-                    if lx >= tile_m or ly >= tile_m:
+            for dty in range(light_span):
+                for dtx in range(light_span):
+                    lx = tx * light_span + dtx
+                    ly = ty * light_span + dty
+                    if lx >= tile_macro or ly >= tile_macro:
                         continue
-                    xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
+                    xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_macro)
                     out[(xm, ym)] = entry
 
             # Dilate river width in fine cells (hydrology_width on wire).
@@ -44,8 +44,8 @@ def hydro_mask_from_parent(
                 radius = max(0, int(cell.hydrology_width) - 1)
                 if radius <= 0:
                     continue
-                cx = parent.gx * tile_m + tx * light_m + light_m // 2
-                cy = parent.gy * tile_m + ty * light_m + light_m // 2
+                cx = parent.gx * tile_macro + tx * light_span + light_span // 2
+                cy = parent.gy * tile_macro + ty * light_span + light_span // 2
                 for dy in range(-radius, radius + 1):
                     for dx in range(-radius, radius + 1):
                         if abs(dx) + abs(dy) > radius:
@@ -53,8 +53,8 @@ def hydro_mask_from_parent(
                         xm, ym = cx + dx, cy + dy
                         # Stay inside macro tile.
                         if not (
-                            parent.gx * tile_m <= xm < (parent.gx + 1) * tile_m
-                            and parent.gy * tile_m <= ym < (parent.gy + 1) * tile_m
+                            parent.gx * tile_macro <= xm < (parent.gx + 1) * tile_macro
+                            and parent.gy * tile_macro <= ym < (parent.gy + 1) * tile_macro
                         ):
                             continue
                         prev = out.get((xm, ym))

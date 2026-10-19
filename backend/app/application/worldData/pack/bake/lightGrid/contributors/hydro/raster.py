@@ -9,7 +9,7 @@ from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompo
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
     light_to_macro_local,
-    meters_to_light,
+    fine_to_light,
 )
 from app.dataModel.worldPack.wire.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
 
@@ -70,8 +70,8 @@ def meter_segments_to_light(
 ) -> list[tuple[tuple[int, int], tuple[int, int]]]:
     out: list[tuple[tuple[int, int], tuple[int, int]]] = []
     for (x0, y0), (x1, y1) in segments:
-        a = meters_to_light(x0, y0, scale)
-        b = meters_to_light(x1, y1, scale)
+        a = fine_to_light(x0, y0, scale)
+        b = fine_to_light(x1, y1, scale)
         out.append((a, b))
     return out
 
@@ -82,7 +82,7 @@ def light_polyline_from_meters(
 ) -> list[tuple[int, int]]:
     if len(points) < 2:
         return []
-    light_pts = [meters_to_light(x, y, scale) for x, y in points]
+    light_pts = [fine_to_light(x, y, scale) for x, y in points]
     cells: list[tuple[int, int]] = []
     for a, b in zip(light_pts, light_pts[1:]):
         leg = bresenham_line(a[0], a[1], b[0], b[1])

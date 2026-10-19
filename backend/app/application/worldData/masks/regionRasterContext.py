@@ -32,7 +32,7 @@ class RegionRasterContext:
     """Resolved topology in macro-tile coordinates, including sphere parity."""
 
     def fine_topology(self) -> WorldTopology:
-        return fine_topology(self.topology, self.scale.tile_m)
+        return fine_topology(self.topology, self.scale.tile_macro)
 
 
 @dataclass(frozen=True, order=True)

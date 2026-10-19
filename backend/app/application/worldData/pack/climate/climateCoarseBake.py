@@ -43,7 +43,7 @@ def sample_climate_coarse_gy_rows(
     """One coarse sample per macro cell on the given gy rows (row-major gx)."""
     svc = climate or ClimateGeneratorService()
     anchors = local_field if local_field is not None else ClimateAnchorField(())
-    tile_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     z_map = coarse_surface_z or {}
     samples: list[ClimateSampleWire] = []
     for gy in gy_rows:
@@ -55,7 +55,7 @@ def sample_climate_coarse_gy_rows(
                     anchors,
                     gx,
                     gy,
-                    tile_m=tile_m,
+                    tile_macro=tile_macro,
                     coarse_surface_z=z_map,
                     uid_map=uid_map,
                     climate=svc,
@@ -120,7 +120,7 @@ def sample_climate_tile_ty_rows(
     """Light-grid samples for the given ty rows (row-major tx)."""
     svc = climate or ClimateGeneratorService()
     anchors = local_field if local_field is not None else ClimateAnchorField(())
-    tile_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     samples: list[ClimateSampleWire] = []
     for ty in ty_rows:
         for tx in range(side):
@@ -133,12 +133,12 @@ def sample_climate_tile_ty_rows(
                     anchors,
                     xm=xm,
                     ym=ym,
-                    tile_m=tile_m,
+                    tile_macro=tile_macro,
                     coarse_surface_z=coarse_surface_z,
                     fine_z_overrides=fine_z_overrides,
                     parent_light=parent_light,
                     l2_surface_z=l2_surface_z,
-                    light_m=step,
+                    light_span=step,
                     uid_map=uid_map,
                     climate=svc,
                 ),
@@ -163,15 +163,15 @@ def build_climate_tile_wire(
     samples: list[ClimateSampleWire] | None = None,
 ) -> ClimateFieldWire:
     """Fine: denser light-grid samples over one macro-tile (origin on fine grid)."""
-    tile_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     side = cells_per_side or resolve_world_map_cells_per_tile(
-        tile_m,
+        tile_macro,
         world.world_map_cells_per_tile,
     )
-    scale = LightGridScale.from_tile(tile_m, side)
-    step = scale.light_m
-    origin_x = int(grid_tile_origin_x(tile_gx, tile_m))
-    origin_y = int(grid_tile_origin_y(tile_gy, tile_m))
+    scale = LightGridScale.from_tile(tile_macro, side)
+    step = scale.light_span
+    origin_x = int(grid_tile_origin_x(tile_gx, tile_macro))
+    origin_y = int(grid_tile_origin_y(tile_gy, tile_macro))
     l2_lookup = l2_surface_z
     if samples is None and l2_surface_z is not None:
         l2_lookup = bucket_l2_z_by_light_cell(

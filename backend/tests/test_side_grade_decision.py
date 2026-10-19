@@ -33,7 +33,7 @@ class TestSideGradeDecision(unittest.TestCase):
             100,
         )
         sides = default_sides_for_count(4, kind=MountainSideKind.SLOPE)
-        d = explain_side_grade_at_xy(geom, sides, 50.0, 0.0, light_m=1.0)
+        d = explain_side_grade_at_xy(geom, sides, 50.0, 0.0, light_span=1.0)
         self.assertEqual(d.kind, MountainSideKind.SLOPE)
         self.assertEqual(d.facing, Facing.WEST)
         self.assertIn("SLOPE", d.reason)
@@ -49,7 +49,7 @@ class TestSideGradeDecision(unittest.TestCase):
             MountainSideSpec(kind=MountainSideKind.SHEER, sheer_band_light=1)
             for _ in range(4)
         ]
-        d = explain_side_grade_at_xy(geom, sides, 99.5, 0.0, light_m=1.0)
+        d = explain_side_grade_at_xy(geom, sides, 99.5, 0.0, light_span=1.0)
         self.assertEqual(d.kind, MountainSideKind.SHEER)
         self.assertIsNone(d.facing)
         self.assertIn("SHEER", d.reason)

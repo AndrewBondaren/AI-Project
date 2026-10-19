@@ -10,7 +10,7 @@ from app.application.worldData.masks.regionRasterizer import (
     ClaimOwnersIndex, rasterize_claim_fine, rasterize_claim_light, rasterize_fine, rasterize_light,
 )
 from app.ids import seed_root
-from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_m
+from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_fine
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EdgeNoise, EllipseShape, PolygonShape
 from app.dataModel.terrainMasks.regions import ForestSpec
 from app.dataModel.worldPack.wire.worldBounds import WorldBounds
@@ -24,7 +24,7 @@ class RegionRasterizerTests(unittest.TestCase):
         self.uid = "region-a"
         self.other_uid = "region-b"
         self.bounds = WorldBounds(x_min=0, x_max=3, y_min=0, y_max=2)
-        self.scale = LightGridScale.from_tile(tile_m=8, side=4)
+        self.scale = LightGridScale.from_tile(tile_macro=8, side=4)
         self.shape = BboxShape(x_min=2, y_min=2, x_max=14, y_max=14)
         self.spec = ForestSpec(name="Test region", shape=self.shape)
         self.ctx = RegionRasterContext(
@@ -43,7 +43,7 @@ class RegionRasterizerTests(unittest.TestCase):
     def centers(self, ctx):
         bounds, scale = ctx.topology.bounds, ctx.scale
         return {
-            LightCellRef(gx, gy, tx, ty): light_cell_center_m(gx, gy, tx, ty, scale)
+            LightCellRef(gx, gy, tx, ty): light_cell_center_fine(gx, gy, tx, ty, scale)
             for gx in range(bounds.x_min, bounds.x_max + 1)
             for gy in range(bounds.y_min, bounds.y_max + 1)
             for tx in range(scale.side) for ty in range(scale.side)

@@ -197,7 +197,7 @@ class WorldMapPackRenderer:
             title=_mosaic_title("light", frame),
             coord_prefix="light ",
             bounds=frame.bounds,
-            fine_span=frame.light_m,
+            fine_span=frame.light_span,
             x_rulers=False,
         )
 
@@ -224,7 +224,7 @@ class WorldMapPackRenderer:
             coord_prefix="light ",
             width=width,
             bounds=frame.bounds,
-            fine_span=frame.light_m,
+            fine_span=frame.light_span,
         )
         legend = render_height_legend(
             z_min=min(hist) if hist else None,

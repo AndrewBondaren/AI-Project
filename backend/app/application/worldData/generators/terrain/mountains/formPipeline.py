@@ -30,9 +30,9 @@ from app.application.worldData.generators.terrain.relief.geom.facing import faci
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
-    light_cell_center_m,
+    light_cell_center_fine,
     light_to_macro_local,
-    meters_to_light,
+    fine_to_light,
 )
 from app.dataModel.terrainMasks.mountain.enums import MountainSideKind
 from app.dataModel.terrainMasks.mountain.specs import (
@@ -71,9 +71,9 @@ def _log_mountain_spec_grade(
         if len(samples) >= _GRADE_SAMPLE_LIMIT:
             break
     for ref in samples:
-        px, py = light_cell_center_m(ref.gx, ref.gy, ref.tx, ref.ty, scale)
+        px, py = light_cell_center_fine(ref.gx, ref.gy, ref.tx, ref.ty, scale)
         decision = explain_side_grade_at_xy(
-            geom, sides, float(px), float(py), light_m=float(scale.light_m),
+            geom, sides, float(px), float(py), light_span=float(scale.light_span),
         )
         facing = facing_wire(decision.facing) or "none"
         logger.debug(
@@ -137,16 +137,16 @@ def materialize_mountain_range(spec: MountainRangeSpec, scale: LightGridScale) -
     xs = [p[0] for p in spec.spine]
     ys = [p[1] for p in spec.spine]
     pad = half
-    lx0, ly0 = meters_to_light(min(xs) - pad, min(ys) - pad, scale)
-    lx1, ly1 = meters_to_light(max(xs) + pad, max(ys) + pad, scale)
+    lx0, ly0 = fine_to_light(min(xs) - pad, min(ys) - pad, scale)
+    lx1, ly1 = fine_to_light(max(xs) + pad, max(ys) + pad, scale)
     points: list[tuple[LightCellRef, float, float]] = []
     for ly in range(ly0, ly1 + 1):
         for lx in range(lx0, lx1 + 1):
             gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
-            cx, cy = light_cell_center_m(gx, gy, tx, ty, scale)
+            cx, cy = light_cell_center_fine(gx, gy, tx, ty, scale)
             points.append((LightCellRef(gx, gy, tx, ty), float(cx), float(cy)))
     fractions, facing = compose_range_corridor(
-        spec, points, light_m=float(scale.light_m),
+        spec, points, light_span=float(scale.light_span),
     )
     cells: set[LightCellRef] = set(fractions.keys())
     for peak in spec.peaks:
@@ -190,7 +190,7 @@ def coarse_footprint_for_spec(
     spec: MountainSpec,
     *,
     cell_m: int,
-    light_m: float,
+    light_span: float,
 ) -> dict[tuple[int, int], float]:
     """Q3-A: FormGeometry→FormRaster→SideFill on macro grid."""
     geom = construct_mountain_form(spec.form, (spec.origin_x_m, spec.origin_y_m), spec.radius_m)
@@ -208,7 +208,7 @@ def coarse_footprint_for_spec(
         geom,
         sides,
         _coarse_macro_points(keys, cell_m=cell_m),
-        light_m=float(light_m),
+        light_span=float(light_span),
     )
 
 
@@ -216,7 +216,7 @@ def coarse_footprint_for_range(
     spec: MountainRangeSpec,
     *,
     cell_m: int,
-    light_m: float,
+    light_span: float,
 ) -> dict[tuple[int, int], float]:
     """Q3-A: shared U6 corridor compose; peaks overlay."""
     _log_range_sides(spec)
@@ -232,10 +232,10 @@ def coarse_footprint_for_range(
     candidate_keys = {(gx, gy) for gy in range(gy0, gy1 + 1) for gx in range(gx0, gx1 + 1)}
     points = _coarse_macro_points(candidate_keys, cell_m=cell)
     fractions, _facing = compose_range_corridor(
-        spec, points, light_m=float(light_m),
+        spec, points, light_span=float(light_span),
     )
     for peak in spec.peaks:
-        peak_fp = coarse_footprint_for_spec(peak, cell_m=cell, light_m=light_m)
+        peak_fp = coarse_footprint_for_spec(peak, cell_m=cell, light_span=light_span)
         for key, frac in peak_fp.items():
             fractions[key] = max(fractions.get(key, 0.0), float(frac))
     return fractions
@@ -245,9 +245,9 @@ def coarse_footprint_for_entry(
     spec: MountainSpec | MountainRangeSpec,
     *,
     cell_m: int,
-    light_m: float,
+    light_span: float,
 ) -> dict[tuple[int, int], float]:
     """Pass 1.4 footprint + elevation fractions — same SoT as light materialize."""
     if isinstance(spec, MountainRangeSpec):
-        return coarse_footprint_for_range(spec, cell_m=cell_m, light_m=light_m)
-    return coarse_footprint_for_spec(spec, cell_m=cell_m, light_m=light_m)
+        return coarse_footprint_for_range(spec, cell_m=cell_m, light_span=light_span)
+    return coarse_footprint_for_spec(spec, cell_m=cell_m, light_span=light_span)

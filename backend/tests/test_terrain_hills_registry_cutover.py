@@ -104,7 +104,7 @@ class RegistryCutoverTests(unittest.TestCase):
             climate_zone_registry=None, relief_pick_policy=None,
         )
         uid = region_uid(world.world_uid, name=spec.name)
-        parent = ParentLightTile.from_cells(world_uid=world.world_uid, gx=0, gy=0, side=1, tile_m=32,
+        parent = ParentLightTile.from_cells(world_uid=world.world_uid, gx=0, gy=0, side=1, tile_macro=32,
             cells=[WorldMapCellWire(tx=0, ty=0, surface_z=3, system_terrain="forest", region_uid=uid)])
         prepare = finePaint.prepare_landcover_inputs
         def with_state(ctx):

@@ -125,7 +125,7 @@ class WildernessRegionIndexTests(unittest.TestCase):
         a = CoverageSeed(WorldSeed((1,1),(0,0)),"forest")
         b = CoverageSeed(WorldSeed((5,1),(1,0)),"forest")
         from app.application.worldData.generators.terrain.landcover.autoresolve.claim import fine_topology
-        topology = fine_topology(self.f.topology,self.f.scale.tile_m)
+        topology = fine_topology(self.f.topology,self.f.scale.tile_macro)
         merged = merge_sublocations((a,b),topology,self.f.policy,"w")
         split = merge_sublocations((a,replace(b,target_key="plains")),topology,self.f.policy,"w")
         self.assertEqual(len(merged),1)
@@ -188,7 +188,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
         f.ctx.surface_planning.sparse_fine_hydro = {}
         f.ctx.surface_planning.fine_z_overrides = {}
         f.ctx.surface_planning.pole_field = None
-        world.fine_cells_per_map_cell = f.ctx.scale.tile_m
+        world.fine_cells_per_map_cell = f.ctx.scale.tile_macro
         world.world_map_cells_per_tile = f.ctx.scale.side
         with tempfile.TemporaryDirectory() as tmp:
             db = str(Path(tmp)/"game.db")

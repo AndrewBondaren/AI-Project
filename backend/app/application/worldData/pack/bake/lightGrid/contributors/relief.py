@@ -11,7 +11,7 @@ from app.application.worldData.generators.terrain.noise import cell_z_noise
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class ReliefContributor:
             return
 
         scale = compose.scale
-        tile_m = scale.tile_m
+        tile_macro = scale.tile_macro
         z_min = world_z_min(world)
         z_max = world_z_max(world)
         seed = world_seed(world)
@@ -49,9 +49,9 @@ class ReliefContributor:
             compose.ensure_tile(gx, gy)
             for ty in range(scale.side):
                 for tx in range(scale.side):
-                    xm, ym = light_cell_center_m(gx, gy, tx, ty, scale)
-                    mgx = int(fine_to_grid_x(xm, tile_m))
-                    mgy = int(fine_to_grid_y(ym, tile_m))
+                    xm, ym = light_cell_center_fine(gx, gy, tx, ty, scale)
+                    mgx = int(fine_to_grid_x(xm, tile_macro))
+                    mgy = int(fine_to_grid_y(ym, tile_macro))
                     sample = pole.sample(world, mgx, mgy)
                     base = planning_z.get((mgx, mgy), sample.typical_elevation_z)
                     z = cell_z_noise(seed, xm, ym, int(base), amplitude=1)

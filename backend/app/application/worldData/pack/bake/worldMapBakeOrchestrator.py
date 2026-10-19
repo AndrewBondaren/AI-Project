@@ -127,9 +127,9 @@ class WorldMapBakeOrchestrator:
             surface_z_hist=_surface_z_hist(surface_ctx.coarse_surface_z),
         )
 
-        tile_m = map_cell_fine_span(world)
-        side = resolve_world_map_cells_per_tile(tile_m, world.world_map_cells_per_tile)
-        scale = LightGridScale.from_tile(tile_m, side)
+        tile_macro = map_cell_fine_span(world)
+        side = resolve_world_map_cells_per_tile(tile_macro, world.world_map_cells_per_tile)
+        scale = LightGridScale.from_tile(tile_macro, side)
         index = locations_index or build_locations_index(locations, world)
 
         bake_ctx = LightGridBakeContext(
@@ -217,9 +217,9 @@ class WorldMapBakeOrchestrator:
     ) -> tuple[list[WorldMapCellWire], str]:
         """Single-tile convenience wrapper around compose pipeline."""
         locs = locations or []
-        tile_m = map_cell_fine_span(world)
+        tile_macro = map_cell_fine_span(world)
         side = cells_per_side or resolve_world_map_cells_per_tile(
-            tile_m,
+            tile_macro,
             world.world_map_cells_per_tile,
         )
         index = locations_index or build_locations_index(locs, world)
@@ -228,7 +228,7 @@ class WorldMapBakeOrchestrator:
             locations=locs,
             locations_index=index,
             tiles=[(gx, gy)],
-            scale=LightGridScale.from_tile(tile_m, side),
+            scale=LightGridScale.from_tile(tile_macro, side),
             surface_planning=surface_ctx,
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),

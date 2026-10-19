@@ -32,7 +32,7 @@ from app.application.worldData.generators.terrain.relief.mountain.sideGradeDecis
 from app.application.worldData.masks.footprint import LightCellRef
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
-    light_cell_center_m,
+    light_cell_center_fine,
 )
 from app.dataModel.terrainMasks.mountain.specs import MountainSideSpec
 
@@ -65,10 +65,10 @@ def side_fill_fraction_at_xy(
     px: float,
     py: float,
     *,
-    light_m: float,
+    light_span: float,
 ) -> float:
     """Ownership B (nearest edge) + per-side profile at one point (meters)."""
-    return side_fill_grade_at_xy(geometry, sides, px, py, light_m=light_m).fraction
+    return side_fill_grade_at_xy(geometry, sides, px, py, light_span=light_span).fraction
 
 
 def side_fill_grade_at_xy(
@@ -77,7 +77,7 @@ def side_fill_grade_at_xy(
     px: float,
     py: float,
     *,
-    light_m: float,
+    light_span: float,
 ) -> RadialGradeDecision:
     """Ownership B + profile + facing — used for stamp and R8 logs."""
     if len(sides) != len(geometry.sectors):
@@ -101,7 +101,7 @@ def side_fill_grade_at_xy(
         t=t,
         dist_origin=dist_origin,
         outer_m=radius,
-        light_m=light_m,
+        light_span=light_span,
         px=px,
         py=py,
         origin_x=float(ox),
@@ -114,13 +114,13 @@ def side_fill_fractions_at_points(
     sides: list[MountainSideSpec],
     points: Iterable[tuple[KeyT, float, float]],
     *,
-    light_m: float,
+    light_span: float,
 ) -> dict[KeyT, float]:
     """``points``: (key, x_m, y_m) → fraction map."""
     out: dict[KeyT, float] = {}
     for key, px, py in points:
         out[key] = side_fill_fraction_at_xy(
-            geometry, sides, float(px), float(py), light_m=light_m,
+            geometry, sides, float(px), float(py), light_span=light_span,
         )
     return out
 
@@ -130,12 +130,12 @@ def side_fill_grades_at_points(
     sides: list[MountainSideSpec],
     points: Iterable[tuple[KeyT, float, float]],
     *,
-    light_m: float,
+    light_span: float,
 ) -> dict[KeyT, RadialGradeDecision]:
     out: dict[KeyT, RadialGradeDecision] = {}
     for key, px, py in points:
         out[key] = side_fill_grade_at_xy(
-            geometry, sides, float(px), float(py), light_m=light_m,
+            geometry, sides, float(px), float(py), light_span=light_span,
         )
     return out
 
@@ -148,11 +148,11 @@ def side_fill_fractions(
 ) -> dict[LightCellRef, float]:
     """Light-grid wrapper around ``side_fill_fractions_at_points``."""
     points = (
-        (ref, *light_cell_center_m(ref.gx, ref.gy, ref.tx, ref.ty, scale))
+        (ref, *light_cell_center_fine(ref.gx, ref.gy, ref.tx, ref.ty, scale))
         for ref in cells
     )
     return side_fill_fractions_at_points(
-        geometry, sides, points, light_m=float(scale.light_m),
+        geometry, sides, points, light_span=float(scale.light_span),
     )
 
 
@@ -163,9 +163,9 @@ def side_fill_grades(
     scale: LightGridScale,
 ) -> dict[LightCellRef, RadialGradeDecision]:
     points = (
-        (ref, *light_cell_center_m(ref.gx, ref.gy, ref.tx, ref.ty, scale))
+        (ref, *light_cell_center_fine(ref.gx, ref.gy, ref.tx, ref.ty, scale))
         for ref in cells
     )
     return side_fill_grades_at_points(
-        geometry, sides, points, light_m=float(scale.light_m),
+        geometry, sides, points, light_span=float(scale.light_span),
     )

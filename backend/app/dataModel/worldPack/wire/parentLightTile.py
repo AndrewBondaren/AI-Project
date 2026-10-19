@@ -8,7 +8,7 @@ from typing import ClassVar, Mapping
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE, light_m_for
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE, light_span_for
 
 
 class ParentLightTile(BaseModel):
@@ -22,7 +22,7 @@ class ParentLightTile(BaseModel):
     gx: int
     gy: int
     side: int = Field(default=WORLD_MAP_CELLS_PER_TILE, ge=1)
-    tile_m: int = Field(ge=1)
+    tile_macro: int = Field(ge=1)
     # (tx, ty) → wire cell; MappingProxyType after from_cells
     cells: Mapping[tuple[int, int], WorldMapCellWire] = Field(default_factory=dict)
 
@@ -34,7 +34,7 @@ class ParentLightTile(BaseModel):
         gx: int,
         gy: int,
         side: int,
-        tile_m: int,
+        tile_macro: int,
         cells: list[WorldMapCellWire],
     ) -> ParentLightTile:
         by_xy: dict[tuple[int, int], WorldMapCellWire] = {
@@ -45,27 +45,27 @@ class ParentLightTile(BaseModel):
             gx=int(gx),
             gy=int(gy),
             side=max(1, int(side)),
-            tile_m=max(1, int(tile_m)),
+            tile_macro=max(1, int(tile_macro)),
             cells=MappingProxyType(by_xy),
         )
 
     @property
-    def light_m(self) -> int:
-        """Meters per light cell — same SoT as ``LightGridScale`` (``light_m_for``)."""
-        return light_m_for(self.tile_m, self.side)
+    def light_span(self) -> int:
+        """Fine cells per light cell — same SoT as ``LightGridScale`` (``light_span_for``)."""
+        return light_span_for(self.tile_macro, self.side)
 
     def cell_at(self, tx: int, ty: int) -> WorldMapCellWire | None:
         return self.cells.get((int(tx), int(ty)))
 
-    def meters_to_tx_ty(self, xm: int, ym: int) -> tuple[int, int]:
-        """Macro-local meters → light (tx, ty) clamped to tile."""
-        origin_x = self.gx * self.tile_m
-        origin_y = self.gy * self.tile_m
-        lx = int(xm) - origin_x
-        ly = int(ym) - origin_y
-        lm = self.light_m
-        tx = min(self.side - 1, max(0, lx // lm))
-        ty = min(self.side - 1, max(0, ly // lm))
+    def fine_to_tx_ty(self, x_fine: int, y_fine: int) -> tuple[int, int]:
+        """World fine coords → light (tx, ty) clamped to tile."""
+        origin_x = self.gx * self.tile_macro
+        origin_y = self.gy * self.tile_macro
+        lx = int(x_fine) - origin_x
+        ly = int(y_fine) - origin_y
+        span = self.light_span
+        tx = min(self.side - 1, max(0, lx // span))
+        ty = min(self.side - 1, max(0, ly // span))
         return tx, ty
 
     def surface_z_at(self, tx: int, ty: int) -> int:

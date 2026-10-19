@@ -47,16 +47,16 @@ def upsample_from_parent_light(
     z_min = world_z_min(world)
     z_max = world_z_max(world)
     seed = world_seed(world)
-    tile_m = parent.tile_m
+    tile_macro = parent.tile_macro
     side = parent.side
     surface_z: dict[tuple[int, int], int] = {}
 
-    for ly in range(tile_m):
-        for lx in range(tile_m):
-            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
+    for ly in range(tile_macro):
+        for lx in range(tile_macro):
+            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_macro)
             # Continuous light coords at cell center of meter.
-            fx = (lx + 0.5) * side / tile_m
-            fy = (ly + 0.5) * side / tile_m
+            fx = (lx + 0.5) * side / tile_macro
+            fy = (ly + 0.5) * side / tile_macro
             if pol.resample == "nearest":
                 base = float(_sample_z_nearest(parent, fx, fy))
             else:
@@ -75,4 +75,4 @@ def upsample_from_parent_light(
 
 
 def fine_bbox_for_parent(parent: ParentLightTile):
-    return fine_bbox_for_tile(parent.gx, parent.gy, parent.tile_m)
+    return fine_bbox_for_tile(parent.gx, parent.gy, parent.tile_macro)

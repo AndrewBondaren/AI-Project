@@ -62,7 +62,7 @@ class LandcoverMaterializer:
         if not isinstance(policy, LandcoverRegionsCategoryPolicy):
             raise TypeError("landcover expects LandcoverRegionsCategoryPolicy")
         regions, index = autoresolve_regions(
-            ctx.world.world_uid, seed_root(ctx.world), ctx.scale.tile_m,
+            ctx.world.world_uid, seed_root(ctx.world), ctx.scale.tile_macro,
             self.inputs, policy, coverage_registry(terrain(ctx.world), policy, autoresolve=True))
         # The same owners map serves claim_area and every sibling materialize.
         self._claim_indexes[index.claim] = index

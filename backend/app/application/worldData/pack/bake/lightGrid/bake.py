@@ -35,11 +35,11 @@ def compose_light_grid(
             ctx.world.world_uid,
         )
     logger.info(
-        "light_compose_start | world=%s tiles=%d side=%d light_m=%d",
+        "light_compose_start | world=%s tiles=%d side=%d light_span=%d",
         ctx.world.world_uid,
         len(ctx.tiles),
         ctx.scale.side,
-        ctx.scale.light_m,
+        ctx.scale.light_span,
     )
     for contributor in pipeline:
         c0 = time.perf_counter()

@@ -208,7 +208,7 @@ class TestQ3ACoarseFormRaster(unittest.TestCase):
             form=StarForm(rays=5, inner_ratio=0.35),
         )
         cell_m = 500
-        form_keys = set(coarse_footprint_for_spec(spec, cell_m=cell_m, light_m=31).keys())
+        form_keys = set(coarse_footprint_for_spec(spec, cell_m=cell_m, light_span=31).keys())
         cx = spec.origin_x_m // cell_m
         cy = spec.origin_y_m // cell_m
         disk_keys = raster_disk(cx, cy, max(0, int(round(spec.radius_m / cell_m))))
@@ -228,7 +228,7 @@ class TestQ3ACoarseFormRaster(unittest.TestCase):
             radius_m=2000,
             form=MountainFormBySides(side_count=6),
         )
-        fp = coarse_footprint_for_spec(spec, cell_m=500, light_m=31)
+        fp = coarse_footprint_for_spec(spec, cell_m=500, light_span=31)
         self.assertGreater(len(fp), 1)
         self.assertTrue(any(f > 0.85 for f in fp.values()))
         self.assertTrue(any(f < 0.5 for f in fp.values()))
@@ -256,21 +256,21 @@ class TestRangeSideFill(unittest.TestCase):
             sides=sides,
         )
         half = 500.0
-        light_m = 31.0
+        light_span = 31.0
         # Point near left boundary (y>0 with spine along +x → left = +y)
         left_frac = range_side_fraction_at_xy(
             1000.0, 480.0,
             spine=list(spec.spine),
             half_width_m=half,
             sides=sides,
-            light_m=light_m,
+            light_span=light_span,
         )
         right_frac = range_side_fraction_at_xy(
             1000.0, -480.0,
             spine=list(spec.spine),
             half_width_m=half,
             sides=sides,
-            light_m=light_m,
+            light_span=light_span,
         )
         self.assertIsNotNone(left_frac)
         self.assertIsNotNone(right_frac)

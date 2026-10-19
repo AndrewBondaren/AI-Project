@@ -203,11 +203,11 @@ class ClimatePackBakeOrchestrator:
             if locations is not None
             else None
         )
-        tile_m = map_cell_fine_span(world)
-        scale = LightGridScale.from_tile(tile_m, side)
-        step = scale.light_m
-        origin_x = int(grid_tile_origin_x(tile_gx, tile_m))
-        origin_y = int(grid_tile_origin_y(tile_gy, tile_m))
+        tile_macro = map_cell_fine_span(world)
+        scale = LightGridScale.from_tile(tile_macro, side)
+        step = scale.light_span
+        origin_x = int(grid_tile_origin_x(tile_gx, tile_macro))
+        origin_y = int(grid_tile_origin_y(tile_gy, tile_macro))
         l2_lookup = (
             bucket_l2_z_by_light_cell(
                 l2_surface_z,
@@ -281,14 +281,14 @@ class ClimatePackBakeOrchestrator:
         require_parent: bool = True,
     ) -> bool:
         """Load parent light and bake fine. Skip (False) when parent missing and required."""
-        tile_m = map_cell_fine_span(world)
+        tile_macro = map_cell_fine_span(world)
         parent = load_parent_light(
             world.world_uid,
             tile_gx,
             tile_gy,
             reader=WorldPackReader(writer.paths),
             cache=writer.parent_light_cache,
-            tile_m=tile_m,
+            tile_macro=tile_macro,
         )
         if parent is None and require_parent:
             logger.warning(

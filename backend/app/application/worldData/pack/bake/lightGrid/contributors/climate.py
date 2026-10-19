@@ -8,7 +8,7 @@ from collections import Counter
 from app.application.worldData.generators.coordinates import fine_to_grid_x, fine_to_grid_y
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
 from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
@@ -38,15 +38,15 @@ class ClimateContributor:
 
         world = ctx.world
         scale = compose.scale
-        tile_m = scale.tile_m
+        tile_macro = scale.tile_macro
         zone_hist: Counter[str] = Counter()
         cells = 0
         for gx, gy in ctx.tiles:
             for ty in range(scale.side):
                 for tx in range(scale.side):
-                    xm, ym = light_cell_center_m(gx, gy, tx, ty, scale)
-                    mgx = int(fine_to_grid_x(xm, tile_m))
-                    mgy = int(fine_to_grid_y(ym, tile_m))
+                    xm, ym = light_cell_center_fine(gx, gy, tx, ty, scale)
+                    mgx = int(fine_to_grid_x(xm, tile_macro))
+                    mgy = int(fine_to_grid_y(ym, tile_macro))
                     sample = pole.sample(world, mgx, mgy)
                     zone_id = _climate_zone_id(sample.system_climate_zone)
                     compose.ensure(gx, gy, tx, ty).climate_zone_id = zone_id

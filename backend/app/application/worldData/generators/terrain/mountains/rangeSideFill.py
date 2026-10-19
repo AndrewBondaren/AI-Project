@@ -114,7 +114,7 @@ def range_side_grade_at_xy(
     spine: list[tuple[int, int]],
     half_width_m: float,
     sides: MountainRangeSides,
-    light_m: float,
+    light_span: float,
 ) -> RangeSideGrade | None:
     """Fraction + facing at point, or None if outside corridor.
 
@@ -148,7 +148,7 @@ def range_side_grade_at_xy(
     if best_side.kind == MountainSideKind.SHEER:
         band = sheer_band_m(
             sheer_band_light=int(best_side.sheer_band_light),
-            light_m=light_m,
+            light_span=light_span,
         )
         frac = sheer_fraction_lateral(
             dist_spine=dist, half_width_m=half, band_m=band,
@@ -159,7 +159,7 @@ def range_side_grade_at_xy(
         t=t,
         dist_for_sheer=dist,
         outer_m=half,
-        light_m=light_m,
+        light_span=light_span,
     )
     nearest = nearest_point_on_polyline_m(px, py, spine)
     facing = (
@@ -177,10 +177,10 @@ def range_side_fraction_at_xy(
     spine: list[tuple[int, int]],
     half_width_m: float,
     sides: MountainRangeSides,
-    light_m: float,
+    light_span: float,
 ) -> float | None:
     grade = range_side_grade_at_xy(
-        px, py, spine=spine, half_width_m=half_width_m, sides=sides, light_m=light_m,
+        px, py, spine=spine, half_width_m=half_width_m, sides=sides, light_span=light_span,
     )
     return None if grade is None else grade.fraction
 
@@ -189,10 +189,10 @@ def range_side_fill_at_points(
     spec: MountainRangeSpec,
     points: Iterable[tuple[KeyT, float, float]],
     *,
-    light_m: float,
+    light_span: float,
 ) -> dict[KeyT, float]:
     """Corridor occupancy + left/right/caps SideFill → fraction map (no peaks)."""
-    grades = range_side_grades_at_points(spec, points, light_m=light_m)
+    grades = range_side_grades_at_points(spec, points, light_span=light_span)
     return {k: g.fraction for k, g in grades.items()}
 
 
@@ -200,7 +200,7 @@ def range_side_grades_at_points(
     spec: MountainRangeSpec,
     points: Iterable[tuple[KeyT, float, float]],
     *,
-    light_m: float,
+    light_span: float,
 ) -> dict[KeyT, RangeSideGrade]:
     half = max(1, int(spec.width_m)) / 2.0
     spine = list(spec.spine)
@@ -213,7 +213,7 @@ def range_side_grades_at_points(
             spine=spine,
             half_width_m=half,
             sides=sides,
-            light_m=light_m,
+            light_span=light_span,
         )
         if grade is not None:
             out[key] = grade

@@ -19,12 +19,12 @@ class LightGridCompose:
         return self.scale.side
 
     @property
-    def tile_m(self) -> int:
-        return self.scale.tile_m
+    def tile_macro(self) -> int:
+        return self.scale.tile_macro
 
     @property
-    def light_m(self) -> int:
-        return self.scale.light_m
+    def light_span(self) -> int:
+        return self.scale.light_span
 
     def ensure(self, gx: int, gy: int, tx: int, ty: int) -> LightGridCell:
         key = (gx, gy, tx, ty)

@@ -13,7 +13,7 @@ from app.application.worldData.masks.regionRasterContext import (
     ClaimSeed, RasterWorld, RegionClaim, RegionRasterContext,
 )
 from app.application.worldData.masks.regionRasterNoise import boundary_depth, smooth_field
-from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.spatial.regionShape import Bounds, Point, RegionShape
 from app.dataModel.worldPack.wire.worldTopology import Coord, WorldTopology
@@ -66,7 +66,7 @@ def _light_samples(bbox: Bounds, ctx: RegionRasterContext,
     """
     x_min, y_min, x_max, y_max = bbox
     scale = ctx.scale
-    tile = scale.tile_m
+    tile = scale.tile_macro
     for gx in range(x_min // tile, x_max // tile + 1):
         for gy in range(y_min // tile, y_max // tile + 1):
             ox, oy = gx * tile, gy * tile
@@ -78,7 +78,7 @@ def _light_samples(bbox: Bounds, ctx: RegionRasterContext,
             sign_y = 1 if end[1] >= start[1] else -1
             for tx in range(scale.side):
                 for ty in range(scale.side):
-                    coord = light_cell_center_m(cgx, cgy, tx, ty, scale)
+                    coord = light_cell_center_fine(cgx, cgy, tx, ty, scale)
                     raw = ox + coord[0] - start[0], oy + sign_y * (coord[1] - start[1])
                     if x_min <= raw[0] <= x_max and y_min <= raw[1] <= y_max:
                         yield raw, coord, LightCellRef(cgx, cgy, tx, ty)
@@ -172,10 +172,10 @@ def rasterize_claim_light(index: ClaimOwnersIndex, world: RasterWorld,
     scale = spec_ctx.scale
     cells = set()
     for coord in coords:
-        gx, lx = divmod(coord[0], scale.tile_m)
-        gy, ly = divmod(coord[1], scale.tile_m)
-        tx = min(lx // scale.light_m, scale.side - 1)
-        ty = min(ly // scale.light_m, scale.side - 1)
-        if coord == light_cell_center_m(gx, gy, tx, ty, scale):
+        gx, lx = divmod(coord[0], scale.tile_macro)
+        gy, ly = divmod(coord[1], scale.tile_macro)
+        tx = min(lx // scale.light_span, scale.side - 1)
+        ty = min(ly // scale.light_span, scale.side - 1)
+        if coord == light_cell_center_fine(gx, gy, tx, ty, scale):
             cells.add(LightCellRef(gx, gy, tx, ty))
     return frozenset(cells)

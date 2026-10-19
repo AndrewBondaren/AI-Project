@@ -71,7 +71,7 @@ class TestLightGridCompose(unittest.TestCase):
         self.assertEqual(resolve_world_map_cells_per_tile(1000), 32)
         scale = LightGridScale.from_tile(1000, 32)
         self.assertEqual(scale.side, 32)
-        self.assertEqual(scale.light_m, 31)
+        self.assertEqual(scale.light_span, 31)
 
     def test_default_pipeline_order(self):
         from app.application.worldData.pack.bake.lightGrid.bake import DEFAULT_CONTRIBUTORS

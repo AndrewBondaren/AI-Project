@@ -46,7 +46,7 @@ def _world_stub() -> MagicMock:
     )
 
 
-def _parent_mixed_terrain(*, side: int = 2, tile_m: int = 8) -> ParentLightTile:
+def _parent_mixed_terrain(*, side: int = 2, tile_macro: int = 8) -> ParentLightTile:
     """Left light cells mountain, right plains."""
     cells = [
         WorldMapCellWire(tx=0, ty=0, surface_z=5, system_terrain="mountain"),
@@ -59,12 +59,12 @@ def _parent_mixed_terrain(*, side: int = 2, tile_m: int = 8) -> ParentLightTile:
         gx=0,
         gy=0,
         side=side,
-        tile_m=tile_m,
+        tile_macro=tile_macro,
         cells=cells,
     )
 
 
-def _parent_with_river(*, side: int = 4, tile_m: int = 32) -> ParentLightTile:
+def _parent_with_river(*, side: int = 4, tile_macro: int = 32) -> ParentLightTile:
     cells: list[WorldMapCellWire] = []
     for ty in range(side):
         for tx in range(side):
@@ -84,7 +84,7 @@ def _parent_with_river(*, side: int = 4, tile_m: int = 32) -> ParentLightTile:
         gx=0,
         gy=0,
         side=side,
-        tile_m=tile_m,
+        tile_macro=tile_macro,
         cells=cells,
     )
 
@@ -117,7 +117,7 @@ class TestParentLightCache(unittest.TestCase):
             writer.parent_light_cache.clear()
             reader = WorldPackReader(paths)
             loaded = load_parent_light(
-                uid, 0, 0, reader=reader, cache=writer.parent_light_cache, tile_m=32,
+                uid, 0, 0, reader=reader, cache=writer.parent_light_cache, tile_macro=32,
             )
             self.assertIsNotNone(loaded)
             assert loaded is not None
@@ -127,7 +127,7 @@ class TestParentLightCache(unittest.TestCase):
 
 class TestUpsampleAndCorridor(unittest.TestCase):
     def test_z_band_respected(self) -> None:
-        parent = _parent_with_river(side=4, tile_m=16)
+        parent = _parent_with_river(side=4, tile_macro=16)
         policy = ParentLightRefinePolicy(z_band=1, detail_noise_amplitude=1)
         w = _world_stub()
         w.world_uid = "w-parent"
@@ -148,7 +148,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             self.assertLessEqual(z, hi)
 
     def test_hard_corridor_keeps_river_only_in_mask(self) -> None:
-        parent = _parent_with_river(side=4, tile_m=16)
+        parent = _parent_with_river(side=4, tile_macro=16)
         mask = hydro_mask_from_parent(parent)
         self.assertTrue(mask)
         for (_xm, _ym), entry in mask.items():
@@ -169,7 +169,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
                 MagicMock(), [], MagicMock(), 0, 0,
             )
 
-        parent = _parent_with_river(side=2, tile_m=8)
+        parent = _parent_with_river(side=2, tile_macro=8)
         w = _world_stub()
         w.world_uid = "w-parent"
         w.fine_cells_per_map_cell = 8
@@ -204,7 +204,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             gx=0,
             gy=0,
             side=2,
-            tile_m=8,
+            tile_macro=8,
             cells=[],
         )
         with self.assertRaises(LookupError):
@@ -213,7 +213,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
 
 class TestTerrainMaskCarry(unittest.TestCase):
     def test_upsample_terrain_nearest_preserves_l0_mask(self) -> None:
-        parent = _parent_mixed_terrain(side=2, tile_m=8)
+        parent = _parent_mixed_terrain(side=2, tile_macro=8)
         w = _world_stub()
         w.world_uid = "w-mask"
         w.terrain_registry = None
@@ -231,7 +231,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
             self.assertGreaterEqual(xm % 8, 4)
 
     def test_column_fill_uses_surface_terrain_not_default_forest(self) -> None:
-        parent = _parent_mixed_terrain(side=2, tile_m=4)
+        parent = _parent_mixed_terrain(side=2, tile_macro=4)
         w = _world_stub()
         w.world_uid = "w-mask"
         w.terrain_registry = None
@@ -267,7 +267,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
 
     def test_build_tile_surface_state_carries_mixed_mask(self) -> None:
         terrain = TerrainBatchOrchestrator(MagicMock())
-        parent = _parent_mixed_terrain(side=2, tile_m=8)
+        parent = _parent_mixed_terrain(side=2, tile_macro=8)
         w = _world_stub()
         w.world_uid = "w-mask"
         w.fine_cells_per_map_cell = 8
@@ -299,7 +299,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
             gx=0,
             gy=0,
             side=2,
-            tile_m=8,
+            tile_macro=8,
             cells=[],
         )
         with self.assertRaises(LookupError):

@@ -28,7 +28,7 @@ def prepare_landcover_inputs(ctx: LightGridBakeContext) -> LandcoverInputs:
 
     def facts_at(point):
         # Region coordinates are fine cells; fact consumers observe macro cells.
-        macro = (point[0] // ctx.scale.tile_m, point[1] // ctx.scale.tile_m)
+        macro = (point[0] // ctx.scale.tile_macro, point[1] // ctx.scale.tile_macro)
         return collect_facts(FactConsumerContext(surface, (macro,), profiles))
 
     return LandcoverInputs(topology, facts_at, read_region_state_snapshot(ctx))

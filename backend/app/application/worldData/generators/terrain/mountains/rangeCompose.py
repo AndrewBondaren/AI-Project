@@ -79,13 +79,13 @@ def compose_range_corridor(
     spec: MountainRangeSpec,
     points: list[tuple[KeyT, float, float]],
     *,
-    light_m: float,
+    light_span: float,
 ) -> tuple[dict[KeyT, float], dict[KeyT, str | None]]:
     """U6 steps 1–2: corridor SideFill (+ facing) → saddle modulate.
 
     Returns ``(fractions, system_facing_wire)``. Caller overlays peaks max-wins.
     """
-    grades = range_side_grades_at_points(spec, points, light_m=light_m)
+    grades = range_side_grades_at_points(spec, points, light_span=light_span)
     fractions = {k: float(g.fraction) for k, g in grades.items()}
     facing = range_facing_wire_map(grades)
     half = max(1, int(spec.width_m)) / 2.0

@@ -55,7 +55,7 @@ class TestLightBakeCleanup(unittest.TestCase):
         self.assertNotIn("8.0", src)
         self.assertNotIn("/ 8", src)
 
-    def test_wp10_side_ignores_tile_m(self) -> None:
+    def test_wp10_side_ignores_tile_macro(self) -> None:
         self.assertEqual(resolve_world_map_cells_per_tile(1000), 32)
         self.assertEqual(resolve_world_map_cells_per_tile(3000), 32)
         self.assertEqual(resolve_world_map_side(), 32)

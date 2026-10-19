@@ -156,7 +156,7 @@ class TerrainBatchOrchestrator:
         fine_z = upsample_from_parent_light(parent_light, world, policy=policy)
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
-        cell_m = parent_light.tile_m
+        cell_m = parent_light.tile_macro
         for (xm, ym), z in ctx.fine_z_overrides.items():
             if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
                 base = fine_z.get((xm, ym), z)

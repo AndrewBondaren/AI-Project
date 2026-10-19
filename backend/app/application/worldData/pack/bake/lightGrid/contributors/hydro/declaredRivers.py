@@ -35,7 +35,7 @@ def apply_declared_rivers(
     for edge in declared.river_edges:
         (x0, y0), (x1, y1) = edge.segment
         light_cells = set(light_polyline_from_meters([(x0, y0), (x1, y1)], scale))
-        radius = max(0, (int(edge.width_cells) + scale.light_m - 1) // scale.light_m - 1)
+        radius = max(0, (int(edge.width_cells) + scale.light_span - 1) // scale.light_span - 1)
         light_cells = dilate(light_cells, radius)
         width = HydrologyMaskWire(
             role=WorldMapHydrologyRole.RIVER,

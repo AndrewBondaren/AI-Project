@@ -25,7 +25,7 @@ from app.application.worldData.generators.terrain.mountains.ridgePlacement impor
 from app.application.worldData.masks.mergeDeclare import merge_declare_over_auto
 from app.application.worldData.pack.bake.lightGrid.coords import (
     light_to_macro_local,
-    meters_to_light,
+    fine_to_light,
 )
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
 from app.dataModel.terrainMasks.worldTerrainMasks import (
@@ -138,10 +138,10 @@ def autoresolve_mountain_specs(
     tile_set = set(ctx.tiles)
     cells: list[tuple[int, int, int, int]] = []
     for gx, gy in ctx.tiles:
-        x0 = gx * scale.tile_m
-        y0 = gy * scale.tile_m
-        x1 = x0 + scale.tile_m - 1
-        y1 = y0 + scale.tile_m - 1
+        x0 = gx * scale.tile_macro
+        y0 = gy * scale.tile_macro
+        x1 = x0 + scale.tile_macro - 1
+        y1 = y0 + scale.tile_macro - 1
         cells.extend(
             iter_ridge_cells_in_meter_rect(
                 x0=x0, y0=y0, x1=x1, y1=y1, ridge_cell_m=int(policy.ridge_cell_m),
@@ -149,12 +149,12 @@ def autoresolve_mountain_specs(
         )
 
     def _typical(ox: int, oy: int) -> int:
-        lx, ly = meters_to_light(ox, oy, scale)
+        lx, ly = fine_to_light(ox, oy, scale)
         mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
         return _typical_from_pole(ctx.pole_field, ctx.world, mgx, mgy)
 
     def _accept(ox: int, oy: int) -> bool:
-        lx, ly = meters_to_light(ox, oy, scale)
+        lx, ly = fine_to_light(ox, oy, scale)
         mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
         return (mgx, mgy) in tile_set
 

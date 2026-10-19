@@ -20,7 +20,7 @@ from app.application.worldData.generators.terrain.worldMapSettings import world_
 from app.dataModel.terrainMasks.mountain.enums import MountainKind
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
 from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
-    light_m_for,
+    light_span_for,
     resolve_world_map_cells_per_tile,
 )
 
@@ -60,7 +60,7 @@ def apply_mountain_z(
     )
     if light_side is not None and int(light_side) > 0:
         side = max(1, int(light_side))
-    light_m = float(light_m_for(cell_m, side))
+    light_span = float(light_span_for(cell_m, side))
     keys = set(heightmap.surface_z.keys())
     specs = collect_mountain_entries_for_coarse(
         world,
@@ -75,7 +75,7 @@ def apply_mountain_z(
     frac_map: dict[tuple[int, int], float] = {}
     kind_map: dict[tuple[int, int], MountainKind] = {}
     for spec in specs:
-        fp = coarse_footprint_for_entry(spec, cell_m=cell_m, light_m=light_m)
+        fp = coarse_footprint_for_entry(spec, cell_m=cell_m, light_span=light_span)
         kind = _entry_kind(spec)
         for key, frac in fp.items():
             if key not in keys:

@@ -83,7 +83,7 @@ def paint_regions_fine(
 
     # The collect path reads only world/locations/scale/surface_planning; the
     # remaining bake-context fields are compose-time concerns (see contributor).
-    scale = LightGridScale.from_tile(parent_light.tile_m, parent_light.side)
+    scale = LightGridScale.from_tile(parent_light.tile_macro, parent_light.side)
     bake_ctx = LightGridBakeContext(
         world=world,
         locations=locations,
@@ -149,7 +149,7 @@ def paint_regions_fine(
     region_uid: dict[Coord, str] = {}
     painted = restored = preserved = blocked = 0
     for coord, current in fine_terrain.items():
-        parent_cell = parent_light.cell_at(*parent_light.meters_to_tx_ty(*coord))
+        parent_cell = parent_light.cell_at(*parent_light.fine_to_tx_ty(*coord))
         region_painted_parent = parent_cell is not None and parent_cell.region_uid is not None
         winner = winners.get(coord)
         if winner is not None:

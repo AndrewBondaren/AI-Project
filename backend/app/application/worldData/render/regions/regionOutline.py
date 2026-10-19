@@ -5,7 +5,7 @@ from app.application.worldData.masks.regionRasterContext import RegionRasterCont
 from app.application.worldData.masks.regionRasterizer import claim_owners
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
-from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
 from app.application.worldData.render.fineTerrainAsciiKernel import draw_symbol_grid
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.worldPack.wire.worldBounds import WorldBounds
@@ -32,7 +32,7 @@ def render_region_outline(ctx: LightGridBakeContext, region_uid: str) -> str | N
             raster = RegionRasterContext(region.region_uid, region.spec, ctx.scale, region.topology)
             owners = claim_owners(region.claim, seed_root(ctx.world), raster.fine_topology())
             cells = frozenset(c for c in cells if (
-                (owner := owners.get(light_cell_center_m(c.gx,c.gy,c.tx,c.ty,ctx.scale))) is not None
+                (owner := owners.get(light_cell_center_fine(c.gx,c.gy,c.tx,c.ty,ctx.scale))) is not None
                 and owner.coord == sub.seed_xy))
         side = ctx.scale.side
         points = {(c.gx*side+c.tx,c.gy*side+c.ty) for c in cells}
@@ -51,5 +51,5 @@ def render_region_outline(ctx: LightGridBakeContext, region_uid: str) -> str | N
             symbols[point] = "#" if edge else "."
         return draw_symbol_grid(symbols, title=f"region {region_uid} (derived L0 outline)",
             extra_headers=["# boundary; . interior; world data, not manifest geometry"],
-            coord_prefix="light ", fine_span=ctx.scale.light_m, x_rulers=False)
+            coord_prefix="light ", fine_span=ctx.scale.light_span, x_rulers=False)
     return None
