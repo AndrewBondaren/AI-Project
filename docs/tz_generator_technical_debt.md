@@ -208,7 +208,7 @@ Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fin
 |---|---|---|
 | Горы / relief masks | `MountainSpec.origin_x_m` / `radius_m` / `width_m`, `peak_spacing_m`, `hat_radius_m`, `half_width_m`, `band_m` | `*_fine` или без суффикса + тип `Fine*` на границе convert |
 | ~~Гидрология~~ ✅ | `CorridorForm.half_width_m`, `semi_minor_m`, `spine_m`, `apply_declared_meter_river_carves`, `sparse_meter_hydro`, `merge_meter_hydro_for_tile`, `meter_z_overrides`, `ResolvedConnectionNode.x_m/y_m/z_m` | done: `*_fine`, `apply_declared_fine_river_carves`, `sparse_fine_hydro`, `merge_fine_hydro_for_tile`, `fine_z_overrides`, `x_fine/y_fine/z`; ТЗ `tz_terrain_hydrology` U20/U21/C1 → fine-клетки |
-| Pack / parent light | `ParentLightTile.tile_m`, `light_m`, `light_m_for`, `tile_size_m`, `background_expand_radius_m`, `corridor_half_width_m`, `max_radius_m` | `map_cell_span` / `fine_per_light_cell` / `*_fine` |
+| ~~Pack / parent light~~ ✅ | `ParentLightTile.tile_m`, `light_m`, `light_m_for`, `tile_size_m`, `background_expand_radius_m`, `corridor_half_width_m`, `max_radius_m`, `meter_surface_z`, `MeterGradeSurface`, `sample_step_m` (wire) | done: `tile_macro` / `light_span` (`light_span_for`) / `*_fine`; `fineGradeSurface`; `sample_step_fine` + `AliasChoices` на чтении старых паков |
 | Locals | `cell_m`, `tile_m`, `xm`/`ym` как «meter x» в surface/pack | `map_cell`, `x_fine` — по касанию, не mass-rename ради grep |
 
 **Замок:**
@@ -625,7 +625,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **R41-T-19** | Снос mill-очереди Q3 (`is_q3_seed`, `q3_s`, `q3_parent`); бок-attach persist оставить | **resolved** |
 | ~~NC-1b~~ | ✅ `tz_terrain_generation.md` rework | resolved |
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
-| **NC-10** | leftover `_m` вне hub (горы / гидрология / pack `light_m`) — отдельный ID | open |
+| **NC-10** | leftover `_m` вне hub (горы; ~~гидрология ✅~~ / ~~pack ✅~~ / locals) — отдельный ID | open |
 | LC-1..LC-4 | Neutral packages | open |
 | NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
 | **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **resolved** |
@@ -643,7 +643,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | MR-1, MR-2, MR-6 | Split cache / rebind / footprint | open |
 | **CITY-T-4** | Смешение + хардкоды после 2d | **resolved** |
 | NC-3, NC-4, **CITY-T-1c** | Barrier contract; стены поселения = C22 инстанс, не эвристика size | open |
-| **NC-10** | leftover `_m` вне hub (горы / гидрология / pack `light_m`); слайс по кластеру | open |
+| **NC-10** | leftover `_m` вне hub (горы; ~~гидрология ✅~~ / ~~pack ✅~~ / locals); слайс по кластеру | open |
 | **CITY-T-1d** | Синхрон шапки city TZ / §6.3 / connections §5.1 vs C22 packing | open |
 | **CITY-T-5** | Швы после C23 (слои, хардкоды leftover) — SoT [city debt TZ](./tz_city_generation_technical_debt.md) | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
@@ -2148,6 +2148,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-14 | **NC-10** pack/parent-light ✅ (`.cursor/plans/nc10-pack-light-m-suffix.md`): `tile_m`→`tile_macro`, `light_m`→`light_span`, `light_m_for`→`light_span_for`, `tile_size_m`/`cell_m`→`tile_macro`, `meter_surface_z`→`fine_surface_z`, `meterGradeSurface`→`fineGradeSurface`, `*_radius_m`/`depth_m`/`half_width_m`→`*_fine`, wire `sample_step_m`→`sample_step_fine` + `AliasChoices` legacy-read. Остались: горы/relief, locals по касанию. |
 | 2026-10-14 | **5b-B3 review debt** ✅ closed — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md): packing-литералы, `catalog=None`→raise, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, `_`-имена как межмодульный API — все устранены; `StructureAreaAssembler` ~281 (pre-existing, repo-лимит не перейден) — зафиксирован, вынос при следующей правке файла |
 | 2026-10-14 | **Repo review → open:** **HY-S-6** `HydrologyBands` dataclass-дубль POJO + `clamp_bands` divergent default (`max`→99 vs POJO 5); **HY-S-5** enriched (`asdict` edges, `.get` consumers, width fallback — severity low→medium); **FM-4** `StructureGeneratorService` class ~575 (2× лимит) + latent ctx-deref + dead `validate_template`; **DR-8** `grid_bbox_padding` третий литерал (NOT NULL → fallback мёртв); **RELIEF-T-68** два relief domain root (cwd-dependent SoT); **LIBPACK-T-8** write-pipeline granularity watch |
 | 2026-10-11 | **LIBPACK-T-2** **resolved** — оба шага `libpack-t2-relief-import-instantiate-done.md`; interim-метод и caller удалены, engine→world relief только через `instantiate_pack`. |

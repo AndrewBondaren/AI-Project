@@ -188,7 +188,7 @@ L2_tile = refine(
 | Правило | Контракт |
 |---|---|
 | **SoT** | Disk wire после successful write — не live `LightGridCompose`, не пересборка маски из `SurfaceTerrainContext` |
-| **Load** | `load_parent_light(gx, gy)` → wire / typed `ParentLightTile` (+ `side`, `light_m`) |
+| **Load** | `load_parent_light(gx, gy)` → wire / typed `ParentLightTile` (+ `side`, `light_span`) |
 | **Cache** | Process-local `{(world_uid, gx, gy) → ParentLightTile}` после successful `write_world_map_tile` **или** первого decode; **miss → disk**. Cache = latency, **не** второй SoT |
 | **Cache scope** | Один pack session / process bake→refine; **не** глобальный singleton без `world_uid`; cold / другой process / restart → только disk |
 | **Same bake** | Write → disk + `cache.put`; refine в том же process бьёт в cache |
@@ -219,7 +219,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 | Правило | Контракт |
 |---|---|
-| **Mode** | **Hard corridor** — fine river/sea/lake/shore **только** внутри light cells с соответствующим L0 `hydrology_role` (и dilate по `hydrology_width` → meters через `light_m`) |
+| **Mode** | **Hard corridor** — fine river/sea/lake/shore **только** внутри light cells с соответствующим L0 `hydrology_role` (и dilate по `hydrology_width` → fine cells через `light_span`) |
 | **Role bridge** | L0 → fine только через `WorldMapHydrologyRole.to_fine_role()` (SoT enum) |
 | **Outside mask** | Не писать river/sea bed вне corridor; Pass 1.5 уточняет bed **внутри**, не смещает русло на карте |
 | **Declared** | Master declared уже отражён в L0; L2 не «перерисовывает» declared вне mask |
@@ -366,7 +366,7 @@ system_terrain и identity grade. Discover и pick используют один
 
 | Правило | Контракт |
 |---|---|
-| **SoT surface-типа** | nearest parent `WorldMapCellWire.system_terrain` (`ParentLightTile.meters_to_tx_ty`) |
+| **SoT surface-типа** | nearest parent `WorldMapCellWire.system_terrain` (`ParentLightTile.fine_to_tx_ty`) |
 | **Resample** | **только nearest** (`categorical_resample`; categorical); bilinear / majority **запрещены** |
 | **Fallback** | тот же resolve, что read (`resolve_world_map_terrain`) — empty wire → plains |
 | **Hydro** | hard corridor override **после** landcover stamp (shore / river_bed / liquid) |
@@ -379,7 +379,7 @@ system_terrain и identity grade. Discover и pick используют один
 **Не смешивать имена (R36u lock):** «terrain mask carry» = **только** `system_terrain`. Hydro hard corridor, `system_facing` upsample и `surface_z` upsample — **соседние** parent-light контракты (WP-PERF-22 / facing), не mask carry; R36u их тоже не меняет.
 
 ```text
-(xm, ym) → meters_to_tx_ty → wire.system_terrain → columnFill z_top
+(x_fine, y_fine) → fine_to_tx_ty → wire.system_terrain → columnFill z_top
          → hydro corridor may recolor
 ```
 
@@ -431,7 +431,7 @@ flowchart TB
 |---|---|
 | **WP-8** | L2 tile = `refine(L0_tile, world_seed, declared_hydro)` — реки/озёра/рельеф **согласованы** с world map |
 | **WP-9** | Локации на world map: L1 anchors + optional coarse footprint; L0 хранит **pins**, не дублирует `NamedLocation` целиком |
-| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_m = fine_cells_per_map_cell / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
+| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_span = fine_cells_per_map_cell / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
 | **WP-11** | L2 соседей — фон **по одному tile**; очередь **path-first** (heading + tile cross), не burst кольцом |
 | **WP-12** | Восстановление refine: **chunk manifest + atomic chunk commit**; прерванный chunk — redo; tile `partial` \| `complete` |
 | **WP-13** | L2 gameplay: **от точки входа**; blocking **только** scene volume; **никогда** blocking целого tile |
@@ -617,7 +617,7 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 |---|---|
 | Unit | **1 macro-tile** (`fine_cells_per_map_cell`, default 1000 m) |
 | Разрешение внутри tile | **`world_map_cells_per_tile = 32`** (константа маски L0) |
-| Физический шаг light cell | `light_m = fine_cells_per_map_cell // 32` — **масштаб** маски плывёт с размером tile |
+| Физический шаг light cell | `light_span = fine_cells_per_map_cell // 32` — **масштаб** маски плывёт с размером tile |
 | Файл pack | `tiles/r.{gx}.{gy}.world_map.zst` + глобальный `climate_coarse.zst` |
 
 #### Шов мира L0
@@ -690,13 +690,13 @@ ownership сохраняется.
 
 ```
 side     = 32                                 # WORLD_MAP_CELLS_PER_TILE (константа)
-light_m  = fine_cells_per_map_cell // side            # физический шаг light-cell
+light_span = fine_cells_per_map_cell // side            # физический шаг light-cell
 ```
 
 | Константа / поле | Default | POJO / код |
 |---|---|---|
 | `WORLD_MAP_CELLS_PER_TILE` / `side` | **32** | `WorldMapCellsPerTilePolicy` — единственный SoT |
-| `light_m` | `fine_cells_per_map_cell // 32` | вычисляется при bake; не хранить параллельный литерал |
+| `light_span` | `fine_cells_per_map_cell // 32` | вычисляется при bake; не хранить параллельный литерал |
 | Master override `worlds.world_map_cells_per_tile` | optional | редкий тумблер; default = 32 |
 
 Typed world wire: `WorldMapResolutionSettings.world_map_cells_per_tile` —
@@ -710,7 +710,7 @@ Path/hash принадлежат отдельному nullable `WorldPackMetadat
 
 **Примеры:**
 
-| `fine_cells_per_map_cell` | `side` | `light_m` | Light cells / tile |
+| `fine_cells_per_map_cell` | `side` | `light_span` | Light cells / tile |
 |---:|---:|---:|---:|
 | 1000 | 32 | 31 m | 1024 |
 | 3000 | 32 | 93 m | 1024 |
@@ -743,7 +743,7 @@ Path/hash принадлежат отдельному nullable `WorldPackMetadat
 **Инвариант:** игрок **входит в мир** после light (или attach готового pack); недостающее — `full_bake` / resume / lazy L2 (WP-28). Partial pack у игрока допустим; SoT формы всё равно bounds.  
 **Cross-ref:** L2 — § WP-13 + **detailed_bake**; generators — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Bake modes.
 
-**L2 не зависит:** fine grid всегда `fine_cells_per_map_cell × fine_cells_per_map_cell` meter cells; L0 всегда `32×32`, меняется только `light_m`, не детализация gameplay.
+**L2 не зависит:** fine grid всегда `fine_cells_per_map_cell × fine_cells_per_map_cell` fine cells; L0 всегда `32×32`, меняется только `light_span`, не детализация gameplay.
 
 **Данные на light cell `(tx, ty)` внутри tile:**
 
@@ -987,7 +987,7 @@ flowchart TB
 
 **Чтение до готовности chunk:** `MapCellQueryFacade` → merge(**L2 chunk if present**, else **L0 upsample** sample, patches). Gameplay **не блокируется** на весь tile.
 
-**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry` (**без** mill). Background rings/path-ahead: `schedule_chunk_refine`. Outdoor grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller — DAG mill 1…N чанков когда сцена требует grade и в pack нет; ГМ может залить pack заранее; не mill на entry.
+**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_fine` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry` (**без** mill). Background rings/path-ahead: `schedule_chunk_refine`. Outdoor grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller — DAG mill 1…N чанков когда сцена требует grade и в pack нет; ГМ может залить pack заранее; не mill на entry.
 
 #### WP-13 — статус impl и открытый backlog
 
@@ -1002,7 +1002,7 @@ flowchart TB
 | Виды якоря (лейблы) | `AnchorKind`: `session_start` \| `tile_cross` \| `location_entry` |
 | Light bake spawn | `kind=session_start` + schedule |
 | Debug HTTP | `POST …/refine-from-entry`, `POST …/schedule-chunk-refine`, `POST …/refine-chunk` |
-| WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_m` |
+| WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_fine` |
 | Read ≠ write | § Read path / Entry load — два потока |
 
 #### L2 refine module layout (утверждено)
@@ -1772,7 +1772,7 @@ sequenceDiagram
 
 **Контракт (v2, 2026-07-10):** `dataModel/worldPack/mergeMapCells.py` — **`merge_layers` field-wise overlay** по `LAYER_PRIORITY_ORDER` (высший приоритет перекрывает **отдельные поля**, не всю ячейку) + `MapCellQueryFacade` — единая точка read при наличии pack.
 
-**Climate coarse:** `climate_coarse.sample_macro(macro_gx, macro_gy)` — coords = **macro grid**. Fine (`r.{gx}.{gy}.climate.zst`) — `sample_meters` with `sample_step_m`. Patch `climate_delta` — через слой PATCH (wins over fine/coarse). См. [`tz_climate.md`](./tz_climate.md) § World Pack climate.
+**Climate coarse:** `climate_coarse.sample_macro(macro_gx, macro_gy)` — coords = **macro grid**. Fine (`r.{gx}.{gy}.climate.zst`) — `sample_fine` with `sample_step_fine`. Patch `climate_delta` — через слой PATCH (wins over fine/coarse). См. [`tz_climate.md`](./tz_climate.md) § World Pack climate.
 
 **`POST generate-climate` на pack-мире:** reject (422) — base climate только через `pack/bake`.
 
@@ -1798,7 +1798,7 @@ sequenceDiagram
 | Приоритет | ID | Задача | Статус | Примечание |
 |---|---|---|---|---|
 | **P0** | **MERGE-1** | PLAYER_SCENE в manifest/read | ✅ | `ChunkRef.refine_role` |
-| **P0** | **MERGE-2** | Climate в read path | ✅ | coarse bake + sample_macro; fine prefer via sample_meters |
+| **P0** | **MERGE-2** | Climate в read path | ✅ | coarse bake + sample_macro; fine prefer via sample_fine |
 | **P1** | **MERGE-3** | Location L2 coords | ⚠️ | footprint v1 ✅; multi-z overlap / layout bbox — backlog |
 | **P1** | **MERGE-4** | terrain/material → registry keys | ✅ | FIX-01/02 |
 | **P2** | **MERGE-5** | PLAYER_PATH corridor | ⚠️ | heading corridor ✅; DAG movement intent — backlog |
@@ -2394,7 +2394,7 @@ flowchart LR
 | 2026-07-19 | Smell fixes: `WorldBounds` POJO; `light_l0_tiles`; single `resolve_light_tile_cap`; light = locations∪declared hydro |
 | 2026-07 | § Идея 1 (light world map) + § Идея 2 (refine from L0) утверждены |
 | 2026-07 | WP-10: `world_map_cells_per_tile` ∝ 1/`fine_cells_per_map_cell` |
-| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_m = fine_cells_per_map_cell // 32`; убрана ∝-формула / clamp 8…48 |
+| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_span = fine_cells_per_map_cell // 32`; убрана ∝-формула / clamp 8…48 |
 | 2026-07 | World Pack + Patch Store; LOD L0/L1/L2 |
 | 2026-07 | WP-26: legacy freeze — map_cells/materialize-stack/TR-PERF вне scope Pack migration |
 | 2026-07 | WP-MERGE: статус merge v1 + приоритет доработок MERGE-1…9 |

@@ -543,7 +543,7 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 ## Открыто (не этот документ закрывает)
 
-- **Набор клеток** sidecar / кто в обходе на тайле 1e6 — **R41-T-25** (не тело файла: consume § Тело sidecar locked; persist сейчас пишет все ключи `meter_surface_z` как stand-in).
+- **Набор клеток** sidecar / кто в обходе на тайле 1e6 — **R41-T-25** (не тело файла: consume § Тело sidecar locked; persist сейчас пишет все ключи `fine_surface_z` как stand-in).
 - Конечный валидатор набора: не 1e6 равнин vs не дыры из-за пустого leftover. Persist occupancy-validator (`validate_grade_cell_slots`) не закрывает из z; на persist **только** при `DEBUG_GRADE_SLOT_VALIDATE=1`. R44 `leftover_plus_halo` — interim.
 - Forest `|dz|=1` (mill skip stamp vs pack-слот).
 - Узкий dump прямой склон = только outward + `+`.

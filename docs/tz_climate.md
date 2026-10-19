@@ -1133,7 +1133,7 @@ class VolumeClimateContext:
 
 | Blob | Путь | Координаты sample |
 |---|---|---|
-| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_m=1`; light / full bake |
+| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_fine=1`; light / full bake |
 | **fine** | `r.{gx}.{gy}.climate.zst` / location climate | meters + stride; detailed_bake / scene / фон |
 
 Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше обоих.  
@@ -1161,7 +1161,7 @@ Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше о�
 |---|---|---|
 | 1 | coarse bake на light pack | ✅ |
 | 2 | apply: meters→macro для coarse (`sample_macro`) | ✅ |
-| 3 | prefer fine over coarse (`sample_meters`) | ✅ |
+| 3 | prefer fine over coarse (`sample_fine`) | ✅ |
 | 4 | reject legacy `generate-climate` | ✅ |
 | 5 | fine denser content (per light-cell sample) | ✅ |
 | 6 | fine через `ClimateFinePending` + worker drain (не inline mid-pipeline) | ✅ |
@@ -1175,7 +1175,7 @@ Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше о�
 | **CL-PACK-3** | ✅ | `locationsIndexBake.build_locations_index_payload` |
 | **CL-PACK-4** | accepted | L0 `climate_zone_id` — optional UI tint; не debt |
 | **CL-PACK-5** | ✅ | `climatePackApply.apply_climate_to_view` |
-| **CL-PACK-6** | ✅ | `sample_macro` / `sample_meters` + ValueError на mismatch |
+| **CL-PACK-6** | ✅ | `sample_macro` / `sample_fine` + ValueError на mismatch |
 | **CL-PACK-7** | ✅ | `coarse_surface_z` только macro keys |
 | **CL-PACK-8** | ✅ | denser `build_climate_tile_wire` |
 | **CL-PACK-9** | ✅ | `bake_tiles(surface_ctx=…)` |

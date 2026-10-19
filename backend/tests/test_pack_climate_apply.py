@@ -1,4 +1,4 @@
-"""Unit tests: climate apply meter→macro, coarse/fine sample API, denser fine bake."""
+"""Unit tests: climate apply fine→macro, coarse/fine sample API, denser fine bake."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class TestClimateFieldSampleAt(unittest.TestCase):
             origin_y=20,
             width=2,
             height=2,
-            sample_step_m=1,
+            sample_step_fine=1,
             samples=[
                 ClimateSampleWire(temperature_base=1, rainfall=10),
                 ClimateSampleWire(temperature_base=2, rainfall=20),
@@ -46,7 +46,7 @@ class TestClimateFieldSampleAt(unittest.TestCase):
             origin_y=6000,
             width=2,
             height=1,
-            sample_step_m=1500,
+            sample_step_fine=1500,
             samples=[
                 ClimateSampleWire(temperature_base=11, rainfall=1),
                 ClimateSampleWire(temperature_base=22, rainfall=2),
@@ -71,8 +71,24 @@ class TestClimateFieldSampleAt(unittest.TestCase):
                 },
             )
 
+    def test_legacy_sample_step_m_key_still_reads(self) -> None:
+        field = ClimateFieldWire.model_validate(
+            {
+                "climate_status": "fine",
+                "origin_x": 0,
+                "origin_y": 0,
+                "width": 1,
+                "height": 1,
+                "sample_step_m": 4,
+                "samples": [{"temperature_base": 1, "rainfall": 2}],
+            },
+        )
+        self.assertEqual(field.sample_step_fine, 4)
+        self.assertIn("sample_step_fine", field.model_dump(mode="json"))
+        self.assertNotIn("sample_step_m", field.model_dump(mode="json"))
 
-class TestApplyClimateMeterToMacro(unittest.TestCase):
+
+class TestApplyClimateFineToMacro(unittest.TestCase):
     def test_apply_climate_converts_fine_to_macro(self) -> None:
         field = ClimateFieldWire(
             climate_status="coarse",
@@ -109,7 +125,7 @@ class TestApplyClimatePreferFine(unittest.TestCase):
             origin_y=3000,
             width=1,
             height=1,
-            sample_step_m=3000,
+            sample_step_fine=3000,
             samples=[ClimateSampleWire(temperature_base=99, rainfall=88)],
         )
         ctx = MagicMock()

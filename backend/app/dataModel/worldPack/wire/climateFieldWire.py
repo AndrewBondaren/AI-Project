@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ClimateBakeStatus = Literal["coarse", "fine"]
 
@@ -55,8 +55,9 @@ class ClimateSampleWire(BaseModel):
 class ClimateFieldWire(ClimateBakeStatusMixin):
     """Rectangular climate grid sampled in pack.
 
-    coarse: ``origin_*`` / sample coords are **macro grid** indices; ``sample_step_m=1``.
-    fine: ``origin_*`` are **fine cells**; ``sample_step_m`` is light-cell stride within the tile.
+    coarse: ``origin_*`` / sample coords are **macro grid** indices; ``sample_step_fine=1``.
+    fine: ``origin_*`` are **fine cells**; ``sample_step_fine`` is light-cell stride within the tile.
+    Legacy key ``sample_step_m`` still validates on read (NC-10).
     """
 
     SCHEMA_ID: ClassVar[str] = "SCH-CLIMATE-FIELD-WIRE"
@@ -67,7 +68,10 @@ class ClimateFieldWire(ClimateBakeStatusMixin):
     origin_y: int = 0
     width: int
     height: int
-    sample_step_m: int = Field(default=1, ge=1)
+    sample_step_fine: int = Field(
+        default=1, ge=1,
+        validation_alias=AliasChoices("sample_step_fine", "sample_step_m"),
+    )
     samples: list[ClimateSampleWire]
 
     @field_validator("samples")
@@ -81,7 +85,7 @@ class ClimateFieldWire(ClimateBakeStatusMixin):
         return samples
 
     def sample_at(self, x: int, y: int) -> ClimateSampleWire | None:
-        step = max(1, int(self.sample_step_m))
+        step = max(1, int(self.sample_step_fine))
         lx = (x - self.origin_x) // step
         ly = (y - self.origin_y) // step
         if lx < 0 or ly < 0 or lx >= self.width or ly >= self.height:

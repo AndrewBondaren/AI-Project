@@ -95,7 +95,7 @@ def build_climate_coarse_wire(
         origin_y=bbox.y_min,
         width=width,
         height=height,
-        sample_step_m=1,
+        sample_step_fine=1,
         samples=samples,
     )
 
@@ -203,6 +203,6 @@ def build_climate_tile_wire(
         origin_y=origin_y,
         width=side,
         height=side,
-        sample_step_m=step,
+        sample_step_fine=step,
         samples=samples,
     )

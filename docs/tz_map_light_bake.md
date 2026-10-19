@@ -121,13 +121,13 @@ pack/bake/worldMapBakeOrchestrator.py   # thin: compose → writer
 ## Координаты (контракт)
 
 ```text
-tile_m  = fine_cells_per_map_cell
-side    = 32                         # WP-10 v2: константа маски (POJO)
-light_m = tile_m // side             # масштаб light-cell; плывёт с tile мира
+tile_macro = fine_cells_per_map_cell
+side       = 32                          # WP-10 v2: константа маски (POJO)
+light_span = tile_macro // side          # масштаб light-cell; плывёт с tile мира
 
 # Абсолютный light index:
-lx = floor(xm / light_m)
-ly = floor(ym / light_m)
+lx = floor(x_fine / light_span)
+ly = floor(y_fine / light_span)
 
 # Macro-tile + local:
 gx = lx // side,  gy = ly // side
@@ -137,8 +137,8 @@ tx = lx %  side,  ty = ly %  side
 | Ключ | Назначение |
 |---|---|
 | Canvas key | `(gx, gy, tx, ty)` (или absolute `(lx, ly)` + view по tile — эквивалент) |
-| Bresenham / rasterize hydro | **light indices**, не meters и не macro `(gx, gy)` |
-| Центр light cell (climate sample) | `(xm + light_m/2, ym + light_m/2)` |
+| Bresenham / rasterize hydro | **light indices**, не fine cells и не macro `(gx, gy)` |
+| Центр light cell (climate sample) | `(x_fine + light_span/2, y_fine + light_span/2)` |
 
 Cross-ref: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § WP-10 v2. `side` — только через POJO [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) (default **32**); **не** литерал в bake и **не** ∝-формула от `fine_cells_per_map_cell`.
 
@@ -169,7 +169,7 @@ Impl note: pack ASCII default = **light-mask mosaic** (WP-10); frame от `world
 | Persist light cell / `to_wire_tile` | [`WorldMapCellWire`](../backend/app/dataModel/worldPack/worldMapCellWire.py) | Имена полей, defaults, validators — только отсюда |
 | `hydrology_role` / `hydrology_width` | [`WorldMapHydrologyRole`](../backend/app/dataModel/worldPack/hydrologyMaskWire.py), [`HydrologyMaskWire`](../backend/app/dataModel/worldPack/hydrologyMaskWire.py) | Width clamp / `from_wire` — в POJO; merge priority ролей — **метод/helper на enum или POJO**, не `_PRIORITY = {…}` в contributor |
 | Pin index / index file | [`LocationsIndexWire`](../backend/app/dataModel/worldPack/locationsIndexWire.py), [`LocationsIndexPin`](../backend/app/dataModel/worldPack/locationsIndexWire.py) | `location_pin` = index в `locations_index.locations[]` |
-| `side` / WP-10 v2 | [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) | default **32**; optional master override; `light_m = tile_m // side` |
+| `side` / WP-10 v2 | [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) | default **32**; optional master override; `light_span = tile_macro // side` |
 | Bake caps (max tiles, …) | [`PackBakeDefaults`](../backend/app/dataModel/worldPack/packBakeDefaults.py) | Не дублировать в orchestrator |
 | Terrain mask domains (enabled / declare / autoresolve) | target `WorldTerrainMasks` (+ existing [`WorldHydrology`](../backend/app/dataModel/hydrology/worldHydrology.py)) | § **Surface mask domains**; `DefaultOnWire`→DB; `IgnoreOnWire` overrides |
 | Bake knobs (interim) | [`LightLandcoverPolicy`](../backend/app/dataModel/worldPack/lightLandcoverPolicy.py), [`LightRavinePolicy`](../backend/app/dataModel/worldPack/lightRavinePolicy.py), [`LightRoadPaintPolicy`](../backend/app/dataModel/worldPack/lightRoadPaintPolicy.py) | tech debt → fold under `terrain_masks`; гора не из z-band |
@@ -581,8 +581,8 @@ Anti-smell (обязательно при ревью PR):
 |---|---|---|
 | Q4 | ✅ | см. ridgePlacement |
 | Q5 | ✅ | Один merge path (Q2 + Q4 + Q17) |
-| Q6 | ✅ | `mountains/geom.py` + `light_cell_center_m` в range/SideFill |
-| Q7 | ✅ | SHEER ε = `sheer_band_light * light_m` |
+| Q6 | ✅ | `mountains/geom.py` + `light_cell_center_fine` в range/SideFill |
+| Q7 | ✅ | SHEER ε = `sheer_band_light * light_span` |
 | Q8 | ✅ | Spec `radius_m` / Range `width_m` default ← `MountainsCategoryPolicy.default_radius_m` (factory) |
 | Q12 | ✅ | Range left/right + optional start/end caps (`MountainRangeSides` + `rangeSideFill`) |
 
@@ -1336,8 +1336,8 @@ Wire/POJO SoT — § **Связь с dataModel** выше. Compose **не** ду
 ```text
 LightGridCompose
   side: int
-  tile_m: int
-  light_m: int
+  tile_macro: int
+  light_span: int
   cells: sparse map (gx, gy, tx, ty) → LightGridCell
 
   ensure(gx, gy, tx, ty) → LightGridCell
@@ -1616,7 +1616,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Событие | Ожидание |
 |---|---|
-| `light_compose_start` / `done` | scope tiles, side, light_m |
+| `light_compose_start` / `done` | scope tiles, side, light_span |
 | per-contributor summary | non-default cell counts (hydro roles hist, pins, z hist) |
 | `world_map_tile_write` | hist из **wire после compose**, не macro-only |
 | `world_map_bake_all_flat` | сигнал: compose/hydro не уложили маску |
