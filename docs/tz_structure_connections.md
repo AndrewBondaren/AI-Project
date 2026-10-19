@@ -1105,6 +1105,7 @@ generators/
 | Алгоритм городской сетки улиц — референс: Parish & Müller (2001), tmwhere; паттерны: grid / radial / organic | отложено — реализуется при написании DistrictAssembler |
 | `air_route` узлы — всегда `structure_type="air_dock"` или могут быть произвольные точки | открыт |
 | Морской путь (`sea_route`) — нужен отдельный мировой WorldGenerator или часть SettlementAssembler | открыт |
+| Построенная подводная магистраль (`undersea_tunnel`) — коридор под дном (`undergroundTunnel`) или structure на floor-клетках; **не** `sea_route` (нет физических клеток) | **решено семантически:** [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Подводный мир; impl — отдельный `system_connection_type`, открыт |
 | Связь `connection_edge_cells` с `map_cells` — физическое изменение terrain-ячеек при прокладке (раздел 3.5) | закрыт |
 | Traversal в реальном времени — как engine проверяет `traversal_conditions` при движении | нет ТЗ |
 | Подъезд участок↔улица при разном z | **closed §5.1.1–§5.1.2:** луч только при Δz участок↔улица; иначе стык; ≤30° grade / 45° лестница; >45° только `map_z` |

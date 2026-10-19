@@ -35,7 +35,8 @@ class RegionPrecedenceTests(unittest.TestCase):
         self.rank = partial(terrain_merge_rank, registry=self.registry)
         self.compare = partial(compare_region_candidates, merge_rank=self.rank)
 
-    def candidate(self, uid, *, specificity=None, side=10, current_type=None, shape=None):
+    def candidate(self, uid, *, specificity=None, side=10, current_type=None, shape=None,
+                  declared=True):
         spec = ForestSpec(
             name=uid,
             shape=shape if shape is not None else BboxShape(x_min=0, y_min=0, x_max=side, y_max=side),
@@ -47,6 +48,7 @@ class RegionPrecedenceTests(unittest.TestCase):
             ),
             spec=spec,
             region_uid=uid,
+            declared=declared,
         )
 
     def assert_precedes(self, winner, loser):
@@ -60,6 +62,30 @@ class RegionPrecedenceTests(unittest.TestCase):
         # Both have forest declarations: rank must use current_type, not entry_type.
         with self.assertNoLogs(LOG, level="WARNING"):
             self.assert_precedes(forest, plains)
+
+    def test_declared_beats_higher_rank_autoresolve(self):
+        # Declared farmland (rank 0) wins every contested cell over autoresolve
+        # forest (rank 2): the authored bonus precedes merge_rank.
+        farmland = self.candidate(self.uid_last, side=1,
+                                  current_type=self.farmland_key)
+        forest = self.candidate(self.uid_first, side=100, specificity=10,
+                                declared=False)
+        self.assert_precedes(farmland, forest)
+
+    def test_autoresolve_pair_still_uses_rank(self):
+        forest = self.candidate(self.uid_last, side=1, declared=False)
+        plains = self.candidate(self.uid_first, side=100, specificity=100,
+                                current_type=self.plains_key, declared=False)
+        self.assert_precedes(forest, plains)
+
+    def test_cross_declared_equal_rank_resolves_without_warning(self):
+        # Same rank, different keys, one autoresolve: the declared bonus is the
+        # contract, not an equal-rank anomaly — no WarningError.
+        farmland = self.candidate(self.uid_last, current_type=self.farmland_key)
+        steppe = self.candidate(self.uid_first, current_type=self.steppe_key,
+                                declared=False)
+        with self.assertNoLogs(LOG, level="WARNING"):
+            self.assert_precedes(farmland, steppe)
 
     def test_specificity_beats_area(self):
         self.assert_precedes(self.candidate(self.uid_last, specificity=2, side=1),

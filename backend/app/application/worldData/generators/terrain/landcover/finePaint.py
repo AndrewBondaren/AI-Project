@@ -8,7 +8,10 @@ cell was region-painted, in which case the per-cell fallback is restored.
 
 from __future__ import annotations
 from collections.abc import Mapping
-from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
+from app.application.worldData.generators.terrain.landcover.types import (
+    RegionSource,
+    StateSnapshotEntry,
+)
 
 import logging
 from functools import cmp_to_key, partial
@@ -103,7 +106,10 @@ def paint_regions_fine(
     merge_rank = partial(terrain_merge_rank, registry=registry)
     ranked = sorted(
         (
-            RegionCandidate(r.current_type, r.spec, r.region_uid, r.claim_area)
+            RegionCandidate(
+                r.current_type, r.spec, r.region_uid, r.claim_area,
+                declared=r.source != RegionSource.AUTORESOLVE,
+            )
             for r in regions
         ),
         key=cmp_to_key(

@@ -719,7 +719,7 @@ Partial и full bake идентичны (контекст — чистая фу�
 - seed-решётка `(sx, sy)` (не `gx, gy` — alias макро-тайла) + джиттер `seeded_u01(seed_root(world), UidKind.REGION, channel="seed", sx, sy)`; шаг сетки = масштаб региона (knob);
 - каналы рандома `UidKind.REGION` различаются обязательным ключом `channel`: `seed` / `claim` / `edge` / `density` — одинаковые keys дали бы один `Random`;
 - вид seed'а — `CoverageResolver` по контексту (domain fact consumers: climate/hydrology/relief/flora);
-- claim: клетка к seed'у с лучшим `w = f(dist) + seeded-шум` (`channel="claim"`, ключи `seed_xy` кандидата и координаты клетки `x, y`), кап `max_radius`; declared/anchor выигрывают через `placement_specificity` (`None` у autoresolve) — отдельного правила нет. Уточнение 2026-10-17: `seed_xy` различает шум кандидатов; общий шум только по `(x,y)` сократился бы при сравнении весов и оставил прямую границу;
+- claim: клетка к seed'у с лучшим `w = f(dist) + seeded-шум` (`channel="claim"`, ключи `seed_xy` кандидата и координаты клетки `x, y`), кап `max_radius`; declared/anchor выигрывают первым звеном precedence (› Пересечения и приоритет) до `merge_rank`; у autoresolve `placement_specificity` — всегда `None`. Уточнение 2026-10-17: `seed_xy` различает шум кандидатов; общий шум только по `(x,y)` сократился бы при сравнении весов и оставил прямую границу;
 - обход соседей решётки — `WorldTopology.neighbor` (шов), не ручной `mod`;
 - соседние seed'ы одного вида сливаются в один регион; каждый seed — **саблокация** со своим uid, адресуемая через `Facing` («Северный/Южный Тёмный лес»); `region_uid` = canonical min `seed_xy`.
 
@@ -728,13 +728,14 @@ Partial и full bake идентичны (контекст — чистая фу�
 Overlap разрешён (авторское слоение; покрытие — не владение): регионы не сдвигаются и не обрезаются. Конфликт **клетки** решается одной функцией сравнения (L0 и L2 — одна и та же):
 
 ```text
-1. merge_rank(current_type)   по убыванию   # TerrainRegistryEntry, разные ключи
-2. placement_specificity      по убыванию   # None ниже любого явного
-3. RegionShape.area()         по убыванию
-4. region_uid                 по возрастанию (каноническая строка)
+1. declared/anchor           — authored-регион первым; autoresolve — после
+2. merge_rank(current_type)   по убыванию   # TerrainRegistryEntry, разные ключи
+3. placement_specificity      по убыванию   # None ниже любого явного
+4. RegionShape.area()         по убыванию
+5. region_uid                 по возрастанию (каноническая строка)
 ```
 
-Это § Placement priority, применённый на клетке после rank. Отдельного `priority`-поля нет. Equal-rank + разные ключи → исход по п.2–4 **и** WarningError в лог. Саблокации наследуют specificity родителя; child-регион частичного перехода (› Состояние) при равном ранге с родителем получает specificity родителя + 1. Границы — seeded-шум в приграничной зоне (регионы «входят» друг в друга). Клетка в двух регионах — факты входят в контекст обоих. Клетка хранит `region_uid` победителя (› L0/L2).
+Это § Placement priority, применённый на клетке после rank. Отдельного `priority`-поля нет. Equal-rank + разные ключи на одном declared-уровне → исход по п.3–5 **и** WarningError в лог. Саблокации наследуют specificity родителя; child-регион частичного перехода (› Состояние) при равном ранге с родителем получает specificity родителя + 1. Границы — seeded-шум в приграничной зоне (регионы «входят» друг в друга). Клетка в двух регионах — факты входят в контекст обоих. Клетка хранит `region_uid` победителя (› L0/L2).
 
 #### Реестр и CoverageResolver (world data, N+1)
 

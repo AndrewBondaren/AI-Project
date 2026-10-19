@@ -163,6 +163,20 @@ class FineRegionPaintTests(unittest.TestCase):
         self.assertEqual(state.surface_terrain[(0, 6)], FOREST)  # pure upsample
         self.assertIsNone(state.surface_region_uid)
 
+    def test_empty_collect_restores_parent_painted_cells(self) -> None:
+        """Category on but collect() returns []: region-painted parent cells
+        must be restored to the zone fallback, not keep the stale terrain."""
+        world = _world()  # enabled policy, no declared regions, no autoresolve
+        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+            world, [], _surface_ctx(), 0, 0, parent_light=_parent(),
+        )
+        terrain = state.surface_terrain
+        assert terrain is not None
+        for x in range(8):  # parent (0,1)+(1,1) carried FOREST + region_uid
+            for y in range(4, 8):
+                self.assertEqual(terrain[(x, y)], PLAINS, (x, y))
+        self.assertIsNone(state.surface_region_uid)
+
     def test_declared_without_explicit_policy_uses_canonical(self) -> None:
         world = _world(self.spec)
         world.terrain_masks = WorldTerrainMasks(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 from app.dataModel.terrainMasks.regions import RegionSpecBase
@@ -22,11 +22,15 @@ class RegionCandidate:
     # Original graph-claim geometry is a union of fine-cell squares. Its area
     # is supplied before L0 sampling/clipping; declared primitives use area().
     claim_area: float | None = None
+    # Authored declarations (declared/anchor) outrank autoresolve coverage
+    # before merge_rank — tz_map_light_bake § Пересечения и приоритет.
+    declared: bool = field(kw_only=True)
 
 
-def _precedence_key(candidate: RegionCandidate, rank: int) -> tuple[int, bool, int, float, str]:
+def _precedence_key(candidate: RegionCandidate, rank: int) -> tuple[int, int, bool, int, float, str]:
     specificity = candidate.spec.placement_specificity
     return (
+        0 if candidate.declared else 1,
         -rank,
         specificity is None,
         -(specificity or 0),
@@ -53,7 +57,8 @@ def compare_region_candidates(
     left_key = _precedence_key(left, left_rank)
     right_key = _precedence_key(right, right_rank)
     result = (left_key > right_key) - (left_key < right_key)
-    if left_rank == right_rank and left.current_type != right.current_type and result:
+    if (left.declared == right.declared and left_rank == right_rank
+            and left.current_type != right.current_type and result):
         winner, loser = (left, right) if result < 0 else (right, left)
         logger.warning(
             "landcover | equal_rank_resolved | WarningError | merge_rank=%s "

@@ -413,6 +413,47 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 - Light hydro: paint `hydrology_role=SEA` без bathymetry `surface_z`  
 - Оставить stub forever как SoT вместо Form/Kind (stub = bridge, не конечная архитектура)
 
+### Подводный мир — сцены на дне океана (утверждено семантически 2026-10-19)
+
+**Продуктовое решение:** дно моря/океана — **полноценная игровая поверхность**, как суша. Подводные локации — затонувший корабль, подводный данж, подводный город с живыми жителями — обычные локации/структуры на floor-клетках, **не** отдельный слой мира.
+
+| Аспект | Механика |
+|---|---|
+| Дно как surface | `surface_z` = дно (§ Ocean bathymetry); колонка под дном — solid fill до `z_min` (`run_column_fill`), тот же что под сушей → cave/tunnel под дном = существующий cave domain / `undergroundTunnel` |
+| Локация | terrain-агностична: `location_complex` subtype (напр. `sunken_ship`), `settlement` subtype `underwater_city` (parallel `underground_city`) с `is_inhabited`; parent `geographic.sea` / `ocean` / `inland_sea` — [`tz_locations.md`](./tz_locations.md) |
+| Интерьер | `liquid_body` только на surface `liquid_candidate` (C3/U28); комнаты/трюм/данж — **сухие** (воздушный пузырь, купол), отдельной механики не надо. Затопленный интерьер — material/state уровня комнаты (future) |
+| Размещение | v1 — **declare-якорь** мастера (`NamedLocation` / `geographic.*` parent на водной клетке). `adjacent_terrain` проверяет внешнее кольцо, **не** «клетка IS water»; placement-условие на воде при autoresolve — v2 |
+
+**Толща воды (граница v1/v2):**
+
+- v1: вода над дном — role + `liquid_body` на одной surface-клетке; **клеток между дном и зеркалом нет**.
+- Сцены **на дне** и **под дном** работают уже сейчас; «плавать в толще» (volume между floor и `z_sea`) — v2 `z_floor` + water-column cells в column fill (§ Sea level).
+
+**Построенные подводные магистрали:**
+
+`sea_route` — абстрактное мировое ребро без физических клеток ([`tz_structure_connections.md`](./tz_structure_connections.md)). **Построенная** магистраль — отдельный `system_connection_type` (напр. `undersea_tunnel`), два варианта геометрии:
+
+| Вариант | Что | Переиспользование |
+|---|---|---|
+| A — тоннель под дном | corridor на `z < floor` | `undergroundTunnel` / corridor pipeline; не требует водного столба |
+| B — труба/мост на дне | structure на floor-клетках | building/corridor materialize, как `bridge` на суше |
+
+**Инварианты:**
+
+1. Локация на дне **не** меняет батиметрию и не carve воду — hydro остаётся SoT `surface_z` дна.
+2. Подводное поселение — тот же settlement generate на floor-клетках; footprint/district machinery без спец-кейсов «под водой».
+3. Физические подводные связи — новый `system_connection_type`; не перегружать `sea_route` (нет контакта/клеток) и не `river`/`mountain_river` (гидро carve).
+
+**Антипаттерны:**
+
+- `liquid_body` внутри интерьера «потому что под водой» — интерьер не surface.
+- Отдельный `underwater` terrain key — вода это `liquid_body` + roles, не новый класс рельефа.
+- Размещать подводную локацию через `adjacent_terrain` — условие про соседство, не про саму клетку.
+
+**Зависимости:** HY-BATH-1 (uniform stub floor — локации на дне валидны уже сейчас; «в желобе/котловине» ждёт DepressionSpec); water-column cells — v2; subtypes в `location_type_registry` и `undersea_tunnel` — data-level добавление, не новый слой движка.
+
+**Зеркальный домен:** воздушный слой над `surface_z` — тот же класс «слой за пределами суши», отдельный документ [`tz_aerial.md`](./tz_aerial.md).
+
 ### Lake
 
 - **Lake basin** — локальный минимум `surface_z` **на суше** (выше или ниже `z_sea` — отдельный `target_depth`; **не** open ocean).
@@ -1267,6 +1308,7 @@ Climate pass (`generate-climate`) читает metadata из БД — **не** i
 | **`ConnectionPersistService`** | **`ConnectionEdge`** `river` / `mountain_river` после hydrology (U9) |
 | `WorldRouteGenerator` `sea_route` | connected `liquid_body` (море), не substitute реки |
 | `detect_terrain_features` | `liquid_body` **после** climate — anchors only |
+| Подводные локации (§ Подводный мир) | declare-якорь на дне: `surface_z` ≤ `z_sea` — обычная surface-сцена; построенная магистраль — `undersea_tunnel` (коридор под дном / structure на дне), **не** `sea_route` |
 
 **Persist cycle (rivers, target):**
 
@@ -1534,6 +1576,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-19 | § **Подводный мир:** дно океана = игровая surface-сцена (корабль/данж/город на floor); интерьер сухой (`liquid_body` только surface); построенная магистраль — `undersea_tunnel`, `sea_route` остаётся абстрактным ребром; толща воды — v2 `z_floor` |
 | 2026-08-17 | **U15 paint:** column fill читает `default_rivers.shore` / `mountain_shore`, `default_lakes.shore`, `default_seas.shore`. `MapCellHydrology.shore_kind`. `default_shore` не красит. JV REF-W на четыре category.shore + closed-set R34 |
 | 2026-08-17 | **`shore_lake` grade:** как `shore_river` (L≥2, SHEER/SLOPE, дно бассейна); отдельный paint `default_lakes.shore` |
 | 2026-08-17 | **U15 shore class:** `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`. Bands ≠ ontology grade. `mountain_river` красит `mountain_shore`. `default_shore` deprecated |
