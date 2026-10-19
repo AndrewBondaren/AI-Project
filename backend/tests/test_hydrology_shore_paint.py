@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
@@ -19,24 +18,13 @@ from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
+from tests.hydrology_fixtures import hydro_world, world_hydrology_dump
 
 
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "w-shore-paint",
-        "hydrology": WorldHydrology().model_dump(mode="json"),
-        "terrain_registry": None,
-        "terrain_masks": None,
-        "terrain_scalars": None,
-        "closed_planet_grid": False,
-        "magma_band_thickness": None,
-        "z_min": 0,
-        "z_max": 20,
-        "map_subsurface_depth": 0,
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+    kwargs.setdefault("world_uid", "w-shore-paint")
+    kwargs.setdefault("hydrology", world_hydrology_dump())
+    return hydro_world(**kwargs)
 
 
 class ShoreCategoryPaintTest(unittest.TestCase):

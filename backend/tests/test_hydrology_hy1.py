@@ -2,7 +2,6 @@
 
 from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
-from types import SimpleNamespace
 
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
@@ -29,14 +28,7 @@ from app.application.worldData.generators.climate.climatePoleField import GridBB
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 
 
-def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {"enabled": True},
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+from tests.hydrology_fixtures import hydro_world as _world
 
 
 class TestHydrologyBands(unittest.TestCase):

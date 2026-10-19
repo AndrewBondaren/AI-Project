@@ -1,9 +1,7 @@
 """Unit tests for lake basin carve — D HY-3."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import carve_lake_basin
 from app.application.worldData.generators.hydrology.geom.polygonInterior import (
     interior_cells,
@@ -11,21 +9,12 @@ from app.application.worldData.generators.hydrology.geom.polygonInterior import 
 )
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
 from app.application.worldData.generators.hydrology.types import HydrologyBands, LakeSpec
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from tests.hydrology_fixtures import flat_heightmap
 
 
-def _flat(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 8) -> SurfaceHeightmap:
-    surface_z = {
-        (gx, gy): z
-        for gx in range(gx_lo, gx_hi + 1)
-        for gy in range(gy_lo, gy_hi + 1)
-    }
-    return SurfaceHeightmap(
-        world_uid="test",
-        bbox=GridBBox(gx_lo, gx_hi, gy_lo, gy_hi),
-        surface_z=surface_z,
-    )
+def _flat(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 8):
+    return flat_heightmap(gx_lo, gx_hi, gy_lo, gy_hi, z=z, world_uid="test")
 
 
 class TestPolygonInterior(unittest.TestCase):

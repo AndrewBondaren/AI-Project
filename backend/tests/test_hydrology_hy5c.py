@@ -1,9 +1,7 @@
 """Unit tests for procedural river autoresolve — D HY-5c."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.rivers.riverBedCarver import generate_rivers
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
@@ -14,36 +12,20 @@ from app.application.worldData.generators.hydrology.rivers.riverNetworkPlanner i
 from app.application.worldData.generators.hydrology.geom.smoothRiverPolyline import (
     turn_angle_deg,
 )
-from app.application.worldData.generators.hydrology.types import (
-    HydrologyMasterInput,
-    HydrologyScope,
-    LoadedConnectionGraph,
-)
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.application.worldData.generators.hydrology.types import HydrologyScope
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from tests.hydrology_fixtures import (
+    heightmap_from_z as _heightmap,
+    hydro_master,
+    hydro_world,
+    rivers_hydrology,
+)
 
 
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_rivers": {"enabled": True, "autoresolve": True},
-        },
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _heightmap(surface_z: dict[tuple[int, int], int]) -> SurfaceHeightmap:
-    xs = [gx for gx, _ in surface_z]
-    ys = [gy for _, gy in surface_z]
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(min(xs), max(xs), min(ys), max(ys)),
-        surface_z=dict(surface_z),
-    )
+    kwargs.setdefault("hydrology", rivers_hydrology())
+    return hydro_world(**kwargs)
 
 
 class TestSmoothRiverPolyline(unittest.TestCase):
@@ -79,12 +61,7 @@ class TestRiverAutoresolve(unittest.TestCase):
             (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
             for gx in range(8)
         }
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.RIVERS}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-        )
+        master = hydro_master(scopes=frozenset({HydrologyScope.RIVERS}))
         segments = autoresolve_river_segments(_world(), hm, master, occupied)
         self.assertGreater(len(segments), 0)
         self.assertFalse(segments[0].declared)
@@ -98,12 +75,7 @@ class TestRiverAutoresolve(unittest.TestCase):
             (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
             for gx in range(8)
         }
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.RIVERS}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-        )
+        master = hydro_master(scopes=frozenset({HydrologyScope.RIVERS}))
         merged, segments, _bbox = generate_rivers(
             _world(),
             hm,

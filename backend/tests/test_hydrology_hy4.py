@@ -2,7 +2,6 @@
 
 import unittest
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
 )
@@ -13,18 +12,13 @@ from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     RiverSegment,
 )
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from tests.hydrology_fixtures import flat_heightmap
 
 
-def _flat(z: int = 10) -> SurfaceHeightmap:
-    surface_z = {(gx, gy): z for gx in range(0, 12) for gy in range(0, 12)}
-    return SurfaceHeightmap(
-        world_uid="test",
-        bbox=GridBBox(0, 11, 0, 11),
-        surface_z=surface_z,
-    )
+def _flat(z: int = 10):
+    return flat_heightmap(0, 11, 0, 11, z=z, world_uid="test")
 
 
 class TestDeclareRiverSegments(unittest.TestCase):

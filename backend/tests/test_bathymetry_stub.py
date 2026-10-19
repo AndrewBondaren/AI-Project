@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
@@ -27,6 +26,7 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from tests.hydrology_fixtures import hydro_world
 
 
 class TestStubElevationResolve(unittest.TestCase):
@@ -55,7 +55,7 @@ class TestStubElevationResolve(unittest.TestCase):
 
 class TestLightSeaZ(unittest.TestCase):
     def test_sea_cells_below_plains_relief(self) -> None:
-        world = SimpleNamespace(
+        world = hydro_world(
             world_uid="world-bath-stub",
             z_min=-20,
             z_max=8,

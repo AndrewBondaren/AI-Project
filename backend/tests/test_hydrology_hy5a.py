@@ -1,7 +1,6 @@
 """Unit tests for procedural sea/ocean autoresolve — D HY-5a."""
 
 import unittest
-from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
@@ -25,61 +24,19 @@ from app.application.worldData.generators.hydrology.types import (
     HydrologyScope,
     LoadedConnectionGraph,
 )
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from tests.hydrology_fixtures import (
+    coastline_world as _world_with_coastline,
+    flat_heightmap as _flat_heightmap,
+    hydro_world,
+    seas_hydrology,
+)
 
 
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_seas": {
-                "bands": {"min": 1, "max": 2},
-                "autoresolve_coastal_sea": True,
-                "autoresolve_open_ocean": True,
-            },
-        },
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _flat_heightmap(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 5) -> SurfaceHeightmap:
-    surface_z = {
-        (gx, gy): z
-        for gx in range(gx_lo, gx_hi + 1)
-        for gy in range(gy_lo, gy_hi + 1)
-    }
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(gx_lo, gx_hi, gy_lo, gy_hi),
-        surface_z=surface_z,
-    )
-
-
-def _world_with_coastline(**kwargs):
-    base = {
-        "enabled": True,
-        "default_seas": {
-            "bands": {"min": 1, "max": 2},
-            "autoresolve_coastal_sea": True,
-            "autoresolve_open_ocean": True,
-        },
-        "declared_coastlines": [{
-            "location_uid": "loc-sea",
-            "path": [
-                {"x": 6000, "y": 6000, "z": 0},
-                {"x": 24000, "y": 6000, "z": 0},
-            ],
-        }],
-    }
-    if "hydrology" in kwargs:
-        merged = {**base, **kwargs.pop("hydrology")}
-        return _world(hydrology=merged, **kwargs)
-    return _world(hydrology=base, **kwargs)
+    kwargs.setdefault("hydrology", seas_hydrology())
+    return hydro_world(**kwargs)
 
 
 class TestSeasAutoresolvePolicy(unittest.TestCase):

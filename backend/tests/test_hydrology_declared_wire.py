@@ -9,16 +9,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 )
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.db.models.namedLocation import NamedLocation
-
-
-def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "fine_cells_per_map_cell": 3000,
-        "hydrology": {"enabled": True},
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+from tests.hydrology_fixtures import hydro_world as _world
 
 
 class TestDeclaredWire(unittest.TestCase):

@@ -1,9 +1,7 @@
 """Unit tests for hydrology sea/ocean carve — D HY-2."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
@@ -23,34 +21,20 @@ from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import
     resolve_z_sea,
 )
 from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyScope
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 
 
+from tests.hydrology_fixtures import (
+    coastline_world,
+    flat_heightmap as _flat_heightmap,
+    hydro_world,
+    seas_hydrology,
+)
+
+
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_seas": {"bands": {"min": 1, "max": 3}},
-        },
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _flat_heightmap(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 5) -> SurfaceHeightmap:
-    surface_z = {
-        (gx, gy): z
-        for gx in range(gx_lo, gx_hi + 1)
-        for gy in range(gy_lo, gy_hi + 1)
-    }
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(gx_lo, gx_hi, gy_lo, gy_hi),
-        surface_z=surface_z,
-    )
+    kwargs.setdefault("hydrology", seas_hydrology(bands=(1, 3), autoresolve=False))
+    return hydro_world(**kwargs)
 
 
 class TestPolylineRasterize(unittest.TestCase):
@@ -101,17 +85,7 @@ class TestDeepeningBands(unittest.TestCase):
 class TestHydrologyOceanScope(unittest.TestCase):
 
     def _world_with_declared_coastline(self):
-        return _world(hydrology={
-            "enabled": True,
-            "default_seas": {"bands": {"min": 1, "max": 3}},
-            "declared_coastlines": [{
-                "location_uid": "loc-sea",
-                "path": [
-                    {"x": 6000, "y": 6000, "z": 0},
-                    {"x": 24000, "y": 6000, "z": 0},
-                ],
-            }],
-        })
+        return coastline_world(bands=(1, 3), autoresolve=False)
 
     def test_apply_ocean_scope_modifies_heightmap(self):
         w = self._world_with_declared_coastline()

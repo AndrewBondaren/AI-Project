@@ -1,9 +1,7 @@
 """water_body_uid stamps on every hydrology carve path — review-debt-7plus step 3."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAutoresolve import (
     autoresolve_lakes,
 )
@@ -31,92 +29,33 @@ from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex imp
 from app.application.worldData.generators.hydrology.types import (
     CoastlineSpec,
     HydrologyBands,
-    HydrologyMasterInput,
-    HydrologyScope,
     LakeSpec,
-    LoadedConnectionGraph,
     RiverSegment,
 )
 from app.application.worldData.generators.hydrology.waterBodyIdentity import (
     AutoWaterBodyRole,
     auto_water_body_uid,
 )
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import (
     MapCellHydrology,
     dump_cell_hydrology,
     parse_cell_hydrology,
 )
+from tests.hydrology_fixtures import (
+    SQUARE,
+    depression_heightmap as _depression_heightmap,
+    flat_heightmap as _flat_heightmap,
+    hydro_master as _master,
+    hydro_world,
+    seas_lakes_hydrology,
+)
 
 
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_seas": {
-                "bands": {"min": 1, "max": 2},
-                "autoresolve_coastal_sea": True,
-                "autoresolve_open_ocean": True,
-            },
-            "default_lakes": {
-                "enabled": True,
-                "autoresolve": True,
-                "bands": {"min": 1, "max": 4},
-            },
-        },
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _heightmap(surface_z: dict[tuple[int, int], int]) -> SurfaceHeightmap:
-    xs = [gx for gx, _ in surface_z]
-    ys = [gy for _, gy in surface_z]
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(min(xs), max(xs), min(ys), max(ys)),
-        surface_z=dict(surface_z),
-    )
-
-
-def _flat_heightmap(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 5) -> SurfaceHeightmap:
-    return _heightmap({
-        (gx, gy): z
-        for gx in range(gx_lo, gx_hi + 1)
-        for gy in range(gy_lo, gy_hi + 1)
-    })
-
-
-def _depression_heightmap() -> SurfaceHeightmap:
-    surface_z: dict[tuple[int, int], int] = {}
-    for gx in range(0, 11):
-        for gy in range(0, 11):
-            ring = max(abs(gx - 5), abs(gy - 5))
-            if ring == 0:
-                surface_z[(gx, gy)] = 7950
-            elif ring == 1:
-                surface_z[(gx, gy)] = 8000
-            elif ring <= 3:
-                surface_z[(gx, gy)] = 8010
-            else:
-                surface_z[(gx, gy)] = 8050
-    return _heightmap(surface_z)
-
-
-def _master(**changes):
-    return HydrologyMasterInput(
-        world_uid="test-world",
-        hydrology_enabled=True,
-        scopes=frozenset(HydrologyScope),
-        connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-        **changes,
-    )
-
-
-SQUARE = [((3, 3), (7, 3)), ((7, 3), (7, 7)), ((7, 7), (3, 7)), ((3, 7), (3, 3))]
+    kwargs.setdefault("hydrology", seas_lakes_hydrology())
+    return hydro_world(**kwargs)
 
 
 class WaterBodyUidTests(unittest.TestCase):
@@ -209,6 +148,60 @@ class WaterBodyUidTests(unittest.TestCase):
         hydro, _ = apply_declared_fine_river_carves(w, [], surface_z)
         self.assertTrue(hydro)
         self.assertTrue(all(e.water_body_uid == "loc-river" for e in hydro.values()))
+
+    def test_two_coastlines_get_distinct_uids(self):
+        master = _master(declared_coastline_specs=[
+            CoastlineSpec(segments=[((2, 2), (2, 6))], location_uid="loc-sea-a"),
+            CoastlineSpec(segments=[((8, 2), (8, 6))], location_uid="loc-sea-b"),
+        ])
+        carved, _ = generate_coastal_sea(_world(), _flat_heightmap(0, 10, 0, 8), master)
+        self.assertTrue(carved)
+        uids = {e.water_body_uid for e in carved.values()}
+        self.assertEqual(uids, {"loc-sea-a", "loc-sea-b"})
+
+    def test_coastline_without_location_uid_falls_back_to_auto(self):
+        master = _master(declared_coastline_specs=[
+            CoastlineSpec(segments=[((2, 2), (8, 2))])])
+        carved, _ = generate_coastal_sea(_world(), _flat_heightmap(0, 10, 0, 6), master)
+        self.assertTrue(carved)
+        self.assertTrue(all(e.water_body_uid is not None for e in carved.values()))
+        self.assertTrue(all(e.water_body_uid.startswith("auto-sea-") for e in carved.values()))
+
+    def test_endpoints_river_fine_carve_stamps_uid(self):
+        w = _world(hydrology={
+            "enabled": True,
+            "declared_rivers": [{
+                "location_uid": "loc-river-ep",
+                "system_role": "stem",
+                "declare_mode": "endpoints",
+                "source": {"x": 2000, "y": 2000, "z": 0},
+                "mouth": {"x": 6000, "y": 2000, "z": 0},
+            }],
+        })
+        surface_z = {
+            (gx, gy): 10
+            for gx in range(2000, 6001)
+            for gy in range(1950, 2051)
+        }
+        hydro, _ = apply_declared_fine_river_carves(w, [], surface_z)
+        self.assertTrue(hydro)
+        self.assertTrue(all(e.water_body_uid == "loc-river-ep" for e in hydro.values()))
+
+    def test_column_fill_persists_water_body_uid(self):
+        heightmap = _flat_heightmap(0, 2, 0, 0, z=1)
+        hydro = {
+            (1, 0): MapCellHydrology(
+                role=HydrologyCellRole.LAKE, water_body_uid="loc-lk"),
+        }
+        cells = run_column_fill(
+            _world(),
+            heightmap,
+            {(0, 0): 0, (1, 0): 0, (2, 0): 0},
+            hydrology_by_cell=hydro,
+            surface_terrain={(0, 0): "plains", (1, 0): "plains", (2, 0): "plains"},
+        )
+        by_xy = {(c.x, c.y): c for c in cells if c.z == 1}
+        self.assertEqual(by_xy[(1, 0)].hydrology["water_body_uid"], "loc-lk")
 
     def test_wire_round_trip_and_missing_default(self):
         dumped = dump_cell_hydrology(MapCellHydrology(

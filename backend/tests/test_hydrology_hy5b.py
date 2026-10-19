@@ -1,9 +1,7 @@
 """Unit tests for procedural lake autoresolve — D HY-5b."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     lakes_autoresolve_policy,
 )
@@ -14,57 +12,20 @@ from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAu
     autoresolve_lakes,
     flood_basin_interior,
 )
-from app.application.worldData.generators.hydrology.types import (
-    HydrologyMasterInput,
-    HydrologyScope,
-    LoadedConnectionGraph,
-)
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.application.worldData.generators.hydrology.types import HydrologyScope
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from tests.hydrology_fixtures import (
+    depression_heightmap as _depression_heightmap,
+    hydro_master,
+    hydro_world,
+    lakes_hydrology,
+)
 
 
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_lakes": {
-                "enabled": True,
-                "autoresolve": True,
-                "bands": {"min": 1, "max": 4},
-            },
-        },
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _heightmap(surface_z: dict[tuple[int, int], int]) -> SurfaceHeightmap:
-    xs = [gx for gx, _ in surface_z]
-    ys = [gy for _, gy in surface_z]
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(min(xs), max(xs), min(ys), max(ys)),
-        surface_z=dict(surface_z),
-    )
-
-
-def _depression_heightmap() -> SurfaceHeightmap:
-    surface_z: dict[tuple[int, int], int] = {}
-    for gx in range(0, 11):
-        for gy in range(0, 11):
-            ring = max(abs(gx - 5), abs(gy - 5))
-            if ring == 0:
-                surface_z[(gx, gy)] = 7950
-            elif ring == 1:
-                surface_z[(gx, gy)] = 8000
-            elif ring <= 3:
-                surface_z[(gx, gy)] = 8010
-            else:
-                surface_z[(gx, gy)] = 8050
-    return _heightmap(surface_z)
+    kwargs.setdefault("hydrology", lakes_hydrology())
+    return hydro_world(**kwargs)
 
 
 class TestLakesAutoresolvePolicy(unittest.TestCase):
@@ -101,12 +62,7 @@ class TestProceduralLakes(unittest.TestCase):
 
     def test_autoresolve_carves_lake_role(self):
         hm = _depression_heightmap()
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.LAKES}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-        )
+        master = hydro_master(scopes=frozenset({HydrologyScope.LAKES}))
         carved, bbox = autoresolve_lakes(_world(), hm, master, {})
         roles = {entry.role for entry in carved.values()}
         self.assertIn(HydrologyCellRole.LAKE, roles)
@@ -114,24 +70,14 @@ class TestProceduralLakes(unittest.TestCase):
 
     def test_skips_occupied_center(self):
         hm = _depression_heightmap()
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.LAKES}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-        )
+        master = hydro_master(scopes=frozenset({HydrologyScope.LAKES}))
         occupied = {(5, 5): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)}
         carved, _ = autoresolve_lakes(_world(), hm, master, occupied)
         self.assertEqual(carved, {})
 
     def test_service_lakes_scope_without_declare(self):
         hm = _depression_heightmap()
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.LAKES}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-        )
+        master = hydro_master(scopes=frozenset({HydrologyScope.LAKES}))
         result = HydrologyGeneratorService().apply(_world(), [], hm, master=master)
         roles = {entry.role for entry in result.cell_index.by_cell.values()}
         self.assertIn(HydrologyCellRole.LAKE, roles)

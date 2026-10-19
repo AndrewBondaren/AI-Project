@@ -3,7 +3,6 @@
 import unittest
 from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
@@ -20,54 +19,33 @@ from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassif
 from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import (
     resolve_declared_river_intents,
 )
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from tests.hydrology_fixtures import (
+    flat_heightmap,
+    hydro_world,
+    lake_wire,
+    river_endpoints_wire,
+    river_segments_wire,
+    waypoint,
+)
 
 FINE_PER_CELL = 1000
 
 
 def _world(hydrology: dict) -> SimpleNamespace:
-    return SimpleNamespace(
-        world_uid="test-world",
-        fine_cells_per_map_cell=FINE_PER_CELL,
+    return hydro_world(
         hydrology={"enabled": True, **hydrology},
+        fine_cells_per_map_cell=FINE_PER_CELL,
     )
 
 
-def _flat_heightmap(x_hi: int, y_hi: int, z: int = 5) -> SurfaceHeightmap:
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(0, x_hi, 0, y_hi),
-        surface_z={(gx, gy): z for gx in range(x_hi + 1) for gy in range(y_hi + 1)},
-    )
+def _flat_heightmap(x_hi: int, y_hi: int, z: int = 5):
+    return flat_heightmap(0, x_hi, 0, y_hi, z=z)
 
 
-def _wp(x: int, y: int) -> dict:
-    return {"x": x, "y": y, "z": 0}
-
-
-LAKE = {
-    "location_uid": "loc-lake",
-    "shoreline": [_wp(3000, 3000), _wp(7000, 3000), _wp(7000, 7000), _wp(3000, 7000)],
-}
-RIVER_SEGMENTS = {
-    "location_uid": "loc-river",
-    "system_role": "stem",
-    "declare_mode": "segments",
-    "segments": [{
-        "from": _wp(1000, 9000),
-        "to": _wp(5000, 9000),
-        "connection_type": "river_lowland",
-        "width_cells": 1,
-    }],
-}
-RIVER_ENDPOINTS = {
-    "location_uid": "loc-river-ep",
-    "system_role": "stem",
-    "declare_mode": "endpoints",
-    "source": _wp(2000, 2000),
-    "mouth": _wp(6000, 2000),
-}
+LAKE = lake_wire()
+RIVER_SEGMENTS = river_segments_wire()
+RIVER_ENDPOINTS = river_endpoints_wire()
 
 
 class TestCoarseMasterInput(unittest.TestCase):
@@ -87,7 +65,11 @@ class TestCoarseMasterInput(unittest.TestCase):
         self.assertTrue(set(result.cell_index.by_cell) <= set(hm.surface_z))
 
     def test_river_into_lake_keeps_lake_cells(self):
-        river_into_lake = {**RIVER_ENDPOINTS, "source": _wp(9000, 9000), "mouth": _wp(5000, 5000)}
+        river_into_lake = {
+            **RIVER_ENDPOINTS,
+            "source": waypoint(9000, 9000),
+            "mouth": waypoint(5000, 5000),
+        }
         lake_only = HydrologyGeneratorService().apply(
             _world({"declared_lakes": [LAKE]}), [], _flat_heightmap(10, 10),
         )
