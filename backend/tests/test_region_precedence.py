@@ -95,6 +95,12 @@ class RegionPrecedenceTests(unittest.TestCase):
         self.assert_precedes(self.candidate(self.uid_last, specificity=0, side=1),
                              self.candidate(self.uid_first, specificity=None, side=100))
 
+    def test_degenerate_bbox_area_is_coverage_not_zero(self):
+        # A 1x1 bbox covers one cell; it must not tie/lose on area=0.
+        point = self.candidate(self.uid_last, side=0)
+        zero_claim = replace(self.candidate(self.uid_first, side=10), claim_area=0)
+        self.assert_precedes(point, zero_claim)
+
     def test_equal_specificity_prefers_larger_area(self):
         for specificity in (None, 0, 3):
             with self.subTest(specificity=specificity):
@@ -105,12 +111,12 @@ class RegionPrecedenceTests(unittest.TestCase):
         claim = replace(self.candidate(self.uid_first, side=100), claim_area=10)
         declared = self.candidate(self.uid_last, side=4)
         self.assert_precedes(declared, claim)
-        self.assert_precedes(replace(claim, claim_area=20), declared)
+        self.assert_precedes(replace(claim, claim_area=30), declared)
 
     def test_area_is_primitive_area_not_bbox_or_noise(self):
         vertices = [(0, 0), (10, 0), (0, 10)]
         triangle = self.candidate(self.uid_first, shape=PolygonShape(vertices=vertices))
-        square = self.candidate(self.uid_last, side=8)  # bbox 64 < triangle bbox 100, area 64 > 50
+        square = self.candidate(self.uid_last, side=8)  # bbox coverage 81 > triangle area 50
         self.assert_precedes(square, triangle)
         noisy = replace(triangle, spec=triangle.spec.model_copy(update={
             "shape": PolygonShape(vertices=vertices,

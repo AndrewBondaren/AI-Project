@@ -60,7 +60,10 @@ class RegionWireTests(unittest.TestCase):
             self.assertIsNone(spec.location_uid)
         self.assertEqual(WorldTerrainMasks.model_validate_json(masks.model_dump_json()), masks)
         schema = WorldTerrainMasks.model_json_schema()
-        union = schema["properties"]["declared_regions"]["items"]
+        prop = schema["properties"]["declared_regions"]
+        if "$ref" in prop:  # DefaultWhenMissing wraps the array in $defs
+            prop = schema["$defs"][prop["$ref"].rsplit("/", 1)[-1]]
+        union = prop["items"]
         self.assertEqual(union["discriminator"]["propertyName"], "entry_type")
         self.assertEqual(set(union["discriminator"]["mapping"]), set(SPEC_TYPES))
         self.assertEqual(schema["$defs"]["ForestSpec"]["properties"]["shape"]
@@ -148,7 +151,7 @@ class RegionGeometryTests(unittest.TestCase):
     def test_bbox_and_ellipse_world_coordinates_and_boundaries(self):
         bbox = BboxShape.model_validate(SHAPES[0])
         self.assertEqual(bbox.bbox(), (-4, -2, 4, 2))
-        self.assertEqual(bbox.area(), 32)
+        self.assertEqual(bbox.area(), 45)  # coverage cells: (8+1) * (4+1)
         ellipse = EllipseShape.model_validate(SHAPES[1])
         self.assertEqual(ellipse.bbox(), bbox.bbox())
         self.assertAlmostEqual(ellipse.area(), 8 * math.pi)
@@ -159,7 +162,7 @@ class RegionGeometryTests(unittest.TestCase):
             self.assertFalse(shape.contains(5, 0))
         self.assertFalse(ellipse.contains(4, 2))
         self.assertTrue(bbox.contains(4, 2))
-        self.assertEqual(BboxShape(x_min=1, x_max=1, y_min=0, y_max=0).area(), 0)
+        self.assertEqual(BboxShape(x_min=1, x_max=1, y_min=0, y_max=0).area(), 1)
 
     def test_polygon_concave_both_windings_and_explicit_closure(self):
         vertices = [(10, 10), (14, 10), (14, 12), (12, 12), (12, 14), (10, 14)]

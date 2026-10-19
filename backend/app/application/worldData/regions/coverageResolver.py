@@ -46,8 +46,9 @@ def resolve(region_facts: RegionFacts, registry: WorldTerrainRegistry) -> Target
     """Argmax raw weighted score; ties use ascending terrain key, never input order.
 
     strength = winning score / sum of that candidate's weights (zero if no
-    positive weights). None means unresolved: the caller must retain its type.
-    Region/cell aggregation belongs to fact consumers, not this function.
+    positive weights). Only score > 0 wins: an all-zero board is unresolved,
+    not a lexical-min pick. None means unresolved: the caller must retain its
+    type. Region/cell aggregation belongs to fact consumers, not this function.
     """
     candidates = []
     rejected = []
@@ -67,6 +68,12 @@ def resolve(region_facts: RegionFacts, registry: WorldTerrainRegistry) -> Target
         )
         return None
     score, target, strength = min(candidates, key=lambda item: (-item[0], item[1]))
+    if score <= 0:
+        logger.warning(
+            "landcover | resolve_unresolved | WarningError | reason=zero_score candidates=%s",
+            sorted(key for _, key, _ in candidates),
+        )
+        return None
     logger.debug("landcover | resolve_target | target=%s score=%s strength=%s facts=%s",
                  target, score, strength, region_facts)
     return TargetCoverage(target_key=target, strength=strength)

@@ -731,7 +731,7 @@ Overlap разрешён (авторское слоение; покрытие �
 1. declared/anchor           — authored-регион первым; autoresolve — после
 2. merge_rank(current_type)   по убыванию   # TerrainRegistryEntry, разные ключи
 3. placement_specificity      по убыванию   # None ниже любого явного
-4. RegionShape.area()         по убыванию
+4. RegionShape.area()         по убыванию   # площадь покрытия в fine-клетках (инклюзивные границы): bbox 1×1 = 1
 5. region_uid                 по возрастанию (каноническая строка)
 ```
 
@@ -739,7 +739,7 @@ Overlap разрешён (авторское слоение; покрытие �
 
 #### Реестр и CoverageResolver (world data, N+1)
 
-`TerrainRegistryEntry` += `merge_rank`, `eligibility: list[EligibilityRule]` (`{fact, op: gte|lte|in_range|flag, lo/hi, weight, required}`), `inertia` (сопротивление переходу как текущего типа), `hills: HillPolicy | None` (L2 холмы по ключу — см. `tz_world_pack_storage` § L2 open-land hills). Builtin-значения (`road > ravine > mountain > forest > plains`, hills forest/plains) — в canonical defaults реестра, не литералы в application. `CoverageResolver` — scorer: `required` провалено → кандидат отпадает; `score = Σ weightᵢ·satisfactionᵢ` (0..1); `target = argmax`, `strength` → темп прогресса; все отпали → WarningError, тип не меняется (без default). Interim eligibility — climate-правила как canonical `eligibility` builtin-ключей с комментарием «цель — rules мира + flora suitability (`flora.*`)».
+`TerrainRegistryEntry` += `merge_rank`, `eligibility: list[EligibilityRule]` (`{fact, op: gte|lte|in_range|flag, lo/hi, weight, required}`), `inertia` (сопротивление переходу как текущего типа), `hills: HillPolicy | None` (L2 холмы по ключу — см. `tz_world_pack_storage` § L2 open-land hills). Builtin-значения (`road > ravine > mountain > forest > plains`, hills forest/plains) — в canonical defaults реестра, не литералы в application. `CoverageResolver` — scorer: `required` провалено → кандидат отпадает; `score = Σ weightᵢ·satisfactionᵢ` (0..1); `target = argmax` при `score > 0` (нулевой борд не выбирает лексикографический минимум — это unresolved), `strength` → темп прогресса; все отпали или все `score == 0` → WarningError, тип не меняется (без default). Interim eligibility — climate-правила как canonical `eligibility` builtin-ключей с комментарием «цель — rules мира + flora suitability (`flora.*`)».
 
 #### Declaration и suitability
 

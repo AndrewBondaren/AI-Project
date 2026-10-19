@@ -68,14 +68,22 @@ class CoverageResolverTests(unittest.TestCase):
 
     def test_flora_unknown_fact_and_absent_domain_score_zero(self):
         for fact in ("flora.eligible_trees", "missing.value", "climate.unknown", "hydrology.water_table"):
-            for required in (False, True):
-                rule = EligibilityRule(fact=fact, op=EligibilityOp.FLAG, required=required)
-                registry = WorldTerrainRegistry([candidate("custom", rule)])
-                if required:
-                    with self.assertLogs(level="WARNING"):
-                        self.assertIsNone(resolve(self.facts, registry))
-                else:
-                    self.assertEqual(resolve(self.facts, registry).strength, 0)
+            rule = EligibilityRule(fact=fact, op=EligibilityOp.FLAG, required=True)
+            registry = WorldTerrainRegistry([candidate("custom", rule)])
+            with self.assertLogs(level="WARNING"):
+                self.assertIsNone(resolve(self.facts, registry))
+
+    def test_zero_score_board_is_unresolved_not_lexical_min(self):
+        # All candidates pass but score 0: no silent fallback to the smallest key.
+        flag = lambda fact: EligibilityRule(fact=fact, op=EligibilityOp.FLAG)
+        entries = [candidate("zeta", flag("missing.a")), candidate("alpha", flag("missing.b"))]
+        registry = WorldTerrainRegistry(entries)
+        with self.assertLogs("app.application.worldData.regions.coverageResolver", level="WARNING") as logs:
+            self.assertIsNone(resolve(self.facts, registry))
+        self.assertIn("landcover | resolve_unresolved | WarningError", logs.output[0])
+        # One positive score on an otherwise zero board still wins.
+        entries.append(candidate("winner", flag("climate.rainfall")))
+        self.assertEqual(resolve(self.facts, WorldTerrainRegistry(entries)).target_key, "winner")
 
     def test_required_inclusive_bounds_and_range_falloff(self):
         for op, bounds, value in ((EligibilityOp.GTE, {"lo": 0}, 0), (EligibilityOp.LTE, {"hi": -10}, -10),
@@ -84,17 +92,23 @@ class CoverageResolverTests(unittest.TestCase):
             registry = WorldTerrainRegistry([candidate("custom", rainfall(op, required=True, **bounds))])
             self.assertIsNotNone(resolve(RegionFacts(climate=ClimateFacts(rainfall_mean=value)), registry))
         registry = WorldTerrainRegistry([candidate("custom", rainfall(EligibilityOp.IN_RANGE, lo=10, hi=20))])
-        for value, expected in ((0, 0), (5, .5), (10, 1), (15, 1), (20, 1), (25, .5), (30, 0)):
+        for value, expected in ((5, .5), (10, 1), (15, 1), (20, 1), (25, .5)):
             self.assertAlmostEqual(resolve(RegionFacts(climate=ClimateFacts(rainfall_mean=value)), registry).strength,
                                    expected)
+        for value in (0, 30):  # zero satisfaction is unresolved, not a zero-strength win
+            with self.assertLogs(level="WARNING"):
+                self.assertIsNone(resolve(RegionFacts(climate=ClimateFacts(rainfall_mean=value)), registry))
 
     def test_flag_zero_weight_empty_rules_and_nonfinite_facts(self):
         rule = EligibilityRule(fact="relief.elevation_plain", op=EligibilityOp.FLAG, required=True, weight=0)
         registry = WorldTerrainRegistry([candidate("custom", rule)])
-        self.assertEqual(resolve(RegionFacts(relief=ReliefFacts(elevation_plain=True)), registry).strength, 0)
+        # weight=0 never wins even when the flag passes: score is still zero.
+        with self.assertLogs(level="WARNING"):
+            self.assertIsNone(resolve(RegionFacts(relief=ReliefFacts(elevation_plain=True)), registry))
         with self.assertLogs(level="WARNING"):
             self.assertIsNone(resolve(RegionFacts(relief=ReliefFacts(elevation_plain=False)), registry))
-        self.assertEqual(resolve(self.facts, WorldTerrainRegistry([candidate("custom")])).strength, 0)
+        with self.assertLogs(level="WARNING"):
+            self.assertIsNone(resolve(self.facts, WorldTerrainRegistry([candidate("custom")])))
         for value in (float("nan"), float("inf")):
             registry = WorldTerrainRegistry([candidate("custom", rainfall(lo=10, required=True))])
             with self.assertLogs(level="WARNING"):

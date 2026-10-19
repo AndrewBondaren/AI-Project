@@ -70,7 +70,8 @@ class BboxShape(RegionShapeBase):
         return self.x_min, self.y_min, self.x_max, self.y_max
 
     def area(self) -> float:
-        return float((self.x_max - self.x_min) * (self.y_max - self.y_min))
+        # Coverage cells matching inclusive contains(): a 1x1 bbox covers 1.
+        return float((self.x_max - self.x_min + 1) * (self.y_max - self.y_min + 1))
 
 
 class EllipseShape(RegionShapeBase):

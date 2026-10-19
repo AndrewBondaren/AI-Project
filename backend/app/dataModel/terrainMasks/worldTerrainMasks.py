@@ -113,7 +113,7 @@ class WorldTerrainMasks(BaseModel):
         default_factory=MountainsCategoryPolicy,
     )
     declared_mountains: DefaultWhenMissing[list[MountainDeclareEntry]] = Field(default_factory=list)
-    declared_regions: list[LandcoverDeclareEntry] = Field(default_factory=list)
+    declared_regions: DefaultWhenMissing[list[LandcoverDeclareEntry]] = Field(default_factory=list)
     default_landcover: DefaultWhenMissing[LandcoverRegionsCategoryPolicy] = Field(
         default_factory=LandcoverRegionsCategoryPolicy.canonical_defaults,
     )
