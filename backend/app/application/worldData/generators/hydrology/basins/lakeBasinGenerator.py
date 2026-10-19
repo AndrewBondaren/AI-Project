@@ -19,6 +19,10 @@ from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     LakeSpec,
 )
+from app.application.worldData.generators.hydrology.waterBodyIdentity import (
+    AutoWaterBodyRole,
+    water_body_uid_for,
+)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
@@ -149,6 +153,7 @@ def carve_lake_interior(
     interior: set[tuple[int, int]],
     bands,
     *,
+    water_body_uid: str,
     open_role: HydrologyCellRole = HydrologyCellRole.LAKE,
 ) -> dict[tuple[int, int], MapCellHydrology]:
     if not interior:
@@ -173,15 +178,17 @@ def carve_lake_interior(
     by_cell: dict[tuple[int, int], MapCellHydrology] = {}
     kind = HydrologyShoreKind.for_open_water_role(open_role) or HydrologyShoreKind.LAKE
     for cell in land_shore:
-        by_cell[cell] = MapCellHydrology.shore(kind, deepening_index=0)
+        by_cell[cell] = MapCellHydrology.shore(kind, deepening_index=0,
+                                             water_body_uid=water_body_uid)
 
     for cell, distance in interior_dist.items():
         if distance <= shelf_depth:
             heightmap.surface_z[cell] = max(floor_z, rim_z - distance)
-            by_cell[cell] = MapCellHydrology.shore(kind, deepening_index=distance)
+            by_cell[cell] = MapCellHydrology.shore(kind, deepening_index=distance,
+                                                 water_body_uid=water_body_uid)
         else:
             heightmap.surface_z[cell] = floor_z
-            by_cell[cell] = MapCellHydrology(role=open_role)
+            by_cell[cell] = MapCellHydrology(role=open_role, water_body_uid=water_body_uid)
 
     return by_cell
 
@@ -203,10 +210,12 @@ def carve_lake_basin(
     if not interior:
         return {}
 
+    uid = water_body_uid_for(spec.location_uid, AutoWaterBodyRole.LAKE, min(interior))
     return carve_lake_interior(
         heightmap,
         interior,
         bands,
+        water_body_uid=uid,
         open_role=spec.open_water_role,
     )
 

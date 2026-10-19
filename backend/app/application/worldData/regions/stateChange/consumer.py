@@ -6,6 +6,7 @@ owner uses explicit add/remove methods; no sweep or background clock is installe
 
 from dataclasses import dataclass
 
+from app.application.worldData.regions.coverageBackground import coverage_registry
 from app.application.worldData.regions.coverageResolver import resolve
 from app.application.worldData.regions.factConsumers import collect_facts
 from app.application.worldData.regions.factConsumers.context import FactConsumerContext
@@ -41,6 +42,7 @@ class StateChangeConsumer:
     def __init__(self, repo: IRegionStateRepository, *, registry: WorldTerrainRegistry,
                  policy: LandcoverRegionsCategoryPolicy) -> None:
         self._repo, self._registry, self._policy = repo, registry, policy
+        self._candidates = coverage_registry(registry, policy, autoresolve=True)
 
     async def evaluate(self, world_uid: str, request: RegionEvaluation) -> EvaluationResult:
         """Evaluate one complete region scope; never infer removal from its absence.
@@ -136,7 +138,7 @@ class StateChangeConsumer:
                  context: FactConsumerContext) -> RegionState:
         facts = collect_facts(context, declaration=request.declaration,
                               elapsed_ticks=request.elapsed_ticks)
-        return advance(state, resolve(facts, self._registry), registry=self._registry,
+        return advance(state, resolve(facts, self._candidates), registry=self._registry,
                        policy=self._policy, elapsed_ticks=request.elapsed_ticks,
                        declaration=facts.declaration, cause=request.cause, at=request.at)
 

@@ -799,7 +799,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 **Причина:**
 
-1. Много child-таблиц ссылаются на `worlds(world_uid)` **без** `ON DELETE CASCADE`.
+1. Много child-таблиц ссылаются на `worlds(world_uid)` **без** `ON DELETE CASCADE`. Явно зафиксированные блокеры: **`region_states`** (`0001_initial.sql` § region_states, FK `world_uid` без CASCADE; строки пишет `StateChangeConsumer` при import/edit declared-регионов — delete мира со state-строками = `IntegrityError`; ревью wilderness 7+, 2026-10-19).
 2. `WorldService.delete` / repo удаляют только строку `worlds`.
 3. Debug helper (`api_delete_world`) сначала purge'ит `locations`, потом вызывает API delete → при FK fail мир остаётся **half-deleted** (локации уже снесены, другие children + `worlds` row живы) → последующий bake: `surface terrain context unavailable`.
 

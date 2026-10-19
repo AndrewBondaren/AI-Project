@@ -21,6 +21,10 @@ from app.application.worldData.generators.hydrology.load.resolveHydrologyBands i
     resolve_hydrology_bands,
 )
 from app.application.worldData.generators.hydrology.types import HydrologyMasterInput
+from app.application.worldData.generators.hydrology.waterBodyIdentity import (
+    AutoWaterBodyRole,
+    auto_water_body_uid,
+)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
@@ -125,6 +129,7 @@ def autoresolve_lakes(
             heightmap,
             interior,
             bands,
+            water_body_uid=auto_water_body_uid(AutoWaterBodyRole.LAKE, center),
             open_role=HydrologyCellRole.LAKE,
         )
         if not carved:

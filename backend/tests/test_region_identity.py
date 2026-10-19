@@ -50,7 +50,7 @@ class RegionIdentityTests(unittest.TestCase):
                 self.assertNotEqual(identity.spec_fingerprint, original.spec_fingerprint)
                 self.assertEqual(identity.region_uid == original.region_uid, changed.name == self.name)
 
-    def test_anonymous_bbox_shift_changes_uid_and_reports_degraded_identity(self):
+    def test_anonymous_bbox_shift_changes_uid_and_logs_degraded_identity_at_runtime(self):
         shape = BboxShape(x_min=-10, y_min=5, x_max=10, y_max=20)
         spec = ForestSpec(shape=shape)
         shifted = spec.model_copy(update={"shape": shape.model_copy(update={"x_min": -11})})
@@ -62,11 +62,13 @@ class RegionIdentityTests(unittest.TestCase):
             self.world_uid, UidKind.REGION, bbox_min=(-10, 5), shape_kind=shape.kind,
         ))
         self.assertEqual(len(caught.records), 2)
-        for record, issue in zip(caught.records, self.ctx.report.issues):
-            self.assertIn("WarningError", record.getMessage())
-            self.assertIn("landcover | degraded_identity", record.getMessage())
-            self.assertEqual(issue.code, "REGION_DEGRADED_IDENTITY")
-            self.assertEqual(issue.path, self.path + ("name",))
+        self.assertEqual(self.ctx.report.issues, [])
+        for record in caught.records:
+            message = record.getMessage()
+            self.assertIn("WarningError", message)
+            self.assertIn("landcover | degraded_identity", message)
+            self.assertIn("code=REGION_DEGRADED_IDENTITY", message)
+            self.assertIn(str(self.path + ("name",)), message)
 
     def test_anonymous_shapes_share_bbox_min_rule_and_include_shape_kind(self):
         bbox = BboxShape(x_min=5, y_min=17, x_max=15, y_max=23)

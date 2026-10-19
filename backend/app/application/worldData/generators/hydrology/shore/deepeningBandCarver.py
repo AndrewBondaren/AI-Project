@@ -337,6 +337,7 @@ def carve_deepening_bands(
     segments: list[tuple[tuple[int, int], tuple[int, int]]],
     bands: HydrologyBands,
     *,
+    water_body_uid: str,
     z_sea: int | None = None,
 ) -> DeepeningCarveResult:
     """
@@ -360,6 +361,7 @@ def carve_deepening_bands(
         by_cell[cell] = MapCellHydrology.shore(
             HydrologyShoreKind.SEA,
             deepening_index=0,
+            water_body_uid=water_body_uid,
         )
         xs.append(cell[0])
         ys.append(cell[1])
@@ -374,10 +376,12 @@ def carve_deepening_bands(
             by_cell[cell] = MapCellHydrology.shore(
                 HydrologyShoreKind.SEA,
                 deepening_index=deepening,
+                water_body_uid=water_body_uid,
             )
         else:
             heightmap.surface_z[cell] = level
-            by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA)
+            by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA,
+                                             water_body_uid=water_body_uid)
 
     dirty = None
     if xs and ys:

@@ -78,6 +78,12 @@ class LakeSpec:
 
 
 @dataclass(frozen=True)
+class CoastlineSpec:
+    segments: list[tuple[tuple[int, int], tuple[int, int]]]
+    location_uid: str | None = None
+
+
+@dataclass(frozen=True)
 class DeclaredRiverEdge:
     edge_uid: str
     segment: tuple[tuple[int, int], tuple[int, int]]
@@ -113,13 +119,16 @@ class HydrologyMasterInput:
     scopes:            frozenset[HydrologyScope]
     connection_graph:  LoadedConnectionGraph
     geographic_locations: list[NamedLocation] = field(default_factory=list)
-    declared_coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]] = field(
-        default_factory=list,
-    )
+    declared_coastline_specs: list[CoastlineSpec] = field(default_factory=list)
     declared_lake_specs: list[LakeSpec] = field(default_factory=list)
     declared_river_edges: list[DeclaredRiverEdge] = field(default_factory=list)
     declared_river_intents: list[Any] = field(default_factory=list)  # DeclaredRiver POJO, modes 1/2
     river_system_index: RiverSystemIndex | None = None
+
+    @property
+    def declared_coastline_segments(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+        """Flat union for geometry-wide consumers (autoresolve bbox, landforms, logs)."""
+        return [seg for spec in self.declared_coastline_specs for seg in spec.segments]
 
 
 @dataclass

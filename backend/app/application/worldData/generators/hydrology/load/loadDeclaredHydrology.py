@@ -10,6 +10,7 @@ from app.application.worldData.generators.hydrology.basins.basinKindResolver imp
 )
 from app.application.worldData.generators.hydrology.basins.lakeSpecs import _group_segments
 from app.application.worldData.generators.hydrology.types import (
+    CoastlineSpec,
     DeclaredRiverEdge,
     LakeSpec,
     RiverSystemIndex,
@@ -27,11 +28,15 @@ from app.db.models.world import World
 
 @dataclass(frozen=True)
 class LoadedDeclaredHydrology:
-    coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]]
+    coastline_specs: list[CoastlineSpec]
     lake_specs: list[LakeSpec]
     river_edges: list[DeclaredRiverEdge]
     river_intents: list[DeclaredRiver]
     river_system_index: RiverSystemIndex
+
+    @property
+    def coastline_segments(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+        return [seg for spec in self.coastline_specs for seg in spec.segments]
 
 
 def _coerce_pojo(model_cls: type, value: object):
@@ -120,9 +125,12 @@ def load_declared_hydrology(
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
     rivers = _coerce_declared_rivers(list(pojo.declared_rivers))
 
-    coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    coastline_specs: list[CoastlineSpec] = []
     for entry in coastlines:
-        coastline_segments.extend(_path_to_segments(list(entry.path)))
+        segments = _path_to_segments(list(entry.path))
+        if not segments:
+            continue
+        coastline_specs.append(CoastlineSpec(segments=segments, location_uid=entry.location_uid))
 
     lake_specs: list[LakeSpec] = []
     for entry in lakes:
@@ -153,7 +161,7 @@ def load_declared_hydrology(
             river_intents.append(river)
 
     return LoadedDeclaredHydrology(
-        coastline_segments=coastline_segments,
+        coastline_specs=coastline_specs,
         lake_specs=lake_specs,
         river_edges=river_edges,
         river_intents=river_intents,

@@ -20,6 +20,10 @@ from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     RiverSegment,
 )
+from app.application.worldData.generators.hydrology.waterBodyIdentity import (
+    AutoWaterBodyRole,
+    water_body_uid_for,
+)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
@@ -41,6 +45,10 @@ def carve_river_segment(
     occupied: Mapping[tuple[int, int], MapCellHydrology] | None = None,
 ) -> dict[tuple[int, int], MapCellHydrology]:
     """River bed on polyline cells; open water already in ``occupied`` (mouth lake/sea) is kept."""
+    if not segment.polyline_cells:
+        return {}
+    uid = water_body_uid_for(segment.location_uid, AutoWaterBodyRole.RIVER,
+                             segment.polyline_cells[0])
     by_cell: dict[tuple[int, int], MapCellHydrology] = {}
     for cell in segment.polyline_cells:
         if cell not in heightmap.surface_z:
@@ -53,6 +61,7 @@ def carve_river_segment(
         by_cell[cell] = MapCellHydrology(
             role=HydrologyCellRole.RIVER_BED,
             connection_edge_uid=segment.edge_uid,
+            water_body_uid=uid,
         )
     return by_cell
 

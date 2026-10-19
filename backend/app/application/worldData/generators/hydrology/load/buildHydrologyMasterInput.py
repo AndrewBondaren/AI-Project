@@ -48,7 +48,8 @@ def build_hydrology_master_input(
         scopes=active_scopes,
         connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
         geographic_locations=geographic_locations(locations),
-        declared_coastline_segments=fine_segments_to_grid(declared.coastline_segments, map_cell),
+        declared_coastline_specs=[replace(spec, segments=fine_segments_to_grid(spec.segments, map_cell))
+            for spec in declared.coastline_specs],
         declared_lake_specs=[
             replace(spec, shoreline_segments=fine_segments_to_grid(spec.shoreline_segments, map_cell))
             for spec in declared.lake_specs

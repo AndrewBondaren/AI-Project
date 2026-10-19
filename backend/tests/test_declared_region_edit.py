@@ -14,6 +14,7 @@ from pydantic import TypeAdapter
 
 from app.api.deps import get_container
 from app.api.routes.worlds import router
+from app.application.jsonValidation.resolve import ResolveMode
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.core.container import Container
@@ -72,10 +73,20 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["valid"])
         self.assertTrue(any("name" in issue["loc"] for issue in response.json()["issues"]))
+        self.assertEqual([i["code"] for i in response.json()["issues"]], ["value_error"])
         self.assertEqual(await self.worlds.get_all(), [])
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
+        with patch("app.application.jsonValidation.declaredRegions.declared_region_identity",
+                   wraps=declared_region_identity) as identity, \
+             self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
             await self.import_world()
         self.assertTrue(any("degraded_identity" in line for line in logs.output))
+        contexts = [call.kwargs["ctx"] for call in identity.call_args_list]
+        self.assertTrue(contexts)
+        for ctx in contexts:
+            self.assertIs(ctx.mode, ResolveMode.IMPORT)
+            self.assertFalse(ctx.validate_only)
+            self.assertEqual(ctx.path_prefix, ("terrain_masks", "declared_regions", 0))
+            self.assertEqual(ctx.report.issues, [])
         rows = await self.repo.get_by_world(self.uid)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].current_type, "forest")

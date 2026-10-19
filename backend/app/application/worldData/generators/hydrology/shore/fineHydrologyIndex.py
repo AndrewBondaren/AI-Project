@@ -24,6 +24,10 @@ from app.application.worldData.generators.hydrology.rivers.riverBedCarver import
     _channel_depth_step,
     carve_river_segment,
 )
+from app.application.worldData.generators.hydrology.waterBodyIdentity import (
+    AutoWaterBodyRole,
+    water_body_uid_for,
+)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
@@ -44,6 +48,10 @@ def apply_declared_fine_river_carves(
 
     segments = segments_from_declared(loaded.river_edges)
     for segment in segments:
+        if not segment.polyline_cells:
+            continue
+        uid = water_body_uid_for(segment.location_uid, AutoWaterBodyRole.RIVER,
+                                 segment.polyline_cells[0])
         depth = _channel_depth_step(segment.connection_type, type_classify)
         for cell in segment.polyline_cells:
             z = surface_z.get(cell, 0)
@@ -51,6 +59,7 @@ def apply_declared_fine_river_carves(
             merged_hydro[cell] = MapCellHydrology(
                 role=HydrologyCellRole.RIVER_BED,
                 connection_edge_uid=segment.edge_uid,
+                water_body_uid=uid,
             )
 
     if surface_z:

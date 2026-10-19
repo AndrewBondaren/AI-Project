@@ -17,6 +17,10 @@ from app.application.worldData.generators.hydrology.geom.polylineRasterize impor
 from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import resolve_hydrology_bands
 from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
 from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyMasterInput
+from app.application.worldData.generators.hydrology.waterBodyIdentity import (
+    AutoWaterBodyRole,
+    auto_water_body_uid,
+)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
@@ -34,6 +38,7 @@ def _carve_water_candidates(
     bands: HydrologyBands,
     level: int,
     *,
+    water_body_uid: str,
     autoresolve_coastal: bool,
     autoresolve_open_ocean: bool,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], GridBBox | None]:
@@ -54,13 +59,16 @@ def _carve_water_candidates(
             by_cell[cell] = MapCellHydrology.shore(
                 HydrologyShoreKind.SEA,
                 deepening_index=deepening,
+                water_body_uid=water_body_uid,
             )
         else:
             heightmap.surface_z[cell] = level
             if autoresolve_open_ocean:
-                by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
+                by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN,
+                                               water_body_uid=water_body_uid)
             elif autoresolve_coastal:
-                by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA)
+                by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA,
+                                               water_body_uid=water_body_uid)
 
         xs.append(cell[0])
         ys.append(cell[1])
@@ -93,11 +101,15 @@ def _autoresolve_beyond_declare_bbox(
         for cell, distance in water_dist.items()
         if cell not in occupied and _outside_bbox(cell, declare_bbox)
     }
+    if not candidates:
+        return {}, None
+    uid = auto_water_body_uid(AutoWaterBodyRole.SEA, min(candidates))
     return _carve_water_candidates(
         heightmap,
         candidates,
         bands,
         level,
+        water_body_uid=uid,
         autoresolve_coastal=autoresolve_coastal,
         autoresolve_open_ocean=autoresolve_open_ocean,
     )
@@ -116,6 +128,7 @@ def _autoresolve_from_map_boundary(
     if not water_dist:
         return {}, None
 
+    uid = auto_water_body_uid(AutoWaterBodyRole.SEA, min(water_dist))
     land_centroid = compute_land_centroid(heightmap)
     land_shore = land_shore_from_water_dist(heightmap, water_dist, land_centroid)
     by_cell: dict[tuple[int, int], MapCellHydrology] = {}
@@ -126,6 +139,7 @@ def _autoresolve_from_map_boundary(
         by_cell[cell] = MapCellHydrology.shore(
             HydrologyShoreKind.SEA,
             deepening_index=0,
+            water_body_uid=uid,
         )
 
     candidates = {
@@ -138,6 +152,7 @@ def _autoresolve_from_map_boundary(
         candidates,
         bands,
         level,
+        water_body_uid=uid,
         autoresolve_coastal=autoresolve_coastal,
         autoresolve_open_ocean=autoresolve_open_ocean,
     )

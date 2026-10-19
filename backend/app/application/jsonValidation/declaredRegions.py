@@ -17,9 +17,9 @@ def validate_declared_regions(world: World, ctx: ResolveContext) -> None:
     regions_ctx = masks_ctx.child(bind_field(DECLARED_REGIONS).field)
     seen: set[str] = set()
     for index, spec in enumerate(masks.declared_regions):
-        # Identity diagnostics use a local report: anonymous runtime regions are
-        # usable, whereas collisions always reject the complete operation.
-        local = ResolveContext(path_prefix=regions_ctx.path_prefix + (index,), validate_only=ctx.validate_only)
+        # Identity diagnostics share the request report/mode: the producer decides
+        # severity by validate_only, whereas collisions always reject the operation.
+        local = regions_ctx.child(index)
         identity = declared_region_identity(world.world_uid, spec, ctx=local)
         if identity.region_uid in seen:
             report_issues(ctx, [FieldPathError(local.path_prefix + (bind_field(REGION_NAME).field,),

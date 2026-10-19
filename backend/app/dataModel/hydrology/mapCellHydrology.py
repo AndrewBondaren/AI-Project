@@ -30,6 +30,7 @@ class MapCellHydrology(BaseModel):
     deepening_index: DefaultWhenMissing[Annotated[int, Field(ge=0)] | None] = constrained_field(default=None)
     connection_edge_uid: DefaultWhenMissing[str | None] = None
     shore_kind: DefaultWhenMissing[HydrologyShoreKind | None] = None
+    water_body_uid: DefaultWhenMissing[str | None] = None
 
     @classmethod
     def shore(
@@ -38,6 +39,7 @@ class MapCellHydrology(BaseModel):
         *,
         deepening_index: int = 0,
         connection_edge_uid: str | None = None,
+        water_body_uid: str | None = None,
     ) -> MapCellHydrology:
         """``role=shore`` cell with paint kind (U15)."""
         return cls(
@@ -45,6 +47,7 @@ class MapCellHydrology(BaseModel):
             shore_kind=kind,
             deepening_index=deepening_index,
             connection_edge_uid=connection_edge_uid,
+            water_body_uid=water_body_uid,
         )
 
     @model_validator(mode="before")

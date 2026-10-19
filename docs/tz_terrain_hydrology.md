@@ -1372,7 +1372,8 @@ Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
   "role": "shore",
   "deepening_index": 0,
   "shore_kind": "lake | sea | river | mountain_river",
-  "connection_edge_uid": "ce-sea-west-mid"
+  "connection_edge_uid": "ce-sea-west-mid",
+  "water_body_uid": "loc-sea-west"
 }
 ```
 
@@ -1383,6 +1384,8 @@ Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
 | `river_bed` | optional metadata | hydrology уже **`liquid_body`**; climate — **состояние** (см. climate TZ) |
 
 Subsurface cells колонки **не** дублируют hydrology v1.
+
+**`water_body_uid`** — идентичность водоёма на каждой carve-клетке (включая `shore`/deepening-клетки тела; `connection_edge_uid` остаётся edge-уровнем рек). Иерархия источников: declared → `location_uid` (`DeclaredLake`/`DeclaredCoastline`/`DeclaredRiver`, durable); event/morph (будущий T-1) → `region_uid` (durable); procedural autoresolve → `auto-{lake|sea|river}-{gx}x{gy}` — позиционная, **не durable**: re-bake перевыпускает, persist/`region_states` на неё не опираются. Якорь `auto-*` — детерминированный факт геометрии: feature center бассейна (lakes), min-клетка flood (seas; один flood = одно тело), первая клетка polyline (rivers). `auto-*` стампуется только внутри policy-enabled autoresolve-веток; open ocean при relabel **наследует** uid моря, не минтует новый. Light wire (`WorldMapCellWire.hydrology_role`/`width`) uid не несёт — L2 читает `surface_planning` (coarse + sparse fine hydro POJO).
 
 ### Partial climate recalc после hydrology (C14)
 

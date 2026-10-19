@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from app.application.worldData.generators.terrain.landcover.autoresolve.claim import fine_topology
 from app.application.worldData.generators.terrain.landcover.autoresolve.mergeSublocations import CoverageSeed, merge_sublocations
 from app.application.worldData.generators.terrain.landcover.autoresolve.seedGrid import WorldSeed, generate_seeds
-from app.application.worldData.generators.terrain.landcover.hydrologyIndex import HydroIndexStatus, index_hydrology
 from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
 from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, LandcoverInputs, RegionSource, StateSnapshotEntry
 from app.application.worldData.masks.regionRasterContext import RegionRasterContext
@@ -23,9 +22,6 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.regions.regionFacts import ClimateFacts, RegionFacts
-from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EdgeNoise
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrain.eligibilityRule import EligibilityRule
@@ -230,19 +226,6 @@ class LandcoverMaterializerTests(unittest.TestCase):
             changed |= noisy != rasterize_claim_fine(
                 ClaimOwnersIndex(claim, seed_root(region), context.fine_topology()), region, context)
         self.assertTrue(changed)
-
-    def test_hydrology_is_only_indexed_without_guessed_ownership(self):
-        hydro = WorldHydrology(declared_lakes=[{"location_uid": "lake", "shoreline": []}])
-        cell = MapCellHydrology(role=HydrologyCellRole.LAKE)
-        surface = SimpleNamespace(coarse_hydro={(0, 0): cell})
-        result = index_hydrology(self.world.world_uid, hydro, surface)
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0].status, HydroIndexStatus.DECLARED)
-        self.assertEqual(result[0].location_uid, "lake")
-        self.assertEqual(result[1].status, HydroIndexStatus.OBSERVED)
-        self.assertIsNone(result[1].region_uid)
-        self.assertEqual(surface.coarse_hydro, {(0, 0): cell})
-        self.assertEqual(len(hydro.declared_lakes), 1)
 
     def test_flora_rule_vetoes_autoresolve_but_not_declared_forest(self):
         rule = EligibilityRule(fact="flora.eligible_trees", op=EligibilityOp.FLAG, required=True)

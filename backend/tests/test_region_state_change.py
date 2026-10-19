@@ -23,7 +23,8 @@ from app.dataModel.terrain.eligibilityRule import EligibilityRule
 from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import (
+    LandcoverRegionsCategoryPolicy, LandcoverTerrainPolicy)
 from app.dataModel.terrainMasks.regions import RegionSpecBase
 from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 from app.db.database import Database
@@ -253,6 +254,44 @@ class ConsumerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.state.current_type, original.current_type)
         self.assertEqual(result.state.progress, original.progress)
         self.repo.mark_tombstone.assert_not_called()
+
+    async def test_policy_closed_keys_are_not_drift_targets(self):
+        for closed in (dict(enabled=False), dict(autoresolve=False)):
+            with self.subTest(**closed):
+                pol = policy(terrain_policies={"steppe": LandcoverTerrainPolicy(
+                    system_terrain="steppe", **closed)})
+                consumer = StateChangeConsumer(self.repo, registry=registry(), policy=pol)
+                self.rows.clear()
+                await self.seed()
+                with self.assertLogs("app.application.worldData.regions.coverageResolver",
+                                     level="WARNING") as logs:
+                    for _ in range(4):
+                        result = await consumer.evaluate("w", self.request())
+                self.assertEqual(result.state.current_type, "forest")
+                self.assertIsNone(result.state.pending_target)
+                self.assertEqual(result.state.progress, 0)
+                self.assertEqual(result.materialize, ())
+                self.assertTrue(any("resolve_unresolved" in line
+                                    and "reason=no_eligible_candidates" in line
+                                    for line in logs.output))
+
+    async def test_entry_without_eligibility_is_not_a_candidate_but_remains_a_known_key(self):
+        reg = WorldTerrainRegistry([*registry().root,
+            TerrainRegistryEntry(system_terrain="bare", terrain_category="solid", merge_rank=2)])
+        consumer = StateChangeConsumer(self.repo, registry=reg, policy=policy())
+        await self.seed()
+        with self.assertLogs("app.application.worldData.regions.coverageResolver",
+                             level="WARNING") as logs:
+            result = await consumer.evaluate("w", self.request(
+                context=FactConsumerContext(None, ((30, 0),))))
+        self.assertTrue(any("reason=no_eligible_candidates" in line for line in logs.output))
+        self.assertEqual(result.state.current_type, "forest")
+        self.assertIsNone(result.state.pending_target)
+        result = await consumer.evaluate("w", self.request(region_uid="b",
+            entry_type="bare", context=FactConsumerContext(None, ((30, 0),))))
+        self.assertEqual(result.state.current_type, "bare")
+        self.assertEqual([e.system_terrain for e in consumer._candidates.root],
+                         ["forest", "steppe", "lowland_lake"])
 
     async def test_none_specificity_child_wins_equal_rank_and_slow_declaration(self):
         request = self.request(declaration=DeclarationFacts(True, 4))

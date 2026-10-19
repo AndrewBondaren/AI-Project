@@ -89,7 +89,8 @@ class TestDeepeningBands(unittest.TestCase):
     def test_carve_sets_z_sea_and_roles(self):
         hm = _flat_heightmap(0, 10, 0, 6)
         segments = [((2, 2), (8, 2))]
-        result = carve_deepening_bands(hm, segments, HydrologyBands(min=1, max=1), z_sea=0)
+        result = carve_deepening_bands(hm, segments, HydrologyBands(min=1, max=1),
+                                       water_body_uid="auto-sea-2x1", z_sea=0)
         self.assertEqual(hm.surface_z[(5, 1)], 1)  # deepening band 1
         self.assertEqual(hm.surface_z[(5, 0)], 0)  # beyond max band → open water
         entry = result.by_cell[(5, 0)]

@@ -20,7 +20,7 @@ def expand_open_ocean(
     """
     level = resolve_z_sea(None) if z_sea is None else z_sea
     coastal_cells = {
-        cell
+        cell: entry.water_body_uid
         for cell, entry in coastal_by_cell.items()
         if entry.role == HydrologyCellRole.COASTAL_SEA
     }
@@ -31,9 +31,10 @@ def expand_open_ocean(
     xs: list[int] = []
     ys: list[int] = []
 
-    for cell in coastal_cells:
+    for cell, water_body_uid in coastal_cells.items():
         heightmap.surface_z[cell] = level
-        by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
+        by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN,
+                                       water_body_uid=water_body_uid)
         xs.extend([cell[0], cell[0]])
         ys.extend([cell[1], cell[1]])
 

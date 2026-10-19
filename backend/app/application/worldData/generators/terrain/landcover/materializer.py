@@ -1,11 +1,10 @@
 """Unified LANDCOVER plugin."""
 
-from app.application.jsonValidation import hydrology, terrain, terrain_masks
+from app.application.jsonValidation import terrain, terrain_masks
 from app.application.worldData.generators.terrain.landcover.apply import apply_region
 from app.application.worldData.generators.terrain.landcover.autoresolve.claim import autoresolve_regions
 from app.application.worldData.generators.terrain.landcover.collect import resolve_collected
 from app.application.worldData.generators.terrain.landcover.regionIdentityCheck import require_unique_region_uids
-from app.application.worldData.generators.terrain.landcover.hydrologyIndex import index_hydrology
 from app.application.worldData.generators.terrain.landcover.types import LandcoverInputs, RegionSource, ResolvedRegion
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.masks.regionIdentity import declared_region_identity
@@ -35,14 +34,12 @@ class LandcoverMaterializer:
     def __init__(self, inputs: LandcoverInputs) -> None:
         self.inputs = inputs
         self.winners: dict[LightCellRef, RegionCandidate] = {}
-        self.hydrology_entries = ()
         self.resolved_regions: list[ResolvedRegion] = []
         self._claim_indexes: dict[RegionClaim, ClaimOwnersIndex] = {}
 
     def begin_pass(self) -> None:
         self.winners.clear()
         self.resolved_regions.clear()
-        self.hydrology_entries = ()
         self._claim_indexes.clear()
 
     def category_policy(self, masks: WorldTerrainMasks) -> LandcoverRegionsCategoryPolicy:
@@ -83,7 +80,6 @@ class LandcoverMaterializer:
             key=lambda region: ((region.source, tuple(s.seed_xy for s in region.sublocations)) if region.source == RegionSource.AUTORESOLVE
                                 else region.spec.identity_key()),
         )
-        self.hydrology_entries = index_hydrology(ctx.world.world_uid, hydrology(ctx.world), ctx.surface_planning)
         require_unique_region_uids(regions)
         self.resolved_regions = resolve_collected(regions, ctx, self.inputs, terrain(ctx.world))
         return self.resolved_regions

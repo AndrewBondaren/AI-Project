@@ -20,6 +20,7 @@ from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAut
     autoresolve_sea_basins,
 )
 from app.application.worldData.generators.hydrology.types import (
+    CoastlineSpec,
     HydrologyMasterInput,
     HydrologyScope,
     LoadedConnectionGraph,
@@ -133,7 +134,7 @@ class TestProceduralSeaAutoresolve(unittest.TestCase):
             hydrology_enabled=True,
             scopes=frozenset({HydrologyScope.COASTAL_SEA}),
             connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_segments=segments,
+            declared_coastline_specs=[CoastlineSpec(segments=segments, location_uid="loc-sea")],
         )
         occupied = {(5, 1): MapCellHydrology(role=HydrologyCellRole.SHORE)}
         auto, bbox = autoresolve_sea_basins(
@@ -156,7 +157,7 @@ class TestProceduralSeaAutoresolve(unittest.TestCase):
             hydrology_enabled=True,
             scopes=frozenset({HydrologyScope.COASTAL_SEA}),
             connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_segments=segments,
+            declared_coastline_specs=[CoastlineSpec(segments=segments, location_uid="loc-sea")],
         )
         auto, bbox = autoresolve_sea_basins(
             _world(),
@@ -189,7 +190,7 @@ class TestBoundaryAutoresolve(unittest.TestCase):
             hydrology_enabled=True,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
             connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_segments=[],
+            declared_coastline_specs=[],
         )
         svc = HydrologyGeneratorService()
         result = svc.apply(w, [], hm, master=master)
