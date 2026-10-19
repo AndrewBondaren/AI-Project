@@ -2,9 +2,8 @@
 
 Covers the step-3 contracts: typed ``pack.manifest.json`` loading and
 validation (TZ §4, template-pack-layout), manifest-aware FS importers
-(manifest never parsed as a body, lone root files rejected), the explicit
-old→new uid map, declared default sources (no wildcard scans), and routing
-of manifest-less bundle bodies into the world-owned ``legacy`` pack.
+(manifest never parsed as a body, lone root files rejected), declared
+default sources (no wildcard scans), and member identity on FS import.
 
 Real SQLite for catalog writes — same pattern as test_library_packs_schema.
 """
@@ -17,33 +16,12 @@ import unittest
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.jsonValidation.types import ImportValidationError
-from app.application.worldBundle.legacyTemplateBodies import (
-    convert_flat_template_bodies,
-)
 from app.ids import LibraryKind, library_uid
 from app.application.templateLibrary.packs.defaults import default_pack_names
-from app.application.templateLibrary.packs.legacy.legacyPack import (
-    LEGACY_PACK_NAME,
-    ensure_legacy_pack,
-    legacy_member_row,
-    legacy_member_uid,
-    legacy_pack_uid,
-)
-from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
 from app.application.templateLibrary.packs.manifest import (
     PACK_MANIFEST_FILENAME,
     PackManifestError,
     load_pack_manifest,
-)
-from app.application.templateLibrary.packs.uidMap import (
-    RELIEF_SMOKE_003_FORMER_UIDS,
-    STRUCTURE_MEMBER_RENAMES,
-    base_member_uid,
-    former_template_uid,
-    mapped_template_uid,
-    pin_for_member,
-    smoke_003_member_uid,
 )
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from app.application.templateLibrary.reliefTemplateFsImport import import_relief_path
@@ -63,9 +41,6 @@ from app.db.repositories.sqlite.libraryPackMemberRepository import (
 )
 from app.db.repositories.sqlite.libraryPackRepository import (
     SqliteLibraryPackRepository,
-)
-from app.db.repositories.sqlite.reliefTemplateRepository import (
-    SqliteReliefTemplateRepository,
 )
 from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
 
@@ -462,36 +437,11 @@ class DefaultSourceTests(unittest.TestCase):
         uids = [str(o.system_name) for o in loaded]
         self.assertEqual(len(uids), 13)
         self.assertEqual(uids, sorted(uids))
-        for local in STRUCTURE_MEMBER_RENAMES.values():
-            self.assertIn(base_member_uid(local), uids)
+        manifest = load_pack_manifest(
+            _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT, library_kind=_STRUCT)
+        self.assertEqual(uids, sorted(m.member.template_uid for m in manifest.members))
         # Repeated load is uid-stable.
         self.assertEqual(uids, [str(o.system_name) for o in load_structure_stdlib(_STRUCTURES_ROOT)])
-
-
-class UidMapTests(unittest.TestCase):
-    """Explicit old→new artifact — covers pointers, bodies, refs, files."""
-
-    def test_structure_map_covers_every_old_uid(self):
-        for old_uid, local in STRUCTURE_MEMBER_RENAMES.items():
-            with self.subTest(local=local):
-                self.assertEqual(mapped_template_uid(old_uid), base_member_uid(local))
-                self.assertEqual(former_template_uid(_STRUCT, local), old_uid)
-
-    def test_relief_map_covers_every_old_uid(self):
-        for old_uid, local in RELIEF_SMOKE_003_FORMER_UIDS.items():
-            with self.subTest(local=local):
-                self.assertEqual(mapped_template_uid(old_uid), smoke_003_member_uid(local))
-                self.assertEqual(former_template_uid(_RELIEF, local), old_uid)
-
-    def test_unmapped_uid_returns_none(self):
-        self.assertIsNone(mapped_template_uid("00000000-0000-0000-0000-000000000000"))
-        self.assertIsNone(former_template_uid(_BUILDING, "anything"))
-
-    def test_pin_form(self):
-        self.assertEqual(
-            pin_for_member(_RELIEF, "open_land_soft").model_dump(mode="json"),
-            {"library_kind": "relief_templates", "template_uid": "open_land_soft"},
-        )
 
 
 class SuppliedContentTests(unittest.TestCase):
@@ -510,8 +460,18 @@ class SuppliedContentTests(unittest.TestCase):
             self.assertEqual(body["system_name"], lm.member.template_uid)
             self.assertEqual(lm.file.stem, lm.member.template_uid)
 
+    _OLD_STRUCTURE_UIDS = frozenset({
+        "0f6d7a8b-9c0d-4e1f-9a2b-4c5d6e7f8a9b", "1a7e8b9c-0d1e-4f2a-8b3c-5d6e7f8a9b0c",
+        "2b8f9c0d-1e2f-4a3b-9c4d-6e7f8a9b0c1d", "3c9a0d1e-2f3a-4b4c-8d5e-7f8a9b0c1d2e",
+        "4d0b1e2f-3a4b-4c5d-9e6f-8a9b0c1d2e3f", "5a1f2b3c-4d5e-4f6a-8b7c-9d0e1f2a3b4c",
+        "5e1c2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a", "6b2f3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+        "6f2d3a4b-5c6d-4e7f-9a8b-0c1d2e3f4a5b", "7a3e4b5c-6d7e-4f8a-8b9c-1d2e3f4a5b6c",
+        "7c3a4d5e-6f7a-4b8c-8d9e-1f2a3b4c5d6e", "8d4b5e6f-7a8b-4c9d-9e0f-2a3b4c5d6e7f",
+        "9e5c6f7a-8b9c-4d0e-8f1a-3b4c5d6e7f8a",
+    })
+
     def test_no_old_structure_uids_left_in_supplied_files(self):
-        old_uids = set(STRUCTURE_MEMBER_RENAMES)
+        old_uids = self._OLD_STRUCTURE_UIDS
         for folder in (_STRUCTURES_ROOT, _FIXTURES / "templates"):
             for path in folder.rglob("*.json"):
                 text = path.read_text(encoding="utf-8")
@@ -519,9 +479,9 @@ class SuppliedContentTests(unittest.TestCase):
                 self.assertEqual(leaked, [], path)
 
     def test_plot_fixtures_reference_base_member_uids(self):
-        member_uids = {
-            base_member_uid(local) for local in STRUCTURE_MEMBER_RENAMES.values()
-        }
+        manifest = load_pack_manifest(
+            _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT, library_kind=_STRUCT)
+        member_uids = {m.member.template_uid for m in manifest.members}
         hits = 0
         for path in (_FIXTURES / "templates").glob("*.json"):
             body = json.loads(path.read_text(encoding="utf-8"))
@@ -536,7 +496,9 @@ class SuppliedContentTests(unittest.TestCase):
             (_FIXTURES / "templates" / "inn_small.json").read_text(encoding="utf-8")
         )
         self.assertEqual(
-            body["main_building"]["structure"], base_member_uid("tavern_1")
+            body["main_building"]["structure"],
+            library_uid(_STRUCT, "tavern_1",
+                        pack_uid=library_uid(_PACKS, "engine.structures.base")),
         )
 
     def test_relief_smoke_003_manifests_validate(self):
@@ -552,7 +514,7 @@ class SuppliedContentTests(unittest.TestCase):
                 self.assertEqual(loaded.manifest.system_name, "user.relief.smoke_003")
                 self.assertEqual(
                     {lm.member.local_uid for lm in loaded.members},
-                    set(RELIEF_SMOKE_003_FORMER_UIDS.values()),
+                    {"open_land_soft", "shore_soft", "road_shoulder_soft", "ravine_soft"},
                 )
 
     def test_gen_003_world_pins_and_pick_policy_migrated(self):
@@ -563,10 +525,11 @@ class SuppliedContentTests(unittest.TestCase):
         pins = {
             (p["library_kind"], p["template_uid"]) for p in fixture["world"]["library_pins"]
         }
+        pack_uid = library_uid(_PACKS, f"world.{world_uid}.smoke_003")
         self.assertEqual(
             pins,
-            {(_RELIEF.value, legacy_member_uid(_RELIEF, local, world_uid=world_uid))
-             for local in RELIEF_SMOKE_003_FORMER_UIDS.values()},
+            {(_RELIEF.value, library_uid(_RELIEF, local, pack_uid=pack_uid))
+             for local in ("open_land_soft", "shore_soft", "road_shoulder_soft", "ravine_soft")},
         )
         policy = fixture["world"]["relief_pick_policy"]
         expected = {
@@ -578,7 +541,7 @@ class SuppliedContentTests(unittest.TestCase):
         for key, local in expected.items():
             self.assertEqual(
                 policy[key]["default_template_uid"],
-                legacy_member_uid(_RELIEF, local, world_uid=world_uid),
+                library_uid(_RELIEF, local, pack_uid=pack_uid),
                 key,
             )
 
@@ -600,109 +563,6 @@ class _DbCase(IsolatedAsyncioTestCase):
         world = World(world_uid=world_uid, name=world_uid, created_at="2026-10-09")
         await SqliteWorldRepository(self.db).create(world)
         return world
-
-
-class LegacyPackTests(_DbCase):
-    """World-owned ``legacy`` pack — destination of manifest-less bodies."""
-
-    async def test_ensure_legacy_pack_idempotent(self):
-        await self._world("w1")
-        first = await ensure_legacy_pack("w1", self.packs)
-        again = await ensure_legacy_pack("w1", self.packs)
-        self.assertEqual(first.pack_uid, again.pack_uid)
-        self.assertEqual(first.pack_uid, legacy_pack_uid("w1"))
-        self.assertEqual(first.pack_name, LEGACY_PACK_NAME)
-        self.assertEqual(first.owner_world_uid, "w1")
-        stored = await self.packs.get_by_uid(first.pack_uid)
-        self.assertIsNotNone(stored)
-        self.assertEqual(
-            len([p for p in await self.packs.list_all() if p.pack_uid == first.pack_uid]),
-            1,
-        )
-
-    def test_member_row_uid_and_provenance(self):
-        row = legacy_member_row(_RELIEF, "open_land_soft", world_uid="w1")
-        self.assertEqual(
-            row.template_uid,
-            legacy_member_uid(_RELIEF, "open_land_soft", world_uid="w1"),
-        )
-        self.assertEqual(row.pack_uid, legacy_pack_uid("w1"))
-        self.assertEqual(row.local_uid, "open_land_soft")
-        # Known shipped content keeps its former uid as provenance.
-        self.assertEqual(row.source_template_uid, "21fb5cb8-eb9a-5f5d-a75b-e632135fc0b5")
-        # World-authored bodies have no former identity.
-        self.assertIsNone(
-            legacy_member_row(_RELIEF, "world_made", world_uid="w1").source_template_uid
-        )
-
-
-class LegacyBodyImportTests(_DbCase):
-    """Manifest-less bundle bodies → world legacy members + pointers."""
-
-    async def test_relief_bodies_become_legacy_members(self):
-        from app.application.templateLibrary.reliefWorldImportService import (
-            ReliefWorldImportService,
-        )
-
-        await self._world("w-relief")
-        container = Container(None, self.db)
-        service = ReliefWorldImportService(
-            world_repository=container.world_repository(),
-            library=container.relief_template_library_service(),
-            catalog=PackCatalogRepos(packs=self.packs, members=self.members),
-            write_provider=container.library_pack_service,
-            db=self.db,
-        )
-        body = {
-            "system_name": "open_land_soft",
-            "display_name": "Open land",
-            "context": "open_land",
-        }
-        result = await service.import_outlines_into_world("w-relief", [body])
-        uid = legacy_member_uid(_RELIEF, "open_land_soft", world_uid="w-relief")
-        self.assertEqual(result["uids"], [uid])
-
-        member = await self.members.get_by_uid(uid)
-        self.assertIsNotNone(member)
-        self.assertEqual(member.pack_uid, legacy_pack_uid("w-relief"))
-        self.assertEqual(member.local_uid, "open_land_soft")
-
-        row = await SqliteReliefTemplateRepository(self.db).get_by_uid(uid)
-        self.assertIsNotNone(row)
-
-        # B7: import writes the member; no registry pointer column exists.
-        self.assertIn(uid, {m.template_uid for m in await self.members.list_for_world("w-relief")})
-
-        # Re-import negotiates; explicit replace keeps the saved identity.
-        from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
-        from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteSelection
-        preview = await service.import_outlines_into_world("w-relief", [body])
-        self.assertIsInstance(preview, PolicyRequired)
-        again = await service.import_outlines_into_world("w-relief", [body],
-            decisions=(LibraryWriteSelection(item_key="0", policy="replace", target_uid=uid),),
-            preview_token=preview.preview_token)
-        self.assertEqual(again["uids"], [uid])
-        self.assertEqual(
-            len(await self.members.list_by_pack(legacy_pack_uid("w-relief"))), 1
-        )
-
-    async def test_legacy_building_outline_rejected_at_bundle_boundary(self):
-        """B7: flat legacy bodies are only interpretable through the
-        bundle converter; unrepresentable fields fail closed."""
-        await self._world("w-build")
-        container = Container(None, self.db)
-        data = {
-            "building_templates": [{
-                "system_name": "mill_x",
-                "structure_types": ["farm"],
-                "display_name": "Mill",
-            }],
-        }
-        with self.assertRaises(ImportValidationError):
-            convert_flat_template_bodies(data, (), source_world_uid="w-build")
-        uid = legacy_member_uid(_BUILDING, "mill_x", world_uid="w-build")
-        self.assertIsNone(await self.members.get_by_uid(uid))
-        self.assertIsNone(await container.building_template_repository().get_by_uid(uid))
 
 
 class FsPackImportCatalogTests(_DbCase):

@@ -44,5 +44,3 @@ class VerticalLadderBaselineTests(unittest.TestCase):
         self.assertTrue(10 < a[0][0] < 16)
         self.assertEqual(internal.path_set, external.path_set)
 
-    def test_trapdoor_alias_is_vertical_ladder(self):
-        self.assertEqual(StaircaseType.parse_template("trapdoor"), StaircaseType.VERTICAL_LADDER)

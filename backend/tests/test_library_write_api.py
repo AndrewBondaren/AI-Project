@@ -52,25 +52,10 @@ class LibraryWriteApiTests(_ServiceCase):
         self.assertEqual(applied.status_code, 201, applied.text)
         self.assertEqual(applied.json()["display_name"], "Revised")
 
-    async def test_world_import_preview_replace_and_stale(self):
-        body = _relief_body("meadow")
-        url = "/worlds/w1/relief-templates/import"
-        first = await self.client.post(url, json=body)
-        self.assertEqual(first.status_code, 200, first.text)
-        uid = first.json()["uids"][0]
-        preview = await self.client.post(url, json=body)
-        self.assertEqual(preview.status_code, 409, preview.text)
-        params = {"preview_token": preview.json()["preview_token"], "decisions": json.dumps([
-            {"item_key": "0", "policy": "replace", "target_uid": uid}])}
-        changed = {**body, "display_name": "Changed"}
-        stale = await self.client.post(url, params=params, json=changed)
-        self.assertEqual(stale.status_code, 409, stale.text)
-        self.assertTrue(stale.json()["stale"])
-        self.assertEqual((await self.relief_rows.get_by_uid(uid)).display_name, "Meadow")
-        params["preview_token"] = stale.json()["preview_token"]
-        applied = await self.client.post(url, params=params, json=changed)
-        self.assertEqual(applied.status_code, 200, applied.text)
-        self.assertEqual(applied.json()["uids"], [uid])
+    async def test_world_loose_body_import_is_rejected(self):
+        response = await self.client.post(
+            "/worlds/w1/relief-templates/import", json=_relief_body("meadow"))
+        self.assertEqual(response.status_code, 422, response.text)
 
     async def test_fs_import_negotiation(self):
         root, path, manifest = self.fs_pack()
@@ -251,12 +236,14 @@ class LibraryWriteApiTests(_ServiceCase):
 
         container = self.container
         body = _relief_body("meadow")
+        pack = await container.library_pack_service().create_pack(system_name="user.relief.seed")
         class SeedLibraries:
             key = "relief_templates"
             def validate_section(self, world, data, *, ctx):
-                container.relief_world_import_service().prepare_body(world, data[0], ctx=ctx)
+                pass
             async def import_section(self, uid, data):
-                outcome = await container.relief_world_import_service().import_outlines_into_world(uid, data)
+                outcome = await container.library_pack_service().write_authored_bodies(
+                    LibraryKind.RELIEF_TEMPLATES, pack.pack_uid, data)
                 require_no_policy(outcome)
                 return ImportResult(total=1, succeeded=1, failed=0)
 
@@ -270,7 +257,7 @@ class LibraryWriteApiTests(_ServiceCase):
         with self.assertRaises(LibraryPackPolicyRequiredError):
             await service.import_bundle(data)
         self.assertIsNone(await self.worlds.get_by_id(uid))
-        self.assertEqual(await self.packs.list_all(), [])
+        self.assertEqual(await self.members.list_by_pack(pack.pack_uid), [])
         self.assertEqual(await self.relief_rows.list_all(), [])
         # Exercise the production HTTP boundary too: it catches the domain
         # exception only after the service has rolled back its transaction.
@@ -284,7 +271,7 @@ class LibraryWriteApiTests(_ServiceCase):
         self.assertEqual(response.status_code, 409, response.text)
         self.assertEqual(response.json()["status"], "policy_required")
         self.assertIsNone(await self.worlds.get_by_id(uid))
-        self.assertEqual(await self.packs.list_all(), [])
+        self.assertEqual(await self.members.list_by_pack(pack.pack_uid), [])
 
     async def test_bundle_later_entity_failure_rolls_back_library_apply(self):
         from app.application.worldBundle.entity.sections import WorldSectionHandler
@@ -292,12 +279,14 @@ class LibraryWriteApiTests(_ServiceCase):
         from app.application.imports.result import ImportResult
         from app.application.templateLibrary.packs.errors import require_no_policy
         container = self.container
+        pack = await container.library_pack_service().create_pack(system_name="user.relief.seed")
         class SeedLibraries:
             key = "relief_templates"
             def validate_section(self, world, data, *, ctx):
-                container.relief_world_import_service().prepare_body(world, data[0], ctx=ctx)
+                pass
             async def import_section(self, uid, data):
-                outcome = await container.relief_world_import_service().import_outlines_into_world(uid, data)
+                outcome = await container.library_pack_service().write_authored_bodies(
+                    LibraryKind.RELIEF_TEMPLATES, pack.pack_uid, data)
                 require_no_policy(outcome)
                 return ImportResult(total=1, succeeded=1, failed=0)
         class FailingEntity:
@@ -314,5 +303,5 @@ class LibraryWriteApiTests(_ServiceCase):
         self.assertTrue(rolled_back)
         self.assertEqual(results["relief_templates"].succeeded, 1)
         self.assertIsNone(await self.worlds.get_by_id(data["world"]["world_uid"]))
-        self.assertEqual(await self.packs.list_all(), [])
+        self.assertEqual(await self.members.list_by_pack(pack.pack_uid), [])
         self.assertEqual(await self.relief_rows.list_all(), [])

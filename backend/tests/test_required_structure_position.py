@@ -22,7 +22,7 @@ from app.dataModel.locations.settlement.enums.requiredStructurePosition import (
 
 
 def _wire(**extra: object) -> dict[str, object]:
-    return {"building_template": "town_hall", **extra}
+    return {"plot_template": "town_hall", **extra}
 
 
 class TestRequiredStructurePositionWire(unittest.TestCase):
@@ -85,14 +85,12 @@ class TestRequiredStructurePositionWire(unittest.TestCase):
         self.assertIs(POSITION_CENTER, RequiredStructurePosition.CENTER)
         self.assertEqual(POSITION_CENTER, "center")
 
-    def test_plot_template_leftover_alias(self) -> None:
-        leftover = RequiredStructure.model_validate({"building_template": "town_hall"})
-        self.assertEqual(leftover.plot_template, "town_hall")
-        dumped = leftover.model_dump(mode="json")
-        self.assertEqual(dumped["plot_template"], "town_hall")
-        self.assertNotIn("building_template", dumped)
+    def test_building_template_key_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            RequiredStructure.model_validate({"building_template": "town_hall"})
         canon = RequiredStructure(plot_template="inn_small")
         self.assertEqual(canon.plot_template, "inn_small")
+        self.assertNotIn("building_template", canon.model_dump(mode="json"))
 
 
 if __name__ == "__main__":

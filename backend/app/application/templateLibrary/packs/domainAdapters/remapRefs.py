@@ -86,8 +86,8 @@ def remap_locations_section(rows, uid_map: Mapping[str, str], sources) -> list[d
             if len(candidates) > 1:
                 raise ImportValidationError([FieldPathError(
                     (BundleSection.LOCATIONS, index, field),
-                    f"ambiguous legacy template name; candidates={sorted(candidates)}",
-                    code="LEGACY_REF_AMBIGUOUS")])
+                    f"ambiguous template name; candidates={sorted(candidates)}",
+                    code="NAME_AMBIGUOUS")])
             row[field] = next(iter(candidates)) if candidates else None
         out.append(row)
     return out

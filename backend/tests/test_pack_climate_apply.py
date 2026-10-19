@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from pydantic import ValidationError
+
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -56,18 +58,18 @@ class TestClimateFieldSampleAt(unittest.TestCase):
         with self.assertRaises(ValueError):
             field.sample_macro(1, 1)
 
-    def test_legacy_tier_a_maps_to_coarse(self) -> None:
-        field = ClimateFieldWire.model_validate(
-            {
-                "tier": "A",
-                "origin_x": 0,
-                "origin_y": 0,
-                "width": 1,
-                "height": 1,
-                "samples": [{"temperature_base": 1, "rainfall": 2}],
-            },
-        )
-        self.assertEqual(field.climate_status, "coarse")
+    def test_removed_tier_key_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            ClimateFieldWire.model_validate(
+                {
+                    "tier": "A",
+                    "origin_x": 0,
+                    "origin_y": 0,
+                    "width": 1,
+                    "height": 1,
+                    "samples": [{"temperature_base": 1, "rainfall": 2}],
+                },
+            )
 
 
 class TestApplyClimateMeterToMacro(unittest.TestCase):

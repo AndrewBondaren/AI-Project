@@ -77,7 +77,6 @@ class _ReliefSnapshotCase(IsolatedAsyncioTestCase):
             structure_library=self.container.structure_template_library_service(),
             building_library=self.container.building_template_library_service(),
             plot_library=self.container.plot_template_library_service(),
-            relief_world_import=self.container.relief_world_import_service(),
         )
         self.loader = TemplateSnapshotLoader(
             EffectiveCatalogLoader(

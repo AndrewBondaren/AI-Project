@@ -27,7 +27,7 @@ from app.application.templateLibrary.packs.effectiveCatalog import (
     EffectiveCatalogLoader,
 )
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
-from app.application.templateLibrary.packs.uidMap import pin_for_member
+from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.container import Container
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
@@ -85,7 +85,6 @@ class _SnapshotCase(IsolatedAsyncioTestCase):
             structure_library=self.container.structure_template_library_service(),
             building_library=self.container.building_template_library_service(),
             plot_library=self.container.plot_template_library_service(),
-            relief_world_import=self.container.relief_world_import_service(),
         )
         self.loader = TemplateSnapshotLoader(
             EffectiveCatalogLoader(
@@ -180,7 +179,7 @@ class SnapshotLoaderTests(_SnapshotCase):
         pinned = own["hall"].template_uid
         await self.container.world_service().update(
             "w1", {"library_pins": [
-                pin_for_member(_PLOT, pinned).model_dump(mode="json")
+                LibraryPinEntry(library_kind=_PLOT.value, template_uid=pinned).model_dump(mode="json")
             ]}
         )
 

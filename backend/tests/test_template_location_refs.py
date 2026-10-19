@@ -10,16 +10,13 @@ the current building body on ordinary reads.
 import json
 import unittest
 from pathlib import Path
-from uuid import NAMESPACE_DNS, uuid5
 
 from tests.test_library_packs_4b import _ServiceCase, _plot_body
-from app.application.jsonValidation.types import ImportValidationError
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (
     StructureAreaAssembler,
 )
 from app.application.templateLibrary.packs.errors import LibraryPackInUseError
-from app.application.templateLibrary.packs.legacy.legacyPack import legacy_pack_uid
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     area_uid, building_location_uid,
 )
@@ -188,55 +185,3 @@ class PersistedRefTests(_ServiceCase):
         await self.locations.delete("b-src")
         result = await self.service.delete_member(plot.template_uid, world_uid="src")
         self.assertEqual(result.template_uid, plot.template_uid)
-
-
-class LegacyRefTests(_ServiceCase):
-    """Flat-body import: legacy names resolve through the explicit member map."""
-
-    async def _world(self, world_uid):
-        return await self.container.world_service().create(
-            {"world_uid": world_uid, "name": world_uid, "created_at": "2026-10-10"})
-
-    async def asyncSetUp(self):
-        await super().asyncSetUp()
-        self.bundle = self.container.world_bundle_service()
-        self.locations = self.container.location_repository()
-
-    async def test_legacy_names_resolve_via_explicit_map(self):
-        structure_source = str(uuid5(NAMESPACE_DNS, "b4.legacy-mill"))
-        data = {
-            "world": {"world_uid": "src", "name": "Src", "created_at": "2026-10-10"},
-            "structure_templates": [{"system_name": structure_source, "local_uid": "mill",
-                                     "display_name": "Mill"}],
-            "building_templates": [{"system_name": "home", "display_name": "Home",
-                                    "main_building": {"structure": "mill"}}],
-            "locations": [{"location_uid": "b1", "display_name": "Home",
-                           "system_location_type": "building",
-                           "system_template_uid": "home",
-                           "system_structure_template_uid": "mill"}],
-        }
-        results, rolled = await self.bundle.import_bundle(data)
-        self.assertFalse(rolled, results)
-        target = next(w for w in await self.worlds.get_all())
-        members = await self.members.list_by_pack(legacy_pack_uid(target.world_uid))
-        by_kind = {m.library_kind: m for m in members}
-        loc = (await self.locations.get_by_world(target.world_uid))[0]
-        self.assertEqual(loc.system_template_uid, by_kind[_P.value].template_uid)
-        self.assertEqual(loc.system_structure_template_uid, by_kind[_S.value].template_uid)
-
-    async def test_ambiguous_legacy_name_is_an_import_error(self):
-        data = {
-            "world": {"world_uid": "src", "name": "Src", "created_at": "2026-10-10"},
-            "structure_templates": [{"system_name": str(uuid5(NAMESPACE_DNS, "b4.mill2")),
-                                     "local_uid": "mill", "display_name": "Mill"}],
-            "plot_templates": [{"system_name": "home", "display_name": "Home",
-                                "main_building": {"structure": "mill"}}],
-            "building_templates": [{"system_name": "home", "display_name": "Dup",
-                                    "structure": "mill"}],
-            "locations": [{"location_uid": "b1", "display_name": "Home",
-                           "system_location_type": "building",
-                           "system_template_uid": "home"}],
-        }
-        with self.assertRaises(ImportValidationError):
-            await self.bundle.import_bundle(data)
-        self.assertEqual(await self.worlds.get_all(), [])

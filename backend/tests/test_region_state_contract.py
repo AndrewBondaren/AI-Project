@@ -33,17 +33,22 @@ from tests import test_landcover_fine_paint as fine
 
 
 class RegionStateContractTests(unittest.TestCase):
-    def test_renamed_field_serializes_spec_and_reads_historical_manifest(self):
+    def test_renamed_field_serializes_spec_and_rejects_historical_key(self):
         state = self.state(spec_fingerprint="revision")
         self.assertIn("spec_fingerprint", state.model_dump())
         self.assertNotIn("state_fingerprint", state.model_dump())
+        with self.assertRaises(ValidationError):
+            WildernessRegionEntry.model_validate({
+                "region_uid": "r", "entry_type": "forest", "current_type": "steppe",
+                "bbox": {"x_min": 0, "y_min": 0, "x_max": 2, "y_max": 2},
+                "status": "declared", "state_fingerprint": "historical-revision",
+            })
         entry = WildernessRegionEntry.model_validate({
             "region_uid": "r", "entry_type": "forest", "current_type": "steppe",
             "bbox": {"x_min": 0, "y_min": 0, "x_max": 2, "y_max": 2},
-            "status": "declared", "state_fingerprint": "historical-revision",
+            "status": "declared", "spec_fingerprint": "historical-revision",
         })
         self.assertEqual(entry.spec_fingerprint, "historical-revision")
-        self.assertEqual(entry.model_dump()["spec_fingerprint"], "historical-revision")
         self.assertNotIn("state_fingerprint", entry.model_dump())
 
     def state(self, **changes):

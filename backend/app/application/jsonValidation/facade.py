@@ -36,10 +36,12 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
                     ctx: ResolveContext | None = None) -> dict[str, Any]:
     """Normalize ``worlds`` wire dict for import or CRUD write."""
     out = dict(data)
-    if "fine_cells_per_map_cell" in out:
-        out.pop("map_cell_size_m", None)
-    elif "map_cell_size_m" in out:
-        out["fine_cells_per_map_cell"] = out.pop("map_cell_size_m")
+    if "map_cell_size_m" in out:
+        raise ImportValidationError([FieldPathError(
+            ("map_cell_size_m",),
+            "map_cell_size_m was removed; use fine_cells_per_map_cell",
+            code="REMOVED_FROM_WIRE",
+        )])
     ctx = ctx if ctx is not None else ResolveContext(mode=ResolveMode.IMPORT, partial=partial)
 
     if partial and "terrain_masks" in out:

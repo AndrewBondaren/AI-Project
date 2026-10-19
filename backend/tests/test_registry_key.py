@@ -6,7 +6,7 @@ import unittest
 from typing import get_origin
 
 from app.dataModel.annotationPolicy import (
-    DefaultOnWire,
+    DefaultWhenMissing,
     StrictOnWire,
     WireFieldPolicy,
     field_policy,
@@ -62,7 +62,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIs(get_origin(inner), RegistryKey)
         self.assertIs(registry_key_target(SettlementSizeKey), WorldSettlementSizeRegistry)
         self.assertIs(
-            registry_key_target(DefaultOnWire[SettlementSizeKey | None]),
+            registry_key_target(DefaultWhenMissing[SettlementSizeKey | None]),
             WorldSettlementSizeRegistry,
         )
 
@@ -107,7 +107,7 @@ class TestRegistryKey(unittest.TestCase):
 
     def test_list_of_keys_peels_to_registry(self) -> None:
         self.assertIs(
-            registry_key_target(DefaultOnWire[list[TerrainKey] | None]),
+            registry_key_target(DefaultWhenMissing[list[TerrainKey] | None]),
             WorldTerrainRegistry,
         )
         self.assertIs(
@@ -348,13 +348,13 @@ class TestRegistryKey(unittest.TestCase):
         key = next(iter(district.plot_counts or {}))
         self.assertIsInstance(key, RegistryKey)
         self.assertEqual(district.plot_counts["inn_small"], 3)
-        aliased = DistrictTemplateEntry(
-            system_name="inn_row",
-            display_name="Inns",
-            district_type="commercial",
-            structure_counts={"inn_small": 2},
-        )
-        self.assertEqual(aliased.plot_counts["inn_small"], 2)
+        with self.assertRaises(Exception):
+            DistrictTemplateEntry(
+                system_name="inn_row",
+                display_name="Inns",
+                district_type="commercial",
+                structure_counts={"inn_small": 2},
+            )
         with self.assertRaises(Exception):
             RequiredStructure(plot_template="")
 

@@ -11,7 +11,7 @@ import gc
 
 from pydantic import BaseModel, ValidationError, computed_field, create_model
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -801,7 +801,7 @@ class LocationContextContractTests(unittest.TestCase):
 
         class FakeSource(BaseModel):
             name: Annotated[
-                DefaultOnWire[str | None],
+                DefaultWhenMissing[str | None],
                 CascadeChannel(ECONOMIC_TIER, OtherAxis.CHILD),
             ] = None
 
@@ -815,7 +815,7 @@ class LocationContextContractTests(unittest.TestCase):
     def test_incompatible_channel_type_errors(self):
         class FakeSource(BaseModel):
             amount: Annotated[
-                DefaultOnWire[int | None],
+                DefaultWhenMissing[int | None],
                 CascadeChannel(ECONOMIC_TIER, ScopeLevel.DISTRICT),
             ] = None
 
@@ -832,7 +832,7 @@ class LocationContextContractTests(unittest.TestCase):
         # one base type (tz_cascade_context §2).
         class FakeSource(BaseModel):
             tier: Annotated[
-                DefaultOnWire[str | None],
+                DefaultWhenMissing[str | None],
                 CascadeChannel(
                     ECONOMIC_TIER, ScopeLevel.SETTLEMENT,
                     above=CascadeLink(

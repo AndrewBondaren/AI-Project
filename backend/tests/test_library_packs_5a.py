@@ -32,7 +32,7 @@ from app.application.templateLibrary.packs.refResolve import (
     RefResolver,
     TemplateRef,
 )
-from app.application.templateLibrary.packs.uidMap import pin_for_member
+from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ReferenceIssueReason
 from app.core.container import Container
@@ -81,7 +81,6 @@ class _CatalogCase(IsolatedAsyncioTestCase):
             structure_library=self.container.structure_template_library_service(),
             building_library=self.container.building_template_library_service(),
             plot_library=self.container.plot_template_library_service(),
-            relief_world_import=self.container.relief_world_import_service(),
         )
         self.repos = PackCatalogRepos(
             packs=self.packs,
@@ -203,7 +202,7 @@ class CandidateTests(_CatalogCase):
         pinned = members[0]
         await self.container.world_service().update(
             "w1", {"library_pins": [
-                pin_for_member(_RELIEF, pinned.template_uid).model_dump(mode="json")
+                LibraryPinEntry(library_kind=_RELIEF.value, template_uid=pinned.template_uid).model_dump(mode="json")
             ]}
         )
         catalog = await self.loader.load("w1")

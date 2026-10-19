@@ -85,12 +85,12 @@ class GridSettingsTests(unittest.TestCase):
         self.assertEqual(grid_settings(SimpleNamespace()).fine_cells_per_map_cell,
                          FINE_CELLS_PER_MAP_CELL_DEFAULT)
 
-    def test_legacy_alias_and_new_name_priority(self):
+    def test_removed_map_cell_size_key_is_rejected(self):
         for partial in (False, True):
-            self.assertEqual(normalize_world({"map_cell_size_m": 2000}, partial=partial)[KEY], 2000)
-            self.assertEqual(normalize_world({KEY: 3000, "map_cell_size_m": None}, partial=partial)[KEY], 3000)
             with self.assertRaises(ImportValidationError):
-                normalize_world({KEY: None, "map_cell_size_m": 2000}, partial=partial)
+                normalize_world({"map_cell_size_m": 2000}, partial=partial)
+            with self.assertRaises(ImportValidationError):
+                normalize_world({KEY: 3000, "map_cell_size_m": None}, partial=partial)
         with self.assertRaises(ImportValidationError):
             resolve_world_column("map_cell_size_m", 2000, ResolveContext())
 

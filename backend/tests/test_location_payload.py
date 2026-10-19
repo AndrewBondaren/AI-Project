@@ -83,7 +83,7 @@ class LocationPayloadTests(unittest.TestCase):
         entry = LocationTypeEntry(system_type="elven_city", display_type="Elven city",
                                   payload_kind="settlement")
         payload = LocationPayload.validate(entry.payload_kind, {
-            "system_city_size": "custom-size", "structure_counts": {"custom-plot": 2},
+            "system_city_size": "custom-size", "plot_counts": {"custom-plot": 2},
             "is_inhabited": False,
         })
         self.assertIsInstance(payload, SettlementPayload)
@@ -116,7 +116,7 @@ class LocationPayloadTests(unittest.TestCase):
     def test_district_topology_is_typed_and_roundtrips(self):
         wire = {"district_topology": {
             "cell_x": 1, "cell_y": 2, "origin_x": 10, "origin_y": 20,
-            "width_m": 30, "depth_m": 40, "ground_z": -2,
+            "width_fine": 30, "depth_fine": 40, "ground_z": -2,
             "template_system_name": "custom-template", "slot_index": 0,
         }}
         payload = LocationPayload.validate("district", wire)
@@ -148,7 +148,7 @@ class LocationPayloadTests(unittest.TestCase):
         self.assertNotIn("economic_tier", SettlementPayload.model_fields)
         self.assertNotIn("system_location_mood", SettlementPayload.model_fields)
         self.assertFalse(SettlementSkeleton().is_inhabited)
-        skeleton = SettlementSkeleton.model_validate({"structure_counts": {"plot": 2}})
+        skeleton = SettlementSkeleton.model_validate({"plot_counts": {"plot": 2}})
         self.assertEqual(skeleton.plot_counts, {"plot": 2})
         self.assertEqual(len(cascade_channels(SettlementSkeleton)), 1)
 

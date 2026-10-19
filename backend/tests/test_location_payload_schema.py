@@ -120,7 +120,7 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
             "system_location_type": "settlement", "system_city_size": "large",
             "settlement_density": "dense", "dominant_material": "stone",
             "architectural_style": "gothic", "frontage_type_order": ["road"],
-            "structure_counts": {"plot": 2}, "structure_priority": {"plot": 3},
+            "plot_counts": {"plot": 2}, "plot_priority": {"plot": 3},
             "perimeter_barrier": {"template": "stone_fence", "probability": 1.0},
             "typical_districts": [{"district_type": "civic"}],
             "system_settlement_specializations": ["extract"], "system_economic_tier": "custom-tier",

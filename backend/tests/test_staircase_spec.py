@@ -57,7 +57,6 @@ class StaircaseSpecTests(unittest.TestCase):
             ("straight", StaircaseType.STRAIGHT),
             ("vertical_ladder", StaircaseType.VERTICAL_LADDER),
             ("external_vertical_ladder", StaircaseType.EXTERNAL_VERTICAL_LADDER),
-            ("trapdoor", StaircaseType.VERTICAL_LADDER),
             (None, StaircaseType.U_SHAPE),
         ):
             with self.subTest(raw=raw):
