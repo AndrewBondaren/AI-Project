@@ -18,7 +18,7 @@ class ParentLightRefinePolicy(BaseModel):
     resample: Literal["bilinear", "nearest"] = "bilinear"
     # Detail noise amplitude around resampled L0 form (then clamped by z_band).
     detail_noise_amplitude: int = Field(default=1, ge=0)
-    # Categorical L0 attrs (terrain / facing / grade_uid) → meter; bilinear forbidden.
+    # Categorical L0 attrs (terrain / facing / grade_uid) → fine cell; bilinear forbidden.
     categorical_resample: Literal["nearest"] = "nearest"
 
     @model_validator(mode="before")

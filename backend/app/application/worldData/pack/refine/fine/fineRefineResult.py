@@ -20,7 +20,7 @@ class FineRefineResult:
     persist: PersistResult
     wilderness_chunks_written: int
     rect_count: int
-    meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
+    fine_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
     grade_instances: tuple[ReliefGradeInstance, ...] = ()
     grade_systems: tuple[ReliefGradeSystem, ...] = ()
     # Mill leftover ``GradeRimRay`` acc — not SCH-GRADE-CELL-SLOTS.

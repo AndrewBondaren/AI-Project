@@ -228,7 +228,7 @@ class PackDetailedBakeOrchestrator:
             for gx, gy in plan.tiles:
                 if await self._climate.bake_fine_tile_with_parent(
                     world, surface_ctx, writer, mat_ctx, gx, gy,
-                    l2_surface_z=aggregate.meter_surface_z or None,
+                    l2_surface_z=aggregate.fine_surface_z or None,
                     locations=locations,
                     require_parent=True,
                 ):

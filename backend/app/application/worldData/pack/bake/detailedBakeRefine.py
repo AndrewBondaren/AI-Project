@@ -39,7 +39,7 @@ class DetailedRefineAggregate:
     persist: PersistResult = field(default_factory=lambda: PersistResult.from_counts(0, 0))
     chunks_written: int = 0
     tiles_refined: int = 0
-    meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
+    fine_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
     grade_instances: list[ReliefGradeInstance] = field(default_factory=list)
     grade_systems: list[ReliefGradeSystem] = field(default_factory=list)
     materialize_s: float = 0.0
@@ -83,10 +83,10 @@ async def refine_detailed_tiles(
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages or GradePipelineStages.off(),
         )
-        for key, z in refined.meter_surface_z.items():
-            prev = aggregate.meter_surface_z.get(key)
+        for key, z in refined.fine_surface_z.items():
+            prev = aggregate.fine_surface_z.get(key)
             if prev is None or z > prev:
-                aggregate.meter_surface_z[key] = z
+                aggregate.fine_surface_z[key] = z
         aggregate.persist = PersistResult.from_counts(
             aggregate.persist.total + refined.persist.total,
             aggregate.persist.succeeded + refined.persist.succeeded,

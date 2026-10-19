@@ -9,7 +9,7 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
     dilate,
-    light_polyline_from_meters,
+    light_polyline_from_fine,
     paint_role,
 )
 from app.dataModel.worldPack.wire.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
@@ -34,7 +34,7 @@ def apply_declared_rivers(
 
     for edge in declared.river_edges:
         (x0, y0), (x1, y1) = edge.segment
-        light_cells = set(light_polyline_from_meters([(x0, y0), (x1, y1)], scale))
+        light_cells = set(light_polyline_from_fine([(x0, y0), (x1, y1)], scale))
         radius = max(0, (int(edge.width_cells) + scale.light_span - 1) // scale.light_span - 1)
         light_cells = dilate(light_cells, radius)
         width = HydrologyMaskWire(
@@ -79,7 +79,7 @@ def apply_declared_rivers(
                     anchors.append(pt)
         if len(anchors) < 2:
             continue
-        light_cells = set(light_polyline_from_meters(anchors, scale))
+        light_cells = set(light_polyline_from_fine(anchors, scale))
         n, _ = paint_role(
             compose,
             light_cells,

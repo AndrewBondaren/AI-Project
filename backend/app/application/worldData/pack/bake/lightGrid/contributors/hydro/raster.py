@@ -64,7 +64,7 @@ def paint_role(
     return painted, preserved
 
 
-def meter_segments_to_light(
+def fine_segments_to_light(
     segments: list[tuple[tuple[int, int], tuple[int, int]]],
     scale: LightGridScale,
 ) -> list[tuple[tuple[int, int], tuple[int, int]]]:
@@ -76,7 +76,7 @@ def meter_segments_to_light(
     return out
 
 
-def light_polyline_from_meters(
+def light_polyline_from_fine(
     points: list[tuple[int, int]],
     scale: LightGridScale,
 ) -> list[tuple[int, int]]:

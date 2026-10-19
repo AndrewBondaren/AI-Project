@@ -1,6 +1,6 @@
 """Painted road edge — L0 RoadContributor footprint (light-grid cells).
 
-Detailed ``road_shoulder`` samples meter ``road_key`` + Δz, not ``road_cells``.
+Detailed ``road_shoulder`` samples fine ``road_key`` + Δz, not ``road_cells``.
 ``owner_uid`` is the graph edge id for a later ribbon bind.
 """
 
@@ -18,7 +18,7 @@ Coord = tuple[int, int]
 class PaintedRoadEdge(BaseModel):
     """One connection edge after L0 terrain paint.
 
-    ``road_cells`` are light-grid ``(lx, ly)``, not fine meters.
+    ``road_cells`` are light-grid ``(lx, ly)``, not fine cells.
     """
 
     SCHEMA_ID: ClassVar[str] = "SCH-PAINTED-ROAD-EDGE"

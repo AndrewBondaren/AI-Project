@@ -8,7 +8,7 @@ from app.db.models.mapCell import MapCell
 
 
 class WorldTileGridRenderer:
-    """Render one world macro tile at fine meter resolution."""
+    """Render one world macro tile at fine-cell resolution."""
 
     def __init__(
         self,
@@ -18,7 +18,7 @@ class WorldTileGridRenderer:
         tile_gy: int,
         fine_span: int,
     ) -> None:
-        self._cell_m = fine_span
+        self._tile_macro = fine_span
         self._tile_gx = tile_gx
         self._tile_gy = tile_gy
         self._x0 = tile_gx * fine_span
@@ -50,16 +50,16 @@ class WorldTileGridRenderer:
         lines = [
             f"tile Gx={self._tile_gx} Gy={self._tile_gy}  (local fine grid, top z)",
             format_grid_header(
-                0, self._cell_m - 1,
-                0, self._cell_m - 1,
+                0, self._tile_macro - 1,
+                0, self._tile_macro - 1,
                 fine_span=1,
                 prefix="local ",
             ),
         ]
-        for ly in range(self._cell_m - 1, -1, -1):
+        for ly in range(self._tile_macro - 1, -1, -1):
             row = "".join(
                 cell_symbol(tops[(lx, ly)]) if (lx, ly) in tops else " "
-                for lx in range(self._cell_m)
+                for lx in range(self._tile_macro)
             )
             lines.append(f"{ly:4d} |{row}|")
         return "\n".join(lines)
@@ -75,16 +75,16 @@ class WorldTileGridRenderer:
         lines = [
             f"tile Gx={self._tile_gx} Gy={self._tile_gy} z={z}",
             format_grid_header(
-                0, self._cell_m - 1,
-                0, self._cell_m - 1,
+                0, self._tile_macro - 1,
+                0, self._tile_macro - 1,
                 fine_span=1,
                 prefix="local ",
             ),
         ]
-        for ly in range(self._cell_m - 1, -1, -1):
+        for ly in range(self._tile_macro - 1, -1, -1):
             row = "".join(
                 cell_symbol(level[(lx, ly)]) if (lx, ly) in level else " "
-                for lx in range(self._cell_m)
+                for lx in range(self._tile_macro)
             )
             lines.append(f"{ly:4d} |{row}|")
         return "\n".join(lines)

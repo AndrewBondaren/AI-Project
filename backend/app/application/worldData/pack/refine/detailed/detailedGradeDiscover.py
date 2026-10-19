@@ -58,10 +58,10 @@ from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlo
 from app.application.worldData.pack.refine.gradeRimRays import (
     rim_rays_from_front,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import (
-    MeterGradeSurface,
+from app.application.worldData.pack.refine.fineGradeSurface import (
+    FineGradeSurface,
     apply_grade_uids,
-    meter_grade_cell_blocked,
+    fine_grade_cell_blocked,
 )
 from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.enums import ReliefContext
@@ -130,7 +130,7 @@ def discover_and_paint(
         return DetailedGradeResult.empty(), (), GradePipelineTimings()
 
     t0 = time.perf_counter()
-    grid = MeterGradeSurface.from_tile_surface_state(
+    grid = FineGradeSurface.from_tile_surface_state(
         surface_state, alias_heights=True,
     )
     known = dict(existing_uids or {})
@@ -150,7 +150,7 @@ def discover_and_paint(
     barrier_keys = WorldTerrainRegistry.canonical_barrier_terrain_keys()
 
     def cell_blocked(xy: Coord) -> bool:
-        return meter_grade_cell_blocked(
+        return fine_grade_cell_blocked(
             grid, xy, road_key=road_key, barrier_keys=barrier_keys,
         )
 

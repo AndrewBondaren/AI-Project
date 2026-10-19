@@ -29,7 +29,7 @@ from app.dataModel.worldPack.wire.worldBounds import WorldBounds
 Coord = tuple[int, int]
 
 
-def iter_halo_meters(this_bbox: ColumnBounds, halo: int) -> Iterator[Coord]:
+def iter_halo_fine(this_bbox: ColumnBounds, halo: int) -> Iterator[Coord]:
     """Meters in the expanded strip, excluding ``this_bbox`` itself."""
     if halo <= 0:
         return
@@ -94,14 +94,14 @@ def overlay_halo_from_parent(
     this_bbox: ColumnBounds,
     halo: int,
 ) -> TileSurfaceState:
-    """Nearest L0 cell of ``parent`` for meters in the expanded halo (not this tile)."""
+    """Nearest L0 cell of ``parent`` for fine cells in the expanded halo (not this tile)."""
     if halo <= 0:
         return state
     new_z = dict(state.heightmap.surface_z)
     new_terrain = dict(state.surface_terrain or {})
     new_facing = dict(state.surface_facing or {})
     wrote = False
-    for x, y in iter_halo_meters(this_bbox, halo):
+    for x, y in iter_halo_fine(this_bbox, halo):
         if macro_tile_of(x, y, parent.tile_macro) != (parent.gx, parent.gy):
             continue
         tx, ty = parent.fine_to_tx_ty(x, y)
@@ -126,7 +126,7 @@ def overlay_halo_from_surface(
     this_bbox: ColumnBounds,
     halo: int,
 ) -> TileSurfaceState:
-    """Copy neighbor meter z/terrain/facing into this tile's halo strip."""
+    """Copy neighbor fine z/terrain/facing into this tile's halo strip."""
     if halo <= 0:
         return state
     src_z = neighbor.heightmap.surface_z
@@ -136,7 +136,7 @@ def overlay_halo_from_surface(
     new_terrain = dict(state.surface_terrain or {})
     new_facing = dict(state.surface_facing or {})
     wrote = False
-    for x, y in iter_halo_meters(this_bbox, halo):
+    for x, y in iter_halo_fine(this_bbox, halo):
         z = src_z.get((x, y))
         if z is None:
             continue
@@ -165,12 +165,12 @@ def overlay_halo_from_wilderness(
     reader: WorldPackReader,
     writer: WorldPackWriter,
 ) -> TileSurfaceState:
-    """Overwrite halo meters with already-baked neighbor fine columns when present."""
+    """Overwrite halo fine cells with already-baked neighbor fine columns when present."""
     tile = writer.manifest.tile_entry(neighbor_gx, neighbor_gy)
     chunks = getattr(tile, "chunks", None) if tile is not None else None
     if not isinstance(chunks, (list, tuple)) or not chunks:
         return state
-    halo_set = set(iter_halo_meters(this_bbox, halo))
+    halo_set = set(iter_halo_fine(this_bbox, halo))
     if not halo_set:
         return state
     fine_bbox = fine_bbox_for_tile(neighbor_gx, neighbor_gy, tile_macro)

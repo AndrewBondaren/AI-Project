@@ -49,14 +49,14 @@ def _rect_overlaps_volume(rect: ColumnRect, volume: TerritoryVolume) -> bool:
 
 
 def tiles_covering_volume(world: World, volume: TerritoryVolume) -> list[tuple[int, int]]:
-    cell_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     corners = (
         (volume.x0, volume.y0),
         (volume.x0, volume.y1),
         (volume.x1, volume.y0),
         (volume.x1, volume.y1),
     )
-    tiles = {macro_tile_of(x, y, cell_m) for x, y in corners}
+    tiles = {macro_tile_of(x, y, tile_macro) for x, y in corners}
     gxs = [g for g, _ in tiles]
     gys = [g for _, g in tiles]
     out: list[tuple[int, int]] = []
@@ -67,8 +67,8 @@ def tiles_covering_volume(world: World, volume: TerritoryVolume) -> list[tuple[i
 
 
 def rects_for_macro_tile(world: World, tile_gx: int, tile_gy: int) -> list[ColumnRect]:
-    cell_m = map_cell_fine_span(world)
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    tile_macro = map_cell_fine_span(world)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
     chunk_size = terrain_chunk_columns(world)
     return list(iter_fine_chunks(fine_bbox, chunk_size))
 
@@ -85,9 +85,9 @@ def fine_chunk_rect(
     cy: int,
 ) -> ColumnRect:
     """One queued chunk rect inside a macro tile; ``ValueError`` when out of grid."""
-    cell_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     chunk_size = terrain_chunk_columns(world)
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
     n_cx = (fine_bbox.x_max - fine_bbox.x_min + 1) // chunk_size
     n_cy = (fine_bbox.y_max - fine_bbox.y_min + 1) // chunk_size
     if n_cx < 1 or n_cy < 1 or not (0 <= cx < n_cx and 0 <= cy < n_cy):

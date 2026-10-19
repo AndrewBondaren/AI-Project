@@ -13,7 +13,7 @@ from app.application.worldData.pack.refine.columnBounds import (
     ColumnBounds,
     rect_contains,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import Coord
+from app.application.worldData.pack.refine.fineGradeSurface import Coord
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.canal import Canal
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, merge_grade_rim_rays

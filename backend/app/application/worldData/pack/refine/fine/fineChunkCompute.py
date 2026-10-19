@@ -21,7 +21,7 @@ from app.application.worldData.pack.refine.fine.fineTileContext import (
     FineTileContext,
     VertexSlotSeam,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import Coord
+from app.application.worldData.pack.refine.fineGradeSurface import Coord
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 
 

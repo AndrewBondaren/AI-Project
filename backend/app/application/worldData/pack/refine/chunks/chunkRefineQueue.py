@@ -32,13 +32,13 @@ class ChunkRefineQueue:
         anchor_x: float,
         anchor_y: float,
         chunk_columns: int,
-        tile_size_m: int,
+        tile_macro: int,
     ) -> bool:
         key = (gx, gy, cx, cy)
         if key in self._seen:
             return False
-        center_x = gx * tile_size_m + (cx + 0.5) * chunk_columns
-        center_y = gy * tile_size_m + (cy + 0.5) * chunk_columns
+        center_x = gx * tile_macro + (cx + 0.5) * chunk_columns
+        center_y = gy * tile_macro + (cy + 0.5) * chunk_columns
         dist = math.hypot(center_x - anchor_x, center_y - anchor_y)
         heapq.heappush(self._heap, _QueuedChunk(dist, gx, gy, cx, cy))
         self._seen.add(key)

@@ -2,8 +2,8 @@
 
 ``path_ahead_depth`` counts **macro-tiles** ahead on heading (POJO SoT).
 Runtime may override via ``AppSettings.path_ahead_depth`` / config.toml.
-Corridor depth in meters: ``depth_tiles * fine_cells_per_map_cell``.
-Corridor half-width: ``terrain_chunk_columns * corridor_half_width_chunk_multiplier`` meters.
+Corridor depth in fine cells: ``depth_tiles * fine_cells_per_map_cell``.
+Corridor half-width: ``terrain_chunk_columns * corridor_half_width_chunk_multiplier`` fine cells.
 """
 
 from __future__ import annotations
@@ -29,5 +29,5 @@ class PathHeadingPolicy(BaseModel):
     def canonical_defaults(cls) -> PathHeadingPolicy:
         return cls()
 
-    def corridor_half_width_m(self, terrain_chunk_columns: int) -> float:
+    def corridor_half_width_fine(self, terrain_chunk_columns: int) -> float:
         return float(terrain_chunk_columns) * self.corridor_half_width_chunk_multiplier

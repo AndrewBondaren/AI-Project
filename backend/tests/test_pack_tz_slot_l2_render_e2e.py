@@ -190,7 +190,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
         uid: str,
     ) -> None:
         pack, payload, sidecar = self._persist_and_render(z_map, uid=uid)
-        self.assertEqual(pack.meter_surface_z, z_map)
+        self.assertEqual(pack.fine_surface_z, z_map)
         self.assertEqual(payload.read_mode, "wilderness_tile_l2")
         self.assertEqual(payload.column_count, len(z_map))
         self.assertEqual(sidecar, expected)

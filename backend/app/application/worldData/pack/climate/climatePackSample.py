@@ -105,7 +105,7 @@ def resolve_pack_surface_z(
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     light_span: int | None = None,
 ) -> int:
-    """Best-available surface z: L2 (light-cell window) → parent light → meter override → coarse → typical."""
+    """Best-available surface z: L2 (light-cell window) → parent light → fine override → coarse → typical."""
     step = light_span
     if step is None and parent_light is not None:
         step = parent_light.light_span
@@ -151,7 +151,7 @@ def sample_pack_climate_at(
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateSampleWire:
-    """One pack climate sample at meters — zone from pole+local, temp/rain from z."""
+    """One pack climate sample at fine cells — zone from pole+local, temp/rain from z."""
     svc = climate or ClimateGeneratorService()
     mgx = int(fine_to_grid_x(xm, tile_macro))
     mgy = int(fine_to_grid_y(ym, tile_macro))

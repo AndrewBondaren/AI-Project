@@ -23,7 +23,7 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
 from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
     open_land_terrain_keys,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_CELL_EMPTY_RAY,
 )
@@ -158,7 +158,7 @@ def _discover_open_land(
     plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
-    surface = MeterGradeSurface(
+    surface = FineGradeSurface(
         surface_z=z,
         surface_terrain={xy: plains for xy in z},
         hydrology=None,

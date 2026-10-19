@@ -37,9 +37,9 @@ class TestClimateFieldSampleAt(unittest.TestCase):
         self.assertEqual(field.sample_macro(11, 21).temperature_base, 4)
         self.assertIsNone(field.sample_macro(9, 20))
         with self.assertRaises(ValueError):
-            field.sample_meters(10, 20)
+            field.sample_fine(10, 20)
 
-    def test_fine_meter_step(self) -> None:
+    def test_fine_cell_step(self) -> None:
         field = ClimateFieldWire(
             climate_status="fine",
             origin_x=3000,
@@ -52,9 +52,9 @@ class TestClimateFieldSampleAt(unittest.TestCase):
                 ClimateSampleWire(temperature_base=22, rainfall=2),
             ],
         )
-        self.assertEqual(field.sample_meters(3000, 6000).temperature_base, 11)
-        self.assertEqual(field.sample_meters(4499, 6000).temperature_base, 11)
-        self.assertEqual(field.sample_meters(4500, 6000).temperature_base, 22)
+        self.assertEqual(field.sample_fine(3000, 6000).temperature_base, 11)
+        self.assertEqual(field.sample_fine(4499, 6000).temperature_base, 11)
+        self.assertEqual(field.sample_fine(4500, 6000).temperature_base, 22)
         with self.assertRaises(ValueError):
             field.sample_macro(1, 1)
 
@@ -73,7 +73,7 @@ class TestClimateFieldSampleAt(unittest.TestCase):
 
 
 class TestApplyClimateMeterToMacro(unittest.TestCase):
-    def test_apply_climate_converts_meters_to_macro(self) -> None:
+    def test_apply_climate_converts_fine_to_macro(self) -> None:
         field = ClimateFieldWire(
             climate_status="coarse",
             origin_x=12,

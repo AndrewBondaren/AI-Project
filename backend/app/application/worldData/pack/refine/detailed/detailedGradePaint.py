@@ -41,7 +41,7 @@ from app.application.worldData.pack.refine.detailed.detailedGradeResult import (
     DetailedGradeResult,
     GradeFormation,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
 from app.db.models.world import World
 
 
@@ -49,7 +49,7 @@ def apply_grade_paint_spec(
     front: DiscoveredFront,
     *,
     world: World,
-    surface: MeterGradeSurface,
+    surface: FineGradeSurface,
 ) -> DetailedGradeResult:
     """1D ``plan_ribbon_volume``, repeat ``z[k]`` across ``front_w`` onto corridor."""
     spec = front.spec

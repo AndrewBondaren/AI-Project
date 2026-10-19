@@ -81,13 +81,13 @@ def collect_height_values(
 def collect_tile_mask_symbols(
     tile: PackTileLightView,
     pins: Iterable[LocationsIndexPin],
-    tile_size_m: int,
+    tile_macro: int,
     *,
     mark_location: bool,
     index_pins: Sequence[LocationsIndexPin] | None = None,
     location_types: WorldLocationTypeRegistry | None = None,
 ) -> dict[tuple[int, int], str]:
-    pin_xy = pin_light_xy_on_tile(pins, tile, tile_size_m) if mark_location else set()
+    pin_xy = pin_light_xy_on_tile(pins, tile, tile_macro) if mark_location else set()
     symbols: dict[tuple[int, int], str] = {}
     for ty in range(tile.side):
         for tx in range(tile.side):

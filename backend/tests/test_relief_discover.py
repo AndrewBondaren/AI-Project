@@ -52,9 +52,9 @@ from app.application.worldData.generators.terrain.relief.sample.openLandTerrains
 from app.application.worldData.generators.terrain.relief.sample.ravineTerrain import (
     ravine_terrain_key,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import (
-    MeterGradeSurface,
-    meter_grade_cell_blocked,
+from app.application.worldData.pack.refine.fineGradeSurface import (
+    FineGradeSurface,
+    fine_grade_cell_blocked,
 )
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
@@ -97,8 +97,8 @@ def _vertices_for(z: dict[Coord, int]) -> ReliefVertices:
     )
 
 
-def _surface(z: dict[Coord, int], terrain: str = _PLAINS) -> MeterGradeSurface:
-    return MeterGradeSurface(
+def _surface(z: dict[Coord, int], terrain: str = _PLAINS) -> FineGradeSurface:
+    return FineGradeSurface(
         surface_z=z,
         surface_terrain={xy: terrain for xy in z},
         hydrology=None,
@@ -142,7 +142,7 @@ def _discover_ravine(
 ) -> tuple[ReliefVertices, tuple]:
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
-    surface = MeterGradeSurface(
+    surface = FineGradeSurface(
         surface_z=z,
         surface_terrain=terrain,
         hydrology=None,
@@ -177,7 +177,7 @@ def _discover_shore(
 ) -> tuple[ReliefVertices, tuple]:
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
-    surface = MeterGradeSurface(
+    surface = FineGradeSurface(
         surface_z=z,
         surface_terrain=terrain,
         hydrology=hydro,
@@ -185,7 +185,7 @@ def _discover_shore(
     )
     blocked = cell_blocked
     if blocked is None:
-        blocked = lambda xy: meter_grade_cell_blocked(
+        blocked = lambda xy: fine_grade_cell_blocked(
             surface, xy, road_key=_ROAD, barrier_keys=_BARRIERS,
         )
     return _geom(discover_fronts(
@@ -705,7 +705,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             (0, 0): 2, (1, 0): 2, (2, 0): 2,
         }
         terrain = {(x, y): (_ROAD if y == 1 else _PLAINS) for x, y in z}
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z=z,
             surface_terrain=terrain,
             hydrology=None,
@@ -739,7 +739,7 @@ class ReliefDiscoverTest(unittest.TestCase):
         }
         pavement = {(1, 2), (2, 2), (1, 1)}
         terrain = {xy: (_ROAD if xy in pavement else _PLAINS) for xy in z}
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z=z,
             surface_terrain=terrain,
             hydrology=None,
@@ -1066,7 +1066,7 @@ class ReliefDiscoverTest(unittest.TestCase):
     def test_forest_stamp_min_still_skips_unit(self) -> None:
         z = {(0, 0): 4, (1, 0): 3}
         forest = {(0, 0): _FOREST, (1, 0): _FOREST}
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z=z,
             surface_terrain=forest,
             hydrology=None,
@@ -1089,7 +1089,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             (0, 0): 2, (1, 0): 2,
         }
         terrain = {(x, y): (_ROAD if y == 1 else _PLAINS) for x, y in z}
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z=z,
             surface_terrain=terrain,
             hydrology=None,
@@ -1170,14 +1170,14 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(terrain[(0, 1)], _PLAINS)
         self.assertEqual(terrain[(0, 0)], _PLAINS)
         self.assertNotEqual(
-            shore_condition_at((0, 0), MeterGradeSurface(
+            shore_condition_at((0, 0), FineGradeSurface(
                 surface_z=z, surface_terrain=terrain, hydrology=hydro,
                 surface_facing=None,
             )),
             None,
         )
         self.assertEqual(
-            shore_condition_at((0, 0), MeterGradeSurface(
+            shore_condition_at((0, 0), FineGradeSurface(
                 surface_z=z, surface_terrain=terrain, hydrology=hydro,
                 surface_facing=None,
             )),
@@ -1384,7 +1384,7 @@ class ReliefDiscoverTest(unittest.TestCase):
         z = {(0, 1): 4, (0, 0): 2}
         terrain = {xy: _PLAINS for xy in z}
         hydro = {(0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED)}
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z=z, surface_terrain=terrain, hydrology=hydro,
             surface_facing=None,
         )

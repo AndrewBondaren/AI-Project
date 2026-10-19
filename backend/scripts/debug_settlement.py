@@ -481,8 +481,8 @@ def test_phase_d_barriers() -> None:
     assert len(barriers) > 0
 
     ox, oy, gz = settlement_origin(city)
-    side_m = footprint_side_fine(world, sk_c.system_city_size)
-    gate_coords = footprint_gate_coordinates(ox, oy, side_m, map_cell_fine_span(world))
+    side_fine = footprint_side_fine(world, sk_c.system_city_size)
+    gate_coords = footprint_gate_coordinates(ox, oy, side_fine, map_cell_fine_span(world))
     barrier_by_xy = {(c.x, c.y): c for c in barriers}
     assert gate_coords <= set(barrier_by_xy)
     for x, y in gate_coords:
@@ -582,8 +582,8 @@ def test_phase_f_map_occupancy() -> None:
 
 def test_coordinate_spaces_anchor_3000() -> None:
     """
-    NC-1: settlement at map_x=3000 must use grid index 1 and meter origin 3000.
-    Smoke at map_x=0 masks mixing grid index with absolute meters.
+    NC-1: settlement at map_x=3000 must use grid index 1 and fine origin 3000.
+    Smoke at map_x=0 masks mixing grid index with absolute fine cells.
     """
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
         plan_district_slots,
@@ -631,25 +631,25 @@ def test_coordinate_spaces_anchor_3000() -> None:
     )
     town.location_payload = {**(town.location_payload or {}), 'settlement_density': "medium"}
 
-    cell_m = map_cell_fine_span(world)
-    assert cell_m == 3000
+    tile_macro = map_cell_fine_span(world)
+    assert tile_macro == 3000
 
     origin = settlement_origin_fine(town)
     assert (origin.x, origin.y, origin.z) == (3000, 0, 0)
     assert settlement_origin(town) == (3000, 0, 0)
 
-    side_m = footprint_side_fine(world, settlement_payload(town).system_city_size)
-    assert side_m == 3000
+    side_fine = footprint_side_fine(world, settlement_payload(town).system_city_size)
+    assert side_fine == 3000
 
     grid_rect = settlement_grid_rect(world, town)
     assert grid_rect.as_tuple() == (1, 0, 2, 1)
     assert footprint_grid_rect(world, town) == (1, 0, 2, 1)
 
-    meter_rect = settlement_fine_rect(world, town)
-    assert meter_rect.as_tuple() == (3000, 0, 6000, 3000, 0)
+    fine_rect = settlement_fine_rect(world, town)
+    assert fine_rect.as_tuple() == (3000, 0, 6000, 3000, 0)
     assert footprint_fine_rect(world, town) == (3000, 0, 6000, 3000, 0)
 
-    gate_coords = footprint_gate_coordinates(3000, 0, side_m, cell_m)
+    gate_coords = footprint_gate_coordinates(3000, 0, side_fine, tile_macro)
     assert (3000, 0) in gate_coords
     assert (6000, 0) in gate_coords
     assert (3000, 3000) in gate_coords
@@ -1168,9 +1168,9 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
         run_heightmap_pass,
     )
 
-    cell_m     = map_cell_fine_span(world)
+    tile_macro     = map_cell_fine_span(world)
     bbox       = grid_bbox_from_locations(world, [region])
-    pole_field = resolve_pole_field(world, [region], cell_m, bbox)
+    pole_field = resolve_pole_field(world, [region], tile_macro, bbox)
     heightmap  = run_heightmap_pass(world, [region], pole_field, 2)
     field      = run_anchor_collect_pass(world, [region], heightmap, pole_field)
 
@@ -1186,7 +1186,7 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
             climate_pole_mode="manual",
         ),
         [region],
-        cell_m,
+        tile_macro,
         bbox,
     )
     field_legacy = run_anchor_collect_pass(world, [region], heightmap, pole_empty)
@@ -1432,7 +1432,7 @@ def test_climate_logging_warnings() -> None:
 
 
 def test_phase_4_collect_map_cells() -> None:
-    """Split persist: surface grid occupancy vs meter geometry (Option A)."""
+    """Split persist: surface grid occupancy vs fine geometry (Option A)."""
     from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
         collect_geometry_fine_cells,
         collect_map_cells_from_layout,
@@ -1474,7 +1474,7 @@ def test_phase_4_collect_map_cells() -> None:
 
     layout = SettlementAssembler().assemble(world, settlement, catalog=_debug_catalog())
     grid_cells = collect_surface_grid_cells(layout)
-    meter_cells = collect_geometry_fine_cells(layout)
+    fine_cells = collect_geometry_fine_cells(layout)
     merged = collect_map_cells_from_layout(world, settlement, layout)
 
     assert grid_cells == layout.occupancy_cells
@@ -1482,15 +1482,15 @@ def test_phase_4_collect_map_cells() -> None:
     assert (grid_cells[0].x, grid_cells[0].y) == (1, 0)
     assert not any(c.system_building_element for c in grid_cells)
 
-    assert not any(c.system_building_element for c in meter_cells)
+    assert not any(c.system_building_element for c in fine_cells)
     ox, oy, x1, y1, _ = footprint_fine_rect(world, settlement)
-    for c in meter_cells:
+    for c in fine_cells:
         assert cell_in_footprint_fine(c.x, c.y, ox, oy, x1, y1), (
-            f"meter cell ({c.x},{c.y}) outside meter footprint"
+            f"fine cell ({c.x},{c.y}) outside fine footprint"
         )
 
-    assert merged == grid_cells + meter_cells
-    assert {id(c) for c in grid_cells}.isdisjoint({id(c) for c in meter_cells})
+    assert merged == grid_cells + fine_cells
+    assert {id(c) for c in grid_cells}.isdisjoint({id(c) for c in fine_cells})
 
     svc = SettlementGeneratorService()
     assert needs_settlement_geometry(settlement, world, grid_cells) is True

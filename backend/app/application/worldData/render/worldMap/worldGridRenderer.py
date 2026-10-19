@@ -21,15 +21,15 @@ from app.db.models.mapCell import MapCell
 
 def _macro_top_surface_cells(
     cells: list[MapCell],
-    cell_m: int,
+    tile_macro: int,
 ) -> dict[tuple[int, int], MapCell]:
     """Aggregate fine-grid cells → one top cell per macro tile (Gx, Gy)."""
     tops: dict[tuple[int, int], MapCell] = {}
     for cell in cells:
         if cell.system_building_element:
             continue
-        gx = cell.x // cell_m
-        gy = cell.y // cell_m
+        gx = cell.x // tile_macro
+        gy = cell.y // tile_macro
         key = (gx, gy)
         if key not in tops or cell.z > tops[key].z:
             tops[key] = cell
@@ -66,8 +66,8 @@ class WorldGridRenderer:
         *,
         fine_span: int | None = None,
     ) -> None:
-        self._cell_m = fine_span or FINE_CELLS_PER_MAP_CELL_DEFAULT
-        self._tops = _macro_top_surface_cells(cells, self._cell_m)
+        self._tile_macro = fine_span or FINE_CELLS_PER_MAP_CELL_DEFAULT
+        self._tops = _macro_top_surface_cells(cells, self._tile_macro)
 
     @staticmethod
     def render_legend(*, mark_location: bool = False) -> str:
@@ -86,7 +86,7 @@ class WorldGridRenderer:
         mark_location: bool = False,
     ) -> str:
         lines: list[str] = [
-            format_grid_header(gx0, gx1, gy0, gy1, fine_span=self._cell_m),
+            format_grid_header(gx0, gx1, gy0, gy1, fine_span=self._tile_macro),
         ]
         for gy in range(gy1, gy0 - 1, -1):
             row = "".join(

@@ -35,9 +35,9 @@ def location_anchor_tiles(
     world: World,
     locations: list[NamedLocation],
 ) -> set[Tile]:
-    cell_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     return {
-        macro_tile_of(loc.map_x, loc.map_y, cell_m)
+        macro_tile_of(loc.map_x, loc.map_y, tile_macro)
         for loc in static_map_anchors(locations)
     }
 
@@ -49,20 +49,20 @@ def declared_hydro_tiles(
     """Macro-tiles covering declared coastline / lake shore / river endpoints."""
     if not is_hydrology_enabled(world):
         return set()
-    cell_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     tiles: set[Tile] = set()
     loaded = load_declared_hydrology(world, locations)
     for a, b in loaded.coastline_segments:
-        tiles.add(macro_tile_of(a[0], a[1], cell_m))
-        tiles.add(macro_tile_of(b[0], b[1], cell_m))
+        tiles.add(macro_tile_of(a[0], a[1], tile_macro))
+        tiles.add(macro_tile_of(b[0], b[1], tile_macro))
     for lake in loaded.lake_specs:
         for a, b in lake.shoreline_segments:
-            tiles.add(macro_tile_of(a[0], a[1], cell_m))
-            tiles.add(macro_tile_of(b[0], b[1], cell_m))
+            tiles.add(macro_tile_of(a[0], a[1], tile_macro))
+            tiles.add(macro_tile_of(b[0], b[1], tile_macro))
     for edge in loaded.river_edges:
         a, b = edge.segment
-        tiles.add(macro_tile_of(a[0], a[1], cell_m))
-        tiles.add(macro_tile_of(b[0], b[1], cell_m))
+        tiles.add(macro_tile_of(a[0], a[1], tile_macro))
+        tiles.add(macro_tile_of(b[0], b[1], tile_macro))
     return tiles
 
 

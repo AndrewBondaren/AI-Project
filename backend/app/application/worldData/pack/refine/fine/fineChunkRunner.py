@@ -60,7 +60,7 @@ class FineChunkRunner:
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         stages: GradePipelineStages | None = None,
     ) -> FineRefineResult:
-        """Generate + persist fine chunks; ``meter_surface_z`` for climate ladder."""
+        """Generate + persist fine chunks; ``fine_surface_z`` for climate ladder."""
         if not rects:
             return FineRefineResult.empty()
 

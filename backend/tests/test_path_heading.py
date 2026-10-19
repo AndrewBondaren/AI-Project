@@ -61,7 +61,7 @@ class TestPathHeading(unittest.TestCase):
             SimpleNamespace(x_min=0, x_max=9, y_min=50, y_max=59),
         ]
         picked = filter_corridor_rects(
-            rects, 5.0, 5.0, heading, depth_m=30.0, half_width_m=10.0,
+            rects, 5.0, 5.0, heading, depth_fine=30.0, half_width_fine=10.0,
         )
         self.assertEqual(len(picked), 1)
         self.assertEqual(picked[0].x_min, 20)

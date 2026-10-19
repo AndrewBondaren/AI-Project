@@ -1,4 +1,4 @@
-"""Tests for R36u detailed grade generate on meter grid."""
+"""Tests for R36u detailed grade generate on fine grid."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from app.application.worldData.pack.refine.detailed.detailedGradeGenerate import generate_detailed_grade
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
 from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
@@ -1077,15 +1077,15 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         self.assertEqual(merged_inst[0].height_cells, 2)
         self.assertEqual(list(merged_inst[0].cell_refs), [(1, 0), (2, 0)])
 
-    def test_meter_grade_cell_blocked_so_t(self) -> None:
-        from app.application.worldData.pack.refine.meterGradeSurface import (
-            meter_grade_cell_blocked,
+    def test_fine_grade_cell_blocked_so_t(self) -> None:
+        from app.application.worldData.pack.refine.fineGradeSurface import (
+            fine_grade_cell_blocked,
         )
         from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
         barriers = WorldTerrainRegistry.canonical_barrier_terrain_keys()
         wall = next(iter(barriers))
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z={(0, 0): 5, (1, 0): 5, (2, 0): 5, (3, 0): 5},
             surface_terrain={
                 (0, 0): "plains",
@@ -1099,7 +1099,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
             surface_facing=None,
             grade_uid={(0, 0): "g1"},
         )
-        blocked = lambda xy: meter_grade_cell_blocked(
+        blocked = lambda xy: fine_grade_cell_blocked(
             surface, xy, road_key="road", barrier_keys=barriers,
         )
         self.assertTrue(blocked((9, 9)))  # missing z
@@ -1107,25 +1107,25 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         self.assertTrue(blocked((1, 0)))  # road
         self.assertTrue(blocked((2, 0)))  # open water
         self.assertTrue(blocked((3, 0)))  # barrier
-        surface2 = MeterGradeSurface(
+        surface2 = FineGradeSurface(
             surface_z={(4, 0): 3},
             surface_terrain={(4, 0): "plains"},
             hydrology=None,
             surface_facing=None,
         )
         self.assertFalse(
-            meter_grade_cell_blocked(
+            fine_grade_cell_blocked(
                 surface2, (4, 0), road_key="road", barrier_keys=barriers,
             ),
         )
-        river = MeterGradeSurface(
+        river = FineGradeSurface(
             surface_z={(5, 0): 2},
             surface_terrain={(5, 0): "plains"},
             hydrology={(5, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED)},
             surface_facing=None,
         )
         self.assertTrue(
-            meter_grade_cell_blocked(
+            fine_grade_cell_blocked(
                 river, (5, 0), road_key="road", barrier_keys=barriers,
             ),
         )
@@ -1646,8 +1646,8 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailed.detailedJobUid import (
             front_grade_site,
         )
-        from app.application.worldData.pack.refine.meterGradeSurface import (
-            MeterGradeSurface,
+        from app.application.worldData.pack.refine.fineGradeSurface import (
+            FineGradeSurface,
         )
         from app.dataModel.spatial.facing import Facing
         from app.application.worldData.generators.terrain.relief.pick.gradePass import (
@@ -1668,7 +1668,7 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
             anchor_bottom=(6, 5),
             hit_seam=False,
         )
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z={(5, 5): 8, (6, 5): 6},
             surface_terrain={(5, 5): _PLAINS, (6, 5): _PLAINS},
             hydrology=None,

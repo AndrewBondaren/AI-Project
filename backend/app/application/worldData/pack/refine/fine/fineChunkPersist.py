@@ -91,7 +91,7 @@ class FineChunkPersist:
         self._ctx = ctx
         self._writer = writer
         self._location_cells: dict[str, list[MapCell]] = {}
-        self._meter_surface_z: dict[tuple[int, int], int] = {}
+        self._fine_surface_z: dict[tuple[int, int], int] = {}
         self._grade_acc: list[ReliefGradeInstance] = []
         self._mill_rim_acc: list[GradeRimRay] = []
         self._seam_acc: list[tuple[ColumnRect, tuple[VertexSlotSeam, ...]]] = []
@@ -193,7 +193,7 @@ class FineChunkPersist:
                 location_uid, chunk, territory_volume=volume,
             )
             self._total_cells += len(loc_cells)
-        occupancy = set(self._meter_surface_z)
+        occupancy = set(self._fine_surface_z)
         sidecar_s, validate_s = self._persist_grade_cell_slots(occupancy)
         self._writer.recalc_manifest_counters()
         self._writer.save_manifest()
@@ -205,7 +205,7 @@ class FineChunkPersist:
             persist=PersistResult.from_counts(self._total_cells, self._total_cells),
             wilderness_chunks_written=self._written,
             rect_count=ctx.chunks_total,
-            meter_surface_z=self._meter_surface_z,
+            fine_surface_z=self._fine_surface_z,
             grade_instances=tuple(self._grade_acc),
             mill_rim_rays=tuple(self._mill_rim_acc),
             vertex_seams=tuple(self._seam_acc),
@@ -223,7 +223,7 @@ class FineChunkPersist:
         Validator runs only when ``DEBUG_GRADE_SLOT_VALIDATE`` is on (dev).
         """
         ctx = self._ctx
-        packed = pack_cell_slots(self._meter_surface_z, cells=occupancy)
+        packed = pack_cell_slots(self._fine_surface_z, cells=occupancy)
         n_cells = len(packed)
         sidecar_t0 = log_pack_grade_ray_sidecar_start(
             ctx.world_uid, n_cells=n_cells,
@@ -251,7 +251,7 @@ class FineChunkPersist:
         n_empty = validate_grade_cell_slots(
             occupancy,
             packed,
-            z_height_map=self._meter_surface_z,
+            z_height_map=self._fine_surface_z,
             on_progress=_validate_progress,
             progress_every=EXECUTEMANY_BATCH_SIZE,
         )
@@ -267,9 +267,9 @@ class FineChunkPersist:
     def _note_surface_z(self, cells: list[MapCell]) -> None:
         for cell in cells:
             key = (int(cell.x), int(cell.y))
-            prev = self._meter_surface_z.get(key)
+            prev = self._fine_surface_z.get(key)
             if prev is None or cell.z > prev:
-                self._meter_surface_z[key] = int(cell.z)
+                self._fine_surface_z[key] = int(cell.z)
 
     def _write_grade_cell_sidecars(self, packed: tuple[GradeCellSlots, ...]) -> None:
         if not packed:
@@ -278,7 +278,7 @@ class FineChunkPersist:
         wilderness: list[GradeCellSlots] = []
         by_loc: dict[str, list[GradeCellSlots]] = {}
         for cell in packed:
-            z = self._meter_surface_z.get(cell.cell)
+            z = self._fine_surface_z.get(cell.cell)
             hit = (
                 location_for_cell(cell.x, cell.y, z, ctx.location_pairs)
                 if z is not None

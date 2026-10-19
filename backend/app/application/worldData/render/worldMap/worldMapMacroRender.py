@@ -49,7 +49,7 @@ def tile_settlement_glyph(
 
 def render_macro_bbox(
     by_xy: TileIndex,
-    tile_size_m: int,
+    tile_macro: int,
     pin_macros: set[tuple[int, int]],
     gx0: int,
     gy0: int,
@@ -83,14 +83,14 @@ def render_macro_bbox(
         symbols,
         title="pack L0 MACRO AGGREGATE (not mask SoT) — one symbol per macro-tile",
         bounds=(gx0, gx1, gy0, gy1),
-        fine_span=tile_size_m,
+        fine_span=tile_macro,
         x_rulers=False,
     )
 
 
 def render_macro(
     by_xy: TileIndex,
-    tile_size_m: int,
+    tile_macro: int,
     pin_macros: set[tuple[int, int]],
     *,
     mark_location: bool = False,
@@ -102,7 +102,7 @@ def render_macro(
     xs = [gx for gx, _ in by_xy]
     ys = [gy for _, gy in by_xy]
     return render_macro_bbox(
-        by_xy, tile_size_m, pin_macros,
+        by_xy, tile_macro, pin_macros,
         min(xs), min(ys), max(xs), max(ys),
         mark_location=mark_location,
         index_pins=index_pins,

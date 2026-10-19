@@ -10,7 +10,7 @@ from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePo
 
 
 class TerritoryVolume(BaseModel):
-    """Axis-aligned volume in meter grid coordinates (inclusive bounds)."""
+    """Axis-aligned volume in fine grid coordinates (inclusive bounds)."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-TERRITORY-VOLUME"
 

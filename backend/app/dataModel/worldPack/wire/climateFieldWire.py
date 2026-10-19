@@ -56,7 +56,7 @@ class ClimateFieldWire(ClimateBakeStatusMixin):
     """Rectangular climate grid sampled in pack.
 
     coarse: ``origin_*`` / sample coords are **macro grid** indices; ``sample_step_m=1``.
-    fine: ``origin_*`` are **meters**; ``sample_step_m`` is light-cell stride within the tile.
+    fine: ``origin_*`` are **fine cells**; ``sample_step_m`` is light-cell stride within the tile.
     """
 
     SCHEMA_ID: ClassVar[str] = "SCH-CLIMATE-FIELD-WIRE"
@@ -94,7 +94,7 @@ class ClimateFieldWire(ClimateBakeStatusMixin):
             raise ValueError("sample_macro requires climate_status=coarse")
         return self.sample_at(gx, gy)
 
-    def sample_meters(self, xm: int, ym: int) -> ClimateSampleWire | None:
+    def sample_fine(self, x_fine: int, y_fine: int) -> ClimateSampleWire | None:
         if self.climate_status != "fine":
-            raise ValueError("sample_meters requires climate_status=fine")
-        return self.sample_at(xm, ym)
+            raise ValueError("sample_fine requires climate_status=fine")
+        return self.sample_at(x_fine, y_fine)

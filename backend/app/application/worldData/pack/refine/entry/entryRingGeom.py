@@ -44,19 +44,19 @@ def wilderness_chunk_origin(
     )
 
 
-def ring_reach_m(radius_m: float, chunk_size: int) -> float:
+def ring_reach_fine(radius_fine: float, chunk_size: int) -> float:
     """Include chunk half-extent so edge chunks near the ring still match."""
-    return float(radius_m) + float(chunk_size)
+    return float(radius_fine) + float(chunk_size)
 
 
 def chunk_within_ring(
     rect: ColumnRect,
     anchor_x: float,
     anchor_y: float,
-    radius_m: float,
+    radius_fine: float,
     chunk_size: int,
 ) -> bool:
-    reach = ring_reach_m(radius_m, chunk_size)
+    reach = ring_reach_fine(radius_fine, chunk_size)
     return distance_sq(*chunk_center(rect), anchor_x, anchor_y) <= reach * reach
 
 
@@ -70,9 +70,9 @@ def scene_chunk_indices(
     xy_radius: int,
 ) -> set[tuple[int, int]]:
     """Chunk (cx, cy) indices covered by scene volume around anchor."""
-    cell_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     chunk_size = terrain_chunk_columns(world)
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
     out: set[tuple[int, int]] = set()
     for rect in iter_fine_chunks(fine_bbox, chunk_size):
         if chunk_within_ring(rect, float(anchor_x), float(anchor_y), float(xy_radius), chunk_size):

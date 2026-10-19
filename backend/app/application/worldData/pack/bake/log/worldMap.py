@@ -77,7 +77,7 @@ def log_pack_world_map_sampling_note(
     sparse_fine_hydro_n: int,
     fine_z_overrides_n: int,
 ) -> None:
-    """Warn when meter-resolution hydro/z exists but light bake samples macro keys only."""
+    """Warn when fine-resolution hydro/z exists but light bake samples macro keys only."""
     if sparse_fine_hydro_n <= 0 and fine_z_overrides_n <= 0:
         return
     logger.warning(

@@ -28,42 +28,42 @@ def location_mark_pins(pins: Iterable[LocationsIndexPin], *, registry: WorldLoca
     return [pin for pin in pins if not pin_is_settlement_site(pin, registry=registry)]
 
 
-def pin_macro(pin: LocationsIndexPin, tile_size_m: int) -> tuple[int, int]:
-    gx, _ = tile_index(pin.map_x, tile_size_m)
-    gy, _ = tile_index(pin.map_y, tile_size_m)
+def pin_macro(pin: LocationsIndexPin, tile_macro: int) -> tuple[int, int]:
+    gx, _ = tile_index(pin.map_x, tile_macro)
+    gy, _ = tile_index(pin.map_y, tile_macro)
     return gx, gy
 
 
 def pin_macros(
     pins: Iterable[LocationsIndexPin],
-    tile_size_m: int,
+    tile_macro: int,
 ) -> set[tuple[int, int]]:
-    return {pin_macro(pin, tile_size_m) for pin in pins}
+    return {pin_macro(pin, tile_macro) for pin in pins}
 
 
 def pin_light_xy(
     pin: LocationsIndexPin,
     tile: PackTileLightView,
-    tile_size_m: int,
+    tile_macro: int,
 ) -> tuple[int, int] | None:
-    gx, lx = tile_index(pin.map_x, tile_size_m)
-    gy, ly = tile_index(pin.map_y, tile_size_m)
+    gx, lx = tile_index(pin.map_x, tile_macro)
+    gy, ly = tile_index(pin.map_y, tile_macro)
     if gx != tile.gx or gy != tile.gy or tile.side <= 0:
         return None
     return (
-        world_map_sample_index(lx, tile_size_m, tile.side),
-        world_map_sample_index(ly, tile_size_m, tile.side),
+        world_map_sample_index(lx, tile_macro, tile.side),
+        world_map_sample_index(ly, tile_macro, tile.side),
     )
 
 
 def pin_light_xy_on_tile(
     pins: Iterable[LocationsIndexPin],
     tile: PackTileLightView,
-    tile_size_m: int,
+    tile_macro: int,
 ) -> set[tuple[int, int]]:
     out: set[tuple[int, int]] = set()
     for pin in pins:
-        xy = pin_light_xy(pin, tile, tile_size_m)
+        xy = pin_light_xy(pin, tile, tile_macro)
         if xy is not None:
             out.add(xy)
     return out
@@ -72,15 +72,15 @@ def pin_light_xy_on_tile(
 def pin_world_xy(
     pins: Iterable[LocationsIndexPin],
     frame: MosaicFrame,
-    tile_size_m: int,
+    tile_macro: int,
 ) -> set[tuple[int, int]]:
     pin_wxy: set[tuple[int, int]] = set()
     for pin in pins:
-        pgx, lx = tile_index(pin.map_x, tile_size_m)
-        pgy, ly = tile_index(pin.map_y, tile_size_m)
+        pgx, lx = tile_index(pin.map_x, tile_macro)
+        pgy, ly = tile_index(pin.map_y, tile_macro)
         if not (frame.gx0 <= pgx <= frame.gx1 and frame.gy0 <= pgy <= frame.gy1):
             continue
-        tx = world_map_sample_index(lx, tile_size_m, frame.side)
-        ty = world_map_sample_index(ly, tile_size_m, frame.side)
+        tx = world_map_sample_index(lx, tile_macro, frame.side)
+        ty = world_map_sample_index(ly, tile_macro, frame.side)
         pin_wxy.add((pgx * frame.side + tx, pgy * frame.side + ty))
     return pin_wxy

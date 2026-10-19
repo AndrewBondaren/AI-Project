@@ -102,21 +102,21 @@ def predicted_border_entry(
     to_gy: int,
     path_x: float,
     path_y: float,
-    tile_size_m: int,
+    tile_macro: int,
 ) -> tuple[int, int]:
     """Predicted entry into ``to`` tile at shared border with ``from`` (WP-13).
 
     Lateral axis keeps the path cross-track clamped into the destination tile bbox;
     along-track axis snaps to the shared edge inside ``to``.
     """
-    if tile_size_m <= 0:
-        raise ValueError("tile_size_m must be positive")
+    if tile_macro <= 0:
+        raise ValueError("tile_macro must be positive")
     dgx = to_gx - from_gx
     dgy = to_gy - from_gy
-    x0 = to_gx * tile_size_m
-    y0 = to_gy * tile_size_m
-    x1 = x0 + tile_size_m - 1
-    y1 = y0 + tile_size_m - 1
+    x0 = to_gx * tile_macro
+    y0 = to_gy * tile_macro
+    x1 = x0 + tile_macro - 1
+    y1 = y0 + tile_macro - 1
 
     if dgx > 0:
         entry_x = x0
@@ -152,8 +152,8 @@ def chunk_in_path_corridor(
     anchor_y: float,
     heading: PathHeading,
     *,
-    depth_m: float,
-    half_width_m: float,
+    depth_fine: float,
+    half_width_fine: float,
 ) -> bool:
     rel_x = center_x - anchor_x
     rel_y = center_y - anchor_y
@@ -161,10 +161,10 @@ def chunk_in_path_corridor(
     if ux == 0.0 and uy == 0.0:
         return False
     along = rel_x * ux + rel_y * uy
-    if along < 0 or along > depth_m:
+    if along < 0 or along > depth_fine:
         return False
     lateral = abs(-uy * rel_x + ux * rel_y)
-    return lateral <= half_width_m
+    return lateral <= half_width_fine
 
 
 def filter_corridor_rects(
@@ -173,8 +173,8 @@ def filter_corridor_rects(
     anchor_y: float,
     heading: PathHeading,
     *,
-    depth_m: float,
-    half_width_m: float,
+    depth_fine: float,
+    half_width_fine: float,
 ) -> list[_RectLike]:
     return [
         rect for rect in rects
@@ -183,7 +183,7 @@ def filter_corridor_rects(
             anchor_x,
             anchor_y,
             heading,
-            depth_m=depth_m,
-            half_width_m=half_width_m,
+            depth_fine=depth_fine,
+            half_width_fine=half_width_fine,
         )
     ]

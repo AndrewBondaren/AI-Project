@@ -156,12 +156,12 @@ class FineTerrainRefineOrchestrator:
         tile_gy: int,
         *,
         skip_scene_rects: set[tuple[int, int]] | None = None,
-        max_radius_m: float | None = None,
+        max_radius_fine: float | None = None,
     ) -> int:
         return await schedule_tile_background_fn(
             world, queue, anchor_x, anchor_y, tile_gx, tile_gy,
             skip_scene_rects=skip_scene_rects,
-            max_radius_m=max_radius_m,
+            max_radius_fine=max_radius_fine,
         )
 
     def scene_chunk_indices(

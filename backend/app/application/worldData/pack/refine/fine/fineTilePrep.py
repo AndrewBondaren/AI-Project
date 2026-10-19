@@ -66,8 +66,8 @@ def prepare_fine_tile(
     run_mill = stages.mill
     run_paint = stages.paint
     chunk_size = terrain_chunk_columns(world)
-    cell_m = map_cell_fine_span(world)
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    tile_macro = map_cell_fine_span(world)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
     location_pairs = territory_volumes_by_location(world, locations)
     reader = WorldPackReader(writer.paths)
     parent = require_parent_light(
@@ -76,7 +76,7 @@ def prepare_fine_tile(
         tile_gy,
         reader=reader,
         cache=writer.parent_light_cache,
-        tile_macro=cell_m,
+        tile_macro=tile_macro,
     )
     surface_state = terrain.build_tile_surface_state(
         world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
@@ -123,7 +123,7 @@ def prepare_fine_tile(
             bounds=bounds,
             reader=reader,
             cache=writer.parent_light_cache,
-            tile_macro=cell_m,
+            tile_macro=tile_macro,
             writer=writer,
             chunk_size=chunk_size,
         )

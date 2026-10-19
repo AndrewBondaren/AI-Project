@@ -40,7 +40,7 @@ def render_tile_light_grade_grid(
     by_xy: TileIndex,
     gx: int,
     gy: int,
-    tile_size_m: int,
+    tile_macro: int,
 ) -> str:
     tile = by_xy.get((gx, gy))
     if tile is None or tile.side <= 0:
@@ -57,7 +57,7 @@ def render_tile_light_grade_grid(
             f"×{min(y for _, y in hits)}..{max(y for _, y in hits)})"
         ),
         coord_prefix="light ",
-        fine_span=max(1, int(tile_size_m) // tile.side),
+        fine_span=max(1, int(tile_macro) // tile.side),
         x_rulers=True,
     )
     return f"{ascii_g}\n\n{render_grade_legend()}"
@@ -65,7 +65,7 @@ def render_tile_light_grade_grid(
 
 def render_light_grade_mosaic(
     by_xy: TileIndex,
-    tile_size_m: int,
+    tile_macro: int,
     *,
     gx0: int | None = None,
     gy0: int | None = None,
@@ -73,7 +73,7 @@ def render_light_grade_mosaic(
     gy1: int | None = None,
 ) -> tuple[str, str]:
     frame = resolve_mosaic_frame(
-        by_xy, tile_size_m, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
+        by_xy, tile_macro, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
     )
     if frame is None:
         return "", ""

@@ -15,7 +15,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
-    meter_segments_to_light,
+    fine_segments_to_light,
     paint_role,
 )
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
@@ -53,7 +53,7 @@ def apply_declared_basins(
     coast_n = 0
 
     for lake in declared.lake_specs:
-        light_segs = meter_segments_to_light(lake.shoreline_segments, scale)
+        light_segs = fine_segments_to_light(lake.shoreline_segments, scale)
         shoreline = rasterize_segments(light_segs)
         interior = _lake_interior_light(light_segs, shoreline)
         sn, _ = paint_role(compose, shoreline, WorldMapHydrologyRole.SHORE, tile_set=tile_set)
@@ -62,7 +62,7 @@ def apply_declared_basins(
         lake_n += ln
 
     if declared.coastline_segments:
-        light_segs = meter_segments_to_light(declared.coastline_segments, scale)
+        light_segs = fine_segments_to_light(declared.coastline_segments, scale)
         shore = rasterize_segments(light_segs)
         cn, _ = paint_role(compose, shore, WorldMapHydrologyRole.SHORE, tile_set=tile_set)
         coast_n += cn

@@ -101,7 +101,7 @@ class TestLocationPinOverlay(unittest.TestCase):
         )
         pins = overlay_location_pins(pack_pins, [_loc("v1")])
         light = WorldMapPackRenderer(
-            [tile], tile_size_m=3000, pins=pins,
+            [tile], tile_macro=3000, pins=pins,
         ).render_tile_light_grid(0, 0, mark_location=True)
         self.assertIn("n", light)
         self.assertNotIn("@", light)

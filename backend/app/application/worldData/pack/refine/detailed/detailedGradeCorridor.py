@@ -22,10 +22,10 @@ from app.application.worldData.generators.terrain.relief.volume.volumeMaterializ
     plan_seed_volume,
 )
 from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
-from app.application.worldData.pack.refine.meterGradeSurface import (
+from app.application.worldData.pack.refine.fineGradeSurface import (
     Coord,
-    MeterGradeSurface,
-    meter_grade_cell_blocked,
+    FineGradeSurface,
+    fine_grade_cell_blocked,
 )
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.db.models.world import World
@@ -107,7 +107,7 @@ def local_grade_anchors(
     *,
     ref_cells: set[Coord],
     segment_seeds: set[Coord],
-    surface: MeterGradeSurface,
+    surface: FineGradeSurface,
 ) -> set[Coord]:
     """Crests adjacent to ``seed``, else uphill cascade neighbor (R36v stitch)."""
     sx, sy = seed
@@ -127,8 +127,8 @@ def local_grade_anchors(
     return crests or cascade
 
 
-def resolve_meter_anchor(
-    surface: MeterGradeSurface,
+def resolve_fine_anchor(
+    surface: FineGradeSurface,
     clearance: SeedClearance,
     *,
     ref_cells: set[Coord],
@@ -150,7 +150,7 @@ def resolve_meter_anchor(
 
 
 def volume_corridor_for_seed(
-    surface: MeterGradeSurface,
+    surface: FineGradeSurface,
     world: World,
     seed: Coord,
     *,
@@ -185,7 +185,7 @@ def volume_corridor_for_seed(
         ref_cells=anchors,
         requested_length=requested,
         world=world,
-        cell_blocked=lambda c: meter_grade_cell_blocked(
+        cell_blocked=lambda c: fine_grade_cell_blocked(
             surface, c, road_key=road_key, barrier_keys=barrier_keys,
         ),
         flush_void=flush_void,
@@ -193,7 +193,7 @@ def volume_corridor_for_seed(
     if isinstance(clearance, SeedClearanceSkip):
         return None
 
-    anchor = resolve_meter_anchor(surface, clearance, ref_cells=anchors)
+    anchor = resolve_fine_anchor(surface, clearance, ref_cells=anchors)
     if anchor is None:
         return None
 

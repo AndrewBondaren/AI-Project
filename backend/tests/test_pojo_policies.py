@@ -40,7 +40,7 @@ class TestPojoPolicies(unittest.TestCase):
     def test_path_heading_policy_corridor_width(self):
         policy = PathHeadingPolicy.canonical_defaults()
         self.assertEqual(policy.position_history_max, 5)
-        self.assertEqual(policy.corridor_half_width_m(32), 32.0)
+        self.assertEqual(policy.corridor_half_width_fine(32), 32.0)
 
     def test_settlement_footprint_from_registry(self):
         self.assertTrue(

@@ -44,7 +44,7 @@ def _z_in_window(z: int, z_min: int | None, z_max: int | None) -> bool:
 
 
 class WildernessTilePackRenderer:
-    """L2 wilderness for one macro-tile — tile-local meter keys from chunk (cx,cy,lx,ly)."""
+    """L2 wilderness for one macro-tile — tile-local fine keys from chunk (cx,cy,lx,ly)."""
 
     def __init__(
         self,
@@ -52,13 +52,13 @@ class WildernessTilePackRenderer:
         *,
         tile_gx: int,
         tile_gy: int,
-        tile_size_m: int,
+        tile_macro: int,
         ray_index: GradeRayIndex | None = None,
         slot_index: GradeSlotIndex | None = None,
     ) -> None:
         self.tile_gx = tile_gx
         self.tile_gy = tile_gy
-        self.tile_size_m = tile_size_m
+        self.tile_macro = tile_macro
         self._cols: dict[tuple[int, int], FineTerrainColumnWire] = {}
         for chunk in chunks:
             cc = max(1, int(chunk.chunk_columns))
@@ -66,8 +66,8 @@ class WildernessTilePackRenderer:
                 tx = chunk.cx * cc + col.lx
                 ty = chunk.cy * cc + col.ly
                 self._cols[(tx, ty)] = col
-        origin_x = int(tile_gx) * int(tile_size_m)
-        origin_y = int(tile_gy) * int(tile_size_m)
+        origin_x = int(tile_gx) * int(tile_macro)
+        origin_y = int(tile_gy) * int(tile_macro)
         self._grade = pick_grade_consume_index(
             slot_index=slot_index,
             ray_index=ray_index,
@@ -85,8 +85,8 @@ class WildernessTilePackRenderer:
 
     def _world_xy(self, tx: int, ty: int) -> tuple[int, int]:
         return (
-            self.tile_gx * self.tile_size_m + tx,
-            self.tile_gy * self.tile_size_m + ty,
+            self.tile_gx * self.tile_macro + tx,
+            self.tile_gy * self.tile_macro + ty,
         )
 
     def _extra_headers(self, tx0: int, ty0: int, tx1: int, ty1: int) -> list[str]:
@@ -95,7 +95,7 @@ class WildernessTilePackRenderer:
         return [
             (
                 f"macro-tile=({self.tile_gx},{self.tile_gy})  "
-                f"tile_size_m={self.tile_size_m}  columns={self.column_count}"
+                f"tile_macro={self.tile_macro}  columns={self.column_count}"
             ),
             f"world meters x: {wx0}..{wx1 + 1}  y: {wy0}..{wy1 + 1}",
         ]

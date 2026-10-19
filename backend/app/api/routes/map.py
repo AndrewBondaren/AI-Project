@@ -214,7 +214,7 @@ async def pack_fine_terrain_read(
     - ``location_uid`` — location terrain ``locations/l.{uid}.terrain.zst``
     - ``gx,gy,cx,cy`` — wilderness chunk ``tiles/r.{gx}.{gy}.c.{cx}.{cy}.zst``
     - ``gx,gy`` — tile manifest entry + chunk index
-    - ``x,y,z`` — gameplay merge at world meter cell (layer priority WP-20)
+    - ``x,y,z`` — gameplay merge at world fine cell (layer priority WP-20)
     """
     world_svc = container.world_service()
     world = await world_svc.get_by_id(world_uid)
@@ -568,8 +568,8 @@ async def refine_from_entry_route(
         ),
         "scheduled_enqueued": scheduled.enqueued if scheduled else 0,
         "schedule_bg": schedule_bg,
-        "background_expand_radius_m": (
-            SceneVolumePolicy.canonical_defaults().background_expand_radius_m
+        "background_expand_radius_fine": (
+            SceneVolumePolicy.canonical_defaults().background_expand_radius_fine
         ),
     })
 
@@ -707,8 +707,8 @@ async def schedule_chunk_refine_route(
         "enqueued": scheduled.enqueued,
         "refine_queue_depth": scheduled.queue_depth,
         "climate_fine_tiles": scheduled.climate_fine_tiles,
-        "background_expand_radius_m": (
-            SceneVolumePolicy.canonical_defaults().background_expand_radius_m
+        "background_expand_radius_fine": (
+            SceneVolumePolicy.canonical_defaults().background_expand_radius_fine
         ),
     })
 

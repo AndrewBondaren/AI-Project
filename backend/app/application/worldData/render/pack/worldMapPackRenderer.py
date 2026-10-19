@@ -56,11 +56,11 @@ class WorldMapPackRenderer:
         self,
         tiles: list[PackTileLightView],
         *,
-        tile_size_m: int,
+        tile_macro: int,
         pins: LocationsIndexWire | None = None,
         location_types: WorldLocationTypeRegistry | None = None,
     ) -> None:
-        self._tile_m = max(1, int(tile_size_m))
+        self._tile_macro = max(1, int(tile_macro))
         self._by_xy: dict[tuple[int, int], PackTileLightView] = {
             (t.gx, t.gy): t for t in tiles
         }
@@ -69,7 +69,7 @@ class WorldMapPackRenderer:
         )
         self._location_types = location_types
         self._location_mark_pins = location_mark_pins(self._pins, registry=location_types)
-        self._pin_macros = pin_macros(self._location_mark_pins, self._tile_m)
+        self._pin_macros = pin_macros(self._location_mark_pins, self._tile_macro)
 
     def tile_count(self) -> int:
         return len(self._by_xy)
@@ -83,7 +83,7 @@ class WorldMapPackRenderer:
         gy1: int | None = None,
     ) -> MosaicFrame | None:
         return resolve_mosaic_frame(
-            self._by_xy, self._tile_m, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
+            self._by_xy, self._tile_macro, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
         )
 
     @staticmethod
@@ -109,7 +109,7 @@ class WorldMapPackRenderer:
     ) -> str:
         """Coarse overview: one symbol per macro-tile. Not L0 mask SoT."""
         return _macro_bbox(
-            self._by_xy, self._tile_m, self._pin_macros,
+            self._by_xy, self._tile_macro, self._pin_macros,
             gx0, gy0, gx1, gy1, mark_location=mark_location,
             index_pins=self._pins, location_types=self._location_types,
         )
@@ -117,7 +117,7 @@ class WorldMapPackRenderer:
     def render_macro(self, *, mark_location: bool = False) -> str:
         """Coarse overview aggregate — not L0 mask SoT."""
         return _macro(
-            self._by_xy, self._tile_m, self._pin_macros,
+            self._by_xy, self._tile_macro, self._pin_macros,
             mark_location=mark_location,
             index_pins=self._pins, location_types=self._location_types,
         )
@@ -135,13 +135,13 @@ class WorldMapPackRenderer:
             return ""
         return draw_symbol_grid(
             collect_tile_mask_symbols(
-                tile, self._location_mark_pins, self._tile_m, mark_location=mark_location,
+                tile, self._location_mark_pins, self._tile_macro, mark_location=mark_location,
                 index_pins=self._pins, location_types=self._location_types,
             ),
             title=f"tile Gx={gx} Gy={gy}  (pack L0 light grid {tile.side}×{tile.side})",
             coord_prefix="light ",
             bounds=(0, tile.side - 1, 0, tile.side - 1),
-            fine_span=max(1, self._tile_m // tile.side),
+            fine_span=max(1, self._tile_macro // tile.side),
             x_rulers=False,
         )
 
@@ -161,7 +161,7 @@ class WorldMapPackRenderer:
             coord_prefix="light ",
             width=width,
             bounds=(0, tile.side - 1, 0, tile.side - 1),
-            fine_span=max(1, self._tile_m // tile.side),
+            fine_span=max(1, self._tile_macro // tile.side),
         )
         if not hist:
             return ascii_h
@@ -187,7 +187,7 @@ class WorldMapPackRenderer:
         if frame is None:
             return ""
         pin_wxy = (
-            pin_world_xy(self._location_mark_pins, frame, self._tile_m) if mark_location else set()
+            pin_world_xy(self._location_mark_pins, frame, self._tile_macro) if mark_location else set()
         )
         return draw_symbol_grid(
             collect_mask_symbols(
@@ -236,7 +236,7 @@ class WorldMapPackRenderer:
 
     def render_tile_light_grade_grid(self, gx: int, gy: int) -> str:
         """L0 relief facing ASCII — PAR-G5 omit, leftover dump path."""
-        return _tile_grade(self._by_xy, gx, gy, self._tile_m)
+        return _tile_grade(self._by_xy, gx, gy, self._tile_macro)
 
     def render_light_grade_mosaic(
         self,
@@ -248,7 +248,7 @@ class WorldMapPackRenderer:
     ) -> tuple[str, str]:
         """Relief grade overlay. No grade cells → ``(\"\", \"\")``."""
         return _grade_mosaic(
-            self._by_xy, self._tile_m, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
+            self._by_xy, self._tile_macro, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
         )
 
     def render_all_tile_light_grids(

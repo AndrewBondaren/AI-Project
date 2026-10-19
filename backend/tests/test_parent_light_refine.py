@@ -219,7 +219,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         w.terrain_registry = None
         fine = upsample_terrain_from_parent_light(parent, w)
         self.assertEqual(len(fine), 8 * 8)
-        # World meters for tile (0,0): lx in left half → mountain
+        # World fine cells for tile (0,0): lx in left half → mountain
         left = {(xm, ym) for (xm, ym), t in fine.items() if t == "mountain"}
         right = {(xm, ym) for (xm, ym), t in fine.items() if t == "plains"}
         self.assertTrue(left)

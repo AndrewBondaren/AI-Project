@@ -71,7 +71,7 @@ class TestPackRenderReadFacade(unittest.TestCase):
         self.assertEqual(len(src.tiles), 1)
         self.assertEqual(src.tiles[0].gx, 0)
         self.assertEqual(len(src.pins.locations), 1)
-        self.assertEqual(src.tile_size_m, 3000)
+        self.assertEqual(src.tile_macro, 3000)
 
     def test_has_and_try_location_terrain(self) -> None:
         chunk = FineTerrainChunkWire(

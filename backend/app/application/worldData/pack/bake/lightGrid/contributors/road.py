@@ -16,7 +16,7 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
     dilate,
-    light_polyline_from_meters,
+    light_polyline_from_fine,
 )
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
 from app.dataModel.worldPack.wire.paintedRoadEdge import PaintedRoadEdge
@@ -26,7 +26,7 @@ from app.db.models.namedLocation import NamedLocation
 logger = logging.getLogger(__name__)
 
 
-def _node_meters(
+def _node_fine(
     node_uid: str,
     nodes_by_uid: dict,
     locations_by_uid: dict[str, NamedLocation],
@@ -76,11 +76,11 @@ class RoadContributor:
                 continue
             if edge.graph_level not in level_set:
                 continue
-            a = _node_meters(edge.from_node_uid, nodes_by_uid, locations_by_uid)
-            b = _node_meters(edge.to_node_uid, nodes_by_uid, locations_by_uid)
+            a = _node_fine(edge.from_node_uid, nodes_by_uid, locations_by_uid)
+            b = _node_fine(edge.to_node_uid, nodes_by_uid, locations_by_uid)
             if a is None or b is None:
                 continue
-            ordered = light_polyline_from_meters([a, b], scale)
+            ordered = light_polyline_from_fine([a, b], scale)
             light_cells = set(ordered)
             if policy.dilate_radius_light > 0:
                 light_cells = dilate(light_cells, int(policy.dilate_radius_light))

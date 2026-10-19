@@ -38,18 +38,18 @@ async def schedule_tile_background(
     tile_gy: int,
     *,
     skip_scene_rects: set[tuple[int, int]] | None = None,
-    max_radius_m: float | None = None,
+    max_radius_fine: float | None = None,
 ) -> int:
     """Enqueue background chunks near anchor — WP-13 rings, not whole tile (WP-PERF-10)."""
-    cell_m = map_cell_fine_span(world)
+    tile_macro = map_cell_fine_span(world)
     chunk_size = terrain_chunk_columns(world)
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
     skip = skip_scene_rects or set()
     policy = SceneVolumePolicy.canonical_defaults()
     radius = (
-        float(max_radius_m)
-        if max_radius_m is not None
-        else float(policy.background_expand_radius_m)
+        float(max_radius_fine)
+        if max_radius_fine is not None
+        else float(policy.background_expand_radius_fine)
     )
     count = 0
     for rect in iter_fine_chunks(fine_bbox, chunk_size):
@@ -63,7 +63,7 @@ async def schedule_tile_background(
             anchor_x=float(anchor_x),
             anchor_y=float(anchor_y),
             chunk_columns=chunk_size,
-            tile_size_m=cell_m,
+            tile_macro=tile_macro,
         ):
             count += 1
     if count:

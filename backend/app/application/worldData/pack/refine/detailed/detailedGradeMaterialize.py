@@ -16,7 +16,7 @@ from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFac
 from app.application.worldData.generators.terrain.relief.log.log import relief_debug
 from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import RibbonGradeResult
 from app.application.worldData.pack.refine.detailed.detailedGradeResult import GradeFormation
-from app.application.worldData.pack.refine.meterGradeSurface import Coord
+from app.application.worldData.pack.refine.fineGradeSurface import Coord
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 
 

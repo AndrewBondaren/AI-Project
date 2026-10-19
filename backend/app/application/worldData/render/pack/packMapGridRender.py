@@ -47,7 +47,7 @@ class PackMapGridRender:
     ) -> WorldMapPackRenderer:
         return WorldMapPackRenderer(
             source.tiles,
-            tile_size_m=source.tile_size_m,
+            tile_macro=source.tile_macro,
             pins=pins if pins is not None else source.pins,
             location_types=location_types_for_world(world),
         )
@@ -81,10 +81,10 @@ class PackMapGridRender:
 
         pins = source.pins.locations
         if pins:
-            cell_m = max(1, int(getattr(world, "fine_cells_per_map_cell", None) or source.tile_size_m))
+            tile_macro = max(1, int(getattr(world, "fine_cells_per_map_cell", None) or source.tile_macro))
             padding = grid_bbox_padding(world)
-            xs = [int(p.map_x) // cell_m for p in pins]
-            ys = [int(p.map_y) // cell_m for p in pins]
+            xs = [int(p.map_x) // tile_macro for p in pins]
+            ys = [int(p.map_y) // tile_macro for p in pins]
             return (
                 min(xs) - padding,
                 min(ys) - padding,
@@ -335,7 +335,7 @@ class PackMapGridRender:
             source.chunks,
             tile_gx=source.gx,
             tile_gy=source.gy,
-            tile_size_m=source.tile_size_m,
+            tile_macro=source.tile_macro,
             slot_index=GradeSlotIndex(source.slots),
         )
         occupied = list(renderer.z_levels())

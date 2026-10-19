@@ -35,7 +35,7 @@ from app.application.worldData.generators.terrain.relief.validate.gradeCellRays 
     validate_grade_cell_empty_rays,
 )
 from app.application.worldData.pack.refine.gradeRimRays import pack_slots_for_persist
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import (
@@ -92,7 +92,7 @@ def _discover_open_land(z: dict[tuple[int, int], int]) -> tuple[FrontGeometry, .
     plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
-    surface = MeterGradeSurface(
+    surface = FineGradeSurface(
         surface_z=z,
         surface_terrain={xy: plains for xy in z},
         hydrology=None,

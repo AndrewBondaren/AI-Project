@@ -1,4 +1,4 @@
-"""Meter-grid read/write adapter for detailed grade generate — R36u."""
+"""Fine-grid read/write adapter for detailed grade generate — R36u."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ Coord = tuple[int, int]
 
 
 @dataclass
-class MeterGradeSurface:
-    """Fine-tile meter columns: **read** parent z + local uid bag.
+class FineGradeSurface:
+    """Fine-tile columns: **read** parent z + local uid bag.
 
     Volume z writes belong on ``DetailedGradeResult.surface_z`` (GradeWriteSet),
     never ``surface_z[xy] =`` on an aliased heightmap. Uid writes go through
@@ -37,7 +37,7 @@ class MeterGradeSurface:
         state: TileSurfaceState,
         *,
         alias_heights: bool = False,
-    ) -> MeterGradeSurface:
+    ) -> FineGradeSurface:
         terrain = state.surface_terrain or {}
         if alias_heights:
             return cls(
@@ -74,13 +74,13 @@ class MeterGradeSurface:
         return bool(self.grade_uid.get(xy))
 
 
-def apply_grade_uids(surface: MeterGradeSurface, uids: Mapping[Coord, str]) -> None:
+def apply_grade_uids(surface: FineGradeSurface, uids: Mapping[Coord, str]) -> None:
     """Local uid bag for later seeds/segments. Not a heightmap write."""
     surface.grade_uid.update(uids)
 
 
 def _road_grade_or_hydro_blocked(
-    surface: MeterGradeSurface,
+    surface: FineGradeSurface,
     xy: Coord,
     *,
     road_key: str,
@@ -98,14 +98,14 @@ def _road_grade_or_hydro_blocked(
     return role is not None and role.blocks_grade_seed()
 
 
-def meter_grade_cell_blocked(
-    surface: MeterGradeSurface,
+def fine_grade_cell_blocked(
+    surface: FineGradeSurface,
     xy: Coord,
     *,
     road_key: str,
     barrier_keys: frozenset[str],
 ) -> bool:
-    """Clearance adapter for meter ribbon (R36m / R36u-T-9 residual)."""
+    """Clearance adapter for fine ribbon (R36m / R36u-T-9 residual)."""
     if surface.z_height_map(xy) is None:
         return True
     return _road_grade_or_hydro_blocked(

@@ -30,7 +30,7 @@ class MosaicFrame:
 
 def resolve_mosaic_frame(
     by_xy: TileIndex,
-    tile_size_m: int,
+    tile_macro: int,
     *,
     gx0: int | None,
     gy0: int | None,
@@ -74,7 +74,7 @@ def resolve_mosaic_frame(
         gx1=gx1,
         gy1=gy1,
         side=side,
-        light_span=max(1, int(tile_size_m) // side),
+        light_span=max(1, int(tile_macro) // side),
         lx0=gx0 * side,
         lx1=(gx1 + 1) * side - 1,
         ly0=gy0 * side,
