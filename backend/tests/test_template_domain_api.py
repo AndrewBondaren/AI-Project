@@ -133,7 +133,7 @@ class TemplateDomainApiTests(_ServiceCase):
             self.assertEqual(result.status_code, 422, result.text)
         self.assertFalse(await self.members.list_by_pack(pack.pack_uid))
 
-    async def test_legacy_outline_validation_returns_converter_path_without_creating_world(self):
+    async def test_flat_body_section_is_rejected_without_creating_world(self):
         data = {"world": {"world_uid": "legacy", "name": "Legacy", "created_at": "2026-10-14"},
                 "building_templates": [{"system_name": "house", "display_name": "House"}]}
         validation = await self.post_world(data, validate=True)
@@ -141,26 +141,14 @@ class TemplateDomainApiTests(_ServiceCase):
         self.assertFalse(validation.json()["valid"])
         response = await self.post_world(data)
         self.assertEqual(response.status_code, 422, response.text)
-        self.assertTrue(any(i["loc"] == ["building_templates", 0, "structure"] for i in response.json()["detail"]))
+        self.assertTrue(any(i["loc"] == ["library_packs"] for i in response.json()["detail"]))
         self.assertFalse(await self.worlds.get_all())
         self.assertFalse(await self.packs.list_all())
 
-    async def test_flat_plot_http_import_uses_declared_plot_section_and_preserves_empty_main(self):
-        data = {"world": {"world_uid": "legacy", "name": "Vacant", "created_at": "2026-10-14"},
-                "plot_templates": [{"system_name": "garden", "display_name": "Garden",
-                                    "main_building": None, "secondary_buildings": []}]}
-        response = await self.post_world(data)
-        self.assertEqual(response.status_code, 200, response.text)
-        world, = await self.worlds.get_all()
-        pack, = await self.packs.list_world_owned(world.world_uid)
-        member, = await self.members.list_by_pack(pack.pack_uid)
-        self.assertEqual(member.library_kind, P.value)
-        self.assertIsNone((await self.service.read_member_body(member.template_uid))["main_building"])
-
-    async def test_empty_flat_plot_section_is_reported_as_zero_without_creating_library(self):
+    async def test_empty_flat_plot_section_is_rejected_without_creating_library(self):
         data = {"world": {"world_uid": "empty", "name": "Empty", "created_at": "2026-10-14"},
                 "plot_templates": []}
         response = await self.post_world(data)
-        self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["plot_templates"]["succeeded"], 0)
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertFalse(await self.worlds.get_all())
         self.assertFalse(await self.packs.list_all())

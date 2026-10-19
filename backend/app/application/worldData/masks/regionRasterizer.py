@@ -138,25 +138,37 @@ def claim_owners(claim: RegionClaim, root: str,
     return winners
 
 
-def _claim_membership(claim: RegionClaim, world: RasterWorld,
+class ClaimOwnersIndex:
+    """One ``claim_owners`` BFS per claim, shared by every sibling region.
+
+    Build once per ``RegionClaim`` per bake/refine pass; rasterize calls take
+    the index, so membership never re-runs the search per region or tile.
+    """
+
+    def __init__(self, claim: RegionClaim, root: str,
+                 topology: WorldTopology) -> None:
+        self.claim = claim
+        self.owners = claim_owners(claim, root, topology)
+
+
+def _claim_membership(index: ClaimOwnersIndex, world: RasterWorld,
                      spec_ctx: RegionRasterContext, *, scope: Bounds | None = None) -> set[Coord]:
     """Cells won by this UID. Scope filters output only; it cannot alter w."""
     root = seed_root(world)
-    owners = claim_owners(claim, root, spec_ctx.fine_topology())
-    return {coord for coord, seed in owners.items()
+    return {coord for coord, seed in index.owners.items()
             if seed.region_uid == spec_ctx.region_uid
             and (scope is None or scope[0] <= coord[0] <= scope[2] and scope[1] <= coord[1] <= scope[3])
             and _density(root, spec_ctx, coord)}
 
 
-def rasterize_claim_fine(claim: RegionClaim, world: RasterWorld,
+def rasterize_claim_fine(index: ClaimOwnersIndex, world: RasterWorld,
                          spec_ctx: RegionRasterContext, *, scope: Bounds | None = None) -> set[Coord]:
-    return _claim_membership(claim, world, spec_ctx, scope=scope)
+    return _claim_membership(index, world, spec_ctx, scope=scope)
 
 
-def rasterize_claim_light(claim: RegionClaim, world: RasterWorld,
+def rasterize_claim_light(index: ClaimOwnersIndex, world: RasterWorld,
                           spec_ctx: RegionRasterContext, *, scope: Bounds | None = None) -> frozenset[LightCellRef]:
-    coords = _claim_membership(claim, world, spec_ctx, scope=scope)
+    coords = _claim_membership(index, world, spec_ctx, scope=scope)
     scale = spec_ctx.scale
     cells = set()
     for coord in coords:

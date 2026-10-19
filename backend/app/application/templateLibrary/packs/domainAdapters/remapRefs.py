@@ -60,12 +60,12 @@ def remap_locations_section(rows, uid_map: Mapping[str, str], sources) -> list[d
     """Bundle ``locations[]`` rows → remapped member refs (B4).
 
     ``uid_map`` is the composed source→target member map of this import
-    (writer item projections + the legacy migration plan). ``sources``
+    (writer item projections). ``sources``
     are the ``WriteImportSource`` projections the same import writes —
-    their ``local_uid`` set is the *explicit* old plot/body map: a
-    non-UUID leftover is a legacy readable name, resolved only through
+    their ``local_uid`` set is the *explicit* member name map: a
+    non-UUID leftover is a readable name, resolved only through
     it. One candidate wins; ambiguity is an import error; no match
-    clears the ref to ``None`` (legacy rows whose identity is not
+    clears the ref to ``None`` (rows whose identity is not
     recoverable, never a guessed name).
     """
     names: dict[tuple[str, str], set[str]] = {}

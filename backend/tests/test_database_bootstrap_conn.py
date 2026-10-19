@@ -43,6 +43,7 @@ def _map_cell_patches_ddl() -> str:
         display_facing TEXT,
         glass_material TEXT,
         hydrology TEXT,
+        system_grade_uid TEXT,
         PRIMARY KEY (world_uid, x, y, z)
     );
     """

@@ -3,8 +3,9 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
+from app.application.templateLibrary.templateContracts import WorldTemplateSnapshot
 from app.application.worldData.persist.connectionPersistService import ConnectionPersistService
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import SettlementAssembleTimings
 from app.application.worldData.generators.structure.physicalTransition import physical_transition
@@ -45,8 +46,12 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
         await self.db.conn.execute("INSERT INTO worlds(world_uid,name,created_at) VALUES (?,?,?)",
                                    (self.world.world_uid, self.world.name, self.world.created_at))
         await self.db.conn.commit()
-        await self.db.conn.execute("INSERT INTO building_templates(template_uid,system_name,display_name,structure_type,data) "
-                                   "VALUES ('hut','hut','Hut','building','{}')")
+        await self.db.conn.execute(
+            "INSERT INTO library_packs(pack_uid,system_name,pack_name,display_name) "
+            "VALUES ('pack-probe','pack.probe','probe','Probe')")
+        await self.db.conn.execute(
+            "INSERT INTO library_pack_members(template_uid,pack_uid,library_kind,local_uid) "
+            "VALUES ('hut','pack-probe','plot_templates','hut')")
         await self.db.conn.commit()
         self.settlement = _settlement()
         self.locations = SqliteNamedLocationRepository(self.db)
@@ -74,8 +79,9 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
         self.generator = Mock()
         self.generator.generate_layout.return_value = self.layout
         self.invalidate = Mock()
+        snapshot = WorldTemplateSnapshot(world_uid="w1")
         self.job = SettlementOutdoorPackingJob(self.generator, self.persist, self.invalidate,
-            Mock(), Mock(), self.nodes, self.edges, self.locations)
+            MagicMock(load=AsyncMock(return_value=snapshot)), self.nodes, self.edges, self.locations)
 
     async def asyncTearDown(self):
         await self.db.disconnect()

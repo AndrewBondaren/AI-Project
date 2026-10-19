@@ -3,7 +3,7 @@ from collections.abc import Iterable
 
 from app.application.worldData.generators.terrain.landcover.types import RegionSource, ResolvedRegion
 from app.application.worldData.generators.terrain.landcover.regionIdentityCheck import require_unique_region_uids
-from app.application.worldData.masks.regionRasterContext import RegionRasterContext
+from app.application.worldData.masks.regionRasterContext import RegionClaim, RegionRasterContext
 from app.application.worldData.masks.regionRasterizer import claim_owners
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.worldPack.meta.wildernessRegionEntry import (
@@ -66,12 +66,12 @@ def build_region_index(regions: list[ResolvedRegion], scale: LightGridScale, *,
         for index, region in enumerate(regions)]
     require_unique_region_uids(regions)
     entries: list[WildernessRegionEntry] = []
-    claims: dict[int, tuple[dict, dict]] = {}
+    claims: dict[RegionClaim, tuple[dict, dict]] = {}
     for region in regions:
         ctx = RegionRasterContext(region.region_uid, region.spec, scale, region.topology)
         seed_boxes = {}
         if region.claim is not None:
-            key = id(region.claim)
+            key = region.claim
             if key not in claims:
                 claims[key] = _claim_bounds(claim_owners(region.claim, seed_root(region), ctx.fine_topology()))
             root_boxes,seed_boxes = claims[key]

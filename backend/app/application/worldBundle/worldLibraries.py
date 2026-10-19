@@ -14,7 +14,7 @@ LIBRARY_CONSUMED_SECTIONS = frozenset(REJECTED_FLAT_SECTIONS)
 
 def import_libraries(data):
     packs = tuple(packs_from_wire(data.get(BundleSection.LIBRARY_PACKS, [])))
-    flat = sorted(key for key in REJECTED_FLAT_SECTIONS if data.get(key))
+    flat = sorted(key for key in REJECTED_FLAT_SECTIONS if key in data)
     if flat:
         raise LibraryPackValidationError(
             "flat template body sections were removed; template bodies travel "

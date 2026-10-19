@@ -2269,3 +2269,20 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; shims removed; P1-A roads literals |
 | 2026-06 | **HY-S registry:** BUNDLE-1, HY-5, HY-S-4, HY-GEO-1 |
 | 2026-06 | **`docs/tz_json_validation.md` v0.1** — Field Contract Registry; ENUM-E / REF-W / N1-S / N1-W (§0) |
+
+## Осознанный остаток «legacy» после срезки контрактов (2026-10-19)
+
+Трек [`legacy-contract-removal-done.md`](../.cursor/plans/legacy-contract-removal-done.md)
+снял старый формат данных (flat body-секции, world-owned `legacy` pack,
+old→new UID map, wire-алиасы чтения, loose-body world import). Ниже —
+места, где слово «legacy» осталось **осознанно** и принадлежит другим трекам:
+
+| Остаток | Файлы | Владелец / причина |
+|---|---|---|
+| Debug read-path `map_cells` | `render/legacyMapGridRender`, `mapGridRenderService`, `worldGridRenderer`, `locationGridRenderer`, `renderPayloads` (`ReadPath`), `mapCellService` (`PACK_LEGACY_GENERATE_MSG`, `reject_legacy_generate_on_pack`), `bootstrapMapCellWriter`, debug routes `map.py`/`locations.py` | Debug/smoke визуализация; pack-миграция debug рендеров — отдельный долг |
+| Deprecated имена кода | `WorldPerk` (класс), `reliefGeomWarn`, `footprint` re-export, `planner/defaults` re-export, `resolve.py` «legacy wire interpretation» | Переименования без контракта данных |
+| Алгоритмические | `seed_int` md5 (`deterministicIds`), `make_grade_uid` legacy mint, v1 Voronoi climate (`climateGeneratorService`, `anchorCollect`), `worldTile` legacy occupancy, `columnFillPass` legacy path, `planner/districts` `allow_legacy` (typical_district_types fallback), `economicTierBand` map shape, `gradeRimPackLegacy`/`gradeRimRays`/`gradeRayDump`, `packBlobWire` shell-only contract | Доменные треки (climate CL-8, wilderness, relief TD-4) |
+| REF-W `default_shore` / lore `terrain_shore` | `resolveRiverTypeClassify`, `validate.py` shore class, `worldLoreRegistry` | Hydrology/lore домен |
+| Landcover wire-алиасы | `landcoverWire`, `worldTerrainMasks.read_legacy_landcover`, `default_plains`/`default_forests`/`forest_min_rainfall` | **wilderness-10b** — владелец снятия |
+| Wire reject-guards (D2) | `_LEGACY_BODY_KEYS`/`_reject_legacy_body_wire` (plotLayoutTemplate), `_reject_legacy_width` (reliefGradeKnobs/reliefRoleCase/reliefTemplate), `reject_legacy_climate_status` (climateFieldWire) | Сознательно: старый ключ = явная ошибка, не silent drop |
+| `allow_legacy` district select | `planner/districts.py` | City-generation домен, не формат |

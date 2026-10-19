@@ -14,6 +14,15 @@ class RasterWorld(Protocol):
     world_uid: str
 
 
+def fine_topology(topology: WorldTopology, tile_macro: int) -> WorldTopology:
+    """Macro-tile topology lifted to fine cells; the same seam rules apply."""
+    bounds = topology.bounds
+    return WorldTopology(mode=topology.mode, bounds=WorldBounds(
+        x_min=bounds.x_min * tile_macro, x_max=(bounds.x_max + 1) * tile_macro - 1,
+        y_min=bounds.y_min * tile_macro, y_max=(bounds.y_max + 1) * tile_macro - 1,
+    ))
+
+
 @dataclass(frozen=True)
 class RegionRasterContext:
     region_uid: str
@@ -23,12 +32,7 @@ class RegionRasterContext:
     """Resolved topology in macro-tile coordinates, including sphere parity."""
 
     def fine_topology(self) -> WorldTopology:
-        bounds = self.topology.bounds
-        tile = self.scale.tile_m
-        return WorldTopology(mode=self.topology.mode, bounds=WorldBounds(
-            x_min=bounds.x_min * tile, x_max=(bounds.x_max + 1) * tile - 1,
-            y_min=bounds.y_min * tile, y_max=(bounds.y_max + 1) * tile - 1,
-        ))
+        return fine_topology(self.topology, self.scale.tile_m)
 
 
 @dataclass(frozen=True, order=True)

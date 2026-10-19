@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from app.application.worldData.generators.climate.climateAnchor import AnchorSource, ClimateAnchorPoint
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
@@ -28,6 +29,7 @@ def _world(**overrides):
         world_uid="world-light-test",
         fine_cells_per_map_cell=1000,
         world_map_cells_per_tile=None,
+        world_bounds={"x_min": 0, "x_max": 0, "y_min": 0, "y_max": 0},
         z_min=-2,
         z_max=4,
         map_subsurface_depth=0,
@@ -116,7 +118,9 @@ class TestLightGridCompose(unittest.TestCase):
         )
         surface = SurfaceTerrainContext(
             pole_field=pole,
-            local_field=ClimateAnchorField(()),
+            local_field=ClimateAnchorField((
+                ClimateAnchorPoint(0, 0, "temperate", "town-1", AnchorSource.AUTO),
+            )),
             coarse_hm=hm,
             coarse_hydro={
                 (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),

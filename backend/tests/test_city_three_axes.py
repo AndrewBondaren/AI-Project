@@ -426,15 +426,15 @@ class JsonValidationRecipeTest(unittest.TestCase):
         out = normalize_world({
             "name": "T",
             "created_at": "2026-01-01T00:00:00",
-            "location_type_registry": {
-                "geographic": {
-                    "display_name": "География",
-                    "subtypes": [{
-                        "system_subtype": "mountain",
-                        "unknown_master_key": True,
-                    }],
-                },
-            },
+            "location_type_registry": [{
+                "system_type": "geographic",
+                "display_type": "География",
+                "subtypes": [{
+                    "system_subtype": "mountain",
+                    "display_subtype": "Гора",
+                    "unknown_master_key": True,
+                }],
+            }],
         })
         self.assertTrue(out["location_type_registry"])
 

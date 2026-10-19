@@ -864,13 +864,28 @@ PRAGMA incremental_vacuum;         -- запускать после массов
   3. Отменить
 - Если валидных снапшотов в таймлайне нет → только варианты 2 и 3
 
-**Что входит в слепок:** схема мира на момент хода, состояние всех NPC, состояние игрока, состояние сессии.
+**Что входит в слепок:** схема мира на момент хода, состояние всех NPC, состояние сессии, patch set хода (дельта — [`tz_patch_system.md`](./tz_patch_system.md)). **Состояние игрока — в отдельной цепочке** `player_snapshots` (export/import, time travel):
+
+```
+player_snapshots
+  player_snapshot_id
+  player_uid
+  session_id             — к какой игровой сессии привязан
+  turn_id                — синхронизация с world_snapshots того же хода
+  created_at
+  parent_snapshot_id     — та же древовидная семантика, что world_snapshots
+  snapshot_data          — сжатый blob: memory (история, origin_timeline) + intrinsic (статы, инвентарь)
+                           placement НЕ входит — свойство session-binding, живёт в world blob
+  snapshot_checksum      — SHA256(snapshot_data)
+```
+
+Односторонняя зависимость: player может ссылаться на world-факты (memory); world никогда не ссылается на player. `attach` игрока к раннему world snapshot — reconcile-операция (player-патч), см. [`tz_patch_system.md`](./tz_patch_system.md).
 
 **Time travel назад** → загружаем snapshot → продолжаем → новый `timeline_id`, первый снапшот новой ветки ссылается на точку ответвления через `parent_snapshot_id`. Будущее не перезаписывается.
 
 **Time travel вперёд** → переход на любой snapshot любого существующего timeline.
 
-**Синхронизация событий между таймлайнами** — открытая проблема, реализуется в последнюю очередь.
+**Синхронизация событий между таймлайнами** — решено (2026-10): cross-timeline sync **не нужен**. Между ветками перемещается только игрок через `player_snapshots`; заброшенная ветка заморожена; продвигается только таймлайн, где находится игрок. См. [`tz_patch_system.md`](./tz_patch_system.md) § Timelines.
 
 ---
 
@@ -1271,7 +1286,7 @@ Template identity/persist refs — [доменные библиотеки §1/3/
 member-copy — назначенный runtime_uid; полный pack remap — существующее
 правило target pack + source template UID. Назначенные UID не пересчитываются.
 Отдельного split helper для каждого вложенного building не требуется:
-вложенность не создаёт member. При смене domain kind legacy mapping
+вложенность не создаёт member. При смене domain kind explicit uid_map
 записывает старую identity → новую по центральному UID-контракту;
 если исходник не содержит достаточной identity, импорт диагностирует это,
 а не угадывает pack по имени/source_file. Не вводить локальную hash-формулу.
@@ -2023,7 +2038,7 @@ member, kind проверяется consumer-контрактом; system_struct
 Обе ссылки входят в export/import/world-copy remap и usage/deletion.
 Structure ref не пересчитывается при чтении из изменившегося building
 template; regeneration обновляет его. None разрешён для объектов без
-structure и legacy unknown provenance; фиктивный member не создаётся.
+structure и unknown provenance; фиктивный member не создаётся.
 SQL/model/DTO синхронизируются в кодовом B4; это не snapshot версии тела.
 ```sql
 named_locations (

@@ -451,8 +451,9 @@ overrides canonical UID. Ручная замена — отдельная явн
 default library members с UID, body defaults остаются в POJO. Действует
 [доменный контракт §3–4](tz_domain_template_libraries.md); прежнее исключение
 plots вне SQL отменено. Runtime world catalog использует ownership ∪ defaults,
-а не bindings. Удаляемые world registry slices остаются только compatibility
-input до cutover; новый importer извлекает legacy данные до normalize.
+а не bindings. Registry pointer-колонки world (`*_template_registry` со старым
+pointer-форматом) и flat body-секции сняты 2026-10-18 — importer отклоняет
+их до normalize.
 
 **Global scope:** библиотека глобальна — partial-update мира к ней неприменим; авто-импорт покрывает только явно объявленные defaults из spec. Пак вне defaults
 автоматически импортировать запрещено. Пользовательские паки используются после
@@ -580,7 +581,7 @@ mixed-строками ломал любой PATCH до union-POJO; колонк
 
 - **Supplied = atomic**: caller передаёт колонку целиком (`partial=False`);
   `resolve_root_list` материализует canonical overlay + dump — та же семантика,
-  что у facade-merge. `wire_adapter` (legacy формы) работает на общем пути.
+  что у facade-merge. `wire_adapter` (canonical shape-адаптеры слайсов) работает на общем пути.
   Для отдельного поля multi-column атомарно само переданное значение;
   это не требование полного resolve всех соседних колонок POJO.
 - **Политика значений принадлежит POJO:** defaults, missing, допустимость null
@@ -606,9 +607,9 @@ mixed-строками ломал любой PATCH до union-POJO; колонк
   policy-автозаполнения; required/nullable/schema defaults определяет исходная
   модель. Ignore не означает пропуск ошибки или явно переданного null.
   `StrictOnWire` / `StrictEnumOnWire` не дают error default.
-  Legacy `DefaultOnWire` / `DefaultEnumOnWire` — aliases missing-only политики;
-  metadata `WireFieldPolicy.DEFAULT` deprecated, error-default execution path
-  удалён. Общей политики «null → сброс к default» нет; W2 её не вводит.
+  `DefaultOnWire` / `DefaultEnumOnWire` / `WireFieldPolicy.DEFAULT` —
+  удалены 2026-10-18 вместе с error-default execution path; canonical
+  missing-only имя — `DefaultWhenMissing`. Общей политики «null → сброс к default» нет; W2 её не вводит.
   Отсутствующая колонка scoped-операции не меняется. Допустимые явные
   `false`, `0` и пустые коллекции не считаются отсутствием через `if not value`.
   Это контракт полей POJO; root-коллекции используют существующий общий
@@ -741,7 +742,8 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 Контракт: строгий int без bool, ≥1000, кратно 1000; default берётся из
 `mapCellSize.FINE_CELLS_PER_MAP_CELL_DEFAULT`. Missing полного объекта →
 default; missing PATCH → не менять; explicit null / float / строка отклоняются.
-Legacy `map_cell_size_m` преобразуется facade до проверки; новое имя приоритетно.
+`map_cell_size_m` отклоняется facade (`REMOVED_FROM_WIRE`, 2026-10-18);
+принимается только `fine_cells_per_map_cell`.
 Create/import/master-PATCH/bundle используют facade; прямой `prepare_import`
 проверяет grid-слайс общим resolver на исходном mapping до конструктора World.
 Ошибки сохраняют path/schema/code в `ImportValidationError`; ручного блока

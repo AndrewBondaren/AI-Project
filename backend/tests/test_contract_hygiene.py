@@ -55,7 +55,6 @@ _PEEL_HEADS = frozenset({"Annotated", "ClassVar", "Optional"})
 KNOWN_HOLES: dict[tuple[str, str, str], str] = {
     # --- шаг 1: library_kind → LibraryKind ---
     ("app/application/templateLibrary/packs/lifecycleContracts.py", "MemberRef", "library_kind"): "1",
-    ("app/application/templateLibrary/packs/legacy/legacyWorldContracts.py", "LegacyPointerDecision", "library_kind"): "1",
     ("app/dataModel/libraryPacks/libraryPinEntry.py", "LibraryPinEntry", "library_kind"): "1+scan",
     ("app/dataModel/libraryPacks/packManifest.py", "LibraryPackManifestMember", "library_kind"): "1+scan",
     # --- шаг 2: connection_type → ConnectionTypeKey ---

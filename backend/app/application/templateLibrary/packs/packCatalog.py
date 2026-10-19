@@ -75,7 +75,7 @@ class PackCatalogRepos:
     """Bundle of pack-catalog repositories — one ctor param for consumers.
 
     ``deps`` is optional: flows that never attach dependency rows
-    (world-owned legacy member writes) wire only packs + members.
+    (world-owned member writes) wire only packs + members.
     """
 
     packs: ILibraryPackRepository

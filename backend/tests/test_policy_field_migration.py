@@ -116,7 +116,8 @@ class FieldMigrationTests(unittest.TestCase):
 
     def test_adapters_preserve_errors_and_missing_scalar_fields(self):
         self.assertEqual(climate_zone_wire_from_raw([{}, 0]), [{}, 0])
-        self.assertEqual(registry_map_to_list({"good": {}, "bad": 0}, id_field="id"), [{"id": "good"}, 0])
+        with self.assertRaisesRegex(ValueError, "dict-map form was removed"):
+            registry_map_to_list({"good": {}, "bad": 0}, id_field="id")
         for value in (False, 0, ""):
             self.assertEqual(registry_map_to_list(value, id_field="id"), value)
         self.assertEqual(scalar_wire_from_mapping(frozenset({"a", "b"}), {"a": None}), {"a": None})

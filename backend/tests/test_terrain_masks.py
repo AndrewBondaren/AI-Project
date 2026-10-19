@@ -113,11 +113,11 @@ class TestTerrainMasks(unittest.TestCase):
 
         path = Path(__file__).resolve().parents[2] / "fixtures" / "world_template.json"
         raw = json.loads(path.read_text(encoding="utf-8"))
-        hills = raw["world"]["terrain_masks"]
+        policies = raw["world"]["terrain_masks"]["default_landcover"]["terrain_policies"]
         plains = self.masks.default_landcover.hills_for(WorldTerrainRegistry.plains_terrain_key())
         forest = self.masks.default_landcover.hills_for(WorldTerrainRegistry.forest_terrain_key())
-        self.assertEqual(hills["default_plains"]["hills"], plains.model_dump(mode="json"))
-        self.assertEqual(hills["default_forests"]["hills"], forest.model_dump(mode="json"))
+        self.assertEqual(policies["plains"]["hills"], plains.model_dump(mode="json"))
+        self.assertEqual(policies["forest"]["hills"], forest.model_dump(mode="json"))
 
 
 

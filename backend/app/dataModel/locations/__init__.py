@@ -3,7 +3,7 @@
 поддомены `settlement/` и `structure/` (см. docs/tz_locations.md §Package layout).
 
 SCH-WORLD-LOC-TYPE — `worlds.location_type_registry` (N1-W-07).
-Эталон: fixtures/world_template.json (legacy map), docs/tz_locations.md (target array).
+Эталон: fixtures/world_template.json, docs/tz_locations.md.
 """
 
 from app.dataModel.locations.locationFootprintPolicy import (

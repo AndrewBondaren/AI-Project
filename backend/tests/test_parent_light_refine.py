@@ -41,6 +41,8 @@ from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 def _world_stub() -> MagicMock:
     return MagicMock(
         world_topology_mode=WorldTerrainScalars.canonical_defaults().world_topology_mode,
+        world_bounds={"x_min": 0, "x_max": 0, "y_min": 0, "y_max": 0},
+        hydrology={"enabled": False},
     )
 
 

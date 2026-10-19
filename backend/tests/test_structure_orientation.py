@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
+from app.ids import LibraryKind, library_uid
 from tests.test_u_shape_orientation_baseline import room
 from app.application.worldData.debugStructureRotations import RotationProbe, compare_rotation
 from app.application.worldData.generators.structure.errors import GenerationError
@@ -174,8 +175,9 @@ class StructureOrientationTests(unittest.TestCase):
     def test_full_generation_four_sides_matches_author_frame(self):
         root = Path(__file__).resolve().parents[2] / "structures_templates/base"
         structures = [simple_structure("east"), simple_structure("south")]
-        from app.application.templateLibrary.packs.uidMap import base_member_uid
-        for uid in (base_member_uid("tavern_1"), base_member_uid("manor_1")):
+        pack_uid = library_uid(LibraryKind.LIBRARY_PACKS, "engine.structures.base")
+        for uid in (library_uid(LibraryKind.STRUCTURE_TEMPLATES, "tavern_1", pack_uid=pack_uid),
+                    library_uid(LibraryKind.STRUCTURE_TEMPLATES, "manor_1", pack_uid=pack_uid)):
             structures.append(StructureTemplate.model_validate(json.loads((root / (uid + ".json")).read_text(encoding="utf-8"))))
         world, building = test_world_building()
         for structure in structures:

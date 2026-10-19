@@ -120,7 +120,8 @@ def paint_regions_fine(
         )
         if region.claim is not None:
             coords = rasterize_claim_fine(
-                region.claim, world, raster_ctx, scope=tile_bbox,
+                materializer.claim_index(region.claim, world, raster_ctx),
+                world, raster_ctx, scope=tile_bbox,
             )
         else:
             coords = rasterize_fine(region.spec.shape, world, raster_ctx)

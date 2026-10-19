@@ -10,8 +10,12 @@ from app.application.worldData.generators.terrain.landcover.types import Landcov
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.application.worldData.masks.regionPrecedence import RegionCandidate
-from app.application.worldData.masks.regionRasterContext import RegionRasterContext
-from app.application.worldData.masks.regionRasterizer import rasterize_claim_light, rasterize_light
+from app.application.worldData.masks.regionRasterContext import (
+    RasterWorld, RegionClaim, RegionRasterContext,
+)
+from app.application.worldData.masks.regionRasterizer import (
+    ClaimOwnersIndex, rasterize_claim_light, rasterize_light,
+)
 from app.application.worldData.masks.runMaskDomain import default_collect
 from app.application.worldData.regions.coverageBackground import coverage_registry
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
@@ -33,11 +37,13 @@ class LandcoverMaterializer:
         self.winners: dict[LightCellRef, RegionCandidate] = {}
         self.hydrology_entries = ()
         self.resolved_regions: list[ResolvedRegion] = []
+        self._claim_indexes: dict[RegionClaim, ClaimOwnersIndex] = {}
 
     def begin_pass(self) -> None:
         self.winners.clear()
         self.resolved_regions.clear()
         self.hydrology_entries = ()
+        self._claim_indexes.clear()
 
     def category_policy(self, masks: WorldTerrainMasks) -> LandcoverRegionsCategoryPolicy:
         return masks.default_landcover
@@ -55,8 +61,21 @@ class LandcoverMaterializer:
     def autoresolve_specs(self, ctx: LightGridBakeContext, policy: MaskCategoryPolicy) -> list[ResolvedRegion]:
         if not isinstance(policy, LandcoverRegionsCategoryPolicy):
             raise TypeError("landcover expects LandcoverRegionsCategoryPolicy")
-        return autoresolve_regions(ctx.world.world_uid, seed_root(ctx.world), ctx.scale.tile_m,
-                                   self.inputs, policy, coverage_registry(terrain(ctx.world), policy, autoresolve=True))
+        regions, index = autoresolve_regions(
+            ctx.world.world_uid, seed_root(ctx.world), ctx.scale.tile_m,
+            self.inputs, policy, coverage_registry(terrain(ctx.world), policy, autoresolve=True))
+        # The same owners map serves claim_area and every sibling materialize.
+        self._claim_indexes[index.claim] = index
+        return regions
+
+    def claim_index(self, claim: RegionClaim, world: RasterWorld,
+                    raster_ctx: RegionRasterContext) -> ClaimOwnersIndex:
+        """Owners map per claim, shared by all sibling regions in this pass."""
+        index = self._claim_indexes.get(claim)
+        if index is None:
+            index = ClaimOwnersIndex(claim, seed_root(world), raster_ctx.fine_topology())
+            self._claim_indexes[claim] = index
+        return index
 
     def collect(self, ctx: LightGridBakeContext, policy: MaskCategoryPolicy) -> list[ResolvedRegion]:
         regions = default_collect(
@@ -71,7 +90,8 @@ class LandcoverMaterializer:
 
     def materialize(self, spec: ResolvedRegion, scale: LightGridScale) -> MaskFootprint:
         raster_context = RegionRasterContext(spec.region_uid, spec.spec, scale, spec.topology)
-        cells = (rasterize_claim_light(spec.claim, spec, raster_context) if spec.claim is not None
+        cells = (rasterize_claim_light(self.claim_index(spec.claim, spec, raster_context), spec, raster_context)
+                 if spec.claim is not None
                  else rasterize_light(spec.spec.shape, spec, raster_context))
         return MaskFootprint(cells)
 

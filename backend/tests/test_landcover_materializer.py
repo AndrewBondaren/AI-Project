@@ -4,6 +4,7 @@ from dataclasses import replace
 from itertools import permutations
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
@@ -14,7 +15,9 @@ from app.application.worldData.generators.terrain.landcover.hydrologyIndex impor
 from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
 from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, LandcoverInputs, RegionSource, StateSnapshotEntry
 from app.application.worldData.masks.regionRasterContext import RegionRasterContext
-from app.application.worldData.masks.regionRasterizer import rasterize_claim_fine, rasterize_fine
+from app.application.worldData.masks.regionRasterizer import (
+    ClaimOwnersIndex, claim_owners, rasterize_claim_fine, rasterize_fine,
+)
 from app.application.worldData.masks.runMaskDomain import run_mask_domain
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
@@ -35,6 +38,7 @@ from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.worldBounds import WorldBounds
 from app.dataModel.worldPack.wire.worldTopology import WorldTopology
 from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.ids import seed_root
 from app.ids.regionIdentity import region_uid
 
 
@@ -220,9 +224,11 @@ class LandcoverMaterializerTests(unittest.TestCase):
         changed = False
         for region in auto:
             context = RegionRasterContext(region.region_uid, region.spec, self.scale, region.topology)
-            noisy = rasterize_claim_fine(region.claim, region, context)
+            index = ClaimOwnersIndex(region.claim, seed_root(region), context.fine_topology())
+            noisy = rasterize_claim_fine(index, region, context)
             claim = replace(region.claim, noise=EdgeNoise(amplitude=0, scale=3))
-            changed |= noisy != rasterize_claim_fine(claim, region, context)
+            changed |= noisy != rasterize_claim_fine(
+                ClaimOwnersIndex(claim, seed_root(region), context.fine_topology()), region, context)
         self.assertTrue(changed)
 
     def test_hydrology_is_only_indexed_without_guessed_ownership(self):
@@ -267,8 +273,21 @@ class LandcoverMaterializerTests(unittest.TestCase):
         plugin = self.plugin()
         for region in plugin.autoresolve_specs(self.ctx, self.policy):
             context = RegionRasterContext(region.region_uid, region.spec, self.scale, region.topology)
-            self.assertEqual(region.claim_area, len(rasterize_claim_fine(region.claim, region, context)))
+            index = ClaimOwnersIndex(region.claim, seed_root(region), context.fine_topology())
+            self.assertEqual(region.claim_area, len(rasterize_claim_fine(index, region, context)))
             self.assertLess(region.claim_area, region.spec.shape.area())
+
+    def test_claim_owners_index_is_one_bfs_per_claim_per_pass(self):
+        plugin = self.plugin()
+        with patch("app.application.worldData.masks.regionRasterizer.claim_owners",
+                   wraps=claim_owners) as spy:
+            regions = plugin.autoresolve_specs(self.ctx, self.policy)
+            shared = [region for region in regions if region.claim is not None]
+            self.assertTrue(shared)
+            self.assertEqual(len({region.claim for region in shared}), 1)
+            for region in shared:
+                plugin.materialize(region, self.scale)
+        self.assertEqual(spy.call_count, 1)
 
 
 if __name__ == "__main__":

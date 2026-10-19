@@ -12,7 +12,7 @@ def prepare_import_row(model: type[T], row: dict) -> T:
     """Validate constructor shape before persistence, without changing wire types.
 
     DB dataclass annotations are storage metadata; wire POJOs own field types.
-    In particular some legacy registry columns accept list wire in dict columns.
+    In particular some registry columns accept list wire in dict columns.
     """
     try:
         signature(model).bind(**row)

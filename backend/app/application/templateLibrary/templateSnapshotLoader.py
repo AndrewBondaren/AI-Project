@@ -4,7 +4,7 @@ Reads the world's membership-scoped ``EffectiveCatalog`` (5a), prepares
 typed bodies through the domain adapters and returns one immutable
 ``WorldTemplateSnapshot`` keyed by member ``template_uid``. Sync
 generators/planners receive the snapshot-derived catalogs and never touch
-SQL, the filesystem or the legacy world registries.
+SQL or the filesystem.
 
 Boundary duties (TZ packs §5/§7, domain libraries §5):
 - availability = membership only; pins are author-usage markers and never

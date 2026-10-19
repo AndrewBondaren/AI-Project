@@ -72,6 +72,7 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
             f"INSERT INTO {row.__table__} ({', '.join(columns)}) "
             f"VALUES ({', '.join('?' for _ in columns)})", values,
         )
+        await self.db.conn.commit()
 
     async def stored_aggregate(self, aggregate, *, registry=None):
         rows = to_transition_rows(aggregate)
@@ -194,6 +195,7 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
         await self.db.conn.execute("DELETE FROM transitions WHERE transition_uid=?", (rows.transition.transition_uid,))
         async with self.db.conn.execute("SELECT count(*) FROM transition_sides") as cursor:
             self.assertEqual((await cursor.fetchone())[0], 0)
+        await self.db.conn.commit()
 
     async def test_projection_rejects_incomplete_duplicate_or_mismatched_sides(self) -> None:
         rows = to_transition_rows(self.aggregate())

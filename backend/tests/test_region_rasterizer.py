@@ -7,8 +7,9 @@ import unittest
 from app.application.worldData.masks.footprint import LightCellRef
 from app.application.worldData.masks.regionRasterContext import ClaimSeed, RegionClaim, RegionRasterContext
 from app.application.worldData.masks.regionRasterizer import (
-    rasterize_claim_fine, rasterize_claim_light, rasterize_fine, rasterize_light,
+    ClaimOwnersIndex, rasterize_claim_fine, rasterize_claim_light, rasterize_fine, rasterize_light,
 )
+from app.ids import seed_root
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_m
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EdgeNoise, EllipseShape, PolygonShape
 from app.dataModel.terrainMasks.regions import ForestSpec
@@ -34,6 +35,10 @@ class RegionRasterizerTests(unittest.TestCase):
 
     def with_mode(self, mode):
         return replace(self.ctx, topology=WorldTopology(mode=mode, bounds=self.bounds))
+
+    def index(self, claim, ctx=None):
+        ctx = ctx or self.ctx
+        return ClaimOwnersIndex(claim, seed_root(self.world), ctx.fine_topology())
 
     def centers(self, ctx):
         bounds, scale = ctx.topology.bounds, ctx.scale
@@ -180,58 +185,59 @@ class RegionRasterizerTests(unittest.TestCase):
         left = ClaimSeed((10, 10), self.uid)
         right = ClaimSeed((20, 10), self.other_uid)
         claim = RegionClaim((right, left), max_radius=10, noise=self.no_noise)
-        fine = rasterize_claim_fine(claim, self.world, self.ctx)
+        fine = rasterize_claim_fine(self.index(claim), self.world, self.ctx)
         self.assertIn((15, 10), fine)
         self.assertNotIn((16, 10), fine)
         self.assertTrue(all(abs(x - 10) + abs(y - 10) <= claim.max_radius for x, y in fine))
-        self.assertEqual(fine, rasterize_claim_fine(replace(claim, seeds=(left, right)), self.world, self.ctx))
+        self.assertEqual(fine, rasterize_claim_fine(self.index(replace(claim, seeds=(left, right))), self.world, self.ctx))
 
     def test_claim_noise_distinguishes_seeds_and_bends_competition_boundary(self):
         seeds = (ClaimSeed((10, 10), self.uid), ClaimSeed((20, 10), self.other_uid))
         claim = RegionClaim(seeds, max_radius=18, noise=EdgeNoise(amplitude=4, scale=4))
-        fine = rasterize_claim_fine(claim, self.world, self.ctx)
+        fine = rasterize_claim_fine(self.index(claim), self.world, self.ctx)
         right_edges = [max(x for x in range(8, 23) if (x, y) in fine) for y in range(4, 17)]
         self.assertGreater(len(set(right_edges)), 1)
-        self.assertEqual(fine, rasterize_claim_fine(claim, self.world, self.ctx))
-        other = rasterize_claim_fine(claim, self.world, replace(self.ctx, region_uid=self.other_uid))
+        self.assertEqual(fine, rasterize_claim_fine(self.index(claim), self.world, self.ctx))
+        other = rasterize_claim_fine(self.index(claim), self.world, replace(self.ctx, region_uid=self.other_uid))
         self.assertFalse(fine & other)
 
     def test_claim_scope_filters_result_and_never_truncates_competitors(self):
         seeds = (ClaimSeed((4, 9), self.uid), ClaimSeed((14, 9), self.other_uid))
         claim = RegionClaim(seeds, max_radius=12, noise=EdgeNoise(amplitude=3, scale=4))
-        full = rasterize_claim_fine(claim, self.world, self.ctx)
+        full = rasterize_claim_fine(self.index(claim), self.world, self.ctx)
         scope = (0, 0, 9, 23)
-        partial = rasterize_claim_fine(claim, self.world, self.ctx, scope=scope)
+        partial = rasterize_claim_fine(self.index(claim), self.world, self.ctx, scope=scope)
         self.assertEqual(partial, {(x, y) for x, y in full if x <= scope[2]})
-        full_light = rasterize_claim_light(claim, self.world, self.ctx)
+        full_light = rasterize_claim_light(self.index(claim), self.world, self.ctx)
         self.assertEqual(full_light, frozenset(cell for cell, center in self.centers(self.ctx).items() if center in full))
 
     def test_claim_uses_wrapped_and_sphere_neighbors_and_planar_void(self):
         claim = RegionClaim((ClaimSeed((0, 10), self.uid),), max_radius=2, noise=self.no_noise)
-        planar = rasterize_claim_fine(claim, self.world, self.ctx)
-        wrapped = rasterize_claim_fine(claim, self.world, self.with_mode(WorldTopologyMode.WRAPPED))
+        planar = rasterize_claim_fine(self.index(claim), self.world, self.ctx)
+        wrapped = rasterize_claim_fine(self.index(claim, self.with_mode(WorldTopologyMode.WRAPPED)),
+                                       self.world, self.with_mode(WorldTopologyMode.WRAPPED))
         self.assertNotIn((31, 10), planar)
         self.assertIn((31, 10), wrapped)
         sphere_ctx = self.with_mode(WorldTopologyMode.SPHERE)
         polar = replace(claim, seeds=(ClaimSeed((3, 23), self.uid),), max_radius=1)
-        self.assertIn((19, 23), rasterize_claim_fine(polar, self.world, sphere_ctx))
+        self.assertIn((19, 23), rasterize_claim_fine(self.index(polar, sphere_ctx), self.world, sphere_ctx))
 
     def test_claim_canonical_seed_images_and_density_match_both_grids(self):
         ctx = self.with_mode(WorldTopologyMode.WRAPPED)
         ctx = replace(ctx, spec=self.spec.model_copy(update={"density": 0.6}))
         seed = ClaimSeed((31, 10), self.uid)
         claim = RegionClaim((seed,), max_radius=8, noise=EdgeNoise(amplitude=2, scale=4))
-        fine = rasterize_claim_fine(claim, self.world, ctx)
-        light = rasterize_claim_light(claim, self.world, ctx)
+        fine = rasterize_claim_fine(self.index(claim, ctx), self.world, ctx)
+        light = rasterize_claim_light(self.index(claim, ctx), self.world, ctx)
         image = replace(claim, seeds=(replace(seed, coord=(-1, 10)),))
-        self.assertEqual(fine, rasterize_claim_fine(image, self.world, ctx))
+        self.assertEqual(fine, rasterize_claim_fine(self.index(image, ctx), self.world, ctx))
         self.assertEqual(light, frozenset(cell for cell, center in self.centers(ctx).items() if center in fine))
 
     def test_empty_claim_zero_radius_and_invalid_cap(self):
         claim = RegionClaim((), max_radius=0, noise=self.no_noise)
-        self.assertEqual(rasterize_claim_fine(claim, self.world, self.ctx), set())
+        self.assertEqual(rasterize_claim_fine(self.index(claim), self.world, self.ctx), set())
         seed = ClaimSeed((3, 3), self.uid)
-        self.assertEqual(rasterize_claim_fine(replace(claim, seeds=(seed,)), self.world, self.ctx), {seed.coord})
+        self.assertEqual(rasterize_claim_fine(self.index(replace(claim, seeds=(seed,))), self.world, self.ctx), {seed.coord})
         with self.assertRaises(ValueError):
             replace(claim, max_radius=-1)
 

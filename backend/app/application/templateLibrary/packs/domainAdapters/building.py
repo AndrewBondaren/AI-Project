@@ -1,4 +1,4 @@
-"""Strict building member bodies; legacy outlines/plots require explicit conversion."""
+"""Strict building member bodies; unrepresentable wire fields reject."""
 
 from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplateBodyPreparation
 from app.application.templateLibrary.packs.domainAdapters.templateBodyAdapter import TemplateBodyAdapter

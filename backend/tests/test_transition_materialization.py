@@ -60,8 +60,12 @@ class TransitionMaterializationTest(unittest.IsolatedAsyncioTestCase):
             main_building={"structure": structure.system_name, "foundation_type": "none", "roof_type": "none"},
             perimeter_barrier={"template": "stone_fence", "probability": 1.0})
         self.catalog = StructureCatalog([structure])
-        await self.db.conn.execute("INSERT INTO building_templates(template_uid,system_name,display_name,structure_type,data) "
-            "VALUES ('acceptance-plot','acceptance-plot','Plot','building','{}')")
+        await self.db.conn.execute(
+            "INSERT INTO library_packs(pack_uid,system_name,pack_name,display_name) "
+            "VALUES ('pack-acceptance','pack.acceptance','acceptance','Acceptance')")
+        await self.db.conn.execute(
+            "INSERT INTO library_pack_members(template_uid,pack_uid,library_kind,local_uid) "
+            f"VALUES ('{structure.system_name}','pack-acceptance','structure_templates','{structure.system_name}')")
         await self.db.conn.commit()
         self.extracted = extract_settlement(self.settlement, self.generate())
         self.context = self.extracted.transition_context

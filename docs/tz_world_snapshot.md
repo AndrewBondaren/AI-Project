@@ -13,9 +13,11 @@ metadata:
 | Принцип | Смысл |
 |---|---|
 | **Единый сервис** | Один `WorldSnapshotService` отвечает за capture / restore / branch / delete |
-| **Полный слепок на ход** | После **каждого хода** мир **целиком** сохраняется в `world_snapshots` |
+| **Полный слепок на ход** | После **каждого хода** мир **целиком** сохраняется в `world_snapshots`; набор доменных патчей хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
 | **Потребители** | Climate LOD, terrain regen, lazy sim, time travel, debug replay — **читают восстановленное состояние**, не делают свой ad-hoc snapshot |
 | **Не маска** | Snapshot — **состояние мира** (данные + сессия), не boolean mask и не один derived field |
+| **Игрок — отдельная цепочка** | Состояние игрока живёт в параллельной `player_snapshots`, синхронизированной по `turn_id` — export/import и time travel без привязки к world blob |
+| **Immutable** | Записанный snapshot никогда не мутируется; изменение = новый узел/ветка, не правка существующего |
 
 **Статус:** schema ✅ ([`project_data_storage_tz.md`](./project_data_storage_tz.md) § `world_snapshots`) · **runtime module ⬜** · capture на каждый ход ⬜
 
@@ -134,8 +136,9 @@ class WorldSnapshotService:
 | `map_cells` (materialized scope) | ✅ | lazy cells = absent until generated; после capture — как в БД |
 | `connection_nodes` / `connection_edges` | ✅ | |
 | `location_states`, `location_weather`, `location_resources` | ✅ | far-zone LOD state |
-| NPC + `character_sheet` + needs/goals | ✅ | |
+| NPC + `character_sheet` + needs/goals | ✅ | NPC — часть мира; **игрок — в `player_snapshots`**, см. ниже |
 | Active session + chat pointers | ✅ | messages могут оставаться отдельно — TBD |
+| Patch set хода | ✅ | дельта изменений хода — audit/diff/regen вход ([`tz_patch_system.md`](./tz_patch_system.md)); blob остаётся authoritative для restore |
 | **`SurfaceClimateField`** (optional derived) | ⬜ v2 | либо в blob, либо rebuild из map_cells + poles при restore |
 | Engine `snapshot_store` (chat pipeline) | ❌ | ephemeral; не world snapshot |
 
@@ -182,6 +185,16 @@ Target: materialization run **один раз** → persist → capture; сле�
 
 ---
 
+## Player snapshot — параллельная цепочка
+
+`player_snapshots` — отдельная цепочка, синхронизированная с `world_snapshots` по `turn_id`. Игрок отделён от мира ради **export/import** и **time travel**: переносится между мирами и ветками, его состояние не живёт внутри world blob.
+
+- Player state = `memory` (история, timeline-агностична, переживает откат мира, опционально `origin_timeline`) + `intrinsic` (статы, инвентарь). **Placement** — свойство session-binding `player↔world`, живёт в world blob («Active session»), в player state не входит.
+- Ослабленная односторонняя зависимость: player → world-факты (как memory); world знает session-bindings, но не player state.
+- `attach(player, world_snapshot)` — операция session-домена: создаёт привязку в целевом мире; результат — session-патч. Player ↔ npc scope migration — `tz_patch_system.md` § «Scope migration».
+
+Контракт patch-системы и attach — [`tz_patch_system.md`](./tz_patch_system.md). Schema — [`project_data_storage_tz.md`](./project_data_storage_tz.md) § `player_snapshots`.
+
 ## Порядок работ
 
 | Фаза | Scope |
@@ -205,7 +218,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 | Sparse vs full `map_cells` в blob для lazy worlds | открыт |
 | `SurfaceClimateField` — persist in blob vs recompute on restore | открыт (CL-17) |
 | Incremental capture (delta) vs full каждый ход | v1: **full**; delta — v2+ |
-| Sync events между timelines | отложено (storage TZ) |
+| Sync events между timelines | решено: sync нет — между ветками перемещается только игрок; продвигается только таймлайн с игроком ([`tz_patch_system.md`](./tz_patch_system.md) § Timelines) |
 
 ---
 
@@ -214,6 +227,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 | Дата | Изменение |
 |---|---|
 | 2026-06 | Initial TZ — единый `WorldSnapshotService`; disambiguation от climate field cache |
+| 2026-10 | Две цепочки: `world_snapshots` + `player_snapshots` (player отделён для export/import и time travel); patch set хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
 
 ---
 

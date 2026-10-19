@@ -120,6 +120,9 @@ class BundleNamedLocation(BaseModel):
         if not isinstance(raw, dict):
             return raw
         values = dict(raw)
+        for old in ("structure_counts", "structure_priority"):
+            if old in values:
+                raise ValueError(f"{old} was removed; use the plot_* key")
         registry = (info.context or {}).get("location_type_registry")
         if registry is None:
             registry = WorldLocationTypeRegistry.canonical_engine()

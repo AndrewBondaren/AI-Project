@@ -16,9 +16,8 @@ Ownership semantics (TZ §1.1 — availability = ownership or default):
 - World-owned packs are editable inside their world only.
 
 Membership is the single availability source (B6): member writes into a
-world-owned pack touch the catalog only — no registry pointer rows are
-written or dropped here; the legacy columns remain migration input until
-B7 removes them.
+world-owned pack touch the catalog only — registry pointer columns were
+removed (B7), nothing else is written or dropped here.
 
 This module is the facade only: shared deps + gates live in
 ``packScope``, result DTOs in ``packResults``. Body writes and imports

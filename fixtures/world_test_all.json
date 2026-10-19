@@ -42,12 +42,31 @@
     "wounds_enabled": false,
     "location_type_registry": [
       {
+        "system_type": "continent",
+        "display_type": "Континент",
+        "parent_types": [
+          null
+        ]
+      },
+      {
         "system_type": "region",
         "display_type": "Регион",
         "parent_types": [
           null,
           "continent"
         ]
+      },
+      {
+        "system_type": "district",
+        "display_type": "Район"
+      },
+      {
+        "system_type": "building",
+        "display_type": "Здание"
+      },
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       },
       {
         "system_type": "territory",
@@ -78,18 +97,6 @@
         ]
       },
       {
-        "system_type": "district",
-        "display_type": "Район"
-      },
-      {
-        "system_type": "building",
-        "display_type": "Здание"
-      },
-      {
-        "system_type": "room",
-        "display_type": "Комната"
-      },
-      {
         "system_type": "geographic",
         "display_type": "География",
         "parent_types": [
@@ -102,13 +109,6 @@
       {
         "system_type": "climate_pole",
         "display_type": "Климатический полюс"
-      },
-      {
-        "system_type": "continent",
-        "display_type": "Континент",
-        "parent_types": [
-          null
-        ]
       }
     ],
     "default_passage_height": 2,

@@ -80,10 +80,11 @@ def build() -> dict:
 
     w["world_uid"] = WORLD_UID
     w["name"] = "Эйдора (полный эталон)"
-    w["location_type_registry"] = {
-        **tw.get("location_type_registry", {}),
-        **w.get("location_type_registry", {}),
-    }
+    w["location_type_registry"] = _merge_registry_list(
+        w.get("location_type_registry", []),
+        tw.get("location_type_registry", []),
+        "system_type",
+    )
     w["lore_registry"] = {**w.get("lore_registry", {}), **tw.get("lore_registry", {})}
     w["terrain_registry"] = _merge_registry_list(
         w.get("terrain_registry", []),
@@ -102,7 +103,11 @@ def build() -> dict:
 
     # Demonstrate a world-defined size while inheriting the engine recipes.
     w["city_size_registry"].append({"system_size": "huge", "display_size": "Огромный"})
-    w["location_type_registry"]["settlement"]["subtypes"] = [
+    settlement_entry = next(
+        entry for entry in w["location_type_registry"]
+        if entry["system_type"] == "settlement"
+    )
+    settlement_entry["subtypes"] = [
         {"system_subtype": subtype, "footprint_by_size": {"huge": footprint}}
         for subtype, footprint in (("city", 8.0), ("underground_city", 8.0), ("village", 0.9))
     ]
