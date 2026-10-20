@@ -7,6 +7,10 @@ from enum import StrEnum
 from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredLake import DeclaredLake
+from app.dataModel.hydrology.enums.basinKind import BasinKind
+from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.placement import (
     PlacementDependency, PlacementOverlap, PlacementSeparation, PreparedPlacement,
 )
@@ -18,6 +22,8 @@ class WaterPreparationCode(StrEnum):
     GEOMETRY = "WATER_PLACEMENT_GEOMETRY"
     FLOOR = "WATER_PLACEMENT_FLOOR"
     CAP_REACHED = "WATER_PLACEMENT_CAP_REACHED"
+    KIND_MISMATCH = "WATER_PLACEMENT_KIND_MISMATCH"
+    DEGENERATE_RING = "WATER_PLACEMENT_DEGENERATE_RING"
 
 
 class WaterGeometryError(ValueError):
@@ -32,6 +38,7 @@ class WaterPlacementContext:
     surface_z: Mapping[Coord, int]
     z_min: int
     anchors: Mapping[str, Coord]
+    location_subtypes: Mapping[str, GeographicSubtype]
     auto_specificity: Mapping[str, int | None]
     dependencies: Mapping[str, tuple[PlacementDependency, ...]]
     permitted_overlaps: Mapping[str, tuple[PlacementOverlap, ...]]
@@ -40,9 +47,11 @@ class WaterPlacementContext:
 
 @dataclass(frozen=True)
 class PreparedWaterEntry:
-    source: DeclaredBasin | DeclaredCoastline
+    source: DeclaredBasin | DeclaredCoastline | DeclaredLake
     prepared: PreparedPlacement
     z_water_level: int
+    kind: BasinKind
+    liquid: MaterialKey
 
 
 @dataclass(frozen=True)

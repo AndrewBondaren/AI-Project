@@ -19,27 +19,25 @@ from app.dataModel.topology import topologyGeometry as geometry
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 
 
-def _neighbors(topology: WorldTopology, cell: Coord):
+def cell_neighbors(topology: WorldTopology, cell: Coord):
     for facing in CARDINAL_FACINGS:
         neighbor = topology.neighbor(*cell, facing)
         if neighbor is not None:
             yield neighbor.coord
 
 
-def _ring(entry: DeclaredCoastline, context: WaterPlacementContext,
-          points: list[Coord], segments: list[tuple[Coord, Coord]]) -> frozenset[Coord]:
-    try:
-        polygon = PolygonShape(vertices=points)
-    except ValidationError as error:
-        raise WaterGeometryError(f"invalid coastline ring: {error.errors()[0]['msg']}") from error
-    inside, _ = shape_cells(polygon, entry.location_uid, context)
+def ring_barrier(context: WaterPlacementContext,
+                 segments: list[tuple[Coord, Coord]]) -> set[Coord]:
     barrier = {context.topology.canonicalize(*cell) for cell in rasterize_segments(segments)}
     if None in barrier:
-        raise WaterGeometryError("coastline ring extends outside planar world")
-    inside = set(inside) - barrier
+        raise WaterGeometryError("ring extends outside planar world")
+    return barrier
+
+
+def ring_sides(polygon: PolygonShape, source_uid: str, context: WaterPlacementContext,
+               barrier: set[Coord]) -> tuple[set[Coord], set[Coord]]:
+    inside = set(shape_cells(polygon, source_uid, context)[0]) - barrier
     outside = set(context.surface_z) - barrier - inside
-    if not inside or not outside:
-        raise WaterGeometryError("ring does not separate an interior and exterior; declare an explicit basin")
     # Every complementary component must have one consistent side. A
     # nonseparating ring must never acquire a bbox-derived interior on a torus.
     remaining = inside | outside
@@ -52,11 +50,11 @@ def _ring(entry: DeclaredCoastline, context: WaterPlacementContext,
             cell = queue.popleft()
             if (cell in inside) != expected_inside:
                 raise WaterGeometryError("nonseparating or ambiguous topology ring; declare an explicit basin")
-            for neighbor in _neighbors(context.topology, cell):
+            for neighbor in cell_neighbors(context.topology, cell):
                 if neighbor in remaining:
                     remaining.remove(neighbor)
                     queue.append(neighbor)
-    return frozenset(inside if entry.water_side == WaterSide.INTERIOR else outside)
+    return inside, outside
 
 
 def coastline_cells(entry: DeclaredCoastline, context: WaterPlacementContext,
@@ -67,7 +65,15 @@ def coastline_cells(entry: DeclaredCoastline, context: WaterPlacementContext,
     segments = list(zip(points, points[1:]))
     if entry.closed:
         segments.append((points[-1], points[0]))
-        return _ring(entry, context, points, segments), False
+        try:
+            polygon = PolygonShape(vertices=points)
+        except ValidationError as error:
+            raise WaterGeometryError(f"invalid coastline ring: {error.errors()[0]['msg']}") from error
+        inside, outside = ring_sides(polygon, entry.location_uid, context,
+                                     ring_barrier(context, segments))
+        if not inside or not outside:
+            raise WaterGeometryError("ring does not separate an interior and exterior; declare an explicit basin")
+        return frozenset(inside if entry.water_side == WaterSide.INTERIOR else outside), False
     topology = context.topology
     coast = set(rasterize_segments(segments))
     if any(topology.canonicalize(*cell) is None for cell in coast):
@@ -110,7 +116,7 @@ def coastline_cells(entry: DeclaredCoastline, context: WaterPlacementContext,
             capped = True
             break
         cells.add(cell)
-        for neighbor in _neighbors(topology, cell):
+        for neighbor in cell_neighbors(topology, cell):
             if neighbor not in visited and side.contains(neighbor, bounded=False):
                 heapq.heappush(frontier, (distance + 1, neighbor[1], neighbor[0]))
     if not cells:

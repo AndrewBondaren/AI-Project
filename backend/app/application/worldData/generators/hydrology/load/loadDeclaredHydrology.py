@@ -127,9 +127,9 @@ def load_declared_hydrology(
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
     rivers = _coerce_declared_rivers(list(pojo.declared_rivers))
     basins = [_coerce_pojo(DeclaredBasin, entry) for entry in pojo.declared_basins]
-    if basins or coastlines:
+    if basins or coastlines or lakes:
         liquid_keys = materials(world).liquid_keys()
-        for entry in [*basins, *coastlines]:
+        for entry in [*basins, *coastlines, *lakes]:
             if entry.liquid not in liquid_keys:
                 raise ValueError(f"water body {entry.location_uid}: liquid must reference a liquid material")
     if basins:

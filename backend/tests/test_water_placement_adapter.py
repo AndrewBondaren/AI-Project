@@ -10,16 +10,18 @@ from app.application.worldData.placement.adapters import (
     WaterPlacementContext, prepare_water_placements, resolved_water_placements,
 )
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
+from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
 from app.dataModel.placement import (
     PlacementDependency, PlacementIssueCode, PlacementOverlap, PlacementSeparation, ResolvedPlacement, WaterPresence,
 )
 from tests.test_placement_resolver import batch, obj, topology
 
 
-def context(mode="planar", *, z=3, auto=None):
+def context(mode="planar", *, z=3, auto=None, subtypes=None):
     surface = {(x, y): z for x in range(20) for y in range(12)}
     return WaterPlacementContext("world", "snapshot", topology(mode, x_max=19, y_max=11),
-                                 surface, -100, {}, {} if auto is None else auto, {}, {}, {})
+                                 surface, -100, {}, {} if subtypes is None else subtypes,
+                                 {} if auto is None else auto, {}, {}, {})
 
 
 def basin(uid="basin", **changes):
@@ -36,9 +38,14 @@ def coast(uid="coast", *, closed=False, **changes):
     return values | changes
 
 
-def prepare(*, basins=(), coasts=(), snapshot=None, ctx=None, **policy):
+def lake(uid="lake", points=((2, 2), (6, 2), (6, 6), (2, 6)), **changes):
+    return dict(location_uid=uid, shoreline=[dict(x=x, y=y) for x, y in points]) | changes
+
+
+def prepare(*, basins=(), coasts=(), lakes=(), snapshot=None, ctx=None, **policy):
     return prepare_water_placements(
-        WorldHydrology(declared_basins=list(basins), declared_coastlines=list(coasts), **policy),
+        WorldHydrology(declared_basins=list(basins), declared_coastlines=list(coasts),
+                       declared_lakes=list(lakes), **policy),
         snapshot or context(), ctx=ctx or ResolveContext(validate_only=True))
 
 
@@ -60,6 +67,7 @@ class WaterBasinAdapterTests(unittest.TestCase):
         self.assertEqual((record.source_uid, record.z_water_level, record.kind, record.liquid),
                          ("basin", 4, "ocean", "lava"))
         self.assertEqual(len(record.footprint_cells), 16)
+        self.assertEqual((prep.entries[0].kind, prep.entries[0].liquid), ("ocean", "lava"))
         self.assertEqual(prep.entries[0].source.floor_z, -20)
         self.assertEqual(snap.surface_z, before)
         self.assertIsInstance(result.results[0], ResolvedPlacement)
@@ -255,7 +263,8 @@ class WaterSharedPassTests(unittest.TestCase):
         snap = context()
         partial = replace(snap, surface_z={(2, 2): 3})
         for case in (dict(basins=[basin()], snapshot=partial),
-                     dict(basins=[basin("coast")], coasts=[coast()])):
+                     dict(basins=[basin("coast")], coasts=[coast()]),
+                     dict(basins=[basin("lake")], lakes=[lake()])):
             with self.subTest(case=case), self.assertRaises(UnresolvedModelError) as failure:
                 prepare(**case)
             self.assertEqual(failure.exception.issues[0].path, ("water_placement",))
@@ -274,6 +283,105 @@ class WaterSharedPassTests(unittest.TestCase):
         self.assertFalse(runtime.errors)
         self.assertEqual(preview.errors[0].path, ("master", "water_placement", "bad"))
         self.assertTrue(all("WarningError" in message for message in log.output))
+
+
+class WaterLakeAdapterTests(unittest.TestCase):
+    def test_ring_becomes_record_with_terrain_derived_level(self):
+        snap = context(auto={"lake": 1})
+        before = dict(snap.surface_z)
+        prep = prepare(lakes=[lake()], snapshot=snap)
+        self.assertFalse(prep.failures)
+        self.assertFalse(prep.notices)
+        cells = prep.objects[0].candidates[0].footprint.cells
+        self.assertEqual(len(cells), 9)
+        self.assertNotIn((2, 2), cells)
+        self.assertIn((3, 3), cells)
+        self.assertIsNone(prep.entries[0].prepared.intent.placement_specificity)
+        self.assertIsNone(prep.entries[0].prepared.intent.shape)
+        _, records = resolve(prep, snap)
+        record = records[0]
+        self.assertEqual((record.kind, record.liquid, record.z_water_level), ("lake", "water", 3))
+        self.assertEqual(snap.surface_z, before)
+
+    def test_level_is_the_rim_of_land_not_the_interior(self):
+        snap = context(auto={"lake": 1})
+        surface = dict(snap.surface_z)
+        surface[(2, 4)] = 9
+        surface[(3, 3)] = -50
+        snap = replace(snap, surface_z=surface)
+        prep = prepare(lakes=[lake()], snapshot=snap)
+        _, records = resolve(prep, snap)
+        self.assertEqual(records[0].z_water_level, 9)
+
+    def test_liquid_passes_through_to_the_record(self):
+        snap = context(auto={"lake": 1})
+        prep = prepare(lakes=[lake(liquid="lava")], snapshot=snap)
+        _, records = resolve(prep, snap)
+        self.assertEqual(records[0].liquid, "lava")
+
+    def test_degenerate_shoreline_falls_back_to_contour_with_notice(self):
+        for points in (((2, 4), (8, 4)), ((2, 4), (5, 4), (8, 4))):
+            with self.subTest(points=points):
+                snap = context(auto={"lake": 1})
+                prep = prepare(lakes=[lake(points=points)], snapshot=snap)
+                self.assertFalse(prep.failures)
+                self.assertEqual(prep.notices[0].code, "WATER_PLACEMENT_DEGENERATE_RING")
+                cells = prep.objects[0].candidates[0].footprint.cells
+                self.assertEqual(cells, {(x, 4) for x in range(2, 9)})
+                _, records = resolve(prep, snap)
+                self.assertEqual(records[0].kind, "lake")
+
+    def test_subtype_kind_mismatch_is_a_notice_and_never_changes_kind(self):
+        snap = context(auto={"lake": 1}, subtypes={"lake": GeographicSubtype.INLAND_SEA})
+        prep = prepare(lakes=[lake()], snapshot=snap)
+        self.assertEqual(prep.notices[0].code, "WATER_PLACEMENT_KIND_MISMATCH")
+        self.assertEqual(prep.entries[0].kind, "lake")
+        snap = context(subtypes={"lake": GeographicSubtype.LAKE})
+        prep = prepare(lakes=[lake()], snapshot=snap)
+        self.assertFalse(prep.notices)
+        snap = context(subtypes={"coast": GeographicSubtype.LAKE})
+        prep = prepare(coasts=[coast()], snapshot=snap)
+        self.assertEqual(prep.notices[0].code, "WATER_PLACEMENT_KIND_MISMATCH")
+        self.assertEqual(prep.entries[0].kind, "sea")
+        for subtype in (GeographicSubtype.OCEAN, GeographicSubtype.ISLAND):
+            with self.subTest(subtype=subtype):
+                snap = context(subtypes={"basin": subtype})
+                prep = prepare(basins=[basin()], snapshot=snap)
+                self.assertFalse(prep.notices)
+
+    def test_floor_below_z_min_is_failure_and_other_sources_continue(self):
+        snap = context(z=-98, auto={"lake": 1, "basin": 1})
+        prep = prepare(lakes=[lake()], basins=[basin()], snapshot=snap)
+        self.assertEqual(prep.failures[0].issue.code, "WATER_PLACEMENT_FLOOR")
+        self.assertEqual([entry.source.location_uid for entry in prep.entries], ["basin"])
+
+    def test_too_few_waypoints_is_a_geometry_failure(self):
+        for shoreline in ([], [dict(x=2, y=2)]):
+            with self.subTest(shoreline=shoreline):
+                prep = prepare(lakes=[lake(shoreline=shoreline)])
+                self.assertFalse(prep.entries)
+                self.assertEqual(prep.failures[0].issue.code, "WATER_PLACEMENT_GEOMETRY")
+                self.assertIn("distinct", prep.failures[0].issue.message)
+
+    def test_ring_across_the_wrapped_seam(self):
+        snap = context("wrapped", auto={"lake": 1})
+        prep = prepare(lakes=[lake(points=((18, 3), (22, 3), (22, 7), (18, 7)))], snapshot=snap)
+        self.assertFalse(prep.failures)
+        cells = prep.objects[0].candidates[0].footprint.cells
+        self.assertEqual(len(cells), 9)
+        self.assertEqual({x for x, _ in cells}, {19, 0, 1})
+
+    def test_source_order_permutation_is_deterministic(self):
+        snap = context(auto={"lake": 1, "basin": 1})
+        sources = [lake(), basin()]
+        baseline = None
+        for ordered in permutations(sources):
+            prep = prepare(basins=[s for s in ordered if "footprint" in s],
+                           lakes=[s for s in ordered if "shoreline" in s], snapshot=snap)
+            result, records = resolve(prep, snap)
+            if baseline is None:
+                baseline = (prep, result, records)
+            self.assertEqual((prep, result, records), baseline)
 
 
 if __name__ == "__main__":
