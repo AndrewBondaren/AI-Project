@@ -1,6 +1,7 @@
 """Declared water → common intents → resolved records, without a private resolve."""
 
 from dataclasses import replace
+from itertools import groupby
 
 from app.application.jsonValidation.resolve import (
     ResolveContext, log_issues, reject_unresolved, report_issues, resolve_model,
@@ -48,15 +49,10 @@ def _validate_context(context: WaterPlacementContext, hydrology: WorldHydrology,
                       auto_specificity=dict(context.auto_specificity),
                       dependencies=dict(context.dependencies), permitted_overlaps=dict(context.permitted_overlaps),
                       separations=dict(context.separations))
-    sources = [*hydrology.declared_basins, *hydrology.declared_coastlines, *hydrology.declared_lakes]
-    uids = [source.location_uid for source in sources]
     errors = []
     if any(not uid or uid != uid.strip() for uid in (context.world_uid, context.snapshot_uid)):
         errors.append(_context_issue(context, ctx,
                              "nonempty world/snapshot identities are required"))
-    if len(uids) != len(set(uids)):
-        errors.append(_context_issue(context, ctx,
-                             "duplicate water source UID"))
     bounds = topology.bounds
     if (len(context.surface_z) != bounds.width * bounds.height
             or any(len(cell) != 2 or any(type(value) is not int for value in cell)
@@ -78,52 +74,85 @@ def _validate_context(context: WaterPlacementContext, hydrology: WorldHydrology,
     return context
 
 
-def _prepare_source(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
-                    hydrology: WorldHydrology, context: WaterPlacementContext,
-                    ctx: ResolveContext, notices: list[FieldPathError],
-                    ) -> PreparedWaterEntry | WaterPreparationFailure:
+def _source_cells(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
+                  hydrology: WorldHydrology, context: WaterPlacementContext,
+                  ctx: ResolveContext, notices: list[FieldPathError],
+                  ) -> tuple[frozenset, float] | WaterPreparationFailure:
     uid = source.location_uid
-    fact = None
-    if isinstance(source, DeclaredBasin):
-        level = source.z_water_level if source.z_water_level is not None else hydrology.default_water_level
-        floor = source.floor_z
-        kind, liquid = source.kind, source.liquid
-    elif isinstance(source, DeclaredCoastline):
-        level = hydrology.default_water_level
-        floor = level - hydrology.default_seas.basin_depth
-        kind, liquid = source.kind, source.liquid
-    else:
-        kind, liquid = BasinKind.LAKE, source.liquid
     try:
         if isinstance(source, DeclaredBasin):
-            cells, area = shape_cells(source.footprint, uid, context)
-        elif isinstance(source, DeclaredCoastline):
+            return shape_cells(source.footprint, uid, context)
+        if isinstance(source, DeclaredCoastline):
             cells, capped = coastline_cells(source, context, hydrology.default_seas)
-            area = float(len(cells))  # Area of this original fine-unit-square claim, before competition.
+            # Area of this original fine-unit-square claim, before competition.
+            if capped:
+                notices.append(_source_issue(context, ctx, uid, WaterPreparationCode.CAP_REACHED,
+                                      "coastline expansion reached hard area/extent budget"))
         else:
             cells, degenerate = lake_cells(source, context)
-            area = float(len(cells))
-            level = lake_level(cells, context)
-            floor = level - hydrology.default_lakes.basin_depth
             if degenerate:
                 notices.append(_source_issue(context, ctx, uid, WaterPreparationCode.DEGENERATE_RING,
                                        "shoreline has no interior; lake footprint is the contour itself"))
+        return cells, float(len(cells))
     except WaterGeometryError as error:
         return WaterPreparationFailure(
             uid, _source_issue(context, ctx, uid, WaterPreparationCode.GEOMETRY, str(error)))
+
+
+def _source_kind(source: DeclaredBasin | DeclaredCoastline | DeclaredLake) -> BasinKind:
+    return source.kind if not isinstance(source, DeclaredLake) else BasinKind.LAKE
+
+
+_PRIMARY_ORDER = (DeclaredBasin, DeclaredCoastline, DeclaredLake)
+
+
+def _merged_issue(context: WaterPlacementContext, ctx: ResolveContext, uid: str,
+                  members: list[tuple[str, int, DeclaredBasin | DeclaredCoastline | DeclaredLake]],
+                  primary_index: int) -> FieldPathError:
+    primary = members[primary_index][2]
+    descriptor = ", ".join(f"{category}[{index}]" for category, index, _ in members)
+    conflicts = [
+        f"{category}[{index}] kind={_source_kind(source).value} liquid={source.liquid}"
+        for position, (category, index, source) in enumerate(members)
+        if position != primary_index
+        and (_source_kind(source) != _source_kind(primary) or source.liquid != primary.liquid)
+    ]
+    reason = (f"duplicate declared water location_uid; merged {descriptor} into one source, "
+              f"primary {members[primary_index][0]}[{members[primary_index][1]}]")
+    if conflicts:
+        reason += "; conflicts: " + "; ".join(conflicts)
+    return _source_issue(context, ctx, uid, WaterPreparationCode.MERGED_SOURCES, reason)
+
+
+def _build_entry(primary: DeclaredBasin | DeclaredCoastline | DeclaredLake,
+                 cells: frozenset, area: float,
+                 hydrology: WorldHydrology, context: WaterPlacementContext,
+                 ctx: ResolveContext, notices: list[FieldPathError],
+                 ) -> PreparedWaterEntry | WaterPreparationFailure:
+    uid = primary.location_uid
+    fact = None
+    if isinstance(primary, DeclaredBasin):
+        level = primary.z_water_level if primary.z_water_level is not None else hydrology.default_water_level
+        floor = primary.floor_z
+        kind, liquid = primary.kind, primary.liquid
+    elif isinstance(primary, DeclaredCoastline):
+        level = hydrology.default_water_level
+        floor = level - hydrology.default_seas.basin_depth
+        kind, liquid = primary.kind, primary.liquid
+    else:
+        kind, liquid = BasinKind.LAKE, primary.liquid
+        level = lake_level(cells, context)
+        floor = level - hydrology.default_lakes.basin_depth
     if floor < context.z_min or floor >= level:
         return WaterPreparationFailure(
             uid, _source_issue(context, ctx, uid, WaterPreparationCode.FLOOR,
                         "basin floor must satisfy world z_min <= floor_z < z_water_level"))
-    if isinstance(source, DeclaredCoastline):
+    if isinstance(primary, DeclaredCoastline):
         wet = any(context.surface_z[cell] < level for cell in cells)
         fact = CoastlinePlacementFact(snapshot_uid=context.snapshot_uid,
                                       water_presence=WaterPresence.PRESENT if wet else WaterPresence.ABSENT,
                                       reason="pre-carve footprint contains z < level" if wet
                                       else "no pre-carve footprint cell is below water level")
-        if capped:
-            notices.append(_source_issue(context, ctx, uid, WaterPreparationCode.CAP_REACHED,
-                                  "coastline expansion reached hard area/extent budget"))
     subtype = context.location_subtypes.get(uid)
     if subtype is not None:
         try:
@@ -137,8 +166,8 @@ def _prepare_source(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
     intent = PlacementIntent(
         identity=PlacementIdentity(world_uid=context.world_uid, source_uid=uid, region_uid=uid),
         mode=PlacementMode.ABSOLUTE,
-        shape=source.footprint if isinstance(source, DeclaredBasin) else None,
-        placement_specificity=source.placement_specificity if isinstance(source, DeclaredBasin) else None,
+        shape=primary.footprint if isinstance(primary, DeclaredBasin) else None,
+        placement_specificity=primary.placement_specificity if isinstance(primary, DeclaredBasin) else None,
         dependencies=context.dependencies.get(uid, ()),
         permitted_overlaps=context.permitted_overlaps.get(uid, ()),
         separations=context.separations.get(uid, ()),
@@ -147,7 +176,7 @@ def _prepare_source(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
                                    footprint=PlacementFootprint(cells=cells, z_min=None, z_max=None))
     prepared = PreparedPlacement(intent=intent, original_area=area, candidates=(candidate,),
                                   auto_specificity=context.auto_specificity.get(uid), coastline=fact)
-    return PreparedWaterEntry(source, prepared, level, floor, kind, liquid)
+    return PreparedWaterEntry(primary, prepared, level, floor, kind, liquid)
 
 
 def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementContext, *,
@@ -156,14 +185,42 @@ def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementC
     hydrology = resolve_model(WorldHydrology, hydrology.model_dump(warnings=False), ctx=ctx)
     context = _validate_context(context, hydrology, ctx)
     entries, failures, notices = [], [], []
-    sources = sorted([*hydrology.declared_basins, *hydrology.declared_coastlines,
-                      *hydrology.declared_lakes],
-                     key=lambda source: source.location_uid)
-    for source in sources:
-        outcome = _prepare_source(source, hydrology, context, ctx, notices)
+    tagged = sorted(
+        [(category, index, source)
+         for category, members in (("declared_basins", hydrology.declared_basins),
+                                   ("declared_coastlines", hydrology.declared_coastlines),
+                                   ("declared_lakes", hydrology.declared_lakes))
+         for index, source in enumerate(members)],
+        key=lambda item: item[2].location_uid)
+    for uid, group in groupby(tagged, key=lambda item: item[2].location_uid):
+        members = list(group)
+        prepared_members = []
+        for member in members:
+            outcome = _source_cells(member[2], hydrology, context, ctx, notices)
+            if isinstance(outcome, WaterPreparationFailure):
+                failures.append(outcome)
+            else:
+                prepared_members.append((member, *outcome))
+        if not prepared_members:
+            continue
+        if len(members) == 1:
+            member, cells, area = prepared_members[0]
+            primary = member[2]
+        else:
+            cells = frozenset().union(*(member_cells for _, member_cells, _ in prepared_members))
+            area = float(len(cells))
+            primary_position = min(
+                range(len(prepared_members)),
+                key=lambda position: (_PRIMARY_ORDER.index(type(prepared_members[position][0][2])),
+                                      prepared_members[position][0][1]))
+            primary = prepared_members[primary_position][0][2]
+        outcome = _build_entry(primary, cells, area, hydrology, context, ctx, notices)
         if isinstance(outcome, WaterPreparationFailure):
             failures.append(outcome)
         else:
+            if len(members) > 1:
+                notices.append(_merged_issue(context, ctx, uid, members,
+                                             members.index(prepared_members[primary_position][0])))
             entries.append(outcome)
     facts = [failure.issue for failure in failures] + notices
     if ctx.validate_only:

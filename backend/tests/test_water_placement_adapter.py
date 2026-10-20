@@ -259,16 +259,13 @@ class WaterSharedPassTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             resolved_water_placements(changed, result)
 
-    def test_incomplete_snapshot_and_duplicate_sources_are_input_errors(self):
+    def test_incomplete_snapshot_is_an_input_error(self):
         snap = context()
         partial = replace(snap, surface_z={(2, 2): 3})
-        for case in (dict(basins=[basin()], snapshot=partial),
-                     dict(basins=[basin("coast")], coasts=[coast()]),
-                     dict(basins=[basin("lake")], lakes=[lake()])):
-            with self.subTest(case=case), self.assertRaises(UnresolvedModelError) as failure:
-                prepare(**case)
-            self.assertEqual(failure.exception.issues[0].path, ("water_placement",))
-            self.assertNotIn("source_uid=", failure.exception.issues[0].message)
+        with self.assertRaises(UnresolvedModelError) as failure:
+            prepare(basins=[basin()], snapshot=partial)
+        self.assertEqual(failure.exception.issues[0].path, ("water_placement",))
+        self.assertNotIn("source_uid=", failure.exception.issues[0].message)
 
     def test_runtime_preview_preparation_parity_and_warning_paths(self):
         snap = context()

@@ -156,7 +156,7 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
     checks.extend(_shore_ref_checks(hydrology, ("default_shore",)))
     for path in _CATEGORY_SHORE_PATHS:
         checks.extend(_shore_ref_checks(hydrology, path))
-    for category in ("declared_basins", "declared_coastlines"):
+    for category in ("declared_basins", "declared_coastlines", "declared_lakes"):
         for index, entry in enumerate(hydrology.get(category, [])):
             checks.append(RefCheck(
                 ref_kind=RefKind.LIQUID,
@@ -199,6 +199,42 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Field
                     ),
                     schema_id=WorldHydrology.SCHEMA_ID,
                     code="SHORE_CLASS_UNKNOWN",
+                ),
+            )
+    return errors
+
+
+_DECLARED_WATER_COLLECTIONS = ("declared_basins", "declared_coastlines", "declared_lakes")
+
+
+def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -> list[FieldPathError]:
+    """``location_uid`` must be unique across declared water sources; runtime merges it."""
+    if partial and "hydrology" not in normalized:
+        return []
+    hydrology = normalized.get("hydrology")
+    if not isinstance(hydrology, dict):
+        return []
+
+    seen: dict[str, list[tuple[str, int]]] = {}
+    for category in _DECLARED_WATER_COLLECTIONS:
+        for index, entry in enumerate(hydrology.get(category, [])):
+            if not isinstance(entry, dict):
+                continue
+            uid = entry.get("location_uid")
+            if isinstance(uid, str) and uid:
+                seen.setdefault(uid, []).append((category, index))
+    errors: list[FieldPathError] = []
+    for uid, refs in seen.items():
+        if len(refs) < 2:
+            continue
+        declared_at = ", ".join(f"{category}[{index}]" for category, index in refs)
+        for category, index in refs:
+            errors.append(
+                FieldPathError(
+                    path=("hydrology", category, index),
+                    message=f"duplicate declared water location_uid {uid!r}: declared at {declared_at}",
+                    schema_id=WorldHydrology.SCHEMA_ID,
+                    code="WATER_IDENTITY_DUPLICATE",
                 ),
             )
     return errors
@@ -264,4 +300,5 @@ def validate_ref_w(
         if issue is not None:
             errors.append(issue)
     errors.extend(_shore_class_errors(normalized, partial))
+    errors.extend(_declared_water_identity_errors(normalized, partial))
     return errors
