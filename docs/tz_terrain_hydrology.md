@@ -1426,6 +1426,85 @@ Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
 
 Subsurface cells колонки **не** дублируют hydrology v1.
 
+**Домен динамических водных систем (решение мастера 2026-10-20).** Водные системы — отдельный домен внутри гидрологии, в отдельной папке. Общие POJO системы и её состояния: `backend/app/dataModel/hydrology/systems/`. Доменный consumer и обновление системы: `backend/app/application/worldData/hydrology/systems/`. Это целевые пути; реализация ещё не создана. Consumer получает изменения водных объектов и их соединений и актуализирует состав, связность и основной объект системы. Система динамическая: появление, исчезновение и изменение соединений могут объединять и разделять системы; результат не фиксируется навсегда при bake. При равном типе и объёме основной объект не выбирается. Pure-генераторы в `backend/app/application/worldData/generators/hydrology/` производят доменные данные для системы; runtime consumer не помещается внутрь pure-генераторов. Общий placement resolver в `backend/app/application/worldData/placement/` продолжает разрешать размещение всех объектов; домен систем потребляет его результат и гидрологические факты, не создавая собственного resolver размещения. Persist остаётся на границе application-сервисов/repositories. Контракты входных изменений, состояния, identity при merge/split и подключения U27 нужно описать в отдельном плане домена до реализации.
+
+**Единая водная система по связности (решение мастера 2026-10-20):** все водные объекты, соединённые друг с другом непосредственно или через другие водные объекты, входят в одну систему — океаны, моря, озёра и реки. Тип и объём не ограничивают членство: связь транзитивна, отдельная несвязанная группа образует другую систему. Система объединяет участников с их собственными UID; она не заменяет их одним объектом. Иерархия `ocean > sea > lake` и сравнение объёмов определяют основной объект внутри системы; при одинаковом типе и объёме победителя нет. Объединение в систему не требует одинакового уровня воды у всех участников: река может соединять водоёмы на разных высотах; физическое слияние зеркал и разрешение уровней остаются отдельным доменным правилом. Существующая U27-топология рек должна быть согласована с общей системой, а не образовывать параллельную независимую систему всей воды. Общий контракт системы, её identity, критерий соединения и адаптация U27 требуют фиксации до реализации; текущий `RiverSystemIndex` не считается готовой общей системой.
+
+**Общий домен устаревания (решение разработчика 2026-10-20):** актуальность, замещение и ссылки на предшественников вынесены в [единый lifecycle](./tz_entity_lifecycle.md). Целевые папки: `backend/app/dataModel/lifecycle/` и `backend/app/application/lifecycle/`. Гидрологический consumer рассчитывает новые системы и использует общий lifecycle; собственного механизма устаревания не создаёт. Проекты общих POJO `EntityLifecycle` и `LifecycleReplacement` описаны в профильном ТЗ.
+
+**Жизненный цикл систем при merge/split (решено мастером 2026-10-20):** результат — новые системы с новыми UID и параметрами, со ссылками на предшественников; старые системы сохраняются в историческом неактивном статусе. Это применение общего принципа жизненного цикла сущностей, не очистка истории. Прецеденты: `tz_states.md` § states (`is_active=false`, сохранение для нарратива), `tz_locations.md` § cell_states (`ended_at`, история сохраняется), `tz_structural_mutations.md` §7 (typed mutation, before-image, ссылка на `world_history`). Эти прецеденты подтверждают принцип хранения истории; готовый универсальный POJO merge/split систем при инвентаризации не найден. Предлагаемый `is_active` переиспользует существующую семантику активности; новый локальный enum жизненного цикла не вводится.
+
+### Контракты домена динамических водных систем — проект
+
+Статус: конкретный проект POJO для ревью до реализации, а не уже созданные Python-модели. Домен находится в `dataModel/hydrology/systems/`; consumer — `application/worldData/hydrology/systems/`. Этот раздел — SoT контрактов; план HY-12 ссылается на него.
+
+Инвентаризация: `DeclaredRiver`/`RiverSystemIndex` описывают authored-топологию только рек; `MapCellHydrology.water_body_uid` — ссылку клетки на водный объект; `RegionState` — состояние другого домена; `ReliefGradeSystem` — систему рельефа. Ни одна модель не покрывает динамическую связность всей воды. Переиспользуются `GeographicSubtype`, `StrictOnWire` и существующий result/report механизм runtime/worldEdit. Новый параллельный enum видов воды для системы не вводится.
+
+Предлагаемые POJO (`BaseModel`, frozen, extra=forbid; коллекции — tuple, обязательные входы без error defaults):
+
+```python
+# waterSystemMember.py — факт о водном объекте, не копия его declare/геометрии
+class WaterSystemMember:
+    water_body_uid: StrictOnWire[str]
+    subtype: StrictOnWire[GeographicSubtype]
+    volume_m3: StrictOnWire[Decimal]  # конечное, >= 0
+
+# waterSystemConnection.py — факт существующего водного соединения
+class WaterSystemConnection:
+    first_water_body_uid: StrictOnWire[str]
+    second_water_body_uid: StrictOnWire[str]
+
+# waterSystem.py — одна компонента связности, включая одиночный объект
+class WaterSystem:
+    water_system_uid: StrictOnWire[str]
+    lifecycle: StrictOnWire[EntityLifecycle]  # общий dataModel/lifecycle, не локальная копия
+    members: StrictOnWire[tuple[WaterSystemMember, ...]]  # параметры участников этой версии
+    connections: StrictOnWire[tuple[WaterSystemConnection, ...]]
+    principal_member_uids: StrictOnWire[tuple[str, ...]]
+
+# waterSystemsSnapshot.py — согласованное состояние домена одного мира
+class WaterSystemsSnapshot:
+    world_uid: StrictOnWire[str]
+    revision: StrictOnWire[int]  # >= 0
+    members: StrictOnWire[tuple[WaterSystemMember, ...]]
+    connections: StrictOnWire[tuple[WaterSystemConnection, ...]]
+    systems: StrictOnWire[tuple[WaterSystem, ...]]
+
+# waterSystemsChange.py — атомарный вход consumer
+class WaterSystemsChange:
+    world_uid: StrictOnWire[str]
+    expected_revision: StrictOnWire[int]  # >= 0
+    upsert_members: StrictOnWire[tuple[WaterSystemMember, ...]]
+    remove_member_uids: StrictOnWire[tuple[str, ...]]
+    add_connections: StrictOnWire[tuple[WaterSystemConnection, ...]]
+    remove_connections: StrictOnWire[tuple[WaterSystemConnection, ...]]
+
+# waterSystemsUpdate.py — результат без persist внутри consumer
+class WaterSystemsUpdate:
+    before_revision: StrictOnWire[int]
+    snapshot: StrictOnWire[WaterSystemsSnapshot]
+    lifecycle_replacements: StrictOnWire[tuple[LifecycleReplacement, ...]]
+```
+
+Исключения `str`: все `*_uid` — opaque-ссылки на существующие world/location/region/auto identity или identity системы, не ключи реестров. Они сохраняются без изменения регистра и нормализации на входной границе; непустота, принадлежность миру и разрешение ссылок проверяются общим механизмом. Отдельный `RegistryKey` для UID не вводится. `Decimal` нужен для точного сравнения равных объёмов; единица — м³, NaN/Infinity и отрицательные значения запрещены, bool не принимается как число. Вычисление объёма принадлежит гидрологии, consumer получает готовый факт; отсутствие измерения нельзя превращать в 0.
+
+Инварианты и поведение consumer:
+
+- Допустимые subtype участника: `OCEAN`, `SEA`, `INLAND_SEA`, `LAKE`, `RIVER`. Coastline — контракт создания воды, не самостоятельный объём воды и не участник системы.
+- Соединение для членства неориентированное: пара UID канонически упорядочена; self-link и дубликаты запрещены. Направление течения остаётся в речном graph. Соединение передаётся производителем как факт; близость bbox или общий parent не доказывают водную связь.
+- `WaterSystem.members` непустой, UID участников уникальны; каждый текущий участник принадлежит ровно одной активной системе. Исторические системы сохраняют прежний состав и параметры. Система содержит полную транзитивную компоненту связности; endpoints всех connections должны существовать в итоговом snapshot.
+- `principal_member_uids` хранит всех равноправных претендентов после сравнения типа и объёма. Один UID означает единственный основной объект; несколько — отсутствие единственного победителя. Каноническая сортировка нужна только для сериализации и не выбирает победителя. Положение `INLAND_SEA` и роль `RIVER` в сравнении основных объектов ещё требуют решения; новый ранг молча не вводится.
+- В каждой системе нет единого обязательного water level: уровни остаются на водных объектах/клетках. При объединении систем identity участников сохраняется.
+- Consumer проверяет world/revision и весь пакет до публикации результата. Один UID не может одновременно удаляться и upsert-иться; одна связь не может одновременно добавляться и удаляться. Удаление участника удаляет его инцидентные связи; остальные dangling refs — unresolved, без частичного изменения snapshot.
+- После применения пакета consumer пересчитывает компоненты затронутых систем и основные объекты. Удаление связи может разделить систему, добавление — объединить; изменение объёма может изменить основной объект без изменения состава. Полный эквивалентный пересчёт должен давать тот же результат независимо от порядка входа.
+- При ошибке используется существующий unresolved/report runtime/worldEdit, а не новый локальный статус. Успешный update передаётся application writer для проверки revision и атомарного persist; consumer не пишет в БД/Pack.
+- `water_system_uid` не равен UID основного объекта. **Merge/split (решено мастером 2026-10-20):** создаются новые системы с новыми UID и актуальными параметрами; каждая новая система содержит `lifecycle.predecessor_uids`. При merge — ссылки на все объединённые системы; при split — каждая новая часть ссылается на исходную систему. Старые системы переводятся в неактивный исторический статус (`lifecycle.is_active=false`), не удаляются и сохраняют собственные параметры, состав, связи и UID. `WaterSystemsSnapshot.systems` содержит активные и исторические записи; проверка компонент применяется только к активным. Смена статусов и создание преемников публикуются атомарно. Повтор одного и того же изменения не создаёт новые преемники: проверяются revision и identity операции. Формула UID/identity операции требует технической фиксации по DET-1; само решение о новых UID и сохранении предшественников закрыто.
+- U27 `stem`/`tributary` и basin-контейнер сохраняют authored-роли. Адаптер переводит подтверждённые соединения речного graph в `WaterSystemConnection`; отсутствие geometry у U27 system-контейнера не делает его водным участником. Общая система связности включает эти реки вместе с морями/озёрами/океанами.
+
+До кода отдельный план должен разложить контракты → pure consumer → producers/U27 adapter → writer/read integration → проверки merge/split, равного объёма, revision conflict и runtime/worldEdit parity. Расчёт объёма, критерий физического соединения, техническая формула UID/identity операции и два незаданных ранга остаются открытыми. Семантика merge/split и сохранения исторических систем решена мастером; повторно не согласуется.
+
+**Иерархия водоёмов при объединении (решение мастера 2026-10-20):** `ocean > sea > lake`. Если типы одинаковые (например, два `sea`), выигрывает водоём с большим **объёмом**, а не площадью footprint. Это правило выбора основного водоёма внутри системы; его применяет consumer домена водных систем к результату общего placement и гидрологическим фактам. Идентичность системы и идентичности её участников различаются. Выбор основного объекта не подменяет физическое разрешение общего уровня воды. **При одинаковом типе и равном объёме победителя нет: соединяющиеся водоёмы составляют одну систему**, без выбора победителя по UID или порядку обхода (решение мастера 2026-10-20). Члены системы сохраняют собственную идентичность; равенство не является поглощением одного другим. Прецедент — § «Топология речных систем A / B (U27)» в `tz_terrain_hydrology.md`: контейнер `system` отделён от геометрии участников. Существующий `RiverSystemIndex` описывает только реки; общий контракт системы водоёмов и его identity ещё требуется определить. Расчёт объёма и положение `inland_sea` в иерархии также требуют формализации до реализации.
+
 **`water_body_uid`** — идентичность водоёма на каждой carve-клетке (включая `shore`/deepening-клетки тела; `connection_edge_uid` остаётся edge-уровнем рек). Иерархия источников: declared → `location_uid` (`DeclaredLake`/`DeclaredCoastline`/`DeclaredRiver`, durable); event/morph (будущий T-1) → `region_uid` (durable); procedural autoresolve → `auto-{lake|sea|river}-{gx}x{gy}` — позиционная, **не durable**: re-bake перевыпускает, persist/`region_states` на неё не опираются. Якорь `auto-*` — детерминированный факт геометрии: feature center бассейна (lakes), min-клетка flood (seas; один flood = одно тело), первая клетка polyline (rivers). `auto-*` стампуется только внутри policy-enabled autoresolve-веток; open ocean при relabel **наследует** uid моря, не минтует новый. Light wire (`WorldMapCellWire.hydrology_role`/`width`) uid не несёт — L2 читает `surface_planning` (coarse + sparse fine hydro POJO).
 
 ### Partial climate recalc после hydrology (C14)
@@ -1668,3 +1747,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | Light compose; R5b bathymetry z on hydro paint |
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Shore grade** (SLOPE/SHEER + facing): context `shore` → relief template; hydro пишет role/bands, не SoT grade |
 | `.cursor/rules/layer-boundaries.mdc` | generate ≠ persist ≠ LLM |
+
+## Планы placement, lifecycle и динамических систем
+
+Физическая вода — [HY-12](../.cursor/plans/hy-12-sea-elevation-contract.md); размещение объектов — [generator-placement.md](../.cursor/plans/generator-placement.md); общий жизненный цикл — [entity-lifecycle.md](../.cursor/plans/entity-lifecycle.md); динамическая связность — [hydrology-water-systems.md](../.cursor/plans/hydrology-water-systems.md). Карта и точные входные gates: [plan-dependency-graph.md](../.cursor/plans/plan-dependency-graph.md). Это разные delivery-треки: физический fill не закрывает динамические системы, а HY-12 coarse smoke не закрывает HY-10 L0 bands.
