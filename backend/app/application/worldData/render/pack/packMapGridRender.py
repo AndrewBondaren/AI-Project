@@ -29,7 +29,7 @@ from app.application.worldData.render.structureAsciiSymbols import render_struct
 from app.application.worldData.render.pack.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.application.worldData.render.pack.worldMapPackRenderer import WorldMapPackRenderer
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
+from app.dataModel.topology.worldBounds import WorldBounds
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

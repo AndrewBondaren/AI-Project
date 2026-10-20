@@ -24,7 +24,7 @@ from app.application.worldData.materialize.terrainBatchOrchestrator import TileS
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainColumnWire
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
+from app.dataModel.topology.worldBounds import WorldBounds
 
 Coord = tuple[int, int]
 

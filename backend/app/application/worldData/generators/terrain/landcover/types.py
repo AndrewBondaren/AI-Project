@@ -12,7 +12,7 @@ from app.application.worldData.regions.regionFacts import RegionFacts
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, Point
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry, RegionSpecBase
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.worldTopology import WorldTopology
 
 
 class RegionSource(StrEnum):

@@ -2,6 +2,8 @@
 
 import unittest
 
+from tests.hydrology_fixtures import hydro_topology
+
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
@@ -66,7 +68,7 @@ class TestDeepeningBands(unittest.TestCase):
     def test_flood_water_side_north_of_east_west_coast(self):
         hm = _flat_heightmap(0, 10, 0, 6)
         segments = [((2, 2), (8, 2))]
-        dist = flood_water_side(hm, rasterize_segments(segments), segments)
+        dist = flood_water_side(hm, rasterize_segments(segments), segments, topology=hydro_topology(hm))
         self.assertIn((5, 1), dist)
         self.assertNotIn((5, 3), dist)
 
@@ -74,7 +76,7 @@ class TestDeepeningBands(unittest.TestCase):
         hm = _flat_heightmap(0, 10, 0, 6)
         segments = [((2, 2), (8, 2))]
         result = carve_deepening_bands(hm, segments, HydrologyBands(min=1, max=1),
-                                       water_body_uid="auto-sea-2x1", z_sea=0)
+                                       water_body_uid="auto-sea-2x1", z_sea=0, topology=hydro_topology(hm))
         self.assertEqual(hm.surface_z[(5, 1)], 1)  # deepening band 1
         self.assertEqual(hm.surface_z[(5, 0)], 0)  # beyond max band → open water
         entry = result.by_cell[(5, 0)]

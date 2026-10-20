@@ -14,8 +14,20 @@ from app.application.worldData.generators.hydrology.types import (
     LoadedConnectionGraph,
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.application.worldData.generators.terrain.worldMapSettings import DEFAULT_GRID_BBOX_PADDING
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.db.models.namedLocation import NamedLocation
+
+
+def hydro_topology(heightmap: SurfaceHeightmap, mode: WorldTopologyMode = WorldTopologyMode.PLANAR) -> WorldTopology:
+    """Explicit topology for tests of the legacy planar water-side contract."""
+    bbox = heightmap.bbox
+    return WorldTopology(mode=mode, bounds=WorldBounds(
+        x_min=bbox.x_min, x_max=bbox.x_max, y_min=bbox.y_min, y_max=bbox.y_max,
+    ))
 
 
 def hydro_world(**kwargs) -> SimpleNamespace:
@@ -31,6 +43,7 @@ def hydro_world(**kwargs) -> SimpleNamespace:
         "z_min": 0,
         "z_max": 20,
         "map_subsurface_depth": 0,
+        "grid_bbox_padding": DEFAULT_GRID_BBOX_PADDING,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)

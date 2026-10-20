@@ -6,7 +6,7 @@ from collections import deque
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import _neighbors4
+from app.dataModel.topology.topologyGeometry import neighbors4_unrolled
 from app.application.worldData.generators.hydrology.geom.polygonInterior import interior_cells
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
 from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
@@ -36,7 +36,7 @@ def _land_shore_outside(
 ) -> set[tuple[int, int]]:
     land: set[tuple[int, int]] = set()
     for cell in shoreline:
-        for n in _neighbors4(*cell):
+        for n in neighbors4_unrolled(cell):
             if n in heightmap.surface_z and n not in interior and n not in shoreline:
                 land.add(n)
     return land
@@ -74,7 +74,7 @@ def _interior_seed(
         if (gx, gy) in heightmap.surface_z and (gx, gy) not in shoreline:
             if point_in_polygon(gx + 0.5, gy + 0.5, verts):
                 return (gx, gy)
-        for n in _neighbors4(gx, gy):
+        for n in neighbors4_unrolled((gx, gy)):
             if n not in heightmap.surface_z or n in shoreline:
                 continue
             if point_in_polygon(n[0] + 0.5, n[1] + 0.5, verts):
@@ -103,7 +103,7 @@ def _resolve_interior(
     queue: deque[tuple[int, int]] = deque([seed])
     while queue:
         cell = queue.popleft()
-        for n in _neighbors4(*cell):
+        for n in neighbors4_unrolled(cell):
             if n in filled or n not in heightmap.surface_z or n in shoreline:
                 continue
             if not point_in_polygon(n[0] + 0.5, n[1] + 0.5, verts):
@@ -120,7 +120,7 @@ def _interior_distances(
     dist: dict[tuple[int, int], int] = {}
     queue: deque[tuple[tuple[int, int], int]] = deque()
     for cell in shoreline:
-        for n in _neighbors4(*cell):
+        for n in neighbors4_unrolled(cell):
             if n in interior and n not in shoreline:
                 queue.append((n, 1))
     while queue:
@@ -128,7 +128,7 @@ def _interior_distances(
         if cell in dist:
             continue
         dist[cell] = d
-        for n in _neighbors4(*cell):
+        for n in neighbors4_unrolled(cell):
             if n in dist or n not in interior or n in shoreline:
                 continue
             queue.append((n, d + 1))
@@ -141,7 +141,7 @@ def _shoreline_ring(
 ) -> set[tuple[int, int]]:
     ring: set[tuple[int, int]] = set()
     for cell in interior:
-        for n in _neighbors4(*cell):
+        for n in neighbors4_unrolled(cell):
             if n not in interior and n in heightmap.surface_z:
                 ring.add(cell)
                 break

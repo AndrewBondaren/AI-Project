@@ -8,8 +8,8 @@ from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs 
 from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
 from app.application.worldData.render.fineTerrainAsciiKernel import draw_symbol_grid
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.ids import seed_root
 
 

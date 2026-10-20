@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.dataModel.topology.worldTopology import WorldTopology
+
 
 def bresenham_line(
     x0: int,
@@ -33,10 +35,17 @@ def bresenham_line(
 
 def rasterize_segments(
     segments: list[tuple[tuple[int, int], tuple[int, int]]],
+    *, topology: WorldTopology | None = None,
 ) -> set[tuple[int, int]]:
-    """Union of grid cells covered by segment list."""
+    """Unrolled raster, optionally canonicalized for grid IO (planar void clipped).
+
+    Endpoints stay unrolled: canonicalizing before Bresenham creates false
+    chords across the map. Geometry consumers omit topology to keep this frame.
+    """
     cells: set[tuple[int, int]] = set()
     for (x0, y0), (x1, y1) in segments:
         for cell in bresenham_line(x0, y0, x1, y1):
-            cells.add(cell)
+            canonical = topology.canonicalize(*cell) if topology is not None else cell
+            if canonical is not None:
+                cells.add(canonical)
     return cells

@@ -1,0 +1,1 @@
+"""Closed world topology modes."""

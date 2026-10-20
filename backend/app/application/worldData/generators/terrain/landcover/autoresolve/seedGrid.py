@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing, opposite
 from app.dataModel.spatial.regionShape import Point
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.ids import RegionRngChannel, UidKind, seeded_u01
 
 

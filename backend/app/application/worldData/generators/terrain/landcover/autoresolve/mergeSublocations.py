@@ -8,7 +8,7 @@ from app.application.worldData.generators.terrain.landcover.types import Subloca
 from app.dataModel.spatial.facing import GRID_DELTA_TO_FACING, GRID_OUTWARD_DELTA, opposite
 from app.dataModel.spatial.regionShape import Point
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.ids.regionIdentity import region_uid
 
 

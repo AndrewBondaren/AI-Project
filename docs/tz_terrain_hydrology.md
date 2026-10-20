@@ -713,6 +713,47 @@ class HydrologyGeneratorService:
 
 **Role tag:** все ячейки этого pass → `HydrologyCellRole.coastal_sea`.
 
+**Водная сторона declared coastline (HY-6, U15/U21).** После перевода declare-сегментов в coarse-grid вода определяется геометрией ближайшего сегмента для любой ориентации берега, включая N-S и диагональ. Для клетки `C` выбирается owning-сегмент по минимальному расстоянию **до отрезка**, не до растровой клетки. `K` — ближайшая клетка coastline, принадлежащая этому сегменту; `n(K)` — его водный шаг (`water_step_from_segment`), перпендикуляр в сторону от взвешенного land centroid. Нормаль `n` и проекция `t` вычисляются по **одному owning-сегменту**. Centroid-fallback допускается только для вырожденного сегмента `a == b`.
+
+Клетка входит в water footprint, если достижима от water-seed и `(C − K)·n(K) > 0`. **Bounded** (`flood_water_side`) дополнительно требует проекцию `C` на owning-сегмент внутри отрезка: `t ∈ [0,1]`; **unbounded** (`flood_water_side_unbounded`, для autoresolve за declare bbox) требует только `dot > 0`. Например, для `(2,2)–(8,2)` с водой на севере `(2,1)` входит в оба footprint, `(0,1)` и `(10,0)` — только в unbounded, `(0,3)` — ни в один. Открытые концы не обтекаются на land-сторону; `dot = 0` не является водой.
+
+При равном расстоянии до сегментов выбирается кандидат с **максимальным `dot`**; оставшиеся равенства разрешаются детерминированным обходом coastline-клеток в порядке `(gy, gx)` и стабильным порядком declare-сегментов. Это v1-эвристика углов: внешняя сторона может оставаться водой, внутренняя — сушей. Вогнутые берега не имеют гарантии полной геометрической корректности; сложные формы задаются несколькими `declared_coastlines` либо `declared_lakes`.
+
+**Единая нормаль:** water seeds (`K + n(K)`), land shore (соседи `K` с `dot < 0`), bounded и unbounded flood используют тот же выбор owning-сегмента и `n(K)`. Соседи с `dot = 0` — торец, не land shore. Стена flood — проверка `dot`, а не только множество растровых coastline-клеток: 8-связная линия Bresenham сама по себе не предотвращает протечки 4-связного BFS между диагональными клетками.
+
+Равенство расстояний между несколькими топологическими образами query-клетки
+одного сегмента разрешается тем же максимумом `dot`: гидрология передаёт
+`tie_breaker(result) = -dot` в доменный `nearest_on_segment`. Нулевой dot
+торцевого образа не подавляет равноудалённый образ на водной стороне.
+
+**Fine → coarse и растеризация (HY-11).** Declare-координаты переводятся на
+coarse-сетку, затем геометрия одной coastline/lake-spec переносится целиком
+через `canonical_frame` в кадр канонического первого anchor. Длины отрезков
+и связность сохраняются; независимый wrap концов и автоматическое сокращение
+authored-отрезка запрещены. При отсутствии разрешённых world bounds loader
+сохраняет unrolled-ввод; runtime разрешает топологию по полному heightmap.
+В `planar` void-anchor сохраняет исходный кадр, чтобы линия, пересекающая
+границу, обрезалась при записи, а не теряла свой внутренний участок.
+`rasterize_segments(..., topology=...)` считает Bresenham в этом unrolled-кадре
+и канонизирует каждую выходную клетку; `None` пропускается. Геометрические
+вычисления могут запрашивать исходный unrolled-растр без канонизации.
+
+**Autoresolve на краях (HY-11).** Procedural-сторона выбирается относительно
+land centroid в одном unrolled-кадре. Seeds берутся из `topology.bounds.edge_tiles`,
+включая существующего соседа через `neighbor`; предикат океанской полуплоскости
+проверяет образы клеток относительно centroid, BFS использует доменную смежность.
+Край частичного bake-bbox не становится новым краем мира. При declare+autoresolve
+принадлежность padded declare-bbox проверяется по топологическим образам клетки,
+чтобы канонический адрес за швом не считался автоматически внешним.
+
+**Геометрия на шве (HY-11 / TOPO-1).** Гидрология использует сервисы домена топологии из [`tz_terrain_generation.md` § Топология поверхности](./tz_terrain_generation.md#топология-поверхности-world_topology_mode): unrolled compute + canonical write. Owning-сегмент выбирается через `nearest_on_segment`, land centroid — через `centroid` с разворотом к anchor. Для сегмента, пересекающего шов, `C`, `K`, концы сегмента и образ land centroid приводятся к одному unrolled-кадру. В нём вычисляются проекция `t`, водный шаг `n(K)` и `(C − K)·n(K)`. При fold через y-шов `sphere` образ учитывает сдвиг x на `w/2` и `invert_dy`; нормаль переносится вместе с кадром, а не пересчитывается по разности канонических координат. Seeds, land shore и оба flood используют этот же кадр и нормаль. Собственные wrap, raw adjacency и ветвление по `mode` в гидрологии запрещены.
+
+**Bounds, шов мира и проходимость под HY-8:** в `wrapped`/`sphere` водная сторона за краем bounds продолжается через шов согласно `WorldTopology`; например, западная водная сторона coastline на `x_min` в `wrapped` попадает на `x_max`. В `planar` за краем — void. BFS идёт в unrolled-координатах, lookup и запись footprint — по каноническим: `passable(c) = canonicalize(c) ∈ heightmap.surface_z`, при `None` — `False`. Вода записывается только в существующие канонические клетки heightmap; bounds не расширяются. Helper водной стороны возвращает только footprint (где резать борт); проходимость BFS передаётся отдельным предикатом `passable`. Carve использует отдельные вызовы `water_side_footprint(...)` → `apply_carve(footprint, ...)`; fill пока совпадает с footprint. Ограничение fill по `z ≤ z_sea` и устранение безусловной записи уровня относятся к HY-8.
+
+**Диагностика declared coastline:** при наличии невырожденного сегмента и пустом `water_dist` генератор пишет warning `declared coastline → water_dist=0 (water side outside bounds?)`; это диагностическая гипотеза, а не расширение bounds. В `planar` void на водной стороне может давать этот warning; в `wrapped`/`sphere` сам выход через шов не является причиной пустого flood — проверка выполняется после канонизации. При непустом flood и `max(water_dist.values()) ≤ bands.min` пишет warning `declared coastline → water extent N <= bands.min M: no open water`, с фактическими `N` и `M`. Оба warning должны попадать в generation log `backend/logs/generation/{uid}/bake-*.log`.
+
+**Известные ограничения:** узкая вода целиком становится deepening band (coarse `SHORE`, `deepening_index > 0`), без открытой воды (`~`/`o`), до HY-BATH-1 (rim-профиль вместо счётчика bands). Перенос этого band в L0 пока отсутствует: `coarseOpenWater` переносит только `SEA`/`LAKE`, а `declaredBasins` красит саму declare-линию; поэтому coarse band ещё не гарантирует `s` в L0 (**HY-10**, отдельный долг по решению мастера 2026-10-20). Shoreline поверх mountain-маски относится к HY-7; HY-6 этот эффект не исправляет и не маскирует. См. [долги HY-6, HY-7, HY-8, HY-10 и HY-BATH-1](./tz_generator_technical_debt.md) и [выполненный план HY-6](../.cursor/plans/hy-6-coastline-water-side-done.md).
+
 ### `OceanBasinGenerator` (open ocean + inland sea)
 
 **Смысл:** **open ocean mass** — большой массив воды **за** coastal sea; плюс **inland_sea** (мастер mask, суша вокруг, `z_sea`).

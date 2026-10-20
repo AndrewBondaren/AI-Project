@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing, StrictOnWire
-from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.worldScalarWire import (
     pojo_wire_keys,

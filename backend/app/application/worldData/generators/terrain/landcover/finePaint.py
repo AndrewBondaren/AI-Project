@@ -50,7 +50,7 @@ from app.dataModel.spatial.regionShape import Bounds
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.wire.worldTopology import Coord
+from app.dataModel.topology.worldTopology import Coord
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

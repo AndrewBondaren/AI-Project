@@ -11,7 +11,7 @@ from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.application.jsonValidation.worldRow import terrain_scalars
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars, validate_world_row_terrain_columns
-from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.db.database import Database
 from app.db.models.world import World
 

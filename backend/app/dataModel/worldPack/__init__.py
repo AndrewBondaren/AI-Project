@@ -33,7 +33,7 @@ from app.dataModel.worldPack.wire.territoryVolume import (
 from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.dataModel.worldPack.wire.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.worldPack.wire.worldSeamCopy import WorldSeamCopy
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
+from app.dataModel.topology.worldBounds import WorldBounds
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
     WORLD_MAP_CELLS_PER_TILE,

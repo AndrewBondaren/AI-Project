@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
+from app.dataModel.topology.worldBounds import WorldBounds
 
 
 class TestWorldBounds(unittest.TestCase):

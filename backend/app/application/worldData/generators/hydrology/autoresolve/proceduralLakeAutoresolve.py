@@ -10,7 +10,7 @@ from app.application.worldData.generators.climate.anchorDetect import (
     detect_terrain_features,
 )
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import _neighbors4
+from app.dataModel.topology.topologyGeometry import neighbors4_unrolled
 from app.application.worldData.generators.hydrology.shore.heightmapSurfaceCells import (
     heightmap_top_surface_cells,
 )
@@ -59,7 +59,7 @@ def flood_basin_interior(
         if z > spill_z and cell != center:
             continue
         interior.add(cell)
-        for n in _neighbors4(*cell):
+        for n in neighbors4_unrolled(cell):
             queue.append((n, dist + 1))
     return interior
 

@@ -9,7 +9,7 @@ from app.application.worldData.generators.terrain.passes.bbox import world_bound
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.regions.factConsumers import collect_facts
 from app.application.worldData.regions.factConsumers.context import FactConsumerContext
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.worldTopology import WorldTopology
 
 
 def read_region_state_snapshot(ctx: LightGridBakeContext) -> Mapping[str, StateSnapshotEntry]:

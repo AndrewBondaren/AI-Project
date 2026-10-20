@@ -98,12 +98,55 @@ Lazy gameplay (`generate_z_slice`) в v2 может генерировать **�
 Явно переданное неизвестное значение — ошибка валидации, не переключение
 на другой режим.
 
-`WorldTopology` (`dataModel/worldPack/wire/worldTopology.py`) владеет
+`WorldTopology` (целевой домен `dataModel/topology/worldTopology.py`,
+перенос из `dataModel/worldPack/wire/` — HY-11) владеет
 режимом и разрешённым `WorldBounds`. Это единая точка lookup для seam,
 halo, транзита, растеризации регионов, pathfinding/дистанций,
 hydrology/z-continuity и climate field на краях. `grid_neighbor` и
 `antagonist_tile` становятся делегатами; потребители не ветвятся по mode
 и не вычисляют собственный wrap.
+
+**Сервисы домена геометрии (HY-11 / TOPO-1).** Топология владеет геометрией
+мира и поведением на швах. `WorldBounds` и `WorldTopology` находятся в
+`dataModel/topology/`, `WorldTopologyMode` — в его `enums/`;
+чистые геометрические сервисы от `WorldTopology` — в `topologyGeometry.py`.
+
+| Сервис | Контракт |
+|---|---|
+| `topology.neighbor(x, y, facing)` | Кардинальный сосед: `NeighborResult{coord, edge_crossing, invert_dy}` либо `None` для planar void |
+| `topology.canonicalize(x, y)` | Unrolled → каноническая координата; за bounds в `planar` → `None` |
+| `topology.seam_pairs()` | Стабильные seam-пары для bake, включая ориентацию граней и `invert_dy` |
+| `unrolled_images(topology, cell)` | Образы клетки: в `planar` один образ; в `wrapped` периодические сдвиги на `±w`, `±h`; в `sphere` также fold-образы со сдвигом x на `w/2` и инверсией Δy |
+| `dist2(topology, p, q)` / `nearest_on_segment(topology, p, a, b)` | Минимум евклидова расстояния по образам; расстояние до отрезка и проекция определяются в одном unrolled-кадре |
+| `centroid(topology, cells, weights, anchor)` | Каждая клетка разворачивается к ближайшему образу относительно anchor; результат — взвешенное среднее в этом unrolled-кадре |
+| `canonical_frame(topology, points, anchor=...)` | Общий перенос unrolled-геометрии в кадр канонического anchor; сохраняет длины, связность и authored extent; при sphere-fold переносит весь кадр с инверсией Δy |
+| `neighbors4_unrolled(cell)` | Четыре кардинальных шага в unrolled-кадре без канонизации; допустимость клетки проверяет потребитель через домен |
+| Растеризация через шов | Отрезки/формы растеризуются в unrolled-координатах; каждая выходная клетка проходит `canonicalize` |
+| `fine_topology(topology, tile_macro)` | Та же топология в fine-сетке; масштабирование extent выполняет домен, без собственного wrap в потребителе |
+
+`nearest_on_segment` возвращает квадрат расстояния, unclamped-проекцию `t`,
+образ query-точки с `invert_dy` и ближайшую точку отрезка в его unrolled-кадре.
+Необязательный `tie_breaker(result)` выбирает минимальный ключ **только между
+образами с одинаковым минимальным расстоянием**; без него и при оставшихся
+равенствах порядок — `(y, x, invert_dy)`. Так application-политика разрешает
+неоднозначность, не дублируя поиск образов или метрику домена.
+
+**Модель потребителя: unrolled compute + canonical write.** Геометрия,
+проекции, нормали и flood вычисляются в unrolled-координатах. Lookup и
+запись в grid используют `topology.canonicalize`; `None` означает void.
+Для heightmap проходимость задаётся как
+`passable(c) = canonicalize(c) ∈ heightmap.surface_z`
+(при `None` — `False`). Membership и дополнительные ограничения
+проходимости принадлежат application-потребителю, координатная
+арифметика и преобразование через шов — домену топологии.
+
+**Запрет raw adjacency:** вне домена нельзя определять мировых соседей
+сырыми `neighbors4`, считать расстояния/центроиды по каноническим мировым
+координатам обычным евклидом или трактовать край bounds как void без
+lookup топологии. Потребитель вызывает сервисы домена без ветвления по
+`mode`; локальная геометрия в полученном unrolled-кадре допустима.
+Перевод существующих консьюмеров идёт по треку TOPO-1: HY-11 покрывает
+домен и гидрологию, остальные домены подключаются отдельными планами.
 
 **Координатная карта.** Границы включительные;
 `w = x_max - x_min + 1`, `h = y_max - y_min + 1`. `NORTH` направлен к

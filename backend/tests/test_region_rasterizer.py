@@ -13,9 +13,9 @@ from app.ids import seed_root
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_fine
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EdgeNoise, EllipseShape, PolygonShape
 from app.dataModel.terrainMasks.regions import ForestSpec
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
-from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 
 
 class RegionRasterizerTests(unittest.TestCase):

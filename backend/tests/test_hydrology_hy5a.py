@@ -2,6 +2,8 @@
 
 import unittest
 
+from tests.hydrology_fixtures import hydro_topology
+
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
     declare_coastline_bbox_padded,
@@ -69,8 +71,8 @@ class TestUnboundedFlood(unittest.TestCase):
         hm = _flat_heightmap(0, 10, 0, 6)
         segments = [((2, 2), (8, 2))]
         coastline = rasterize_segments(segments)
-        bounded = flood_water_side(hm, coastline, segments)
-        unbounded = flood_water_side_unbounded(hm, coastline, segments)
+        bounded = flood_water_side(hm, coastline, segments, topology=hydro_topology(hm))
+        unbounded = flood_water_side_unbounded(hm, coastline, segments, topology=hydro_topology(hm))
         self.assertNotIn((0, 1), bounded)
         self.assertIn((0, 1), unbounded)
         self.assertIn((10, 0), unbounded)
@@ -135,7 +137,7 @@ class TestBoundaryAutoresolve(unittest.TestCase):
         from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
             flood_from_bbox_ocean_edge,
         )
-        dist = flood_from_bbox_ocean_edge(hm)
+        dist = flood_from_bbox_ocean_edge(hm, topology=hydro_topology(hm))
         self.assertIn((5, 0), dist)
         self.assertNotIn((5, 6), dist)
 

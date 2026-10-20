@@ -5,7 +5,7 @@ from functools import cache
 from math import hypot
 
 from app.dataModel.spatial.regionShape import BboxShape, EllipseShape, PolygonShape, RegionShape
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.worldTopology import WorldTopology
 
 
 def smooth_field(sample: Callable[..., float], scale: int,

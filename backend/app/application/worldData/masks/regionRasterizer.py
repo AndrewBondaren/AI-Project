@@ -16,7 +16,7 @@ from app.application.worldData.masks.regionRasterNoise import boundary_depth, sm
 from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.spatial.regionShape import Bounds, Point, RegionShape
-from app.dataModel.worldPack.wire.worldTopology import Coord, WorldTopology
+from app.dataModel.topology.worldTopology import Coord, WorldTopology
 from app.ids import RegionRngChannel, UidKind, seed_rng, seed_root, seeded_u01
 
 

@@ -31,9 +31,9 @@ from app.dataModel.terrainMasks.regions import ForestSpec, PlainSpec
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
-from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.ids import seed_root
 from app.ids.regionIdentity import region_uid
 

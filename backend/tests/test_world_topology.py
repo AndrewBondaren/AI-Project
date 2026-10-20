@@ -6,9 +6,9 @@ from pydantic import ValidationError
 
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, CARDINAL_WALL_OUTWARD_DELTA, NS_FACINGS, Facing, opposite
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
-from app.dataModel.worldPack.wire.worldTopology import NeighborResult, WorldTopology
-from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import NeighborResult, WorldTopology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 
 
 class WorldTopologyTests(unittest.TestCase):

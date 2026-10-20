@@ -6,21 +6,12 @@ from typing import Protocol
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.spatial.regionShape import EdgeNoise, Point
 from app.dataModel.terrainMasks.regions import RegionSpecBase
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
-from app.dataModel.worldPack.wire.worldTopology import WorldTopology
+from app.dataModel.topology.fineTopology import fine_topology as fine_topology
+from app.dataModel.topology.worldTopology import WorldTopology
 
 
 class RasterWorld(Protocol):
     world_uid: str
-
-
-def fine_topology(topology: WorldTopology, tile_macro: int) -> WorldTopology:
-    """Macro-tile topology lifted to fine cells; the same seam rules apply."""
-    bounds = topology.bounds
-    return WorldTopology(mode=topology.mode, bounds=WorldBounds(
-        x_min=bounds.x_min * tile_macro, x_max=(bounds.x_max + 1) * tile_macro - 1,
-        y_min=bounds.y_min * tile_macro, y_max=(bounds.y_max + 1) * tile_macro - 1,
-    ))
 
 
 @dataclass(frozen=True)

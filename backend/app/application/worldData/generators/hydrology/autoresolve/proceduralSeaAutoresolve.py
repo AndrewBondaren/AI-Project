@@ -15,6 +15,7 @@ from app.application.worldData.generators.hydrology.shore.deepeningBandCarver im
 )
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
 from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import resolve_hydrology_bands
+from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
 from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
 from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyMasterInput
 from app.application.worldData.generators.hydrology.waterBodyIdentity import (
@@ -25,11 +26,15 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.topologyGeometry import unrolled_images
 
 
-def _outside_bbox(cell: tuple[int, int], bbox: GridBBox) -> bool:
-    gx, gy = cell
-    return gx < bbox.x_min or gx > bbox.x_max or gy < bbox.y_min or gy > bbox.y_max
+def _outside_bbox(cell: tuple[int, int], bbox: GridBBox, topology: WorldTopology) -> bool:
+    anchor = (bbox.x_min + bbox.x_max) / 2, (bbox.y_min + bbox.y_max) / 2
+    return not any(bbox.x_min <= image.coord[0] <= bbox.x_max
+                   and bbox.y_min <= image.coord[1] <= bbox.y_max
+                   for image in unrolled_images(topology, cell, anchor=anchor))
 
 
 def _carve_water_candidates(
@@ -86,6 +91,7 @@ def _autoresolve_beyond_declare_bbox(
     bands: HydrologyBands,
     level: int,
     *,
+    topology: WorldTopology,
     autoresolve_coastal: bool,
     autoresolve_open_ocean: bool,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], GridBBox | None]:
@@ -94,12 +100,12 @@ def _autoresolve_beyond_declare_bbox(
     if declare_bbox is None:
         return {}, None
 
-    coastline_cells = rasterize_segments(segments)
-    water_dist = flood_water_side_unbounded(heightmap, coastline_cells, segments)
+    coastline_cells = rasterize_segments(segments, topology=topology)
+    water_dist = flood_water_side_unbounded(heightmap, coastline_cells, segments, topology=topology)
     candidates = {
         cell: distance
         for cell, distance in water_dist.items()
-        if cell not in occupied and _outside_bbox(cell, declare_bbox)
+        if cell not in occupied and _outside_bbox(cell, declare_bbox, topology)
     }
     if not candidates:
         return {}, None
@@ -121,16 +127,17 @@ def _autoresolve_from_map_boundary(
     bands: HydrologyBands,
     level: int,
     *,
+    topology: WorldTopology,
     autoresolve_coastal: bool,
     autoresolve_open_ocean: bool,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], GridBBox | None]:
-    water_dist = flood_from_bbox_ocean_edge(heightmap)
+    water_dist = flood_from_bbox_ocean_edge(heightmap, topology=topology)
     if not water_dist:
         return {}, None
 
     uid = auto_water_body_uid(AutoWaterBodyRole.SEA, min(water_dist))
-    land_centroid = compute_land_centroid(heightmap)
-    land_shore = land_shore_from_water_dist(heightmap, water_dist, land_centroid)
+    land_centroid = compute_land_centroid(heightmap, topology=topology)
+    land_shore = land_shore_from_water_dist(heightmap, water_dist, land_centroid, topology=topology)
     by_cell: dict[tuple[int, int], MapCellHydrology] = {}
 
     for cell in land_shore:
@@ -187,6 +194,7 @@ def autoresolve_sea_basins(
 
     bands = resolve_hydrology_bands("seas", world, world_uid=master.world_uid)
     level = resolve_z_sea(world)
+    topology = resolve_hydrology_topology(world, heightmap)
 
     if master.declared_coastline_segments:
         return _autoresolve_beyond_declare_bbox(
@@ -195,6 +203,7 @@ def autoresolve_sea_basins(
             occupied,
             bands,
             level,
+            topology=topology,
             autoresolve_coastal=autoresolve_coastal,
             autoresolve_open_ocean=autoresolve_open_ocean,
         )
@@ -204,6 +213,7 @@ def autoresolve_sea_basins(
         occupied,
         bands,
         level,
+        topology=topology,
         autoresolve_coastal=autoresolve_coastal,
         autoresolve_open_ocean=autoresolve_open_ocean,
     )

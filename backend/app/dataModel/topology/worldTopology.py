@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, NS_FACINGS, Facing, opposite
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
-from app.dataModel.worldPack.wire.worldBounds import WorldBounds
-from app.dataModel.worldPack.wire.worldTopologyMode import WorldTopologyMode
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 
 Coord = tuple[int, int]
 
