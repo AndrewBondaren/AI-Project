@@ -412,7 +412,7 @@
       ],
       "declared_coastlines": [
         {
-          "location_uid": "loc-geo-coast-west-004",
+          "location_uid": "loc-geo-ocean-west-004",
           "kind": "ocean",
           "path": [
             {
