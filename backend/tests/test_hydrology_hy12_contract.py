@@ -135,12 +135,46 @@ class BasinContractTests(unittest.TestCase):
 
     def test_fixture_imports_accept_explicit_coastline_kind(self):
         root = Path(__file__).resolve().parents[2] / "fixtures"
-        for name in ("world_template.json", "world_terrain_test.json", "world_test_all.json", "world_test_004.json"):
+        # world_test_004 intentionally duplicates a declared water location_uid; it is
+        # covered by the dedicated WATER_IDENTITY_DUPLICATE test below.
+        for name in ("world_template.json", "world_terrain_test.json", "world_test_all.json"):
             with self.subTest(fixture=name):
                 raw = json.loads((root / name).read_text(encoding="utf-8"))["world"]
                 normalized = normalize_world(raw)
                 policy = WorldHydrology.model_validate(normalized["hydrology"])
                 self.assertTrue(policy.declared_coastlines)
+
+    def test_fixture_duplicate_water_identity_is_an_import_error(self):
+        root = Path(__file__).resolve().parents[2] / "fixtures"
+        raw = json.loads((root / "world_test_004.json").read_text(encoding="utf-8"))["world"]
+        with self.assertRaises(ImportValidationError) as failure:
+            normalize_world(raw)
+        duplicates = [e for e in failure.exception.errors
+                      if e.code == "WATER_IDENTITY_DUPLICATE"]
+        self.assertEqual(len(duplicates), 2)
+        self.assertEqual({error.path[:2] for error in duplicates},
+                         {("hydrology", "declared_basins"), ("hydrology", "declared_coastlines")})
+        self.assertTrue(all("loc-geo-ocean-west-004" in error.message for error in duplicates))
+        self.assertTrue(all("declared_basins" in error.message and "declared_coastlines" in error.message
+                            for error in duplicates))
+
+    def test_basin_and_lake_with_same_uid_rejected_by_ref_w(self):
+        raw = {"hydrology": {
+            "declared_basins": [{"location_uid": "a", "kind": "ocean", "floor_z": -10,
+                                 "footprint": {"kind": "bbox", "x_min": 0, "x_max": 3,
+                                               "y_min": 0, "y_max": 3}}],
+            "declared_coastlines": [{"location_uid": "b", "kind": "sea",
+                                     "path": [{"x": 0, "y": 0}, {"x": 4, "y": 0}]}],
+            "declared_lakes": [{"location_uid": "a", "shoreline": [{"x": 0, "y": 0},
+                                                                 {"x": 3, "y": 0},
+                                                                 {"x": 3, "y": 3}]}],
+        }}
+        with self.assertRaises(ImportValidationError) as failure:
+            normalize_world(raw)
+        paths = {error.path for error in failure.exception.errors
+                 if error.code == "WATER_IDENTITY_DUPLICATE"}
+        self.assertEqual(paths, {("hydrology", "declared_basins", 0),
+                                 ("hydrology", "declared_lakes", 0)})
 
 
 class CoastlineContractTests(unittest.TestCase):

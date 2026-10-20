@@ -381,5 +381,88 @@ class WaterLakeAdapterTests(unittest.TestCase):
             self.assertEqual((prep, result, records), baseline)
 
 
+def ring(uid="dup", points=((8, 2), (12, 2), (12, 6), (8, 6))):
+    return coast(uid, closed=True, path=[dict(x=x, y=y) for x, y in points])
+
+
+def merged_notices(prep):
+    return [notice for notice in prep.notices if notice.code == "WATER_PLACEMENT_MERGED_SOURCES"]
+
+
+class WaterMergedSourceTests(unittest.TestCase):
+    def test_basin_and_coastline_with_same_uid_merge_into_one_source(self):
+        snap = context()
+        ctx = ResolveContext(validate_only=True)
+        prep = prepare(basins=[basin("dup")], coasts=[ring()], snapshot=snap, ctx=ctx)
+        self.assertFalse(prep.failures)
+        self.assertEqual(len(prep.entries), 1)
+        entry = prep.entries[0]
+        cells = entry.prepared.candidates[0].footprint.cells
+        self.assertEqual(len(cells), 25)
+        self.assertIn((3, 3), cells)   # basin bbox
+        self.assertIn((10, 4), cells)  # closed coastline interior
+        self.assertEqual((entry.kind, entry.floor_z), ("ocean", -20))  # basin is primary
+        _, records = resolve(prep, snap)
+        self.assertEqual(len(records), 1)
+        merged = merged_notices(prep)
+        self.assertEqual(len(merged), 1)
+        self.assertIn("declared_basins[0]", merged[0].message)
+        self.assertIn("declared_coastlines[0]", merged[0].message)
+        self.assertIn("kind=sea", merged[0].message)
+        self.assertIn(merged[0], ctx.errors)
+
+    def test_same_type_duplicates_merge_with_first_declared_primary(self):
+        second = basin("dup", floor_z=-5, kind="sea",
+                       footprint=dict(kind="bbox", x_min=8, x_max=11, y_min=8, y_max=10))
+        prep = prepare(basins=[basin("dup"), second], snapshot=context())
+        entry = prep.entries[0]
+        self.assertEqual((entry.kind, entry.floor_z), ("ocean", -20))
+        self.assertEqual(len(entry.prepared.candidates[0].footprint.cells), 16 + 12)
+        merged = merged_notices(prep)
+        self.assertEqual(len(merged), 1)
+        self.assertIn("declared_basins[1]", merged[0].message)
+        self.assertIn("kind=sea", merged[0].message)
+
+    def test_coastline_beats_lake_as_primary(self):
+        prep = prepare(coasts=[ring()],
+                       lakes=[lake("dup", points=((2, 8), (5, 8), (5, 10), (2, 10)))],
+                       snapshot=context())
+        entry = prep.entries[0]
+        self.assertEqual(entry.kind, "sea")
+        self.assertIsNotNone(entry.prepared.coastline)  # coastline primary keeps its water fact
+
+    def test_failed_member_is_a_failure_and_the_survivor_becomes_primary(self):
+        broken = basin("dup", footprint=dict(kind="bbox", x_min=-1, x_max=2, y_min=1, y_max=3))
+        prep = prepare(basins=[broken], coasts=[ring()], snapshot=context())
+        self.assertEqual(len(prep.entries), 1)
+        self.assertEqual(prep.entries[0].kind, "sea")
+        self.assertEqual(len(prep.failures), 1)
+        self.assertEqual(prep.failures[0].issue.code, "WATER_PLACEMENT_GEOMETRY")
+
+    def test_group_without_valid_geometry_reports_failures_and_no_entry(self):
+        bad = dict(kind="bbox", x_min=-4, x_max=-1, y_min=1, y_max=3)
+        prep = prepare(basins=[basin("dup", footprint=bad),
+                               basin("dup", footprint=bad | {"y_min": 5, "y_max": 7})],
+                       snapshot=context())
+        self.assertEqual(len(prep.failures), 2)
+        self.assertFalse(prep.entries)
+
+    def test_runtime_logs_one_warning_and_preview_reports_the_same_fact(self):
+        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
+            prepare(basins=[basin("dup")], coasts=[ring()], snapshot=context(),
+                    ctx=ResolveContext())
+        self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line for line in log.output))
+        preview = ResolveContext(validate_only=True)
+        with self.assertNoLogs("app.application.jsonValidation.resolve", level="WARNING"):
+            prep = prepare(basins=[basin("dup")], coasts=[ring()], snapshot=context(), ctx=preview)
+        self.assertEqual([notice.code for notice in prep.notices], ["WATER_PLACEMENT_MERGED_SOURCES"])
+        self.assertEqual([e.code for e in preview.errors], ["WATER_PLACEMENT_MERGED_SOURCES"])
+
+    def test_merged_output_is_deterministic(self):
+        first = prepare(basins=[basin("dup")], coasts=[ring()], snapshot=context())
+        second = prepare(basins=[basin("dup")], coasts=[ring()], snapshot=context())
+        self.assertEqual(first, second)
+
+
 if __name__ == "__main__":
     unittest.main()

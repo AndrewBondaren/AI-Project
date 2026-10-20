@@ -107,7 +107,12 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
     def test_world_test_004_wrapped_ocean_basin_carves_across_seam(self):
         world, locations = _fixture_world_and_locations()
         policy = WorldHydrology.model_validate(world.hydrology)
-        ctx = prepare_surface_terrain_context(world, locations)
+        # The fixture intentionally duplicates location_uid between a declared basin and
+        # a declared coastline; runtime merges them with one structured warning.
+        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
+            ctx = prepare_surface_terrain_context(world, locations)
+        self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line
+                            and "loc-geo-ocean-west-004" in line for line in log.output))
         self.assertIsNotNone(ctx)
         projected = policy.declared_basins[0].footprint.projected(1000)
         topology = resolve_hydrology_topology(world, ctx.coarse_hm, locations=locations)
