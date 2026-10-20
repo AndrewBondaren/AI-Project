@@ -147,7 +147,7 @@ def _prepare_source(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
                                    footprint=PlacementFootprint(cells=cells, z_min=None, z_max=None))
     prepared = PreparedPlacement(intent=intent, original_area=area, candidates=(candidate,),
                                   auto_specificity=context.auto_specificity.get(uid), coastline=fact)
-    return PreparedWaterEntry(source, prepared, level, kind, liquid)
+    return PreparedWaterEntry(source, prepared, level, floor, kind, liquid)
 
 
 def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementContext, *,

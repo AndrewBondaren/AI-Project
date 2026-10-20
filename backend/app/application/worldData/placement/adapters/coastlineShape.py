@@ -13,17 +13,13 @@ from app.application.worldData.placement.adapters.waterShape import shape_cells
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.enums.waterSide import WaterSide
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
-from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.spatial.regionShape import PolygonShape
 from app.dataModel.topology import topologyGeometry as geometry
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 
 
 def cell_neighbors(topology: WorldTopology, cell: Coord):
-    for facing in CARDINAL_FACINGS:
-        neighbor = topology.neighbor(*cell, facing)
-        if neighbor is not None:
-            yield neighbor.coord
+    return iter(geometry.canonical_neighbors4(topology, cell))
 
 
 def ring_barrier(context: WaterPlacementContext,

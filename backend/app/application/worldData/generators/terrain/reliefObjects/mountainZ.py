@@ -44,12 +44,12 @@ def apply_mountain_z(
     *,
     pole_field: ClimatePoleField,
     light_side: int,
-) -> int:
-    """Raise ``surface_z`` from mountain Specs (Q3-A FormRaster+SideFill). Returns raised cell count."""
+) -> frozenset[tuple[int, int]]:
+    """Raise ``surface_z`` from mountain Specs (Q3-A FormRaster+SideFill). Returns raised cells."""
     masks = terrain_masks(world)
     policy = masks.default_mountains
     if not masks.category_enabled(policy):
-        return 0
+        return frozenset()
 
     z_min = world_z_min(world)
     z_max = world_z_max(world)
@@ -85,7 +85,7 @@ def apply_mountain_z(
                 frac_map[key] = float(frac)
                 kind_map[key] = kind
 
-    raised = 0
+    raised = frozenset(frac_map)
     for key, frac in frac_map.items():
         base = heightmap.surface_z[key]
         heightmap.surface_z[key] = resolve_mountain_surface_z(
@@ -95,12 +95,11 @@ def apply_mountain_z(
             kind=kind_map[key],
             side_fraction=frac,
         )
-        raised += 1
 
     logger.debug(
         "relief_objects_mountain_z | world=%s raised=%d specs=%d",
         world.world_uid,
-        raised,
+        len(raised),
         len(specs),
     )
     return raised

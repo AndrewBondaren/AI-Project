@@ -50,6 +50,7 @@ class PreparedWaterEntry:
     source: DeclaredBasin | DeclaredCoastline | DeclaredLake
     prepared: PreparedPlacement
     z_water_level: int
+    floor_z: int
     kind: BasinKind
     liquid: MaterialKey
 

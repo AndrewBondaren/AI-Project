@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from math import floor, fsum, isfinite
 
-from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
+from app.dataModel.spatial.facing import CARDINAL_FACINGS, CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 
@@ -159,6 +159,15 @@ def centroid(topology: WorldTopology, cells: Iterable[GeometryPoint],
         raise ValueError("centroid requires positive total weight")
     return (fsum(item[0] for item in contributions) / total,
             fsum(item[1] for item in contributions) / total)
+
+
+def canonical_neighbors4(topology: WorldTopology, cell: Coord) -> tuple[Coord, ...]:
+    """Four canonical cardinal neighbours; non-existent directions are dropped."""
+    return tuple(
+        neighbor.coord
+        for facing in CARDINAL_FACINGS
+        if (neighbor := topology.neighbor(*cell, facing)) is not None
+    )
 
 
 def neighbors4_unrolled(cell: Coord) -> tuple[Coord, Coord, Coord, Coord]:
