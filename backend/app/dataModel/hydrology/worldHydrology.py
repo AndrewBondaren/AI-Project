@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver, validate_declared_rivers_topology
 from app.dataModel.hydrology.landforms import HydrologyLandformsPolicy
@@ -25,6 +26,7 @@ class WorldHydrology(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     enabled: DefaultWhenMissing[bool] = True
+    default_water_level: DefaultWhenMissing[int] = 0
     default_shore: DefaultWhenMissing[HydrologyShoreDefaults] = Field(default_factory=HydrologyShoreDefaults)
     default_rivers: DefaultWhenMissing[HydrologyRiversPolicy] = Field(default_factory=HydrologyRiversPolicy)
     default_lakes: DefaultWhenMissing[HydrologyLakesPolicy] = Field(default_factory=HydrologyLakesPolicy)
@@ -34,12 +36,15 @@ class WorldHydrology(BaseModel):
     )
     materialize_named_locations: DefaultWhenMissing[bool] = False
     declared_lakes: DefaultWhenMissing[list[DeclaredLake]] = Field(default_factory=list)
+    declared_basins: DefaultWhenMissing[list[DeclaredBasin]] = Field(default_factory=list)
     declared_coastlines: DefaultWhenMissing[list[DeclaredCoastline]] = Field(default_factory=list)
     declared_rivers: DefaultWhenMissing[list[DeclaredRiver]] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _validate_river_systems(self) -> WorldHydrology:
+    def _validate_declares(self) -> WorldHydrology:
         validate_declared_rivers_topology(self.declared_rivers)
+        for basin in self.declared_basins:
+            basin.validate_water_level(self.default_water_level)
         return self
 
     @classmethod

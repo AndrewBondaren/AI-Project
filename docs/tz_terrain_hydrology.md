@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус:** семантика **утверждена** (2026-06) · **Impl:** ⬜ (H-0…H-7).  
+> **Статус:** целевой физический контракт HY-12 актуализирован 2026-10-20; шаг 1 — документация. Реализация carve/fill ещё не мигрирована. Старые результаты HY-2/HY-6/HY-11 остаются baseline, не подтверждением HY-12.
 > **Связь:** дополняет [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Terrain layers п.3; **не** заменяет climate liquid overlay.
 
 ## Утверждено (2026-06)
@@ -15,7 +15,7 @@ metadata:
 |---|---|
 | U1 | Гидрология — **отдельный домен** pure-generators между Pass 1 и gap analysis |
 | U2 | **Море** = coastal sea («большое у берега»); **океан** = coastal ring + open ocean mass; один `liquid_body`, роли в metadata |
-| U3 | **Озеро** ≠ море: локальная впадина на суше; **inland_sea** = master mask на `z_sea`, окружён сушей |
+| U3 | **Озеро** — локальная впадина; **inland_sea** — замкнутый крупный водоём. У каждого тела свой `z_water_level`; океанский дефолт — `default_water_level`. См. § Level-fill + компоненты |
 | U4 | **Остров / полуостров** — топология после carve (`CoastalLandformClassifier`) |
 | U5 | **Река:** возвышенность → устье; edge **`river`** / **`mountain_river`** — autoresolve по terrain (U17) |
 | U6 | **Русло** — bootstrap carve; **поток / оттепель** — runtime (`season_changed`), без regen heightmap |
@@ -34,12 +34,12 @@ metadata:
 | U18 | **River pipeline layers:** `classify_river_segments` → `list[RiverSegment]` (pure); **`riverConnectionEmit`** → `ConnectionEdge`; persist — **вне** generators (`MapCellService` / orchestration) |
 | U19 | **`liquid_candidate` persist (v1):** mask и роли hydrology — **metadata на `map_cells`** при `save_terrain_batch`; climate и downstream читают из БД; нужно для «где реки/озёра/море» без sidecar между HTTP-вызовами |
 | U20 | **Declare озеро:** `world.hydrology.declared_lakes[]` — `location_uid` + `shoreline[]` waypoints (fine-клетки, замкнутый контур) |
-| U21 | **Declare море/берег:** `world.hydrology.declared_coastlines[]` — `location_uid` + `path[]`; роль из `geographic` subtype |
+| U21 | **Declare воды:** `declared_basins[]` — форма + `kind` + дно; `declared_coastlines[]` — линия + явный `kind`, из неё достраивается бассейн. Все входы проходят общий placement → единый carve/fill |
 | U22 | **`type_classify` null:** runtime **fallback** на встроенные defaults схемы; **import validator (future):** проверить defaults, **записать явные значения** в bundle (normalize on import) — см. § Import validator |
 | U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — declare в `world.hydrology.declared_*` (hard cut от connection graph для hydrology) |
 | U24 | **River bed:** hydrology ставит **`system_terrain: liquid_body`** в channel; **`role: river_bed`** в metadata |
 | U28 | **Простая модель воды (2026-06):** hydrology → **`liquid_body`** в русле; **`generate-climate`** → **состояние** уже liquid cells (семантика состояния — [`tz_climate.md`](./tz_climate.md), **не** в этом ТЗ). Hydrology **не** выбирает лёд/вода/steam |
-| U25 | **Lake vs inland_sea (Q6):** declare по **subtype** (A): `geographic.lake` + `declared_lakes`, `geographic.inland_sea` + замкнутый контур на `z_sea`; при **несовпадении** subtype и topology — **fallback (B):** warning + carve по topology (не по ошибочному subtype) |
+| U25 | **Lake vs inland_sea:** authored kind выражает намерение; физическая классификация читает post-carve компоненты, уровень и размер. Несоответствие диагностируется, отдельного carver по subtype нет |
 | U26 | **Coast segment (Q4):** `geographic.coast` — **waypoint** на цепочке `coastline` моря (`ConnectionNode.location_uid`); не отдельная геометрия |
 | U27 | **Реки (Q5):** `declared_rivers[]` — режимы `endpoints` / `via_locations` / `segments` + `system_role`; segments на import; endpoints/via на generate (A3); classify 1/2 по terrain (B2); global autoresolve не перезаписывает declare |
 
@@ -65,7 +65,7 @@ metadata:
 ## Принципы
 
 1. **Hydrology — pure generators** (как `TerrainGeneratorService`): без repos, без async. Persist — `MapCellService` / DAG.
-2. **Модифицирует shape до column fill:** hydrology работает на **`SurfaceHeightmap`** (Pass 1 output), **до** gap analysis + column fill — низина = реально более низкий `surface_z`, не только смена `system_terrain`.
+2. **Высоту пишет relief:** hydrology подготавливает `BasinSpec` / `RiverBedSpec`, затем читает post-carve `SurfaceHeightmap` до gap analysis и column fill. Изменение `surface_z` выполняют только relief objects; fill/classify/shore высоту не меняют.
 3. **Liquid semantics — climate pass:** после carve hydrology выставляет **кандидатов** (`liquid_candidate` / metadata); **`liquid_body` на cells** — по температуре в `generate-climate` (см. [`tz_climate.md`](./tz_climate.md)).
 4. **Детерминизм:** `world_seed(world)` + `(gx, gy, pass_id)` — как в terrain noise.
 5. **`NamedLocation` optional (U11).** Generators — только geometry. Master **declare** → location из import. **Autoresolve** → без location. **U13:** `materialize_named_locations: true` в **world template** → цепочка DAG: collect candidates → **`llm_name_procedural_locations`** → persist (generators pure).
@@ -78,63 +78,33 @@ metadata:
 
 ```mermaid
 flowchart TB
-  P1["Pass 1 — SurfaceHeightmap\npole + noise + clamp"]
-  R4["Pass 1.4 — relief objects z\nmountain/ravine on heightmap"]
-  HY["Pass 1.5 — Hydrology\ncoastal sea → ocean → lakes → rivers"]
-  GA["Gap analysis\nN_eff"]
-  P2["Pass 2 — column fill\nsolid only"]
-  CL["generate-climate\n+ liquid overlay"]
-  OR["generate-ores / caves"]
-
-  P1 --> R4 --> HY --> GA --> P2 --> CL
-  P2 --> OR
+  BASE["Terrain base + anchors"]
+  PLACE["Общий placement-pass P2/P3"]
+  SPEC["ResolvedWaterPlacement → basinSpecFactory"]
+  R4["Pass 1.4: relief objects — mountain/ravine/basinZ"]
+  WATER["Pass 1.5: компоненты → fill/merge → classify → shore"]
+  RIVER["River planner → RiverBedSpec → relief apply → river roles"]
+  GA["Gap analysis → column fill → climate"]
+  BASE --> PLACE --> SPEC --> R4 --> WATER --> RIVER --> GA
 ```
 
-| Этап | Класс / entry | Мутирует | Persist layer |
-|---|---|---|---|
-| 1 | `run_surface_pass` | `SurfaceHeightmap.surface_z` | — |
-| **1.4** | **Relief objects z** (mountain / ravine materialize на heightmap; `terrain_masks`) | **`surface_z` (± terrain ids на planning)** | — |
-| **1.5** | **`HydrologyGeneratorService.apply`** | **`surface_z`, hydrology metadata** | — |
-| 1.6 | `run_gap_analysis` | `N_eff` | — |
-| 2 | `run_column_fill` | `MapCell[]` solid | `save_terrain_batch` |
-| 3 | `ClimateOrchestrator` + `liquidOverlayPass` | `liquid_body` where allowed | `save_pass climate` |
+Общий placement-pass выполняется после готовности terrain base и anchors, до применения spec в Pass 1.4. Coastline-footprint читает один pre-carve снимок; `anchor_radius` использует готовые anchors. Гидрология не размещает объекты собственным resolver. Шаг 3 HY-12 требует P2 и водный adapter P3, включая authored absolute footprint.
 
-**Инвариант порядка (2026-07-17):** Pass **1.4 до 1.5**. Hydrology detect (peaks / basins / river sources) читает heightmap **после** подъёма/carve объектов рельефа. Mask-only mountain paint на light **не** заменяет 1.4 — см. [`tz_map_light_bake.md`](./tz_map_light_bake.md) § Coarse planning ↔ light compose.
+Pass 1.4 применяет абсолютные `surface_z` из `terrain/reliefObjects/bathymetry/basinZ.py`. Pass 1.5 читает готовое дно: размечает впадины, разрешает физические уровни, заливает, классифицирует, выводит берег. Затем river planner эмитит `RiverBedSpec`, relief применяет русло, гидрология ставит роли и факт устья. River bed apply — отдельный вызов relief после планирования; fill тел из-за него повторно не запускается.
 
-**Инвариант:** после hydrology сосед с `surface_z=2` и озером `surface_z=0` — gap analysis видит **Δz=2** и углубляет колонку берега при необходимости.
-
----
+Метаданные (`WaterBody`, уровень, UID, роль) соответствуют материализации на клетках в том же результате. Persist остаётся application/repository-слою; динамические системы и lifecycle — отдельные W/L-треки. Gap analysis видит итоговое дно и русла, climate определяет состояние жидкости. DAG wiring в HY-12 не меняется.
 
 ## Концептуальная модель
 
-### Таксономия воды (утверждено семантически)
+### Таксономия воды (HY-12)
 
-Один физический объект — **водная поверхность на `z_sea`**, но **две продуктовые роли**:
-
-| Термин | Смысл | Геометрия (target) |
-|---|---|---|
-| **Море (sea, coastal)** | «Большое **у берега**» — прибрежная полоса воды у суши | Ячейки `liquid_candidate`, **соседствующие с сушей** (`surface_z > z_sea`); мелководье, заливы, проливы |
-| **Океан (ocean, open)** | **Море у берега** + **большой массив воды** вглубь | Connected component: **coastal ring** + **open ocean mass** (дальше от суши, та же `z_sea`, может быть глубже carve) |
-
-**Не два несвязанных типа terrain.** Океан **включает** прибрежное море; «море без океана» — замкнутое **внутреннее море** (окружённое сушей, как большое озеро на `z_sea` — см. ниже).
-
-```mermaid
-flowchart LR
-  LAND["Суша\nsurface_z > z_sea"]
-  SEA["Море у берега\ncoastal sea"]
-  OCEAN["Открытый океан\nopen mass"]
-  LAND --- SEA --- OCEAN
-```
-
-**Единый `system_terrain`:** `liquid_body` на всех водных ячейках. Различие sea vs ocean — **metadata** (`HydrologyCellRole`: `coastal_sea` | `open_ocean` | `inland_sea`), не отдельный terrain type в registry v1.
-
-**Озеро vs море:** озеро — **локальная впадина суши** (`surface_z` ниже соседей, **не** на глобальном `z_sea`). Море/океан — **глобальный горизонт воды** `z_sea`. Внутреннее море (Каспий) — master mask на `z_sea`, окружённое сушей → role `inland_sea`.
+`BasinKind` = `sea | ocean | inland_sea | lake`. Тип задаёт контекст профиля и классификации; размер и глубина переопределяются настройками. `coastal_sea`, `open_ocean`, `inland_sea`, `lake` — роли материала воды на клетках, `SHORE` — роль сухого берега. Один океан включает прибрежную и открытую воду; отдельный terrain type на каждый kind не создаётся.
 
 ### Sea level (reference)
 
-- **`z_sea`** — эталон уровня моря для мира; **v1:** `0` (как [`tz_locations.md`](./tz_locations.md)).
-- Все моря и океаны делят **один** `z_sea`; «глубина» open ocean — optional **`z_floor`** ниже `z_sea` в column fill (v2), не смена surface reference.
-- Не путать: interim «всё `z ≤ z_sea` = вода» vs target «вода только там, где hydrology вырезала basin + mask».
+Глобальный океанский дефолт — `WorldHydrology.default_water_level: DefaultWhenMissing[int] = 0`. `resolve_z_sea() = 0` — legacy, который мигрирует в шаге 2. На каждом теле и его клетках используется **`z_water_level`**. Несвязанные тела могут иметь разные уровни; непосредственное физическое слияние зеркал разрешает общий уровень, связь через реку сохраняет разницу высот.
+
+Вода тела существует строго при **`surface_z < z_water_level`**. Клетка **`surface_z == z_water_level` — суша**; при соседстве с водой может стать `SHORE`. Heightmap показывает дно, уровень зеркала хранится отдельно. `is_land` в контексте уровня включает равенство; отсутствие воды нельзя определять одним глобальным сравнением с нулём.
 
 ### Суша, острова, полуострова
 
@@ -142,7 +112,7 @@ flowchart LR
 
 | Форма | Определение (grid, 4/8-neighborhood) |
 |---|---|
-| **Суша (land)** | `surface_z > z_sea` **или** ячейка вне `liquid_candidate` |
+| **Суша (land)** | клетка вне итогового water fill, включая `surface_z == z_water_level` своего соседнего тела |
 | **Остров** | connected component **суши**, не касающийся «материковой» суши (outer bbox land или master `mainland_mask`) |
 | **Полуостров** | суша, connected к материку, с **≥3 сторон** — `coastal_sea` / `open_ocean` (не считая diagonal-only v1: 4-neighbor) |
 | **Материк** | largest land component (или master `mainland_mask`) |
@@ -153,89 +123,35 @@ flowchart LR
 
 **Мастер:** явные `island` / `coast` NamedLocation anchors переопределяют auto-detect для narrative; geometry всё равно из heightmap.
 
-### Берег и углубление (U15 — утверждено)
+### Берег и углубление (U15 — HY-12)
 
-Поперечный профиль водоёма / русла — **не** «радиус от точки», а **линия берега + полосы углубления** перпендикулярно границе суша–вода (или к оси реки — в обе стороны от channel).
+Берег выводится после fill: сухая клетка с 4-соседом воды получает `SHORE`. Соседство и расстояния предоставляются `dataModel/topology`. Берег не записывает `surface_z = level`; равенство уровню допускается, но высокая сухая клетка у воды тоже берег.
 
-```mermaid
-flowchart LR
-  LAND["Суша"]
-  SH["Берег\nsurface shore cell"]
-  D1["Углубление 1"]
-  D2["…"]
-  DN["Углубление N"]
-  H2O["liquid_candidate\nоткрытая вода"]
+`HydrologyBands` переиспользуется как `rim`: ширины зон профиля дна и ограничение борта. Сначала relief строит профиль от фактического `z_land(rim)` к `floor_z`; затем вода определяется строгим уровнем. `deepening_index` — квантование расстояния/глубины профиля, а не счётчик, который превращает все первые N клеток воды в сушу.
 
-  LAND --- SH --- D1 --- D2 --- DN --- H2O
-```
+`bands.min` — предпочтительная ширина, не обязательная сухая полоса. В узком footprint профиль сжимается: если есть клетка ниже уровня, она остаётся водой. `bands.max` ограничивает carve по контракту борта: перепад от pre-carve поверхности не превышает cap, высокие выступы могут остаться островами; warning сообщает, что заданное дно не достигнуто. Разрешение precedence mountain × shore остаётся HY-7.
 
-| Понятие | Смысл |
-|---|---|
-| **Берег (shore cell)** | Первая surface-ячейка на контакте с сушей. Role `HydrologyCellRole.SHORE`. **`system_terrain` + `system_material`** — из **`default_<category>.shore`**, не из одного world-level `default_shore` |
-| **Углубление (deepening band)** | Следующие **1…N** ячеек **от берега внутрь** воды: каждая band **ниже** `surface_z` предыдущей; семантика **всё ещё берег** (тот же terrain/material **этой категории**, role `shore` + `deepening_index`) |
-| **Открытая вода** | После последней band — `liquid_candidate`, `surface_z` at basin floor / `z_sea` (climate → `liquid_body`) |
+Настройки: `default_seas.bands` (существующий default 1…20), `default_lakes.bands` / `default_rivers.bands` (1…5); локальный `rim` заменяет профиль своего тела. Валидатор: `1 <= min <= max <= 99`. Ширины интерпретируются в контракте рабочей сетки; отдельного масштаба гидрологии нет.
 
-**Две оси U15 (не подменять):**
+Материал сухого берега берётся из `default_seas.shore` (`shore_sea`), `default_lakes.shore` (`shore_lake`), `default_rivers.shore` (`shore_river`) или `mountain_shore` (`shore_mountain_river`). World-level `default_shore` deprecated. Grade берега принадлежит relief, не `bands`. Подводный solid-профиль остаётся дном; `liquid_candidate`/water-role определяются fill. Полная передача band/metadata в L0 — HY-10, coarse-профиль её не подтверждает.
 
-| Ось | Что задаёт | Не задаёт |
-|---|---|---|
-| **`bands`** | сколько клеток углубления **в воду** | пол grade L/θ/kind |
-| **`shore.system_terrain`** | класс клетки берега для маски и **онтологии grade** (как plains vs forest) | ширину shelf |
+### Ocean bathymetry / Depression forms (HY-12)
 
-Речной берег 1–2 м по ontology **может** быть допустим; тот же knobs-профиль на море — **нет**. Это [`tz_terrain_relief.md`](./tz_terrain_relief.md) R34/R37 (`shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`), не `bands.max`.
+Дно любого водоёма — relief object в `generators/terrain/reliefObjects/bathymetry/`. `ResolvedWaterPlacement` мапится через `hydrology/basinSpecFactory.py` в `BasinSpec`; общая очередь Pass 1.4 применяет его рядом с mountain/ravine spec. Собственного z-writer у sea/lake/ocean нет.
 
-**Класс `system_terrain` клетки берега (locked):**
+Footprint — существующий `RegionShape`: bbox, ellipse, polygon, anchor_radius и новый общий CORRIDOR (`path: list[Point]`, положительная `width`, круглые caps). Corridor растеризуется доменным расстоянием до сегментов `<= width/2` в unrolled-кадре. `edge_noise` переиспользуется из spatial; новый shape-DSL для воды не вводится.
 
-| Категория hydro | Ключ paint | `system_terrain` (R34) |
-|---|---|---|
-| Река `river` | `default_rivers.shore` | `shore_river` |
-| Река `mountain_river` (U17) | `default_rivers.mountain_shore` | `shore_mountain_river` |
-| Озеро (`default_lakes`) | `default_lakes.shore` | `shore_lake` (цифры grade как у реки; **не** `shore_river`) |
-| Море / океан / `inland_sea` | `default_seas.shore` | `shore_sea` |
+Профиль — piecewise по multi-source BFS distance field от rim/waterline: **shelf → slope → floor**. `ocean` задаёт широкий shelf и переход к abyss; `sea` — более узкий shelf; `inland_sea`/`lake` — чашу. `kind` выбирает форму профиля, не обязательную глубину. Явное дно берётся из `DeclaredBasin.floor_z`, coastline получает глубину из `HydrologySeasPolicy.basin_depth` (см. ниже).
 
-`mountain_river` — **`system_connection_type` русла** (круче bed, пороги, melt) **и** отдельный класс **берега** `shore_mountain_river` (θ 20–70°, L min 2). Не тот же envelope, что у равнинной реки.
+Carve записывает **абсолютное** `z = profile(d)` с учётом `z_min` и cap борта. Повторный bake использует тот же terrain-base снимок и те же spec; повторное применение не вычитает глубину ещё раз. На выходе `surface_z` — дно; для воды требуется `surface_z < z_water_level`. Полоса на уровне зеркала — суша.
 
-World-level **`hydrology.default_shore`** — **deprecated** (один terrain на все воды). Override: `hydrology_profile.shore` / edge metadata — `system_terrain` **обязан** быть одним из четырёх ключей; иначе reject. Warning, если override меняет terrain/material категории.
+Прежний **Scope A** «только DepressionSpec внутри open ocean» и gate D4 по готовому `open_ocean_mask` сняты: бассейн создаёт впадину **до** fill. Дополнительные `DepressionSpec` (котловины/желоба внутри уже созданного дна, Form + Kind + width/length/depth) остаются отдельным будущим расширением и в HY-12 не реализуются.
 
-**N по контексту (U15 + U16):** **`world.hydrology.default_<category>.bands`**. Validator: `1 ≤ min ≤ max ≤ 99`.
+`HydrologySeasPolicy.stub_drop_fraction_of_span` — существующий interim-knob, не целевой fallback глубины. Он выводится вместе с legacy `resolve_open_water_surface_z` после миграции callers. Light writer не получает своего алгоритма батиметрии; HY-12 smoke проверяет coarse heightmap + hydro index. Полный L0-профиль — HY-10.
 
-| Контекст | Ключ в template | Зависимость ширины |
-|---|---|---|
-| **Река** | `default_rivers.bands` | `river_width_cells` → N в `[min, max]` |
-| **Озеро** | `default_lakes.bands` | ширина basin / сегмента берега |
-| **Море / океан** | `default_seas.bands` | мелководье (shelf) перед open water |
+#### Дополнительные впадины дна — будущее расширение
 
-**Локальный override (U16):** на **`NamedLocation`**, `ConnectionEdge.metadata` или spec declare — поле `hydrology_profile.bands` (или `hydrology_override.bands`). Применяется **вместо** world default для **этой** фичи; orchestration layer пишет **`logger.warning`** (`hydrology bands overridden for <uid>`). Clamp к `[1, 99]`.
-
-**Override shore:** `hydrology_profile.shore` / `ConnectionEdge.metadata.shore` — `system_terrain` ∈ {`shore_river`,`shore_mountain_river`,`shore_lake`,`shore_sea`}; warning если меняет terrain/material категории.
-
-**Классы (target):** `ShoreProfile`, `DeepeningBandCarver` — общий для `RiverBedCarver`, `LakeBasinGenerator`, `SeaBasinGenerator`; не дублировать логику disk/radius.
-
-**Column fill:** shore + deepening bands — **solid** surface cells с shore material; `liquid_candidate` только на open water cells после profile. Gap analysis видит ступенчатый склон берега.
-
-### Ocean bathymetry / Depression forms (утверждено 2026-07-19)
-
-**Scope A (зафиксировано):** только **ocean bathymetry** на `coastal_sea` / `open_ocean` (роль SEA / open ocean mass).  
-**Вне scope этого контракта:** озёра, ravines, `inland_sea` (возможен reuse pipeline позже — не сейчас).
-
-Домен: **`world.hydrology.default_seas`** (+ declare).  
-**Не** `terrain_masks` / Mountain Form. Параллельный pipeline с горами (Form → Raster → Depth), **не** общий класс с `MountainSpec`.
-
-#### Семантика z
-
-```text
-z_sea     = зеркало воды (reference; v1: 0)
-surface_z = дно (bathymetry) на водных клетках; после carve всегда ≤ z_sea
-```
-
-Height / ASCII height map показывает **дно**, не уровень зеркала.
-
-| Слой | Что задаёт | Не заменяет |
-|---|---|---|
-| **U15 shore bands** | Поперечный профиль *от берега* → shelf / мелководье | формы желобов и котловин в open water |
-| **DepressionSpec** | Именованные / procedural **впадины внутри open ocean** (котловина, желоб) с width × length × depth | U15 |
-
-Оба слоя допустимы; Depression **не заменяет** U15.
+Следующий сохранённый Form/Kind/Spec-контракт относится **только к дополнительным котловинам и желобам внутри уже вырезанного дна**, вне HY-12. Его gate D4 по open-water/abyss остаётся ограничением этих дополнительных объектов; для основного `BasinSpec` он не применяется. `z_sea` в сохранённых формулах означает уровень конкретного принимающего тела (`z_water_level`). Само применение depth выполняет relief, гидрология лишь предоставляет контекст.
 
 #### Оси формы (width / length / depth)
 
@@ -269,7 +185,7 @@ DepressionSpec
   # optional: declare uid, seed
 ```
 
-**Неверно:** плоский `{radius_cells, depth}` как единственная модель.  
+**Неверно:** плоский `{radius_cells, depth}` как единственная модель.
 **Верно:** discriminated union Form + отдельный Kind.
 
 #### EllipseForm / CorridorForm (норматив метрик)
@@ -286,7 +202,7 @@ DepressionSpec
 - width = `2 · half_width_fine`
 - `depth_fraction`: 1 на spine, 0 на боковых краях; optional taper на концах spine
 
-#### Engine interface (единственный способ роста)
+#### Engine interface дополнительных DepressionSpec
 
 ```text
 construct_depression_form(form, …) → DepressionFormGeometry
@@ -340,79 +256,6 @@ flowchart TD
 
 **Autoresolve v1 (target, не блокер контракта):** seed field внутри open ocean → Ellipse и/или Corridor с random yaw / aspect; clamp размера к bbox воды.
 
-#### Light / coarse writers
-
-- Coarse: `HydrologyGeneratorService` / ocean path materialize U15 + DepressionSpec → `surface_z` на heightmap.
-- Light: hydro contributor после paint SEA **обязан** писать bathymetry `surface_z` (см. [`tz_map_light_bake.md`](./tz_map_light_bake.md) R5 / R5b). Mask SEA без понижения z — **запрещён**.
-
-#### Interim stub (shipped 2026-07-19) — analog mountain KindElevation stub
-
-**Зачем:** закрыть R5b / HY-BATH-1 (SEA с plains-level z на light), не блокируясь на полном Form engine. Зеркало Pass 1.4 mountain interim: один POJO-fraction → единый apply helper → light writer.
-
-| | **Горы (Pass 1.4 interim)** | **Океан stub (сейчас)** | **Океан target (Depression)** |
-|---|---|---|---|
-| Домен | `terrain_masks.default_mountains` | `hydrology.default_seas` | тот же `default_seas` (+ declare) |
-| POJO knob | `rise_fraction_of_z_max` | `stub_drop_fraction_of_span` | Kind table `max_drop` / `drop_fraction` (stub knob **снимается** или становится default Kind) |
-| Формула | `z = clamp(base + round(z_max·f))` | `z = max(z_min, z_sea - drop)` при `depth_fraction=1` | `z = max(z_min, z_sea - round(drop·depth_fraction))` |
-| Footprint | declare disk + autoresolve score | весь SEA/LAKE macro fill (Path A) | `raster_depression_footprint(Ellipse\|Corridor\|…)` ∩ open_ocean |
-| Depth profile | later SideFill fraction | **uniform** (весь footprint = deepest) | `fill_depression_depth` → fraction map |
-| Helper | `resolve_mountain_surface_z` | `resolve_open_water_surface_z` | `apply_depression_cell` (тот же clamp-паттерн) |
-| Light writer | `MountainContributor` | `apply_coarse_open_water` после `paint_role` | facade `apply_depression_spec` из hydro contributor |
-| Coarse SoT | `apply_relief_objects_z` до hydro | prefer `coarse_surface_z` если ≤ `z_sea` | U15 + DepressionSpec на coarse heightmap |
-
-**Алгоритм stub (`resolve_open_water_surface_z`):**
-
-```text
-drop = max(1, round((z_sea - z_min) * stub_drop_fraction_of_span))   # span>0
-if coarse_z is not None and coarse_z <= z_sea:
-    return max(z_min, coarse_z)          # post-hydro carve wins
-return max(z_min, z_sea - drop)          # uniform floor (depth_fraction ≡ 1)
-```
-
-**Код (SoT путей):**
-
-- POJO: `HydrologySeasPolicy.stub_drop_fraction_of_span` (DefaultOnWire, default `0.05`)
-- Helper: `generators/hydrology/bathymetry/stubElevation.py`
-- Light: `pack/bake/lightGrid/contributors/hydro/coarseOpenWater.py` — paint SEA/LAKE → write `surface_z`
-
-**Как stub ложится на целевой pipeline (не выкидывать слой, а сузить):**
-
-```text
-TARGET:  Spec → construct_form → raster → fill_depth → apply_depression_cell
-STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
-                     →  depth_fraction = 1 everywhere
-                     →  drop from stub_drop_fraction_of_span  ≈  future Kind.default drop
-                     →  same apply clamp as apply_depression_cell
-```
-
-| Целевой слой | Stub сейчас | Миграция |
-|---|---|---|
-| `DepressionSpec` / Form | нет | добавить declare/autoresolve Spec |
-| `construct` + `raster` | macro tile fill | заменить на Ellipse/Corridor footprint |
-| `fill_depression_depth` | константа `1` | profile от Form |
-| `resolve_drop(kind)` | `stub_drop_fraction_of_span` | Kind table; stub field deprecate |
-| `apply_*_cell` | `resolve_open_water_surface_z` | тонкий wrap → `apply_depression_cell` |
-| Light R5b writer | ✅ | остаётся; только источник z меняется |
-
-**Инварианты stub (сохранить при миграции):**
-
-1. Light hydro пишет z на open water (R5b) — не откатывать к paint-only.  
-2. Prefer coarse carved floor ≤ `z_sea` перед stub drop.  
-3. Не поднимать сушу; не писать bathymetry вне SEA/LAKE roles.  
-4. Не класть depth math в `terrain_masks` / mountain contributor.  
-5. `stub_drop_fraction_of_span` — **временный** DefaultOnWire; после Kind table не дублировать литералом в generator.
-
-**Вне stub (ещё open):** U15 shelf bands на light; Ellipse/Corridor; declare `declared_depressions[]`; autoresolve field; неоднородное дно (width×length×depth).
-
-#### Антипаттерны
-
-- Noise-only «неровное дно» без Form/Kind как SoT  
-- Depth knobs в Form POJO  
-- Depression в `terrain_masks` / mountain contributor  
-- Один disk `radius_cells` как единственная модель желоба  
-- Light hydro: paint `hydrology_role=SEA` без bathymetry `surface_z`  
-- Оставить stub forever как SoT вместо Form/Kind (stub = bridge, не конечная архитектура)
-
 ### Подводный мир — сцены на дне океана (утверждено семантически 2026-10-19)
 
 **Продуктовое решение:** дно моря/океана — **полноценная игровая поверхность**, как суша. Подводные локации — затонувший корабль, подводный данж, подводный город с живыми жителями — обычные локации/структуры на floor-клетках, **не** отдельный слой мира.
@@ -427,7 +270,7 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 **Толща воды (граница v1/v2):**
 
 - v1: вода над дном — role + `liquid_body` на одной surface-клетке; **клеток между дном и зеркалом нет**.
-- Сцены **на дне** и **под дном** работают уже сейчас; «плавать в толще» (volume между floor и `z_sea`) — v2 `z_floor` + water-column cells в column fill (§ Sea level).
+- Сцены на дне и под дном используют heightmap дна; плавание в толще между дном и `z_water_level` тела требует будущих water-column cells в column fill (§ Sea level).
 
 **Построенные подводные магистрали:**
 
@@ -440,7 +283,7 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 
 **Инварианты:**
 
-1. Локация на дне **не** меняет батиметрию и не carve воду — hydro остаётся SoT `surface_z` дна.
+1. Локация на дне не меняет батиметрию и не carve воду — SoT дна остаётся post-carve heightmap, который пишет relief.
 2. Подводное поселение — тот же settlement generate на floor-клетках; footprint/district machinery без спец-кейсов «под водой».
 3. Физические подводные связи — новый `system_connection_type`; не перегружать `sea_route` (нет контакта/клеток) и не `river`/`mountain_river` (гидро carve).
 
@@ -456,22 +299,20 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 
 ### Lake
 
-- **Lake basin** — локальный минимум `surface_z` **на суше** (выше или ниже `z_sea` — отдельный `target_depth`; **не** open ocean).
-- **Профиль (U15):** от линии берега basin → deepening bands **1–5** → open water в центре; **не** `radius_cells` disk как единственная модель.
-- **Endorheic lake** — без outflow; река не обязана.
-- Река **может** впадать в озеро; из озера **может** выходить река к морю (outlet) — v2; v1 достаточно lake **или** sea sink.  
-- **Не** использует `DepressionForm` / `DepressionSpec` (scope A — только ocean); reuse pipeline — later.
+Озеро — локальная впадина с собственным уровнем, которая проходит общий basin pipeline. `DeclaredLake.shoreline` сохраняется как wire-контракт, нормализуется в basin intent с bowl-профилем; отдельного lake carver нет. `default_lakes` использует существующий `HydrologyLakesPolicy`; его целевое поле `basin_depth: DefaultWhenMissing[int] = 5` (`>0`, Z) задаёт дно при отсутствии явного `DeclaredBasin.floor_z`. При отсутствии собственного уровня применяется общий default, физическое ограничение — pour-point впадины.
+
+`SHORE` выводится по фактической воде. Река может впадать в озеро выше океанского уровня; endorheic озеро не обязано иметь outflow. Динамическая сеть outlet/системы — отдельный W-трек. Неоднородные DepressionSpec внутри дна остаются будущим расширением для всех kind.
 
 ### River
 
-**Инвариант (утверждено):** река течёт **из возвышенности → в море или океан** (terminal sink).
+**Инвариант:** река течёт из возвышенности к принимающему водоёму (озеро, море или океан), используя уровень этого тела.
 
 | Узел | Правило |
 |---|---|
 | **Исток (source)** | Любая возвышенность (peak v1; lowland v2). **Тип segment** — `classify_river_segments` (U17) |
 | **Русло** | monotonic non-increasing `surface_z` вдоль polyline (D8 v1) |
 | **Повороты (U14)** | **Плавные:** угол между соседними сегментами polyline **≤ 45°**; **> 45° запрещён** (declare и autoresolve). При необходимости — цепочка waypoint + дуга (см. [`tz_structure_connections.md`](./tz_structure_connections.md) § river curve) |
-| **Устье (mouth)** | первая ячейка `coastal_sea` / `open_ocean` / `inland_sea`; **не** произвольная низина без связи с морем |
+| **Устье (mouth)** | первая клетка принимающего тела с `z < z_water_level` либо open-water ролью, включая озеро; произвольная низина без resolved water body не является устьем |
 | **Озеро** | side sink (впадает, может остановиться); **не** заменяет море как финальная цель world-scale river network v1 |
 
 - **River bed** — carve вдоль polyline: channel + **U15 shore/deepening** перpendicular к оси (обе стороны).
@@ -523,6 +364,62 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 
 ---
 
+## Level-fill + компоненты (HY-12)
+
+### Компоненты и уровни
+
+Вход — полный разрешённый topology-контекст, post-carve elevation и нормализованные basin intents. Сначала размечаются впадины, затем multi-source priority-flood разрешает уровни и connected-component fill. Смежность — 4-связная через домен топологии, lookup/write — canonical, вычисления — unrolled. Частичный bake не создаёт физический борт на границе загруженной области: данных компоненты/борта должно хватать для resolve, иначе unresolved с причиной, без догадки об уровне.
+
+Запрошенный уровень тела — явный declare либо `default_water_level`. Свой удерживаемый уровень (`WaterBody.declared_level`) = `min(requested_level, pour_point)`. Pour-point — первая по высоте rim-клетка с выходом в более низкую внешнюю область; dead-end rim, за которым нет спуска, уровень не ограничивает. Frontier упорядочен по `(z,y,x)`, граница компоненты учитывает доменную топологию. `z=level` на spillway остаётся сухой клеткой. При отсутствии конечного spill ограничителя применяется requested level; граница planar void считается выходом, шов wrapped/sphere — обычной связью, не сливом.
+
+Fill включает только клетки **`z < effective z_water_level`**. `floor_z >= pour_point` означает «basin cannot hold water»: тело не создаётся, пишется warning. Запрошенный уровень выше удерживаемого даёт warning «level exceeds pour point». Берег не дописывает воду и не корректирует высоту.
+
+### Физический merge и каскад
+
+При непосредственном контакте водных фронтов A и B образуется физическое объединение S. **`S.level = min(max(L_a,L_b), min_rim_z(union))`**, где минимум rim берётся по pour-point-клеткам внешнего борта объединения; внутренний борт и dead-end rim исключаются. Отсутствие конечного pour-point не ограничивает `max(L_a,L_b)`. Простого соседства сухих footprint или связи через реку для физического merge недостаточно.
+
+Дети сохраняют UID/kind и собственный `declared_level`, получают effective `z_water_level` от физического родителя. Nested union наследует уровень каскадом по всей цепочке `PHYSICAL_MERGE`; `RIVER_LINK` в каскад не входит. `declared_level != effective_level` — warning «level superseded» один раз на тело. Например, L_a=20, L_b=5 и pour-point union=8 дают S.level=8; оба тела наследуют 8.
+
+Resolver доводит fill до итогового уровня затронутого union: при повышении расширяет заливку, при понижении исключает клетки `z >= level` из итоговой воды/ролей. Вычисленный уровень и материализация не могут расходиться. Обработка фронта/union детерминирована; глобальные повторные обходы мира для каждого merge не допускаются. Бюджет priority-flood — O(W log W) по затронутой воде и борту; отдельные scan+label/distance-field — линейные по своим клеткам.
+
+HY-12 выдаёт физические факты union, уровней и связей. Общую identity/lifecycle системы и динамическое membership определяют W/L-домены, не локальные replacements в pure-генераторе. Выбор primary по kind/объёму не влияет на формулу уровня. Разные `liquid` фиксируются как факт; разрешение смешения материалов — отдельный домен.
+
+### Классификация и минимальная масса
+
+Классификатор читает готовые компоненты, authored kind и их уровень. Явный kind сохраняет намерение объекта; несоответствие subtype/физике диагностируется. Для natural-only autoresolve ocean-кандидат имеет океанский default-уровень и наибольшую водную массу среди таких компонентов. В planar достижение **мировой** границы — дополнительный океанский признак; достижение bake-bbox не используется. В wrapped/sphere отсутствие края не мешает классификации: используются уровень и масса, не edge flood. Крупнейшее горное озеро не становится океаном только из-за размера.
+
+Остальные замкнутые компоненты — `inland_sea` либо `lake` по относительной площади и контексту впадины. Целевой параметр `HydrologySeasPolicy.inland_sea_min_area_fraction: DefaultWhenMissing[float] = 0.01` (`0 < value <= 1`) задаёт порог относительно площади полного мира. Авторский kind не переписывается только из-за этого procedural-порога.
+
+Минимальный размер водного объекта — целевое поле **`min_water_cells: DefaultWhenMissing[int] = 2`** (`>=1`) существующих `HydrologySeasPolicy` и `HydrologyLakesPolicy`, для соответствующей категории. Это фильтр speckle в клетках coarse-индекса; он не является географическим extent-лимитом. Компонента меньшего размера — puddle: без `WaterBody` и open-water ролей, с единичной диагностикой. Состояние локальной лужи — вне bootstrap-контракта. Счётчики площади и минимум дна собираются тем же fill, выделенный второй проход ради объёма не вводится.
+
+### Derived shore, записи и identity
+
+`shoreDerive` после окончательного fill назначает `SHORE` сухим 4-соседям воды, включая `z==level`; z остаётся исходным post-carve. Wet-клетки сохраняют water-role; `deepening_index` — факт профиля, не основание объявить мокрую клетку сухой. На стыке нескольких тел берутся факты фактически смежной воды в стабильном порядке resolve; grade/terrain precedence остаётся своей ответственностью, HY-7 не закрывается.
+
+Целевой **`WaterBody`** (`dataModel/hydrology/waterBody.py`, frozen): `water_body_uid: StrictOnWire[str]`, `location_uid: DefaultWhenMissing[str | None] = None`, `kind: StrictOnWire[BasinKind]`, `liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]] = "water"`, `declared_level: StrictOnWire[int]`, `z_water_level: StrictOnWire[int]`, `declared_basin_uid: DefaultWhenMissing[str | None] = None`, `parent_system_uid: DefaultWhenMissing[str | None] = None`. UID-поля — непрозрачные строковые ссылки существующей identity/remap-инфраструктуры; новый локальный формат UID для систем не вводится. `parent_system_uid` — ближайший физический родитель, effective уровень разрешается по цепочке; до общего system identity не подставляется UID победившего ребёнка.
+
+`MapCellHydrology` расширяется `z_water_level: DefaultWhenMissing[int | None] = None`. Вода и её derived shore несут `water_body_uid` и уровень соответствующего тела; `surface_z` хранит дно/сушу, не зеркало. Downstream читает уровень из записи, не восстанавливает его по role или глобальному нулю. `HydrologyCellIndex`/`HydrologyResult` получают факты тел/уровней через существующий POJO-контракт.
+
+Identity источники: declared → `location_uid` (включая DeclaredBasin/Lake/Coastline); morph/event → durable `region_uid`; policy-enabled autoresolve → существующий позиционный `auto-{role}-{x}x{y}` helper. Якорь моря — min-cell в каноническом порядке `(y,x)`, озера — существующий feature center. Auto UID не durable и не применяется как identity history/store. Open ocean при relabel наследует UID своего тела. UID union-системы принадлежит общему lifecycle/W-контракту.
+
+Для W-consumer объём — простое приближение **`V ≈ A_water * (z_water_level - z_floor)`**, коэффициент по умолчанию 1. A_water и min floor аккумулируются в fill; при явном spec применяется его дно. Дополнительный scan или интеграл запрещён. Точная локальная гидростатика — будущий игровой домен; исключение двойного учёта членов и выбор primary остаются W0.
+
+### Детерминизм, швы и дегенераты
+
+Канонический scan-order — `(y,x)`, heap tie — `(z,y,x)`, стабильные UID завершают равенство источников. Геометрия использует общий canonical frame, `nearest_on_segment`, `centroid`, domain neighbors; sphere-fold через y-шов переносит x на полуширину и учитывает ориентацию. Seed/edge-noise переиспользует существующий spatial-канал и identity spec; новый `hash()`/глобальный RNG не вводится. Повторный bake тех же входов даёт те же z/footprint/уровни/UID/роли.
+
+- Мир целиком `z >= level` без carve — воды нет; сам факт all-land не ошибка. При включённом ocean-autoresolve отсутствие океанской впадины диагностируется отдельно, GEO-1 не эмулируется.
+- Все `z == level` — суша; вода не создаётся ни paint, ни присваиванием role.
+- `floor_z >= resolved requested_level` — невалидный declare; post-carve footprint без клеток ниже уровня либо с дном выше spill — warning без фиктивного WaterBody.
+- Разные уровни несвязанных тел допустимы; непосредственный merge разрешает уровень и предупреждает о superseded значениях.
+- Footprint больше мира, а в compact-мире покрытие >=50% уникальных клеток — warning «мир — океан», не повторный счёт топологических образов.
+- Достижение area/extent cap, empty water-side, неоднозначная closed-loop или отсутствие данных для полного борта диагностируются с UID и причиной; bounds не расширяются молча.
+- Puddle ниже min_water_cells не становится озером/морем. Узкий footprint выше порога не исчезает из-за bands.min.
+
+Warning/WarningError передаются существующим generation log через доменные именованные `log_*` и diagnostic extra (`activity`, `world_uid`, UID тела/источника), один раз на условие на тело за проход. `warnings: list[str]` на POJO не создаётся. Requested/declared/effective уровни остаются проверяемыми typed-фактами; канал unresolved для общих систем принадлежит W-контракту.
+
+Приёмка HY-12: coarse heightmap + hydro index для `world_test_004` и отдельного declared basin, planar/wrapped/sphere seams, strict waterline, merge/spill, puddle, river mouth и детерминированный re-bake. HY-10 L0 bands, GEO-1, W/L runtime/persist, климат и precedence гор не объявляются выполненными. Backend агент не стартует.
+
 ## Подземная гидрология (cave systems) — U12
 
 **Утверждено:** реки и озёра **могут существовать под землёй** внутри **cave systems** — отдельно от surface hydrology (U1–U7). Там **своя экосистема**: иной климат, нет прямого surface rain/pole, отдельные правила жидкости и биоты (future).
@@ -532,8 +429,8 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 | | **Surface hydrology** | **Cave hydrology** |
 |---|---|---|
 | **Когда** | Pass 1.5 — между surface pass и gap analysis | **`generate-caves`** — после carve air/cave cells |
-| **Где** | `SurfaceHeightmap`, `z ≈ surface`, open ocean `z_sea` | Ячейки **внутри cave volume** (`z < surface_z`, carved void) |
-| **Озеро** | Basin на heightmap / `z_sea` horizon | **Подземное озеро** — локальная низина **пола пещеры** |
+| **Где** | `SurfaceHeightmap`, дно отдельно от `z_water_level` тела | Ячейки внутри cave volume (`z < surface_z`, carved void) |
+| **Озеро** | Basin на heightmap со своим `z_water_level` | Подземное озеро — локальная низина пола пещеры |
 | **Река** | Исток → устье в **море/океан** (U5) | **Подземная река** — по floor cave; устье в **подземное озеро**, sump, или **выход** (spring/sinkhole) |
 | **Mask** | `liquid_candidate` (surface sidecar) | **`cave_liquid_candidate`** — не merge с surface mask |
 | **Climate** | pole + `liquidOverlayPass` на surface field | **Volume climate** — см. [`tz_climate.md`](./tz_climate.md) § volume; без pole Voronoi по `(gx,gy)` |
@@ -615,160 +512,42 @@ generators/terrain/caves/
 
 ---
 
-## Расположение кода (target)
+## Расположение кода (target HY-12)
 
-Hydrology — **peer** `generators/climate/`, не подпапка terrain (layout 2026-07-12).
+Pure facade — `generators/hydrology/hydrologyGeneratorService.py`: порядок passes/scopes/dirty-bbox. `waterBodyAssembler.py` собирает тело через `BasinKind`; `riverNetworkAssembler.py` — речную сеть. Per-kind assemblers не создаются; `generators/assemblers/` принадлежит settlement-домену.
 
-```
-generators/hydrology/
-  __init__.py
-  hydrologyGeneratorService.py   # sync facade
-  types.py                       # HydrologyResult, scopes, master input DTOs
-  load/
-    loadHydrologyFromWorld.py    # world.hydrology → policies
-    loadDeclaredHydrology.py
-    loadConnectionGraph.py       # DB nodes/edges → roads/settlement (U23)
-    buildHydrologyMasterInput.py
-    hydrologyLocations.py
-    declaredEdges.py
-    resolveHydrologyBands.py
-    resolveRiverTypeClassify.py
-    hydrologyAutoresolvePolicy.py
-  basins/
-    seaLevelPolicy.py            # z_sea resolve
-    seaBasinGenerator.py         # Coastal sea
-    oceanBasinGenerator.py       # Open ocean (+ inland_sea)
-    lakeBasinGenerator.py
-    lakeSpecs.py
-    basinKindResolver.py         # U25
-    coastalLandformClassifier.py # islands, peninsulas (read-only)
-  rivers/
-    riverNetworkPlanner.py       # D8 descent
-    riverBedCarver.py
-    riverSpecs.py
-    classifyRiverSegments.py     # U17/U18 pure classify
-    resolveDeclaredRiverPath.py
-    riverConnectionEmit.py       # U18 DTO emit
-  shore/
-    shoreProfile.py
-    deepeningBandCarver.py
-    fineHydrologyIndex.py
-    heightmapSurfaceCells.py
-  geom/
-    polylineRasterize.py
-    polygonInterior.py
-    smoothRiverPolyline.py
-  autoresolve/
-    proceduralSeaAutoresolve.py
-    proceduralLakeAutoresolve.py
-    proceduralRiverAutoresolve.py
+- `hydrology/load/`: parse и нормализация declare; `basinSpecFactory.py`: resolved placement → доменный `BasinSpec`.
+- `terrain/reliefObjects/bathymetry/`: `basinSpec.py`, `floorProfile.py`, `distanceField.py`, `basinZ.py` — единственный writer дна.
+- `hydrology/water/`: `componentLabel.py`, `levelFill.py`, `waterBodyResolver.py`, `waterClassifier.py`, `shoreDerive.py` — post-carve физика и роли.
+- `hydrology/rivers/`: planner, spec emission, классификация и DTO emit; `terrain/reliefObjects/riverBed/`: `RiverBedSpec` и writer русла.
+- `hydrology/waterfalls/`: факты перепадов от river segments, rim spillway и authored drops; z не пишет.
+- `hydrology/shore/waterSideFootprint.py`: owning-сегмент/водная сторона, вход footprint; самостоятельного создания воды нет.
+- `dataModel/hydrology/`: existing policies + `DeclaredBasin`, `WaterBody`, enums. Общие shapes — `dataModel/spatial/`, геометрия — `dataModel/topology/`.
+- `application/worldData/placement/` + `dataModel/placement/`: общий resolver/контракты P; `application/worldData/hydrology/systems/` + `dataModel/hydrology/systems/`: W-домен; общий lifecycle — свой L-домен.
 
-generators/terrain/passes/       # surface still owns heightmap passes
-  surfacePass.py
-  …
-```
-
-`dataModel/hydrology/` — POJO / enums / policies (без изменений layout).
-
-**Facade (контракт):**
-
-```python
-class HydrologyGeneratorService:
-    """Pure sync — mutates SurfaceHeightmap in place or returns new instance."""
-
-    def apply(
-        self,
-        world: World,
-        locations: list[NamedLocation],
-        heightmap: SurfaceHeightmap,
-        *,
-        master: HydrologyMasterInput | None = None,
-        scopes: frozenset[HydrologyScope] = HYDROLOGY_BOOTSTRAP_SCOPES,
-    ) -> HydrologyResult:
-        ...
-```
-
----
+Новые пути — target, не утверждение об уже существующем коде. Facade работает с typed master input/result; persist, SQL и LLM в pure generators отсутствуют. Из существующих `seaBasinGenerator`/`oceanBasinGenerator`/`lakeBasinGenerator` удаляются отдельные carvers/flood после перевода callers на единый путь.
 
 ## Классы (ответственность)
 
 ### `SeaLevelPolicy`
 
-| Метод | Назначение |
-|---|---|
-| `resolve_z_sea(world) -> int` | v1: `0`; v2: `world.sea_level_z` если поле добавят |
-| `is_land(surface_z, z_sea) -> bool` | `surface_z > z_sea` после carve |
+Читает `WorldHydrology.default_water_level` для default-контекста, а для конкретного тела — его resolved `z_water_level`. Хардкод `return 0` удаляется в шаге 2; default `0` принадлежит POJO. Сухая клетка в контексте тела имеет `surface_z >= z_water_level`.
 
 ### `SeaBasinGenerator` (coastal sea)
 
-**Смысл:** «большое у берега» — прибрежная полоса воды вдоль **границы суша–вода**.
+Целевой вход — resolved placement и post-carve heightmap; выход — физические факты тела/клеток. `waterBodyAssembler` делегирует в `water/`: один механизм для моря, океана и озера. Legacy line→paint/flood удаляется при миграции; HY-6 water-side геометрия остаётся входом rim, HY-11 topology geometry сохраняется.
 
-**Вход:** `SurfaceHeightmap`, `world`, optional master **`declared_coastline_segments`** из `world.hydrology.declared_coastlines[]` (U21).  
-**Выход:** `coastal_sea_mask`, mutated `surface_z`, **shore/deepening bands (U15, max 20)** → `liquid_candidate`.
+Coastline создаёт намерение водоёма с явным `kind`/`liquid`. Открытая линия получает bounded downhill footprint на pre-carve z и относительные лимиты политики; петля — topology-aware interior/exterior по `water_side`. Алгоритмы и POJO описаны в § Declare: бассейн, озеро и coastline.
 
-| Режим | Поведение |
-|---|---|
-| **Master (U21)** | Declare `declared_coastlines[].path[]` (waypoints в fine-клетках) → `build_hydrology_master_input` переводит в coarse → rasterize → shore line + deepening bands **1–20** → `z_sea` open water |
-| **Procedural v1** | Flood from land boundary: shore cell на контакте, deepening внутрь до 20 cells, затем coastal sea |
+Owning-сегмент, проекция `t`, нормаль `n(K)` и `(C-K)·n(K)>0` вычисляются в одном unrolled-кадре через доменные `nearest_on_segment`/`centroid`. При равном расстоянии — max dot, затем стабильный порядок `(y,x)` и сегментов. Seeds, water-side и rim используют ту же нормаль; raw adjacency, локальный wrap и евклид на канонических мировых координатах запрещены.
 
-**Role tag:** все ячейки этого pass → `HydrologyCellRole.coastal_sea`.
-
-**Водная сторона declared coastline (HY-6, U15/U21).** После перевода declare-сегментов в coarse-grid вода определяется геометрией ближайшего сегмента для любой ориентации берега, включая N-S и диагональ. Для клетки `C` выбирается owning-сегмент по минимальному расстоянию **до отрезка**, не до растровой клетки. `K` — ближайшая клетка coastline, принадлежащая этому сегменту; `n(K)` — его водный шаг (`water_step_from_segment`), перпендикуляр в сторону от взвешенного land centroid. Нормаль `n` и проекция `t` вычисляются по **одному owning-сегменту**. Centroid-fallback допускается только для вырожденного сегмента `a == b`.
-
-Клетка входит в water footprint, если достижима от water-seed и `(C − K)·n(K) > 0`. **Bounded** (`flood_water_side`) дополнительно требует проекцию `C` на owning-сегмент внутри отрезка: `t ∈ [0,1]`; **unbounded** (`flood_water_side_unbounded`, для autoresolve за declare bbox) требует только `dot > 0`. Например, для `(2,2)–(8,2)` с водой на севере `(2,1)` входит в оба footprint, `(0,1)` и `(10,0)` — только в unbounded, `(0,3)` — ни в один. Открытые концы не обтекаются на land-сторону; `dot = 0` не является водой.
-
-При равном расстоянии до сегментов выбирается кандидат с **максимальным `dot`**; оставшиеся равенства разрешаются детерминированным обходом coastline-клеток в порядке `(gy, gx)` и стабильным порядком declare-сегментов. Это v1-эвристика углов: внешняя сторона может оставаться водой, внутренняя — сушей. Вогнутые берега не имеют гарантии полной геометрической корректности; сложные формы задаются несколькими `declared_coastlines` либо `declared_lakes`.
-
-**Единая нормаль:** water seeds (`K + n(K)`), land shore (соседи `K` с `dot < 0`), bounded и unbounded flood используют тот же выбор owning-сегмента и `n(K)`. Соседи с `dot = 0` — торец, не land shore. Стена flood — проверка `dot`, а не только множество растровых coastline-клеток: 8-связная линия Bresenham сама по себе не предотвращает протечки 4-связного BFS между диагональными клетками.
-
-Равенство расстояний между несколькими топологическими образами query-клетки
-одного сегмента разрешается тем же максимумом `dot`: гидрология передаёт
-`tie_breaker(result) = -dot` в доменный `nearest_on_segment`. Нулевой dot
-торцевого образа не подавляет равноудалённый образ на водной стороне.
-
-**Fine → coarse и растеризация (HY-11).** Declare-координаты переводятся на
-coarse-сетку, затем геометрия одной coastline/lake-spec переносится целиком
-через `canonical_frame` в кадр канонического первого anchor. Длины отрезков
-и связность сохраняются; независимый wrap концов и автоматическое сокращение
-authored-отрезка запрещены. При отсутствии разрешённых world bounds loader
-сохраняет unrolled-ввод; runtime разрешает топологию по полному heightmap.
-В `planar` void-anchor сохраняет исходный кадр, чтобы линия, пересекающая
-границу, обрезалась при записи, а не теряла свой внутренний участок.
-`rasterize_segments(..., topology=...)` считает Bresenham в этом unrolled-кадре
-и канонизирует каждую выходную клетку; `None` пропускается. Геометрические
-вычисления могут запрашивать исходный unrolled-растр без канонизации.
-
-**Autoresolve на краях (HY-11).** Procedural-сторона выбирается относительно
-land centroid в одном unrolled-кадре. Seeds берутся из `topology.bounds.edge_tiles`,
-включая существующего соседа через `neighbor`; предикат океанской полуплоскости
-проверяет образы клеток относительно centroid, BFS использует доменную смежность.
-Край частичного bake-bbox не становится новым краем мира. При declare+autoresolve
-принадлежность padded declare-bbox проверяется по топологическим образам клетки,
-чтобы канонический адрес за швом не считался автоматически внешним.
-
-**Геометрия на шве (HY-11 / TOPO-1).** Гидрология использует сервисы домена топологии из [`tz_terrain_generation.md` § Топология поверхности](./tz_terrain_generation.md#топология-поверхности-world_topology_mode): unrolled compute + canonical write. Owning-сегмент выбирается через `nearest_on_segment`, land centroid — через `centroid` с разворотом к anchor. Для сегмента, пересекающего шов, `C`, `K`, концы сегмента и образ land centroid приводятся к одному unrolled-кадру. В нём вычисляются проекция `t`, водный шаг `n(K)` и `(C − K)·n(K)`. При fold через y-шов `sphere` образ учитывает сдвиг x на `w/2` и `invert_dy`; нормаль переносится вместе с кадром, а не пересчитывается по разности канонических координат. Seeds, land shore и оба flood используют этот же кадр и нормаль. Собственные wrap, raw adjacency и ветвление по `mode` в гидрологии запрещены.
-
-**Bounds, шов мира и проходимость под HY-8:** в `wrapped`/`sphere` водная сторона за краем bounds продолжается через шов согласно `WorldTopology`; например, западная водная сторона coastline на `x_min` в `wrapped` попадает на `x_max`. В `planar` за краем — void. BFS идёт в unrolled-координатах, lookup и запись footprint — по каноническим: `passable(c) = canonicalize(c) ∈ heightmap.surface_z`, при `None` — `False`. Вода записывается только в существующие канонические клетки heightmap; bounds не расширяются. Helper водной стороны возвращает только footprint (где резать борт); проходимость BFS передаётся отдельным предикатом `passable`. Carve использует отдельные вызовы `water_side_footprint(...)` → `apply_carve(footprint, ...)`; fill пока совпадает с footprint. Ограничение fill по `z ≤ z_sea` и устранение безусловной записи уровня относятся к HY-8.
-
-**Диагностика declared coastline:** при наличии невырожденного сегмента и пустом `water_dist` генератор пишет warning `declared coastline → water_dist=0 (water side outside bounds?)`; это диагностическая гипотеза, а не расширение bounds. В `planar` void на водной стороне может давать этот warning; в `wrapped`/`sphere` сам выход через шов не является причиной пустого flood — проверка выполняется после канонизации. При непустом flood и `max(water_dist.values()) ≤ bands.min` пишет warning `declared coastline → water extent N <= bands.min M: no open water`, с фактическими `N` и `M`. Оба warning должны попадать в generation log `backend/logs/generation/{uid}/bake-*.log`.
-
-**Известные ограничения:** узкая вода целиком становится deepening band (coarse `SHORE`, `deepening_index > 0`), без открытой воды (`~`/`o`), до HY-BATH-1 (rim-профиль вместо счётчика bands). Перенос этого band в L0 пока отсутствует: `coarseOpenWater` переносит только `SEA`/`LAKE`, а `declaredBasins` красит саму declare-линию; поэтому coarse band ещё не гарантирует `s` в L0 (**HY-10**, отдельный долг по решению мастера 2026-10-20). Shoreline поверх mountain-маски относится к HY-7; HY-6 этот эффект не исправляет и не маскирует. См. [долги HY-6, HY-7, HY-8, HY-10 и HY-BATH-1](./tz_generator_technical_debt.md) и [выполненный план HY-6](../.cursor/plans/hy-6-coastline-water-side-done.md).
+Открытая coastline на wrapped/sphere сама по себе не означает безграничный flood: caps применяются к footprint до carve. Planar void не расширяет мир; неполные bake-данные не превращаются в физический борт. Ошибки footprint диагностируются один раз на тело. Отсутствие воды понижает effective placement specificity до `0` с `WarningError`; механизм общего resolve и отсутствие цикла описаны ниже.
 
 ### `OceanBasinGenerator` (open ocean + inland sea)
 
-**Смысл:** **open ocean mass** — большой массив воды **за** coastal sea; плюс **inland_sea** (мастер mask, суша вокруг, `z_sea`).
+Самостоятельного bbox-edge flood и z-writer нет. После общего carve → fill → merge классификатор читает компоненты и их уровни. `open_ocean` обозначает открытую часть океанской массы, `coastal_sea` — прибрежную; замкнутые тела классифицируются по размеру/уровню/declare. В wrapped/sphere края океана не существует; существующий ocean uid сохраняется при назначении open-water ролей.
 
-**Вход:** `SurfaceHeightmap`, `coastal_sea_mask`, optional `open_ocean_mask`, `inland_sea_mask`.  
-**Выход:** `liquid_candidate` union, `open_ocean_mask`, mutated `surface_z`.
-
-| Режим | Поведение |
-|---|---|
-| **Open ocean** | Connected expansion от coastal sea в «открытую» сторону (away from mainland / toward bbox edge) |
-| **Inland sea** | Master-only closed mask на `z_sea`, не connected to open ocean |
-| **Procedural v1** | bbox edge flood минус land → open mass; merge с coastal ring |
-
-**Role tags:** `open_ocean` | `inland_sea`.  
-**Не делает:** temperature, `liquid_body` — только geometry + metadata.
+Autoresolve HY-12 — natural-only: классификация существующих впадин. Если впадин нет, океан не синтезируется; при включённом ocean autoresolve пишется диагностика. Процедурное размещение океанского дна — GEO-1, не локальная эвристика hydrology.
 
 ### `CoastalLandformClassifier`
 
@@ -787,33 +566,15 @@ class CoastalLandforms:
 
 ### `LakeBasinGenerator`
 
-**Вход:** `SurfaceHeightmap`, `list[LakeSpec]`.  
-**LakeSpec:** из `loadDeclaredHydrology` → **`declared_lake_specs`** (U20: `declared_lakes[].shoreline[]` waypoints в fine-клетках; в master input — coarse) **или** auto-detect basins (`detect_terrain_features` kind=`basin`). Поля spec: `{ shoreline_segments, location_uid?, open_water_role? }`.
+`DeclaredLake.shoreline` нормализуется в общий basin intent с `kind=lake`; wire-форма озера сохраняется. Результат следует тому же пути placement → `BasinSpec` → relief carve → fill → classify → shore. Отдельный lake carver и обязательные сухие bands снимаются после перевода callers.
 
-**Алгоритм v1 (U15):**
-
-```
-from shoreline inward (perpendicular or distance transform):
-  band 0 = shore cell (terrain/material from defaults or spec)
-  bands 1..N = deepening (N ∈ [1, 5], from width context)
-  center = open water (liquid_candidate, lowest surface_z)
-```
-
-**Idempotency:** повторный apply с тем же spec — тот же результат (deterministic).
-
-**Deprecated draft:** `radius_cells` disk-only — fallback autoresolve v0, не целевая семантика.
+Natural autoresolve использует существующие локальные впадины и политику `default_lakes`; bowl-профиль и уровень — контекст общего механизма. Озеро может иметь уровень выше океанского; river mouth использует уровень именно этого озера.
 
 ### `RiverNetworkPlanner`
 
-**Вход:** `SurfaceHeightmap`, `liquid_candidate` + roles, `lake_masks`, `world`.  
-**Выход:** `list[RiverPolyline]` — только geometry path (source → mouth). **Не** `ConnectionEdge`, **не** type split.
+Вход: post-1.4 heightmap, water bodies/индекс уровней и world policies. Выход — маршрут source→mouth; DTO `ConnectionEdge` создаётся отдельно. D8-соседство предоставляет `dataModel/topology` (`neighbors8_unrolled` при необходимости); локальный `_neighbors8` снимается в шаге 5.
 
-| v1 | v2 (отложено) |
-|---|---|
-| D8 descent от sources к nearest `liquid_candidate` | Accumulation map |
-| Reject if mouth not on water mask | Lake outlet chains |
-| **Turn (U14):** deflection ≤ 45° via `smooth_river_polyline` | Meander noise |
-| Max N rivers per bbox | — |
+Устье — первая клетка принимающего тела с `surface_z < z_water_level` **либо** open-water ролью. Проверка уровня ограничена resolved extent/индексом этого тела; она не делает водой любую мировую клетку ниже глобального default. До river roles planner эмитит `RiverBedSpec`, relief применяет абсолютный профиль русла, затем гидрология вычисляет роли и connections. Deflection <=45° сохраняется; явно отмеченные перепады z передаются `waterfalls/`, smoothing их не стирает.
 
 ### `RiverTypeClassifier` (U17 + U18)
 
@@ -852,7 +613,7 @@ def classify_river_segments(
 
 | v1 | |
 |---|---|
-| Carve per segment; `mountain_river` — `mountain_bed_steepness_factor`; rapids — не flatten Δz | |
+| Эмиссия `RiverBedSpec` на сегменты; запись z — только relief `riverBedZ`; `mountain_river` использует policy, отмеченные перепады не сглаживаются | |
 
 **Параметры channel (world / edge override):**
 
@@ -885,23 +646,7 @@ Persist: **`MapCellService`** / debug route → **`ConnectionPersistService.pers
 
 ### River pipeline (orchestration, U18)
 
-```mermaid
-flowchart LR
-  PLAN[RiverNetworkPlanner]
-  SMO[smooth_river_polyline]
-  CLS[classify_river_segments]
-  CARVE[RiverBedCarver]
-  EMIT[riverConnectionEmit]
-  ORCH[HydrologyGeneratorService.apply]
-  PERS[ConnectionPersistService]
-
-  ORCH --> PLAN --> SMO --> CLS --> CARVE
-  CLS --> EMIT
-  ORCH --> EMIT
-  EMIT -.->|outside generators| PERS
-```
-
-**Sources / sinks** (planner): master polylines; auto sources on mountain/peak terrain; mouth → `coastal_sea` → `open_ocean` → `inland_sea`.
+`riverNetworkAssembler`: sources/declared path → planner → smoothing с сохранением drops → classify segments → `RiverBedSpec` → relief `riverBedZ` → river roles/mouth → `riverConnectionEmit`. Facade обеспечивает порядок и scopes. `RiverBedCarver` мигрирует в spec emission, прямого z-writer в hydrology нет. Сохранение connections выполняет `ConnectionPersistService` вне pure generators. Факты waterfall принадлежат отдельному `waterfalls/`, не теряются при smoothing.
 
 ### `HydrologyGeneratorService`
 
@@ -923,7 +668,7 @@ HYDROLOGY_BOOTSTRAP_SCOPES = frozenset({
 })
 ```
 
-**Порядок внутри `apply`:** `COASTAL_SEA` → `OPEN_OCEAN` → `LAKES` → `RIVERS` → optional `LANDFORMS`.
+**Порядок физики HY-12:** общий resolved placement → basin spec/relief apply → компоненты/fill/merge → classify/shore → river planner/spec/relief/roles → optional landforms. Scopes фильтруют категории, не создают независимые sea/ocean/lake carve pipelines.
 
 **Alias scope `ocean` (debug):** `COASTAL_SEA` + `OPEN_OCEAN`.
 
@@ -1101,7 +846,7 @@ Validator **не заменяет** runtime fallback — оба слоя (как
 | `geographic.lake` | Inland lake basin | `LakeBasinGenerator` |
 | `geographic.sea` | Coastal sea / залив у берега | `SeaBasinGenerator` |
 | `geographic.ocean` | Open ocean mass | `OceanBasinGenerator` |
-| `geographic.inland_sea` | Замкнутое море на `z_sea` | `SeaBasinGenerator` + role `inland_sea` |
+| `geographic.inland_sea` | Замкнутый крупный водоём со своим уровнем | общий basin pipeline + role `inland_sea` |
 | `geographic.island` / `coast` | Narrative override landform classifier | `CoastalLandformClassifier` |
 | `geographic.river` | **Имя** русла | geometry — `declared_rivers[]` (U27); routing — `ConnectionEdge` после carve/**emit** (U9/U18) |
 
@@ -1109,56 +854,33 @@ Validator **не заменяет** runtime fallback — оба слоя (как
 
 **Loader:** `loadDeclaredHydrology(world, locations)` → fine-cell segments / `LakeSpec` / `DeclaredRiverEdge` / deferred `DeclaredRiver` intents; `build_hydrology_master_input` **не** читает hydrology declare из `connection_edges` (hard cut U23). Geographic locations — filter `system_location_type == "geographic"` для subtype routing (U25) и `via_locations` anchors.
 
-#### Declare: озеро и море (U20/U21)
+#### Declare: бассейн, озеро и coastline (U20/U21, HY-12)
 
-Контур задаётся **waypoints в fine-клетках** в `world.hydrology`, не radius и не один anchor:
+Все declare находятся в `world.hydrology`; connection graph не является источником hydrology declare (U23). `location_uid` — ссылка на geographic-локацию; procedural тела не требуют NamedLocation.
 
-```
-declared_lakes[].shoreline[]     → A → B → C → D → A   (озеро, замкнутый контур)
-declared_coastlines[].path[]     → P → Q → R             (море, polyline или polygon)
-```
+**`DeclaredBasin`** (`dataModel/hydrology/declaredBasin.py`, frozen, extra=ignore): `location_uid: StrictOnWire[str]`, `footprint: StrictOnWire[RegionShape]`, `kind: StrictOnWire[BasinKind]`, `liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]] = "water"`, `floor_z: StrictOnWire[int]`, `z_water_level: DefaultWhenMissing[int | None] = None`, `rim: DefaultWhenMissing[HydrologyBands | None] = None`, `placement_specificity: DefaultWhenMissing[int | None] = None`. `None` уровня означает `WorldHydrology.default_water_level`, `None` rim — policy категории. Load проверяет `floor_z < resolved z_water_level`, предел `z_min` и допустимость liquid в `WorldMaterialRegistry.liquid_keys`.
 
-| Waypoint | Координаты |
-|---|---|
-| **Метры** | явные `x`, `y`, `z` в `HydrologyWaypoint` |
-| **Привязка** | `location_uid` на declare entry + `NamedLocation.map_*` для якоря имени |
+`WorldHydrology` расширяется `declared_basins: DefaultWhenMissing[list[DeclaredBasin]] = []` (factory) и `default_water_level: DefaultWhenMissing[int] = 0`. `BasinKind` — отдельный enum `sea/ocean/inland_sea/lake`; `WaterSide` — `interior/exterior`. Bare str для kind/liquid не вводится: liquid использует существующий `MaterialKey`; строковые UID — осознанные непрозрачные ссылки, разрешаемые существующим import/remap-контрактом.
 
-**Озеро (U20):** `declared_lakes[]` с `location_uid` + `shoreline[]`; optional `NamedLocation` (`geographic.lake`) для имени.  
-**Море (U21):** `declared_coastlines[]` с `location_uid` + `path[]`; optional `geographic.sea` / `coast` для имени. Polygon = замкнутая цепочка; polyline = открытый участок берега.  
-**Фьорд / coast (U26):** `geographic.coast` — точка **на** polyline моря (`path[]` или anchor локации), не второй контур.  
-**Lake vs inland_sea (U25):** subtype задаёт **intent** мастера; loader после построения mask проверяет topology — при mismatch **warning + carve по фактической topology**.
+**`DeclaredCoastline`** сохраняет `location_uid` и `path: list[HydrologyWaypoint]`, расширяется обязательным `kind: BasinKind`, `liquid: MaterialKey` с default water, `closed: bool = False`, `water_side: WaterSide | None = None`. `closed=True` требует явного water_side. Невырожденная открытая линия содержит >=2 различных точек; петля >=3, повтор первой точки не обязателен. Waypoints — существующий fine-контракт; поле waypoint.z не подменяет уровень всего водоёма.
 
-**Эталон bundle (озеро):**
+**Открытая линия:** P3 adapter строит bounded downhill footprint на pre-carve снимке. Seeds — водная сторона HY-6; BFS идёт через доменную 4-смежность. Допустимая клетка удовлетворяет `z < resolved_level` **или** остаётся внутри extent-бюджета от owning-сегмента, причём hard area/extent caps действуют в обоих случаях. Все смещения считаются в одном unrolled-кадре; на шве используются доменные образы. Детерминированный frontier `(distance,y,x)` исключает зависимость от порядка входных записей. `edge_noise` деформирует границу до hard caps, если задан существующим spatial-контекстом.
 
-```json
-"hydrology": {
-  "declared_lakes": [{
-    "location_uid": "loc-template-lake-declared",
-    "shoreline": [
-      {"x": 15000, "y": 9000, "z": 0},
-      {"x": 16800, "y": 9600, "z": 0},
-      {"x": 16200, "y": 7800, "z": 0},
-      {"x": 13800, "y": 8400, "z": 0}
-    ]
-  }]
-}
-```
+**Петля:** footprint = interior либо exterior по water_side, через общий topology-aware rasterizer. Неоднозначная неразделяющая петля на компактной поверхности не получает случайного bbox-interior: unresolved с UID и причиной, автор может указать явный `DeclaredBasin.footprint`. Деформация пути `CoastlineForm` относится к HY-9 и не меняет семантику closed/water_side.
 
-Carve — `LakeBasinGenerator` / `SeaBasinGenerator` по rasterized polyline. Persist routing graph для declare shoreline **не** требуется (U23).
+**`DeclaredLake`** сохраняется как wire-вход с `location_uid + shoreline`; closed footprint нормализуется в единый basin intent (`kind=lake`) с политикой `default_lakes`. Все тела идут через общий P-resolver. Adapter возвращает `ResolvedWaterPlacement {footprint_cells,z_water_level,kind,liquid,source_uid}`; `basinSpecFactory` добавляет floor/rim-контекст и выдаёт `BasinSpec`. Resolver/adapter не создаёт bathymetry spec и не пишет z. Метаданные исходного intent доступны factory по source_uid.
 
-> **Historical (deprecated U23):** declare lake/sea через `connection_edges` (`lake_shoreline` / `coastline`) — снято; см. changelog 2026-07.
+`HydrologySeasPolicy` — существующий POJO `dataModel/hydrology/seas.py`, владелец `world.hydrology.default_seas`. Для coastline целевые поля: **`basin_depth: DefaultWhenMissing[int] = 20`** (`>0`, единицы Z), **`max_area_fraction: DefaultWhenMissing[float] = 0.25`**, **`max_extent_x_fraction: DefaultWhenMissing[float] = 0.5`**, **`max_extent_y_fraction: DefaultWhenMissing[float] = 0.5`** (каждая доля `>0, <=1`). Это начальные настраиваемые defaults шага 1, не универсальные географические константы. `floor_z = resolved_level - basin_depth`; явный `DeclaredBasin.floor_z` имеет приоритет. Несовместимое с z_min дно диагностируется до spec-apply, не исправляется скрытой подстановкой.
+
+Площадь cap = `floor(max_area_fraction * L_x * L_y)` в рабочей сетке, с физическим минимумом одной доступной клетки при непустом мире. Extent-кандидат проверяется по обеим осям от owning-проекции линии: `abs(dx) <= max_extent_x_fraction * L_x`, аналогично Y; extent не подменяет длину authored линии. Эти лимиты ограничивают достроение открытой coastline, не обрезают явно заданный `DeclaredBasin.footprint`. Достижение cap диагностируется один раз на тело.
+
+**Гидрология размеры мира не вычисляет:** читает `topology.bounds.width/height` в готовом рабочем пространстве. Общий topology/placement-слой предоставляет полные bounds и перевод единиц; для partial bake используются те же размеры мира. Конверсия fine/coarse сохраняет географический масштаб ограничений; площадь исходного intent для placement вычисляется до clipping. Wire-значения политики разрешаются через POJO; defaults в генераторах не дублируются.
+
+**Coastline без воды:** общий placement получает факт о существующей воде из pre-carve снимка/входных фактов, без чтения будущего fill. Если воды нет, effective `placement_specificity=0` независимо от authored значения, исходное значение сохраняется; `WarningError` с UID и причиной — один раз на coastline за проход. Это не отменяет создание basin intent: кандидат строится до resolve, его будущая вода не становится его опорой. Когда вода уже существует, применяется обычный общий placement priority. Общие POJO/входные сигнатуры этого факта принадлежат P1, не локальному resolver hydrology.
 
 #### Topology fallback — lake vs inland_sea (U25)
 
-После rasterize контура (closed polygon):
-
-| Topology | Carve path | Если subtype мастера другой |
-|---|---|---|
-| Local basin, `surface_z` ниже соседей, **не** на `z_sea` | `LakeBasinGenerator`, role `lake` | `inland_sea` / `sea` → **warning**, carve как lake |
-| Closed contour на **`z_sea`**, land вокруг | inland_sea / `OceanBasinGenerator`, role `inland_sea` | `lake` → **warning**, carve как inland_sea |
-| Open `coastline`, контакт с open ocean | `SeaBasinGenerator`, role `coastal_sea` | — |
-
-Subtype в bundle **не reject** (до validator v2); orchestration **доверяет topology** для carve, subtype — для UI/LLM intent.
+Один физический pipeline обслуживает все kind. Классификатор использует уровень, массу и authored intent на post-carve данных (§ Level-fill + компоненты). Наличие закрытого контура на океанском default само по себе не превращает озеро в море. Несовпадение geographic subtype с явным kind или итоговой физикой даёт warning; UID локации сохраняется. Уровни объединённых детей наследуются независимо от их исходных kind.
 
 ### Реки — declare POJO + routing graph (U9, U27)
 
@@ -1349,7 +1071,7 @@ Climate pass (`generate-climate`) читает metadata из БД — **не** i
 | **`ConnectionPersistService`** | **`ConnectionEdge`** `river` / `mountain_river` после hydrology (U9) |
 | `WorldRouteGenerator` `sea_route` | connected `liquid_body` (море), не substitute реки |
 | `detect_terrain_features` | `liquid_body` **после** climate — anchors only |
-| Подводные локации (§ Подводный мир) | declare-якорь на дне: `surface_z` ≤ `z_sea` — обычная surface-сцена; построенная магистраль — `undersea_tunnel` (коридор под дном / structure на дне), **не** `sea_route` |
+| Подводные локации (§ Подводный мир) | declare-якорь на дне: `surface_z` < `z_water_level` тела — обычная surface-сцена; построенная магистраль — `undersea_tunnel` (коридор под дном / structure на дне), **не** `sea_route` |
 
 **Persist cycle (rivers, target):**
 
@@ -1388,7 +1110,7 @@ Settlement outdoor persist — **после** regional terrain exists (как с
 |---|---|---|
 | `ConnectionNode.x/y`, `NamedLocation.map_x/y`, `HydrologyWaypoint.x/y` | **fine cells** (`WORLD_FINE_GRID`) | import bundle, graph, `loadDeclaredHydrology` |
 | `SurfaceHeightmap` keys `(gx, gy)` | **grid cells** | carve, gap, column fill |
-| `surface_z`, `z_sea`, node `z` | **метры** (1 z = 1 m) | heightmap |
+| `surface_z`, `z_water_level`, node `z` | **метры** (1 z = 1 m) | heightmap |
 
 ```python
 from app.application.worldData.generators.coordinates.convert import (
@@ -1546,9 +1268,9 @@ Bundle keys **`connection_nodes`**, **`connection_edges`** — import/export в 
 
 Per `HydrologyScope`: **declared edges/specs first** → carve; затем autoresolve если `default_<category>.autoresolve` и edge_uid не в declared set.
 
-### Procedural sea v1 (C7, C7b)
+### Procedural sea (C7/C7b, HY-12)
 
-Declare `coastline` carve **в bbox polyline** (с padding 1 cell). **Вне bbox** — autoresolve coastal/open ocean если `default_seas.autoresolve_*` ON (**2B**).
+Natural-only autoresolve классифицирует существующие post-carve впадины и не достраивает воду от bbox-edge или за padded declare-bbox. Выделение designed ocean и изменение continental-поля — GEO-1. Для повторного bake источником carve остаётся один pre-hydrology snapshot, не результат предыдущего carve.
 
 ### River bed и climate (U28)
 
@@ -1629,12 +1351,12 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | # | Вопрос | Решение (утверждено) |
 |---|---|---|
-| Q1 | `z_sea` per-world vs const `0` | const `0` v1 |
+| Q1 | Уровень воды | HY-12: `z_water_level` на тело, `default_water_level=0` — POJO default мира |
 | Q2 | River width meters vs grid cells | grid cells v1 |
 | ~~Q3~~ | `liquid_candidate` storage | **U19:** persist на **`map_cells` metadata** v1 |
 | Q4 | Underwater subsurface terrain | dry rock band v1; **cave water** — отдельный домен U12, не surface hydrology |
 | Q5 | Closed planet ocean wrap | defer |
-| ~~Q6~~ | `inland_sea` vs large lake | **U25:** subtype declare (A) + topology fallback (B) + warning |
+| ~~Q6~~ | `inland_sea` vs large lake | U25/HY-12: authored intent + post-carve уровень/масса; physical mismatch диагностируется |
 | Q7 | Peninsula neighbor rule | 4-neighbor v1 |
 | Q8 | Mountain source detection | peak feature v1 |
 | ~~Q9~~ | Melt flow storage | **U19/U24:** hydrology roles on `map_cells`; season `flow_level` — **v2** (climate events), не sidecar |
@@ -1697,6 +1419,8 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 ## Changelog
 
+2026-10-20 — HY-12 шаг 1: согласованный declare/placement/relief/fill/shore/river контракт, per-body уровни, относительные X/Y лимиты и поля существующих POJO политики. Реализация шагов 2–6 остаётся отдельной.
+
 | Дата | Изменение |
 |---|---|
 | 2026-10-19 | § **Подводный мир:** дно океана = игровая surface-сцена (корабль/данж/город на floor); интерьер сухой (`liquid_body` только surface); построенная магистраль — `undersea_tunnel`, `sea_route` остаётся абстрактным ребром; толща воды — v2 `z_floor` |
@@ -1751,3 +1475,17 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 ## Планы placement, lifecycle и динамических систем
 
 Физическая вода — [HY-12](../.cursor/plans/hy-12-sea-elevation-contract.md); размещение объектов — [generator-placement.md](../.cursor/plans/generator-placement.md); общий жизненный цикл — [entity-lifecycle.md](../.cursor/plans/entity-lifecycle.md); динамическая связность — [hydrology-water-systems.md](../.cursor/plans/hydrology-water-systems.md). Карта и точные входные gates: [plan-dependency-graph.md](../.cursor/plans/plan-dependency-graph.md). Это разные delivery-треки: физический fill не закрывает динамические системы, а HY-12 coarse smoke не закрывает HY-10 L0 bands.
+
+### Coastline: приоритет при отсутствии воды (HY-12 / P1)
+
+Решение мастера: effective priority `0` независимо от authored `placement_specificity`, `WarningError` в лог. Правило pre-carve входного факта, сохранение исходного intent и отсутствие цикла зафиксированы в [declare-контракте](#declare-бассейн-озеро-и-coastline-u20u21-hy-12); общий порядок — [Placement priority](./tz_map_light_bake.md#placement-priority).
+
+### Открытая coastline: относительный размер мира (HY-12)
+
+Гидрология читает готовые `topology.bounds.width/height`; сама размеры не разрешает и не конвертирует. Площадь ограничивается относительно X×Y, расширение — отдельно относительно каждой оси. [Поля политики и defaults](#declare-бассейн-озеро-и-coastline-u20u21-hy-12): `max_area_fraction=0.25`, `max_extent_x_fraction=0.5`, `max_extent_y_fraction=0.5`. Это defaults POJO, переопределяемые миром; partial bake не меняет размеры мира.
+
+### Глубина coastline: поле POJO (HY-12)
+
+Используется существующий **`HydrologySeasPolicy`** (`dataModel/hydrology/seas.py`) внутри `WorldHydrology.default_seas`. Целевое поле **`basin_depth: DefaultWhenMissing[int] = 20`**, строго `>0`, в единицах Z; wire — **`world.hydrology.default_seas.basin_depth`**. `floor_z = z_water_level - basin_depth`. Явное `DeclaredBasin.floor_z` имеет приоритет, настройки мира разрешаются через POJO, при отсутствии настройки используется модельный default. `kind` задаёт профиль, отдельной обязательной таблицы глубин по kind нет. Interim `stub_drop_fraction_of_span` не является вторым fallback.
+
+Шаг 2 HY-12 реализован 2026-10-20: POJO, policy fields, strict floor/level validation, liquid REF-W, parse declared_basins в fine-геометрии и передача в master input. CORRIDOR использует unrolled-сервис домена топологии (расстояние и геометрическая площадь union сегментов); существующий regionRasterizer канонизирует выход, edge_noise поддерживает новый вариант. Четыре bundle-фикстуры мигрированы на обязательный coastline.kind, world_test_004 содержит явный бассейн. Carve/fill ещё legacy: материализация новых basin-полей начинается шагом 3 после P2+водного P3; W/L и HY-10 остаются отдельными.

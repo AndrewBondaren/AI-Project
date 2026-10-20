@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
@@ -124,6 +125,8 @@ class HydrologyMasterInput:
     declared_river_edges: list[DeclaredRiverEdge] = field(default_factory=list)
     declared_river_intents: list[Any] = field(default_factory=list)  # DeclaredRiver POJO, modes 1/2
     river_system_index: RiverSystemIndex | None = None
+    # Authored fine geometry; placement normalization belongs to HY-12 step 3.
+    declared_basins: list[DeclaredBasin] = field(default_factory=list)
 
     @property
     def declared_coastline_segments(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:

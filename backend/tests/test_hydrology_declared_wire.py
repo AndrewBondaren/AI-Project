@@ -21,6 +21,7 @@ class TestDeclaredWire(unittest.TestCase):
             "hydrology": {
                 "declared_coastlines": [{
                     "location_uid": "loc-sea",
+                    "kind": "sea",
                     "path": [
                         {"x": 6000, "y": 6000, "z": 0},
                         {"x": 24000, "y": 6000, "z": 0},

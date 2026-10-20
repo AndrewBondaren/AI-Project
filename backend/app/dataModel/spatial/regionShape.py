@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from math import pi
+from math import ceil, floor, pi, sqrt
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -13,6 +13,7 @@ class RegionShapeKind(StrEnum):
     ELLIPSE = "ellipse"
     POLYGON = "polygon"
     ANCHOR_RADIUS = "anchor_radius"
+    CORRIDOR = "corridor"
 
 
 Point = tuple[int, int]
@@ -161,7 +162,38 @@ class AnchorRadiusShape(RegionShapeBase):
         return pi * self.radius ** 2
 
 
+class CorridorShape(RegionShapeBase):
+    """Union of round-capped segments in one authored unrolled frame."""
+
+    kind: Literal[RegionShapeKind.CORRIDOR] = RegionShapeKind.CORRIDOR
+    path: list[Point] = Field(min_length=2)
+    width: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def nonzero_path(self) -> Self:
+        if len(set(self.path)) < 2:
+            raise ValueError("corridor requires at least two distinct points")
+        return self
+
+    def distance(self, x: float, y: float) -> float:
+        from app.dataModel.topology.corridorGeometry import polyline_distance2
+        return sqrt(polyline_distance2((x, y), self.path))
+
+    def contains(self, x: float, y: float) -> bool:
+        return self.distance(x, y) <= self.width / 2
+
+    def bbox(self) -> Bounds:
+        xs, ys = zip(*self.path)
+        radius = self.width / 2
+        return (floor(min(xs) - radius), floor(min(ys) - radius),
+                ceil(max(xs) + radius), ceil(max(ys) + radius))
+
+    def area(self) -> float:
+        from app.dataModel.topology.corridorGeometry import corridor_area
+        return corridor_area(tuple(self.path), self.width)
+
+
 RegionShape = Annotated[
-    BboxShape | EllipseShape | PolygonShape | AnchorRadiusShape,
+    BboxShape | EllipseShape | PolygonShape | AnchorRadiusShape | CorridorShape,
     Field(discriminator="kind"),
 ]

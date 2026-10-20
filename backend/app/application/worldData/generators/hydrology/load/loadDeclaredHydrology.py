@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from app.application.jsonValidation.worldRow import hydrology as read_hydrology
+from app.application.jsonValidation.worldRow import hydrology as read_hydrology, materials, terrain_scalars
 from app.application.worldData.generators.hydrology.basins.basinKindResolver import (
     resolve_lake_basin_role,
 )
@@ -16,6 +16,7 @@ from app.application.worldData.generators.hydrology.types import (
     RiverSystemIndex,
 )
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
@@ -33,6 +34,7 @@ class LoadedDeclaredHydrology:
     river_edges: list[DeclaredRiverEdge]
     river_intents: list[DeclaredRiver]
     river_system_index: RiverSystemIndex
+    declared_basins: list[DeclaredBasin] = field(default_factory=list)
 
     @property
     def coastline_segments(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:
@@ -124,10 +126,23 @@ def load_declared_hydrology(
     coastlines = _coerce_declared_coastlines(list(pojo.declared_coastlines))
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
     rivers = _coerce_declared_rivers(list(pojo.declared_rivers))
+    basins = [_coerce_pojo(DeclaredBasin, entry) for entry in pojo.declared_basins]
+    if basins or coastlines:
+        liquid_keys = materials(world).liquid_keys()
+        for entry in [*basins, *coastlines]:
+            if entry.liquid not in liquid_keys:
+                raise ValueError(f"water body {entry.location_uid}: liquid must reference a liquid material")
+    if basins:
+        scalars = terrain_scalars(world)
+        z_min = scalars.resolved_z_min(scalars.z_min)
+        for basin in basins:
+            basin.validate_water_level(pojo.default_water_level)
+            if basin.floor_z < z_min:
+                raise ValueError(f"basin {basin.location_uid}: floor_z is below world z_min")
 
     coastline_specs: list[CoastlineSpec] = []
     for entry in coastlines:
-        segments = _path_to_segments(list(entry.path))
+        segments = _path_to_segments(list(entry.path), closed=entry.closed)
         if not segments:
             continue
         coastline_specs.append(CoastlineSpec(segments=segments, location_uid=entry.location_uid))
@@ -166,4 +181,5 @@ def load_declared_hydrology(
         river_edges=river_edges,
         river_intents=river_intents,
         river_system_index=build_river_system_index(rivers),
+        declared_basins=basins,
     )

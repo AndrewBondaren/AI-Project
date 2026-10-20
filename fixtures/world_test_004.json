@@ -400,9 +400,20 @@
         }
       },
       "materialize_named_locations": false,
+      "default_water_level": 0,
+      "declared_basins": [
+        {
+          "location_uid": "loc-geo-ocean-west-004",
+          "kind": "ocean",
+          "liquid": "water",
+          "footprint": {"kind": "ellipse", "cx": -2000, "cy": 0, "rx": 1200, "ry": 1800},
+          "floor_z": -20
+        }
+      ],
       "declared_coastlines": [
         {
           "location_uid": "loc-geo-ocean-west-004",
+          "kind": "ocean",
           "path": [
             {
               "x": -1500,

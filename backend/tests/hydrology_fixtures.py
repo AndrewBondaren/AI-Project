@@ -170,6 +170,7 @@ def coastline_world(
         **seas_hydrology(bands=bands, autoresolve=autoresolve),
         "declared_coastlines": [{
             "location_uid": location_uid,
+            "kind": "sea",
             "path": path or COASTLINE_PATH_WIRE,
         }],
     }

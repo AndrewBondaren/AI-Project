@@ -31,6 +31,7 @@ class MapCellHydrology(BaseModel):
     connection_edge_uid: DefaultWhenMissing[str | None] = None
     shore_kind: DefaultWhenMissing[HydrologyShoreKind | None] = None
     water_body_uid: DefaultWhenMissing[str | None] = None
+    z_water_level: DefaultWhenMissing[int | None] = None
 
     @classmethod
     def shore(

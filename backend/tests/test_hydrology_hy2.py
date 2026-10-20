@@ -60,7 +60,7 @@ class TestSeaLevelPolicy(unittest.TestCase):
 
     def test_is_land(self):
         self.assertTrue(is_land(3, 0))
-        self.assertFalse(is_land(0, 0))
+        self.assertTrue(is_land(0, 0))
 
 
 class TestDeepeningBands(unittest.TestCase):

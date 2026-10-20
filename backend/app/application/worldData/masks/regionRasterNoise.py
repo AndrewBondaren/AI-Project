@@ -4,7 +4,7 @@ from collections.abc import Callable
 from functools import cache
 from math import hypot
 
-from app.dataModel.spatial.regionShape import BboxShape, EllipseShape, PolygonShape, RegionShape
+from app.dataModel.spatial.regionShape import BboxShape, CorridorShape, EllipseShape, PolygonShape, RegionShape
 from app.dataModel.topology.worldTopology import WorldTopology
 
 
@@ -34,6 +34,8 @@ def smooth_field(sample: Callable[..., float], scale: int,
 
 def boundary_depth(shape: RegionShape, x: int, y: int) -> float:
     """Interior distance used only for edge-noise decay, after contains()."""
+    if isinstance(shape, CorridorShape):
+        return shape.width / 2 - shape.distance(x, y)
     if isinstance(shape, BboxShape):
         return min(x - shape.x_min, shape.x_max - x, y - shape.y_min, shape.y_max - y)
     if isinstance(shape, EllipseShape):

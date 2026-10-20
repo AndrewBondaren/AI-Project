@@ -8,6 +8,10 @@ Not `worlds.caves.hydrology` (отдельный POJO позже).
 
 from app.dataModel.hydrology.bands import BAND_MAX, BAND_MIN, HydrologyBands
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.enums.basinKind import BasinKind
+from app.dataModel.hydrology.enums.waterSide import WaterSide
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
@@ -33,6 +37,10 @@ __all__ = [
     "BAND_MAX",
     "HydrologyBands",
     "DeclaredCoastline",
+    "DeclaredBasin",
+    "WaterBody",
+    "BasinKind",
+    "WaterSide",
     "DeclaredLake",
     "DeclaredRiver",
     "RiverSystemTopology",

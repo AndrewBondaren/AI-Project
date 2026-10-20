@@ -74,4 +74,5 @@ def build_hydrology_master_input(
         ],
         declared_river_intents=declared.river_intents,
         river_system_index=declared.river_system_index,
+        declared_basins=declared.declared_basins,
     )

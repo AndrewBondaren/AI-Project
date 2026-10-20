@@ -19,6 +19,12 @@ class HydrologySeasPolicy(MaskCategoryPolicy):
 
     autoresolve_coastal_sea: DefaultWhenMissing[bool] = True
     autoresolve_open_ocean: DefaultWhenMissing[bool] = True
+    basin_depth: DefaultWhenMissing[int] = constrained_field(default=20, greater=0)
+    max_area_fraction: DefaultWhenMissing[float] = constrained_field(default=0.25, greater=0, lesser_equals=1)
+    max_extent_x_fraction: DefaultWhenMissing[float] = constrained_field(default=0.5, greater=0, lesser_equals=1)
+    max_extent_y_fraction: DefaultWhenMissing[float] = constrained_field(default=0.5, greater=0, lesser_equals=1)
+    min_water_cells: DefaultWhenMissing[int] = constrained_field(default=2, greater_equals=1)
+    inland_sea_min_area_fraction: DefaultWhenMissing[float] = constrained_field(default=0.01, greater=0, lesser_equals=1)
     bands: DefaultWhenMissing[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=20))
     shore: DefaultWhenMissing[HydrologyShoreDefaults] = Field(
         default_factory=lambda: HydrologyShoreDefaults.for_condition(

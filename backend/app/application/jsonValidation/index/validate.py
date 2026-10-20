@@ -156,6 +156,15 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
     checks.extend(_shore_ref_checks(hydrology, ("default_shore",)))
     for path in _CATEGORY_SHORE_PATHS:
         checks.extend(_shore_ref_checks(hydrology, path))
+    for category in ("declared_basins", "declared_coastlines"):
+        for index, entry in enumerate(hydrology.get(category, [])):
+            checks.append(RefCheck(
+                ref_kind=RefKind.LIQUID,
+                schema_id=WorldHydrology.SCHEMA_ID,
+                path=("hydrology", category, index, "liquid"),
+                value_getter=lambda _data, row=entry: row.get("liquid"),
+                registry_present_key="material_registry",
+            ))
     return checks
 
 

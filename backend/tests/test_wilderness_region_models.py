@@ -11,7 +11,7 @@ from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.dataModel.spatial.regionShape import (
-    AnchorRadiusShape, BboxShape, EllipseShape, PolygonShape, RegionShape,
+    AnchorRadiusShape, BboxShape, CorridorShape, EllipseShape, PolygonShape, RegionShape,
 )
 from app.dataModel.terrainMasks import WorldTerrainMasks
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
@@ -25,9 +25,10 @@ SHAPES = (
     {"kind": "ellipse", "cx": 0, "cy": 0, "rx": 4, "ry": 2},
     {"kind": "polygon", "vertices": [[-4, -2], [4, -2], [0, 2]]},
     {"kind": "anchor_radius", "anchor_uid": "anchor-1", "radius": 4},
+    {"kind": "corridor", "path": [[-4, -2], [4, 2]], "width": 2},
 )
 SPEC_TYPES = {"forest": ForestSpec, "plains": PlainSpec, "farmland": FarmlandSpec}
-SHAPE_TYPES = (BboxShape, EllipseShape, PolygonShape, AnchorRadiusShape)
+SHAPE_TYPES = (BboxShape, EllipseShape, PolygonShape, AnchorRadiusShape, CorridorShape)
 
 
 def declarations():
@@ -49,12 +50,12 @@ class RegionWireTests(unittest.TestCase):
                 self.assertEqual(WorldTerrainRegistry.require_engine_terrain_key(spec.entry_type),
                                  spec.entry_type)
 
-    def test_world_json_all_twelve_union_variants_round_trip(self):
+    def test_world_json_all_shape_union_variants_round_trip(self):
         raw = {"declared_regions": declarations()}
         masks = WorldTerrainMasks.model_validate_json(json.dumps(raw), context={"validate_only": True})
         for i, spec in enumerate(masks.declared_regions):
             self.assertIsInstance(spec, SPEC_TYPES[spec.entry_type])
-            self.assertIsInstance(spec.shape, SHAPE_TYPES[i % 4])
+            self.assertIsInstance(spec.shape, SHAPE_TYPES[i % len(SHAPE_TYPES)])
             self.assertEqual(spec.density, 1.0)
             self.assertIsNone(spec.placement_specificity)
             self.assertIsNone(spec.location_uid)
@@ -75,7 +76,7 @@ class RegionWireTests(unittest.TestCase):
         result = resolve_world_column("terrain_masks", raw,
                                       ResolveContext.for_import(validate_only=True))
         self.assertEqual(raw, original)
-        self.assertEqual(len(WorldTerrainMasks.model_validate(result["terrain_masks"]).declared_regions), 12)
+        self.assertEqual(len(WorldTerrainMasks.model_validate(result["terrain_masks"]).declared_regions), len(SHAPES) * len(SPEC_TYPES))
 
     def test_missing_names_are_issues_only_on_author_path(self):
         for value in (None, "", "  ", "missing"):

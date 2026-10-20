@@ -884,6 +884,7 @@
       "declared_coastlines": [
         {
           "location_uid": "loc-template-sea-declared",
+          "kind": "sea",
           "path": [
             {
               "x": 21000,

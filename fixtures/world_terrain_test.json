@@ -156,6 +156,7 @@
       "declared_coastlines": [
         {
           "location_uid": "loc-terrain-ocean-west",
+          "kind": "ocean",
           "path": [
             {
               "x": 6000,
