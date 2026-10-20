@@ -65,6 +65,8 @@ class TestCoarseMasterInput(unittest.TestCase):
         self.assertTrue(set(result.cell_index.by_cell) <= set(hm.surface_z))
 
     def test_river_into_lake_keeps_lake_cells(self):
+        # Declared lakes are carved/role'd by the pre-1.4 placement pass (HY-12/3b);
+        # the legacy apply path emits no LAKE cells for them anymore.
         river_into_lake = {
             **RIVER_ENDPOINTS,
             "source": waypoint(9000, 9000),
@@ -82,7 +84,7 @@ class TestCoarseMasterInput(unittest.TestCase):
         def cells(result, role):
             return {c for c, e in result.cell_index.by_cell.items() if e.role == role}
 
-        self.assertTrue(cells(lake_only, HydrologyCellRole.LAKE))
+        self.assertFalse(cells(lake_only, HydrologyCellRole.LAKE))
         self.assertEqual(cells(with_river, HydrologyCellRole.LAKE), cells(lake_only, HydrologyCellRole.LAKE))
         self.assertTrue(cells(with_river, HydrologyCellRole.RIVER_BED))
 

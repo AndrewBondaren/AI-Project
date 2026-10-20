@@ -204,7 +204,7 @@ def carve_deepening_bands(
     """
     U15: shoreline → deepening bands → open coastal_sea at z_sea.
 
-    Mutates ``heightmap.surface_z`` in place.
+    Roles only; declared-source z is carved by Pass 1.4 basinZ.
     """
     level = resolve_z_sea(None) if z_sea is None else z_sea
     coastline_cells = rasterize_segments(segments, topology=topology)
@@ -248,14 +248,12 @@ def _apply_carve(
         ys.append(cell[1])
         if distance <= shelf_depth:
             deepening = distance
-            heightmap.surface_z[cell] = max(level, level + (shelf_depth - deepening + 1))
             by_cell[cell] = MapCellHydrology.shore(
                 HydrologyShoreKind.SEA,
                 deepening_index=deepening,
                 water_body_uid=water_body_uid,
             )
         else:
-            heightmap.surface_z[cell] = level
             by_cell[cell] = MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA,
                                              water_body_uid=water_body_uid)
 

@@ -57,7 +57,8 @@ class DeclaredTopologyFloodTests(unittest.TestCase):
         self.assertEqual(result.by_cell[(2, 0)].deepening_index, 1)
         self.assertEqual(result.by_cell[(1, 0)].role, HydrologyCellRole.COASTAL_SEA)
         self.assertEqual(result.by_cell[(-1, 0)].deepening_index, 0)
-        self.assertEqual(self.hm.surface_z[(1, 0)], 0)
+        # Declared-source z is carved by Pass 1.4 basinZ (HY-12/3b); carver is role-only.
+        self.assertEqual(self.hm.surface_z[(1, 0)], before[(1, 0)])
         self.assertEqual(self.hm.surface_z[(-1, 0)], before[(-1, 0)])
         self.assertEqual(set(self.hm.surface_z), set(before))
         self.assertTrue(set(result.by_cell) <= before.keys())

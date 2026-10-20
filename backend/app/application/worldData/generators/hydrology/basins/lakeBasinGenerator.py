@@ -1,4 +1,4 @@
-"""Declared lake basin carve — D HY-3 scope LAKES."""
+"""Lake basin roles — declared lakes are carved in Pass 1.4 (basinZ); autoresolve remains."""
 
 from __future__ import annotations
 
@@ -11,9 +11,6 @@ from app.application.worldData.generators.hydrology.geom.polygonInterior import 
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
 from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     lakes_autoresolve_policy,
-)
-from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import (
-    resolve_hydrology_bands,
 )
 from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
@@ -245,15 +242,9 @@ def generate_lakes(
     master: HydrologyMasterInput,
     occupied: dict[tuple[int, int], MapCellHydrology] | None = None,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], GridBBox | None]:
-    bands = resolve_hydrology_bands("lakes", world, world_uid=master.world_uid)
     merged: dict[tuple[int, int], MapCellHydrology] = {}
     dirty: GridBBox | None = None
     occupied_cells = occupied or {}
-
-    for spec in master.declared_lake_specs:
-        carved = carve_lake_basin(heightmap, spec, bands)
-        merged.update(carved)
-        dirty = _merge_bbox(carved, dirty)
 
     lakes_policy = lakes_autoresolve_policy(world)
     if lakes_policy.lakes_enabled and lakes_policy.autoresolve:

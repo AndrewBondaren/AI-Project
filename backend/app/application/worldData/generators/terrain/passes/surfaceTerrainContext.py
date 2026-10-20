@@ -15,6 +15,9 @@ from app.application.worldData.generators.hydrology.hydrologyGeneratorService im
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
+from app.application.worldData.generators.hydrology.placement import (
+    run_water_placement_pass,
+)
 from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import (
     apply_declared_fine_river_carves,
 )
@@ -83,8 +86,14 @@ def prepare_surface_terrain_context(
     # Pre-1.4 snapshot for light relief (avoid double-rise when mountain raises on light).
     coarse_relief_z = dict(coarse_hm.surface_z)
 
+    water = run_water_placement_pass(world, locations, coarse_hm)
+
     # Pass 1.4 — mountain rise / ravine drop before hydrology detect (1.5).
-    apply_relief_objects_z(world, locations, coarse_hm, pole_field=pole_field)
+    apply_relief_objects_z(
+        world, locations, coarse_hm, pole_field=pole_field,
+        basin_specs=water.basin_specs if water else (),
+        topology=water.topology if water else None,
+    )
 
     coarse_hydro: dict[tuple[int, int], object] = {}
     if is_hydrology_enabled(world):

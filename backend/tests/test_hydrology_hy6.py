@@ -119,11 +119,13 @@ class TestWaterSidePerpendicular(unittest.TestCase):
         self.assertIn((1, 3), seeds)
         self.assertTrue(seeds <= self.flood(segments).keys())
         self.assertTrue(shore.isdisjoint(self.flood(segments, bounded=False)))
+        before = dict(self.hm.surface_z)
         result = carve_deepening_bands(self.hm, segments, HydrologyBands(min=1, max=1),
                                       water_body_uid="test-sea", z_sea=0, topology=self.topology)
         self.assertEqual(result.by_cell[(3, 3)].deepening_index, 0)
         self.assertEqual(result.by_cell[(1, 3)].deepening_index, 1)
-        self.assertEqual(self.hm.surface_z[(0, 3)], 0)
+        # Declared-source z is carved by Pass 1.4 basinZ (HY-12/3b); carver is role-only.
+        self.assertEqual(self.hm.surface_z, before)
 
     def test_passable_predicate_blocks_flood_without_mutation(self):
         segments = [((4, 1), (4, 5))]

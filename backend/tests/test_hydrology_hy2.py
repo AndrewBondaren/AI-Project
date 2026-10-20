@@ -72,13 +72,14 @@ class TestDeepeningBands(unittest.TestCase):
         self.assertIn((5, 1), dist)
         self.assertNotIn((5, 3), dist)
 
-    def test_carve_sets_z_sea_and_roles(self):
+    def test_carve_sets_roles_without_z_write(self):
+        # Declared-source z is carved by Pass 1.4 basinZ (HY-12/3b); this carver is role-only.
         hm = _flat_heightmap(0, 10, 0, 6)
+        before = dict(hm.surface_z)
         segments = [((2, 2), (8, 2))]
         result = carve_deepening_bands(hm, segments, HydrologyBands(min=1, max=1),
                                        water_body_uid="auto-sea-2x1", z_sea=0, topology=hydro_topology(hm))
-        self.assertEqual(hm.surface_z[(5, 1)], 1)  # deepening band 1
-        self.assertEqual(hm.surface_z[(5, 0)], 0)  # beyond max band → open water
+        self.assertEqual(hm.surface_z, before)  # deepening band 1 and open water keep pre-carve z
         entry = result.by_cell[(5, 0)]
         self.assertEqual(entry.role, HydrologyCellRole.COASTAL_SEA)
         self.assertTrue(result.dirty_bbox is not None)

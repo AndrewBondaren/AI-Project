@@ -26,6 +26,7 @@ class HydrologySeasPolicy(MaskCategoryPolicy):
     min_water_cells: DefaultWhenMissing[int] = constrained_field(default=2, greater_equals=1)
     inland_sea_min_area_fraction: DefaultWhenMissing[float] = constrained_field(default=0.01, greater=0, lesser_equals=1)
     bands: DefaultWhenMissing[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=20))
+    placement_specificity: DefaultWhenMissing[int] = constrained_field(default=0, greater_equals=0)
     shore: DefaultWhenMissing[HydrologyShoreDefaults] = Field(
         default_factory=lambda: HydrologyShoreDefaults.for_condition(
             ReliefConditionTerrain.SHORE_SEA,

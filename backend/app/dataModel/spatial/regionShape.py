@@ -50,6 +50,19 @@ class RegionShapeBase(BaseModel):
 
     edge_noise: EdgeNoise | None = None
 
+    def projected(self, divisor: int) -> Self:
+        """Fine → working-grid projection; subclasses must re-validate."""
+        raise NotImplementedError
+
+    def _projected(self, divisor: int, update: dict) -> Self:
+        if divisor <= 0:
+            raise ValueError("projection divisor must be positive")
+        noise = None
+        if self.edge_noise is not None:
+            noise = EdgeNoise(amplitude=round(self.edge_noise.amplitude / divisor),
+                              scale=max(1, round(self.edge_noise.scale / divisor)))
+        return type(self).model_validate(self.model_dump() | update | {"edge_noise": noise})
+
 
 class BboxShape(RegionShapeBase):
     kind: Literal[RegionShapeKind.BBOX] = RegionShapeKind.BBOX
@@ -74,6 +87,12 @@ class BboxShape(RegionShapeBase):
         # Coverage cells matching inclusive contains(): a 1x1 bbox covers 1.
         return float((self.x_max - self.x_min + 1) * (self.y_max - self.y_min + 1))
 
+    def projected(self, divisor: int) -> BboxShape:
+        return self._projected(divisor, {
+            "x_min": self.x_min // divisor, "x_max": self.x_max // divisor,
+            "y_min": self.y_min // divisor, "y_max": self.y_max // divisor,
+        })
+
 
 class EllipseShape(RegionShapeBase):
     kind: Literal[RegionShapeKind.ELLIPSE] = RegionShapeKind.ELLIPSE
@@ -90,6 +109,13 @@ class EllipseShape(RegionShapeBase):
 
     def area(self) -> float:
         return pi * self.rx * self.ry
+
+    def projected(self, divisor: int) -> EllipseShape:
+        return self._projected(divisor, {
+            "cx": self.cx // divisor, "cy": self.cy // divisor,
+            "rx": max(1, round(self.rx / divisor)),
+            "ry": max(1, round(self.ry / divisor)),
+        })
 
 
 class PolygonShape(RegionShapeBase):
@@ -144,6 +170,11 @@ class PolygonShape(RegionShapeBase):
         return abs(sum(a[0] * b[1] - b[0] * a[1]
                        for a, b in zip(ring, ring[1:] + ring[:1]))) / 2
 
+    def projected(self, divisor: int) -> PolygonShape:
+        return self._projected(divisor, {
+            "vertices": [(x // divisor, y // divisor) for x, y in self.vertices],
+        })
+
 
 class AnchorRadiusShape(RegionShapeBase):
     """Unresolved anchor reference; collect resolves it to absolute geometry."""
@@ -160,6 +191,9 @@ class AnchorRadiusShape(RegionShapeBase):
 
     def area(self) -> float:
         return pi * self.radius ** 2
+
+    def projected(self, divisor: int) -> AnchorRadiusShape:
+        return self._projected(divisor, {"radius": max(1, round(self.radius / divisor))})
 
 
 class CorridorShape(RegionShapeBase):
@@ -191,6 +225,12 @@ class CorridorShape(RegionShapeBase):
     def area(self) -> float:
         from app.dataModel.topology.corridorGeometry import corridor_area
         return corridor_area(tuple(self.path), self.width)
+
+    def projected(self, divisor: int) -> CorridorShape:
+        return self._projected(divisor, {
+            "path": [(x // divisor, y // divisor) for x, y in self.path],
+            "width": max(1, round(self.width / divisor)),
+        })
 
 
 RegionShape = Annotated[
