@@ -20,17 +20,17 @@ from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverP
 from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import (
     resolve_river_type_classify,
 )
-from app.application.worldData.generators.hydrology.rivers.riverBedCarver import (
-    _channel_depth_step,
+from app.application.worldData.generators.hydrology.rivers.riverBedProfile import (
     river_bed_spec,
     river_bed_roles,
 )
-from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
 from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
-from app.dataModel.topology.fineTopology import fine_topology
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.generators.terrain.reliefObjects.riverBed import apply_river_bed_z
+from app.application.jsonValidation.worldRow import hydrology
+from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -40,14 +40,18 @@ def apply_declared_fine_river_carves(
     world: World,
     locations: list[NamedLocation],
     base_surface_z: dict[tuple[int, int], int],
-    *, base_space: CoordinateSpace = CoordinateSpace.WORLD_FINE_GRID,
+    *, topology: WorldTopology,
+    base_space: CoordinateSpace = CoordinateSpace.WORLD_FINE_GRID,
     coarse_hydro: dict[tuple[int, int], MapCellHydrology] | None = None,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], dict[tuple[int, int], int]]:
     """Rasterize fine rivers; sample coarse input explicitly, never invent floor z."""
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("fine rivers require an explicit WorldTopology")
     if base_space not in (CoordinateSpace.WORLD_FINE_GRID, CoordinateSpace.WORLD_SURFACE_GRID):
         raise ValueError(f"unsupported river base space: {base_space}")
     loaded = load_declared_hydrology(world, locations)
     type_classify = resolve_river_type_classify(world)
+    river_policy = hydrology(world).default_rivers
     merged_hydro: dict[tuple[int, int], MapCellHydrology] = {}
     surface_z: dict[tuple[int, int], int] = dict(base_surface_z)
 
@@ -66,8 +70,6 @@ def apply_declared_fine_river_carves(
             surface_z={},
         )
 
-    coarse_topology = resolve_hydrology_topology(world)
-    topology = fine_topology(coarse_topology, map_cell_fine_span(world)) if coarse_topology else None
     segments = segments_from_declared(loaded.river_edges, topology=topology)
     segments.extend(resolve_declared_river_intents(
         world, hm, loaded.river_intents, locations, {}, type_classify,
@@ -93,7 +95,7 @@ def apply_declared_fine_river_carves(
     specs = []
     for segment in segments:
         spec = river_bed_spec(hm, segment,
-            depth_step=_channel_depth_step(segment.connection_type, type_classify),
+            depth_step=river_policy.channel_depth_for(HydrologyConnectionType(segment.connection_type)),
             occupied=occupied, z_min=world_z_min(world))
         specs.append(spec)
         merged_hydro.update(river_bed_roles(segment, spec))

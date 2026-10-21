@@ -24,6 +24,7 @@ from tests.hydrology_fixtures import (
     flat_heightmap,
     heightmap_from_z,
     hydro_master,
+    hydro_topology,
     hydro_world,
     rivers_hydrology,
     seas_hydrology,
@@ -65,7 +66,7 @@ segments = autoresolve_river_segments(
     hydro_world(hydrology=rivers_hydrology()),
     heightmap_from_z(surface_z),
     hydro_master(scopes=frozenset({HydrologyScope.RIVERS})),
-    occupied,
+    occupied, topology=hydro_topology(heightmap_from_z(surface_z)),
 )
 
 print(json.dumps({

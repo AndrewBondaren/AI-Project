@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.coordinates.space import CoordinateSpace
+from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
+from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
+from app.dataModel.topology.fineTopology import fine_topology
 
 from dataclasses import dataclass
 
@@ -90,11 +93,14 @@ def prepare_surface_terrain_context(
 
     water = run_water_placement_pass(world, locations, coarse_hm)
 
+    topology = water.topology if water is not None else resolve_hydrology_topology(
+        world, coarse_hm, locations=locations)
+
     # Pass 1.4 — mountain rise / ravine drop before hydrology detect (1.5).
     apply_relief_objects_z(
         world, locations, coarse_hm, pole_field=pole_field,
         basin_specs=water.basin_specs if water else (),
-        topology=water.topology if water else None,
+        topology=topology,
     )
 
     # Fine profiles sample the same pre-river snapshot, avoiding a second bed cut.
@@ -109,7 +115,7 @@ def prepare_surface_terrain_context(
             nodes=nodes or [],
             edges=edges or [],
             basin_specs=water.basin_specs if water else (),
-            topology=water.topology if water else None,
+            topology=topology,
         )
         coarse_hydro = hydro_result.cell_index.by_cell
 
@@ -117,6 +123,7 @@ def prepare_surface_terrain_context(
         world,
         locations,
         pre_river_z,
+        topology=fine_topology(topology, map_cell_fine_span(world)),
         base_space=CoordinateSpace.WORLD_SURFACE_GRID,
         coarse_hydro=coarse_hydro,
     )

@@ -7,6 +7,7 @@ Categories per master decision:
 - autoresolve         — procedural fill, policy-gated only
 """
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
 import unittest
 
 from app.application.worldData.generators.coordinates.space import CoordinateSpace
@@ -102,7 +103,7 @@ class TestDeclaredAutoresolveEdge(unittest.TestCase):
             for gx in range(2950, 6051)
             for gy in range(1950, 2051)
         }
-        hydro, _ = apply_declared_fine_river_carves(world, locs, surface_z)
+        hydro, _ = apply_declared_fine_river_carves(world, locs, surface_z, topology=_river_test_topology(_river_test_heightmap(surface_z)))
         self.assertTrue(hydro)
         self.assertTrue(all(
             e.water_body_uid == "loc-river-via" for e in hydro.values()))
@@ -132,6 +133,7 @@ class TestDeclaredAutoresolveEdge(unittest.TestCase):
             world, hm, [river], [], occupied,
             resolve_river_type_classify(world),
             space=CoordinateSpace.WORLD_FINE_GRID,
+            topology=_river_test_topology(hm),
         )
         self.assertEqual(len(segments), 1)
         self.assertEqual(segments[0].polyline_cells[-1], (5950, 2000))
@@ -147,6 +149,7 @@ class TestDeclaredAutoresolveEdge(unittest.TestCase):
             {},
             resolve_river_type_classify(world),
             space=CoordinateSpace.WORLD_FINE_GRID,
+            topology=_river_test_topology(hm),
         )
         self.assertEqual(segments, [])
 
@@ -172,6 +175,7 @@ class TestDeclaredAutoresolveEdge(unittest.TestCase):
                 foothill_gradient_threshold=0.5,
             ),
             space=CoordinateSpace.WORLD_FINE_GRID,
+            topology=_river_test_topology(hm),
         )
         self.assertEqual(len(segments), 1)
         self.assertEqual(segments[0].connection_type, "mountain_river")
@@ -194,7 +198,7 @@ class TestAutoresolveEdge(unittest.TestCase):
         segments = autoresolve_river_segments(
             world, heightmap_from_z(surface_z),
             hydro_master(scopes=frozenset({HydrologyScope.RIVERS})),
-            occupied)
+            occupied, topology=_river_test_topology(heightmap_from_z(surface_z)))
         self.assertGreater(len(segments), 0)
         self.assertLessEqual(len(segments), MAX_RIVERS_PER_BBOX)
         self.assertEqual(len(segments), MAX_RIVERS_PER_BBOX)

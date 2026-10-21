@@ -1,8 +1,9 @@
 """Unit tests for procedural river autoresolve — D HY-5c."""
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology
 import unittest
 
-from app.application.worldData.generators.hydrology.riverNetworkAssembler import generate_rivers
+from app.application.worldData.generators.hydrology.riverNetworkAssembler import assemble_rivers
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
 )
@@ -45,7 +46,7 @@ class TestRiverPlanner(unittest.TestCase):
             (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
             for gx in range(6)
         }
-        path = plan_descent_path(hm, (3, 5), occupied)
+        path = plan_descent_path(hm, (3, 5), occupied, topology=_river_test_topology(hm))
         self.assertGreaterEqual(len(path), 2)
         self.assertEqual(path[-1][1], 0)
 
@@ -62,11 +63,11 @@ class TestRiverAutoresolve(unittest.TestCase):
             for gx in range(8)
         }
         master = hydro_master(scopes=frozenset({HydrologyScope.RIVERS}))
-        segments = autoresolve_river_segments(_world(), hm, master, occupied)
+        segments = autoresolve_river_segments(_world(), hm, master, occupied, topology=_river_test_topology(hm))
         self.assertGreater(len(segments), 0)
         self.assertFalse(segments[0].declared)
 
-    def test_generate_rivers_autoresolve_with_occupied_ocean(self):
+    def test_assemble_rivers_autoresolve_with_occupied_ocean(self):
         surface_z = {(gx, gy): 10 for gx in range(8) for gy in range(8)}
         for gy in range(1, 8):
             surface_z[(4, gy)] = 10 + gy * 6
@@ -76,16 +77,17 @@ class TestRiverAutoresolve(unittest.TestCase):
             for gx in range(8)
         }
         master = hydro_master(scopes=frozenset({HydrologyScope.RIVERS}))
-        merged, segments, _bbox = generate_rivers(
+        result = assemble_rivers(
             _world(),
             hm,
             master,
             occupied=occupied,
             locations=[],
+            topology=_river_test_topology(hm),
         )
-        roles = {entry.role for entry in merged.values()}
+        roles = {entry.role for entry in result.by_cell.values()}
         self.assertIn(HydrologyCellRole.RIVER_BED, roles)
-        self.assertGreater(len(segments), 0)
+        self.assertGreater(len(result.segments), 0)
 
 
 if __name__ == "__main__":

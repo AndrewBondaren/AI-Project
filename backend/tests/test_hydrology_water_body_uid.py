@@ -1,5 +1,6 @@
 """water_body_uid stamps on every hydrology carve path — review-debt-7plus step 3."""
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
 import unittest
 
 from tests.hydrology_geometry_helpers import apply_test_river
@@ -97,7 +98,7 @@ class WaterBodyUidTests(unittest.TestCase):
             }],
         })
         surface_z = {(gx, 9000): 10 for gx in range(3000, 6001)}
-        hydro, _ = apply_declared_fine_river_carves(w, [], surface_z)
+        hydro, _ = apply_declared_fine_river_carves(w, [], surface_z, topology=_river_test_topology(_river_test_heightmap(surface_z)))
         self.assertTrue(hydro)
         self.assertTrue(all(e.water_body_uid == "loc-river" for e in hydro.values()))
 
@@ -118,7 +119,7 @@ class WaterBodyUidTests(unittest.TestCase):
             for gx in range(2000, 6001)
             for gy in range(1950, 2051)
         }
-        hydro, _ = apply_declared_fine_river_carves(w, [], surface_z)
+        hydro, _ = apply_declared_fine_river_carves(w, [], surface_z, topology=_river_test_topology(_river_test_heightmap(surface_z)))
         self.assertTrue(hydro)
         self.assertTrue(all(e.water_body_uid == "loc-river-ep" for e in hydro.values()))
 

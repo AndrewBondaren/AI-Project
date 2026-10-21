@@ -1,5 +1,6 @@
 """Unit tests for declare river carve — D HY-4."""
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology
 import unittest
 
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
@@ -34,7 +35,7 @@ class TestDeclareRiverSegments(unittest.TestCase):
                 connection_type="river",
             ),
         ]
-        segs = segments_from_declared(edges)
+        segs = segments_from_declared(edges, topology=_river_test_topology(_flat()))
         self.assertEqual(len(segs), 2)
         self.assertEqual(segs[0].connection_type, "mountain_river")
         self.assertTrue(segs[0].declared)

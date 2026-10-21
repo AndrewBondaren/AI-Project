@@ -24,7 +24,7 @@ def autoresolve_river_segments(
     heightmap: SurfaceHeightmap,
     master: HydrologyMasterInput,
     occupied: dict[tuple[int, int], MapCellHydrology],
-    *, topology: WorldTopology | None = None,
+    *, topology: WorldTopology,
 ) -> list[RiverSegment]:
     type_classify = resolve_river_type_classify(world)
     polylines = plan_river_network(world, heightmap, occupied, type_classify, topology=topology)

@@ -3,21 +3,13 @@
 from collections.abc import Mapping
 
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
-from app.application.worldData.generators.hydrology.types import RiverSegment, RiverTypeClassify
+from app.application.worldData.generators.hydrology.types import RiverSegment
 from app.application.worldData.generators.hydrology.waterBodyIdentity import AutoWaterBodyRole, water_body_uid_for
 from app.application.worldData.generators.terrain.reliefObjects.riverBed import RiverBedSpec
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
-from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.topology.worldTopology import Coord
-
-
-def _channel_depth_step(connection_type: str, type_classify: RiverTypeClassify) -> int:
-    base = 1
-    if HydrologyConnectionType.from_wire(connection_type) == HydrologyConnectionType.MOUNTAIN_RIVER:
-        return max(1, int(round(base * type_classify.mountain_bed_steepness_factor)))
-    return base
 
 
 def river_bed_spec(heightmap: SurfaceHeightmap, segment: RiverSegment, *, depth_step: int,
@@ -30,7 +22,9 @@ def river_bed_spec(heightmap: SurfaceHeightmap, segment: RiverSegment, *, depth_
         if is_river_mouth(cell, heightmap.surface_z, occupied):
             break
         z = heightmap.surface_z[cell]
-        bed.append((cell, min(z, max(z_min, z - depth_step))))
+        lowered_z = max(z_min, z - depth_step)
+        # Carve must not lift an existing floor that is already below z_min.
+        bed.append((cell, min(z, lowered_z)))
     return RiverBedSpec(tuple(bed))
 
 

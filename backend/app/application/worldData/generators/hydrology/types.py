@@ -16,6 +16,7 @@ from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConne
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic
 from app.dataModel.hydrology.waterfallDrop import WaterfallDrop
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.locations.enums.geographicSubtype import (
@@ -156,7 +157,8 @@ class HydrologyCellIndex:
 class HydrologyResult:
     heightmap:      Any = None  # SurfaceHeightmap after carve; same ref as input
     cell_index:     HydrologyCellIndex = field(default_factory=HydrologyCellIndex)
-    river_segments: list[Any] = field(default_factory=list)
+    river_segments: list[RiverSegment] = field(default_factory=list)
+    river_diagnostics: tuple[RiverRouteDiagnostic, ...] = ()
     dirty_bbox:     GridBBox | None = None
     landforms:      Any = None
     waterfall_drops: tuple[WaterfallDrop, ...] = ()

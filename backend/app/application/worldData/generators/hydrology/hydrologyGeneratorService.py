@@ -58,6 +58,8 @@ class HydrologyGeneratorService:
             return result
         ctx = ctx or ResolveContext()
         active = resolve_scopes(inp.scopes)
+        topology = topology if topology is not None else resolve_hydrology_topology(
+            world, heightmap, locations=locations)
         policy = hydrology(world)
         seas = bool(active & {HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN})
         lakes = HydrologyScope.LAKES in active
@@ -69,7 +71,7 @@ class HydrologyGeneratorService:
                      if (lakes and policy.default_lakes.enabled if spec.kind is BasinKind.LAKE
                          else seas and policy.default_seas.enabled)]
             water = assemble_water_bodies(
-                heightmap, specs, topology or resolve_hydrology_topology(world, heightmap, locations=locations),
+                heightmap, specs, topology,
                 policy, change_uid=change_uid if change_uid is not None else initial_water_change_uid(world.world_uid),
                 auto_seas=bool(seas and policy.default_seas.enabled and (
                     policy.default_seas.autoresolve_coastal_sea or policy.default_seas.autoresolve_open_ocean)),
@@ -89,9 +91,11 @@ class HydrologyGeneratorService:
                 result.dirty_bbox = GridBBox(min(xs), max(xs), min(ys), max(ys))
         if HydrologyScope.RIVERS in active:
             rivers = assemble_rivers(world, heightmap, inp, occupied=result.cell_index.by_cell,
-                                     locations=locations, topology=topology)
+                                     locations=locations, topology=topology,
+                                     water_bodies=result.water_bodies, ctx=ctx)
             result.cell_index.by_cell.update(rivers.by_cell)
             result.river_segments = rivers.segments
+            result.river_diagnostics = rivers.diagnostics
             result.waterfall_drops = rivers.drops
             result.dirty_bbox = _merge_bbox(result.dirty_bbox, rivers.dirty_bbox)
         if HydrologyScope.LANDFORMS in active:

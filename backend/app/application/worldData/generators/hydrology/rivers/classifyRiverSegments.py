@@ -13,14 +13,15 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 
 
-def segments_from_declared(edges: list[DeclaredRiverEdge], *, topology: WorldTopology | None = None) -> list[RiverSegment]:
+def segments_from_declared(edges: list[DeclaredRiverEdge], *, topology: WorldTopology) -> list[RiverSegment]:
     """U18: bundle edges already typed — no re-classify."""
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("declared river geometry requires an explicit WorldTopology")
     segments: list[RiverSegment] = []
     for edge in edges:
         cells = bresenham_line(*edge.segment[0], *edge.segment[1])
-        if topology is not None:
-            cells = list(dict.fromkeys(canonical for cell in cells
-                         if (canonical := topology.canonicalize(*cell)) is not None))
+        cells = list(dict.fromkeys(canonical for cell in cells
+                     if (canonical := topology.canonicalize(*cell)) is not None))
         segments.append(RiverSegment(
             polyline_cells=cells,
             connection_type=edge.connection_type,

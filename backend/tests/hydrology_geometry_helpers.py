@@ -25,7 +25,7 @@ def water_side_seeds(coast, segments, hm, centroid, *, topology):
 
 def apply_test_river(hm, segment, *, depth_step, occupied=None, z_min=0):
     """Test the profile → relief → roles contract explicitly."""
-    from app.application.worldData.generators.hydrology.rivers.riverBedCarver import river_bed_spec, river_bed_roles
+    from app.application.worldData.generators.hydrology.rivers.riverBedProfile import river_bed_spec, river_bed_roles
     from app.application.worldData.generators.terrain.reliefObjects.riverBed import apply_river_bed_z
     spec = river_bed_spec(hm, segment, depth_step=depth_step, occupied=occupied or {}, z_min=z_min)
     apply_river_bed_z(hm, (spec,))

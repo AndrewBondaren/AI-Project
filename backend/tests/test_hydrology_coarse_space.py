@@ -1,5 +1,6 @@
 """Declared hydrology (fine cells) → coarse pass on WORLD_SURFACE_GRID."""
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology
 import unittest
 from types import SimpleNamespace
 
@@ -67,7 +68,7 @@ class TestCoarseMasterInput(unittest.TestCase):
         self.assertTrue(set(result.cell_index.by_cell) <= set(hm.surface_z))
         self.assertEqual(hm.surface_z, before_fill)
 
-    def test_river_into_lake_keeps_lake_cells(self):
+    def test_river_without_resolved_lake_is_not_materialized(self):
         # Declared lakes are carved/role'd by the pre-1.4 placement pass (HY-12/3b);
         # the legacy apply path emits no LAKE cells for them anymore.
         river_into_lake = {
@@ -89,7 +90,8 @@ class TestCoarseMasterInput(unittest.TestCase):
 
         self.assertFalse(cells(lake_only, HydrologyCellRole.LAKE))
         self.assertEqual(cells(with_river, HydrologyCellRole.LAKE), cells(lake_only, HydrologyCellRole.LAKE))
-        self.assertTrue(cells(with_river, HydrologyCellRole.RIVER_BED))
+        self.assertFalse(cells(with_river, HydrologyCellRole.RIVER_BED))
+        self.assertEqual(with_river.river_diagnostics[0].code.value, "RIVER_NO_WATER_BODIES")
 
 
 class TestRiverIntentSpace(unittest.TestCase):
@@ -99,6 +101,7 @@ class TestRiverIntentSpace(unittest.TestCase):
         intents = load_declared_hydrology(w, []).river_intents
         return resolve_declared_river_intents(
             w, hm, intents, [], {}, resolve_river_type_classify(w), space=space,
+            topology=_river_test_topology(hm),
         )
 
     def test_endpoints_projected_to_surface_grid(self):
@@ -107,7 +110,7 @@ class TestRiverIntentSpace(unittest.TestCase):
         self.assertEqual((cells[0], cells[-1]), ((2, 2), (6, 2)))
 
     def test_endpoints_kept_on_fine_grid(self):
-        segments = self._resolve(CoordinateSpace.WORLD_FINE_GRID, _flat_heightmap(1, 1))
+        segments = self._resolve(CoordinateSpace.WORLD_FINE_GRID, flat_heightmap(2000, 6000, 2000, 2000))
         cells = segments[0].polyline_cells
         self.assertEqual((cells[0], cells[-1]), ((2000, 2000), (6000, 2000)))
 

@@ -1,5 +1,6 @@
 """HY-12/6 acceptance: real coarse bake and declared → placement → relief → water → river."""
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
 import unittest
 
 from scripts.smoke_hydrology_hy12 import REPO, coarse_snapshot, load_fixture, render_svg
@@ -150,8 +151,8 @@ class UnifiedWaterAcceptance(unittest.TestCase):
         world = basin_world(river=True)
         segment = world.hydrology["declared_rivers"][0]["segments"][0]
         world.hydrology["declared_rivers"][0]["segments"].append(dict(segment))
-        _, z = apply_declared_fine_river_carves(world, [], {(x, 2): 20 for x in range(5)})
-        self.assertEqual(z[(3, 2)], 19)
+        _, z = apply_declared_fine_river_carves(world, [], {(x, 2): 20 for x in range(5)}, topology=_river_test_topology(_river_test_heightmap({(x, 2): 20 for x in range(5)})))
+        self.assertEqual(z[(3, 2)], 17)
 
 
 if __name__ == "__main__":

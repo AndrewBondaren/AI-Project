@@ -1,11 +1,14 @@
 """HY-12/5: receiving waterline, shared topology, absolute river relief."""
 
+from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
+from app.dataModel.topology.fineTopology import fine_topology
+from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.application.worldData.generators.hydrology.riverNetworkAssembler import assemble_rivers
-from app.application.worldData.generators.hydrology.rivers.riverBedCarver import river_bed_spec
+from app.application.worldData.generators.hydrology.rivers.riverBedProfile import river_bed_spec
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
 from app.application.worldData.generators.hydrology.rivers.riverNetworkPlanner import plan_descent_path
 from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import resolve_river_type_classify
@@ -84,10 +87,11 @@ class RiverWaterlineTests(unittest.TestCase):
         occupied = {(2, 0): MapCellHydrology(water_body_uid="lake", z_water_level=10)}
         result = assemble_rivers(hydro_world(z_min=-20), hm, hydro_master(declared_river_edges=[
             DeclaredRiverEdge("edge", ((0, 0), (3, 0)), "river")]), occupied,
-            topology=hydro_topology(hm))
+               topology=hydro_topology(hm),
+           )
         self.assertEqual(result.segments[0].polyline_cells, [(0, 0), (1, 0), (2, 0)])
         self.assertEqual(set(result.by_cell), {(0, 0), (1, 0)})
-        self.assertEqual([(drop.upper_z, drop.lower_z) for drop in result.drops], [(29, 19), (19, 10)])
+        self.assertEqual([(drop.upper_z, drop.lower_z) for drop in result.drops], [(27, 17), (17, 10)])
         self.assertEqual(hm.surface_z[(2, 0)], 5)
         self.assertEqual(hm.surface_z[(3, 0)], 4)
 
@@ -122,9 +126,9 @@ class RiverWaterlineTests(unittest.TestCase):
         hydro, elevations = apply_declared_fine_river_carves(world, [],
             {(0, 0): 10, (1, 0): 5, (2, 0): -10},
             base_space=CoordinateSpace.WORLD_SURFACE_GRID,
-            coarse_hydro={(2, 0): MapCellHydrology(role=Role.LAKE, water_body_uid="lake", z_water_level=0)})
+            coarse_hydro={(2, 0): MapCellHydrology(role=Role.LAKE, water_body_uid="lake", z_water_level=0)}, topology=fine_topology(_river_test_topology(_river_test_heightmap({(0, 0): 10, (1, 0): 5, (2, 0): -10})), map_cell_fine_span(world)))
         self.assertEqual(set(hydro), {(x, 0) for x in range(4)})
-        self.assertEqual(elevations[(3, 0)], 4)
+        self.assertEqual(elevations[(3, 0)], 2)
         self.assertEqual(elevations[(4, 0)], -10)
 
     def test_pipeline_supplies_pre_river_elevation_to_fine_profiles(self):

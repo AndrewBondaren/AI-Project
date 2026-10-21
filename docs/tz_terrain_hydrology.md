@@ -616,6 +616,176 @@ D8-соседство — `topologyGeometry.neighbors8_unrolled` / `canonical_ne
 
 Fine river caller передаёт `base_space: CoordinateSpace` явно: production использует `WORLD_SURFACE_GRID`, standalone fine callers — `WORLD_FINE_GRID`. При coarse-входе профиль строится только для fine-клеток declare, с выборкой z из соответствующей coarse-клетки и защитой принимающей воды из `coarse_hydro`. Недостающая высота не заменяется выдуманным нулём. Это запись русла через тот же relief writer; полноценная L0 вода/bands остаётся HY-10.
 
+### River review-debt: согласованные решения (2026-10-21)
+
+Следующий контракт утверждён мастером для исправления review-debt шага 5/6
+([план](../.cursor/plans/hy-12-step5-review-debt.md)). Это целевые изменения;
+документационная фиксация не означает, что текущий код уже их реализует.
+R-1 реализован 2026-10-21: caller разрешает topology один раз, river geometry
+требует явный POJO, fine получает доменный lift от caller. R-4 реализован
+шагом 2: поле глубины и расчёт через POJO подключены к coarse/fine.
+Шагом 3 реализованы coarse R-3/R-5 и общий mouth query R-6; fine R-2/R-3
+остаётся шагу 4. POJO with_* и итоговая сверка документов — шаги 5–6.
+
+**Topology (R-1).** Caller один раз разрешает `WorldTopology` из мира.
+Нижележащие river-функции, выполняющие геометрические операции, требуют её
+явно; тесты также передают режим. Неявный PLANAR-fallback и повторный resolve
+внутри planner/helpers удаляются. Отсутствие topology — ошибка входа,
+не основание молча переключаться на planar или выбирать runtime-fallback.
+Read-only helpers готового canonical индекса без геометрии не требуют
+фиктивного topology-параметра.
+
+**Fine planning (R-2).** Resolved водный индекс доступен fine intents до
+построения маршрута. Защитное усечение `RiverBedSpec` на первой клетке воды
+сохраняет её дно, но не заменяет поиск принимающей воды при planning.
+Доступ к coarse воде в fine координатах не требует полного разворачивания мира.
+
+**Результат и runtime-fallback (R-3).** `river_segments` содержит фактически
+материализованные принятые участки. Отказавший объект не исчезает молча:
+обязательны явная диагностика и `WarningError` в логе. Runtime сначала пытается
+достичь заданной authored-цели; если это не удалось, разрешено перенаправить
+объект в ближайший **достижимый** водоём, включая другой водоём. Ближайший
+недостижимый кандидат не останавливает поиск достижимого. Выбор использует
+topology, соблюдает правила маршрута/спуска и детерминирован при равенстве
+кандидатов. UID перенаправленного объекта сохраняется, authored-цель
+не переписывается молча. Import/validate-only не маскируют ошибки
+runtime-перенаправлением.
+
+`WarningError` успешного перенаправления содержит полную информацию:
+
+- world UID;
+- UID и тип перенаправленного объекта;
+- исходную цель: UID водоёма и/или authored-координаты;
+- конкретную причину, по которой исходная цель не достигнута;
+- UID и тип водоёма, куда объект перенаправлен;
+- фактическую клетку устья.
+
+Если в мире **нет водоёмов**, материализовать объект нельзя: он пропускается,
+выпускается отдельный `WarningError` с UID/типом объекта, исходной целью и
+причиной «нет водоёмов». Если водоёмы есть, но **ни один не достижим**, объект
+также не материализуется, с отдельным `WarningError` и отличимой причиной.
+Генерация остальных объектов продолжается. Фиктивная вода, завершённое русло
+или частично материализованный отказавший объект не подставляются вместо отказа.
+
+Несколько рек могут иметь общую клетку принимающего устья. Сухой SHORE
+проходим. Невозможный обязательный участок маршрута нельзя молча пропустить:
+исходная попытка считается неудачной, после чего runtime использует описанный
+fallback. Неиспользуемый сейчас `plan_path_to_target` сам по себе не определяет
+контракт production-пути.
+
+**Глубина (R-4).** `world.hydrology.default_rivers.channel_depth_cells` —
+положительное целое поле POJO с default **3 cells**, вертикальная ось Z.
+Генератор читает модель; локального fallback-литерала нет. Имя
+`channel_depth_step_m` из прежнего примера ТЗ заменяется; метры не используются.
+Mountain-множитель `mountain_bed_steepness_factor` применяется к базовой глубине
+с текущим округлением `max(1, round(depth * factor))`: 3 × 1.5 даёт 4 cells.
+Это настройка глубины русла, не эвристика классификации типа реки. Добавление
+override глубины отдельной authored реки данным решением не утверждено.
+
+Реализовано шагом 2 review-debt: `HydrologyRiversPolicy.channel_depth_for` —
+публичный typed API расчёта глубины по `HydrologyConnectionType.RIVER` /
+`MOUNTAIN_RIVER`. Значение поля — strict int > 0; missing использует default
+из POJO, supplied null/ноль/отрицательное/boolean/string/float отклоняются
+общим import/runtime resolver, без локальной подстановки глубины. Оба
+materializer читают `hydrology(world).default_rivers`. Spec/role emission
+находится в `rivers/riverBedProfile.py`; прежний приватный depth-helper и
+модуль с именем Carver удалены. Writer остаётся в relief.
+
+
+**Specs (R-5).** Наружное поле `AssembledRivers.bed_specs` удаляется: код и ТЗ
+не содержат его внешнего потребителя, relief apply уже выполняется внутри
+assembler. Это лишний новый выходной контракт шага 5, а не legacy-требование.
+Сам `RiverBedSpec` остаётся обязательным внутренним этапом
+planner → specs → relief apply → роли.
+
+**Допуск authored mouth (R-6).** Допуск поиска принимающей воды возле
+authored-точки задаётся настраиваемой policy в **world-fine cells**, с одинаковым
+физическим смыслом в coarse/fine проходах. Default, согласованный мастером, —
+**200 world-fine cells** (размер клетки L2). Coarse-проход пересчитывает это
+расстояние в свою сетку; это не 200 coarse/L0-клеток. Старый литерал 24
+заменяется. Этот локальный допуск и выбор
+другого тела при runtime-fallback — разные операции.
+
+**Сохранение поведения при рефакторинге.** River carve не должен поднимать уже
+низкий рельеф: при входе `z < z_min` нельзя безусловно заменять
+`min(z, max(z_min, z-depth))` на `max(z_min, z-depth)` без нового входного
+инварианта. POJO `with_*` должны сохранять все поля и валидацию обновлений;
+голый `model_copy(update=...)` конструкторную валидацию не заменяет.
+
+### River routing: кодовые контракты review-debt шага 3
+
+Инвентаризация не обнаружила готового river routing diagnostic POJO. Используются
+существующие `HydrologyMouth`, `Coord`, `HydrologyConnectionType`, `BasinKind`,
+`WaterBody`, `ResolveContext` и sinks `FieldPathError`/`log_issues`/`report_issues`.
+Новый `dataModel/hydrology/riverRouting.py` содержит только диагностические
+контракты, не resolver размещения, persistence или lifecycle.
+
+`RiverRoutingCode` — закрытый enum: `RIVER_REDIRECTED`, `RIVER_NO_WATER_BODIES`,
+`RIVER_NO_REACHABLE_WATER`, `RIVER_TARGET_UNREACHABLE`, `RIVER_INVALID_SOURCE`.
+`RiverRoutingFailure` — закрытый enum причин: отсутствующая геометрия/опора/клетка
+рельефа, разрыв маршрута, подъём, недопустимый поворот, занятое русло, сухой конец,
+другое принимающее тело, превышение бюджета пути, исток уже в воде, отсутствие
+идентичности/типа принимающей воды. `RiverRouteDiagnostic` — frozen POJO:
+`world_uid`, `object_uid` (opaque существующие UID, осознанно `str`),
+`object_type: HydrologyConnectionType`, `requested_mouth: HydrologyMouth | None`,
+`code: RiverRoutingCode`, `reason: RiverRoutingFailure`,
+`source_cell/failure_cell/receiver_cell: Coord | None` (world-fine координаты),
+`receiver_uid: str | None` (opaque UID), `receiver_kind: BasinKind | None`,
+`receiver_level: int | None`. Только перенаправление требует заполненных
+receiver UID/kind/cell. Для coarse-входа координаты диагностики проецируются
+через общий coordinate hub; исходные fine-координаты authored mouth сохраняются,
+если они присутствуют в declare. У геометрических edges без исходного fine-record
+логируется fine-проекция известной coarse-цели, не выдуманная точная позиция.
+
+`AssembledRivers.diagnostics` и `HydrologyResult.river_diagnostics` содержат tuple
+этих фактов. `river_segments` содержит только принятые материализованные части.
+Диагностика отправляется в общий WarningError sink как JSON из POJO, без ручной
+сборки/потери полей. Runtime сохраняет identity и исходную цель объекта.
+
+Одна authored река с несколькими segments принимается атомарно: до relief apply
+проверяется полный обязательный маршрут. Отказ не оставляет частичного bed/roles.
+Исходный прямой маршрут усечён на первой воде; для явно указанного UID требуется
+именно это тело, для геометрического mouth без UID допускается первая вода на
+пути. Отсутствующие обязательные anchors не пропускаются. Shared mouth допускается,
+перекрытие чужого interior river bed запрещено. Сухой SHORE не блокирует путь.
+
+Fallback заново ищет маршрут от прежнего истока по D8-соседям домена topology,
+по готовому pre-bed terrain: без подъёма, с существующим ограничением поворота,
+без пересечения чужого русла. Для входа в воду используется уровень тела, если
+известен, а не глубокое дно. Ранжируются только достижимые принимающие клетки:
+минимальная topology `dist2` от исходной цели (при неизвестной координате цели —
+от истока), затем `(y, x, body_uid)` для детерминизма. Для каждой клетки путь
+находится по состояниям `(previous, current)`, чтобы отказ одного поворота
+не скрывал другой допустимый подход. Устье не используется как транзит в другое
+тело. Приёмник fallback должен иметь существующий UID и известный `BasinKind`
+из `WaterBody` либо однозначной open-water роли; метаданные не выдумываются.
+
+В `HydrologyRiversPolicy` добавляются `mouth_search_radius_fine` (strict int ≥0,
+default **200**) и `max_path_cells` (strict int ≥2, default **128** — перенос
+существующего алгоритмического лимита planner в POJO). Старый лимит planner
+не становится вторым SoT. Допуск привязки authored mouth сравнивается в единой
+fine-метрике: query сохраняет authored fine-позицию, coarse-кандидаты
+проецируются через coordinate hub, topology поднимается доменным fine_topology.
+Радиус не округляется до целой coarse-клетки. Fallback по всему входному
+resolved индексу не ограничивается этим локальным допуском.
+
+Runtime-fallback разрешён только при runtime context без `validate_only`.
+Import/preview возвращают `RIVER_TARGET_UNREACHABLE` для исходной попытки,
+без перенаправления. При отсутствии resolved принимающей воды во входном
+мировом индексе — `RIVER_NO_WATER_BODIES`; если вода есть, но пути или полных
+метаданных приёмника нет — `RIVER_NO_REACHABLE_WATER`. Это факты доступного
+snapshot, не догадка о неизвестной части мира. Исток вне готового terrain либо
+уже в воде — `RIVER_INVALID_SOURCE`. Независимые объекты продолжаются.
+Диагностика покрывает каждый запрос материализации, переданный assembler,
+включая неудачные declared intents. Отброшенные candidate sources внутреннего
+процедурного planner ещё не являются объектами; их отбор остаётся HY-RIV-1.
+
+Новые application modules `riverRouteRequests`, `riverRouting`,
+`riverRouteDiagnostics`, `riverPrepare` разделяют подготовку входов, геометрию,
+реакцию на факты и эмиссию профилей. Assembler только оркестрирует их.
+Подключение той же схемы к fine planning остаётся шагу 4; текущий шаг не
+объявляет fine cutover выполненным.
+
 ### `RiverTypeClassifier` (U17 + U18)
 
 **Pure read-only** (как `CoastalLandformClassifier`): **не** mutates heightmap, **не** persist, **не** строит `ConnectionEdge`.
@@ -646,7 +816,7 @@ def classify_river_segments(
 **Вход:** smoothed polyline + Pass 1 terrain / `surface_z`. **Выход:** `list[RiverSegment]`.  
 **Config:** `default_rivers.type_classify`. **Declare** edges в bundle — classifier **skip** (решение в `HydrologyGeneratorService.apply`, U18).
 
-### `RiverBedCarver`
+### `RiverBedProfile`
 
 **Вход:** `SurfaceHeightmap`, `list[RiverSegment]` (или polyline + parallel type list), shore/bands policy.  
 **Не** принимает `ConnectionEdge`.
@@ -660,7 +830,7 @@ def classify_river_segments(
 ```json
 {
   "river_width_cells": 1,
-  "channel_depth_step_m": 1,
+  "channel_depth_cells": 3,
   "max_turn_angle_deg": 45
 }
 ```
@@ -794,6 +964,7 @@ flowchart LR
   "hydrology": {
     "enabled": true,
     "default_rivers": {
+      "channel_depth_cells": 3,
       "enabled": true,
       "autoresolve": true,
       "bands": { "min": 1, "max": 5 },

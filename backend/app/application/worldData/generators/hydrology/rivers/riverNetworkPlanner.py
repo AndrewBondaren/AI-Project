@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.math import world_seed
-from app.application.worldData.generators.hydrology.rivers.riverGeometry import distance_to_mouths, river_topology, river_turn_ok
+from app.application.worldData.generators.hydrology.rivers.riverGeometry import distance_to_mouths, river_turn_ok
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
 from app.dataModel.topology.topologyGeometry import canonical_neighbors8, dist2
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -13,9 +13,10 @@ from app.application.worldData.generators.hydrology.types import RiverTypeClassi
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+from app.application.jsonValidation.worldRow import hydrology
 
 MAX_RIVERS_PER_BBOX = 8
-MAX_PATH_CELLS = 128
 # Fraction of post-1.4 land_z_max for source floor when policy half-cap is too high.
 RIVER_SOURCE_LAND_Z_FRACTION = 0.5
 
@@ -76,9 +77,10 @@ def find_river_sources(
     type_classify: RiverTypeClassify,
     *,
     world_uid: str,
-    topology: WorldTopology | None = None,
+    topology: WorldTopology,
 ) -> list[tuple[int, int]]:
-    topology = river_topology(heightmap, topology)
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("river geometry requires an explicit WorldTopology")
     min_z = _river_source_min_z(heightmap, type_classify)
     locals_ = _local_max_sources(heightmap, occupied, min_z=min_z, topology=topology)
     ordered: list[tuple[int, int]] = []
@@ -97,9 +99,10 @@ def plan_descent_path(
     heightmap: SurfaceHeightmap,
     source: tuple[int, int],
     occupied: dict[tuple[int, int], MapCellHydrology],
-    *, topology: WorldTopology | None = None,
+    *, topology: WorldTopology, policy: HydrologyRiversPolicy | None = None,
 ) -> list[tuple[int, int]]:
-    topology = river_topology(heightmap, topology)
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("river geometry requires an explicit WorldTopology")
     if source not in heightmap.surface_z:
         return []
 
@@ -109,7 +112,8 @@ def plan_descent_path(
     visited = {source}
     current = source
 
-    while len(path) < MAX_PATH_CELLS:
+    path_limit = (policy or HydrologyRiversPolicy()).max_path_cells
+    while len(path) < path_limit:
         if is_river_mouth(current, heightmap.surface_z, occupied):
             return path if len(path) >= 2 else []
 
@@ -153,10 +157,11 @@ def plan_path_to_target(
     source: tuple[int, int],
     target: tuple[int, int],
     occupied: dict[tuple[int, int], MapCellHydrology],
-    *, topology: WorldTopology | None = None,
+    *, topology: WorldTopology, policy: HydrologyRiversPolicy | None = None,
 ) -> list[tuple[int, int]]:
     """D8 descent biased toward a fixed mouth cell (declare endpoints/via)."""
-    topology = river_topology(heightmap, topology)
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("river geometry requires an explicit WorldTopology")
     if source not in heightmap.surface_z or target not in heightmap.surface_z:
         return []
     if source == target:
@@ -166,7 +171,8 @@ def plan_path_to_target(
     visited = {source}
     current = source
 
-    while len(path) < MAX_PATH_CELLS:
+    path_limit = (policy or HydrologyRiversPolicy()).max_path_cells
+    while len(path) < path_limit:
         if current == target:
             return path if len(path) >= 2 else []
         if is_river_mouth(current, heightmap.surface_z, occupied):
@@ -214,11 +220,11 @@ def plan_river_network(
     heightmap: SurfaceHeightmap,
     occupied: dict[tuple[int, int], MapCellHydrology],
     type_classify: RiverTypeClassify,
-    *, topology: WorldTopology | None = None,
+    *, topology: WorldTopology,
 ) -> list[list[tuple[int, int]]]:
     """Return polylines (cell lists) source → mouth on liquid."""
-    from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
-    topology = topology or resolve_hydrology_topology(world, heightmap)
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("river planning requires an explicit WorldTopology")
     world_uid = getattr(world, "world_uid", "world")
     sources = find_river_sources(heightmap, occupied, type_classify, world_uid=world_uid, topology=topology)
     if not sources:
@@ -236,7 +242,7 @@ def plan_river_network(
             break
         if source in claimed:
             continue
-        path = plan_descent_path(heightmap, source, occupied, topology=topology)
+        path = plan_descent_path(heightmap, source, occupied, topology=topology, policy=hydrology(world).default_rivers)
         if len(path) < 2:
             continue
         interior = set(path[:-1])
