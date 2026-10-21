@@ -96,6 +96,7 @@ class HydrologyGeneratorService:
             result.cell_index.by_cell.update(rivers.by_cell)
             result.river_segments = rivers.segments
             result.river_diagnostics = rivers.diagnostics
+            result.river_drainage_links = rivers.drainage_links
             result.waterfall_drops = rivers.drops
             result.dirty_bbox = _merge_bbox(result.dirty_bbox, rivers.dirty_bbox)
         if HydrologyScope.LANDFORMS in active:

@@ -22,13 +22,6 @@ class WaterBody(BaseModel):
     parent_system_uid: DefaultWhenMissing[str | None] = None
 
     def with_parent_system(self, parent_system_uid: str | None) -> Self:
-        return type(self)(
-            water_body_uid=self.water_body_uid,
-            location_uid=self.location_uid,
-            kind=self.kind,
-            liquid=self.liquid,
-            declared_level=self.declared_level,
-            z_water_level=self.z_water_level,
-            declared_basin_uid=self.declared_basin_uid,
-            parent_system_uid=parent_system_uid,
-        )
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "parent_system_uid": parent_system_uid,
+        })

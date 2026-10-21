@@ -56,7 +56,7 @@ def apply_declared_fine_river_carves(
     merged = {}
     for job in jobs:
         for segment, spec in zip(job.segments, job.specs, strict=True):
-            merged.update(river_bed_roles(segment, spec))
+            merged.update(river_bed_roles(segment, spec, drainage=job.drainage))
         for diagnostic in job.diagnostics:
             emit_river_diagnostic(ctx, diagnostic)
     return merged, hm.surface_z

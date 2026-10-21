@@ -22,6 +22,7 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic
+from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.waterfallDrop import WaterfallDrop
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
@@ -36,6 +37,7 @@ class AssembledRivers:
     dirty_bbox: GridBBox | None
     drops: tuple[WaterfallDrop, ...]
     diagnostics: tuple[RiverRouteDiagnostic, ...]
+    drainage_links: tuple[RiverDrainageLink, ...] = ()
 
 
 def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: HydrologyMasterInput,
@@ -44,8 +46,16 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
                      water_bodies: Sequence[WaterBody] = (), ctx: ResolveContext | None = None) -> AssembledRivers:
     """Return accepted materialized segments only; independent failures are explicit.
 
-    All profiles use one pre-bed snapshot. Shared receiving mouths are allowed;
-    occupied interior beds are reserved between objects. Runtime alone can reroute.
+    Segments are published only when their prepared profile has land bed cells;
+    the terminal receiving-water cell keeps its floor and public hydrology role.
+    All profiles use one pre-bed snapshot, applied by the relief writer once.
+    Shared receiving mouths are allowed; occupied interior beds are reserved
+    between objects. Dry SHORE is passable. A failed prepared request contributes
+    diagnostics without a partial bed. Runtime without validate_only may reroute
+    to the nearest reachable receiver; import/preview never redirect. The emitted
+    diagnostic records the object, original failure/target and actual receiver.
+    UID resolution, tributary confluences and invalid-type error isolation remain
+    review-round-2 work; this contract does not claim those fixes are complete.
     """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river assembly requires an explicit WorldTopology")
@@ -61,7 +71,7 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
                                   space=CoordinateSpace.WORLD_SURFACE_GRID)
     if policy.enabled and policy.autoresolve:
         auto = autoresolve_river_segments(world, heightmap, master, claims, topology=topology)
-        requests = [request_from_segments(world, (segment,), occupied, space=CoordinateSpace.WORLD_SURFACE_GRID)
+        requests = [request_from_segments(world, (segment,), occupied, heightmap.surface_z, space=CoordinateSpace.WORLD_SURFACE_GRID)
                     for segment in auto]
         jobs.extend(prepare_river_requests(world, heightmap, requests, claims, topology, policy, water_bodies, ctx, z_min,
                                            space=CoordinateSpace.WORLD_SURFACE_GRID))
@@ -69,7 +79,7 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
     merged, segments, drops = {}, [], []
     for job in jobs:
         for segment, spec in zip(job.segments, job.specs, strict=True):
-            merged.update(river_bed_roles(segment, spec))
+            merged.update(river_bed_roles(segment, spec, drainage=job.drainage))
             segments.append(segment)
             actual = RiverBedSpec(tuple((cell, heightmap.surface_z[cell]) for cell, _ in spec.bed_z))
             drops.extend(river_drop_facts(heightmap, segment, actual, occupied))
@@ -80,4 +90,5 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
     if merged:
         xs, ys = zip(*merged)
         dirty = GridBBox(min(xs), max(xs), min(ys), max(ys))
-    return AssembledRivers(merged, segments, dirty, tuple(drops), diagnostics)
+    return AssembledRivers(merged, segments, dirty, tuple(drops), diagnostics,
+                           tuple(job.drainage for job in jobs if job.drainage is not None))

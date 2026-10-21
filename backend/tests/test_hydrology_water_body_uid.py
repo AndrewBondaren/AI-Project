@@ -11,6 +11,7 @@ from app.application.worldData.generators.hydrology.types import (
     RiverSegment,
 )
 from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
+from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import (
     MapCellHydrology,
@@ -72,14 +73,14 @@ class WaterBodyUidTests(unittest.TestCase):
         declared = RiverSegment(polyline_cells=[(1, 1), (2, 1), (3, 1)],
                                 connection_type="river", edge_uid="e1",
                                 location_uid="loc-river", declared=True)
-        carved = apply_test_river(hm, declared, depth_step=1)
+        carved = apply_test_river(hm, declared, depth_step=1, z_min=world_z_min(_world()))
         self.assertTrue(carved)
         self.assertTrue(all(e.water_body_uid == "loc-river" for e in carved.values()))
         self.assertTrue(all(e.connection_edge_uid == "e1" for e in carved.values()))
         auto = apply_test_river(
             _flat_heightmap(0, 5, 0, 5),
             RiverSegment(polyline_cells=[(1, 1), (2, 1), (3, 1)], connection_type="river"),
-            depth_step=1)
+            depth_step=1, z_min=world_z_min(_world()))
         self.assertTrue(all(e.water_body_uid == "auto-river-1x1" for e in auto.values()))
 
     def test_fine_river_carve_stamps_uid(self):

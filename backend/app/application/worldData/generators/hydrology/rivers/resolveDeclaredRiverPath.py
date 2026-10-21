@@ -182,7 +182,17 @@ def resolve_declared_river_intents(
     space: CoordinateSpace,
     topology: WorldTopology,
 ) -> list[RiverSegment]:
-    """Modes endpoints / via_locations → classified segments (B2) in ``space`` of ``heightmap``."""
+    """Rasterize endpoints/via_locations intents into candidate segments.
+
+    Resolved water must be available before planning. Mouth snapping uses the
+    POJO mouth_search_radius_fine in world-fine cells in either working space,
+    with topology distance and deterministic ties. An empty rasterized leg
+    rejects the candidate instead of silently skipping that leg. Reaching water
+    ends rasterization; shared validation decides whether it is an acceptable
+    receiver. The caller handles failed requests and runtime fallback; this
+    resolver neither materializes beds nor publishes acceptance diagnostics.
+    Authored location/body UID separation remains review-round-2 work.
+    """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river intents require an explicit WorldTopology")
     to_space = _fine_to_space(world, space)

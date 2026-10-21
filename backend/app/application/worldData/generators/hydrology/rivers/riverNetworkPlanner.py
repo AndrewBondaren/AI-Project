@@ -99,7 +99,7 @@ def plan_descent_path(
     heightmap: SurfaceHeightmap,
     source: tuple[int, int],
     occupied: dict[tuple[int, int], MapCellHydrology],
-    *, topology: WorldTopology, policy: HydrologyRiversPolicy | None = None,
+    *, topology: WorldTopology, policy: HydrologyRiversPolicy,
 ) -> list[tuple[int, int]]:
     if not isinstance(topology, WorldTopology):
         raise TypeError("river geometry requires an explicit WorldTopology")
@@ -112,7 +112,7 @@ def plan_descent_path(
     visited = {source}
     current = source
 
-    path_limit = (policy or HydrologyRiversPolicy()).max_path_cells
+    path_limit = policy.max_path_cells
     while len(path) < path_limit:
         if is_river_mouth(current, heightmap.surface_z, occupied):
             return path if len(path) >= 2 else []
@@ -157,9 +157,14 @@ def plan_path_to_target(
     source: tuple[int, int],
     target: tuple[int, int],
     occupied: dict[tuple[int, int], MapCellHydrology],
-    *, topology: WorldTopology, policy: HydrologyRiversPolicy | None = None,
+    *, topology: WorldTopology, policy: HydrologyRiversPolicy,
 ) -> list[tuple[int, int]]:
-    """D8 descent biased toward a fixed mouth cell (declare endpoints/via)."""
+    """Standalone D8 descent biased toward target; no production callers.
+
+    May stop at an earlier receiving-water cell instead of reaching target.
+    Declared intents use their own rasterization and shared route validation;
+    this helper does not define their target acceptance or runtime fallback.
+    """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river geometry requires an explicit WorldTopology")
     if source not in heightmap.surface_z or target not in heightmap.surface_z:
@@ -171,7 +176,7 @@ def plan_path_to_target(
     visited = {source}
     current = source
 
-    path_limit = (policy or HydrologyRiversPolicy()).max_path_cells
+    path_limit = policy.max_path_cells
     while len(path) < path_limit:
         if current == target:
             return path if len(path) >= 2 else []
@@ -222,7 +227,13 @@ def plan_river_network(
     type_classify: RiverTypeClassify,
     *, topology: WorldTopology,
 ) -> list[list[tuple[int, int]]]:
-    """Return polylines (cell lists) source → mouth on liquid."""
+    """Return candidate polylines, not accepted materialized river segments.
+
+    Dry SHORE may host a source or route cell; receiving water and existing
+    river beds exclude sources. Interiors cannot overlap claimed cells, but
+    routes may share their terminal receiving-water cell. Assembly separately
+    validates requests, prepares profiles and publishes materialized segments.
+    """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river planning requires an explicit WorldTopology")
     world_uid = getattr(world, "world_uid", "world")

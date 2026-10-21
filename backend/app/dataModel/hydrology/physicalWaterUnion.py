@@ -17,37 +17,21 @@ class PhysicalWaterUnion(BaseModel):
     parent_system_uid: DefaultWhenMissing[str | None] = None
 
     def with_identity(self, water_system_uid: str, member_uids: tuple[str, ...]) -> Self:
-        return type(self)(
-            water_system_uid=water_system_uid,
-            member_uids=member_uids,
-            child_system_uids=self.child_system_uids,
-            z_water_level=self.z_water_level,
-            parent_system_uid=self.parent_system_uid,
-        )
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "water_system_uid": water_system_uid, "member_uids": member_uids,
+        })
 
     def with_parent_system(self, parent_system_uid: str | None) -> Self:
-        return type(self)(
-            water_system_uid=self.water_system_uid,
-            member_uids=self.member_uids,
-            child_system_uids=self.child_system_uids,
-            z_water_level=self.z_water_level,
-            parent_system_uid=parent_system_uid,
-        )
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "parent_system_uid": parent_system_uid,
+        })
 
     def with_child_systems(self, child_system_uids: tuple[str, ...]) -> Self:
-        return type(self)(
-            water_system_uid=self.water_system_uid,
-            member_uids=self.member_uids,
-            child_system_uids=child_system_uids,
-            z_water_level=self.z_water_level,
-            parent_system_uid=self.parent_system_uid,
-        )
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "child_system_uids": child_system_uids,
+        })
 
     def with_water_level(self, z_water_level: int) -> Self:
-        return type(self)(
-            water_system_uid=self.water_system_uid,
-            member_uids=self.member_uids,
-            child_system_uids=self.child_system_uids,
-            z_water_level=z_water_level,
-            parent_system_uid=self.parent_system_uid,
-        )
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "z_water_level": z_water_level,
+        })

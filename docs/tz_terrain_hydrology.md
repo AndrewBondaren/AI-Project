@@ -629,21 +629,23 @@ Fine river caller передаёт `base_space: CoordinateSpace` явно: produ
 
 ### River review-debt: согласованные решения (2026-10-21)
 
-Следующий контракт утверждён мастером для исправления review-debt шага 5/6
-([план](../.cursor/plans/hy-12-step5-review-debt.md)). Это целевые изменения;
-документационная фиксация не означает, что текущий код уже их реализует.
+Контракт утверждён мастером для исправления review-debt шага 5/6
+([план](../.cursor/plans/hy-12-step5-review-debt.md)). R-1…R-6 реализованы
+шагами 1–5; шаг 6 фиксирует сверенные семантики. Уточнения раунда 2 ниже
+отмечены отдельно как целевой контракт шага 7 и ещё не реализованы.
 R-1 реализован 2026-10-21: caller разрешает topology один раз, river geometry
 требует явный POJO, fine получает доменный lift от caller. R-4 реализован
 шагом 2: поле глубины и расчёт через POJO подключены к coarse/fine.
 Шагом 3 реализованы coarse R-3/R-5 и общий mouth query R-6. Шагом 4
 подключены fine planning с resolved водой и общий prepare/diagnostic job.
-POJO with_* и итоговая сверка документов — шаги 5–6; согласованные
-уточнения раунда 2 (UID, притоки, error boundary, metadata) — шаг 7.
+Шагом 5 реализованы POJO with_* с сохранением полей и валидации. Итоговая
+сверка документов выполнена шагом 6; согласованные уточнения раунда 2
+(UID, притоки, error boundary, metadata) остаются шагу 7.
 
 **Topology (R-1).** Caller один раз разрешает `WorldTopology` из мира.
 Нижележащие river-функции, выполняющие геометрические операции, требуют её
 явно; тесты также передают режим. Неявный PLANAR-fallback и повторный resolve
-внутри planner/helpers удаляются. Отсутствие topology — ошибка входа,
+внутри planner/helpers удалены. Отсутствие topology — ошибка входа,
 не основание молча переключаться на planar или выбирать runtime-fallback.
 Read-only helpers готового canonical индекса без геометрии не требуют
 фиктивного topology-параметра.
@@ -670,7 +672,11 @@ dict не являются контрактом writer. Shared request/prepare h
 чужим руслом при fine-уточнении; reservations между fine-объектами сохраняются.
 
 **Результат и runtime-fallback (R-3).** `river_segments` содержит фактически
-материализованные принятые участки. Отказавший объект не исчезает молча:
+материализованные принятые участки, а не все кандидаты planner. Сегмент
+публикуется, только если его подготовленный RiverBedSpec содержит клетки русла.
+Терминальная клетка принимающей воды может присутствовать в polyline, но не
+в bed_z: её дно, роль и UID сохраняются. Роли публикуются после relief apply.
+Отказавший объект не исчезает молча:
 обязательны явная диагностика и `WarningError` в логе. Runtime сначала пытается
 достичь заданной authored-цели; если это не удалось, разрешено перенаправить
 объект в ближайший **достижимый** водоём, включая другой водоём. Ближайший
@@ -696,11 +702,19 @@ runtime-перенаправлением.
 Генерация остальных объектов продолжается. Фиктивная вода, завершённое русло
 или частично материализованный отказавший объект не подставляются вместо отказа.
 
-Несколько рек могут иметь общую клетку принимающего устья. Сухой SHORE
-проходим. Невозможный обязательный участок маршрута нельзя молча пропустить:
-исходная попытка считается неудачной, после чего runtime использует описанный
-fallback. Неиспользуемый сейчас `plan_path_to_target` сам по себе не определяет
-контракт production-пути.
+Несколько рек могут иметь общую клетку принимающей воды: terminal mouth
+исключён из interior-проверки пересечений, а русла до него резервируются между
+объектами. Это не означает реализованного слияния с чужим RIVER_BED: притоки
+остаются шагу 7. Сухой SHORE не блокирует путь и сам по себе не исключает
+кандидатный исток; остальные требования к высоте и маршруту сохраняются.
+
+Пустой rasterized leg отклоняет candidate polyline вместо пропуска участка.
+Shared prepare проверяет связность и обязательную геометрию до writer;
+неудачная исходная попытка допускает описанный runtime-fallback.
+`plan_path_to_target` не имеет production callers: helper может закончиться
+на принимающей воде до target, но это не задаёт семантику declared intents.
+Их production-путь — rasterization → shared validate/prepare → relief apply.
+Известные дефекты UID и ранней границы ошибки типа перечислены в шаге 7.
 
 **Притоки и слияние рек — решение мастера по Q-2 раунда 2.**
 
@@ -773,7 +787,7 @@ materializer читают `hydrology(world).default_rivers`. Spec/role emission
 модуль с именем Carver удалены. Writer остаётся в relief.
 
 
-**Specs (R-5).** Наружное поле `AssembledRivers.bed_specs` удаляется: код и ТЗ
+**Specs (R-5).** Наружное поле `AssembledRivers.bed_specs` удалено: код и ТЗ
 не содержат его внешнего потребителя, relief apply уже выполняется внутри
 assembler. Это лишний новый выходной контракт шага 5, а не legacy-требование.
 Сам `RiverBedSpec` остаётся обязательным внутренним этапом
@@ -784,7 +798,9 @@ authored-точки задаётся настраиваемой policy в **worl
 физическим смыслом в coarse/fine проходах. Default, согласованный мастером, —
 **200 world-fine cells** (размер клетки L2). Coarse-проход пересчитывает это
 расстояние в свою сетку; это не 200 coarse/L0-клеток. Старый литерал 24
-заменяется. Этот локальный допуск и выбор
+заменён. Метрика — topology Euclidean distance (сравнение квадратов расстояний),
+а не Manhattan-кольца. Равные кандидаты упорядочиваются по координатам.
+Этот локальный допуск и выбор
 другого тела при runtime-fallback — разные операции.
 
 **Сохранение поведения при рефакторинге.** River carve не должен поднимать уже
@@ -792,6 +808,16 @@ authored-точки задаётся настраиваемой policy в **worl
 `min(z, max(z_min, z-depth))` на `max(z_min, z-depth)` без нового входного
 инварианта. POJO `with_*` должны сохранять все поля и валидацию обновлений;
 голый `model_copy(update=...)` конструкторную валидацию не заменяет.
+
+Кодовый контракт review-debt шага 5: `with_*` у PhysicalWaterUnion,
+WaterBody и MapCellHydrology сериализуют полную модель в Python round-trip
+форме с `by_alias=True`, обновляют только запрошенные поля и вызывают
+`type(self).model_validate`. Сохраняются alias новых полей; API совместим
+с заявленным Pydantic >=2.7, wire parsing policy не меняется.
+Сохраняются тип подкласса и его поля; field/model validators выполняются
+повторно. Не используются ручное перечисление неизменённых полей и
+невалидируемый model_copy(update=...). Имена и аргументы методов сохраняются.
+Тестовый apply_test_river требует явный z_min от caller; скрытого floor=0 нет.
 
 ### River routing: кодовые контракты review-debt шага 3
 
@@ -841,7 +867,7 @@ Fallback заново ищет маршрут от прежнего истока
 тело. Приёмник fallback должен иметь существующий UID и известный `BasinKind`
 из `WaterBody` либо однозначной open-water роли; метаданные не выдумываются.
 
-В `HydrologyRiversPolicy` добавляются `mouth_search_radius_fine` (strict int ≥0,
+В `HydrologyRiversPolicy` заданы `mouth_search_radius_fine` (strict int ≥0,
 default **200**) и `max_path_cells` (strict int ≥2, default **128** — перенос
 существующего алгоритмического лимита planner в POJO). Старый лимит planner
 не становится вторым SoT. Допуск привязки authored mouth сравнивается в единой
@@ -1812,3 +1838,9 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 `LakeSpec` и `HydrologyMasterInput.declared_lake_specs` временно сохраняются как **геометрия кольца** для pack tile collection/L0 и совместимых читателей, без kind-resolver/carve/физического уровня. Поле `open_water_role` снято. Их окончательное удаление зависит от миграции L0 в HY-10, которым текущая приёмка не является. `DeclaredLake` wire сохраняется и участвует в общем placement adapter.
 
 Приёмка: 523 tests OK (hydrology, landcover, topology, placement, bathymetry, terrain, pack bake/wire, DET-1 и SQLite schema), включая межпроцессный replay `PYTHONHASHSEED=0/1/42` с полными coarse-фактами fixture. HTTP/L0 full bake этим offline smoke не заявлены; backend агентом не запускался. HY-7/HY-9/HY-10, дополнительные Depression forms, GEO-1, HY-RIV-1, HY-WF-1 и W/L остаются отдельными треками.
+
+### Уточнение typed-контрактов раунда 2 (2026-10-22)
+
+Факт стока — frozen RiverDrainageLink: river_uid, receiver_uid (opaque str UID), receiver_kind: BasinKind | HydrologyConnectionType, receiver_cell: Coord в world-fine. AssembledRivers.drainage_links и HydrologyResult.river_drainage_links содержат tuple фактов; MapCellHydrology.river_drainage хранит optional тот же POJO, включая fine/persist путь. Это направленный сток, не authored parent/system group. Слияние допустимо только терминально с подтверждённым стоком принимающей реки до бассейна; транзит и циклы запрещены. Зависимости разрешаются до применения relief на одном pre-bed snapshot.
+
+RiverRouteDiagnostic.requested_receiver_uid хранит разрешённый UID отдельно от authored requested_mouth.location_uid. receiver_kind принимает BasinKind | HydrologyConnectionType. При невалидном типе object_type=None, rejected_connection_type: str | None сохраняет исходную строку: осознанное исключение для диагностики отклонённого wire-входа, без enum-подстановки. Код RIVER_INVALID_CONNECTION_TYPE, reason invalid_connection_type; fallback запрещён. При неуспешном поиске fallback_reason сохраняет самостоятельную причину (в том числе RECEIVER_METADATA), reason остаётся исходной. Исток на чужом bed — RIVER_INVALID_SOURCE с reason blocked_river_bed. Единый runtime-предикат: mode RUNTIME и не validate_only; вне runtime используются validation sinks. Helpers планирования требуют явную HydrologyRiversPolicy.

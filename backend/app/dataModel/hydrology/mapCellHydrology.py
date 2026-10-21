@@ -8,6 +8,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
@@ -32,6 +33,7 @@ class MapCellHydrology(BaseModel):
     shore_kind: DefaultWhenMissing[HydrologyShoreKind | None] = None
     water_body_uid: DefaultWhenMissing[str | None] = None
     z_water_level: DefaultWhenMissing[int | None] = None
+    river_drainage: DefaultWhenMissing[RiverDrainageLink | None] = None
 
     @classmethod
     def shore(
@@ -71,15 +73,9 @@ class MapCellHydrology(BaseModel):
         return bool(self.liquid_candidate)
 
     def with_water_level(self, z_water_level: int) -> Self:
-        return type(self)(
-            liquid_candidate=self.liquid_candidate,
-            role=self.role,
-            deepening_index=self.deepening_index,
-            connection_edge_uid=self.connection_edge_uid,
-            shore_kind=self.shore_kind,
-            water_body_uid=self.water_body_uid,
-            z_water_level=z_water_level,
-        )
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "z_water_level": z_water_level,
+        })
 
 
 def parse_cell_hydrology(raw: dict | None) -> MapCellHydrology | None:

@@ -6,6 +6,7 @@ from app.application.worldData.generators.coordinates.space import CoordinateSpa
 from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
 from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
 from app.dataModel.topology.fineTopology import fine_topology
+from app.dataModel.topology.worldTopology import WorldTopology
 
 from dataclasses import dataclass
 from app.application.jsonValidation.resolve import ResolveContext
@@ -100,6 +101,9 @@ def prepare_surface_terrain_context(
 
     topology = water.topology if water is not None else resolve_hydrology_topology(
         world, coarse_hm, locations=locations)
+
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("surface terrain requires resolved WorldTopology")
 
     # Pass 1.4 — mountain rise / ravine drop before hydrology detect (1.5).
     apply_relief_objects_z(
