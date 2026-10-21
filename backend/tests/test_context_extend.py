@@ -21,6 +21,8 @@ from app.dataModel.locations.settlement.settlement.settlementPayload import Sett
 from app.dataModel.cascade.cascadeSpec import (
     Cascade, CascadeChannel, CascadeDefault, CascadeLink, FieldRef, DefaultPolicy, ScopeAxis, RepeatScope,
 )
+from app.application.cascade import cascadeLog
+from app.dataModel.cascade import cascadeGraph
 from app.dataModel.cascade.cascadeGraph import ordered_scopes
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -397,7 +399,7 @@ class RuntimeLinkedListTests(unittest.TestCase):
             right=(Annotated[str | None,
                              CascadeChannel(right_param, AdditionalAxis.OTHER)], None),
         )
-        with patch("app.dataModel.cascade.cascadeGraph._source_models",
+        with patch(cascadeGraph.__name__ + "._source_models",
                    return_value={sources}):
             with self.assertRaisesRegex(ValueError, "ambiguous or cyclic"):
                 ordered_scopes((left_param, right_param), AdditionalAxis.ROOT)
@@ -900,7 +902,7 @@ class ExtendResolutionTests(unittest.TestCase):
         self.assertEqual(ctx.economic_tier, "t5")
 
     def test_median_warns_once_at_first_empty_scope(self):
-        module = "app.application.cascade.cascadeLog"
+        module = cascadeLog.__name__
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),

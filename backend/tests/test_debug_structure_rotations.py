@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
+from app.api.routes import debug as debug_routes
 from app.api.routes.debug import debug_generate_structure_rotations, _LogCapture
 from app.application.worldData.debugStructureRotations import generate_rotations, RotationProbe
 from app.application.worldData.generators.structure.errors import GenerationError
@@ -44,7 +45,7 @@ class DebugStructureRotationsTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def call_route(self, **kwargs):
-        with patch("app.api.routes.debug.JsonResolver.resolve", AsyncMock(return_value=self.plot)):
+        with patch(debug_routes.__name__ + ".JsonResolver.resolve", AsyncMock(return_value=self.plot)):
             return await debug_generate_structure_rotations(
                 self.world.world_uid, file=None, path=None, container=self.container, **kwargs,
             )

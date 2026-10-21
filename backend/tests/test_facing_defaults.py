@@ -1,6 +1,7 @@
 """Internal facing fallback keeps geometry and reports degraded generation."""
 import json
 import tempfile
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 from pydantic import ValidationError
 import unittest
@@ -10,12 +11,13 @@ from random import Random
 from app.core.generationLogging import generation_world_log
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.dataModel.locations.structure.room.shapeParams import ResolvedStemWall
+from app.application.worldData.generators.structure.shape import shapes
 from app.application.worldData.generators.structure.shape.shapes import footprint_t_shape, room_footprint
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from tests.test_structure_orientation import simple_structure, test_world_building
 
-LOGGER = "app.application.worldData.generators.structure.shape.shapes"
+LOGGER = shapes.__name__
 
 
 class FacingDefaultsTests(unittest.TestCase):
@@ -31,7 +33,7 @@ class FacingDefaultsTests(unittest.TestCase):
 
     def test_invalid_internal_direction_rejects_without_south_default(self):
         for value in (None, "", "bad", "any", "northeast", Facing.NORTHEAST, [], 12):
-            with self.subTest(value=value), self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+            with self.subTest(value=value), self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(UnresolvedModelError):
                 footprint_t_shape(0, 0, 6, 4, 2, value)
 
     def test_dispatch_does_not_hide_missing_direction(self):

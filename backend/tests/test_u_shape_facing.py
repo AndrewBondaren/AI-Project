@@ -4,9 +4,11 @@ from copy import deepcopy
 from random import Random
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.staircase.uShape import uShape
 from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing
 from app.application.worldData.generators.structure.staircase.uShape.uShape import UShapeBuilder
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_u_params
+from app.application.worldData.generators.structure.passages import builder as passages_builder
 from app.application.worldData.generators.structure.passages.builder import build_transitions
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
@@ -17,10 +19,6 @@ from app.db.models.locationLevel import LocationLevel
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building
 from tests import test_embedded_shaft
-
-BUILDER = "app.application.worldData.generators.structure.passages.builder"
-U_SHAPE = "app.application.worldData.generators.structure.staircase.uShape.uShape"
-
 
 class UShapeFacingTests(unittest.TestCase):
     def floors(self, footprint, side, z=6):
@@ -67,7 +65,7 @@ class UShapeFacingTests(unittest.TestCase):
         cells = self.floors(shaft.get_footprint(), Facing.EAST)
         builder = UShapeBuilder(fr, to, low, top, cells, "world", "building", "stone", "test",
                                 shaft=shaft, sc_entry=sc, passage_height=2)
-        with patch(U_SHAPE + "._compute_u_params", wraps=_compute_u_params) as compute:
+        with patch.object(uShape, "_compute_u_params", wraps=_compute_u_params) as compute:
             builder.build()
         self.assertEqual(compute.call_args.args[4], Facing.WEST)
         self.assertTrue(builder.path_set)
@@ -85,8 +83,8 @@ class UShapeFacingTests(unittest.TestCase):
         levels = {0: LocationLevel("lo", "building", 0, 6, "Low"),
                   1: LocationLevel("hi", "building", 6, 6, "Top")}
         cells = self.floors(shaft.get_footprint(), Facing.EAST)
-        with patch(BUILDER + "._build_archway", return_value=None) as arch, \
-             patch(BUILDER + ".build_staircase", return_value=(None, None)) as stairs:
+        with patch.object(passages_builder, "_build_archway", return_value=None) as arch, \
+             patch.object(passages_builder, "build_staircase", return_value=(None, None)) as stairs:
             build_transitions(cells, [fr, to, shaft, upper_shaft], [], levels,
                            {"hall": 0, "upper": 1, "shaft_lo": 0, "shaft_hi": 1},
                            "world", "building", Random(1), staircases=[sc])

@@ -15,6 +15,7 @@ from pathlib import Path
 from random import Random
 from unittest.mock import patch
 
+from app.application.cascade import cascadeLog
 from app.application.cascade.cascadeLink import EmptyLink
 from app.application.cascade.contextResolver import extend
 from app.application.cascade.locationScope import (
@@ -38,6 +39,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.application.worldData.generators.structure import structureGeneratorService as service
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
+from app.application.worldData.generators.structure.passages import wallOpening
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
 from app.application.worldData.generators.utils import materialResolver
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
@@ -140,8 +142,8 @@ def snapshot(*, band=None, building_tier=None):
 
     with ExitStack() as stack:
         stack.enter_context(patch.object(materialResolver, "resolve_material", side_effect=resolve_material))
-        stack.enter_context(patch("app.application.worldData.generators.structure.passages.wallOpening.resolve_material",
-                                  side_effect=resolve_material))
+        stack.enter_context(patch.object(wallOpening, "resolve_material",
+                                        side_effect=resolve_material))
         stack.enter_context(patch.object(service, "instantiate_level_rooms",
                                         side_effect=lambda *a, **k: record_rooms(original_rooms, *a, **k)))
         stack.enter_context(patch.object(service, "instantiate_shaft_rooms",
@@ -305,7 +307,7 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # to the registry median — even when a deeper authored link
         # later overrides the provisional default.
         world, building, _ = fixture()
-        log_target = "app.application.cascade.cascadeLog"
+        log_target = cascadeLog.__name__
         with self.assertLogs(log_target, level="WARNING") as captured:
             self.assertEqual(
                 debug_building_context(world, building).economic_tier, "t5",

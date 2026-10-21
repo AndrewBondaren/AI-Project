@@ -7,14 +7,12 @@ from app.application.worldData.debugStructureRotations import RotationProbe
 from app.application.worldData.generators.structure.cellBuilder import (
     _interior, pass2_floors, pass3_interior_walls,
 )
+from app.application.worldData.generators.structure.passages import builder as passages_builder
 from app.application.worldData.generators.structure.passages.archway import _build_archway
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from tests import test_embedded_shaft
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
-
-BUILDER = "app.application.worldData.generators.structure.passages.builder"
-
 
 class ShaftWallTests(unittest.TestCase):
     def cell_rooms(self, embedded=True, center=False, has_walls=False):
@@ -65,7 +63,7 @@ class ShaftWallTests(unittest.TestCase):
                 template.staircases[0]["has_walls"] = has_walls
                 before = deepcopy(template.model_dump())
                 probe = RotationProbe()
-                with patch(BUILDER + "._build_archway", wraps=_build_archway) as arches:
+                with patch.object(passages_builder, "_build_archway", wraps=_build_archway) as arches:
                     result = probe.generate_from_template(world, building, template)
                 self.assertEqual(arches.call_count, 2 if has_walls else 0)
                 self.assertEqual(template.model_dump(), before)
@@ -88,7 +86,7 @@ class ShaftWallTests(unittest.TestCase):
         template.staircases[0].pop("embed_at")
         template.staircases[0].pop("embed_in")
         probe = RotationProbe()
-        with patch(BUILDER + "._build_archway", wraps=_build_archway) as arches:
+        with patch.object(passages_builder, "_build_archway", wraps=_build_archway) as arches:
             first = probe.generate_from_template(world, building, template)
         self.assertEqual(arches.call_count, 0)
         second = RotationProbe().generate_from_template(world, building, template)

@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from app.application.worldData.debugStructureRotations import RotationProbe
+from app.application.worldData.generators.structure.staircase import embeddedUpperLayout
 from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import prepare_embedded_upper
 from app.application.worldData.generators.structure.layout.layoutEngine import layout_level
 from app.application.worldData.generators.structure.cellBuilder import pass2_floors, _interior
@@ -19,7 +20,7 @@ from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
 from app.ids import UidKind, entity_uid
 
-LOGGER = "app.application.worldData.generators.structure.staircase.embeddedUpperLayout"
+LOGGER = embeddedUpperLayout.__name__
 
 
 class EmbeddedUpperLayoutTests(unittest.TestCase):

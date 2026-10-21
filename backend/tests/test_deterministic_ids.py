@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
+from app.application.worldData.generators.structure.staircase.uShape import uShape
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_fr_anchor, _compute_u_params
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.ids import (
@@ -281,8 +282,6 @@ class StaircaseReplayTests(unittest.TestCase):
             display_name="Manor", system_location_type="building", created_at="2026-09-29",
             map_x=20, map_y=30, map_z=7,
         )
-        module = "app.application.worldData.generators.structure.staircase.uShape.uShape"
-
         def generate():
             anchors = []
 
@@ -291,7 +290,7 @@ class StaircaseReplayTests(unittest.TestCase):
                 anchors.append(params.fr_anchor)
                 return params
 
-            with patch(module + "._compute_u_params", side_effect=capture), patch("random.choice", side_effect=AssertionError("global RNG used")):
+            with patch.object(uShape, "_compute_u_params", side_effect=capture), patch("random.choice", side_effect=AssertionError("global RNG used")):
                 layout = StructureGeneratorService().generate_from_template(world, building, structure)
             self.assertTrue(anchors)
             stairs = [c for c in layout.cells if c.system_building_element in (

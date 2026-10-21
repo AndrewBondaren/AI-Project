@@ -5,6 +5,7 @@ from copy import deepcopy
 from random import Random
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.room import roomFactory
 from app.application.worldData.generators.structure.room.roomFactory import (
     _resolve_shape_params, instantiate_level_rooms,
 )
@@ -19,9 +20,6 @@ from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 
-FACTORY = "app.application.worldData.generators.structure.room.roomFactory"
-
-
 class MixedShapeParamsTests(unittest.TestCase):
     def definition(self, shapes, **params):
         return RoomDef.model_validate(room_wire(shape_type=shapes,
@@ -30,7 +28,7 @@ class MixedShapeParamsTests(unittest.TestCase):
     def instantiate(self, definition, rng=None):
         world, _ = test_world_building()
         level = LevelDef.model_construct(z_offset=0, display_name="Ground", rooms=[definition])
-        with patch(FACTORY + ".resolve_room_materials", return_value=("stone", "wood")):
+        with patch.object(roomFactory, "resolve_room_materials", return_value=("stone", "wood")):
             instance = instantiate_level_rooms(level, simple_structure(), 5, 0, world, rng or Random(1))[0]
         instance.origin_x = instance.origin_y = 0
         return instance

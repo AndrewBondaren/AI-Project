@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, MagicMock
 
+from app.application.worldData.pack.bake import packBakeLog
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_detailed_bake_skip_not_in_index,
     log_pack_settlement_skip_not_in_index,
@@ -90,7 +91,7 @@ class LocationsIndexReadTests(TestCase):
 
 class PackIndexSkipLogLevelTests(TestCase):
     def test_skip_logs_are_error(self):
-        logger = "app.application.worldData.pack.bake.packBakeLog"
+        logger = packBakeLog.__name__
         with self.assertLogs(logger, level="ERROR") as captured:
             log_pack_detailed_bake_skip_not_in_index(
                 "w1", location_uid="loc-city-amberport-002",

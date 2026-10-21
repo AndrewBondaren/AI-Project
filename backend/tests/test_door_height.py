@@ -9,6 +9,7 @@ from unittest.mock import patch
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.core.generationLogging import generation_world_log
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.generators.structure.passages import doorHeight, doorway
 from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.passages.entry import _resolve_entry_height
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
@@ -20,8 +21,7 @@ from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-LOGGER = "app.application.worldData.generators.structure.passages.doorHeight"
-DOORWAY = "app.application.worldData.generators.structure.passages.doorway"
+LOGGER = doorHeight.__name__
 
 
 class DoorHeightTests(unittest.TestCase):
@@ -48,8 +48,8 @@ class DoorHeightTests(unittest.TestCase):
         fr.z_height, to.z_height = heights
         level = LocationLevel("level", "building", 0, max(heights), "Ground")
         conn = RoomConnection(from_room="from", to_room="to", passage_type="doorway", door_height=explicit)
-        with patch(DOORWAY + "._shared_segment", return_value=[(1, 2)]), \
-             patch(DOORWAY + ".DoorPlacer") as placer_class:
+        with patch.object(doorway, "_shared_segment", return_value=[(1, 2)]), \
+             patch.object(doorway, "DoorPlacer") as placer_class:
             placer = placer_class.return_value
             placer.filter_passable_from_center.return_value = [(1, 2)]
             placer.place.return_value = True
@@ -83,7 +83,7 @@ class DoorHeightTests(unittest.TestCase):
         before = deepcopy(template.model_dump())
         with tempfile.TemporaryDirectory() as directory:
             with generation_world_log(world.world_uid, mode="test", root=directory) as path:
-                with patch(DOORWAY + ".resolve_door_height", wraps=resolve_door_height) as resolve:
+                with patch.object(doorway, "resolve_door_height", wraps=resolve_door_height) as resolve:
                     first = StructureGeneratorService().generate_from_template(world, building, template)
                     second = StructureGeneratorService().generate_from_template(world, building, template)
             records = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]

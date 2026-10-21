@@ -7,6 +7,7 @@ from test_library_packs_4b import _ServiceCase, _RELIEF, _STRUCT, _plot_body, _r
 from app.application.templateLibrary.packs.errors import LibraryPackConflictError, LibraryPackValidationError
 from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
+from app.application.templateLibrary.packs.write import memberWritePlanner
 from app.application.templateLibrary.packs.write.writeContracts import (
     LibraryWriteItem, LibraryWriteRequest, LibraryWriteSelection, WriteSource, WriteStatus,
 )
@@ -265,7 +266,7 @@ class LibraryWritePlanTests(_ServiceCase):
         source = await self.service.create_member(pack.pack_uid, library_kind=_RELIEF, local_uid="meadow",
                                                   body=_relief_body("meadow"), world_uid="w1")
         fresh = runtime_uid()
-        with patch("app.application.templateLibrary.packs.write.memberWritePlanner.runtime_uid",
+        with patch(memberWritePlanner.__name__ + ".runtime_uid",
                    side_effect=[source.template_uid, fresh]) as allocator:
             plan = await self.plan([self.item(source.template_uid, target=pack.pack_uid, kind=_RELIEF)],
                                    selections=[self.select()])

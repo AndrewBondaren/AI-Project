@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.templateLibrary.packs.domainAdapters.factory import (
     build_pack_domain_adapters,
 )
@@ -241,7 +242,7 @@ class BodyTests(_CatalogCase):
         self.assertIsNone(await catalog.body("no-such-uid"))
 
 
-_RESOLVE_LOGGER = "app.application.jsonValidation.resolve"
+_RESOLVE_LOGGER = resolve_module.__name__
 
 
 class ResolveTests(_CatalogCase):

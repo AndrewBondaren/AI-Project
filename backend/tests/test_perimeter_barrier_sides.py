@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import resolve_model
 from app.dataModel.locations.settlement.area.perimeterBarrier import (
     PerimeterBarrier,
@@ -51,7 +52,7 @@ class TestPerimeterBarrierSides(unittest.TestCase):
         self.assertEqual(barrier.sides, [Facing.EAST, Facing.NORTH])
 
     def test_resolve_non_list_rejects(self):
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+        with self.assertLogs(resolve_module.__name__, "WARNING") as logs:
             result = resolve_result(PerimeterBarrier, {"template": "stone_fence", "sides": "north"})
         self.assertFalse(result.resolved)
         self.assertEqual(result.issues[0].path, ("sides",))

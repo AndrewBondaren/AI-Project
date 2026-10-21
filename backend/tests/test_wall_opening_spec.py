@@ -10,20 +10,23 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.core.generationLogging import generation_world_log
 from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
+from app.application.worldData.generators.structure.passages import wallOpening
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import compute_exterior_wall_profiles
+from app.application.worldData.generators.structure.room import roomFactory
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-FACTORY_LOGGER = "app.application.worldData.generators.structure.room.roomFactory"
-OPENING_LOGGER = "app.application.worldData.generators.structure.passages.wallOpening"
+FACTORY_LOGGER = roomFactory.__name__
+OPENING_LOGGER = wallOpening.__name__
 
 
 class WallOpeningSpecTests(unittest.TestCase):
@@ -62,7 +65,7 @@ class WallOpeningSpecTests(unittest.TestCase):
         return layout
 
     def test_invalid_opening_stops_generation_with_warning(self):
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+        with self.assertLogs(resolve_module.__name__, "WARNING") as logs:
             with self.assertRaises(GenerationError):
                 self.generate([dict(opening_type="door", window_z=-1, glass_material=[])])
         self.assertTrue(any("WarningError" in line for line in logs.output))
@@ -95,8 +98,8 @@ class WallOpeningSpecTests(unittest.TestCase):
         profiles = compute_exterior_wall_profiles([r], r.get_footprint(), base)
         if profile_height is not None:
             profiles[r.uid_key].z_height = profile_height
-        with patch(OPENING_LOGGER + "._opening_cell", wraps=_opening_cell) as opening, \
-             patch(OPENING_LOGGER + ".compute_exterior_wall_profiles", return_value=profiles):
+        with patch.object(wallOpening, "_opening_cell", wraps=_opening_cell) as opening, \
+             patch.object(wallOpening, "compute_exterior_wall_profiles", return_value=profiles):
             place_wall_openings([r], r.get_footprint(), cells, level, world, "building", Random(1), ground)
         return cells, opening.call_args_list
 

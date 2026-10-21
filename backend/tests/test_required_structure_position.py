@@ -6,6 +6,7 @@ from app.application.jsonValidation.resolve import UnresolvedModelError, Resolve
 from pydantic import ValidationError
 import unittest
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import resolve_model
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.locations.settlement.district.requiredStructure import (
@@ -62,14 +63,14 @@ class TestRequiredStructurePositionWire(unittest.TestCase):
         self.assertIs(entry.position, RequiredStructurePosition.ANY)
 
     def test_resolve_unknown_rejects(self):
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+        with self.assertLogs(resolve_module.__name__, "WARNING") as logs:
             result = resolve_result(RequiredStructure, _wire(position="edge"))
         self.assertFalse(result.resolved)
         self.assertEqual(result.issues[0].path, ("position",))
         self.assertIn("WarningError", logs.output[0])
 
     def test_resolve_blank_rejects(self):
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+        with self.assertLogs(resolve_module.__name__, "WARNING") as logs:
             result = resolve_result(RequiredStructure, _wire(position=""))
         self.assertFalse(result.resolved)
         self.assertEqual(result.issues[0].path, ("position",))

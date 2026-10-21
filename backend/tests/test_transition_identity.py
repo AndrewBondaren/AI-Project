@@ -5,6 +5,7 @@ from unittest.mock import patch
 from uuid import UUID
 
 from app.ids import UidKind, entity_uid, runtime_uid
+from app.application.worldData.transitions import transitionIdentity
 from app.application.worldData.transitions.transitionIdentity import transition_uid
 from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
@@ -27,7 +28,7 @@ class TransitionIdentityTest(unittest.TestCase):
             "destination_x": 124, "destination_y": -45, "destination_z": 28, "destination_geometry": "concrete",
         }
         with patch(
-            "app.application.worldData.transitions.transitionIdentity.entity_uid",
+            transitionIdentity.__name__ + ".entity_uid",
             wraps=entity_uid,
         ) as mint:
             uid = transition_uid("world", self.system_type, self.source, self.destination)
@@ -80,7 +81,7 @@ class TransitionIdentityTest(unittest.TestCase):
     def test_symbolic_surface_marker_has_no_none_or_fake_xyz(self) -> None:
         symbolic = TransitionEndpoint()
         with patch(
-            "app.application.worldData.transitions.transitionIdentity.entity_uid",
+            transitionIdentity.__name__ + ".entity_uid",
             wraps=entity_uid,
         ) as mint:
             symbolic_uid = transition_uid("world", self.system_type, symbolic, self.destination)
@@ -114,7 +115,7 @@ class TransitionIdentityTest(unittest.TestCase):
             source=self.source, destination=self.destination,
         )
         with patch(
-            "app.application.worldData.transitions.transitionIdentity.entity_uid",
+            transitionIdentity.__name__ + ".entity_uid",
             side_effect=AssertionError("projections must not mint"),
         ):
             from_mapping = Transition.model_validate(aggregate.model_dump(mode="json"))

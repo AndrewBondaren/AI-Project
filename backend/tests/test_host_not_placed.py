@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.core.generationLogging import generation_world_log
+from app.application.worldData.generators.structure.layout import layoutEngine
 from app.application.worldData.generators.structure.layout.layoutEngine import (
     _layout_mode_b, _spiral_search, _try_adjacent, _place_next_to_any,
 )
@@ -15,7 +16,7 @@ from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-LAYOUT = "app.application.worldData.generators.structure.layout.layoutEngine"
+LAYOUT = layoutEngine.__name__
 
 
 class HostNotPlacedTests(unittest.TestCase):
@@ -64,10 +65,10 @@ class HostNotPlacedTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             with generation_world_log(world.world_uid, mode="test", root=directory) as path:
-                with patch(LAYOUT + "._spiral_search", side_effect=no_host_space), \
-                     patch(LAYOUT + "._try_adjacent", side_effect=try_adjacent), \
-                     patch(LAYOUT + "._place_next_to_any", side_effect=place_next), \
-                     patch(LAYOUT + "._layout_mode_b", side_effect=capture_mode_b):
+                with patch.object(layoutEngine, "_spiral_search", side_effect=no_host_space), \
+                     patch.object(layoutEngine, "_try_adjacent", side_effect=try_adjacent), \
+                     patch.object(layoutEngine, "_place_next_to_any", side_effect=place_next), \
+                     patch.object(layoutEngine, "_layout_mode_b", side_effect=capture_mode_b):
                     result = StructureGeneratorService().generate_from_template(world, building, template)
             records = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
         self.assertTrue(result.cells)

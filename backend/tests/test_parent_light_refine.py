@@ -28,6 +28,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect, Surfa
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.parentLightLoad import load_parent_light
+from app.application.worldData.pack.refine.fine import fineTilePrep
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
@@ -326,7 +327,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
             terrain_parallel_workers=None,
         )
         with patch(
-            "app.application.worldData.pack.refine.fine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             side_effect=MissingParentLightError("w-miss", 0, 0),
         ):
             with self.assertRaises(MissingParentLightError):

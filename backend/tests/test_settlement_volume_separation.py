@@ -8,6 +8,7 @@ from unittest import IsolatedAsyncioTestCase
 
 from fastapi import HTTPException
 
+from app.application.jsonValidation import settlementVolumeSeparation
 from app.application.jsonValidation.settlementVolumeSeparation import (
     log_settlement_volume_separation,
 )
@@ -249,7 +250,7 @@ class TestOccupancyCallers(unittest.TestCase):
 class TestSettlementVolumeLog(unittest.TestCase):
     def setUp(self) -> None:
         self.logger = logging.getLogger(
-            "app.application.jsonValidation.settlementVolumeSeparation",
+            settlementVolumeSeparation.__name__,
         )
         self.handler = _LogCapture()
         self.logger.addHandler(self.handler)
@@ -304,7 +305,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         repo = _LocRepo()
         world = _world()
         svc = NamedLocationService(repo=repo, world_repo=_WorldRepo(world))
-        log = logging.getLogger("app.application.jsonValidation.settlementVolumeSeparation")
+        log = logging.getLogger(settlementVolumeSeparation.__name__)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)
@@ -343,7 +344,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         first = _city("loc-a")
         vol = next(v for _, v in territory_volumes_by_location(world, [first]))
         second_y = vol.y1 + 1 + policy.min_settlement_separation_xy
-        log = logging.getLogger("app.application.jsonValidation.settlementVolumeSeparation")
+        log = logging.getLogger(settlementVolumeSeparation.__name__)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)
@@ -364,7 +365,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         repo = _LocRepo()
         world = _world()
         svc = NamedLocationService(repo=repo, world_repo=_WorldRepo(world))
-        log = logging.getLogger("app.application.jsonValidation.settlementVolumeSeparation")
+        log = logging.getLogger(settlementVolumeSeparation.__name__)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)

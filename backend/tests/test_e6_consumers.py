@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
+from app.application.cascade import locationScope
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.cascade.locationScope import (
@@ -21,12 +23,13 @@ from app.application.templateLibrary.templateContracts import (
     ReliefTemplateSnapshot,
     TemplateEntry,
 )
-from app.dataModel.terrain.relief import ReliefTemplate
+from app.dataModel.terrain.relief import ReliefTemplate, reliefTemplate
 from app.application.worldData.relief.parseObjectReliefPickPolicy import parse_object_relief_pick_policy
 from app.application.worldData.registries.raceService import RaceService, _to_race
 from app.application.worldData.registries.worldPerkService import WorldPerkService, _to_perk
 from app.application.imports.helpers import import_list
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.locations.structure.building import structureTemplate
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
@@ -42,7 +45,7 @@ class SourceConsumerTests(unittest.TestCase):
             facts = []
             for preview in (False, True):
                 ctx = ResolveContext.for_import(validate_only=preview)
-                with patch("app.application.jsonValidation.resolve.logger") as log:
+                with patch(resolve_module.__name__ + ".logger") as log:
                     with self.assertRaises(UnresolvedModelError) as caught:
                         NamedLocationService._from_wire({"location_uid": "source", "display_name": "Source",
                             "system_location_type": "building", field: value},
@@ -58,7 +61,7 @@ class SourceConsumerTests(unittest.TestCase):
         before = parent.model_dump()
         for field in ("system_economic_tier", "parent_wall_material", "parent_floor_material"):
             invalid = replace(location, **{field: "unknown"})
-            with patch("app.application.cascade.locationScope.extend") as extend:
+            with patch(locationScope.__name__ + ".extend") as extend:
                 with self.assertRaises(UnresolvedModelError):
                     building_context(world, parent, invalid)
                 extend.assert_not_called()
@@ -68,7 +71,7 @@ class SourceConsumerTests(unittest.TestCase):
         world, location, _ = fixture()
         settlement = replace(location, system_location_type="settlement",
                              location_payload={"dominant_material": "unknown"})
-        with patch("app.application.cascade.locationScope.extend") as extend:
+        with patch(locationScope.__name__ + ".extend") as extend:
             with self.assertRaises(UnresolvedModelError):
                 settlement_context(world, settlement)
             extend.assert_not_called()
@@ -80,7 +83,7 @@ class SourceConsumerTests(unittest.TestCase):
                       {"economic_tier_range": {"min": "t9", "max": "t1"}},
                       {"economic_tier_band": "unknown"}):
             plot = PlotLayoutTemplate(system_name="plot", display_name="Plot", economic_tier="t2", **extra)
-            with patch("app.application.cascade.locationScope.extend") as extend:
+            with patch(locationScope.__name__ + ".extend") as extend:
                 with self.assertRaises(UnresolvedModelError):
                     area_context(world, parent, plot, area_uid="plot")
                 extend.assert_not_called()
@@ -164,8 +167,8 @@ class SourceConsumerTests(unittest.TestCase):
 class LibraryConsumerTests(unittest.IsolatedAsyncioTestCase):
     async def test_infrastructure_failure_is_not_converted_to_data_error(self):
         for service_cls, model_path in (
-            (StructureTemplateLibraryService, "app.dataModel.locations.structure.building.structureTemplate.StructureTemplate.model_validate"),
-            (ReliefTemplateLibraryService, "app.dataModel.terrain.relief.reliefTemplate.ReliefTemplate.model_validate")):
+            (StructureTemplateLibraryService, structureTemplate.__name__ + ".StructureTemplate.model_validate"),
+            (ReliefTemplateLibraryService, reliefTemplate.__name__ + ".ReliefTemplate.model_validate")):
             repo = SimpleNamespace(upsert=AsyncMock())
             service = service_cls(repo)
             with patch(model_path, side_effect=OSError("infrastructure")):

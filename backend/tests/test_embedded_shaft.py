@@ -3,6 +3,8 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.passages import builder as passages_builder
+from app.application.worldData.generators.structure.staircase import shaftPlacer
 from app.application.worldData.generators.structure.staircase.shaftPlacer import (
     EmbeddedShaftPlacer, AdjacentShaftPlacer, make_shaft_placer,
 )
@@ -18,8 +20,7 @@ from tests.structureWire import room_wire, level_wire
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-PLACER = "app.application.worldData.generators.structure.staircase.shaftPlacer"
-BUILDER = "app.application.worldData.generators.structure.passages.builder"
+PLACER = shaftPlacer.__name__
 
 
 class EmbeddedShaftTests(unittest.TestCase):
@@ -165,7 +166,7 @@ class EmbeddedShaftTests(unittest.TestCase):
                     if kwargs.get("shared_cells") is not None and args[1].z_offset == 0:
                         captured.append((args[0], args[1], args[2], list(kwargs["shared_cells"])))
                     return _build_archway(*args, **kwargs)
-                with patch(BUILDER + "._build_archway", side_effect=arch):
+                with patch.object(passages_builder, "_build_archway", side_effect=arch):
                     first = StructureGeneratorService().generate_from_template(world, building, template)
                     second = StructureGeneratorService().generate_from_template(world, building, template)
                 self.assertEqual(template.model_dump(), original)

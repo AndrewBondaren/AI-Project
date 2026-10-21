@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.application.worldData.pack.refine.fine import fineChunkRunner, fineTilePrep
 from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
@@ -59,10 +60,10 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         pool_instance.map_sync_with_callback = AsyncMock(side_effect=fake_pool)
 
         with patch(
-            "app.application.worldData.pack.refine.fine.fineChunkRunner.ChunkComputePool",
+            fineChunkRunner.__name__ + ".ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls, patch(
-            "app.application.worldData.pack.refine.fine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await runner.refine_rects(
@@ -99,9 +100,9 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         runner = FineChunkRunner(terrain)
 
         with patch(
-            "app.application.worldData.pack.refine.fine.fineChunkRunner.ChunkComputePool",
+            fineChunkRunner.__name__ + ".ChunkComputePool",
         ) as pool_cls, patch(
-            "app.application.worldData.pack.refine.fine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await runner.refine_rects(
@@ -132,7 +133,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         terrain, writer, rects, mat_ctx = self._setup()
         facade = FineTerrainRefineOrchestrator(terrain)
         with patch(
-            "app.application.worldData.pack.refine.fine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await facade._refine_rects(

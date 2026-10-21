@@ -11,6 +11,7 @@ from app.application.worldData.persist.connectionPersistService import Connectio
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
+from app.application.worldData.pack.io import worldPackWriter
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.io.packBlobWire import InteriorTransitionsRebuildRequired
 from app.application.worldData.pack.read.settlementStructureIndex import transitions_for_level
@@ -152,7 +153,7 @@ class TransitionPackRoundtripTest(unittest.IsolatedAsyncioTestCase):
     async def test_interrupted_publish_reloads_tmp_and_retries_without_generation_or_sql(self):
         tmp = self.writer.encode_settlement_structure_tmp("settlement", self.wire, registry=self.registry)
         await self.persist_sql()
-        with patch("app.application.worldData.pack.io.worldPackWriter.os.replace", side_effect=OSError("interrupted")):
+        with patch(worldPackWriter.__name__ + ".os.replace", side_effect=OSError("interrupted")):
             with self.assertRaises(OSError):
                 self.publish(self.writer, tmp)
         fresh = WorldPackWriter(self.paths)

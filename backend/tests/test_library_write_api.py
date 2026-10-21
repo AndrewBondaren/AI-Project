@@ -13,6 +13,7 @@ from app.api.deps import get_container
 from app.api.errorMapping import install_error_handlers
 from app.api.routes.reliefTemplates import router as relief_router
 from app.api.routes.structureTemplates import router as structure_router
+from app.application.templateLibrary import reliefTemplateLibraryService, structureTemplateLibraryService
 from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteSelection
 from app.application.templateLibrary.packs.errors import LibraryPackValidationError, LibraryPackConflictError
 from app.application.templateLibrary.packs.write.writeResults import PolicyRequired
@@ -59,7 +60,7 @@ class LibraryWriteApiTests(_ServiceCase):
 
     async def test_fs_import_negotiation(self):
         root, path, manifest = self.fs_pack()
-        with patch("app.application.templateLibrary.reliefTemplateLibraryService.resolve_relief_domain_root", return_value=root):
+        with patch(reliefTemplateLibraryService.__name__ + ".resolve_relief_domain_root", return_value=root):
             data = {"path": str(path)}
             first = await self.client.post("/relief-templates/import", data=data)
             self.assertEqual(first.status_code, 200, first.text)
@@ -145,7 +146,7 @@ class LibraryWriteApiTests(_ServiceCase):
         member = manifest["members"][0]
         path = fs_fixture._write_pack(root, "user", manifest=manifest, bodies={member["local_uid"]:
             {"system_name": member["template_uid"], "display_name": "House"}})
-        with patch("app.application.templateLibrary.structureTemplateLibraryService.resolve_structures_domain_root", return_value=root):
+        with patch(structureTemplateLibraryService.__name__ + ".resolve_structures_domain_root", return_value=root):
             url = "/structure-templates/import"
             body = {"path": str(path)}
             first = await self.client.post(url, json=body)

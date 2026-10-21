@@ -13,6 +13,8 @@ from app.application.worldData.generators.climate.climatePoleField import (
     GridBBox,
 )
 from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.pack.bake import packBakeLog
+from app.application.worldData.pack.climate import climateCoarseBake, climatePackBakeOrchestrator
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )
@@ -59,10 +61,10 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
         pool_instance.map_sync = AsyncMock(side_effect=fake_map)
 
         with patch(
-            "app.application.worldData.pack.climate.climatePackBakeOrchestrator.ChunkComputePool",
+            climatePackBakeOrchestrator.__name__ + ".ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls, patch(
-            "app.application.worldData.pack.climate.climateCoarseBake.sample_pack_climate_at_macro",
+            climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
             side_effect=_dummy_sample,
         ):
             result, n = await orch.bake_coarse(
@@ -85,9 +87,9 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
         mat_ctx = MaterializationContext(free_cores=4, parallel_workers_override=1)
 
         with patch(
-            "app.application.worldData.pack.climate.climatePackBakeOrchestrator.ChunkComputePool",
+            climatePackBakeOrchestrator.__name__ + ".ChunkComputePool",
         ) as pool_cls, patch(
-            "app.application.worldData.pack.climate.climateCoarseBake.sample_pack_climate_at_macro",
+            climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
             side_effect=_dummy_sample,
         ):
             result, n = await orch.bake_coarse(
@@ -109,14 +111,14 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
             def emit(self, record: logging.LogRecord) -> None:
                 records.append(record)
 
-        log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+        log = logging.getLogger(packBakeLog.__name__)
         handler = _Capture()
         log.addHandler(handler)
         prev = log.level
         log.setLevel(logging.DEBUG)
         try:
             with patch(
-                "app.application.worldData.pack.climate.climateCoarseBake.sample_pack_climate_at_macro",
+                climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
                 side_effect=_dummy_sample,
             ):
                 await orch.bake_coarse(_world(), _surface_ctx(), writer, mat_ctx)

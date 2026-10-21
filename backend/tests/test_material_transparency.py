@@ -3,6 +3,7 @@ import math
 import unittest
 from unittest.mock import patch
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model, resolve_patch
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
@@ -26,7 +27,7 @@ class MaterialTransparencyTests(unittest.TestCase):
             facts = []
             for preview in (False, True):
                 ctx = ResolveContext.for_import(validate_only=preview)
-                with patch("app.application.jsonValidation.resolve.logger") as log:
+                with patch(resolve_module.__name__ + ".logger") as log:
                     with self.assertRaises(UnresolvedModelError) as error:
                         resolve_model(MaterialRegistryEntry, self.row(transparent=value), ctx=ctx)
                 facts.append([(issue.path, issue.code) for issue in error.exception.issues])

@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from app.api.deps import get_container
 from app.api.routes.worlds import router
 from app.application.imports.result import ImportResult
+from app.application.worldBundle import worldCopyImport
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.core.container import Container
@@ -58,7 +59,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
                 stack.enter_context(patch.object(handler, "import_section", side_effect=AssertionError("write handler")))
             stack.enter_context(patch.object(self.worlds, "find_by_id", side_effect=AssertionError("version lookup")))
             stack.enter_context(patch.object(self.worlds, "next_version_number", side_effect=AssertionError("version allocation")))
-            stack.enter_context(patch("app.application.worldBundle.worldCopyImport.remap_bundle", side_effect=AssertionError("remap")))
+            stack.enter_context(patch(worldCopyImport.__name__ + ".remap_bundle", side_effect=AssertionError("remap")))
             report = await self.service.import_bundle(fixture, validate_only=True)
         self.assertIsInstance(report, ImportValidationReport)
         self.assertTrue(report.valid, report.issues)

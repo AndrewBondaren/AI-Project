@@ -26,6 +26,7 @@ from app.dataModel.locations.context.cascadeParams import (
 from app.dataModel.locations.settlement.enums.districtDensity import (
     DistrictDensity,
 )
+from app.dataModel.cascade import cascadeGraph, cascadeVerify
 from app.dataModel.cascade.cascadeGraph import (
     bind_field,
     cascade_channels,
@@ -179,14 +180,14 @@ class RepeatedChannelContractTests(unittest.TestCase):
         return axis, route, repeat, source, context
 
     def _verify(self, source, context):
-        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}), \
-             patch("app.dataModel.cascade.cascadeVerify._source_models", return_value={source}):
+        with patch(cascadeGraph.__name__ + "._source_models", return_value={source}), \
+             patch(cascadeVerify.__name__ + "._source_models", return_value={source}):
             verify_cascade_contract(context)
 
     def test_repeat_uses_declared_path_on_reordered_axis(self):
         axis, route, repeat, source, context = self._fixture()
         self._verify(source, context)
-        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+        with patch(cascadeGraph.__name__ + "._source_models", return_value={source}):
             from app.dataModel.cascade.cascadeGraph import ordered_scopes
             path = ordered_scopes((repeat, route), axis.ROOT)
             chain = ordered_chain(repeat, scope_path=path)
@@ -212,7 +213,7 @@ class RepeatedChannelContractTests(unittest.TestCase):
 
     def test_repeat_requires_path_and_all_declared_tags(self):
         axis, _, repeat, source, context = self._fixture()
-        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+        with patch(cascadeGraph.__name__ + "._source_models", return_value={source}):
             with self.assertRaisesRegex(ValueError, "requires a declared scope path"):
                 ordered_chain(repeat)
             for path in ((axis.ROOT, axis.FIRST), (axis.ROOT, axis.LEAF, axis.LEAF)):
@@ -227,7 +228,7 @@ class RepeatedChannelContractTests(unittest.TestCase):
         source.model_fields["signal"].annotation = int | None
         with self.assertRaisesRegex(ValueError, "incompatible with field type"):
             self._verify(source, context)
-        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+        with patch(cascadeGraph.__name__ + "._source_models", return_value={source}):
             with self.assertRaisesRegex(ValueError, "foreign or duplicate"):
                 ordered_chain(repeat, scope_path=(ScopeLevel.WORLD, axis.FIRST, axis.MIDDLE, axis.LEAF))
         self.assertEqual(cascade_channels(source, repeat, ScopeLevel.ROOM), ())
@@ -247,7 +248,7 @@ class RepeatedChannelContractTests(unittest.TestCase):
         source.model_fields["signal"].metadata[:] = [CascadeChannel(repeat, RepeatScope.EVERY_TAG)]
         context.model_fields["signal"].metadata[:] = [repeat]
         self._verify(source, context)
-        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+        with patch(cascadeGraph.__name__ + "._source_models", return_value={source}):
             chain = ordered_chain(repeat, scope_path=(axis.ROOT, axis.FIRST, axis.MIDDLE, axis.LEAF))
         self.assertEqual([node.level for _, node, _ in chain], [axis.LEAF, axis.FIRST])
         self.assertEqual(cascade_channels(source, repeat, axis.MIDDLE), ())
@@ -312,10 +313,10 @@ class LinkedListContractTests(unittest.TestCase):
     def _assert_broken(self, edges, pattern, **kwargs):
         param, source, context = self._fixture(edges, **kwargs)
         with patch(
-            "app.dataModel.cascade.cascadeVerify._source_models",
+            cascadeVerify.__name__ + "._source_models",
             return_value={source},
         ), patch(
-            "app.dataModel.cascade.cascadeGraph._source_models",
+            cascadeGraph.__name__ + "._source_models",
             return_value={source},
         ):
             with self.assertRaisesRegex(ValueError, pattern):
@@ -328,10 +329,10 @@ class LinkedListContractTests(unittest.TestCase):
             {"signal": "middle", "middle": "tail"},
         )
         with patch(
-            "app.dataModel.cascade.cascadeVerify._source_models",
+            cascadeVerify.__name__ + "._source_models",
             return_value={source},
         ), patch(
-            "app.dataModel.cascade.cascadeGraph._source_models",
+            cascadeGraph.__name__ + "._source_models",
             return_value={source},
         ):
             verify_cascade_contract(context)
@@ -361,10 +362,10 @@ class LinkedListContractTests(unittest.TestCase):
             str | None, param,
         ], None))
         with patch(
-            "app.dataModel.cascade.cascadeVerify._source_models",
+            cascadeVerify.__name__ + "._source_models",
             return_value={tail, head},
         ), patch(
-            "app.dataModel.cascade.cascadeGraph._source_models",
+            cascadeGraph.__name__ + "._source_models",
             return_value={tail, head},
         ):
             verify_cascade_contract(context)
@@ -376,9 +377,9 @@ class LinkedListContractTests(unittest.TestCase):
             {"signal": "middle", "middle": "tail"},
             above_edges={"middle": "signal", "tail": "middle"},
         )
-        with patch("app.dataModel.cascade.cascadeVerify._source_models",
+        with patch(cascadeVerify.__name__ + "._source_models",
                    return_value={source}), patch(
-                       "app.dataModel.cascade.cascadeGraph._source_models",
+                       cascadeGraph.__name__ + "._source_models",
                        return_value={source}):
             verify_cascade_contract(context)
             self.assertEqual([node.field for _, node, _ in ordered_chain(param)],
@@ -435,7 +436,7 @@ class LinkedListContractTests(unittest.TestCase):
                     LinkedListAxis.TAIL),
         )
         with patch(
-            "app.dataModel.cascade.cascadeVerify._source_models",
+            cascadeVerify.__name__ + "._source_models",
             return_value={source},
         ):
             with self.assertRaisesRegex(ValueError, "levels without channel"):
@@ -449,7 +450,7 @@ class LinkedListContractTests(unittest.TestCase):
                     "tail": ScopeLevel.ROOM},
         )
         with patch(
-            "app.dataModel.cascade.cascadeVerify._source_models",
+            cascadeVerify.__name__ + "._source_models",
             return_value={source},
         ):
             with self.assertRaisesRegex(ValueError, "foreign axis"):
@@ -468,7 +469,7 @@ class DefaultSourceContractTests(unittest.TestCase):
         context = create_model("DefaultContext", signal=(Annotated[
             str | None, param,
         ], None))
-        with patch("app.dataModel.cascade.cascadeVerify._source_models",
+        with patch(cascadeVerify.__name__ + "._source_models",
                    return_value={source}):
             verify_cascade_contract(context)
 

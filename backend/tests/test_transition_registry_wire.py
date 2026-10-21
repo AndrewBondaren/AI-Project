@@ -4,6 +4,7 @@ from app.application.jsonValidation.resolve import UnresolvedModelError, Resolve
 import unittest
 from types import SimpleNamespace
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import transition_types
@@ -78,7 +79,7 @@ class TransitionRegistryWireTest(unittest.TestCase):
 
     def test_runtime_invalid_row_rejects_whole_registry(self):
         for bad in (_row("bad", "unknown"), {"system_type": "bad", "display_name": "Bad"}):
-            with self.subTest(bad=bad), self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+            with self.subTest(bad=bad), self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(UnresolvedModelError):
                 transition_types(SimpleNamespace(world_uid="world", transition_type_registry=[_row("valid"), bad]))
 
     def test_builtin_behavior_cannot_be_reassigned_through_facade(self) -> None:
@@ -87,7 +88,7 @@ class TransitionRegistryWireTest(unittest.TestCase):
         self.assertTrue(any(error.path == ("transition_type_registry", 0) for error in caught.exception.errors))
 
     def test_runtime_reassigned_builtin_rejects_whole_registry(self):
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+        with self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(UnresolvedModelError):
             transition_types(SimpleNamespace(world_uid="world", transition_type_registry=[_row("valid"), _row("main_entrance", "door")]))
 
     def test_deferred_portal_registry_is_not_converted(self) -> None:

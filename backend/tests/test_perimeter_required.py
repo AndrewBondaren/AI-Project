@@ -9,18 +9,19 @@ from random import Random
 from unittest.mock import patch
 
 from app.core.generationLogging import generation_world_log
+from app.application.worldData.generators.structure.room import roomFactory
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from tests.test_structure_orientation import simple_structure, test_world_building
 
-LOGGER = "app.application.worldData.generators.structure.room.roomFactory"
+LOGGER = roomFactory.__name__
 
 
 class PerimeterRequiredTests(unittest.TestCase):
     def instantiate(self, template):
         level = StructureGeneratorService._resolve_levels(template)[0]
         world, _ = test_world_building()
-        with patch(LOGGER + ".resolve_room_materials", return_value=("stone", "wood")):
+        with patch.object(roomFactory, "resolve_room_materials", return_value=("stone", "wood")):
             return instantiate_level_rooms(level, template, 5, 0, world, Random(1))
 
     def test_explicit_false_warns_for_either_entrance_and_forces_true(self):

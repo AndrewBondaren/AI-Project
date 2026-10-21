@@ -3,6 +3,7 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.layout import layoutEngine
 from app.application.worldData.generators.structure.layout.layoutEngine import _layout_mode_b
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.spatial.facing import Facing
@@ -13,9 +14,6 @@ from app.ids import UidKind, entity_rng
 from tests.structureWire import room_wire, level_wire
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building
-
-LAYOUT = "app.application.worldData.generators.structure.layout.layoutEngine"
-
 
 def scenario(width=10, depth=14, room_type="corridor", mode=AttachWall.ANY, z=0):
     host = room("corridor", width=width, depth=depth, z=z)
@@ -63,7 +61,7 @@ class AttachAnyTests(unittest.TestCase):
         ):
             with self.subTest(width=width, depth=depth, facing=facing):
                 host, guests = scenario(width, depth)
-                with patch(LAYOUT + ".entity_rng", side_effect=AssertionError("one free side needs no RNG")):
+                with patch.object(layoutEngine, "entity_rng", side_effect=AssertionError("one free side needs no RNG")):
                     place(host, guests, [staircase(facing)])
                 self.assert_side(host, guests, expected)
 
@@ -161,7 +159,7 @@ class AttachAnyTests(unittest.TestCase):
                     guests = [r for r in args[0] if r.room_id == "guest"]
                     self.assertEqual(len(guests), 2)
                     self.assert_side(host, guests, expected)
-            with self.subTest(staircase=has_staircase), patch(LAYOUT + "._layout_mode_b", side_effect=capture):
+            with self.subTest(staircase=has_staircase), patch.object(layoutEngine, "_layout_mode_b", side_effect=capture):
                 first = StructureGeneratorService().generate_from_template(world, building, template)
                 second = StructureGeneratorService().generate_from_template(world, building, template)
                 self.assertTrue(first.cells)

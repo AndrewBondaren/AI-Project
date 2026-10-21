@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model, resolve_patch, resolve_result, resolve_root_list, resolve_root_dict
 from app.application.jsonValidation.worldSlices import climate_zone_wire_from_raw, registry_map_to_list
 from app.dataModel.annotationPolicy import DefaultWhenMissing, DefaultEnumWhenMissing, field_policy, WireFieldPolicy, wire_enum_class
@@ -38,7 +39,7 @@ class FieldMigrationTests(unittest.TestCase):
             facts = []
             for preview in (False, True):
                 ctx = ResolveContext.for_import(validate_only=preview)
-                with patch("app.application.jsonValidation.resolve.logger") as log:
+                with patch(resolve_module.__name__ + ".logger") as log:
                     result = resolve_result(Parent, raw, ctx=ctx)
                 self.assertFalse(result.resolved, raw)
                 self.assertEqual(log.warning.called, not preview)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from typing import get_origin
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.dataModel.annotationPolicy import (
     DefaultWhenMissing,
     StrictOnWire,
@@ -687,7 +688,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIsNone(whitespace.system_name)
 
         # Blank pin is an explicitly supported domain sentinel, not an error.
-        with self.assertNoLogs("app.application.jsonValidation.resolve", "WARNING"):
+        with self.assertNoLogs(resolve_module.__name__, "WARNING"):
             resolved = resolve_model(TypicalDistrictRef, {"district_type": "industrial", "system_name": ""})
         self.assertIsNone(resolved.system_name)
         self.assertEqual(resolved.district_type, "industrial")
@@ -796,7 +797,7 @@ class TestRegistryKey(unittest.TestCase):
         whitespace = PerimeterBarrier(template="   ")
         self.assertIsNone(whitespace.template)
 
-        with self.assertNoLogs("app.application.jsonValidation.resolve", "WARNING"):
+        with self.assertNoLogs(resolve_module.__name__, "WARNING"):
             resolved = resolve_model(PerimeterBarrier, {"template": ""})
         self.assertIsNone(resolved.template)
 
