@@ -80,11 +80,15 @@ class WorldColumnWriteTests(unittest.TestCase):
                 self.assertEqual(result[key], raw)
 
     def test_legacy_adapter_matches_import(self):
-        raw = {"grain": {"display_name": "Grain", "crop_kind": "grain"}}
-        # Adapter injects identity before the shared registry resolver.
+        raw = [{"system_crop": "grain", "display_name": "Grain", "crop_kind": "grain"}]
+        # Canonical list wire; dict-map input is rejected by the shared adapter.
         scoped = resolve_world_column("crops_registry", raw, self.ctx())
         self.assertEqual(scoped["crops_registry"],
                          normalize_world({"crops_registry": raw}, partial=True)["crops_registry"])
+        with self.assertRaises(ImportValidationError):
+            resolve_world_column("crops_registry",
+                                 {"grain": {"display_name": "Grain", "crop_kind": "grain"}},
+                                 self.ctx())
 
     def test_invalid_registry_is_atomic_and_preserves_all_error_paths(self):
         world = self.world()

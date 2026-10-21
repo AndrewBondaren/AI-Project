@@ -51,3 +51,8 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
         return {key: out[key]}
     except UnresolvedModelError as exc:
         raise ImportValidationError(list(exc.issues)) from exc
+    except ValueError as exc:
+        issue = FieldPathError(active.path_prefix + (key,), str(exc),
+                               schema_id=active.schema_id, code="VALIDATION_ERROR")
+        active.report.issues.append(issue)
+        raise ImportValidationError([issue]) from exc
