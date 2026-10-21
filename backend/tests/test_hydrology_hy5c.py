@@ -1,6 +1,7 @@
 """Unit tests for procedural river autoresolve — D HY-5c."""
 
 from tests.hydrology_fixtures import hydro_topology as _river_test_topology
+from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 import unittest
 
 from app.application.worldData.generators.hydrology.riverNetworkAssembler import assemble_rivers
@@ -45,10 +46,10 @@ class TestRiverPlanner(unittest.TestCase):
             surface_z[(3, gy)] = 10 + gy * 5
         hm = _heightmap(surface_z)
         occupied = {
-            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
+            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN, water_body_uid="ocean")
             for gx in range(6)
         }
-        path = plan_descent_path(hm, (3, 5), occupied, topology=_river_test_topology(hm))
+        path = plan_descent_path(hm, (3, 5), occupied, topology=_river_test_topology(hm), policy=HydrologyRiversPolicy())
         self.assertGreaterEqual(len(path), 2)
         self.assertEqual(path[-1][1], 0)
 
@@ -63,7 +64,7 @@ class TestRiverAutoresolve(unittest.TestCase):
                     surface_z[(4, gy)] = 10 + gy * 6
                 hm = _heightmap(surface_z)
                 before = dict(hm.surface_z)
-                occupied = {(gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN) for gx in range(8)}
+                occupied = {(gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN, water_body_uid="ocean") for gx in range(8)}
                 world = _world(hydrology=WorldHydrology(default_rivers=policy).model_dump(mode="json"))
                 result = assemble_rivers(world, hm, hydro_master(scopes=frozenset({HydrologyScope.RIVERS})),
                     occupied=occupied, topology=_river_test_topology(hm))
@@ -77,7 +78,7 @@ class TestRiverAutoresolve(unittest.TestCase):
             surface_z[(4, gy)] = 10 + gy * 6
         hm = _heightmap(surface_z)
         occupied = {
-            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
+            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN, water_body_uid="ocean")
             for gx in range(8)
         }
         master = hydro_master(scopes=frozenset({HydrologyScope.RIVERS}))
@@ -91,7 +92,7 @@ class TestRiverAutoresolve(unittest.TestCase):
             surface_z[(4, gy)] = 10 + gy * 6
         hm = _heightmap(surface_z)
         occupied = {
-            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
+            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN, water_body_uid="ocean")
             for gx in range(8)
         }
         master = hydro_master(scopes=frozenset({HydrologyScope.RIVERS}))

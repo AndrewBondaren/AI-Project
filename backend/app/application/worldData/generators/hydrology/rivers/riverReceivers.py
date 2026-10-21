@@ -4,7 +4,6 @@ from collections.abc import Mapping, Sequence
 
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as Role
-from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType as Connection
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink, RiverReceiverKind
 from app.dataModel.hydrology.waterBody import WaterBody
@@ -34,7 +33,7 @@ def receiver_kind(cell: Coord, occupied: Mapping[Coord, MapCellHydrology],
                   bodies: Sequence[WaterBody]) -> RiverReceiverKind | None:
     entry = occupied[cell]
     if entry.role is Role.RIVER_BED:
-        return Connection.RIVER if entry.river_drainage is not None else None
+        return entry.river_drainage.river_type if entry.river_drainage is not None else None
     for body in bodies:
         if body.water_body_uid == entry.water_body_uid:
             return body.kind

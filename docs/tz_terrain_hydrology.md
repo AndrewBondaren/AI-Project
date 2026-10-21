@@ -630,9 +630,9 @@ Fine river caller передаёт `base_space: CoordinateSpace` явно: produ
 ### River review-debt: согласованные решения (2026-10-21)
 
 Контракт утверждён мастером для исправления review-debt шага 5/6
-([план](../.cursor/plans/hy-12-step5-review-debt.md)). R-1…R-6 реализованы
+([план](../.cursor/plans/hy-12-step5-review-debt-done.md)). R-1…R-6 реализованы
 шагами 1–5; шаг 6 фиксирует сверенные семантики. Уточнения раунда 2 ниже
-отмечены отдельно как целевой контракт шага 7 и ещё не реализованы.
+реализованы шагом 7 (2026-10-22). Review-debt шаги 1–7 завершены.
 R-1 реализован 2026-10-21: caller разрешает topology один раз, river geometry
 требует явный POJO, fine получает доменный lift от caller. R-4 реализован
 шагом 2: поле глубины и расчёт через POJO подключены к coarse/fine.
@@ -640,7 +640,7 @@ R-1 реализован 2026-10-21: caller разрешает topology один
 подключены fine planning с resolved водой и общий prepare/diagnostic job.
 Шагом 5 реализованы POJO with_* с сохранением полей и валидации. Итоговая
 сверка документов выполнена шагом 6; согласованные уточнения раунда 2
-(UID, притоки, error boundary, metadata) остаются шагу 7.
+(UID, притоки, error boundary, metadata) реализованы шагом 7.
 
 **Topology (R-1).** Caller один раз разрешает `WorldTopology` из мира.
 Нижележащие river-функции, выполняющие геометрические операции, требуют её
@@ -704,8 +704,8 @@ runtime-перенаправлением.
 
 Несколько рек могут иметь общую клетку принимающей воды: terminal mouth
 исключён из interior-проверки пересечений, а русла до него резервируются между
-объектами. Это не означает реализованного слияния с чужим RIVER_BED: притоки
-остаются шагу 7. Сухой SHORE не блокирует путь и сам по себе не исключает
+объектами. Шагом 7 добавлено терминальное слияние с подтверждённой принимающей
+рекой; транзит через чужой RIVER_BED запрещён. Сухой SHORE не блокирует путь и сам по себе не исключает
 кандидатный исток; остальные требования к высоте и маршруту сохраняются.
 
 Пустой rasterized leg отклоняет candidate polyline вместо пропуска участка.
@@ -714,13 +714,14 @@ Shared prepare проверяет связность и обязательную
 `plan_path_to_target` не имеет production callers: helper может закончиться
 на принимающей воде до target, но это не задаёт семантику declared intents.
 Их production-путь — rasterization → shared validate/prepare → relief apply.
-Известные дефекты UID и ранней границы ошибки типа перечислены в шаге 7.
+Дефекты UID и ранней границы ошибки типа исправлены шагом 7.
 
 **Притоки и слияние рек — решение мастера по Q-2 раунда 2.**
 
-Целевой контракт; реализация относится к согласованию и исполнению шага 7
-review-debt. Текущий безусловный запрет входа в чужой `RIVER_BED` пока
-не реализует разрешённое ниже слияние.
+Реализовано шагом 7 review-debt: принимающие реки подготавливаются раньше
+притоков; до записи relief проверяется подтверждённая цепочка стока до бассейна.
+Геометрический prepass сохраняет координатное устье на будущей реке, но не
+выдаёт права на чужое русло: claims получают только принятые объекты.
 
 Одна река — отдельный объект со своим UID, истоком и непрерывным направленным
 маршрутом. Приток — другая река со своим UID. Его конечная клетка может
@@ -746,8 +747,8 @@ POJO до реализации. Правило слияния не делает 
 позволяет успешно завершить fallback. Недостижимый кандидат без метаданных
 сам по себе не является основанием для этой причины. Каждый отброшенный
 кандидат отдельно не логируется; итоговая диагностика сохраняет также
-конкретную причину отказа исходной попытки по R-3/log. Это целевой контракт
-шага 7; текущая реализация пока только исключает такие кандидаты из выбора.
+конкретную причину отказа исходной попытки по R-3/log. Реализовано шагом 7:
+отказ поиска хранится в fallback_reason отдельно от reason исходной попытки.
 
 **Идентичность цели — решение мастера по Q-1 раунда 2.** Authored
 `HydrologyMouth.location_uid` остаётся UID локации. Разрешённый UID принимающего
@@ -757,7 +758,7 @@ POJO до реализации. Правило слияния не делает 
 используют разрешённую идентичность тела. Исходная authored-цель и фактический
 приёмник fallback сохраняются раздельно. Для проверки принимающей воды
 используется реальный surface_z, включая ветку strict z < z_water_level;
-пустой словарь не подменяет доступный рельеф. Это целевой контракт шага 7.
+пустой словарь не подменяет доступный рельеф. Реализовано шагом 7.
 
 **Ошибка типа объекта — решение мастера по Q-3 раунда 2.** Невалидный
 connection_type приводит к явной диагностике и WarningError конкретного
@@ -765,8 +766,8 @@ connection_type приводит к явной диагностике и Warning
 ошибочного типа охватывает сборку request, включая request_from_segments,
 и подготовку профиля; исключение на раннем этапе не должно обрывать весь apply.
 Отказ не оставляет частичного русла, невалидный тип не заменяется допустимым
-default. Типизированный контракт диагностики такого входа уточняется до кода
-по инвентаризации существующих POJO. Это целевой контракт шага 7.
+default. Реализовано шагом 7: RIVER_INVALID_CONNECTION_TYPE с object_type=None
+и rejected_connection_type (исходная отклонённая строка). См. typed-контракт ниже.
 
 **Глубина (R-4).** `world.hydrology.default_rivers.channel_depth_cells` —
 положительное целое поле POJO с default **3 cells**, вертикальная ось Z.
@@ -828,16 +829,19 @@ WaterBody и MapCellHydrology сериализуют полную модель �
 контракты, не resolver размещения, persistence или lifecycle.
 
 `RiverRoutingCode` — закрытый enum: `RIVER_REDIRECTED`, `RIVER_NO_WATER_BODIES`,
-`RIVER_NO_REACHABLE_WATER`, `RIVER_TARGET_UNREACHABLE`, `RIVER_INVALID_SOURCE`.
-`RiverRoutingFailure` — закрытый enum причин: отсутствующая геометрия/опора/клетка
+`RIVER_NO_REACHABLE_WATER`, `RIVER_TARGET_UNREACHABLE`, `RIVER_INVALID_SOURCE`, `RIVER_INVALID_CONNECTION_TYPE`.
+`RiverRoutingFailure` — закрытый enum причин: невалидный тип, цикл стока, отсутствующая геометрия/опора/клетка
 рельефа, разрыв маршрута, подъём, недопустимый поворот, занятое русло, сухой конец,
 другое принимающее тело, превышение бюджета пути, исток уже в воде, отсутствие
 идентичности/типа принимающей воды. `RiverRouteDiagnostic` — frozen POJO:
 `world_uid`, `object_uid` (opaque существующие UID, осознанно `str`),
-`object_type: HydrologyConnectionType`, `requested_mouth: HydrologyMouth | None`,
+`object_type: HydrologyConnectionType | None`, `requested_mouth: HydrologyMouth | None`,
+`requested_receiver_uid: str | None` (opaque UID разрешённого приёмника),
+`rejected_connection_type: str | None` (исключение для отклонённой строки типа),
+`fallback_reason: RiverRoutingFailure | None` (отказ поиска отдельно от исходного),
 `code: RiverRoutingCode`, `reason: RiverRoutingFailure`,
 `source_cell/failure_cell/receiver_cell: Coord | None` (world-fine координаты),
-`receiver_uid: str | None` (opaque UID), `receiver_kind: BasinKind | None`,
+`receiver_uid: str | None` (opaque UID), `receiver_kind: BasinKind | HydrologyConnectionType | None`,
 `receiver_level: int | None`. Только перенаправление требует заполненных
 receiver UID/kind/cell. Для coarse-входа координаты диагностики проецируются
 через общий coordinate hub; исходные fine-координаты authored mouth сохраняются,
@@ -858,14 +862,19 @@ receiver UID/kind/cell. Для coarse-входа координаты диагн
 
 Fallback заново ищет маршрут от прежнего истока по D8-соседям домена topology,
 по готовому pre-bed terrain: без подъёма, с существующим ограничением поворота,
-без пересечения чужого русла. Для входа в воду используется уровень тела, если
+без транзита через чужое русло; подтверждённая река может стать конечным
+приёмником. Для входа в воду используется уровень тела, если
 известен, а не глубокое дно. Ранжируются только достижимые принимающие клетки:
 минимальная topology `dist2` от исходной цели (при неизвестной координате цели —
 от истока), затем `(y, x, body_uid)` для детерминизма. Для каждой клетки путь
 находится по состояниям `(previous, current)`, чтобы отказ одного поворота
 не скрывал другой допустимый подход. Устье не используется как транзит в другое
-тело. Приёмник fallback должен иметь существующий UID и известный `BasinKind`
-из `WaterBody` либо однозначной open-water роли; метаданные не выдумываются.
+тело. Приёмник fallback должен иметь существующий UID и известный тип:
+`BasinKind` из `WaterBody`/однозначной open-water роли или `HydrologyConnectionType`
+из подтверждённого RiverDrainageLink. Метаданные не выдумываются. Отсутствие
+метаданных у достижимого кандидата отражается в fallback_reason=RECEIVER_METADATA,
+только если не найден корректный альтернативный приёмник; reason сохраняет
+исходную причину, отдельные кандидаты не логируются.
 
 В `HydrologyRiversPolicy` заданы `mouth_search_radius_fine` (strict int ≥0,
 default **200**) и `max_path_cells` (strict int ≥2, default **128** — перенос
@@ -881,17 +890,19 @@ Import/preview возвращают `RIVER_TARGET_UNREACHABLE` для исход
 без перенаправления. При отсутствии resolved принимающей воды во входном
 мировом индексе — `RIVER_NO_WATER_BODIES`; если вода есть, но пути или полных
 метаданных приёмника нет — `RIVER_NO_REACHABLE_WATER`. Это факты доступного
-snapshot, не догадка о неизвестной части мира. Исток вне готового terrain либо
-уже в воде — `RIVER_INVALID_SOURCE`. Независимые объекты продолжаются.
+snapshot, не догадка о неизвестной части мира. Исток вне готового terrain,
+уже в воде или на чужом bed — `RIVER_INVALID_SOURCE`. Независимые объекты продолжаются.
 Диагностика покрывает каждый запрос материализации, переданный assembler,
 включая неудачные declared intents. Отброшенные candidate sources внутреннего
 процедурного planner ещё не являются объектами; их отбор остаётся HY-RIV-1.
 
-Новые application modules `riverRouteRequests`, `riverRouting`,
-`riverRouteDiagnostics`, `riverPrepare` разделяют подготовку входов, геометрию,
+Application modules `riverRouteRequests`, `riverRouteSearch`, `riverReceivers`,
+`riverRequestOrder`, `riverRouteDiagnostics`, `riverPrepare` разделяют подготовку входов, геометрию,
 реакцию на факты и эмиссию профилей. Assembler только оркестрирует их.
 На момент шага 3 fine cutover оставался впереди. Шагом 4 та же схема
-подключена к fine planning; уточнения раунда 2 остаются отдельным шагом 7.
+подключена к fine planning; уточнения раунда 2 реализованы шагом 7.
+Модуль геометрии/поиска переименован из riverRouting в riverRouteSearch;
+dataModel/hydrology/riverRouting остаётся владельцем диагностических POJO.
 
 ### `RiverTypeClassifier` (U17 + U18)
 
@@ -1841,6 +1852,6 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 ### Уточнение typed-контрактов раунда 2 (2026-10-22)
 
-Факт стока — frozen RiverDrainageLink: river_uid, receiver_uid (opaque str UID), receiver_kind: BasinKind | HydrologyConnectionType, receiver_cell: Coord в world-fine. AssembledRivers.drainage_links и HydrologyResult.river_drainage_links содержат tuple фактов; MapCellHydrology.river_drainage хранит optional тот же POJO, включая fine/persist путь. Это направленный сток, не authored parent/system group. Слияние допустимо только терминально с подтверждённым стоком принимающей реки до бассейна; транзит и циклы запрещены. Зависимости разрешаются до применения relief на одном pre-bed snapshot.
+Факт стока — frozen RiverDrainageLink: river_uid, river_type: HydrologyConnectionType, receiver_uid (opaque str UID), receiver_kind: BasinKind | HydrologyConnectionType, receiver_cell: Coord в world-fine. AssembledRivers.drainage_links и HydrologyResult.river_drainage_links содержат tuple фактов; MapCellHydrology.river_drainage хранит optional тот же POJO, включая fine/persist путь. Это направленный сток, не authored parent/system group. Слияние допустимо только терминально с подтверждённым стоком принимающей реки до бассейна; транзит и циклы запрещены. Зависимости разрешаются до применения relief на одном pre-bed snapshot.
 
 RiverRouteDiagnostic.requested_receiver_uid хранит разрешённый UID отдельно от authored requested_mouth.location_uid. receiver_kind принимает BasinKind | HydrologyConnectionType. При невалидном типе object_type=None, rejected_connection_type: str | None сохраняет исходную строку: осознанное исключение для диагностики отклонённого wire-входа, без enum-подстановки. Код RIVER_INVALID_CONNECTION_TYPE, reason invalid_connection_type; fallback запрещён. При неуспешном поиске fallback_reason сохраняет самостоятельную причину (в том числе RECEIVER_METADATA), reason остаётся исходной. Исток на чужом bed — RIVER_INVALID_SOURCE с reason blocked_river_bed. Единый runtime-предикат: mode RUNTIME и не validate_only; вне runtime используются validation sinks. Helpers планирования требуют явную HydrologyRiversPolicy.

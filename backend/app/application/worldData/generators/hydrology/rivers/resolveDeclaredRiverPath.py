@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from app.application.jsonValidation.worldRow import hydrology
 
@@ -30,6 +30,7 @@ from app.dataModel.topology.fineTopology import fine_topology
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as Role
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -38,17 +39,16 @@ class _MouthSearch:
     topology: WorldTopology
     radius_fine: int
     span: int
+    river_uids: frozenset[str] = frozenset()
+    river_cells: frozenset[Coord] = frozenset()
 
 
-def _nearest_water_cell(fine_anchor, occupied, *, heightmap, search: _MouthSearch,
-                        target_uid: str | None = None):
+def _nearest_water_cell(fine_anchor, occupied, *, heightmap, search: _MouthSearch):
     anchor = search.topology.canonicalize(*fine_anchor)
     if anchor is None:
         return None
     ranked = []
-    for cell, entry in occupied.items():
-        if target_uid is not None and entry.water_body_uid != target_uid:
-            continue
+    for cell in occupied:
         if not is_river_mouth(cell, heightmap.surface_z, occupied):
             continue
         point = (grid_tile_origin_x(cell[0], search.span), grid_tile_origin_y(cell[1], search.span))
@@ -72,7 +72,7 @@ def _fine_to_space(world: object, space: CoordinateSpace) -> FineToSpace:
 
 
 def _waypoint_fine(wp: HydrologyWaypoint) -> Cell:
-    return int(wp.x), int(wp.y)
+    return wp.x, wp.y
 
 
 def _location_anchor_fine(
@@ -100,8 +100,13 @@ def _resolve_mouth(
         anchor = int(mouth.x), int(mouth.y)
     else:
         return None
-    return _nearest_water_cell(anchor, occupied, heightmap=heightmap, search=search,
-                               target_uid=mouth.location_uid) or to_space(anchor)
+    cell = to_space(anchor)
+    entry = occupied.get(cell)
+    if cell in search.river_cells or mouth.location_uid in search.river_uids or (entry is not None and (
+            entry.role is Role.RIVER_BED or is_river_mouth(cell, heightmap.surface_z, occupied))):
+        return cell
+    # The location identifies the anchor, never the water body's identity.
+    return _nearest_water_cell(anchor, occupied, heightmap=heightmap, search=search) or cell
 
 
 def _anchors_for_river(
@@ -131,8 +136,8 @@ def _anchors_for_river(
             last_uid = river.route_location_uids[-1]
             last = _location_anchor_fine(last_uid, loc_map)
             if last is not None:
-                water = _nearest_water_cell(last, occupied, heightmap=heightmap, search=search,
-                                            target_uid=last_uid)
+                water = _resolve_mouth(HydrologyMouth(location_uid=last_uid), loc_map,
+                                       occupied, to_space, heightmap, search)
                 if water is not None:
                     anchors[-1] = water
         return anchors
@@ -181,6 +186,8 @@ def resolve_declared_river_intents(
     *,
     space: CoordinateSpace,
     topology: WorldTopology,
+    river_uids: frozenset[str] = frozenset(),
+    river_cells: frozenset[Coord] = frozenset(),
 ) -> list[RiverSegment]:
     """Rasterize endpoints/via_locations intents into candidate segments.
 
@@ -191,14 +198,14 @@ def resolve_declared_river_intents(
     ends rasterization; shared validation decides whether it is an acceptable
     receiver. The caller handles failed requests and runtime fallback; this
     resolver neither materializes beds nor publishes acceptance diagnostics.
-    Authored location/body UID separation remains review-round-2 work.
+    Authored location UID and resolved receiving identity remain separate.
     """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river intents require an explicit WorldTopology")
     to_space = _fine_to_space(world, space)
     span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
     search = _MouthSearch(fine_topology(topology, span) if span != 1 else topology,
-                          hydrology(world).default_rivers.mouth_search_radius_fine, span)
+                          hydrology(world).default_rivers.mouth_search_radius_fine, span, river_uids, river_cells)
     loc_map = {loc.location_uid: loc for loc in locations}
     segments: list[RiverSegment] = []
 
@@ -223,3 +230,19 @@ def resolve_declared_river_intents(
         )
 
     return segments
+
+
+def resolve_mouth_cell(world: object, mouth: HydrologyMouth, locations: Sequence[NamedLocation],
+                       occupied: dict[Cell, MapCellHydrology], heightmap: SurfaceHeightmap, *,
+                       space: CoordinateSpace, topology: WorldTopology,
+                       river_uids: frozenset[str] = frozenset(),
+                       river_cells: frozenset[Coord] = frozenset()) -> Cell | None:
+    """Resolve an authored anchor once without conflating location and body UID."""
+    if not isinstance(topology, WorldTopology):
+        raise TypeError("river mouths require an explicit WorldTopology")
+    span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
+    search = _MouthSearch(fine_topology(topology, span) if span != 1 else topology,
+                         hydrology(world).default_rivers.mouth_search_radius_fine, span, river_uids, river_cells)
+    cell = _resolve_mouth(mouth, {loc.location_uid: loc for loc in locations}, occupied,
+                          _fine_to_space(world, space), heightmap, search)
+    return topology.canonicalize(*cell) if cell is not None else None

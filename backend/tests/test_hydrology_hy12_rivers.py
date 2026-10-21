@@ -3,6 +3,8 @@
 from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
 from app.dataModel.topology.fineTopology import fine_topology
 from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
+from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+from app.dataModel.hydrology.waterBody import WaterBody
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -45,23 +47,23 @@ class RiverWaterlineTests(unittest.TestCase):
         raw = {(4, 0): MapCellHydrology(water_body_uid="lake", z_water_level=7)}
         painted = {(4, 0): MapCellHydrology(role=Role.LAKE, water_body_uid="lake", z_water_level=7)}
         expected = [(x, 0) for x in range(5)]
-        self.assertEqual(plan_descent_path(hm, (0, 0), raw, topology=topology), expected)
-        self.assertEqual(plan_descent_path(hm, (0, 0), painted, topology=topology), expected)
+        self.assertEqual(plan_descent_path(hm, (0, 0), raw, topology=topology, policy=HydrologyRiversPolicy()), expected)
+        self.assertEqual(plan_descent_path(hm, (0, 0), painted, topology=topology, policy=HydrologyRiversPolicy()), expected)
         self.assertTrue(is_river_mouth((4, 0), hm.surface_z, {(4, 0): MapCellHydrology(role=Role.LAKE)}))
 
     def test_wrapped_seam_turn_continues_in_same_direction(self):
         hm = flat_heightmap(0, 7, 0, 2, z=50)
         hm.surface_z.update({(6, 1): 10, (7, 1): 8, (0, 1): 6, (1, 1): -2})
         index = {(1, 1): MapCellHydrology(water_body_uid="sea", z_water_level=0)}
-        self.assertEqual(plan_descent_path(hm, (6, 1), index, topology=hydro_topology(hm, Mode.WRAPPED)),
+        self.assertEqual(plan_descent_path(hm, (6, 1), index, topology=hydro_topology(hm, Mode.WRAPPED), policy=HydrologyRiversPolicy()),
                          [(6, 1), (7, 1), (0, 1), (1, 1)])
-        self.assertEqual(plan_descent_path(hm, (6, 1), index, topology=hydro_topology(hm)), [])
+        self.assertEqual(plan_descent_path(hm, (6, 1), index, topology=hydro_topology(hm), policy=HydrologyRiversPolicy()), [])
 
     def test_sphere_fold_continues_after_reflection(self):
         hm = flat_heightmap(0, 7, 0, 3, z=50)
         hm.surface_z.update({(0, 1): 10, (0, 0): 8, (4, 0): 6, (4, 1): -1})
         index = {(4, 1): MapCellHydrology(water_body_uid="sea", z_water_level=0)}
-        self.assertEqual(plan_descent_path(hm, (0, 1), index, topology=hydro_topology(hm, Mode.SPHERE)),
+        self.assertEqual(plan_descent_path(hm, (0, 1), index, topology=hydro_topology(hm, Mode.SPHERE), policy=HydrologyRiversPolicy()),
                          [(0, 1), (0, 0), (4, 0), (4, 1)])
 
     def test_d8_domain_deduplicates_tiny_world(self):
@@ -88,6 +90,8 @@ class RiverWaterlineTests(unittest.TestCase):
         result = assemble_rivers(hydro_world(z_min=-20), hm, hydro_master(declared_river_edges=[
             DeclaredRiverEdge("edge", ((0, 0), (3, 0)), "river")]), occupied,
                topology=hydro_topology(hm),
+               water_bodies=(WaterBody(water_body_uid="lake", kind=BasinKind.LAKE,
+                                       declared_level=10, z_water_level=10),),
            )
         self.assertEqual(result.segments[0].polyline_cells, [(0, 0), (1, 0), (2, 0)])
         self.assertEqual(set(result.by_cell), {(0, 0), (1, 0)})
@@ -106,7 +110,7 @@ class RiverWaterlineTests(unittest.TestCase):
                                      change_uid="test", auto_seas=False, auto_lakes=False)
         index = water.materialized.by_cell
         self.assertEqual(index[(4, 2)].role, Role.SHORE)
-        path = plan_descent_path(hm, (1, 2), index, topology=topology)
+        path = plan_descent_path(hm, (1, 2), index, topology=topology, policy=HydrologyRiversPolicy())
         self.assertTrue(path)
         self.assertEqual(path[-1], (5, 2))
         self.assertIn((4, 2), path)

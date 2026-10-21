@@ -103,6 +103,8 @@ def plan_descent_path(
 ) -> list[tuple[int, int]]:
     if not isinstance(topology, WorldTopology):
         raise TypeError("river geometry requires an explicit WorldTopology")
+    if not isinstance(policy, HydrologyRiversPolicy):
+        raise TypeError("river planning requires an explicit HydrologyRiversPolicy")
     if source not in heightmap.surface_z:
         return []
 
@@ -167,6 +169,8 @@ def plan_path_to_target(
     """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river geometry requires an explicit WorldTopology")
+    if not isinstance(policy, HydrologyRiversPolicy):
+        raise TypeError("river planning requires an explicit HydrologyRiversPolicy")
     if source not in heightmap.surface_z or target not in heightmap.surface_z:
         return []
     if source == target:

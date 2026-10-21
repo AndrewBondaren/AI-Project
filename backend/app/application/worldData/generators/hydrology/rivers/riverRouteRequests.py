@@ -108,7 +108,8 @@ def _edge_requests(world: World, heightmap: SurfaceHeightmap, edges: Sequence[De
 def _intent_requests(world: World, heightmap: SurfaceHeightmap, intents: Sequence[DeclaredRiver],
                      locations: Sequence[NamedLocation], occupied: dict[Coord, MapCellHydrology],
                      type_classify: RiverTypeClassify, topology: WorldTopology,
-                     space: CoordinateSpace) -> list[RiverRouteRequest]:
+                     space: CoordinateSpace, river_uids: frozenset[str],
+                     candidates: Sequence[RiverSegment]) -> list[RiverRouteRequest]:
     loc_map = {location.location_uid: location for location in locations}
     span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
 
@@ -122,6 +123,8 @@ def _intent_requests(world: World, heightmap: SurfaceHeightmap, intents: Sequenc
     for river in intents:
         if river.system_role is RiverSystemRole.SYSTEM:
             continue
+        river_cells = frozenset(cell for segment in candidates if segment.location_uid != river.location_uid
+                                for cell in segment.polyline_cells)
         if river.declare_mode is RiverDeclareMode.ENDPOINTS:
             source_fine = (river.source.x, river.source.y) if river.source is not None else None
             mouth = river.mouth
@@ -136,10 +139,10 @@ def _intent_requests(world: World, heightmap: SurfaceHeightmap, intents: Sequenc
             missing = not anchors or any(cell is None for cell in anchors)
         source = topology.canonicalize(*fine_to_grid_xy(*source_fine, span)) if source_fine else None
         target = resolve_mouth_cell(world, mouth, locations, occupied, heightmap,
-                                    space=space, topology=topology) if target_fine is not None else None
+                                    space=space, topology=topology, river_uids=river_uids, river_cells=river_cells) if target_fine is not None else None
         segments = () if missing else tuple(resolve_declared_river_intents(
             world, heightmap, [river], list(locations), occupied, type_classify,
-            space=space, topology=topology))
+            space=space, topology=topology, river_uids=river_uids, river_cells=river_cells))
         if segments:
             request = request_from_segments(world, segments, occupied, heightmap.surface_z, space=space)
             request = replace(request, object_uid=river.location_uid, source=source, target=target,
@@ -148,6 +151,8 @@ def _intent_requests(world: World, heightmap: SurfaceHeightmap, intents: Sequenc
         else:
             request = RiverRouteRequest(river.location_uid, Connection.RIVER, (), source, target, mouth,
                                         Failure.MISSING_ANCHOR if missing else Failure.MISSING_GEOMETRY)
+        if mouth is not None and mouth.location_uid in river_uids:
+            request = replace(request, requested_receiver_uid=mouth.location_uid)
         if river.system_role is RiverSystemRole.TRIBUTARY:
             request = replace(request, requested_receiver_uid=river.parent_location_uid)
         requests.append(request)
@@ -159,8 +164,13 @@ def declared_river_requests(world: World, heightmap: SurfaceHeightmap,
                             locations: Sequence[NamedLocation], occupied: dict[Coord, MapCellHydrology],
                             type_classify: RiverTypeClassify, topology: WorldTopology, *,
                             space: CoordinateSpace) -> list[RiverRouteRequest]:
-    return [
-        *_edge_requests(world, heightmap, edges, occupied, topology, space),
-        *_intent_requests(world, heightmap, intents, locations, occupied, type_classify, topology, space),
-    ]
-
+    edge_requests = _edge_requests(world, heightmap, edges, occupied, topology, space)
+    river_uids = frozenset([edge.location_uid for edge in edges if edge.location_uid]
+                          + [river.location_uid for river in intents])
+    # A geometry-only prepass makes future confluence anchors visible before
+    # any producer is accepted. It grants no claims or receiver metadata.
+    candidates = [segment for request in edge_requests for segment in request.segments]
+    candidates.extend(resolve_declared_river_intents(world, heightmap, list(intents), list(locations), {},
+        type_classify, space=space, topology=topology, river_uids=river_uids))
+    return [*edge_requests, *_intent_requests(world, heightmap, intents, locations, occupied,
+        type_classify, topology, space, river_uids, candidates)]

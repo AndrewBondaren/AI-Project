@@ -17,6 +17,8 @@ from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassif
 from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import apply_declared_fine_river_carves
 from app.application.worldData.generators.hydrology.types import DeclaredRiverEdge, HydrologyScope
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
@@ -31,8 +33,8 @@ class RiverTopologyContractTests(unittest.TestCase):
         cases = (
             (segments_from_declared, ([],), {}),
             (find_river_sources, (hm, {}, policy), {"world_uid": world.world_uid}),
-            (plan_descent_path, (hm, (0, 0), {}), {}),
-            (plan_path_to_target, (hm, (0, 0), (0, 0), {}), {}),
+            (plan_descent_path, (hm, (0, 0), {}), {"policy": HydrologyRiversPolicy()}),
+            (plan_path_to_target, (hm, (0, 0), (0, 0), {}), {"policy": HydrologyRiversPolicy()}),
             (plan_river_network, (world, hm, {}, policy), {}),
             (autoresolve_river_segments, (world, hm, master, {}), {}),
             (assemble_rivers, (world, hm, master), {}),
@@ -91,7 +93,9 @@ class RiverTopologyContractTests(unittest.TestCase):
                 world = hydro_world(hydrology=WorldHydrology(
                     default_rivers=HydrologyRiversPolicy(autoresolve=False)).model_dump(mode="json"))
                 result = assemble_rivers(world, hm, hydro_master(declared_river_edges=[
-                    DeclaredRiverEdge("river-edge", edge, "river")]), occupied, topology=topology)
+                    DeclaredRiverEdge("river-edge", edge, "river")]), occupied, topology=topology,
+                    water_bodies=(WaterBody(water_body_uid="receiver", kind=BasinKind.LAKE,
+                                            declared_level=0, z_water_level=0),))
                 self.assertEqual(set(result.by_cell), set(elevations) - {mouth})
                 self.assertEqual(result.segments[0].polyline_cells[-1], mouth)
                 self.assertEqual(hm.surface_z[mouth], elevations[mouth])

@@ -54,8 +54,9 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
     diagnostics without a partial bed. Runtime without validate_only may reroute
     to the nearest reachable receiver; import/preview never redirect. The emitted
     diagnostic records the object, original failure/target and actual receiver.
-    UID resolution, tributary confluences and invalid-type error isolation remain
-    review-round-2 work; this contract does not claim those fixes are complete.
+    Receiving rivers are prepared before tributaries and carry proven drainage
+    to a basin. A confluence preserves the receiver's floor/identity. Invalid
+    connection types reject only their own object, starting at request creation.
     """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river assembly requires an explicit WorldTopology")
@@ -82,7 +83,7 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
             merged.update(river_bed_roles(segment, spec, drainage=job.drainage))
             segments.append(segment)
             actual = RiverBedSpec(tuple((cell, heightmap.surface_z[cell]) for cell, _ in spec.bed_z))
-            drops.extend(river_drop_facts(heightmap, segment, actual, occupied))
+            drops.extend(river_drop_facts(heightmap, segment, actual, claims))
     diagnostics = tuple(fact for job in jobs for fact in job.diagnostics)
     for diagnostic in diagnostics:
         emit_river_diagnostic(ctx, diagnostic)

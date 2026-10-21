@@ -13,6 +13,7 @@ class RiverDrainageLink(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     river_uid: str
+    river_type: HydrologyConnectionType
     receiver_uid: str
     receiver_kind: RiverReceiverKind
     receiver_cell: Coord
