@@ -137,7 +137,7 @@ class RiverWaterlineTests(unittest.TestCase):
 
         def hydro_apply(*args, **kwargs):
             hm.surface_z[(0, 0)] = 9
-            return SimpleNamespace(cell_index=SimpleNamespace(by_cell={}))
+            return SimpleNamespace(cell_index=SimpleNamespace(by_cell={}), water_bodies=())
 
         with patch.object(module, "run_pole_resolve_pass"), \
                 patch.object(module, "run_surface_pass_coarse", return_value=hm), \

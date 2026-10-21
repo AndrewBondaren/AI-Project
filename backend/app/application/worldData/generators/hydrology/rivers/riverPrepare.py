@@ -13,6 +13,7 @@ from app.application.worldData.generators.hydrology.types import RiverSegment
 from app.application.worldData.generators.terrain.reliefObjects.riverBed import RiverBedSpec
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic, RiverRoutingCode as Code, RiverRoutingFailure as Failure
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
@@ -50,7 +51,7 @@ def _selected_segments(request: RiverRouteRequest, path: tuple[Coord, ...], redi
 def prepare_river(world: World, heightmap: SurfaceHeightmap, request: RiverRouteRequest,
                    occupied: dict[Coord, MapCellHydrology], topology: WorldTopology,
                    policy: HydrologyRiversPolicy, bodies: Sequence[WaterBody],
-                   ctx: ResolveContext, z_min: int) -> PreparedRiver:
+                   ctx: ResolveContext, z_min: int, *, space: CoordinateSpace) -> PreparedRiver:
     checked = validate_route(request, heightmap, occupied, topology, policy)
     path = checked.path
     diagnostics = ()
@@ -71,11 +72,11 @@ def prepare_river(world: World, heightmap: SurfaceHeightmap, request: RiverRoute
         diagnostic = RiverRouteDiagnostic(
             world_uid=world.world_uid, object_uid=request.object_uid, object_type=request.object_type,
             requested_mouth=request.requested_mouth, code=code, reason=checked.failure,
-            source_cell=diagnostic_cell(world, request.source, CoordinateSpace.WORLD_SURFACE_GRID),
-            failure_cell=diagnostic_cell(world, checked.failure_cell, CoordinateSpace.WORLD_SURFACE_GRID),
+            source_cell=diagnostic_cell(world, request.source, space),
+            failure_cell=diagnostic_cell(world, checked.failure_cell, space),
             receiver_uid=receiving.water_body_uid if receiving else None,
             receiver_kind=receiver_kind(path[-1], occupied, bodies) if receiving else None,
-            receiver_cell=diagnostic_cell(world, path[-1], CoordinateSpace.WORLD_SURFACE_GRID) if receiving else None,
+            receiver_cell=diagnostic_cell(world, path[-1], space) if receiving else None,
             receiver_level=receiving.z_water_level if receiving else None,
         )
         diagnostics = (diagnostic,)
@@ -95,6 +96,21 @@ def prepare_river(world: World, heightmap: SurfaceHeightmap, request: RiverRoute
         diagnostic = RiverRouteDiagnostic(world_uid=world.world_uid, object_uid=request.object_uid,
             object_type=request.object_type, requested_mouth=request.requested_mouth,
             code=Code.INVALID_SOURCE, reason=Failure.MISSING_GEOMETRY,
-            source_cell=diagnostic_cell(world, request.source, CoordinateSpace.WORLD_SURFACE_GRID))
+            source_cell=diagnostic_cell(world, request.source, space))
         return PreparedRiver(diagnostics=(diagnostic,))
     return PreparedRiver(tuple(accepted), tuple(specs), diagnostics)
+
+
+def prepare_river_requests(world: World, heightmap: SurfaceHeightmap, requests: Sequence[RiverRouteRequest],
+                           claims: dict[Coord, MapCellHydrology], topology: WorldTopology,
+                           policy: HydrologyRiversPolicy, water_bodies: Sequence[WaterBody],
+                           ctx: ResolveContext, z_min: int, *, space: CoordinateSpace) -> list[PreparedRiver]:
+    """Reserve successful interiors between objects; no terrain or public role writes."""
+    jobs = []
+    for request in requests:
+        job = prepare_river(world, heightmap, request, claims, topology, policy, water_bodies, ctx, z_min, space=space)
+        jobs.append(job)
+        for spec in job.specs:
+            for cell, _ in spec.bed_z:
+                claims[cell] = MapCellHydrology(role=HydrologyCellRole.RIVER_BED)
+    return jobs

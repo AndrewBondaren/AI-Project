@@ -8,6 +8,7 @@ from app.application.worldData.generators.hydrology.hydrologyGeneratorService im
 from app.application.worldData.generators.hydrology.placement import run_water_placement_pass
 from app.application.worldData.generators.terrain.reliefObjects.bathymetry.basinZ import apply_basin_z
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as Role
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
 from app.dataModel.topology.topologyGeometry import canonical_neighbors4
 from tests.hydrology_fixtures import carve_then_fill, flat_heightmap, hydro_world
@@ -151,7 +152,11 @@ class UnifiedWaterAcceptance(unittest.TestCase):
         world = basin_world(river=True)
         segment = world.hydrology["declared_rivers"][0]["segments"][0]
         world.hydrology["declared_rivers"][0]["segments"].append(dict(segment))
-        _, z = apply_declared_fine_river_carves(world, [], {(x, 2): 20 for x in range(5)}, topology=_river_test_topology(_river_test_heightmap({(x, 2): 20 for x in range(5)})))
+        base = {(x, 2): 20 for x in range(5)}
+        base[(1, 2)] = 0
+        _, z = apply_declared_fine_river_carves(world, [], base,
+            fine_hydro={(1, 2): MapCellHydrology(role=Role.LAKE, water_body_uid="body", z_water_level=5)},
+            topology=_river_test_topology(_river_test_heightmap(base)))
         self.assertEqual(z[(3, 2)], 17)
 
 

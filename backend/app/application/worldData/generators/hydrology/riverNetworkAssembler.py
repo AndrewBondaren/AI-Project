@@ -10,20 +10,18 @@ from app.application.worldData.generators.coordinates.space import CoordinateSpa
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import autoresolve_river_segments
 from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import resolve_river_type_classify
 from app.application.worldData.generators.hydrology.rivers.riverBedProfile import river_bed_roles
-from app.application.worldData.generators.hydrology.rivers.riverPrepare import PreparedRiver, prepare_river
+from app.application.worldData.generators.hydrology.rivers.riverPrepare import prepare_river_requests
 from app.application.worldData.generators.hydrology.rivers.riverRouteDiagnostics import emit_river_diagnostic
 from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import (
-    RiverRouteRequest, declared_river_requests, request_from_segments,
+    declared_river_requests, request_from_segments,
 )
 from app.application.worldData.generators.hydrology.types import HydrologyMasterInput, RiverSegment
 from app.application.worldData.generators.hydrology.waterfalls.riverDrops import river_drop_facts
 from app.application.worldData.generators.terrain.reliefObjects.riverBed import RiverBedSpec, apply_river_bed_z
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
-from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic
-from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.waterfallDrop import WaterfallDrop
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
@@ -38,21 +36,6 @@ class AssembledRivers:
     dirty_bbox: GridBBox | None
     drops: tuple[WaterfallDrop, ...]
     diagnostics: tuple[RiverRouteDiagnostic, ...]
-
-
-def _prepare_requests(world: World, heightmap: SurfaceHeightmap, requests: Sequence[RiverRouteRequest],
-                      claims: dict[Coord, MapCellHydrology], topology: WorldTopology,
-                      policy: HydrologyRiversPolicy, water_bodies: Sequence[WaterBody],
-                      ctx: ResolveContext, z_min: int) -> list[PreparedRiver]:
-    jobs = []
-    for request in requests:
-        job = prepare_river(world, heightmap, request, claims, topology, policy, water_bodies, ctx, z_min)
-        jobs.append(job)
-        # Reservations only. Materialized roles are published after relief apply.
-        for spec in job.specs:
-            for cell, _ in spec.bed_z:
-                claims[cell] = MapCellHydrology(role=HydrologyCellRole.RIVER_BED)
-    return jobs
 
 
 def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: HydrologyMasterInput,
@@ -72,13 +55,16 @@ def assemble_rivers(world: World, heightmap: SurfaceHeightmap, master: Hydrology
     policy = hydrology(world).default_rivers
     type_classify = resolve_river_type_classify(world)
     z_min = world_z_min(world)
-    requests = declared_river_requests(world, heightmap, master, locations or (), occupied, type_classify, topology)
-    jobs = _prepare_requests(world, heightmap, requests, claims, topology, policy, water_bodies, ctx, z_min)
+    requests = declared_river_requests(world, heightmap, master.declared_river_edges, master.declared_river_intents,
+        locations or (), occupied, type_classify, topology, space=CoordinateSpace.WORLD_SURFACE_GRID)
+    jobs = prepare_river_requests(world, heightmap, requests, claims, topology, policy, water_bodies, ctx, z_min,
+                                  space=CoordinateSpace.WORLD_SURFACE_GRID)
     if policy.enabled and policy.autoresolve:
         auto = autoresolve_river_segments(world, heightmap, master, claims, topology=topology)
         requests = [request_from_segments(world, (segment,), occupied, space=CoordinateSpace.WORLD_SURFACE_GRID)
                     for segment in auto]
-        jobs.extend(_prepare_requests(world, heightmap, requests, claims, topology, policy, water_bodies, ctx, z_min))
+        jobs.extend(prepare_river_requests(world, heightmap, requests, claims, topology, policy, water_bodies, ctx, z_min,
+                                           space=CoordinateSpace.WORLD_SURFACE_GRID))
     apply_river_bed_z(heightmap, tuple(spec for job in jobs for spec in job.specs))
     merged, segments, drops = {}, [], []
     for job in jobs:

@@ -10,10 +10,10 @@ from app.application.worldData.generators.coordinates.space import CoordinateSpa
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import segments_from_declared
 from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import resolve_declared_river_intents
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
-from app.application.worldData.generators.hydrology.types import HydrologyMasterInput, RiverSegment, RiverTypeClassify
+from app.application.worldData.generators.hydrology.types import DeclaredRiverEdge, RiverSegment, RiverTypeClassify
 from app.application.worldData.generators.hydrology.waterBodyIdentity import AutoWaterBodyRole, water_body_uid_for
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-from app.dataModel.hydrology.declaredRiver import HydrologyMouth
+from app.dataModel.hydrology.declaredRiver import DeclaredRiver, HydrologyMouth
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType as Connection
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.dataModel.hydrology.enums.riverSystemRole import RiverSystemRole
@@ -60,29 +60,30 @@ def request_from_segments(world: World, segments: Sequence[RiverSegment],
     return RiverRouteRequest(uid, Connection(first.connection_type), tuple(segments), source, target, mouth)
 
 
-def declared_river_requests(world: World, heightmap: SurfaceHeightmap, master: HydrologyMasterInput,
+def declared_river_requests(world: World, heightmap: SurfaceHeightmap,
+                            edges: Sequence[DeclaredRiverEdge], intents: Sequence[DeclaredRiver],
                             locations: Sequence[NamedLocation], occupied: dict[Coord, MapCellHydrology],
-                            type_classify: RiverTypeClassify, topology: WorldTopology) -> list[RiverRouteRequest]:
+                            type_classify: RiverTypeClassify, topology: WorldTopology, *,
+                            space: CoordinateSpace) -> list[RiverRouteRequest]:
     groups: dict[str, list[RiverSegment]] = {}
     raw_sources = {}
     raw_targets = {}
-    for edge, segment in zip(master.declared_river_edges,
-                             segments_from_declared(master.declared_river_edges, topology=topology), strict=True):
-        request = request_from_segments(world, (segment,), occupied, space=CoordinateSpace.WORLD_SURFACE_GRID)
+    for edge, segment in zip(edges, segments_from_declared(edges, topology=topology), strict=True):
+        request = request_from_segments(world, (segment,), occupied, space=space)
         groups.setdefault(request.object_uid, []).append(segment)
         raw_sources.setdefault(request.object_uid, topology.canonicalize(*edge.segment[0]))
         raw_targets[request.object_uid] = edge.segment[1]
     requests = []
     for uid, group in groups.items():
-        request = request_from_segments(world, group, occupied, space=CoordinateSpace.WORLD_SURFACE_GRID)
+        request = request_from_segments(world, group, occupied, space=space)
         raw_target = raw_targets[uid]
-        fine_target = diagnostic_cell(world, raw_target, CoordinateSpace.WORLD_SURFACE_GRID)
+        fine_target = diagnostic_cell(world, raw_target, space)
         mouth = HydrologyMouth(location_uid=request.requested_mouth.location_uid if request.requested_mouth else None,
                                x=fine_target[0], y=fine_target[1])
         requests.append(replace(request, source=raw_sources[uid],
                                 target=topology.canonicalize(*raw_target), requested_mouth=mouth))
     loc_map = {location.location_uid: location for location in locations}
-    span = map_cell_fine_span(world)
+    span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
 
     def anchor(uid: str) -> Coord | None:
         location = loc_map.get(uid)
@@ -90,7 +91,7 @@ def declared_river_requests(world: World, heightmap: SurfaceHeightmap, master: H
             return None
         return int(location.map_x), int(location.map_y)
 
-    for river in master.declared_river_intents:
+    for river in intents:
         if river.system_role is RiverSystemRole.SYSTEM:
             continue
         failure = None
@@ -112,7 +113,7 @@ def declared_river_requests(world: World, heightmap: SurfaceHeightmap, master: H
         target = topology.canonicalize(*fine_to_grid_xy(*target_fine, span)) if target_fine else None
         segments = () if failure else tuple(resolve_declared_river_intents(
             world, heightmap, [river], list(locations), occupied, type_classify,
-            space=CoordinateSpace.WORLD_SURFACE_GRID, topology=topology))
+            space=space, topology=topology))
         kind = Connection(segments[0].connection_type) if segments else Connection.RIVER
         requests.append(RiverRouteRequest(river.location_uid, kind, segments, source, target, mouth,
                                           failure or (Failure.MISSING_GEOMETRY if not segments else None)))

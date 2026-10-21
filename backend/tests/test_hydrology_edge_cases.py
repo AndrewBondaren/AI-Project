@@ -103,7 +103,10 @@ class TestDeclaredAutoresolveEdge(unittest.TestCase):
             for gx in range(2950, 6051)
             for gy in range(1950, 2051)
         }
-        hydro, _ = apply_declared_fine_river_carves(world, locs, surface_z, topology=_river_test_topology(_river_test_heightmap(surface_z)))
+        world.hydrology["default_rivers"] = {"max_path_cells": 6000 - 3000 + 1}
+        hydro, _ = apply_declared_fine_river_carves(world, locs, surface_z,
+            fine_hydro={(6000, 2000): MapCellHydrology(role=HydrologyCellRole.LAKE, water_body_uid="loc-b")},
+            topology=_river_test_topology(_river_test_heightmap(surface_z)))
         self.assertTrue(hydro)
         self.assertTrue(all(
             e.water_body_uid == "loc-river-via" for e in hydro.values()))

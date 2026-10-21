@@ -8,6 +8,8 @@ from app.application.worldData.generators.hydrology.load.resolveHydrologyTopolog
 from app.dataModel.topology.fineTopology import fine_topology
 
 from dataclasses import dataclass
+from app.application.jsonValidation.resolve import ResolveContext
+from app.dataModel.hydrology.waterBody import WaterBody
 
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
@@ -44,7 +46,7 @@ class SurfaceTerrainContext:
     pole_field: ClimatePoleField
     local_field: ClimateAnchorField
     coarse_hm: SurfaceHeightmap
-    coarse_hydro: dict[tuple[int, int], object]
+    coarse_hydro: dict[tuple[int, int], MapCellHydrology]
     sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology]
     fine_z_overrides: dict[tuple[int, int], int]
     # Pre-1.4 macro z (relief only) — light ReliefContributor base. Not hydro SoT.
@@ -61,6 +63,7 @@ def require_surface_terrain_context(
     nodes: list[ConnectionNode] | None = None,
     edges: list[ConnectionEdge] | None = None,
     hydrology_generator: HydrologyGeneratorService | None = None,
+    resolve_ctx: ResolveContext | None = None,
 ) -> SurfaceTerrainContext:
     """Fail-closed planning for pack bake / refine HTTP and orchestrators."""
     ctx = prepare_surface_terrain_context(
@@ -69,6 +72,7 @@ def require_surface_terrain_context(
         nodes=nodes,
         edges=edges,
         hydrology_generator=hydrology_generator,
+        resolve_ctx=resolve_ctx,
     )
     if ctx is None:
         raise ValueError("surface terrain context unavailable")
@@ -82,6 +86,7 @@ def prepare_surface_terrain_context(
     nodes: list[ConnectionNode] | None = None,
     edges: list[ConnectionEdge] | None = None,
     hydrology_generator: HydrologyGeneratorService | None = None,
+    resolve_ctx: ResolveContext | None = None,
 ) -> SurfaceTerrainContext | None:
     pole_field = run_pole_resolve_pass(world, locations)
     coarse_hm = run_surface_pass_coarse(world, locations, pole_field)
@@ -105,7 +110,8 @@ def prepare_surface_terrain_context(
 
     # Fine profiles sample the same pre-river snapshot, avoiding a second bed cut.
     pre_river_z = dict(coarse_hm.surface_z)
-    coarse_hydro: dict[tuple[int, int], object] = {}
+    coarse_hydro: dict[tuple[int, int], MapCellHydrology] = {}
+    water_bodies: tuple[WaterBody, ...] = ()
     if is_hydrology_enabled(world):
         hydro = hydrology_generator or HydrologyGeneratorService()
         hydro_result = hydro.apply(
@@ -116,8 +122,10 @@ def prepare_surface_terrain_context(
             edges=edges or [],
             basin_specs=water.basin_specs if water else (),
             topology=topology,
+            ctx=resolve_ctx,
         )
         coarse_hydro = hydro_result.cell_index.by_cell
+        water_bodies = hydro_result.water_bodies
 
     sparse_fine_hydro, fine_z_overrides = apply_declared_fine_river_carves(
         world,
@@ -126,6 +134,8 @@ def prepare_surface_terrain_context(
         topology=fine_topology(topology, map_cell_fine_span(world)),
         base_space=CoordinateSpace.WORLD_SURFACE_GRID,
         coarse_hydro=coarse_hydro,
+        water_bodies=water_bodies,
+        ctx=resolve_ctx,
     )
     local_field = build_local_field_from_coarse(world, locations, pole_field, coarse_hm)
 

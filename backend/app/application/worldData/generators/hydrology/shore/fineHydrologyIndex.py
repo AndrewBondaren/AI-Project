@@ -1,107 +1,65 @@
-"""Declared hydrology carve at world fine-grid resolution."""
+"""Fine river planning over resolved water; relief remains the elevation writer."""
 
-from __future__ import annotations
+from collections.abc import Sequence
+from itertools import chain
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.coordinates.space import CoordinateSpace
-from app.application.worldData.generators.coordinates.worldTile import (
-    expand_coarse_hydro_to_tile,
-    fine_bbox_for_tile,
-)
-from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
-    segments_from_declared,
-)
-from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
-    load_declared_hydrology,
-)
-from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import (
-    resolve_declared_river_intents,
-)
-from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import (
-    resolve_river_type_classify,
-)
-from app.application.worldData.generators.hydrology.rivers.riverBedProfile import (
-    river_bed_spec,
-    river_bed_roles,
-)
-from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
-from app.dataModel.topology.worldTopology import WorldTopology
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
-from app.application.worldData.generators.terrain.reliefObjects.riverBed import apply_river_bed_z
+from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.worldRow import hydrology
-from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+from app.application.worldData.generators.coordinates.space import CoordinateSpace
+from app.application.worldData.generators.coordinates.worldTile import expand_coarse_hydro_to_tile, fine_bbox_for_tile
+from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import load_declared_hydrology
+from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import resolve_river_type_classify
+from app.application.worldData.generators.hydrology.rivers.riverBedProfile import river_bed_roles
+from app.application.worldData.generators.hydrology.rivers.riverPrepare import prepare_river_requests
+from app.application.worldData.generators.hydrology.rivers.riverRouteDiagnostics import emit_river_diagnostic
+from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import declared_river_requests
+from app.application.worldData.generators.hydrology.shore.fineRiverSampling import sample_fine_river_input
+from app.application.worldData.generators.terrain.reliefObjects.riverBed import apply_river_bed_z
+from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.topology.worldTopology import Coord, WorldTopology
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
 def apply_declared_fine_river_carves(
-    world: World,
-    locations: list[NamedLocation],
-    base_surface_z: dict[tuple[int, int], int],
-    *, topology: WorldTopology,
+    world: World, locations: list[NamedLocation], base_surface_z: dict[Coord, int], *, topology: WorldTopology,
     base_space: CoordinateSpace = CoordinateSpace.WORLD_FINE_GRID,
-    coarse_hydro: dict[tuple[int, int], MapCellHydrology] | None = None,
-) -> tuple[dict[tuple[int, int], MapCellHydrology], dict[tuple[int, int], int]]:
-    """Rasterize fine rivers; sample coarse input explicitly, never invent floor z."""
+    coarse_hydro: dict[Coord, MapCellHydrology] | None = None,
+    fine_hydro: dict[Coord, MapCellHydrology] | None = None,
+    water_bodies: Sequence[WaterBody] = (), ctx: ResolveContext | None = None,
+) -> tuple[dict[Coord, MapCellHydrology], dict[Coord, int]]:
+    """Sample before planning; atomically prepare profiles, apply once, then publish roles."""
     if not isinstance(topology, WorldTopology):
         raise TypeError("fine rivers require an explicit WorldTopology")
     if base_space not in (CoordinateSpace.WORLD_FINE_GRID, CoordinateSpace.WORLD_SURFACE_GRID):
         raise ValueError(f"unsupported river base space: {base_space}")
+    if (base_space is CoordinateSpace.WORLD_FINE_GRID and coarse_hydro) or (
+            base_space is CoordinateSpace.WORLD_SURFACE_GRID and fine_hydro):
+        raise ValueError("resolved river input hydrology must match base_space")
+    ctx = ctx if ctx is not None else ResolveContext()
+    policy, classify = hydrology(world).default_rivers, resolve_river_type_classify(world)
     loaded = load_declared_hydrology(world, locations)
-    type_classify = resolve_river_type_classify(world)
-    river_policy = hydrology(world).default_rivers
-    merged_hydro: dict[tuple[int, int], MapCellHydrology] = {}
-    surface_z: dict[tuple[int, int], int] = dict(base_surface_z)
-
-    if surface_z:
-        xs = [x for x, _ in surface_z]
-        ys = [y for _, y in surface_z]
-        hm = SurfaceHeightmap(
-            world_uid=world.world_uid,
-            bbox=GridBBox(min(xs), max(xs), min(ys), max(ys)),
-            surface_z=surface_z,
-        )
-    else:
-        hm = SurfaceHeightmap(
-            world_uid=world.world_uid,
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={},
-        )
-
-    segments = segments_from_declared(loaded.river_edges, topology=topology)
-    segments.extend(resolve_declared_river_intents(
-        world, hm, loaded.river_intents, locations, {}, type_classify,
-        space=CoordinateSpace.WORLD_FINE_GRID, topology=topology,
-    ))
-    occupied = {}
-    if base_space is CoordinateSpace.WORLD_SURFACE_GRID:
-        from app.application.worldData.generators.coordinates.convert import fine_to_grid_xy
-        from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import classify_autoresolve_polyline
-        from dataclasses import replace
-
-        span = map_cell_fine_span(world)
-        samples = {cell: fine_to_grid_xy(*cell, span)
-                   for segment in segments for cell in segment.polyline_cells}
-        surface_z = {cell: base_surface_z[grid] for cell, grid in samples.items() if grid in base_surface_z}
-        hm = replace(hm, surface_z=surface_z)
-        occupied = {cell: coarse_hydro[grid] for cell, grid in samples.items()
-                    if coarse_hydro is not None and grid in coarse_hydro}
-        segments = [segment if segment.declared else replace(segment, connection_type=
-            classify_autoresolve_polyline(segment.polyline_cells, hm, type_classify,
-                                         edge_uid=segment.edge_uid).connection_type)
-                    for segment in segments]
-    specs = []
-    for segment in segments:
-        spec = river_bed_spec(hm, segment,
-            depth_step=river_policy.channel_depth_for(HydrologyConnectionType(segment.connection_type)),
-            occupied=occupied, z_min=world_z_min(world))
-        specs.append(spec)
-        merged_hydro.update(river_bed_roles(segment, spec))
-    apply_river_bed_z(hm, specs)
-
-    return merged_hydro, surface_z
+    sampling = sample_fine_river_input(world, loaded, locations, base_surface_z, topology, base_space,
+                                      coarse_hydro or {}, fine_hydro or {}, policy)
+    hm = sampling.heightmap
+    requests = declared_river_requests(world, hm, loaded.river_edges, loaded.river_intents, locations,
+        sampling.occupied, classify, topology, space=CoordinateSpace.WORLD_FINE_GRID)
+    requests = sampling.sample_requests(requests, classify)
+    jobs = prepare_river_requests(world, hm, requests, dict(sampling.occupied), topology, policy,
+        water_bodies, ctx, world_z_min(world), space=CoordinateSpace.WORLD_FINE_GRID)
+    hm = sampling.output_heightmap(cell for segments in chain(
+        (request.segments for request in requests), (job.segments for job in jobs))
+        for segment in segments for cell in segment.polyline_cells)
+    apply_river_bed_z(hm, tuple(spec for job in jobs for spec in job.specs))
+    merged = {}
+    for job in jobs:
+        for segment, spec in zip(job.segments, job.specs, strict=True):
+            merged.update(river_bed_roles(segment, spec))
+        for diagnostic in job.diagnostics:
+            emit_river_diagnostic(ctx, diagnostic)
+    return merged, hm.surface_z
 
 
 def merge_fine_hydro_for_tile(

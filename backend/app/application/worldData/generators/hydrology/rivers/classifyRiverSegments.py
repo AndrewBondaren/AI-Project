@@ -1,6 +1,7 @@
 """U17/U18 — declare skip; autoresolve classify — D HY-4 / HY-5c."""
 
 from __future__ import annotations
+from collections.abc import Sequence
 
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import bresenham_line
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -13,7 +14,7 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 
 
-def segments_from_declared(edges: list[DeclaredRiverEdge], *, topology: WorldTopology) -> list[RiverSegment]:
+def segments_from_declared(edges: Sequence[DeclaredRiverEdge], *, topology: WorldTopology) -> list[RiverSegment]:
     """U18: bundle edges already typed — no re-classify."""
     if not isinstance(topology, WorldTopology):
         raise TypeError("declared river geometry requires an explicit WorldTopology")
@@ -32,13 +33,11 @@ def segments_from_declared(edges: list[DeclaredRiverEdge], *, topology: WorldTop
     return segments
 
 
-def classify_autoresolve_polyline(
+def classify_river_type(
     polyline: list[tuple[int, int]],
     heightmap: SurfaceHeightmap,
     type_classify: RiverTypeClassify,
-    *,
-    edge_uid: str,
-) -> RiverSegment:
+) -> HydrologyConnectionType:
     """U17: mountain vs lowland from source elevation."""
     # Planner enforces turns in its topology frame. Never drop a bed/drop vertex.
     cells = list(polyline)
@@ -56,13 +55,23 @@ def classify_autoresolve_polyline(
         source_z >= type_classify.mountain_min_source_z
         or mountain_fraction >= type_classify.path_mountain_fraction
     ):
-        connection_type = HydrologyConnectionType.MOUNTAIN_RIVER.value
+        return HydrologyConnectionType.MOUNTAIN_RIVER
     else:
-        connection_type = HydrologyConnectionType.RIVER.value
+        return HydrologyConnectionType.RIVER
+
+
+def classify_autoresolve_polyline(
+    polyline: list[tuple[int, int]],
+    heightmap: SurfaceHeightmap,
+    type_classify: RiverTypeClassify,
+    *, edge_uid: str,
+) -> RiverSegment:
+    """Attach geometry/identity once; type selection is independent of emission."""
+    connection_type = classify_river_type(polyline, heightmap, type_classify)
 
     return RiverSegment(
-        polyline_cells=cells,
-        connection_type=connection_type,
+        polyline_cells=list(polyline),
+        connection_type=connection_type.value,
         edge_uid=edge_uid,
         declared=False,
     )

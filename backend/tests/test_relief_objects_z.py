@@ -175,7 +175,7 @@ class TestPrepareSurfaceOrder(unittest.TestCase):
         hydro = MagicMock()
         hydro.apply.side_effect = lambda *_a, **_k: (
             order.append("hydro"),
-            SimpleNamespace(cell_index=SimpleNamespace(by_cell={})),
+            SimpleNamespace(cell_index=SimpleNamespace(by_cell={}), water_bodies=()),
         )[1]
 
         with (
