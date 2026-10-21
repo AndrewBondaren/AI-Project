@@ -3,6 +3,8 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.passages import builder as passages_builder
+from app.application.worldData.generators.structure.staircase import shaftPlacer
 from app.application.worldData.generators.structure.staircase.shaftPlacer import (
     EmbeddedShaftPlacer, AdjacentShaftPlacer, make_shaft_placer,
 )
@@ -18,8 +20,8 @@ from tests.structureWire import room_wire, level_wire
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-PLACER = "app.application.worldData.generators.structure.staircase.shaftPlacer"
-BUILDER = "app.application.worldData.generators.structure.passages.builder"
+PLACER = shaftPlacer.__name__
+BUILDER = passages_builder.__name__
 
 
 class EmbeddedShaftTests(unittest.TestCase):

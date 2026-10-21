@@ -9,6 +9,7 @@ from unittest.mock import patch
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.core.generationLogging import generation_world_log
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.generators.structure.passages import doorHeight, doorway
 from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.passages.entry import _resolve_entry_height
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
@@ -20,8 +21,8 @@ from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-LOGGER = "app.application.worldData.generators.structure.passages.doorHeight"
-DOORWAY = "app.application.worldData.generators.structure.passages.doorway"
+LOGGER = doorHeight.__name__
+DOORWAY = doorway.__name__
 
 
 class DoorHeightTests(unittest.TestCase):

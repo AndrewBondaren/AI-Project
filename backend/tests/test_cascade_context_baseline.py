@@ -38,6 +38,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.application.worldData.generators.structure import structureGeneratorService as service
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
+from app.application.worldData.generators.structure.passages import wallOpening
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
 from app.application.worldData.generators.utils import materialResolver
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
@@ -140,8 +141,8 @@ def snapshot(*, band=None, building_tier=None):
 
     with ExitStack() as stack:
         stack.enter_context(patch.object(materialResolver, "resolve_material", side_effect=resolve_material))
-        stack.enter_context(patch("app.application.worldData.generators.structure.passages.wallOpening.resolve_material",
-                                  side_effect=resolve_material))
+        stack.enter_context(patch.object(wallOpening, "resolve_material",
+                                        side_effect=resolve_material))
         stack.enter_context(patch.object(service, "instantiate_level_rooms",
                                         side_effect=lambda *a, **k: record_rooms(original_rooms, *a, **k)))
         stack.enter_context(patch.object(service, "instantiate_shaft_rooms",

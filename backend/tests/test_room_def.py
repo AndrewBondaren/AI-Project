@@ -17,11 +17,12 @@ from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.dataModel.locations.structure.room.sizeSpec import SizeSpec
 from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.generators.structure import structureGeneratorService
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from tests.structureWire import room_wire, level_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 
-LOGGER = "app.application.worldData.generators.structure.structureGeneratorService"
+LOGGER = structureGeneratorService.__name__
 UID = "00000000-0000-4000-8000-000000000010"
 
 

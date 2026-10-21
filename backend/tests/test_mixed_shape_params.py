@@ -5,6 +5,7 @@ from copy import deepcopy
 from random import Random
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.room import roomFactory
 from app.application.worldData.generators.structure.room.roomFactory import (
     _resolve_shape_params, instantiate_level_rooms,
 )
@@ -19,7 +20,7 @@ from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 
-FACTORY = "app.application.worldData.generators.structure.room.roomFactory"
+FACTORY = roomFactory.__name__
 
 
 class MixedShapeParamsTests(unittest.TestCase):

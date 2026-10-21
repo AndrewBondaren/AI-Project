@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
+from app.application.worldData.generators.structure.staircase.uShape import uShape
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_fr_anchor, _compute_u_params
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.ids import (
@@ -259,7 +260,7 @@ class StaircaseReplayTests(unittest.TestCase):
             display_name="Manor", system_location_type="building", created_at="2026-09-29",
             map_x=20, map_y=30, map_z=7,
         )
-        module = "app.application.worldData.generators.structure.staircase.uShape.uShape"
+        module = uShape.__name__
 
         def generate():
             anchors = []

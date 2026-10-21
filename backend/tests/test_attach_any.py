@@ -3,6 +3,7 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.layout import layoutEngine
 from app.application.worldData.generators.structure.layout.layoutEngine import _layout_mode_b
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.spatial.facing import Facing
@@ -14,7 +15,7 @@ from tests.structureWire import room_wire, level_wire
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building
 
-LAYOUT = "app.application.worldData.generators.structure.layout.layoutEngine"
+LAYOUT = layoutEngine.__name__
 
 
 def scenario(width=10, depth=14, room_type="corridor", mode=AttachWall.ANY, z=0):

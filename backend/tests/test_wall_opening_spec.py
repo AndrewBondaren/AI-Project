@@ -14,16 +14,18 @@ from app.core.generationLogging import generation_world_log
 from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
+from app.application.worldData.generators.structure.passages import wallOpening
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import compute_exterior_wall_profiles
+from app.application.worldData.generators.structure.room import roomFactory
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-FACTORY_LOGGER = "app.application.worldData.generators.structure.room.roomFactory"
-OPENING_LOGGER = "app.application.worldData.generators.structure.passages.wallOpening"
+FACTORY_LOGGER = roomFactory.__name__
+OPENING_LOGGER = wallOpening.__name__
 
 
 class WallOpeningSpecTests(unittest.TestCase):

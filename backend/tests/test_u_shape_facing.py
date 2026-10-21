@@ -4,9 +4,11 @@ from copy import deepcopy
 from random import Random
 from unittest.mock import patch
 
+from app.application.worldData.generators.structure.staircase.uShape import uShape
 from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing
 from app.application.worldData.generators.structure.staircase.uShape.uShape import UShapeBuilder
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_u_params
+from app.application.worldData.generators.structure.passages import builder as passages_builder
 from app.application.worldData.generators.structure.passages.builder import build_transitions
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
@@ -18,8 +20,8 @@ from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building
 from tests import test_embedded_shaft
 
-BUILDER = "app.application.worldData.generators.structure.passages.builder"
-U_SHAPE = "app.application.worldData.generators.structure.staircase.uShape.uShape"
+BUILDER = passages_builder.__name__
+U_SHAPE = uShape.__name__
 
 
 class UShapeFacingTests(unittest.TestCase):

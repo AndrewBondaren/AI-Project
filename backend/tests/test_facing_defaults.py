@@ -10,12 +10,13 @@ from random import Random
 from app.core.generationLogging import generation_world_log
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.dataModel.locations.structure.room.shapeParams import ResolvedStemWall
+from app.application.worldData.generators.structure.shape import shapes
 from app.application.worldData.generators.structure.shape.shapes import footprint_t_shape, room_footprint
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from tests.test_structure_orientation import simple_structure, test_world_building
 
-LOGGER = "app.application.worldData.generators.structure.shape.shapes"
+LOGGER = shapes.__name__
 
 
 class FacingDefaultsTests(unittest.TestCase):
