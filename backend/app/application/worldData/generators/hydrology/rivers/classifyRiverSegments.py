@@ -8,8 +8,8 @@ from app.dataModel.topology.worldTopology import WorldTopology
 from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     RiverSegment,
-    RiverTypeClassify,
 )
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 

@@ -5,9 +5,9 @@ import unittest
 from tests.hydrology_fixtures import hydro_topology
 
 from tests.hydrology_geometry_helpers import (flood_water_side, flood_water_side_unbounded)
-from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
-    seas_autoresolve_policy,
-)
+from app.application.jsonValidation.worldRow import hydrology
+from app.dataModel.hydrology.seas import HydrologySeasPolicy
+from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
@@ -31,16 +31,17 @@ def _world(**kwargs):
     return hydro_world(**kwargs)
 
 
-class TestSeasAutoresolvePolicy(unittest.TestCase):
+class TestSeasPolicy(unittest.TestCase):
 
     def test_defaults_on(self):
-        policy = seas_autoresolve_policy(_world())
-        self.assertTrue(policy.seas_enabled)
+        policy = hydrology(_world()).default_seas
+        self.assertIsInstance(policy, HydrologySeasPolicy)
+        self.assertTrue(policy.enabled)
         self.assertTrue(policy.autoresolve_coastal_sea)
         self.assertTrue(policy.autoresolve_open_ocean)
 
     def test_explicit_off(self):
-        policy = seas_autoresolve_policy(
+        policy = hydrology(
             _world(
                 hydrology={
                     "enabled": True,
@@ -50,7 +51,7 @@ class TestSeasAutoresolvePolicy(unittest.TestCase):
                     },
                 },
             ),
-        )
+        ).default_seas
         self.assertFalse(policy.autoresolve_coastal_sea)
         self.assertFalse(policy.autoresolve_open_ocean)
 
@@ -131,27 +132,25 @@ class TestHydrologyServiceAutoresolve(unittest.TestCase):
         self.assertGreater(result.cells_modified, 12)
         self.assertEqual(hm.surface_z, before)
 
-    def test_autoresolve_off_keeps_narrow_strip(self):
-        w = _world(
-            hydrology={
-                "enabled": True,
-                "default_seas": {
-                    "bands": {"min": 1, "max": 2},
-                    "autoresolve_coastal_sea": False,
-                    "autoresolve_open_ocean": False,
-                },
-            },
+    def test_sea_generation_gates_on_existing_below_level_terrain(self):
+        cases = (
+            ("on", WorldHydrology(), HydrologyScope.OPEN_OCEAN, True),
+            ("global_off", WorldHydrology(enabled=False), HydrologyScope.OPEN_OCEAN, False),
+            ("category_off", WorldHydrology(default_seas=HydrologySeasPolicy(enabled=False)),
+             HydrologyScope.OPEN_OCEAN, False),
+            ("autoresolve_off", WorldHydrology(default_seas=HydrologySeasPolicy(
+                autoresolve_coastal_sea=False, autoresolve_open_ocean=False)), HydrologyScope.OPEN_OCEAN, False),
+            ("scope_off", WorldHydrology(), HydrologyScope.LANDFORMS, False),
         )
-        hm = _flat_heightmap(0, 12, 0, 6)
-        svc = HydrologyGeneratorService()
-        result = svc.apply(
-            w,
-            [],
-            hm,
-            scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
-        )
-        roles = result.cell_index.by_cell
-        self.assertNotIn((0, 0), roles)
+        for name, policy, scope, expected_water in cases:
+            with self.subTest(case=name):
+                hm = _flat_heightmap(0, 12, 0, 6, z=-5)
+                before = dict(hm.surface_z)
+                w = _world(hydrology=policy.model_dump(mode="json"))
+                result = HydrologyGeneratorService().apply(w, [], hm, scopes=frozenset({scope}))
+                self.assertEqual(bool(result.water_bodies), expected_water)
+                self.assertEqual(bool(result.cell_index.by_cell), expected_water)
+                self.assertEqual(hm.surface_z, before)
 
 
 if __name__ == "__main__":

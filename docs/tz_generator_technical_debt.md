@@ -1071,16 +1071,101 @@ Nodes typed (`ResolvedConnectionNode`, `types.py:55-64`), edges — `asdict(Conn
 
 ### HY-S-6 — `HydrologyBands`: dataclass-дубль POJO + divergent defaults
 
-**Severity:** medium · **P:** P2 · **Status:** open · **Найдено:** 2026-10-14 (repo review)
+**Severity:** medium · **P:** P2 · **Status:** resolved (2026-10-21) · **Найдено:** 2026-10-14.
 
-Самое явное текущее нарушение `dataModel-no-hardcode`: два типа `HydrologyBands` с расходящейся семантикой.
+**Было:** runtime dataclass `HydrologyBands` дублировал POJO из dataModel;
+`resolveHydrologyBands` повторял bounds литералами, подставлял missing max=99
+вместо POJO default 5 и содержал raw local_profile/clamp API.
 
-- `generators/hydrology/types.py:39-42` — frozen dataclass `HydrologyBands(min, max)` дублирует Pydantic `dataModel/hydrology/bands.py` (`BAND_MIN=1`/`BAND_MAX=99`, field defaults `min=1`, `max=5`). Consumers берут dataclass (`proceduralSeaAutoresolve`, `deepeningBandCarver`, `proceduralLakeAutoresolve`, …).
-- `load/resolveHydrologyBands.py:16-17` — локальные `_BAND_MIN`/`_BAND_MAX` вместо импорта из `dataModel.hydrology.bands`.
-- `clamp_bands` (`resolveHydrologyBands.py:56-63`) — missing `max` → `99` (`_BAND_MAX`); POJO default `max=5`. Поведенческое расхождение: `bands: {min: 3}` без `max` даёт `(3, 99)` через resolver и `(3, 5)` через POJO; категории вне POJO-map без `bands` получают полный `1..99` вместо per-category default.
-- `_CATEGORY_POJO` (`:27-31`) покрывает только rivers/lakes/seas; `shore`/`landforms` — raw-dict path (`:43-53`). Миграция на POJO остановлена посередине (см. также HY-S-3).
+**Сделано 2026-10-21:** по повторной инвентаризации production уже читает
+канонический POJO, у legacy resolver остались только два тестовых вызова.
+Удалены dataclass из `generators/hydrology/types.py` и весь неиспользуемый
+`load/resolveHydrologyBands.py` без compat alias или нового resolver.
+Остался единственный `dataModel/hydrology/bands.py:HydrologyBands`;
+policy, BasinSpec и floor_profile_z используют его напрямую. Wire и текущая
+валидация POJO не менялись, новые правила/coercion/сортировка bounds не вводились.
+Whole-category defaults и typed rim сохраняются; legacy max=99 fallback удалён.
 
-**Fix:** resolver читает `dataModel` `HydrologyBands` напрямую (все категории через POJO), `clamp_bands` → bounds из POJO; единственный тип `HydrologyBands` в hydrology (генераторы принимают POJO).
+Два теста старого API заменены пятью проверками существующего POJO-контракта:
+missing category bands, partial bands с max=5, custom bounds round-trip,
+отказ невалидных границ без clamp/default, typed rim и отказ inverted rim.
+**68 tests OK**: HY-1, bathymetry, water resolver, HY-12 rivers/smoke и
+water placement pass; compileall backend/app и diff-check прошли.
+Поиск Python-кода подтверждает одно определение HydrologyBands и отсутствие
+legacy API imports/callers. Backend не запускался, коммит не создавался.
+
+План и отчёт: [hy-s-6-hydrology-bands-pojo-done.md](../.cursor/plans/hy-s-6-hydrology-bands-pojo-done.md).
+HY-S-7 и HY-S-8 остаются отдельными open задачами.
+
+---
+
+### HY-S-7 — `RiverTypeClassify`: runtime-дубль существующего POJO
+
+**Severity:** medium · **P:** P2 · **Status:** resolved (2026-10-21) · **Найдено:** 2026-10-21.
+
+**Было:** dataclass в `generators/hydrology/types.py` повторял пять полей
+Pydantic `dataModel/hydrology/rivers.py:RiverTypeClassify`. Активный resolver
+вручную копировал поля, повторял cast/default/null fallback и raw-dict parse.
+
+**Сделано:** dataclass удалён без compat alias. Planner, classifier,
+declared intent/request helpers, fine sampling и test consumers импортируют
+канонический POJO напрямую. `load/resolveRiverTypeClassify.py` сохранён как
+typed accessor: `hydrology(world).default_rivers.type_classify`; ручная
+проекция, `_pojo_to_runtime`, `_type_classify_from_defaults` и локальные
+fallback-ветки удалены. Defaults/валидация остаются у существующего POJO
+и общего jsonValidation; public exports jsonValidation не менялись.
+
+Синхронизированы устаревшие U22 / раздел import validator в ТЗ: missing
+использует defaults POJO; supplied null/invalid отклоняется общим resolver.
+Это уже действующее поведение, подтверждённое прежним null regression;
+новая строгость или новые правила классификации не вводились.
+
+**126 tests OK**: HY-1, edge_cases, HY-5a/b/c, depth, routing/topology,
+fine planning, coarse space, HY-12 rivers/smoke, relief. Добавлены проверки
+типа accessor, default/partial/custom policy round-trip, фактического влияния
+custom source threshold на mountain/river и отказа invalid import/runtime.
+Существующие depth tests подтверждают multiplier/rounding в coarse/fine.
+compileall backend/app и diff-check прошли; поиск подтверждает один класс
+RiverTypeClassify и отсутствие imports runtime-дубля/ручной проекции.
+
+План и отчёт: [hy-s-7-river-classify-pojo-done.md](../.cursor/plans/hy-s-7-river-classify-pojo-done.md).
+HY-S-8 и HY-12 review-debt не выполнялись. Backend не запускался,
+коммит не создавался; изменения HY-S-6 сохранены.
+
+---
+
+### HY-S-8 — неиспользуемые autoresolve policy-обёртки
+
+**Severity:** low · **P:** P3 · **Status:** resolved (2026-10-21) · **Найдено:** 2026-10-21.
+
+**Было:** `load/hydrologyAutoresolvePolicy.py` объявлял три dataclass
+RiversAutoresolvePolicy/LakesAutoresolvePolicy/SeasAutoresolvePolicy и helpers.
+Они копировали флаги existing POJO и добавляли локальные fallback True,
+не вычисляя effective policy. Повторная инвентаризация подтвердила отсутствие
+production-callers: sea/lake helpers вызывались четырьмя policy-тестами,
+river helper внешних callers не имел.
+
+**Сделано:** loader с тремя обёртками удалён целиком без compat alias,
+нового DTO/resolver или замены defaults. Четыре policy tests переключены на
+существующий typed reader и HydrologySeasPolicy/HydrologyLakesPolicy.
+Production facade/assembler и canonical POJO не менялись.
+
+Сохранено и усилено покрытие production gates. Sea off test теперь использует
+реально подходящий below-level terrain с положительным on-контролем,
+проверяет global/category enabled, autoresolve flags и scope. Lake test
+проверяет global/category/autoresolve/scope off на существующей впадине;
+положительный сценарий lake fill сохранён. Добавлен river test: category
+enabled=False / autoresolve=False не выпускает segments/roles и не пишет z
+на том же типе terrain/water входа, где положительный существующий test
+материализует реку. Declared при autoresolve=False покрыт routing/depth suites.
+
+**115 tests OK**: HY-1, HY-5a/b/c, edge cases, coarse/fine, HY-12 rivers/smoke,
+depth, routing/topology и fine planning. compileall backend/app и diff-check
+прошли. Поиск Python-кода: ноль старых imports, классов и helpers.
+
+План и отчёт: [hy-s-8-autoresolve-policy-cleanup-done.md](../.cursor/plans/hy-s-8-autoresolve-policy-cleanup-done.md).
+Изменения HY-S-6/HY-S-7 сохранены. HY-12 review-debt не выполнялся;
+backend не запускался, коммит не создавался.
 
 ---
 
@@ -1126,7 +1211,9 @@ Nodes typed (`ResolvedConnectionNode`, `types.py:55-64`), edges — `asdict(Conn
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
 | HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
 | HY-S-5 | low→medium | P2 | edges as dict (`asdict` + `.get` consumers) | open |
-| HY-S-6 | medium | P2 | `HydrologyBands` дубль POJO + divergent clamp defaults | open |
+| HY-S-6 | medium | P2 | `HydrologyBands` дубль POJO + divergent clamp defaults | **resolved 2026-10-21** — один POJO, legacy resolver удалён; 68 tests OK |
+| HY-S-7 | medium | P2 | `RiverTypeClassify`: активный runtime-дубль POJO и ручное копирование/fallback | **resolved 2026-10-21** — прямой POJO accessor, 126 tests OK |
+| HY-S-8 | low | P3 | Неиспользуемые autoresolve policy-обёртки поверх существующих POJO | **resolved 2026-10-21** — loader удалён, coverage на POJO/production; 115 tests OK |
 | CONN-1 | low | P2 | `node_type` → `connection_node_type` wire rename | open |
 
 ---

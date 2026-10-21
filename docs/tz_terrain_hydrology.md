@@ -35,7 +35,7 @@ metadata:
 | U19 | **`liquid_candidate` persist (v1):** mask и роли hydrology — **metadata на `map_cells`** при `save_terrain_batch`; climate и downstream читают из БД; нужно для «где реки/озёра/море» без sidecar между HTTP-вызовами |
 | U20 | **Declare озеро:** `world.hydrology.declared_lakes[]` — `location_uid` + `shoreline[]` waypoints (fine-клетки, замкнутый контур) |
 | U21 | **Declare воды:** `declared_basins[]` — форма + `kind` + дно; `declared_coastlines[]` — линия + явный `kind`, из неё достраивается бассейн. Все входы проходят общий placement → единый carve/fill |
-| U22 | **`type_classify` null:** runtime **fallback** на встроенные defaults схемы; **import validator (future):** проверить defaults, **записать явные значения** в bundle (normalize on import) — см. § Import validator |
+| U22 | **`type_classify`:** missing использует defaults POJO; supplied null/invalid отклоняется общим import/runtime resolver, без локального fallback. Normalize записывает явные значения в bundle — см. § Import validator |
 | U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — declare в `world.hydrology.declared_*` (hard cut от connection graph для hydrology) |
 | U24 | **River bed:** hydrology ставит **`system_terrain: liquid_body`** в channel; **`role: river_bed`** в metadata |
 | U28 | **Простая модель воды (2026-06):** hydrology → **`liquid_body`** в русле; **`generate-climate`** → **состояние** уже liquid cells (семантика состояния — [`tz_climate.md`](./tz_climate.md), **не** в этом ТЗ). Hydrology **не** выбирает лёд/вода/steam |
@@ -132,6 +132,17 @@ Pass 1.4 применяет абсолютные `surface_z` из `terrain/relie
 `bands.min` — предпочтительная ширина, не обязательная сухая полоса. В узком footprint профиль сжимается: если есть клетка ниже уровня, она остаётся водой. `bands.max` задаёт ширину slope-зоны distance-профиля, не ограничение перепада z. По решению мастера HY-12/3 гора иммутабельна: поднятые mountainZ клетки передаются в basinZ как reserved, исключаются из footprint и остаются островами с обычным профилем дна вокруг них. Разрешение precedence mountain × shore остаётся HY-7.
 
 Настройки: `default_seas.bands` (существующий default 1…20), `default_lakes.bands` / `default_rivers.bands` (1…5); локальный `rim` заменяет профиль своего тела. Валидатор: `1 <= min <= max <= 99`. Ширины интерпретируются в контракте рабочей сетки; отдельного масштаба гидрологии нет.
+
+**Единый контракт bands (HY-S-6).** Используется только POJO
+`dataModel/hydrology/bands.py:HydrologyBands`. Category policy и
+`DeclaredBasin.rim` передают его потребителям напрямую; runtime dataclass-дубль
+и неиспользуемый `resolveHydrologyBands` / `clamp_bands` удалены.
+Missing whole-category bands использует default категории; явно переданный
+partial bands разбирается по defaults самого HydrologyBands (в частности,
+missing max — 5, а не legacy 99). Потребитель не clamp-ит supplied значения
+и не заменяет их локальными defaults. Валидация остаётся на POJO и общем
+import/runtime resolver, порядок rim проверяется DeclaredBasin. Legacy
+raw `local_profile` API не сохраняется; локальный профиль тела задаётся typed rim.
 
 Материал сухого берега берётся из `default_seas.shore` (`shore_sea`), `default_lakes.shore` (`shore_lake`), `default_rivers.shore` (`shore_river`) или `mountain_shore` (`shore_mountain_river`). World-level `default_shore` deprecated. Grade берега принадлежит relief, не `bands`. Подводный solid-профиль остаётся дном; `liquid_candidate`/water-role определяются fill. Полная передача band/metadata в L0 — HY-10, coarse-профиль её не подтверждает.
 
@@ -995,6 +1006,14 @@ Validator: `1 ≤ min ≤ max ≤ 99`. Эталон: `default_rivers` / `default
 
 **Default:** geometry autoresolve ON; **`materialize_named_locations: false`** в шаблоне мира. Generators **никогда** не пишут в `named_locations` и **не** вызывают LLM.
 
+**Чтение autoresolve policy (HY-S-8).** Production facade/assembler получают
+`default_seas`, `default_lakes`, `default_rivers` напрямую из канонического
+`WorldHydrology` через общий typed reader. POJO владеют defaults и валидацией;
+отдельные `SeasAutoresolvePolicy`, `LakesAutoresolvePolicy`,
+`RiversAutoresolvePolicy` и локальные fallback True не используются.
+Существующая оркестрация применяет global/category enabled, scopes и
+autoresolve-флаги. Удаление неиспользуемых обёрток эти условия не меняет.
+
 **DAG (target)** — только если `materialize_named_locations: true` в **world template** (import JSON):
 
 ```mermaid
@@ -1095,21 +1114,31 @@ flowchart LR
 
 Loader: `resolve_hydrology_bands(category, world, local?)` → `world.hydrology.default_<category>.bands`; local `hydrology_profile` → **warning**.
 
-### Import validator — `type_classify` (future, U22)
+### Import validator — `type_classify` (U22, HY-S-7)
 
-> **Контракт:** [`tz_json_validation.md`](./tz_json_validation.md) § Normalize — schemaDefaults → explicit `worlds.hydrology`. Domain rules: ниже. Runtime hardcode `_SCHEMA_DEFAULTS` — transitional (§ Legacy json validation TZ).
+> **Контракт:** [`tz_json_validation.md`](./tz_json_validation.md) § Normalize. Единственный тип и источник defaults — `dataModel/hydrology/rivers.py:RiverTypeClassify`.
 
-**Правило:** поле `null` в `hydrology.default_rivers.type_classify` → **runtime fallback** на встроенные defaults схемы (generator не падает). **Validator on import:** подставить явные значения и **записать** normalized JSON в bundle / world record.
+Missing section/field использует defaults существующего POJO. Явно переданный
+null или другое невалидное значение отклоняется общим import/runtime resolver;
+consumer не подставляет вместо ошибки локальный default. Import normalize
+записывает разрешённые значения в bundle/world record. Это фиксация действующего
+POJO-контракта; прежний текст о consumer fallback при null устарел.
 
-| Поле | Schema default (v1, draft) | Примечание |
+`resolve_river_type_classify` — typed accessor к
+`hydrology(world).default_rivers.type_classify`. Planner/classifier/coarse/fine
+получают этот POJO напрямую, без runtime dataclass, ручной проекции полей,
+повторного parse/coerce и локальных defaults. Формулы классификации и расчёта
+mountain depth не меняются.
+
+| Поле | Default POJO | Примечание |
 |---|---|---|
-| `mountain_min_source_z` | `40` | метры `surface_z`; override мастером |
+| `mountain_min_source_z` | `40` | клетки Z `surface_z`; override мастером |
 | `path_mountain_fraction` | `0.5` | доля сегмента в mountain terrain |
 | `rapid_drop_threshold_m` | `3` | порог rapids (Δz между cells) |
 | `mountain_bed_steepness_factor` | `1.5` | множитель carve для `mountain_river` |
 | `foothill_gradient_threshold` | `0.12` | gradient (Δz/cell) — split `mountain_river` → `river` |
 
-Validator **не заменяет** runtime fallback — оба слоя (как climate CL-5). До validator: `null` в [`fixtures/world_template.json`](../fixtures/world_template.json) допустим; loader использует таблицу выше.
+Таблица описывает defaults POJO, а не отдельную таблицу подстановок loader. При изменении настроек источником остаётся POJO.
 
 `materialize_named_locations` — не `default_*`: world-wide, не override per location.
 

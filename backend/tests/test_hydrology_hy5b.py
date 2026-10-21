@@ -2,9 +2,9 @@
 
 import unittest
 
-from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
-    lakes_autoresolve_policy,
-)
+from app.application.jsonValidation.worldRow import hydrology
+from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
@@ -23,17 +23,18 @@ def _world(**kwargs):
     return hydro_world(**kwargs)
 
 
-class TestLakesAutoresolvePolicy(unittest.TestCase):
+class TestLakesPolicy(unittest.TestCase):
 
     def test_defaults_on(self):
-        policy = lakes_autoresolve_policy(_world())
-        self.assertTrue(policy.lakes_enabled)
+        policy = hydrology(_world()).default_lakes
+        self.assertIsInstance(policy, HydrologyLakesPolicy)
+        self.assertTrue(policy.enabled)
         self.assertTrue(policy.autoresolve)
 
     def test_explicit_off(self):
-        policy = lakes_autoresolve_policy(
+        policy = hydrology(
             _world(hydrology={"enabled": True, "default_lakes": {"autoresolve": False}}),
-        )
+        ).default_lakes
         self.assertFalse(policy.autoresolve)
 
 
@@ -51,13 +52,22 @@ class TestProceduralLakes(unittest.TestCase):
         self.assertEqual({entry.water_body_uid for entry in result.cell_index.by_cell.values()},
                          {body.water_body_uid for body in result.water_bodies})
 
-    def test_autoresolve_off_does_not_fill_natural_bowl(self):
-        world = _world(world_topology_mode="planar", hydrology={"enabled": True,
-            "default_lakes": {"autoresolve": False}})
-        result = HydrologyGeneratorService().apply(world, [], _depression_heightmap(),
-                                                   scopes=frozenset({HydrologyScope.LAKES}))
-        self.assertEqual(result.water_bodies, ())
-        self.assertEqual(result.cell_index.by_cell, {})
+    def test_disabled_gates_do_not_fill_natural_bowl(self):
+        cases = (
+            ("global_off", WorldHydrology(enabled=False), HydrologyScope.LAKES),
+            ("category_off", WorldHydrology(default_lakes=HydrologyLakesPolicy(enabled=False)), HydrologyScope.LAKES),
+            ("autoresolve_off", WorldHydrology(default_lakes=HydrologyLakesPolicy(autoresolve=False)), HydrologyScope.LAKES),
+            ("scope_off", WorldHydrology(), HydrologyScope.LANDFORMS),
+        )
+        for name, policy, scope in cases:
+            with self.subTest(case=name):
+                hm = _depression_heightmap()
+                before = dict(hm.surface_z)
+                world = _world(world_topology_mode="planar", hydrology=policy.model_dump(mode="json"))
+                result = HydrologyGeneratorService().apply(world, [], hm, scopes=frozenset({scope}))
+                self.assertEqual(result.water_bodies, ())
+                self.assertEqual(result.cell_index.by_cell, {})
+                self.assertEqual(hm.surface_z, before)
 
     def test_closed_global_minimum_has_no_guessed_high_lake_level(self):
         world = _world(world_topology_mode="wrapped")

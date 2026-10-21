@@ -16,6 +16,8 @@ from app.application.worldData.generators.hydrology.geom.smoothRiverPolyline imp
 from app.application.worldData.generators.hydrology.types import HydrologyScope
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from tests.hydrology_fixtures import (
     heightmap_from_z as _heightmap,
     hydro_master,
@@ -52,6 +54,22 @@ class TestRiverPlanner(unittest.TestCase):
 
 
 class TestRiverAutoresolve(unittest.TestCase):
+
+    def test_disabled_river_autoresolve_does_not_emit_or_carve(self):
+        for policy in (HydrologyRiversPolicy(enabled=False), HydrologyRiversPolicy(autoresolve=False)):
+            with self.subTest(enabled=policy.enabled, autoresolve=policy.autoresolve):
+                surface_z = {(gx, gy): 10 for gx in range(8) for gy in range(8)}
+                for gy in range(1, 8):
+                    surface_z[(4, gy)] = 10 + gy * 6
+                hm = _heightmap(surface_z)
+                before = dict(hm.surface_z)
+                occupied = {(gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN) for gx in range(8)}
+                world = _world(hydrology=WorldHydrology(default_rivers=policy).model_dump(mode="json"))
+                result = assemble_rivers(world, hm, hydro_master(scopes=frozenset({HydrologyScope.RIVERS})),
+                    occupied=occupied, topology=_river_test_topology(hm))
+                self.assertEqual(result.segments, [])
+                self.assertEqual(result.by_cell, {})
+                self.assertEqual(hm.surface_z, before)
 
     def test_autoresolve_segments_from_peak_to_ocean(self):
         surface_z = {(gx, gy): 10 for gx in range(8) for gy in range(8)}

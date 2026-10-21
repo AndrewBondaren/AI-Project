@@ -13,7 +13,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import classify_river_type
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
 from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import RiverRouteRequest
-from app.application.worldData.generators.hydrology.types import RiverTypeClassify
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as Role
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode

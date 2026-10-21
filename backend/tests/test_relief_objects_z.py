@@ -22,7 +22,7 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.generators.hydrology.rivers.riverNetworkPlanner import (
     _river_source_min_z,
 )
-from app.application.worldData.generators.hydrology.types import RiverTypeClassify
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.bake.lightGrid.contributors.mountain import MountainContributor

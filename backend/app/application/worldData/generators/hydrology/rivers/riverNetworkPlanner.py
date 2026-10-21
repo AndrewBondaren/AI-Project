@@ -9,7 +9,7 @@ from app.application.worldData.generators.hydrology.rivers.riverGeometry import 
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
 from app.dataModel.topology.topologyGeometry import canonical_neighbors8, dist2
 from app.dataModel.topology.worldTopology import WorldTopology
-from app.application.worldData.generators.hydrology.types import RiverTypeClassify
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

@@ -18,8 +18,8 @@ from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments
 )
 from app.application.worldData.generators.hydrology.types import (
     RiverSegment,
-    RiverTypeClassify,
 )
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver, HydrologyMouth
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth

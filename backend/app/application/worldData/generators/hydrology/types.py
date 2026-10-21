@@ -42,21 +42,6 @@ HYDROLOGY_BOOTSTRAP_SCOPES = frozenset({
 
 
 @dataclass(frozen=True)
-class HydrologyBands:
-    min: int
-    max: int
-
-
-@dataclass(frozen=True)
-class RiverTypeClassify:
-    mountain_min_source_z:        int
-    path_mountain_fraction:       float
-    rapid_drop_threshold_m:       int
-    mountain_bed_steepness_factor: float
-    foothill_gradient_threshold:  float
-
-
-@dataclass(frozen=True)
 class ResolvedConnectionNode:
     node_uid:     str
     x_fine:       int

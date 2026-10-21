@@ -35,8 +35,8 @@ from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex imp
 from app.application.worldData.generators.hydrology.types import (
     CoastlineSpec,
     HydrologyScope,
-    RiverTypeClassify,
 )
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

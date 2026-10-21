@@ -10,7 +10,8 @@ from app.application.worldData.generators.coordinates.space import CoordinateSpa
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import segments_from_declared
 from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import resolve_declared_river_intents
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
-from app.application.worldData.generators.hydrology.types import DeclaredRiverEdge, RiverSegment, RiverTypeClassify
+from app.application.worldData.generators.hydrology.types import DeclaredRiverEdge, RiverSegment
+from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.generators.hydrology.waterBodyIdentity import AutoWaterBodyRole, water_body_uid_for
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver, HydrologyMouth
