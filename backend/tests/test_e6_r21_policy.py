@@ -2,6 +2,7 @@
 import unittest
 from unittest.mock import patch
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.generators.terrain.relief.pick.templatePick import PickResult, pick_template, resolve_picked_template
 from app.application.worldData.generators.terrain.relief.canal.attachments import resolve_knobs_canal
@@ -12,6 +13,7 @@ from app.dataModel.terrain.relief.enums import CanalObstacleEntity, ReliefPickMo
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import WorldCanalTemplateRegistry
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy, ReliefContextPickPolicy
 from app.dataModel.terrain.relief import ReliefTemplate
+from app.application.worldData.generators.terrain.relief.pick import gradePass
 from app.application.worldData.generators.terrain.relief.pick.gradePass import grade_from_template
 from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import grade_constrained
 
@@ -21,7 +23,7 @@ class R21PolicyTests(unittest.TestCase):
         facts = []
         for preview in (False, True):
             ctx = ResolveContext.for_import(validate_only=preview)
-            with patch("app.application.jsonValidation.resolve.logger") as log:
+            with patch(resolve_module.__name__ + ".logger") as log:
                 with self.assertRaises(UnresolvedModelError) as caught:
                     operation(ctx)
             facts.append(caught.exception.issues)
@@ -72,7 +74,7 @@ class R21PolicyTests(unittest.TestCase):
                 {"policy": "slope_none", "bands": []}]}]})
         before = template.model_dump()
         for grade in (grade_from_template, grade_constrained):
-            with patch("app.application.worldData.generators.terrain.relief.pick.gradePass.kind_roll") as roll:
+            with patch(gradePass.__name__ + ".kind_roll") as roll:
                 self.assert_policy_error(lambda ctx: grade(template=template, template_uid="gap",
                     terrain_key="plains", dz=3, world_seed="seed", site_id="site",
                     resolve_ctx=ctx), "DOMAIN_SCHEDULE_HOLE")

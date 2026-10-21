@@ -12,6 +12,7 @@ from app.application.worldData.generators.climate.climateAnchor import (
 )
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+from app.application.worldData.pack.climate import lightFineTileResolve
 from app.application.worldData.pack.climate.climatePackSample import (
     bucket_l2_z_by_light_cell,
     resolve_pack_surface_z,
@@ -118,7 +119,7 @@ class TestLightFineTilePolicy(unittest.TestCase):
 
         world = SimpleNamespace(world_uid="w", fine_cells_per_map_cell=1000)
         with patch(
-            "app.application.worldData.pack.climate.lightFineTileResolve.tile_for_anchor",
+            lightFineTileResolve.__name__ + ".tile_for_anchor",
             return_value=(9, 9),
         ):
             out = resolve_fine_tiles_for_policy(

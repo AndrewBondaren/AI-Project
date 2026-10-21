@@ -15,6 +15,7 @@ from pathlib import Path
 from random import Random
 from unittest.mock import patch
 
+from app.application.cascade import cascadeLog
 from app.application.cascade.cascadeLink import EmptyLink
 from app.application.cascade.contextResolver import extend
 from app.application.cascade.locationScope import (
@@ -306,7 +307,7 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # to the registry median — even when a deeper authored link
         # later overrides the provisional default.
         world, building, _ = fixture()
-        log_target = "app.application.cascade.cascadeLog"
+        log_target = cascadeLog.__name__
         with self.assertLogs(log_target, level="WARNING") as captured:
             self.assertEqual(
                 debug_building_context(world, building).economic_tier, "t5",

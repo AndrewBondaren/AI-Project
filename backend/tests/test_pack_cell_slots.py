@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
+from app.application.worldData.generators.terrain.relief.validate import gradeCellSlotValidate
 from app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate import (
     validate_grade_cell_slots,
 )
@@ -104,13 +105,13 @@ class TestValidateGradeCellSlots(unittest.TestCase):
         z = {(0, 0): 4, (1, 0): 4}
         packed = pack_cell_slots(z)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate.relief_error",
+            gradeCellSlotValidate.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_slots(z, packed, z_height_map=z)
         err.assert_not_called()
         self.assertEqual(n_empty, 0)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate.relief_error",
+            gradeCellSlotValidate.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_slots(z, packed[:1], z_height_map=z)
         self.assertEqual(err.call_count, 1)

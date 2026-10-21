@@ -1,6 +1,7 @@
 """Room/level wire boundaries, fallbacks, references and generation diagnostics."""
 import json
 import tempfile
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 from copy import deepcopy
@@ -54,7 +55,7 @@ class RoomDefTests(unittest.TestCase):
 
     def test_invalid_attachment_reaches_central_warning_without_default(self):
         raw = room_wire(attach_wall="bad")
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as logs:
+        with self.assertLogs(resolve_module.__name__, "WARNING") as logs:
             result = resolve_result(RoomDef, raw)
         self.assertFalse(result.resolved)
         self.assertIn("WarningError", logs.output[0])
@@ -147,7 +148,7 @@ class RoomDefTests(unittest.TestCase):
         template = StructureTemplate.model_validate(template_wire(
             room_wire(room_id="host"), room_wire(attach_to="host")))
         template.levels[0]["rooms"][1]["attach_to"] = "missing"
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(GenerationError):
+        with self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(GenerationError):
             StructureGeneratorService._resolve_levels(template)
 
     def test_runtime_missing_required_field_raises_contextual_generation_error(self):
@@ -162,7 +163,7 @@ class RoomDefTests(unittest.TestCase):
         for invalid in (0, -1, "bad"):
             template = StructureTemplate.model_validate(template_wire(room_wire()))
             template.levels[0]["z_height"] = invalid
-            with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(GenerationError):
+            with self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(GenerationError):
                 StructureGeneratorService._resolve_levels(template)
         self.assertIsNone(StructureGeneratorService._resolve_levels(
             StructureTemplate.model_validate(template_wire(room_wire())))[0].z_height)
@@ -171,5 +172,5 @@ class RoomDefTests(unittest.TestCase):
         template = simple_structure()
         template.levels[0]["rooms"].append(room_wire(room_id="orphan", attach_to="absent"))
         world, building = test_world_building()
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(GenerationError):
+        with self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(GenerationError):
             StructureGeneratorService().generate_from_template(world, building, template)

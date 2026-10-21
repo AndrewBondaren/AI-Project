@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from app.application.worldData.generators.terrain.passes import bbox as bbox_module
 from app.dataModel.worldPack.worldBounds import WorldBounds
 
 
@@ -58,10 +59,10 @@ class TestGridBboxFromLocations(unittest.TestCase):
             map_x=0, map_y=0, map_z=0, is_mobile=False,
         )
         with patch(
-            "app.application.worldData.generators.terrain.passes.bbox.static_map_anchors",
+            bbox_module.__name__ + ".static_map_anchors",
             return_value=[loc],
         ), patch(
-            "app.application.worldData.generators.terrain.passes.bbox.map_cell_fine_span",
+            bbox_module.__name__ + ".map_cell_fine_span",
             return_value=3000,
         ):
             bbox = grid_bbox_from_locations(world, [loc])

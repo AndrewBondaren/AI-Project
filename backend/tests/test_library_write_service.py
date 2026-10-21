@@ -8,6 +8,7 @@ from unittest.mock import patch
 import test_library_write_plan as plan_fixture
 import test_library_packs_b3 as fs_fixture
 from test_library_packs_4b import _ServiceCase
+from app.application.templateLibrary.packs.write import memberWritePlanner
 from app.application.templateLibrary.packs.write.writeInspector import LibraryWriteInspector
 from app.application.templateLibrary.packs.write.writePlanner import LibraryWritePlanner
 from app.application.templateLibrary.packs.packCatalog import PackCatalogRepos
@@ -219,7 +220,7 @@ class LibraryWriteServiceTests(_ServiceCase):
         raw = self.imported()
         request = self.request(self.item("raw", imported=True))
         await self.writer.execute(request, imports={"raw": raw})
-        with patch("app.application.templateLibrary.packs.write.memberWritePlanner.runtime_uid", side_effect=AssertionError("allocated")):
+        with patch(memberWritePlanner.__name__ + ".runtime_uid", side_effect=AssertionError("allocated")):
             preview = await self.writer.execute(request, imports={"raw": raw})
         copy = next(p.copy for p in preview.preview if p.copy)
         self.assertTrue(copy.remaps_internal_references)

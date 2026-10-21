@@ -30,6 +30,7 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
 from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
     open_land_terrain_keys,
 )
+from app.application.worldData.generators.terrain.relief.validate import gradeCellRays
 from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
     leftover_plus_halo,
     validate_grade_cell_empty_rays,
@@ -122,7 +123,7 @@ def _assert_pack_closes_interior(
         present = {ray.facing for ray in slots if ray.cell == cell}
         test.assertEqual(present, set(Facing), cell)
     with patch(
-        "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+        gradeCellRays.__name__ + ".relief_error",
     ) as err:
         n_empty = validate_grade_cell_empty_rays(
             halo, slots, z_height_map=z,
@@ -174,7 +175,7 @@ class TestLockedOneByOneHole(unittest.TestCase):
         slots, halo = pack_slots_for_persist(leftover, z)
         self.assertEqual(halo, ())
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, slots, z_height_map=z,
@@ -231,7 +232,7 @@ class TestLockedCouple(unittest.TestCase):
     def test_same_z_without_couple_is_empty(self) -> None:
         z = {(0, 0): 5, (1, 0): 5}
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((0, 0), (1, 0)), (), z_height_map=z)
         self.assertEqual(err.call_count, 2)
@@ -242,7 +243,7 @@ class TestLockedCouple(unittest.TestCase):
         halo = ((0, 0), (1, 0))
         rays = couple_rim_rays(halo, leftover, z)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, rays, z_height_map=z,

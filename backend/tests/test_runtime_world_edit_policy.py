@@ -10,7 +10,9 @@ from app.application.jsonValidation.resolve import (
 )
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
+from app.application.cascade import locationScope
 from app.application.cascade.locationScope import empty_location_chain, room_context
+from app.application.jsonValidation import resolve as resolve_module
 from app.dataModel.annotationPolicy import DefaultWhenMissing, field_policy, WireFieldPolicy
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.room.roomDef import RoomDef
@@ -31,7 +33,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
             for mode in ResolveMode:
                 ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT,
                                      path_prefix=("terrain_masks", "default_forests"))
-                with patch("app.application.jsonValidation.resolve.logger") as log:
+                with patch(resolve_module.__name__ + ".logger") as log:
                     result = resolve_result(ForestsCategoryPolicy, {"forest_min_rainfall": invalid}, ctx=ctx)
                 self.assertFalse(result.resolved)
                 self.assertIsNone(result.value)
@@ -75,7 +77,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
         parent = empty_location_chain(world, ScopeLevel.BUILDING)
         for mode in ResolveMode:
             ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT, path_prefix=("rooms", "r1"))
-            with patch("app.application.cascade.locationScope.extend") as extend:
+            with patch(locationScope.__name__ + ".extend") as extend:
                 with self.assertRaises(UnresolvedModelError) as error:
                     room_context(world, parent, _room("unknown"), room_uid="r1", resolve_ctx=ctx)
                 extend.assert_not_called()

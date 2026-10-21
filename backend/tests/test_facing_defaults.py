@@ -1,6 +1,7 @@
 """Internal facing fallback keeps geometry and reports degraded generation."""
 import json
 import tempfile
+from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 from pydantic import ValidationError
 import unittest
@@ -32,7 +33,7 @@ class FacingDefaultsTests(unittest.TestCase):
 
     def test_invalid_internal_direction_rejects_without_south_default(self):
         for value in (None, "", "bad", "any", "northeast", Facing.NORTHEAST, [], 12):
-            with self.subTest(value=value), self.assertLogs("app.application.jsonValidation.resolve", "WARNING"), self.assertRaises(UnresolvedModelError):
+            with self.subTest(value=value), self.assertLogs(resolve_module.__name__, "WARNING"), self.assertRaises(UnresolvedModelError):
                 footprint_t_shape(0, 0, 6, 4, 2, value)
 
     def test_dispatch_does_not_hide_missing_direction(self):

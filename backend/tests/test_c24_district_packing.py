@@ -27,6 +27,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
 from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
     SettlementOutdoorOrchestrator,
 )
+from app.application.worldData.settlementOutdoor import settlementOutdoorPackingJob
 from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import SettlementOutdoorPackingJob
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.templateLibrary.templateContracts import WorldTemplateSnapshot
@@ -357,7 +358,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
             MagicMock(get_by_world=AsyncMock(return_value=[])),
             MagicMock(get_by_world=AsyncMock(return_value=[])),
         )
-        module = "app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob"
+        module = settlementOutdoorPackingJob.__name__
         slot = MagicMock()
         clock = MagicMock()
         clock.lap.return_value = 0.0

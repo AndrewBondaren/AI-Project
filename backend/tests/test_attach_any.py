@@ -15,9 +15,6 @@ from tests.structureWire import room_wire, level_wire
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building
 
-LAYOUT = layoutEngine.__name__
-
-
 def scenario(width=10, depth=14, room_type="corridor", mode=AttachWall.ANY, z=0):
     host = room("corridor", width=width, depth=depth, z=z)
     host.room_type = room_type
@@ -64,7 +61,7 @@ class AttachAnyTests(unittest.TestCase):
         ):
             with self.subTest(width=width, depth=depth, facing=facing):
                 host, guests = scenario(width, depth)
-                with patch(LAYOUT + ".entity_rng", side_effect=AssertionError("one free side needs no RNG")):
+                with patch.object(layoutEngine, "entity_rng", side_effect=AssertionError("one free side needs no RNG")):
                     place(host, guests, [staircase(facing)])
                 self.assert_side(host, guests, expected)
 
@@ -162,7 +159,7 @@ class AttachAnyTests(unittest.TestCase):
                     guests = [r for r in args[0] if r.room_id == "guest"]
                     self.assertEqual(len(guests), 2)
                     self.assert_side(host, guests, expected)
-            with self.subTest(staircase=has_staircase), patch(LAYOUT + "._layout_mode_b", side_effect=capture):
+            with self.subTest(staircase=has_staircase), patch.object(layoutEngine, "_layout_mode_b", side_effect=capture):
                 first = StructureGeneratorService().generate_from_template(world, building, template)
                 second = StructureGeneratorService().generate_from_template(world, building, template)
                 self.assertTrue(first.cells)

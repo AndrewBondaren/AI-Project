@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from test_library_packs_4b import _ServiceCase, _RELIEF
 import test_library_write_plan as plan_fixture
+from app.application.jsonValidation import resolve as resolve_module
+from app.application.jsonValidation import worldColumnResolve
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.templateLibrary.packs.errors import LibraryPackConflictError
 from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteRequest
@@ -59,9 +61,9 @@ class LibraryWorldColumnWriteTests(_ServiceCase):
             current.name = "Changed after prepare"
             await self.worlds.update(current)
             trace.clear()
-            with patch("app.application.jsonValidation.worldColumnResolve.resolve_world_column",
+            with patch(worldColumnResolve.__name__ + ".resolve_world_column",
                        side_effect=AssertionError("executor must not resolve")), \
-                 patch("app.application.jsonValidation.resolve.resolve_model",
+                 patch(resolve_module.__name__ + ".resolve_model",
                        side_effect=AssertionError("executor must not normalize")):
                 await self.writer.apply_prepared(plan)
             saved = await self.worlds.get_by_id("w1")

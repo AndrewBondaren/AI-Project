@@ -7,6 +7,7 @@ from unittest.mock import patch
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import AreaThresholdKind
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import StructureAreaAssembler
+from app.application.worldData.generators.assemblers.areaAssembler.planner import areaBarriers
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import area_gate_cells, should_build_area_barrier
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import extract_settlement
@@ -75,7 +76,7 @@ class AreaGatesTest(unittest.IsolatedAsyncioTestCase):
             self.plot.perimeter_barrier.model_copy(update={"probability": 0.5})})
         outcomes = set()
         for x in range(20, 30):
-            with patch("app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers.should_build_area_barrier",
+            with patch(areaBarriers.__name__ + ".should_build_area_barrier",
                        wraps=should_build_area_barrier) as decision:
                 area = self.assemble(plot=plot, x=x)
                 self.assertEqual(decision.call_count, 1)

@@ -15,6 +15,7 @@ from app.db.models.connectionNode import ConnectionNode
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
+from app.db.repositories.sqlite import transitionRepository
 from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
 
 
@@ -135,7 +136,7 @@ class TransitionRepositoryTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_bulk_is_idempotent_uses_shared_helper_and_updates_without_replace(self):
         aggregates = [self.transition("one"), self.transition("two")]
-        with patch("app.db.repositories.sqlite.transitionRepository.executemany_rows", wraps=executemany_rows) as bulk:
+        with patch(transitionRepository.__name__ + ".executemany_rows", wraps=executemany_rows) as bulk:
             self.assertEqual(await self.repo.upsert_bulk(aggregates), 2)
             self.assertEqual(bulk.call_count, 2)
         self.assertEqual(await self.repo.upsert_bulk(aggregates), 2)

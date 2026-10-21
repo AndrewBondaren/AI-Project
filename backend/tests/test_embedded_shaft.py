@@ -21,7 +21,6 @@ from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
 PLACER = shaftPlacer.__name__
-BUILDER = passages_builder.__name__
 
 
 class EmbeddedShaftTests(unittest.TestCase):
@@ -167,7 +166,7 @@ class EmbeddedShaftTests(unittest.TestCase):
                     if kwargs.get("shared_cells") is not None and args[1].z_offset == 0:
                         captured.append((args[0], args[1], args[2], list(kwargs["shared_cells"])))
                     return _build_archway(*args, **kwargs)
-                with patch(BUILDER + "._build_archway", side_effect=arch):
+                with patch.object(passages_builder, "_build_archway", side_effect=arch):
                     first = StructureGeneratorService().generate_from_template(world, building, template)
                     second = StructureGeneratorService().generate_from_template(world, building, template)
                 self.assertEqual(template.model_dump(), original)

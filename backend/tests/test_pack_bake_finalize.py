@@ -13,7 +13,9 @@ from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.application.worldData.errors import WorldDataNotFoundError, WorldDataValidationError
+from app.application.worldData.pack.bake import packBakeFinalize
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.io import packManifestStore
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -145,7 +147,7 @@ class PackFinalizeTests(unittest.IsolatedAsyncioTestCase):
     async def test_sql_failure_keeps_readable_manifest_clears_caches_and_never_logs_success(self):
         reader = self.prime_cache(self.writer.paths.root)
         self.repo.update.side_effect = OSError("SQL failed")
-        with patch("app.application.worldData.pack.bake.packBakeFinalize.log_pack_finalize") as log:
+        with patch(packBakeFinalize.__name__ + ".log_pack_finalize") as log:
             with self.assertRaisesRegex(OSError, "SQL failed"):
                 await self.finalize()
             log.assert_not_called()
@@ -158,7 +160,7 @@ class PackFinalizeTests(unittest.IsolatedAsyncioTestCase):
         self.writer.save_manifest()
         before = self.writer.paths.manifest_path().read_bytes()
         self.writer.manifest.bake_mode = "full"
-        with patch("app.application.worldData.pack.io.packManifestStore.os.replace",
+        with patch(packManifestStore.__name__ + ".os.replace",
                    side_effect=OSError("replace failed")):
             with self.assertRaisesRegex(OSError, "replace failed"):
                 await self.finalize()

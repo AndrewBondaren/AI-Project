@@ -30,6 +30,7 @@ from app.application.worldData.generators.terrain.relief.log.events import (
 from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
 )
+from app.application.worldData.generators.terrain.relief.validate import gradeCellRays
 from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
     leftover_plus_halo,
     validate_grade_cell_empty_rays,
@@ -275,14 +276,14 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
             for facing in Facing
         )
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays((cell,), rays, z_height_map={(0, 0): 1})
         err.assert_not_called()
 
     def test_isolated_cell_omits_missing_neighbors(self) -> None:
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((0, 0),), (), z_height_map={(0, 0): 1})
         err.assert_not_called()
@@ -290,7 +291,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
     def test_same_z_without_pack_couple_is_empty(self) -> None:
         z = {(0, 0): 5, (1, 0): 5}
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((0, 0), (1, 0)), (), z_height_map=z)
         self.assertEqual(err.call_count, 2)
@@ -306,7 +307,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
             GradeRimRay(x=1, y=0, facing=Facing.WEST, kind=ReliefSideKind.COUPLE),
         )
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((0, 0), (1, 0)), rays, z_height_map=z)
         err.assert_not_called()
@@ -316,7 +317,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
         for dx, dy in GRID_OUTWARD_DELTA.values():
             z[(dx, dy)] = 0
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((0, 0),), (), z_height_map=z)
         err.assert_called_once()
@@ -326,7 +327,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
     def test_different_z_without_ray_logs_shared_facings(self) -> None:
         z = {(4, 8): 142, (4, 7): 122}
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((4, 8), (4, 7)), (), z_height_map=z)
         self.assertEqual(err.call_count, 2)
@@ -346,7 +347,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
         )
         z = {(4, 8): 142, (4, 7): 122}
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((4, 8), (4, 7)), slots, z_height_map=z)
         err.assert_not_called()
@@ -399,7 +400,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
         )
         self.assertTrue(_has_eight_neighbors((0, 0), z))
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, slots, z_height_map=z,
@@ -429,7 +430,7 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
         present = {ray.facing for ray in slots if ray.cell == (0, 0)}
         self.assertEqual(present, set(Facing))
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, slots, z_height_map=z,
@@ -457,7 +458,7 @@ class TestDiscoverPackClosesR44(unittest.TestCase):
             present = {ray.facing for ray in slots if ray.cell == cell}
             self.assertEqual(present, set(Facing), cell)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, slots, z_height_map=z,
@@ -496,7 +497,7 @@ class TestDiscoverPackClosesR44(unittest.TestCase):
         slots, halo = _pack_like_persist(leftover, z)
         self.assertEqual(halo, ())
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, slots, z_height_map=z,

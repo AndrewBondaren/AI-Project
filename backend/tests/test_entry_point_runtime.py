@@ -63,7 +63,7 @@ class EntryPointRuntimeTests(unittest.TestCase):
         template.levels[0]["z_height"] = 8
         definition["back_entry_point"] = {"wall": "west", "passage_type": "service_entrance"}
         world, building = test_world_building()
-        with patch(entry_module.__name__ + "._resolve_entry_height", wraps=_resolve_entry_height) as resolve:
+        with patch.object(entry_module, "_resolve_entry_height", wraps=_resolve_entry_height) as resolve:
             StructureGeneratorService().generate_from_template(world, building, template)
         self.assertEqual(resolve.call_count, 2)
         for call in resolve.call_args_list:
@@ -110,9 +110,8 @@ class EntryPointRuntimeTests(unittest.TestCase):
             for material in (None, "stone"):
                 entry = EntryPoint(wall="east", passage_type="service_entrance",
                                    width=2, door_height=height, frame_material=material)
-                with patch(entry_module.__name__ + "._exterior_cells_on_wall", return_value=[(1, 2), (1, 3)]), patch(
-                    entry_module.__name__ + ".DoorPlacer"
-                ) as placer_class:
+                with patch.object(entry_module, "_exterior_cells_on_wall", return_value=[(1, 2), (1, 3)]), \
+                     patch.object(entry_module, "DoorPlacer") as placer_class:
                     placer = placer_class.return_value
                     placer.filter_passable_from_center.return_value = [(1, 2), (1, 3)]
                     placer.place.return_value = True
