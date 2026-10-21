@@ -13,17 +13,8 @@ from app.application.worldData.generators.coordinates.space import CoordinateSpa
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
 )
-from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
-    autoresolve_sea_basins,
-)
 from app.application.worldData.generators.hydrology.basins.coastalLandformClassifier import (
     classify_coastal_landforms,
-)
-from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import (
-    carve_lake_basin,
-)
-from app.application.worldData.generators.hydrology.basins.seaBasinGenerator import (
-    generate_coastal_sea,
 )
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
@@ -42,16 +33,13 @@ from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex imp
 )
 from app.application.worldData.generators.hydrology.types import (
     CoastlineSpec,
-    HydrologyBands,
     HydrologyScope,
-    LakeSpec,
     RiverTypeClassify,
 )
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from tests.hydrology_fixtures import (
-    SQUARE,
     flat_heightmap,
     heightmap_from_z,
     hydro_master,
@@ -87,28 +75,6 @@ class TestDeclaredEdge(unittest.TestCase):
         result = HydrologyGeneratorService().apply(world, [], hm)
         self.assertEqual(result.cell_index.by_cell, {})
         self.assertEqual(hm.surface_z, before)
-
-    def test_single_point_coastline_does_not_crash(self):
-        master = hydro_master(declared_coastline_specs=[
-            CoastlineSpec(segments=[((5, 5), (5, 5))], location_uid="loc-sea")])
-        carved, _ = generate_coastal_sea(
-            hydro_world(), flat_heightmap(0, 10, 0, 8), master)
-        if carved:
-            self.assertTrue(all(
-                e.water_body_uid == "loc-sea" for e in carved.values()))
-
-    def test_sea_autoresolve_never_restamps_declared_lake(self):
-        hm = flat_heightmap(0, 10, 0, 10)
-        lake = carve_lake_basin(
-            hm, LakeSpec(shoreline_segments=SQUARE, location_uid="loc-lake"),
-            HydrologyBands(min=1, max=2))
-        auto, _ = autoresolve_sea_basins(
-            hydro_world(), flat_heightmap(0, 10, 0, 10), hydro_master(), lake,
-            autoresolve_coastal=True, autoresolve_open_ocean=True)
-        for cell in lake:
-            self.assertNotIn(cell, auto)
-        self.assertTrue(all(
-            e.water_body_uid == "loc-lake" for e in lake.values()))
 
 
 class TestDeclaredAutoresolveEdge(unittest.TestCase):

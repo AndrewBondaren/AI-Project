@@ -32,8 +32,3 @@ class HydrologySeasPolicy(MaskCategoryPolicy):
             ReliefConditionTerrain.SHORE_SEA,
         ),
     )
-    # Interim bathymetry stub (analog mountain rise_fraction): uniform floor drop vs (z_sea - z_min).
-    # Full DepressionForm/Kind pipeline later — tz_terrain_hydrology § Ocean bathymetry.
-    stub_drop_fraction_of_span: DefaultWhenMissing[float] = constrained_field(
-        default=0.05, greater_equals=0.0, lesser_equals=1.0,
-    )

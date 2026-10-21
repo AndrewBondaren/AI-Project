@@ -179,3 +179,18 @@ def neighbors4_unrolled(cell: Coord) -> tuple[Coord, Coord, Coord, Coord]:
         return x + dx, y + dy
 
     return step(Facing.EAST), step(Facing.WEST), step(Facing.NORTH), step(Facing.SOUTH)
+
+
+def neighbors8_unrolled(cell: Coord) -> tuple[Coord, ...]:
+    """D8 steps in one unrolled frame; canonicalize at grid IO."""
+    x, y = cell
+    return tuple((x + dx, y + dy) for dx in (-1, 0, 1)
+                 for dy in (-1, 0, 1) if dx or dy)
+
+
+def canonical_neighbors8(topology: WorldTopology, cell: Coord) -> tuple[Coord, ...]:
+    """Canonical D8 neighbours, excluding void, self and duplicate images."""
+    return tuple(dict.fromkeys(
+        canonical for unrolled in neighbors8_unrolled(cell)
+        if (canonical := topology.canonicalize(*unrolled)) is not None and canonical != cell
+    ))

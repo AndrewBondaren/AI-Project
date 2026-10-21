@@ -8,13 +8,8 @@ from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePol
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAutoresolve import (
-    autoresolve_lakes,
-    flood_basin_interior,
-)
 from app.application.worldData.generators.hydrology.types import HydrologyScope
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from tests.hydrology_fixtures import (
     depression_heightmap as _depression_heightmap,
     hydro_master,
@@ -42,38 +37,34 @@ class TestLakesAutoresolvePolicy(unittest.TestCase):
         self.assertFalse(policy.autoresolve)
 
 
-class TestBasinFlood(unittest.TestCase):
-
-    def test_flood_stays_within_prominence(self):
-        hm = _depression_heightmap()
-        interior = flood_basin_interior(
-            hm,
-            (5, 5),
-            set(),
-            prominence=50,
-            max_radius=4,
-        )
-        self.assertIn((5, 5), interior)
-        self.assertNotIn((0, 0), interior)
-        self.assertGreater(len(interior), 1)
-
-
 class TestProceduralLakes(unittest.TestCase):
 
-    def test_autoresolve_carves_lake_role(self):
+    def test_autoresolve_fills_existing_bowl_without_carve(self):
         hm = _depression_heightmap()
-        master = hydro_master(scopes=frozenset({HydrologyScope.LAKES}))
-        carved, bbox = autoresolve_lakes(_world(), hm, master, {})
-        roles = {entry.role for entry in carved.values()}
-        self.assertIn(HydrologyCellRole.LAKE, roles)
-        self.assertTrue(bbox is not None)
+        before = dict(hm.surface_z)
+        world = _world(world_topology_mode="planar", hydrology={
+            **lakes_hydrology(), "default_seas": {"inland_sea_min_area_fraction": 1.0}})
+        result = HydrologyGeneratorService().apply(world, [], hm, scopes=frozenset({HydrologyScope.LAKES}))
+        self.assertTrue(result.water_bodies)
+        self.assertEqual(hm.surface_z, before)
+        self.assertTrue(all(body.water_body_uid.startswith("auto-lake-") for body in result.water_bodies))
+        self.assertEqual({entry.water_body_uid for entry in result.cell_index.by_cell.values()},
+                         {body.water_body_uid for body in result.water_bodies})
 
-    def test_skips_occupied_center(self):
-        hm = _depression_heightmap()
-        master = hydro_master(scopes=frozenset({HydrologyScope.LAKES}))
-        occupied = {(5, 5): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)}
-        carved, _ = autoresolve_lakes(_world(), hm, master, occupied)
-        self.assertEqual(carved, {})
+    def test_autoresolve_off_does_not_fill_natural_bowl(self):
+        world = _world(world_topology_mode="planar", hydrology={"enabled": True,
+            "default_lakes": {"autoresolve": False}})
+        result = HydrologyGeneratorService().apply(world, [], _depression_heightmap(),
+                                                   scopes=frozenset({HydrologyScope.LAKES}))
+        self.assertEqual(result.water_bodies, ())
+        self.assertEqual(result.cell_index.by_cell, {})
+
+    def test_closed_global_minimum_has_no_guessed_high_lake_level(self):
+        world = _world(world_topology_mode="wrapped")
+        result = HydrologyGeneratorService().apply(world, [], _depression_heightmap(),
+                                                   scopes=frozenset({HydrologyScope.LAKES}))
+        self.assertEqual(result.water_bodies, ())
+
 
     def test_service_lakes_scope_without_declare(self):
         hm = _depression_heightmap()

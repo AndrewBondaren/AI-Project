@@ -2,39 +2,12 @@
 
 import unittest
 
-from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAutoresolve import (
-    autoresolve_lakes,
-)
-from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
-    autoresolve_sea_basins,
-)
-from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import (
-    _resolve_interior,
-    carve_lake_basin,
-)
-from app.application.worldData.generators.hydrology.basins.oceanBasinGenerator import (
-    expand_open_ocean,
-)
-from app.application.worldData.generators.hydrology.basins.seaBasinGenerator import (
-    generate_coastal_sea,
-)
-from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import (
-    resolve_hydrology_bands,
-)
-from app.application.worldData.generators.hydrology.rivers.riverBedCarver import carve_river_segment
+from tests.hydrology_geometry_helpers import apply_test_river
 from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import (
     apply_declared_fine_river_carves,
 )
 from app.application.worldData.generators.hydrology.types import (
-    CoastlineSpec,
-    HydrologyBands,
-    LakeSpec,
     RiverSegment,
-)
-from app.application.worldData.generators.hydrology.waterBodyIdentity import (
-    AutoWaterBodyRole,
-    auto_water_body_uid,
 )
 from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
@@ -44,10 +17,8 @@ from app.dataModel.hydrology.mapCellHydrology import (
     parse_cell_hydrology,
 )
 from tests.hydrology_fixtures import (
-    SQUARE,
     depression_heightmap as _depression_heightmap,
     flat_heightmap as _flat_heightmap,
-    hydro_master as _master,
     hydro_world,
     seas_lakes_hydrology,
 )
@@ -60,70 +31,51 @@ def _world(**kwargs):
 
 class WaterBodyUidTests(unittest.TestCase):
 
-    def test_declared_lake_cells_carry_location_uid(self):
-        hm = _flat_heightmap(0, 10, 0, 10)
-        spec = LakeSpec(shoreline_segments=SQUARE, location_uid="loc-lake")
-        carved = carve_lake_basin(hm, spec, HydrologyBands(min=1, max=3))
-        self.assertTrue(carved)
-        self.assertTrue(all(e.water_body_uid == "loc-lake" for e in carved.values()))
-        shore = [e for e in carved.values() if e.role == HydrologyCellRole.SHORE]
-        self.assertTrue(shore)
-        self.assertTrue(all(e.water_body_uid == "loc-lake" for e in shore))
+    def test_declared_body_and_shore_keep_location_uid_for_each_source(self):
+        from tests.test_hydrology_hy12_smoke import basin_world
+        from tests.hydrology_fixtures import carve_then_fill
+        for source in ("basin", "lake", "coastline"):
+            with self.subTest(source=source):
+                result, _ = carve_then_fill(basin_world(source=source), _flat_heightmap(0, 7, 0, 5, z=20))
+                self.assertTrue(result.cell_index.by_cell)
+                self.assertEqual({entry.water_body_uid for entry in result.cell_index.by_cell.values()}, {"body"})
+                self.assertEqual(result.water_bodies[0].location_uid, "body")
 
-    def test_lake_spec_without_location_uid_falls_back_to_auto(self):
-        hm = _flat_heightmap(0, 10, 0, 10)
-        spec = LakeSpec(shoreline_segments=SQUARE)
-        shoreline = rasterize_segments(spec.shoreline_segments)
-        interior = _resolve_interior(hm, spec.shoreline_segments, shoreline)
-        expected = auto_water_body_uid(AutoWaterBodyRole.LAKE, min(interior))
-        carved = carve_lake_basin(hm, spec, HydrologyBands(min=1, max=3))
-        self.assertTrue(carved)
-        uids = {e.water_body_uid for e in carved.values()}
-        self.assertEqual(uids, {expected})
+    def test_disconnected_declared_bodies_keep_distinct_uids(self):
+        from tests.test_hydrology_hy12_smoke import basin_world
+        from tests.hydrology_fixtures import carve_then_fill
+        world = basin_world()
+        world.hydrology["declared_basins"] = [
+            {"location_uid": uid, "kind": "lake", "floor_z": -8, "z_water_level": 5,
+             "footprint": {"kind": "bbox", "x_min": lo, "x_max": hi, "y_min": 1, "y_max": 2}}
+            for uid, lo, hi in (("left", 0, 1), ("right", 4, 5))]
+        result, _ = carve_then_fill(world, _flat_heightmap(0, 7, 0, 5, z=20))
+        self.assertEqual({body.water_body_uid for body in result.water_bodies}, {"left", "right"})
+        self.assertEqual(result.physical_unions, ())
 
-    def test_autoresolve_lakes_use_feature_center_and_are_deterministic(self):
-        runs = []
-        for _ in range(2):
-            carved, _ = autoresolve_lakes(_world(), _depression_heightmap(), _master(), {})
-            runs.append({cell: e.water_body_uid for cell, e in carved.items()})
-        self.assertTrue(runs[0])
-        self.assertTrue(all(uid.startswith("auto-lake-") for uid in runs[0].values()))
-        self.assertEqual(runs[0], runs[1])
+    def test_natural_body_identity_replays_without_recarving(self):
+        from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
+        from app.application.worldData.generators.hydrology.types import HydrologyScope
+        world = _world(world_topology_mode="planar", hydrology={
+            **seas_lakes_hydrology(), "default_seas": {"inland_sea_min_area_fraction": 1.0}})
+        hm = _depression_heightmap()
+        first = HydrologyGeneratorService().apply(world, [], hm, scopes=frozenset({HydrologyScope.LAKES}))
+        second = HydrologyGeneratorService().apply(world, [], hm, scopes=frozenset({HydrologyScope.LAKES}))
+        self.assertTrue(first.water_bodies)
+        self.assertEqual(first.water_bodies, second.water_bodies)
+        self.assertEqual(first.cell_index.by_cell, second.cell_index.by_cell)
 
-    def test_declared_coastline_and_ocean_relabel_share_uid(self):
-        master = _master(declared_coastline_specs=[
-            CoastlineSpec(segments=[((2, 2), (8, 2))], location_uid="loc-sea")])
-        carved, _ = generate_coastal_sea(_world(), _flat_heightmap(0, 10, 0, 6), master)
-        self.assertTrue(carved)
-        self.assertTrue(all(e.water_body_uid == "loc-sea" for e in carved.values()))
-        ocean, _ = expand_open_ocean(_flat_heightmap(0, 10, 0, 6), carved)
-        self.assertTrue(ocean)
-        self.assertTrue(all(e.role == HydrologyCellRole.OPEN_OCEAN for e in ocean.values()))
-        self.assertTrue(all(e.water_body_uid == "loc-sea" for e in ocean.values()))
-
-    def test_sea_autoresolve_without_declare_is_one_body(self):
-        maps = []
-        for _ in range(2):
-            auto, _ = autoresolve_sea_basins(
-                _world(), _flat_heightmap(0, 10, 0, 6), _master(), {},
-                autoresolve_coastal=True, autoresolve_open_ocean=True)
-            maps.append({cell: e.water_body_uid for cell, e in auto.items()})
-        self.assertTrue(maps[0])
-        uids = set(maps[0].values())
-        self.assertEqual(len(uids), 1)
-        self.assertTrue(next(iter(uids)).startswith("auto-sea-"))
-        self.assertEqual(maps[0], maps[1])
 
     def test_river_declared_and_auto_identity(self):
         hm = _flat_heightmap(0, 5, 0, 5)
         declared = RiverSegment(polyline_cells=[(1, 1), (2, 1), (3, 1)],
                                 connection_type="river", edge_uid="e1",
                                 location_uid="loc-river", declared=True)
-        carved = carve_river_segment(hm, declared, depth_step=1)
+        carved = apply_test_river(hm, declared, depth_step=1)
         self.assertTrue(carved)
         self.assertTrue(all(e.water_body_uid == "loc-river" for e in carved.values()))
         self.assertTrue(all(e.connection_edge_uid == "e1" for e in carved.values()))
-        auto = carve_river_segment(
+        auto = apply_test_river(
             _flat_heightmap(0, 5, 0, 5),
             RiverSegment(polyline_cells=[(1, 1), (2, 1), (3, 1)], connection_type="river"),
             depth_step=1)
@@ -149,23 +101,6 @@ class WaterBodyUidTests(unittest.TestCase):
         self.assertTrue(hydro)
         self.assertTrue(all(e.water_body_uid == "loc-river" for e in hydro.values()))
 
-    def test_two_coastlines_get_distinct_uids(self):
-        master = _master(declared_coastline_specs=[
-            CoastlineSpec(segments=[((2, 2), (2, 6))], location_uid="loc-sea-a"),
-            CoastlineSpec(segments=[((8, 2), (8, 6))], location_uid="loc-sea-b"),
-        ])
-        carved, _ = generate_coastal_sea(_world(), _flat_heightmap(0, 10, 0, 8), master)
-        self.assertTrue(carved)
-        uids = {e.water_body_uid for e in carved.values()}
-        self.assertEqual(uids, {"loc-sea-a", "loc-sea-b"})
-
-    def test_coastline_without_location_uid_falls_back_to_auto(self):
-        master = _master(declared_coastline_specs=[
-            CoastlineSpec(segments=[((2, 2), (8, 2))])])
-        carved, _ = generate_coastal_sea(_world(), _flat_heightmap(0, 10, 0, 6), master)
-        self.assertTrue(carved)
-        self.assertTrue(all(e.water_body_uid is not None for e in carved.values()))
-        self.assertTrue(all(e.water_body_uid.startswith("auto-sea-") for e in carved.values()))
 
     def test_endpoints_river_fine_carve_stamps_uid(self):
         w = _world(hydrology={

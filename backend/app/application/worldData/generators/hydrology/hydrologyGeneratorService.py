@@ -9,7 +9,7 @@ from app.application.worldData.generators.climate.climatePoleField import GridBB
 from app.application.worldData.generators.hydrology.basins.coastalLandformClassifier import classify_coastal_landforms
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import build_hydrology_master_input
 from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
-from app.application.worldData.generators.hydrology.rivers.riverBedCarver import generate_rivers
+from app.application.worldData.generators.hydrology.riverNetworkAssembler import assemble_rivers
 from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput, HydrologyResult, HydrologyScope, resolve_scopes,
 )
@@ -42,7 +42,7 @@ class HydrologyGeneratorService:
 
     Callers pass the very specs used in Pass 1.4. Stateful W/L operations must
     supply their durable change_uid; the default is a replayable first bake.
-    River-bed writes remain the separate HY-12/5 migration.
+    River-bed elevation is applied through the relief writer after planning.
     """
 
     def apply(self, world: World, locations: list[NamedLocation], heightmap: SurfaceHeightmap, *,
@@ -88,11 +88,12 @@ class HydrologyGeneratorService:
                 xs, ys = zip(*result.cell_index.by_cell)
                 result.dirty_bbox = GridBBox(min(xs), max(xs), min(ys), max(ys))
         if HydrologyScope.RIVERS in active:
-            rivers, segments, bbox = generate_rivers(world, heightmap, inp,
-                                                      occupied=result.cell_index.by_cell, locations=locations)
-            result.cell_index.by_cell.update(rivers)
-            result.river_segments = segments
-            result.dirty_bbox = _merge_bbox(result.dirty_bbox, bbox)
+            rivers = assemble_rivers(world, heightmap, inp, occupied=result.cell_index.by_cell,
+                                     locations=locations, topology=topology)
+            result.cell_index.by_cell.update(rivers.by_cell)
+            result.river_segments = rivers.segments
+            result.waterfall_drops = rivers.drops
+            result.dirty_bbox = _merge_bbox(result.dirty_bbox, rivers.dirty_bbox)
         if HydrologyScope.LANDFORMS in active:
             result.landforms = classify_coastal_landforms(inp)
         logger.info("HydrologyGeneratorService | world=%s scopes=%s cells=%d bodies=%d unions=%d",

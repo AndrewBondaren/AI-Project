@@ -5,15 +5,11 @@ Invariant (narrow): do **not** overwrite light cells that already have
 (SEA ≥ RIVER) is unchanged; this skip is only for coarse open-water paint so a declared
 river survives inside a SEA macro tile.
 
-R5b: after paint, write bathymetry ``surface_z`` (stub drop / coarse floor).
+Copy the resolved coarse floor; L0 never synthesizes bathymetry.
 """
 
 from __future__ import annotations
 
-from app.application.jsonValidation import hydrology
-from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
-from app.application.worldData.generators.hydrology.bathymetry import resolve_open_water_surface_z
-from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import paint_role
@@ -46,9 +42,6 @@ def apply_coarse_open_water(
     preserved = 0
     z_applied = 0
 
-    seas = hydrology(ctx.world).default_seas
-    z_sea = resolve_z_sea(ctx.world)
-    z_min = world_z_min(ctx.world)
     coarse_z_map = planning.coarse_surface_z
 
     for gx, gy in ctx.tiles:
@@ -74,12 +67,9 @@ def apply_coarse_open_water(
         painted += n
         preserved += p
 
-        floor_z = resolve_open_water_surface_z(
-            z_sea=z_sea,
-            z_min=z_min,
-            policy=seas,
-            coarse_z=coarse_z_map.get((gx, gy)),
-        )
+        floor_z = coarse_z_map.get((gx, gy))
+        if floor_z is None:
+            continue
         for lx, ly in fill:
             ngx = lx // scale.side
             ngy = ly // scale.side

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.application.worldData.generators.coordinates.space import CoordinateSpace
+
 from dataclasses import dataclass
 
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
@@ -95,6 +97,8 @@ def prepare_surface_terrain_context(
         topology=water.topology if water else None,
     )
 
+    # Fine profiles sample the same pre-river snapshot, avoiding a second bed cut.
+    pre_river_z = dict(coarse_hm.surface_z)
     coarse_hydro: dict[tuple[int, int], object] = {}
     if is_hydrology_enabled(world):
         hydro = hydrology_generator or HydrologyGeneratorService()
@@ -112,7 +116,9 @@ def prepare_surface_terrain_context(
     sparse_fine_hydro, fine_z_overrides = apply_declared_fine_river_carves(
         world,
         locations,
-        coarse_hm.surface_z,
+        pre_river_z,
+        base_space=CoordinateSpace.WORLD_SURFACE_GRID,
+        coarse_hydro=coarse_hydro,
     )
     local_field = build_local_field_from_coarse(world, locations, pole_field, coarse_hm)
 

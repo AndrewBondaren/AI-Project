@@ -4,12 +4,7 @@ import unittest
 
 from tests.hydrology_fixtures import hydro_topology
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-    declare_coastline_bbox_padded,
-    flood_water_side,
-    flood_water_side_unbounded,
-)
+from tests.hydrology_geometry_helpers import (flood_water_side, flood_water_side_unbounded)
 from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     seas_autoresolve_policy,
 )
@@ -17,17 +12,12 @@ from app.application.worldData.generators.hydrology.hydrologyGeneratorService im
     HydrologyGeneratorService,
 )
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
-    autoresolve_sea_basins,
-)
 from app.application.worldData.generators.hydrology.types import (
-    CoastlineSpec,
     HydrologyMasterInput,
     HydrologyScope,
     LoadedConnectionGraph,
 )
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from tests.hydrology_fixtures import (
     coastline_world as _world_with_coastline,
     flat_heightmap as _flat_heightmap,
@@ -77,69 +67,33 @@ class TestUnboundedFlood(unittest.TestCase):
         self.assertIn((0, 1), unbounded)
         self.assertIn((10, 0), unbounded)
 
-    def test_declare_bbox_padding(self):
-        segments = [((2, 2), (8, 2))]
-        bbox = declare_coastline_bbox_padded(segments)
-        self.assertEqual(bbox, GridBBox(1, 9, 1, 3))
-
-
-class TestProceduralSeaAutoresolve(unittest.TestCase):
-
-    def test_skips_occupied_and_inside_bbox(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        segments = [((2, 2), (8, 2))]
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.COASTAL_SEA}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_specs=[CoastlineSpec(segments=segments, location_uid="loc-sea")],
-        )
-        occupied = {(5, 1): MapCellHydrology(role=HydrologyCellRole.SHORE)}
-        auto, bbox = autoresolve_sea_basins(
-            _world(),
-            hm,
-            master,
-            occupied,
-            autoresolve_coastal=True,
-            autoresolve_open_ocean=True,
-        )
-        self.assertNotIn((5, 1), auto)
-        self.assertIn((0, 1), auto)
-        self.assertTrue(bbox is not None)
-
-    def test_disabled_flags_return_empty(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        segments = [((2, 2), (8, 2))]
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.COASTAL_SEA}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_specs=[CoastlineSpec(segments=segments, location_uid="loc-sea")],
-        )
-        auto, bbox = autoresolve_sea_basins(
-            _world(),
-            hm,
-            master,
-            {},
-            autoresolve_coastal=False,
-            autoresolve_open_ocean=False,
-        )
-        self.assertEqual(auto, {})
-        self.assertIsNone(bbox)
-
 
 class TestBoundaryAutoresolve(unittest.TestCase):
 
-    def test_flood_from_bbox_north_ocean(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-            flood_from_bbox_ocean_edge,
-        )
-        dist = flood_from_bbox_ocean_edge(hm, topology=hydro_topology(hm))
-        self.assertIn((5, 0), dist)
-        self.assertNotIn((5, 6), dist)
+    def test_high_flat_world_is_not_synthesized_into_an_ocean(self):
+        hm = _flat_heightmap(0, 10, 0, 6, z=5)
+        before = dict(hm.surface_z)
+        result = HydrologyGeneratorService().apply(_world(), [], hm,
+            scopes=frozenset({HydrologyScope.OPEN_OCEAN}))
+        self.assertEqual(result.cell_index.by_cell, {})
+        self.assertEqual(hm.surface_z, before)
+
+    def test_below_default_ocean_does_not_depend_on_world_edge(self):
+        for mode in ("planar", "wrapped", "sphere"):
+            with self.subTest(mode=mode):
+                hm = _flat_heightmap(0, 5, 0, 4, z=-5)
+                result = HydrologyGeneratorService().apply(_world(world_topology_mode=mode), [], hm,
+                    scopes=frozenset({HydrologyScope.OPEN_OCEAN}))
+                self.assertEqual(set(result.cell_index.by_cell), set(hm.surface_z))
+                self.assertEqual(len(result.water_bodies), 1)
+                self.assertEqual(result.water_bodies[0].z_water_level, 0)
+
+    def test_equal_level_flat_world_stays_dry(self):
+        hm = _flat_heightmap(0, 5, 0, 4, z=0)
+        result = HydrologyGeneratorService().apply(_world(), [], hm,
+            scopes=frozenset({HydrologyScope.OPEN_OCEAN}))
+        self.assertEqual(result.cell_index.by_cell, {})
+
 
     def test_service_without_declare_coastline(self):
         w = _world()

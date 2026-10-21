@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.generators.hydrology.rivers.riverBedCarver import generate_rivers
+from app.application.worldData.generators.hydrology.riverNetworkAssembler import generate_rivers
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
 )

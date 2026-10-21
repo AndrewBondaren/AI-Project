@@ -28,12 +28,8 @@ from tests.hydrology_fixtures import (
     rivers_hydrology,
     seas_hydrology,
 )
-from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAutoresolve import (
-    autoresolve_lakes,
-)
-from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
-    autoresolve_sea_basins,
-)
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
+from scripts.smoke_hydrology_hy12 import load_fixture, coarse_snapshot, REPO
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
 )
@@ -48,20 +44,15 @@ def _dump(entries):
 
 world = hydro_world(hydrology=seas_hydrology())
 
-lakes, _ = autoresolve_lakes(
-    world,
-    depression_heightmap(),
-    hydro_master(scopes=frozenset({HydrologyScope.LAKES})),
-    {},
-)
-sea, _ = autoresolve_sea_basins(
-    world,
-    flat_heightmap(0, 10, 0, 6),
-    hydro_master(),
-    {},
-    autoresolve_coastal=True,
-    autoresolve_open_ocean=True,
-)
+lakes = HydrologyGeneratorService().apply(
+    hydro_world(world_topology_mode="planar", hydrology={"enabled": True,
+        "default_seas": {"inland_sea_min_area_fraction": 1.0}}), [],
+    depression_heightmap(), scopes=frozenset({HydrologyScope.LAKES}),
+).cell_index.by_cell
+sea = HydrologyGeneratorService().apply(world, [], flat_heightmap(0, 10, 0, 6, z=-5),
+    scopes=frozenset({HydrologyScope.OPEN_OCEAN})).cell_index.by_cell
+fixture_world, locations = load_fixture(REPO / "fixtures/world_test_004.json")
+snapshot = coarse_snapshot(fixture_world, locations)
 
 surface_z = {(gx, gy): 10 for gx in range(8) for gy in range(8)}
 for gy in range(1, 8):
@@ -80,6 +71,7 @@ segments = autoresolve_river_segments(
 print(json.dumps({
     "lakes": _dump(lakes),
     "sea": _dump(sea),
+    "fixture": snapshot,
     "rivers": sorted(
         {"edge": s.edge_uid, "cells": s.polyline_cells} for s in segments
     ),

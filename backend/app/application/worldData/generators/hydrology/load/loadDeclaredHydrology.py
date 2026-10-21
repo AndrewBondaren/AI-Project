@@ -5,10 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.application.jsonValidation.worldRow import hydrology as read_hydrology, materials, terrain_scalars
-from app.application.worldData.generators.hydrology.basins.basinKindResolver import (
-    resolve_lake_basin_role,
-)
-from app.application.worldData.generators.hydrology.basins.lakeSpecs import _group_segments
 from app.application.worldData.generators.hydrology.types import (
     CoastlineSpec,
     DeclaredRiverEdge,
@@ -19,7 +15,6 @@ from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
-from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.dataModel.hydrology.enums.riverSystemRole import RiverSystemRole
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
@@ -122,7 +117,6 @@ def load_declared_hydrology(
 ) -> LoadedDeclaredHydrology:
     """Read POJO declare from world; segments mode → edges at import (A3 hybrid)."""
     pojo = read_hydrology(world)
-    loc_map = {loc.location_uid: loc for loc in locations}
     coastlines = _coerce_declared_coastlines(list(pojo.declared_coastlines))
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
     rivers = _coerce_declared_rivers(list(pojo.declared_rivers))
@@ -152,18 +146,9 @@ def load_declared_hydrology(
         segments = _path_to_segments(list(entry.shoreline), closed=True)
         if not segments:
             continue
-        for group in _group_segments(segments):
-            open_role = resolve_lake_basin_role(
-                entry.location_uid,
-                loc_map,
-                world_uid=world.world_uid,
-                connection_type=HydrologyConnectionType.LAKE_SHORELINE.value,
-            )
-            lake_specs.append(LakeSpec(
-                shoreline_segments=group,
-                location_uid=entry.location_uid,
-                open_water_role=open_role,
-            ))
+        # Geometry-only compatibility for pack tile collection and L0 (HY-10).
+        # Physical kind/level are resolved exclusively by the water pipeline.
+        lake_specs.append(LakeSpec(shoreline_segments=segments, location_uid=entry.location_uid))
 
     river_edges: list[DeclaredRiverEdge] = []
     river_intents: list[DeclaredRiver] = []

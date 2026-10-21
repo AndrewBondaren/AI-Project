@@ -1,29 +1,18 @@
 """HY-6 matrix A1–C: nearest-segment water side, endpoints, and footprint seam."""
 
-import json
-import tempfile
 import unittest
 
 from tests.hydrology_fixtures import hydro_topology
-from pathlib import Path
 
-from app.application.worldData.generators.hydrology.basins.seaBasinGenerator import generate_coastal_sea
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-    _land_shore_cells,
-    carve_deepening_bands,
-    compute_land_centroid,
-    flood_water_side,
-    flood_water_side_unbounded,
-    water_side_seeds,
-)
+from tests.hydrology_geometry_helpers import (_land_shore_cells, compute_land_centroid, flood_water_side, flood_water_side_unbounded, water_side_seeds)
 from app.application.worldData.generators.hydrology.shore.waterSideFootprint import (
     CoastlineWaterSide,
     water_side_footprint,
 )
-from app.application.worldData.generators.hydrology.types import CoastlineSpec, HydrologyBands
-from app.core.generationLogging import generation_world_log
-from tests.hydrology_fixtures import flat_heightmap, hydro_master, hydro_world, seas_hydrology
+from tests.hydrology_fixtures import (
+    flat_heightmap,
+)
 
 
 class TestWaterSidePerpendicular(unittest.TestCase):
@@ -119,13 +108,6 @@ class TestWaterSidePerpendicular(unittest.TestCase):
         self.assertIn((1, 3), seeds)
         self.assertTrue(seeds <= self.flood(segments).keys())
         self.assertTrue(shore.isdisjoint(self.flood(segments, bounded=False)))
-        before = dict(self.hm.surface_z)
-        result = carve_deepening_bands(self.hm, segments, HydrologyBands(min=1, max=1),
-                                      water_body_uid="test-sea", z_sea=0, topology=self.topology)
-        self.assertEqual(result.by_cell[(3, 3)].deepening_index, 0)
-        self.assertEqual(result.by_cell[(1, 3)].deepening_index, 1)
-        # Declared-source z is carved by Pass 1.4 basinZ (HY-12/3b); carver is role-only.
-        self.assertEqual(self.hm.surface_z, before)
 
     def test_passable_predicate_blocks_flood_without_mutation(self):
         segments = [((4, 1), (4, 5))]
@@ -165,60 +147,6 @@ class TestWaterSidePerpendicular(unittest.TestCase):
         self.assertIn((1, 3), self.flood(segments))
         self.hm.surface_z.clear()
         self.assertEqual(self.flood(segments), {})
-
-
-class TestCoastlineWarnings(unittest.TestCase):
-    LOGGER = "app.application.worldData.generators.hydrology.basins.seaBasinGenerator"
-
-    def generate(self, x, *, bands=(2, 3), segments=None):
-        world = hydro_world(hydrology=seas_hydrology(bands=bands), world_topology_mode="planar")
-        spec = CoastlineSpec(
-            segments=segments if segments is not None else [((x, 1), (x, 5))],
-            location_uid="loc-sea-warning",
-        )
-        return generate_coastal_sea(
-            world, flat_heightmap(0, 10, 0, 6),
-            hydro_master(declared_coastline_specs=[spec]),
-        )
-
-    def test_empty_water_warns_even_with_land_shore(self):
-        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
-            cells, _ = self.generate(0)
-        self.assertTrue(cells)  # Shore alone must not hide the empty flood.
-        self.assertEqual(len(captured.records), 1)
-        self.assertIn("water_dist=0 (water side outside bounds?)", captured.output[0])
-        self.assertIn("world=test-world", captured.output[0])
-        self.assertIn("water_body_uid=loc-sea-warning", captured.output[0])
-
-    def test_narrow_water_warns_including_exact_minimum(self):
-        for extent in (1, 2):
-            with self.subTest(extent=extent):
-                with self.assertLogs(self.LOGGER, level="WARNING") as captured:
-                    self.generate(extent)
-                self.assertEqual(len(captured.records), 1)
-                self.assertIn(f"water extent {extent} <= bands.min 2: no open water", captured.output[0])
-
-    def test_open_water_does_not_warn(self):
-        with self.assertNoLogs(self.LOGGER, level="WARNING"):
-            self.generate(4)
-
-    def test_empty_and_degenerate_line_do_not_report_empty_water_warning(self):
-        with self.assertNoLogs(self.LOGGER, level="WARNING"):
-            self.generate(0, segments=[])
-            self.generate(0, segments=[((-5, 1), (-5, 1))])
-
-    def test_both_warnings_reach_generation_log_and_latest(self):
-        with tempfile.TemporaryDirectory() as root:
-            with generation_world_log("test-world", mode="light", root=root) as run_path:
-                self.generate(0)
-                self.generate(1)
-            rows = [json.loads(line) for line in run_path.read_text(encoding="utf-8").splitlines()]
-            warnings = [row for row in rows if row["level"] == "WARNING" and row["logger"] == self.LOGGER]
-            self.assertEqual(len(warnings), 2)
-            self.assertIn("water_dist=0", warnings[0]["msg"])
-            self.assertIn("water extent 1 <= bands.min 2", warnings[1]["msg"])
-            latest = Path(root) / "test-world" / "bake-light-latest.log"
-            self.assertEqual(latest.read_text(encoding="utf-8"), run_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

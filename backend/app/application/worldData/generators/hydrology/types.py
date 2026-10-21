@@ -16,6 +16,7 @@ from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConne
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.waterfallDrop import WaterfallDrop
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
@@ -75,9 +76,9 @@ class LoadedConnectionGraph:
 
 @dataclass(frozen=True)
 class LakeSpec:
+    """Declared ring geometry for legacy L0 consumers until HY-10; no physics."""
     shoreline_segments: list[tuple[tuple[int, int], tuple[int, int]]]
     location_uid: str | None = None
-    open_water_role: HydrologyCellRole = HydrologyCellRole.LAKE
 
 
 @dataclass(frozen=True)
@@ -158,6 +159,7 @@ class HydrologyResult:
     river_segments: list[Any] = field(default_factory=list)
     dirty_bbox:     GridBBox | None = None
     landforms:      Any = None
+    waterfall_drops: tuple[WaterfallDrop, ...] = ()
     water_bodies: tuple[WaterBody, ...] = ()
     physical_unions: tuple[PhysicalWaterUnion, ...] = ()
     water_areas: dict[str, int] = field(default_factory=dict)

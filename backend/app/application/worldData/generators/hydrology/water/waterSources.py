@@ -48,9 +48,13 @@ def water_sources(surface_z: Mapping[Coord, int], specs: Sequence[BasinSpec],
             kind, bands, role = BasinKind.LAKE, policy.default_lakes.bands, AutoWaterBodyRole.LAKE
         else:
             continue
+        body = WaterBody(
+            water_body_uid=auto_water_body_uid(role, anchor), kind=kind,
+            declared_level=level, z_water_level=level,
+        )
         sources.append(WaterSource(BasinSpec(
-            source_uid=auto_water_body_uid(role, anchor), kind=kind,
-            liquid=WaterBody.default_liquid(), footprint=frozenset(node.cells),
-            z_water_level=level, floor_z=node.height, bands=bands,
+            source_uid=body.water_body_uid, kind=body.kind,
+            liquid=body.liquid, footprint=frozenset(node.cells),
+            z_water_level=body.z_water_level, floor_z=node.height, bands=bands,
         ), (anchor,), False))
     return tuple(sources)

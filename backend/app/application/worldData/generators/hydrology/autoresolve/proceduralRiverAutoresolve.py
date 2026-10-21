@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from app.dataModel.topology.worldTopology import WorldTopology
 
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     classify_autoresolve_polyline,
@@ -23,9 +24,10 @@ def autoresolve_river_segments(
     heightmap: SurfaceHeightmap,
     master: HydrologyMasterInput,
     occupied: dict[tuple[int, int], MapCellHydrology],
+    *, topology: WorldTopology | None = None,
 ) -> list[RiverSegment]:
     type_classify = resolve_river_type_classify(world)
-    polylines = plan_river_network(world, heightmap, occupied, type_classify)
+    polylines = plan_river_network(world, heightmap, occupied, type_classify, topology=topology)
     segments: list[RiverSegment] = []
     for index, polyline in enumerate(polylines):
         source = polyline[0]

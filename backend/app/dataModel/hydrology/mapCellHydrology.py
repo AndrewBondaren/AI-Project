@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 from typing import Annotated
 
@@ -69,6 +69,17 @@ class MapCellHydrology(BaseModel):
 
     def is_liquid_candidate(self) -> bool:
         return bool(self.liquid_candidate)
+
+    def with_water_level(self, z_water_level: int) -> Self:
+        return type(self)(
+            liquid_candidate=self.liquid_candidate,
+            role=self.role,
+            deepening_index=self.deepening_index,
+            connection_edge_uid=self.connection_edge_uid,
+            shore_kind=self.shore_kind,
+            water_body_uid=self.water_body_uid,
+            z_water_level=z_water_level,
+        )
 
 
 def parse_cell_hydrology(raw: dict | None) -> MapCellHydrology | None:

@@ -119,7 +119,7 @@ def resolve_water_levels(tree: DepressionTree, sources: tuple[WaterSource, ...],
                     if body_parents[i] is None:
                         body_parents[i] = uid
                 for child_uid in child_uids:
-                    unions[child_uid] = unions[child_uid].model_copy(update={"parent_system_uid": uid})
+                    unions[child_uid] = unions[child_uid].with_parent_system(uid)
                 exterior = [groups[i].exterior for i in roots if groups[i].exterior is not None]
                 group = _Group(members, maximum, uid, any(groups[i].ocean for i in roots),
                                min(exterior) if exterior else None)
@@ -151,5 +151,5 @@ def resolve_water_levels(tree: DepressionTree, sources: tuple[WaterSource, ...],
         union = unions[uid]
         level = effective[union.parent_system_uid] if union.parent_system_uid else effective[uid]
         effective[uid] = level
-        unions[uid] = union.model_copy(update={"z_water_level": level})
+        unions[uid] = union.with_water_level(level)
     return ResolvedWaterLevels(levels, tuple(own_levels), tuple(body_parents), tuple(unions.values()))

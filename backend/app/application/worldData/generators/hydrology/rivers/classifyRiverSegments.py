@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import bresenham_line
-from app.application.worldData.generators.hydrology.geom.smoothRiverPolyline import smooth_polyline_cells
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     RiverSegment,
@@ -13,11 +13,14 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 
 
-def segments_from_declared(edges: list[DeclaredRiverEdge]) -> list[RiverSegment]:
+def segments_from_declared(edges: list[DeclaredRiverEdge], *, topology: WorldTopology | None = None) -> list[RiverSegment]:
     """U18: bundle edges already typed — no re-classify."""
     segments: list[RiverSegment] = []
     for edge in edges:
         cells = bresenham_line(*edge.segment[0], *edge.segment[1])
+        if topology is not None:
+            cells = list(dict.fromkeys(canonical for cell in cells
+                         if (canonical := topology.canonicalize(*cell)) is not None))
         segments.append(RiverSegment(
             polyline_cells=cells,
             connection_type=edge.connection_type,
@@ -36,7 +39,8 @@ def classify_autoresolve_polyline(
     edge_uid: str,
 ) -> RiverSegment:
     """U17: mountain vs lowland from source elevation."""
-    cells = smooth_polyline_cells(polyline)
+    # Planner enforces turns in its topology frame. Never drop a bed/drop vertex.
+    cells = list(polyline)
     source_z = heightmap.surface_z.get(cells[0], 0)
     mountain_fraction = 0.0
     if len(cells) > 1:

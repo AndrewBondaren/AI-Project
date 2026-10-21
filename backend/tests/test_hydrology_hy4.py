@@ -5,9 +5,7 @@ import unittest
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
 )
-from app.application.worldData.generators.hydrology.rivers.riverBedCarver import (
-    carve_river_segment,
-)
+from tests.hydrology_geometry_helpers import apply_test_river
 from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     RiverSegment,
@@ -53,7 +51,7 @@ class TestRiverBedCarve(unittest.TestCase):
             edge_uid="ce-test",
             declared=True,
         )
-        carved = carve_river_segment(hm, segment, depth_step=1)
+        carved = apply_test_river(hm, segment, depth_step=1)
         self.assertEqual(len(carved), 3)
         self.assertEqual(hm.surface_z[(4, 3)], 9)
         self.assertEqual(carved[(4, 3)].role, HydrologyCellRole.RIVER_BED)
@@ -68,7 +66,7 @@ class TestRiverBedCarve(unittest.TestCase):
             declared=True,
         )
         occupied = {(5, 3): MapCellHydrology(role=HydrologyCellRole.LAKE)}
-        carved = carve_river_segment(hm, segment, depth_step=1, occupied=occupied)
+        carved = apply_test_river(hm, segment, depth_step=1, occupied=occupied)
         self.assertEqual(set(carved), {(3, 3), (4, 3)})
         self.assertEqual(hm.surface_z[(5, 3)], 10)
 
@@ -81,7 +79,7 @@ class TestRiverBedCarve(unittest.TestCase):
             declared=True,
         )
         occupied = {(4, 3): MapCellHydrology(role=HydrologyCellRole.SHORE)}
-        carved = carve_river_segment(hm, segment, depth_step=1, occupied=occupied)
+        carved = apply_test_river(hm, segment, depth_step=1, occupied=occupied)
         self.assertEqual(carved[(4, 3)].role, HydrologyCellRole.RIVER_BED)
 
 

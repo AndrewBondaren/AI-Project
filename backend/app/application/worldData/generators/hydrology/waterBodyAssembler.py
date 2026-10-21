@@ -54,7 +54,7 @@ def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec
         if len(members) > 1 and all(uid in body_uids for uid in members):
             uid = water_system_uid(heightmap.world_uid, change_uid, members, WaterSystemKind.PHYSICAL_MERGE)
             aliases[union.water_system_uid] = uid
-            normalized[uid] = union.model_copy(update={"water_system_uid": uid, "member_uids": members})
+            normalized[uid] = union.with_identity(uid, members)
 
     children = {uid: set() for uid in normalized}
     for old_uid, uid in aliases.items():
@@ -62,19 +62,19 @@ def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec
         while previous is not None and (previous not in aliases or aliases[previous] == uid):
             previous = raw[previous].parent_system_uid
         parent = aliases[previous] if previous is not None else None
-        normalized[uid] = normalized[uid].model_copy(update={"parent_system_uid": parent})
+        normalized[uid] = normalized[uid].with_parent_system(parent)
         if parent is not None:
             children[parent].add(uid)
-    unions = tuple(union.model_copy(update={"child_system_uids": tuple(sorted(children[uid]))})
+    unions = tuple(union.with_child_systems(tuple(sorted(children[uid])))
                    for uid, union in normalized.items())
     nearest = {}
     for union in unions:
         for member in union.member_uids:
             candidate = (len(union.member_uids), union.water_system_uid)
             nearest[member] = min(nearest.get(member, candidate), candidate)
-    water = replace(water, bodies=tuple(body.model_copy(update={
-        "parent_system_uid": nearest[body.water_body_uid][1] if body.water_body_uid in nearest else None,
-    }) for body in water.bodies))
+    water = replace(water, bodies=tuple(body.with_parent_system(
+        nearest[body.water_body_uid][1] if body.water_body_uid in nearest else None,
+    ) for body in water.bodies))
     if auto_seas and not any(source.spec.z_water_level == policy.default_water_level for source in sources):
         water_issue(ctx, heightmap.world_uid, "natural-only autoresolve: no ocean depression",
                     "WATER_NO_OCEAN_DEPRESSION")

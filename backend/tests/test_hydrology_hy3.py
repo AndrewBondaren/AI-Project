@@ -2,19 +2,11 @@
 
 import unittest
 
-from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import carve_lake_basin
 from app.application.worldData.generators.hydrology.geom.polygonInterior import (
-    interior_cells,
     point_in_polygon,
 )
-from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.hydrology.types import HydrologyBands, LakeSpec
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from tests.hydrology_fixtures import flat_heightmap
-
-
-def _flat(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 8):
-    return flat_heightmap(gx_lo, gx_hi, gy_lo, gy_hi, z=z, world_uid="test")
 
 
 class TestPolygonInterior(unittest.TestCase):
@@ -25,24 +17,21 @@ class TestPolygonInterior(unittest.TestCase):
         self.assertFalse(point_in_polygon(4.5, 1.5, verts))
 
 
-class TestLakeBasin(unittest.TestCase):
-
-    def test_carve_closed_quad_has_lake_center(self):
-        segments = [
-            ((4, 4), (7, 4)),
-            ((7, 4), (7, 7)),
-            ((7, 7), (4, 7)),
-            ((4, 7), (4, 4)),
-        ]
-        hm = _flat(0, 10, 0, 10)
-        spec = LakeSpec(shoreline_segments=segments)
-        carved = carve_lake_basin(hm, spec, HydrologyBands(min=1, max=3))
-        shoreline = rasterize_segments(segments)
-        interior = interior_cells(hm, segments, shoreline)
-        self.assertTrue(interior)
-        lake_cells = [c for c, e in carved.items() if e.role == HydrologyCellRole.LAKE]
-        self.assertTrue(lake_cells)
-        self.assertTrue(all(hm.surface_z[c] < 8 for c in lake_cells))
+class TestUnifiedLakeBasin(unittest.TestCase):
+    def test_declared_ring_materializes_lake_center_and_dry_shore(self):
+        from tests.test_hydrology_hy12_smoke import basin_world
+        from tests.hydrology_fixtures import carve_then_fill
+        hm = flat_heightmap(0, 7, 0, 5, z=8)
+        result, before_fill = carve_then_fill(basin_world(source="lake"), hm)
+        self.assertEqual(hm.surface_z, before_fill)
+        center = result.cell_index.by_cell[(3, 2)]
+        self.assertEqual(center.water_body_uid, "body")
+        self.assertTrue(center.liquid_candidate)
+        self.assertLess(hm.surface_z[(3, 2)], center.z_water_level)
+        shores = {cell: entry for cell, entry in result.cell_index.by_cell.items()
+                  if entry.role == HydrologyCellRole.SHORE}
+        self.assertTrue(shores)
+        self.assertTrue(all(not entry.liquid_candidate for entry in shores.values()))
 
 
 if __name__ == "__main__":

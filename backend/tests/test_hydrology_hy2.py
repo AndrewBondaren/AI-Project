@@ -7,13 +7,7 @@ from tests.hydrology_fixtures import hydro_topology
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-    carve_deepening_bands,
-    flood_water_side,
-)
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
+from tests.hydrology_geometry_helpers import (flood_water_side)
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import (
     bresenham_line,
     rasterize_segments,
@@ -22,7 +16,9 @@ from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import
     is_land,
     resolve_z_sea,
 )
-from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyScope
+from app.application.worldData.generators.hydrology.types import (
+    HydrologyScope,
+)
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 
 
@@ -72,18 +68,6 @@ class TestDeepeningBands(unittest.TestCase):
         dist = flood_water_side(hm, rasterize_segments(segments), segments, topology=hydro_topology(hm))
         self.assertIn((5, 1), dist)
         self.assertNotIn((5, 3), dist)
-
-    def test_carve_sets_roles_without_z_write(self):
-        # Declared-source z is carved by Pass 1.4 basinZ (HY-12/3b); this carver is role-only.
-        hm = _flat_heightmap(0, 10, 0, 6)
-        before = dict(hm.surface_z)
-        segments = [((2, 2), (8, 2))]
-        result = carve_deepening_bands(hm, segments, HydrologyBands(min=1, max=1),
-                                       water_body_uid="auto-sea-2x1", z_sea=0, topology=hydro_topology(hm))
-        self.assertEqual(hm.surface_z, before)  # deepening band 1 and open water keep pre-carve z
-        entry = result.by_cell[(5, 0)]
-        self.assertEqual(entry.role, HydrologyCellRole.COASTAL_SEA)
-        self.assertTrue(result.dirty_bbox is not None)
 
 
 class TestHydrologyOceanScope(unittest.TestCase):

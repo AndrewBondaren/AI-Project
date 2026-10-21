@@ -2,30 +2,26 @@
 
 import unittest
 
-from app.application.worldData.generators.hydrology.basins.seaBasinGenerator import generate_coastal_sea
-from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import autoresolve_sea_basins
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import build_hydrology_master_input
-from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-    carve_deepening_bands, compute_land_centroid, flood_from_bbox_ocean_edge,
-    flood_water_side, flood_water_side_unbounded,
-)
+from tests.hydrology_geometry_helpers import (compute_land_centroid, flood_water_side, flood_water_side_unbounded)
 from app.application.worldData.generators.hydrology.shore.waterSideFootprint import (
     CoastlineWaterSide, water_side_footprint,
 )
-from app.application.worldData.generators.hydrology.types import CoastlineSpec, HydrologyBands, HydrologyScope
-from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.application.worldData.generators.hydrology.types import (
+    HydrologyScope,
+)
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
 from tests.hydrology_fixtures import (
-    coastline_world, flat_heightmap, hydro_master, hydro_topology, hydro_world, seas_hydrology, waypoint,
+    coastline_world,
+    flat_heightmap,
+    hydro_topology,
+    waypoint,
     carve_then_fill,
 )
 
 
 class DeclaredTopologyFloodTests(unittest.TestCase):
-    LOGGER = "app.application.worldData.generators.hydrology.basins.seaBasinGenerator"
 
     def setUp(self):
         self.hm = flat_heightmap(-2, 2, -2, 2)
@@ -37,12 +33,6 @@ class DeclaredTopologyFloodTests(unittest.TestCase):
         return CoastlineWaterSide(rasterize_segments(segments), segments, centroid,
                                   topology=self.topology)
 
-    def generate(self, *, world=None, hm=None, segments=None):
-        world = world or hydro_world(hydrology=seas_hydrology(bands=(1, 1)))
-        spec = CoastlineSpec(segments=self.segments if segments is None else segments,
-                             location_uid="hy11-sea")
-        return generate_coastal_sea(world, self.hm if hm is None else hm,
-                                    hydro_master(declared_coastline_specs=[spec]))
 
     def test_wrapped_west_coast_flood_reaches_east_with_canonical_distances(self):
         water = flood_water_side(self.hm, rasterize_segments(self.segments), self.segments,
@@ -51,37 +41,6 @@ class DeclaredTopologyFloodTests(unittest.TestCase):
         self.assertEqual(self.hm.surface_z, flat_heightmap(-2, 2, -2, 2).surface_z)
         self.assertLessEqual(len(water), len(self.hm.surface_z))
 
-    def test_declared_carver_writes_only_canonical_cells_and_leaves_land_intact(self):
-        before = dict(self.hm.surface_z)
-        result = carve_deepening_bands(self.hm, self.segments, HydrologyBands(min=1, max=1),
-                                       topology=self.topology, water_body_uid="hy11-sea", z_sea=0)
-        self.assertEqual(result.by_cell[(2, 0)].deepening_index, 1)
-        self.assertEqual(result.by_cell[(1, 0)].role, HydrologyCellRole.COASTAL_SEA)
-        self.assertEqual(result.by_cell[(-1, 0)].deepening_index, 0)
-        # Declared-source z is carved by Pass 1.4 basinZ (HY-12/3b); carver is role-only.
-        self.assertEqual(self.hm.surface_z[(1, 0)], before[(1, 0)])
-        self.assertEqual(self.hm.surface_z[(-1, 0)], before[(-1, 0)])
-        self.assertEqual(set(self.hm.surface_z), set(before))
-        self.assertTrue(set(result.by_cell) <= before.keys())
-        self.assertEqual(result.by_cell[(2, 0)].water_body_uid, "hy11-sea")
-
-    def test_world_default_wrapped_does_not_emit_false_empty_water_warning(self):
-        with self.assertNoLogs(self.LOGGER, level="WARNING"):
-            cells, _ = self.generate()
-        self.assertEqual(cells[(2, 0)].deepening_index, 1)
-        self.assertEqual(cells[(1, 0)].role, HydrologyCellRole.COASTAL_SEA)
-
-    def test_planar_void_warns_and_does_not_expand_heightmap(self):
-        world = hydro_world(hydrology=seas_hydrology(bands=(1, 1)),
-                             world_topology_mode=Mode.PLANAR.value)
-        before = dict(self.hm.surface_z)
-        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
-            cells, _ = self.generate(world=world)
-        self.assertEqual(len(captured.records), 1)
-        self.assertIn("water_dist=0", captured.output[0])
-        self.assertTrue(cells)
-        self.assertTrue(all(entry.deepening_index == 0 for entry in cells.values()))
-        self.assertEqual(self.hm.surface_z, before)
 
     def test_passable_receives_canonical_cells_and_blocks_seam_flood(self):
         seen = []
@@ -108,17 +67,6 @@ class DeclaredTopologyFloodTests(unittest.TestCase):
         self.assertNotIn((-1, 2), unbounded)
         self.assertTrue(set(bounded) <= unbounded.keys())
 
-    def test_missing_seam_target_is_not_created_and_world_bounds_override_bake_scope(self):
-        partial = flat_heightmap(-2, 0, -2, 2)
-        world = hydro_world(hydrology=seas_hydrology(bands=(1, 1)),
-                             world_bounds=self.topology.bounds.model_dump())
-        resolved = resolve_hydrology_topology(world, partial)
-        self.assertEqual(resolved.bounds, self.topology.bounds)
-        before = dict(partial.surface_z)
-        with self.assertLogs(self.LOGGER, level="WARNING"):
-            cells, _ = self.generate(world=world, hm=partial)
-        self.assertEqual(partial.surface_z, before)
-        self.assertNotIn((0, 0), cells)  # Partial bbox must not become a false wrap seam.
 
     def test_unrolled_segment_and_its_translated_image_have_same_canonical_footprint(self):
         first = water_side_footprint(self.geometry(), bounded=True,
@@ -163,17 +111,6 @@ class SphereDeclaredFloodTests(unittest.TestCase):
                 self.assertTrue(all(topology.bounds.contains(*cell) for cell in water))
                 self.assertLessEqual(len(water), len(hm.surface_z))
 
-    def test_sphere_carver_uses_world_mode_and_keeps_normal_across_fold(self):
-        for y in (0, 4):
-            with self.subTest(y=y):
-                hm = flat_heightmap(0, 5, 0, 4)
-                world = hydro_world(world_topology_mode=Mode.SPHERE.value,
-                                     hydrology=seas_hydrology(bands=(1, 1)))
-                spec = CoastlineSpec(segments=[((0, y), (1, y))], location_uid="sphere-sea")
-                cells, _ = generate_coastal_sea(world, hm, hydro_master(declared_coastline_specs=[spec]))
-                self.assertEqual(cells[(3, y)].deepening_index, 1)
-                self.assertEqual(cells[(3, 3 if y == 4 else 1)].role, HydrologyCellRole.COASTAL_SEA)
-                self.assertEqual(cells[(3, y)].water_body_uid, "sphere-sea")
 
     def test_equal_distance_fold_water_image_is_not_suppressed_by_tangent_image(self):
         hm = flat_heightmap(0, 3, 0, 4)
@@ -212,18 +149,6 @@ class TopologyConsumerTests(unittest.TestCase):
                          {(-2, 0), (-1, 0), (0, 0)})
         self.assertEqual(rasterize_segments([((-4, 4), (0, 4))], topology=topology), set())
 
-    def test_fully_clipped_planar_declare_keeps_empty_water_diagnostic(self):
-        hm = flat_heightmap(-2, 2, -2, 2)
-        world = hydro_world(world_topology_mode=Mode.PLANAR.value,
-                             hydrology=seas_hydrology(bands=(1, 1)))
-        spec = CoastlineSpec(segments=[((-4, -1), (-4, 1))], location_uid="void-sea")
-        before = dict(hm.surface_z)
-        with self.assertLogs(DeclaredTopologyFloodTests.LOGGER, level="WARNING") as captured:
-            cells, _ = generate_coastal_sea(world, hm, hydro_master(declared_coastline_specs=[spec]))
-        self.assertEqual(cells, {})
-        self.assertEqual(len(captured.records), 1)
-        self.assertIn("water_dist=0", captured.output[0])
-        self.assertEqual(hm.surface_z, before)
 
     def test_fine_loader_reanchors_coastline_then_facade_floods_across_world_seam(self):
         hm = flat_heightmap(-2, 2, -2, 2)
@@ -266,46 +191,6 @@ class TopologyConsumerTests(unittest.TestCase):
         segments = build_hydrology_master_input(world, []).declared_coastline_segments
         self.assertEqual(segments, [((3, 4), (4, 3)), ((4, 3), (5, 3))])
         self.assertEqual(rasterize_segments(segments, topology=topology), {(3, 4), (4, 3), (5, 3)})
-
-    def test_padded_declared_bbox_excludes_its_wrapped_image_from_autoresolve(self):
-        hm = flat_heightmap(-2, 2, -2, 2)
-        master = hydro_master(declared_coastline_specs=[
-            CoastlineSpec(segments=[((-2, -1), (-2, 1))], location_uid="hy11-sea"),
-        ])
-        auto, _ = autoresolve_sea_basins(
-            hydro_world(hydrology=seas_hydrology(bands=(1, 1))), hm, master, {},
-            autoresolve_coastal=True, autoresolve_open_ocean=True,
-        )
-        self.assertTrue(auto)
-        self.assertNotIn((2, 0), auto)  # Image (-3,0) lies inside padded declare bbox.
-        self.assertIn((1, 0), auto)
-
-    def test_padded_declared_bbox_excludes_fold_image_from_autoresolve(self):
-        hm = flat_heightmap(0, 5, 0, 4)
-        master = hydro_master(declared_coastline_specs=[
-            CoastlineSpec(segments=[((0, 4), (1, 4))], location_uid="hy11-sea"),
-        ])
-        auto, _ = autoresolve_sea_basins(
-            hydro_world(world_topology_mode=Mode.SPHERE.value, hydrology=seas_hydrology(bands=(1, 1))),
-            hm, master, {}, autoresolve_coastal=True, autoresolve_open_ocean=True,
-        )
-        self.assertNotIn((3, 4), auto)  # Reflected image (0,5) is inside padded bbox.
-        self.assertIn((3, 3), auto)
-
-    def test_procedural_partial_bake_edge_is_not_a_world_edge(self):
-        for mode in Mode:
-            full = flat_heightmap(-2, 3, -2, 2)
-            topology = hydro_topology(full, mode)
-            partial = flat_heightmap(-1, 1, -1, 1)
-            self.assertEqual(flood_from_bbox_ocean_edge(partial, topology=topology), {})
-
-    def test_procedural_flood_keeps_canonical_keys_for_every_topology(self):
-        for mode in Mode:
-            hm = flat_heightmap(-2, 3, -2, 2)
-            water = flood_from_bbox_ocean_edge(hm, topology=hydro_topology(hm, mode))
-            self.assertIn((0, -2), water)
-            self.assertTrue(water.keys() <= hm.surface_z.keys())
-            self.assertTrue(all(distance > 0 for distance in water.values()))
 
 
 if __name__ == "__main__":

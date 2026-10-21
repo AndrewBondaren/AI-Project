@@ -27,5 +27,5 @@ def derive_shore(surface_z: Mapping[Coord, int], water: Mapping[Coord, MapCellHy
                 raise ValueError(f"incomplete level fill next to {cell}: {neighbor}")
             result[neighbor] = MapCellHydrology.shore(
                 kind, water_body_uid=entry.water_body_uid,
-            ).model_copy(update={"z_water_level": entry.z_water_level})
+            ).with_water_level(entry.z_water_level)
     return result
