@@ -6,7 +6,7 @@ from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSp
 from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.dataModel.spatial.facing import Facing
 
-from app.application.worldData.generators.structure.shapes import room_footprint
+from app.application.worldData.generators.structure.shape.shapes import room_footprint
 
 
 @dataclass

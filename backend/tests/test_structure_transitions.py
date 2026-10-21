@@ -3,7 +3,7 @@
 import unittest
 from dataclasses import replace
 
-from app.application.worldData.generators.structure.layoutTranslate import translate_layout
+from app.application.worldData.generators.structure.layout.layoutTranslate import translate_layout
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService, StructureLayout
 from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import rebind_layout_to_building

@@ -5,7 +5,7 @@ from itertools import permutations
 from app.application.worldData.generators.structure.cellBuilder import (
     _interior, pass3_interior_walls,
 )
-from app.application.worldData.generators.structure.wallRegions import (
+from app.application.worldData.generators.structure.walls.wallRegions import (
     classify_wall_regions,
 )
 from app.dataModel.locations.structure.wallRegion import WallProvenance

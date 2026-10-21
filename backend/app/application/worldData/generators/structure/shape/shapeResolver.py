@@ -1,5 +1,5 @@
 from app.dataModel.locations.structure.room.sizeSpec import SizeSpec
-from app.application.worldData.generators.structure.shapeType import ShapeType
+from app.application.worldData.generators.structure.shape.shapeType import ShapeType
 
 _SQUARE_SIZE_TYPES: frozenset[str] = frozenset({
     "sq_small", "sq_medium", "sq_large",

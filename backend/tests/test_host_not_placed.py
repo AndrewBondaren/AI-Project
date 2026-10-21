@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.core.generationLogging import generation_world_log
-from app.application.worldData.generators.structure.layoutEngine import (
+from app.application.worldData.generators.structure.layout.layoutEngine import (
     _layout_mode_b, _spiral_search, _try_adjacent, _place_next_to_any,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
@@ -15,7 +15,7 @@ from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room
 
-LAYOUT = "app.application.worldData.generators.structure.layoutEngine"
+LAYOUT = "app.application.worldData.generators.structure.layout.layoutEngine"
 
 
 class HostNotPlacedTests(unittest.TestCase):

@@ -28,14 +28,14 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     level_uid as _level_uid,
 )
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
-from app.application.worldData.generators.structure.wallMaterials import (
+from app.application.worldData.generators.structure.walls.wallMaterials import (
     select_wall_materials,
 )
-from app.application.worldData.generators.structure.wallRegions import (
+from app.application.worldData.generators.structure.walls.wallRegions import (
     classify_wall_regions,
 )
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
-from app.application.worldData.generators.structure.layoutEngine import layout_level
+from app.application.worldData.generators.structure.layout.layoutEngine import layout_level
 from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import prepare_embedded_upper
 from app.application.worldData.generators.structure.passages import build_transitions
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms

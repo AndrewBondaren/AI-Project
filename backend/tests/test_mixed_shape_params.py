@@ -8,10 +8,10 @@ from unittest.mock import patch
 from app.application.worldData.generators.structure.room.roomFactory import (
     _resolve_shape_params, instantiate_level_rooms,
 )
-from app.application.worldData.generators.structure.shapes import (
+from app.application.worldData.generators.structure.shape.shapes import (
     footprint_l_shape, footprint_t_shape, room_footprint,
 )
-from app.application.worldData.generators.structure.shapeType import ShapeType
+from app.application.worldData.generators.structure.shape.shapeType import ShapeType
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.dataModel.locations.structure.building.levelDef import LevelDef

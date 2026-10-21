@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.application.worldData.debugStructureRotations import RotationProbe
 from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import prepare_embedded_upper
-from app.application.worldData.generators.structure.layoutEngine import layout_level
+from app.application.worldData.generators.structure.layout.layoutEngine import layout_level
 from app.application.worldData.generators.structure.cellBuilder import pass2_floors, _interior
 from app.application.worldData.generators.structure.passages.corridorTrimmer import trim_corridor_rooms
 from app.core.generationLogging import generation_world_log
