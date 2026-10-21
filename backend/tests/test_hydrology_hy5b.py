@@ -78,9 +78,16 @@ class TestProceduralLakes(unittest.TestCase):
     def test_service_lakes_scope_without_declare(self):
         hm = _depression_heightmap()
         master = hydro_master(scopes=frozenset({HydrologyScope.LAKES}))
-        result = HydrologyGeneratorService().apply(_world(), [], hm, master=master)
+        # A high lake needs a finite physical outlet; wrapped global minima do
+        # not acquire a guessed water level. Here the world rim supplies it.
+        world = _world(world_topology_mode="planar", hydrology={
+            **lakes_hydrology(), "default_seas": {"inland_sea_min_area_fraction": 1.0},
+        })
+        before = dict(hm.surface_z)
+        result = HydrologyGeneratorService().apply(world, [], hm, master=master)
         roles = {entry.role for entry in result.cell_index.by_cell.values()}
         self.assertIn(HydrologyCellRole.LAKE, roles)
+        self.assertEqual(hm.surface_z, before)
 
 
 if __name__ == "__main__":

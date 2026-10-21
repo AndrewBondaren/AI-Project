@@ -20,8 +20,10 @@ from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverP
     resolve_declared_river_intents,
 )
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.application.worldData.generators.hydrology.types import HydrologyScope
 from tests.hydrology_fixtures import (
     flat_heightmap,
+    carve_then_fill,
     hydro_world,
     lake_wire,
     river_endpoints_wire,
@@ -60,9 +62,10 @@ class TestCoarseMasterInput(unittest.TestCase):
     def test_apply_on_coarse_heightmap_with_declared_lake(self):
         w = _world({"declared_lakes": [LAKE]})
         hm = _flat_heightmap(10, 10)
-        result = HydrologyGeneratorService().apply(w, [], hm)
+        result, before_fill = carve_then_fill(w, hm, scopes=frozenset({HydrologyScope.LAKES}))
         self.assertGreater(result.cells_modified, 0)
         self.assertTrue(set(result.cell_index.by_cell) <= set(hm.surface_z))
+        self.assertEqual(hm.surface_z, before_fill)
 
     def test_river_into_lake_keeps_lake_cells(self):
         # Declared lakes are carved/role'd by the pre-1.4 placement pass (HY-12/3b);

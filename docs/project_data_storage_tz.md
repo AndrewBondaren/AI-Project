@@ -1276,6 +1276,12 @@ Lookup: `alias → { category, system_name, current_value }`.
 - **Валидация при записи** — перед сохранением нового стата/скилла/резиста alias проверяется против текущего AliasRegistry; коллизия блокирует сохранение с явной ошибкой: `Alias "Fr" уже используется: стат "Fire"`
 - **Обновление в памяти** — после любого изменения схемы (добавить/переименовать/удалить стат/скилл/резист) AliasRegistry обновляется немедленно; коллизия никогда не попадает в БД
 
+### Identity водных систем (HY-12/4, 2026-10-21)
+
+Общие теги `UidKind.WATER_SYSTEM` и `UidKind.LIFECYCLE_CHANGE` живут в `app/ids/uidKind.py`; adapter формулы — `app/ids/waterSystemIdentity.py`. UID системы: `entity_uid(world_uid, WATER_SYSTEM, change_uid=operation_uid, members=state_fingerprint(tuple(sorted(unique_member_uids))), system_kind=WaterSystemKind)`. Вид `PHYSICAL_MERGE` отделён от `CONNECTED`; UID участников не меняются. Перестановка состава/retry не меняют результат, новая операция восстановления после засухи даёт новый UID даже при прежнем составе. Нельзя выводить historical identity только из состава или уровня воды.
+
+`initial_water_change_uid(world_uid)` использует `entity_uid(world_uid, LIFECYCLE_CHANGE, scope="hydrology", origin="bootstrap")` только для чистого первого bake/preview. Stateful caller передаёт identity своей операции и переиспользует её при retry; bootstrap-default не является identity нового runtime-события. Журнал/change persist и историзация остаются L/W-доменам.
+
 ### Детерминированные uid и rng (**DET-1**, cross-cutting)
 
 **A0, 2026-10-14:** единственное актуальное место UID helper — `app/ids/`

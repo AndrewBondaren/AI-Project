@@ -15,6 +15,8 @@ from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
@@ -156,6 +158,10 @@ class HydrologyResult:
     river_segments: list[Any] = field(default_factory=list)
     dirty_bbox:     GridBBox | None = None
     landforms:      Any = None
+    water_bodies: tuple[WaterBody, ...] = ()
+    physical_unions: tuple[PhysicalWaterUnion, ...] = ()
+    water_areas: dict[str, int] = field(default_factory=dict)
+    water_floors: dict[str, int] = field(default_factory=dict)
 
     @property
     def cells_modified(self) -> int:

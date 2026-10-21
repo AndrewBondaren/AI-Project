@@ -18,3 +18,7 @@ class WaterBody(BaseModel):
     z_water_level: StrictOnWire[int]
     declared_basin_uid: DefaultWhenMissing[str | None] = None
     parent_system_uid: DefaultWhenMissing[str | None] = None
+
+    @classmethod
+    def default_liquid(cls) -> MaterialKey:
+        return cls.model_fields["liquid"].default

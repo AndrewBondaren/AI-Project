@@ -20,6 +20,7 @@ from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
 from tests.hydrology_fixtures import (
     coastline_world, flat_heightmap, hydro_master, hydro_topology, hydro_world, seas_hydrology, waypoint,
+    carve_then_fill,
 )
 
 
@@ -229,17 +230,19 @@ class TopologyConsumerTests(unittest.TestCase):
         topology = hydro_topology(hm, Mode.WRAPPED)
         world = coastline_world(
             fine_cells_per_map_cell=1000, world_bounds=topology.bounds.model_dump(),
+            z_min=-100,
             path=[waypoint(3500, -1000), waypoint(3500, 1000)],
             hydrology={"default_seas": {"bands": {"min": 1, "max": 1},
                                        "autoresolve_coastal_sea": False, "autoresolve_open_ocean": False}},
         )
         master = build_hydrology_master_input(world, [])
         self.assertEqual(master.declared_coastline_segments, [((-2, -1), (-2, 1))])
-        result = HydrologyGeneratorService().apply(
-            world, [], hm, scopes=frozenset({HydrologyScope.COASTAL_SEA}),
+        result, before_fill = carve_then_fill(
+            world, hm, scopes=frozenset({HydrologyScope.COASTAL_SEA}),
         )
         self.assertEqual(result.cell_index.by_cell[(2, 0)].deepening_index, 1)
-        self.assertEqual(result.cell_index.by_cell[(1, 0)].role, HydrologyCellRole.COASTAL_SEA)
+        self.assertTrue(result.cell_index.by_cell[(2, 0)].liquid_candidate)
+        self.assertEqual(hm.surface_z, before_fill)
         self.assertTrue(result.cell_index.by_cell.keys() <= hm.surface_z.keys())
 
     def test_fine_loader_preserves_long_segment_and_multi_leg_connectivity(self):

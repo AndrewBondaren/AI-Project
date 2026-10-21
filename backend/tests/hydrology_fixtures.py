@@ -87,6 +87,23 @@ def heightmap_from_z(
     )
 
 
+def carve_then_fill(world, heightmap, *, scopes=None, locations=None):
+    """Production water path: shared placement → relief carve → read-only fill."""
+    from app.application.worldData.generators.hydrology.placement import run_water_placement_pass
+    from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
+    from app.application.worldData.generators.terrain.reliefObjects.bathymetry.basinZ import apply_basin_z
+    locations = locations or []
+    water = run_water_placement_pass(world, locations, heightmap)
+    if water is not None:
+        apply_basin_z(heightmap, water.basin_specs, water.topology, reserved=frozenset())
+    before_fill = dict(heightmap.surface_z)
+    result = HydrologyGeneratorService().apply(
+        world, locations, heightmap, scopes=scopes,
+        basin_specs=water.basin_specs if water else (), topology=water.topology if water else None,
+    )
+    return result, before_fill
+
+
 def depression_heightmap() -> SurfaceHeightmap:
     surface_z: dict[tuple[int, int], int] = {}
     for gx in range(0, 11):

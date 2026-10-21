@@ -129,6 +129,16 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         carved = {cell for cell in footprint
                   if ctx.coarse_hm.surface_z[cell] < policy.default_water_level}
         self.assertTrue(carved)
+        # HY-12/4: materialized water carries the effective per-body level and
+        # identity on both sides of the seam; bottom z is not the water surface.
+        water_cells = {cell: entry for cell, entry in ctx.coarse_hydro.items()
+                       if entry.role is not None and entry.role.is_open_water_role()}
+        self.assertTrue(water_cells)
+        self.assertTrue({-2, 2} <= {x for x, _ in water_cells})
+        self.assertIn("loc-geo-ocean-west-004", {entry.water_body_uid for entry in water_cells.values()})
+        for cell, entry in water_cells.items():
+            self.assertIsNotNone(entry.z_water_level)
+            self.assertLess(ctx.coarse_hm.surface_z[cell], entry.z_water_level)
         # The rest are mountain-reserved cells (raised in 1.4 before basinZ).
         for cell in footprint - carved:
             self.assertNotEqual(ctx.coarse_hm.surface_z[cell], ctx.coarse_relief_z[cell])
@@ -138,6 +148,7 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         first = prepare_surface_terrain_context(world, locations)
         second = prepare_surface_terrain_context(world, locations)
         self.assertEqual(first.coarse_hm.surface_z, second.coarse_hm.surface_z)
+        self.assertEqual(first.coarse_hydro, second.coarse_hydro)
 
 
 if __name__ == "__main__":

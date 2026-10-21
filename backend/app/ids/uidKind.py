@@ -25,6 +25,8 @@ class UidKind(StrEnum):
     GRADE_SYSTEM = "grade_system"
     REGION = "region"
     TERRAIN_SNAPSHOT = "terrain_snapshot"
+    WATER_SYSTEM = "water_system"
+    LIFECYCLE_CHANGE = "lifecycle_change"
 
     # Bake reproducibility — world_seed root (seed_uid / seed_rng)
     JOB_TILE = "tile"

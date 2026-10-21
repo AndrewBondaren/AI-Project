@@ -28,6 +28,7 @@ from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 
 from tests.hydrology_fixtures import (
     coastline_world,
+    carve_then_fill,
     flat_heightmap as _flat_heightmap,
     hydro_world,
     seas_hydrology,
@@ -90,18 +91,17 @@ class TestHydrologyOceanScope(unittest.TestCase):
     def _world_with_declared_coastline(self):
         return coastline_world(bands=(1, 3), autoresolve=False)
 
-    def test_apply_ocean_scope_modifies_heightmap(self):
+    def test_carve_then_fill_ocean_scope_preserves_bottom(self):
         w = self._world_with_declared_coastline()
+        w.z_min = -100
         hm = _flat_heightmap(0, 12, 0, 6)
-        svc = HydrologyGeneratorService()
-        result = svc.apply(
-            w,
-            [],
-            hm,
+        result, before_fill = carve_then_fill(
+            w, hm,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
         )
         self.assertGreater(result.cells_modified, 0)
-        self.assertTrue(any(z == 0 for z in hm.surface_z.values()))
+        self.assertEqual(hm.surface_z, before_fill)
+        self.assertTrue(any(z < 0 for z in hm.surface_z.values()))
         roles = set(result.cell_index.roles.values())
         self.assertTrue(
             roles & {HydrologyCellRole.COASTAL_SEA, HydrologyCellRole.OPEN_OCEAN, HydrologyCellRole.SHORE},

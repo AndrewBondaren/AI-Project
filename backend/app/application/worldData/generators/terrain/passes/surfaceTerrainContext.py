@@ -104,6 +104,8 @@ def prepare_surface_terrain_context(
             coarse_hm,
             nodes=nodes or [],
             edges=edges or [],
+            basin_specs=water.basin_specs if water else (),
+            topology=water.topology if water else None,
         )
         coarse_hydro = hydro_result.cell_index.by_cell
 

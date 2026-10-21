@@ -143,7 +143,7 @@ class TestBoundaryAutoresolve(unittest.TestCase):
 
     def test_service_without_declare_coastline(self):
         w = _world()
-        hm = _flat_heightmap(0, 12, 0, 6)
+        hm = _flat_heightmap(0, 12, 0, 6, z=-5)
         master = HydrologyMasterInput(
             world_uid="test-world",
             hydrology_enabled=True,
@@ -160,9 +160,10 @@ class TestBoundaryAutoresolve(unittest.TestCase):
 
 class TestHydrologyServiceAutoresolve(unittest.TestCase):
 
-    def test_apply_adds_open_ocean_outside_declare_strip(self):
+    def test_autoresolve_reads_existing_depression_outside_declare_strip(self):
         w = _world_with_coastline()
-        hm = _flat_heightmap(0, 12, 0, 6)
+        hm = _flat_heightmap(0, 12, 0, 6, z=-5)
+        before = dict(hm.surface_z)
         svc = HydrologyGeneratorService()
         result = svc.apply(
             w,
@@ -174,6 +175,7 @@ class TestHydrologyServiceAutoresolve(unittest.TestCase):
         self.assertIn((0, 0), roles)
         self.assertEqual(roles[(0, 0)].role, HydrologyCellRole.OPEN_OCEAN)
         self.assertGreater(result.cells_modified, 12)
+        self.assertEqual(hm.surface_z, before)
 
     def test_autoresolve_off_keeps_narrow_strip(self):
         w = _world(
