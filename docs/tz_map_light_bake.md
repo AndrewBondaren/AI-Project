@@ -1448,6 +1448,17 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 
 ### Coarse planning ↔ light compose — порядок z (утверждено 2026-07-17)
 
+**Уточнение target от 2026-10-22:** [terrain/relief planning](./tz_terrain_generation.md#terrain-relief-hydrology-planning)
+один раз выбирает горы, овраги и геометрию дна водоёмов до гидрологии.
+Речные маршруты могут потребовать второго relief-вызова. L0/L2 получают
+проекции этих решений; MountainContributor/MountainMaskMaterializer.collect
+и RavineContributor при cutover перестают независимо выбирать объекты
+по запрошенным tiles. Template pick выполняется в planning из frozen
+inputs, а не повторно в light compose. Гидрология читает готовые высоты.
+Описанные ниже повторные coarse/light вычисления относятся к legacy
+baseline и не разрешают второй выбор объектов в target. Точные contracts
+и activation ledger фиксируются PC-0; этот текст не отмечает cutover done.
+
 **Проблема smoke:** light `mountain` красит `system_terrain=mountain` без подъёма z; hydrology на coarse видит почти плоский heightmap → peaks/basins/истоки пустые → нет procedural озёр/рек. Море живёт (edge flood), не через prominence.
 
 **Два контура (не путать):**
@@ -1793,3 +1804,29 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | 2026-07-19 | § Координаты: mosaic frame prefer `world_bounds`; MLB-12; sparse bake ≠ форма мира |
 | 2026-07-19 | Compose tile set: light = location tiles, full = весь bounds (контракт мастера); без wilderness bake stage |
 | 2026-07-15 | MLB-8 unit path ✅ via WP-PERF-22 impl |
+
+
+## PC-0 — потребление frozen surface plans (2026-10-23)
+
+Полный контракт — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0),
+PC-B…PC-F. LightGridBakeContext получает coherent SurfacePlanBundle.
+ReliefContributor читает ReliefPlan.light.base_surface_z; MountainContributor
+читает mountain_layout и готовые light mountain z/facing; RavineContributor
+читает готовые light ravine cells/z. Полный generation extent задаёт
+planning input, ctx.tiles только обрезает delivery. Terrain color проходит
+existing merge helper с frozen terrain_merge; неуспешный color paint не
+запускает selection и не отменяет готовое height effect.
+
+ClimateContributor использует ClimateBasePlan sampler без live World.
+HydroContributor получает final hydrology и DeclaredWaterPaint, сохраняет
+порядок corridors → lake/coastline → coarse open water. Fine→light raster
+и tile paint остаются materialization, выбор объектов/anchors/geometry —
+planning. LightCellRef переносится единственным классом в spatial/grid/
+coordinateTypes.py; old masks/footprint re-exports symbol.
+
+PC-10 переводит названные consumers атомарно; PC-11 использует те же refs
+и persisted parent light. Wire/manifest storage, landcover state writer,
+city/location caches и pack decode cache сохраняют свой scope. Приёмка:
+full/partial equality на пересечении tiles, HIT/MISS/restart equality,
+one mountain selection и absence of double carve. Изменение legacy
+light selection/height-color coupling принимается отдельным baseline delta.

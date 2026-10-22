@@ -239,3 +239,22 @@ Target: materialization run **один раз** → persist → capture; сле�
 - [`tz_lazy_simulation.md`](./tz_lazy_simulation.md) — LOD unfold
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — TR-2 deferred → snapshot
 - [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) — post-turn capture node (future)
+
+
+## PC-0 — surface source view и будущий snapshot adapter (2026-10-23)
+
+[Норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0) фиксирует
+StateViewRevision как SHA-256 canonical source projection. До общего
+WorldSnapshot runtime caller передаёт world/locations и loaded mountain
+member projections из одного authoritative read/draft view. Capture только
+разрешает inputs/refs; не запускает генерацию, не читает cache/SQL/pack.
+
+PlanKey использует собственный input closure и exact dependency refs,
+а bundle — source-view revision. Неизменившийся domain artifact может
+переиспользоваться после unrelated edit. Cache не хранит current pointer.
+Publication owner повторно сверяет source projection под write guard до
+pack/manifest publication; stale compute не становится latest. Coherent
+read/guard — обязанность caller boundary, не обещание транзакционности
+существующего file writer самого по себе. Future restore adapter меняет
+эту boundary, не создаёт terrain-local snapshot/restore/branch service.
+Новые schemas не означают реализацию WorldSnapshotService.

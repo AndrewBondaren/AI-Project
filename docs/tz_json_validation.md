@@ -1085,3 +1085,28 @@ Patch не вызывает defaults отсутствующих полей и н
 Ошибочный тип `levels[].rooms` даёт штатный report/GenerationError, а не TypeError
 при построении диагностики. Приёмка исправлений: 188 synchronous + 10 import/API
 tests, OK; полный suite заново не запускался. Остаток E6 сохраняется в плане.
+
+
+## PC-0 — immutable inputs и diagnostic admission (2026-10-23)
+
+Полный contract — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0).
+EntityUid — единственное neutral определение прежнего PlacementUid value
+contract; identity/seed formulas не меняются. Pure FieldPathError,
+ReferenceIssueContext/Reason переносятся в dataModel/validation/diagnostics/
+fieldPathError.py; ResolveContext/Report/HTTP mapping остаются application.
+ResolutionMode RUNTIME/VALIDATE_ONLY — отдельная общая validation ось.
+
+PC-0I переводит перечисленные в нормативе shape/hydrology/mountain source
+collections и MountainSideRecipe.side_kinds в tuple. JSON arrays и
+DefaultWhenMissing/StrictOnWire semantics сохраняются; _reference_issues
+обходит tuple так же, как list, включая RegistryKey children. model_copy/
+construct не обходят recursive cache admission: actual enum/numeric fields,
+nested containers, duplicates, required fields и cross-field invariants
+проверяются даже на already-typed instances. Missing field не получает
+нового synthetic default на cache boundary.
+
+Capture provenance issues публикуются при каждом capture. Provider issues
+— immutable PlanDiagnostic в envelope; request reports их ровно один раз
+в явном phase order. ERROR/FALLBACK дают validation error, runtime FALLBACK
+проходит existing report_issues/log_issues/WarningError, NOTICE не ctx.errors.
+Cache/backend failure — technical error, не MISS/empty plan/runtime fallback.

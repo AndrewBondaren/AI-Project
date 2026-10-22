@@ -1247,3 +1247,21 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — CL-* registry
 - [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — pack climate blobs, merge fine→coarse, WP-18 / WP-PERF-32
 - [`tz_logging.md`](./tz_logging.md) — sink `climate/climateLog`
+
+
+## PC-0 — climate planning и dependency closure (2026-10-23)
+
+Полные payload/input fields — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0).
+ClimateBaseInput→ClimateBasePlan не имеет plan dependencies: poles, bbox,
+resolved registry profiles и blend frozen. ClimateLocalInput→ClimateLocalPlan
+зависит от climate_base и final hydrology после river_relief. Auto features
+строит local provider, не capture. ClimateFeaturePolicy включает
+synthetic_surface_terrain и water_feature_terrain TerrainKey.
+
+Point/sample/AnchorSource definitions переносятся в dataModel/climate/
+planning/climatePoints.py с old-path re-exports. ClimatePlanSampler принимает
+ClimateBasePlan/GridX/GridY без World/profile accessor. Manual pole order
+сохраняет current first-only fallback semantics. Hydro-only edit не меняет
+climate_base key, но final z edit меняет dependent local anchors. Base
+planning не записывает materialized temperature/rainfall. Reports/NOTICE/
+FALLBACK на HIT/MISS одинаковы по общему envelope/report contract.

@@ -194,3 +194,20 @@ class PatchSet(BaseModel):  # дельта одного хода
 - [`project_data_storage_tz.md`](./project_data_storage_tz.md) — schema `world_snapshots` / `player_snapshots`
 - [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — Patch Store (`map_cell_patches`) как доменный patch-формат cells; pack = immutable base
 - [`tz_runtime_world_edit_policy.md`](./tz_runtime_world_edit_policy.md) — единый resolver/политика для доменных изменений
+
+
+## PC-0 — planning cache и публикация изменений (2026-10-23)
+
+[Норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0):
+planning cache содержит только derived immutable envelopes. Edit сначала
+меняет authoritative domain inputs, затем replan affected dependency closure;
+L0/L2 материализуются по запросу. Cache eviction/restart не является edit и
+не меняет UID/seed/geometry. Invalidation event не источник correctness:
+expected keys/refs строятся от authoritative source projection.
+
+Write-owner сверяет captured source revision под authoritative write guard
+перед публикацией pack/manifest или соответствующей patch boundary. Mismatch
+отклоняет write и требует replan; cache не выполняет commit и не публикует
+stale как latest. PC-0 готовит caller seam для будущего WorldSnapshot/Patch
+adapter, не реализует platform patch runtime. Immutable pack и terrain_delta/
+climate_delta precedence сохраняются; генераторы не читают Patch Store сами.

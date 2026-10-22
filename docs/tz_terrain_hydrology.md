@@ -65,11 +65,11 @@ metadata:
 ## Принципы
 
 1. **Hydrology — pure generators** (как `TerrainGeneratorService`): без repos, без async. Persist — `MapCellService` / DAG.
-2. **Высоту пишет relief:** hydrology подготавливает `BasinSpec` / `RiverBedSpec`, затем читает post-carve `SurfaceHeightmap` до gap analysis и column fill. Изменение `surface_z` выполняют только relief objects; fill/classify/shore высоту не меняют.
+2. **Геометрию и высоту планирует terrain/relief:** первый этап до hydrology включает горы, овраги и дно моря/океана/озера. Hydrology рассчитывает воду и маршруты рек; готовые маршруты передаются в повторный relief-вызов для геометрии и прорезки русел. Затем hydrology читает post-carve поверхность для итоговых водных фактов до gap analysis и column fill. `BasinSpec` / `RiverBedSpec` — данные междоменной передачи, не основание переносить планирование геометрии в hydrology. Fill/classify/shore высоту не меняют. Норматив: [порядок planning](./tz_terrain_generation.md#terrain-relief-hydrology-planning).
 3. **Liquid semantics — climate pass:** после carve hydrology выставляет **кандидатов** (`liquid_candidate` / metadata); **`liquid_body` на cells** — по температуре в `generate-climate` (см. [`tz_climate.md`](./tz_climate.md)).
 4. **Детерминизм:** `world_seed(world)` + `(gx, gy, pass_id)` — как в terrain noise.
 5. **`NamedLocation` optional (U11).** Generators — только geometry. Master **declare** → location из import. **Autoresolve** → без location. **U13:** `materialize_named_locations: true` в **world template** → цепочка DAG: collect candidates → **`llm_name_procedural_locations`** → persist (generators pure).
-6. **Connections отдельно:** persist графа — [`tz_structure_connections.md`](./tz_structure_connections.md) + `ConnectionPersistService`; hydrology **materialize** bed + выдаёт polyline для edges.
+6. **Connections отдельно:** persist графа — [`tz_structure_connections.md`](./tz_structure_connections.md) + `ConnectionPersistService`; hydrology выдаёт маршрут/polyline для русла и edges, геометрию дна материализует terrain/relief.
 7. **Surface ≠ caves:** U1–U11 — **surface** heightmap (Pass 1.5). Подземная вода — **cave hydrology** в `generate-caves` (U12); не смешивать masks и invariants.
 
 ---
@@ -1855,3 +1855,28 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 Факт стока — frozen RiverDrainageLink: river_uid, river_type: HydrologyConnectionType, receiver_uid (opaque str UID), receiver_kind: BasinKind | HydrologyConnectionType, receiver_cell: Coord в world-fine. AssembledRivers.drainage_links и HydrologyResult.river_drainage_links содержат tuple фактов; MapCellHydrology.river_drainage хранит optional тот же POJO, включая fine/persist путь. Это направленный сток, не authored parent/system group. Слияние допустимо только терминально с подтверждённым стоком принимающей реки до бассейна; транзит и циклы запрещены. Зависимости разрешаются до применения relief на одном pre-bed snapshot.
 
 RiverRouteDiagnostic.requested_receiver_uid хранит разрешённый UID отдельно от authored requested_mouth.location_uid. receiver_kind принимает BasinKind | HydrologyConnectionType. При невалидном типе object_type=None, rejected_connection_type: str | None сохраняет исходную строку: осознанное исключение для диагностики отклонённого wire-входа, без enum-подстановки. Код RIVER_INVALID_CONNECTION_TYPE, reason invalid_connection_type; fallback запрещён. При неуспешном поиске fallback_reason сохраняет самостоятельную причину (в том числе RECEIVER_METADATA), reason остаётся исходной. Исток на чужом bed — RIVER_INVALID_SOURCE с reason blocked_river_bed. Единый runtime-предикат: mode RUNTIME и не validate_only; вне runtime используются validation sinks. Helpers планирования требуют явную HydrologyRiversPolicy.
+
+
+## PC-0 — routes и final water contracts (2026-10-23)
+
+Exact fields и registrations — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0),
+PC-C…PC-F. HydrologyRoutesPlan выдаёт open-water facts/bodies/unions,
+coarse/fine RiverRoute records, pre-river sparse fine heights и
+DeclaredWaterPaint. Route coordinates типизированы по space, receiver
+явный, rooted drainage и object identity сохранены. Build не пишет z.
+
+World-surface composition передаёт routes в terrain RiverReliefPlanProvider,
+затем запускает HydrologyFinalPlanProvider. Final читает actual post-river
+surface/bed, выпускает roles/drainage/waterfalls и переносит уже принятые
+bodies/unions, не делает carve, новый route search или auto body discovery.
+Полный HydrologyPlan содержит final coarse heights и sampled fine overrides;
+pre-river refs не подменяются final refs. No-river и disabled-water cases
+не выключают terrain и не требуют фиктивных routes.
+
+DeclaredWaterPaint сохраняет fine lake/coastline segments и river corridor
+geometry с разрешёнными anchors. L0 не загружает заново authored hydrology;
+segment fine width и intent wire width остаются разными typed variants.
+PC-1H определяет records, PC-8 разделяет existing route/final computations,
+PC-10 переключает L0 consumers. HY-RIV-1 procedural fine source search
+этой подготовкой не включается. GEO source mapping/classification decisions
+передаются через отдельный GeoHydrologyRoutesPlan, без consumer cast.

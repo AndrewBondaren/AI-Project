@@ -31,6 +31,25 @@ flowchart LR
 
 ---
 
+## Владение геометрией terrain/relief
+
+**Согласовано мастером 2026-10-22; target, не отчёт о готовом cutover.**
+Terrain/relief планирует геометрию и пишет высоты гор, оврагов, дна
+морей/океанов/озёр и речных русел. Первый общий этап рельефа выполняется
+до гидрологии; повторный вызов строит русла по готовым гидрологическим
+маршрутам. Гидрология после этого читает итоговые высоты для водных фактов.
+Повторный вызов не перестраивает горы и дно водоёмов. Общий placement
+сохраняет ответственность за разрешение размещения.
+
+Горы имеют одно planning решение с coarse/light/fine проекциями.
+L0/L2 consumers не повторяют selection, template pick или placement;
+гидрология, landcover и bake tile scope не являются обратной зависимостью
+первого mountain planning. Используемые template inputs фиксируются
+immutable projection, не live accessor. Это владение surface geometry
+не смешивается с отдельными grade/mill обязанностями ниже.
+Полный норматив фаз, refs и приёмки —
+[Terrain/relief и гидрология: порядок планирования](./tz_terrain_generation.md#terrain-relief-hydrology-planning).
+
 ## Граница слоёв
 
 | Слой | Делает | Не делает |
@@ -567,3 +586,30 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 | 2026-08-27 | **Leftover L=1 в коде:** `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` (`gradeLeftoverPair`), не конверт 45°. |
 | 2026-08-26 | **θ местности:** (0, 90), **90° нет**; SHEER **[80, 90)**; нависание — отдельные объекты (как холм), inherit родителя, не leftover pack. |
 | 2026-08-26 | **SoT generate сжат:** очереди Q1/Q2, итерация leftover, правила стрелок, эталоны ямы/W×L/каскад. Bake R36/R43 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Алгоритм и валидатор — следующая разработка. |
+
+
+## PC-0 — frozen relief layout и две фазы (2026-10-23)
+
+Exact schemas и bindings — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0),
+PC-B…PC-F. ReliefPlan содержит полную pre-river coarse поверхность,
+MountainLayout и LightReliefPlan. MountainLayout сохраняет целые merged/
+stamped MountainSpec/MountainRangeSpec, template member projections и
+world mountain pick policy; повторный coarse/light selection запрещён.
+LightReliefPlan содержит полную light base и sparse absolute mountain/
+ravine effects на полном generation extent, независимо от bake tiles.
+
+RiverReliefPlan — отдельный результат terrain: post-river coarse/fine
+surface и keyed-by-river-UID bed records. Он не заменяет ReliefPlan и не
+перезапускает mountain/ravine/basin pass. Hydrology routes передаются ему
+через exact dependency ref. River-bed profile computation принадлежит
+terrain/reliefObjects/riverBed/riverBedZ.py; legacy hydrology symbol только
+re-export до атомарного cutover. Receiver floor сохраняется, overlapping
+absolute targets merge min, повторное вычитание depth запрещено.
+
+Template projection: member UID/context/side_recipe, без conditions и
+structure_refs lists полного ReliefTemplate. PC-0I включает tuple перенос
+MountainSideRecipe.side_kinds; wire arrays/XOR/defaults сохраняются.
+PC-1R определяет contracts, PC-7 — оба providers, PC-9/10/11 — единый
+production cutover. Формулы identity/seed прежние; устранение отдельного
+light mountain selection и зависимости height от terrain color — явные
+baseline deltas с приёмкой, а не cache-only equivalence.
