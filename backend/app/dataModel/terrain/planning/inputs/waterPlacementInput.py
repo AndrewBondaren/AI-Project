@@ -1,6 +1,6 @@
 """Baseline water-placement source projection; no live World or root mutable lists."""
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, StrictBool, model_validator
 
@@ -16,6 +16,7 @@ from app.dataModel.spatial.grid.coordinateTypes import FineXY, FineZ
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from app.dataModel.planning.identity.sourceFieldRole import SourceFieldRole
 
 
 class WaterAnchorInput(BaseModel):
@@ -30,7 +31,7 @@ class WaterPlacementInput(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     enabled: StrictBool
-    resolution_mode: ResolutionMode
+    resolution_mode: Annotated[ResolutionMode, SourceFieldRole.EXECUTION_POLICY]
     default_water_level: FineZ
     seas: HydrologySeasPolicy
     lakes: HydrologyLakesPolicy

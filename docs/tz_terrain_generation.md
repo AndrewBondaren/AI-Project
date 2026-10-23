@@ -1965,18 +1965,25 @@ bindings, один frozen source view, explicit phase calls общего Plannin
 определение SurfaceTerrainContext перенесено в surfacePlanningView; старый
 terrain path реэкспортирует тот же symbol. to_legacy_context создаёт отдельные
 mutable maps, сохраняя eight-field API и pre-1.4/final высотные источники.
-Capture использует existing WorldSlice/POJO normalization и request report;
-планирование/SQL/pack/cache ему не принадлежат. Source revision сохраняет
-climate mode, исключает water/routes resolution_mode и diagnostics;
-require_current_source выполняет pure world/revision check. Publication guard
-предоставляет write-owner. Typed codec bindings используют общий canonical
-codec и явный manifest стабильных type IDs, generic engine не знает домены мира.
-Проверки: consumers26/providers126/contracts69/cache20/encoding7/regression59
-OK (307 tests), pyright valid0/negative48 exact diagnostic code/location.
+После review correction единственная декларация графа/IDs/версий находится
+в dataModel/surfacePlanning/surfacePlanBindings.py; wiring и bundle validator
+читают её. Capture использует публичный resolve_world_slice, per-slot projection
+methods и climate-owned resolve_base_profiles. Disposition возвращает producer;
+ctx.errors не превращается в FALLBACK на boundary. SourceFieldRole.EXECUTION_POLICY
+на input fields исключает request policy из source revision; имена/типы этих
+полей capture не перечисляет. Climate mode остаётся source state.
+planning/guards/sourceRevision.py содержит pure require_current_source;
+publication guard предоставляет write-owner. planning/encoding содержит
+отдельные surfaceManifest и surfaceEnvelopeCodec; codec использует публичный
+validate_immutable. Все 165 type IDs и исходные canonical fingerprints сохранены.
+Проверки: consumers35/providers126/contracts69/cache20/encoding7/regression59
+OK (316 tests), pyright valid0/negative48 exact diagnostic code/location.
 Production caller/container activation и PC-8C lazy-import debt остаются PC-9.
+PC-9 также отделяет transitional SurfaceTerrainContext от frozen contracts,
+убирая generator imports из surfacePlanningView при сохранении old type identity.
 
-Статус: schemas и activation contract зафиксированы; runtime implementation
-и PC-12 ещё не выполнены. Delivery SoT —
+Статус: schemas/activation contract зафиксированы, PC-9A реализован и проверен;
+production activation PC-9 и итоговая приёмка PC-12 ещё не выполнены. Delivery SoT —
 [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md), §6.25–6.33.
 Общие records и исходные input projections ниже читаются вместе с final
 freeze: его точные дополнения заменяют прежние baseline bindings и

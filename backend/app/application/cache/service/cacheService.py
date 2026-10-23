@@ -110,6 +110,11 @@ def _immutable(value: object, active: set[int]) -> None:
         active.remove(identity)
 
 
+def validate_immutable(value: object) -> None:
+    """Public admission check for complete, immutable records and nested values."""
+    _immutable(value, set())
+
+
 class CacheService:
     def __init__(self, backend: CacheBackend, policy: CachePolicy):
         self._backend = backend

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
-from app.application.worldData.planning.composition.surfacePlanningCapture import require_current_source, SurfacePlanningStale
+from app.application.worldData.planning.guards.sourceRevision import require_current_source, SurfacePlanningStale
 from app.application.worldData.planning.contracts.surfacePlanningView import ReadySurfacePlanningView
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.db.models.namedLocation import NamedLocation
@@ -113,6 +113,51 @@ class RevisionTests(unittest.TestCase):
         self.assertEqual(builds, [])
         self.assertEqual(bundle.view_revision, first.revision)
         self.assertFalse(any(issue.issue.code == "unknown_climate" for issue in bundle.climate_base.diagnostics))
+
+    def test_capture_preserves_producer_dispositions_without_classifying_ctx_errors(self):
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        baseline = capture(self.source)
+        facts = tuple(PlanDiagnostic(issue=FieldPathError(("climate_zone_registry",), disposition.value),
+            disposition=disposition) for disposition in PlanDiagnosticDisposition)
+        with patch("app.application.worldData.planning.composition.surfacePlanningCapture.resolve_base_profiles",
+                   return_value=(baseline.climate_base.profiles, facts)):
+            changed = capture(self.source)
+        self.assertEqual(changed.capture_diagnostics, facts)
+        self.assertEqual(changed.revision, baseline.revision)
+
+    def test_execution_policy_marker_applies_without_type_or_field_name_special_cases(self):
+        from typing import Annotated
+        from pydantic import BaseModel, ConfigDict
+        from app.dataModel.planning.identity.sourceFieldRole import SourceFieldRole
+        from app.application.worldData.planning.composition.surfacePlanningCapture import _revision
+
+        class Source(BaseModel):
+            model_config = ConfigDict(frozen=True)
+            content: int
+            different_policy_name: Annotated[int, SourceFieldRole.EXECUTION_POLICY]
+
+        before, after = Source(content=1, different_policy_name=2), Source(content=1, different_policy_name=3)
+        self.assertEqual(_revision("world", (before,)), _revision("world", (after,)))
+        self.assertNotEqual(_revision("world", (before,)), _revision("world", (Source(content=2, different_policy_name=2),)))
+
+    def test_climate_owner_resolves_custom_values_and_fallback_diagnostic(self):
+        from app.application.worldData.generators.climate.registry import resolve_base_profiles, profile_for
+        from app.application.jsonValidation.worldRow import climate_zones
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
+        from app.dataModel.registryKey import RegistryKey
+        from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
+        source = replace(self.source, default_climate_zone="desert",
+            climate_zone_registry=[{"system_climate": "desert", "base_temperature": 123}])
+        view = capture(source)
+        ctx = ResolveContext(collect_only=True)
+        profiles, diagnostics = resolve_base_profiles(RegistryKey[WorldClimateZoneRegistry]("unknown"), (),
+            view.climate_base.preset, climate_zones(source), ctx)
+        self.assertEqual(diagnostics[0].disposition, PlanDiagnosticDisposition.FALLBACK)
+        self.assertEqual(tuple(ctx.errors), tuple(d.issue for d in diagnostics))
+        self.assertEqual(next(p.values.base_temperature for p in view.climate_base.profiles if p.key == "desert"),
+            profile_for(source, "desert").base_temperature)
+        self.assertIn("unknown", {profile.key for profile in profiles})
 
     def test_invalid_authored_source_reports_and_never_uses_synthetic_defaults(self):
         ctx = ResolveContext(collect_only=True)

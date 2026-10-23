@@ -11,6 +11,7 @@ from app.dataModel.perks.worldPerkTemplateRegistry import WorldPerkTemplateRegis
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
+from pydantic import BaseModel
 from dataclasses import asdict
 
 from app.application.canonicalLibrary import (
@@ -20,6 +21,7 @@ from app.application.canonicalLibrary import (
     canonical_merge,
 )
 from app.application.jsonValidation.resolve import (
+    ResolveContext,
     resolve_model,
     resolve_root_dict,
     resolve_root_list,
@@ -104,6 +106,8 @@ def world_wire_from_row(world: Any) -> dict[str, Any]:
     out = asdict(world)
     for item in WORLD_SLICES:
         if item.wire_kind == "multi_column":
+            if item.wire_from_mapping is None:
+                raise RuntimeError(f"multi_column WorldSlice for {item.schema_id} missing wire_from_mapping")
             for key in item.world_keys:
                 out.pop(key, None)
             out.update(item.wire_from_mapping(world))
@@ -467,6 +471,28 @@ def slice_column_key(pojo_cls: type) -> str:
     if world_slice is None or not world_slice.world_keys:
         raise RuntimeError(f"no WorldSlice registered for {pojo_cls.__name__}")
     return world_slice.world_keys[0]
+
+
+def resolve_world_slice[M: BaseModel](world: object, model: type[M], *, ctx: ResolveContext) -> M:
+    """Typed slice normalization with the caller's diagnostic/report policy."""
+    source = slice_for_pojo(model)
+    if source is None:
+        raise ValueError("source has no registered WorldSlice")
+    if source.wire_from_mapping is not None:
+        raw = source.wire_from_mapping(world)
+    else:
+        raw = getattr(world, source.world_keys[0])
+        if source.wire_adapter is not None:
+            raw = source.wire_adapter(raw)
+        if source.wire_kind == "registry_list":
+            raw = canonical_registry_wire(source, raw)
+        if raw is None or (source.wire_kind == "registry_list" and raw == []):
+            if source.empty_factory is None:
+                raise ValueError("missing source without declared defaults")
+            return model.model_validate(source.empty_factory())
+    active_ctx = ctx if source.wire_from_mapping is not None else ctx.child(source.world_keys[0])
+    resolved = resolve_model(model, raw, ctx=active_ctx)
+    return model.model_validate(_apply_runtime_canonical_merge(source, resolved))
 
 
 def resolve_multi_column_world(

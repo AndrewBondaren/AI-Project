@@ -46,6 +46,23 @@ class BoundaryTests(unittest.TestCase):
         self.assertIn("def prepare_surface_terrain_context", source)
         self.assertIn("run_surface_pass_coarse", source)
 
+    def test_surface_boundary_imports_only_public_apis_from_other_owners(self):
+        root = APP / "application/worldData/planning"
+        for module in root.rglob("*.py"):
+            tree = ast.parse(module.read_text(encoding="utf-8-sig"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    self.assertFalse(any(alias.name.startswith("_") for alias in node.names),
+                        (str(module), node.module))
+
+    def test_contracts_and_wiring_do_not_declare_dependency_metadata(self):
+        root = APP / "application/worldData/planning"
+        for relative in ("composition/planProviders.py", "contracts/surfacePlanBundle.py"):
+            source = (root / relative).read_text(encoding="utf-8-sig")
+            self.assertNotIn("surface.pc.", source)
+            self.assertNotIn("SchemaVersion(1)", source)
+            self.assertNotIn("AlgorithmVersion(1)", source)
+
 
 if __name__ == "__main__":
     unittest.main()

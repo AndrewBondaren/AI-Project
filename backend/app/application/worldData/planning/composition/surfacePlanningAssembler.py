@@ -1,4 +1,6 @@
-"""Explicit existing phase calls over a single frozen view; no IO or scheduler."""
+"""Explicit phase calls over one frozen view; cache/scheduling delegate to PlanningService."""
+
+from pydantic import TypeAdapter
 
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
@@ -41,10 +43,9 @@ class SurfacePlanningAssembler:
 
     def prepare(self, view: SurfacePlanningView, *, wait: PlanWaitControl) -> SurfacePlanBundle | None:
         wait.raise_if_cancelled()
+        view = TypeAdapter[SurfacePlanningView](SurfacePlanningView).validate_python(view, strict=True)
         if isinstance(view, NoExtentSurfacePlanningView):
-            NoExtentSurfacePlanningView.model_validate(view)
             return None
-        view = ReadySurfacePlanningView.model_validate(view)
         p, S = self._providers, SurfacePlanSlot
         empty = PlanDependencyReader(self._registry)
         base = self._build(view, p.climate_base, view.climate_base, empty, (), wait)

@@ -1,6 +1,6 @@
 """Source projections for route planning and final water-fact assembly."""
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, model_validator
 
@@ -18,6 +18,7 @@ from app.dataModel.spatial.grid.coordinateTypes import FineXY, FineZ
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from app.dataModel.planning.identity.sourceFieldRole import SourceFieldRole
 
 
 class HydrologyAnchorInput(BaseModel):
@@ -34,7 +35,7 @@ class HydrologyPlanInput(BaseModel):
 
     enabled: StrictBool
     seed: StrictInt
-    resolution_mode: ResolutionMode
+    resolution_mode: Annotated[ResolutionMode, SourceFieldRole.EXECUTION_POLICY]
     scopes: frozenset[HydrologyScope]
     default_water_level: FineZ
     seas: HydrologySeasPolicy

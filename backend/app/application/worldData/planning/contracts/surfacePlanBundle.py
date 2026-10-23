@@ -10,6 +10,7 @@ from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.identity.planKey import StateViewRevision, WorldPlanScope
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
+from app.dataModel.surfacePlanning.surfacePlanBindings import surface_plan_binding
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
 from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverReliefPlan
@@ -37,17 +38,16 @@ class SurfacePlanBundle(BaseModel):
             (S.HYDROLOGY_ROUTES, self.hydrology_routes), (S.RIVER_RELIEF, self.river_relief),
             (S.HYDROLOGY, self.hydrology), (S.CLIMATE_LOCAL, self.climate_local))
         refs = {slot.value: envelope.ref for slot, envelope in envelopes}
-        dependencies = ((), (S.CLIMATE_BASE,), (S.TERRAIN_BASE,),
-            (S.CLIMATE_BASE, S.TERRAIN_BASE, S.WATER_PLACEMENT), (S.RELIEF, S.WATER_PLACEMENT),
-            (S.RELIEF, S.HYDROLOGY_ROUTES), (S.RELIEF, S.HYDROLOGY_ROUTES, S.RIVER_RELIEF),
-            (S.CLIMATE_BASE, S.HYDROLOGY))
-        for (slot, envelope), upstream in zip(envelopes, dependencies, strict=True):
+        for slot, envelope in envelopes:
+            declaration = surface_plan_binding(slot)
+            metadata = declaration.metadata
             key = envelope.ref.key
             if (key.world_uid != self.world_uid or key.scope != WorldPlanScope()
-                    or key.contract_id != f"surface.pc.{slot.value}"
-                    or key.schema_version != 1 or key.algorithm_version != 1):
+                    or key.contract_id != metadata.id
+                    or key.schema_version != metadata.schema_version
+                    or key.algorithm_version != metadata.algorithm_version):
                 raise ValueError("surface bundle contains a foreign world/scope/phase/version")
             actual = {dep.slot: dep.ref for dep in envelope.dependencies}
-            if actual != {dep.value: refs[dep.value] for dep in upstream}:
+            if actual != {dep.value: refs[dep.value] for dep in declaration.upstream}:
                 raise ValueError("surface bundle contains incoherent dependency refs")
         return self
