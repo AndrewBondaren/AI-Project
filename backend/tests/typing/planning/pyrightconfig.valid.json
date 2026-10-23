@@ -5,6 +5,9 @@
     "../../../app/dataModel/cache",
     "../../../app/dataModel/validation",
     "../../../app/dataModel/climate/planning",
+    "../../../app/dataModel/terrain/planning",
+    "../../../app/dataModel/terrain/relief/bathymetry",
+    "../../../app/dataModel/spatial/grid/gridSettings.py",
     "valid.py"
   ]
 }

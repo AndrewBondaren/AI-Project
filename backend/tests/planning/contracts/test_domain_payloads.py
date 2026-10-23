@@ -260,5 +260,130 @@ class ClimatePlanningPayloadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class TerrainPlanningPayloadTests(unittest.TestCase):
+    def grid(self):
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        return SurfaceGridSettings(fine_span=1000, light_side=4)
+
+    def topology(self):
+        from app.dataModel.topology.worldBounds import WorldBounds
+        from app.dataModel.topology.worldTopology import WorldTopology
+        return WorldTopology(bounds=WorldBounds(x_min=0, x_max=10, y_min=0, y_max=6))
+
+    def water_result(self):
+        from app.application.worldData.generators.hydrology.placement import run_water_placement_pass
+        from tests.hydrology_fixtures import flat_heightmap
+        from tests.test_water_placement_pass import _basin_world
+        return run_water_placement_pass(_basin_world(), [], flat_heightmap(0, 10, 0, 6))
+
+    def test_grid_and_terrain_inputs_require_explicit_valid_values(self):
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        from app.dataModel.spatial.grid.gridBBox import GridBBox
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ
+        from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
+        for wire in ({}, {"fine_span": 100}, {"fine_span": True, "light_side": 2},
+                     {"fine_span": 0, "light_side": 2}, {"fine_span": 100, "light_side": -1}):
+            with self.assertRaises(ValidationError):
+                SurfaceGridSettings.model_validate(wire)
+        original = TerrainBaseInput(seed=42, bbox=GridBBox(0, 1, 0, 0),
+                                    z_min=FineZ(-10), z_max=FineZ(10), grid=self.grid())
+        for update in ({"z_min": 11}, {"z_max": True}, {"bbox": GridBBox(1, 0, 0, 0)}):
+            with self.assertRaises(ValidationError):
+                TerrainBaseInput.model_validate(original.model_dump() | update)
+
+    def test_surface_coverage_and_working_copy_are_independent(self):
+        from app.dataModel.spatial.grid.gridBBox import GridBBox
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, SurfaceGridCoord
+        from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+        left, right = SurfaceGridCoord(GridX(0), GridY(0)), SurfaceGridCoord(GridX(1), GridY(0))
+        cells = ((left, FineZ(3)), (right, FineZ(4)))
+        plan = TerrainPlan(bbox=GridBBox(0, 1, 0, 0), surface_z=cells)
+        working = {(coord.gx, coord.gy): z for coord, z in plan.surface_z}
+        working[(0, 0)] = 99
+        self.assertEqual(plan.surface_z, cells)
+        for bad in ((), cells[:1], (cells[0], cells[0]), tuple(reversed(cells)),
+                    (cells[0], (SurfaceGridCoord(GridX(2), GridY(0)), FineZ(4)))):
+            with self.assertRaises(ValidationError):
+                TerrainPlan(bbox=plan.bbox, surface_z=bad)
+        with self.assertRaises(ValidationError):
+            plan.surface_z = ()
+        with self.assertRaises(FrozenInstanceError):
+            plan.surface_z[0][0].gx = GridX(99)
+
+    def test_basin_move_preserves_identity_and_original_invariants(self):
+        from app.application.worldData.generators.terrain.reliefObjects.bathymetry.basinSpec import BasinSpec as Old
+        from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+        self.assertIs(Old, BasinSpec)
+        spec = self.water_result().basin_specs[0]
+        self.assertIsInstance(spec, BasinSpec)
+        for updates in ({"footprint": frozenset()}, {"floor_z": spec.z_water_level}):
+            with self.assertRaises(ValueError):
+                replace(spec, **updates)
+        with self.assertRaises(FrozenInstanceError):
+            spec.floor_z = 100
+
+    def test_water_plan_joins_by_uid_and_rejects_inconsistent_records(self):
+        from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+        from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
+        result = self.water_result()
+        wire = dict(coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, topology=result.topology,
+                    records=result.records, basin_specs=result.basin_specs)
+        plan = WaterPlacementPlan(**wire)
+        spec = plan.basin_specs[0]
+        # The second source is intentionally in the opposite order in the spec tuple.
+        record = result.records[0]
+        identity = record.placement.identity.model_copy(update={"source_uid": "second"})
+        intent = record.placement.prepared.intent.model_copy(update={"identity": identity})
+        prepared = record.placement.prepared.model_copy(update={"intent": intent})
+        other = record.model_copy(update={"placement": record.placement.model_copy(update={"prepared": prepared})})
+        joined = WaterPlacementPlan(**(wire | {"records": (record, other),
+                                              "basin_specs": (replace(spec, source_uid="second"), spec)}))
+        self.assertEqual(len(joined.records), 2)
+        for update in ({"coordinate_space": CoordinateSpace.WORLD_FINE_GRID},
+                       {"basin_specs": ()}, {"records": (record, record)},
+                       {"basin_specs": (replace(spec, liquid="lava"),)},
+                       {"basin_specs": (replace(spec, footprint=frozenset({(0, 0)})),)},
+                       {"basin_specs": (replace(spec, kind=None),)},
+                       {"basin_specs": (replace(spec, z_water_level=spec.z_water_level + 1),)}):
+            with self.subTest(update=update), self.assertRaises(ValidationError):
+                WaterPlacementPlan(**(wire | update))
+        empty = WaterPlacementPlan(**(wire | {"records": (), "basin_specs": ()}))
+        self.assertEqual(empty.records, ())
+
+    def test_water_inputs_are_immutable_and_capture_bounds_and_liquid_vocabulary(self):
+        from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+        from app.dataModel.hydrology.seas import HydrologySeasPolicy
+        from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
+        from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        wire = dict(enabled=False, resolution_mode=ResolutionMode.RUNTIME, default_water_level=0,
+                    seas=HydrologySeasPolicy(), lakes=HydrologyLakesPolicy(), basins=(), coastlines=(),
+                    declared_lakes=(), anchors=(), topology=self.topology(), grid=self.grid(), z_min=-10, z_max=10,
+                    liquid_keys=frozenset({RegistryKey[WorldMaterialRegistry]("water")}))
+        captured = WaterPlacementInput.model_validate(wire)
+        with self.assertRaises(ValidationError):
+            captured.grid.fine_span = 2
+        for update in ({"z_max": -11}, {"enabled": 0}, {"basins": []}):
+            with self.assertRaises(ValidationError):
+                WaterPlacementInput.model_validate(wire | update)
+        self.assertEqual(captured.basins, ())
+        from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+        basin = DeclaredBasin.model_validate({"location_uid": "declared", "kind": "lake", "floor_z": -2,
+            "footprint": {"kind": "bbox", "x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1}})
+        self.assertEqual(WaterPlacementInput.model_validate(wire | {"basins": (basin,)}).basins, (basin,))
+        for bad in (basin.model_copy(update={"floor_z": -11}),
+                    basin.model_copy(update={"z_water_level": 11}),
+                    basin.model_copy(update={"liquid": RegistryKey[WorldMaterialRegistry]("unknown")})):
+            with self.assertRaises(ValidationError):
+                WaterPlacementInput.model_validate(wire | {"basins": (bad,)})
+
+    def test_terrain_contract_imports_do_not_load_application(self):
+        script = ("import sys; from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan; "
+                  "from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput; "
+                  "assert not any(n.startswith(('app.application', 'app.db')) for n in sys.modules)")
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

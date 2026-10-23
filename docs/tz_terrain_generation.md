@@ -2204,6 +2204,17 @@ PlanningService не владеет transaction и не выполняет commi
 
 ### PC-0 — доменные payloads
 
+**PC-1T реализован 2026-10-23:** terrain/planning хранит immutable
+TerrainBaseInput/TerrainPlan и WaterPlacementInput/WaterPlacementPlan;
+SurfaceGridSettings принадлежит spatial/grid. Surface полностью покрывает
+inclusive bbox, ключи unique и row-major. Water records/specs соединяются
+по source_uid и согласуют footprint/level/kind/liquid в coarse surface space.
+BasinSpec имеет единственное определение в terrain/relief/bathymetry;
+старый application path — re-export. Перенос досрочно включён в PC-1T
+по согласованию мастера; остальной PC-1R остаётся отдельным шагом.
+Проверки: 120 tests OK; pyright positive 0 errors/warnings, negative
+10 ожидаемых diagnostics. Domain providers/runtime wiring ещё впереди.
+
 **Замороженный порядок PC после §6.30 — §6.31-E.** Восемь concrete
 bindings: climate_base → terrain_base → water_placement → relief →
 hydrology_routes → river_relief → hydrology → climate_local. Mountain

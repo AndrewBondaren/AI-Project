@@ -9,6 +9,7 @@ from app.dataModel.planning.identity.planKey import InputFingerprint, OutputFing
 from app.dataModel.cache.contracts.cacheContract import CacheSchemaVersion
 from app.dataModel.spatial.grid.coordinateTypes import FineX
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan, ClimateLocalPlan
+from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from tests.typing.planning.valid import (
     ClimatePayload, HydroInput, HydroPayload, build_climate, require_climate, require_grid_x,
 )
@@ -48,3 +49,7 @@ def invalid_version(value: CacheSchemaVersion) -> SchemaVersion:
 
 def invalid_climate_phase(local: PlanEnvelope[ClimateLocalPlan], key: CacheKey[PlanEnvelope[ClimateBasePlan]]) -> None:
     CacheEntry[PlanEnvelope[ClimateBasePlan]](key=key, value=local)  # EXPECT: reportArgumentType
+
+
+def invalid_terrain_payload(terrain: PlanEnvelope[TerrainPlan], key: CacheKey[PlanEnvelope[ClimateBasePlan]]) -> None:
+    CacheEntry[PlanEnvelope[ClimateBasePlan]](key=key, value=terrain)  # EXPECT: reportArgumentType

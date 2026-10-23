@@ -13,6 +13,8 @@ from app.dataModel.spatial.grid.coordinateTypes import GridX
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
+from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
 
 
 @dataclass(frozen=True)
@@ -81,3 +83,10 @@ def climate_domain_round_trip(request: PlanRequest[ClimateBaseInput],
         assert_type(lookup.entry.value.payload, ClimateBasePlan)
         return lookup.entry.value.payload.profiles[0].values.base_temperature
     return None
+
+
+def terrain_domain_round_trip(request: PlanRequest[TerrainBaseInput],
+                              entry: CacheEntry[PlanEnvelope[TerrainPlan]]) -> TerrainPlan:
+    assert_type(request.inputs, TerrainBaseInput)
+    assert_type(entry.value.payload, TerrainPlan)
+    return entry.value.payload
