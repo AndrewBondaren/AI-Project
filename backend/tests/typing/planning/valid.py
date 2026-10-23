@@ -294,3 +294,14 @@ def valid_local_provider(provider: ClimateLocalPlanProvider, request: PlanReques
 def valid_local_adapter(inputs: ClimateLocalInput, base: ClimateBasePlan,
     hydrology: HydrologyPlan) -> PlanBuildResult[ClimateLocalPlan]:
     return build_local_plan_from_coarse(inputs, base, hydrology)
+
+
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningView, SurfaceTerrainContext
+
+
+def valid_surface_composition(assembler: SurfacePlanningAssembler, view: SurfacePlanningView,
+    wait: PlanWaitControl) -> SurfaceTerrainContext | None:
+    bundle: SurfacePlanBundle | None = assembler.prepare(view, wait=wait)
+    return None if bundle is None else to_legacy_context(bundle)

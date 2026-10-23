@@ -247,3 +247,20 @@ def invalid_local_surface(inputs: ClimateLocalInput, base: ClimateBasePlan, reli
 def invalid_local_result(provider: ClimateLocalPlanProvider, request: PlanRequest[ClimateLocalInput],
     reader: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[ClimateBasePlan]:
     return provider.build(request, reader, control)  # EXPECT: reportReturnType
+
+
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningView
+
+
+def invalid_surface_request(assembler: SurfacePlanningAssembler, bundle: SurfacePlanBundle, wait: PlanWaitControl) -> None:
+    assembler.prepare(bundle, wait=wait)  # EXPECT: reportArgumentType
+
+
+def invalid_surface_legacy(view: SurfacePlanningView) -> None:
+    to_legacy_context(view)  # EXPECT: reportArgumentType
+
+
+def invalid_surface_final_as_routes(bundle: SurfacePlanBundle) -> PlanEnvelope[HydrologyRoutesPlan]:
+    return bundle.hydrology  # EXPECT: reportReturnType

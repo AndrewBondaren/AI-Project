@@ -3,6 +3,7 @@
   "include": [
     "../../../app/application/cache",
     "../../../app/application/planning",
+    "../../../app/application/worldData/planning",
     "../../../app/application/worldData/generators/climate/planning",
     "../../../app/application/worldData/generators/climate/localFieldFromCoarse.py",
     "../../../app/application/worldData/generators/climate/anchorDetect.py",

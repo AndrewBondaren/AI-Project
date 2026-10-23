@@ -8,15 +8,12 @@ from app.application.worldData.generators.hydrology.load.resolveHydrologyTopolog
 from app.dataModel.topology.fineTopology import fine_topology
 from app.dataModel.topology.worldTopology import WorldTopology
 
-from dataclasses import dataclass
 from app.application.jsonValidation.resolve import ResolveContext
 from app.dataModel.hydrology.waterBody import WaterBody
 
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
 )
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
-from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
@@ -31,7 +28,6 @@ from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex imp
 )
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
 from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.generators.climate.localFieldFromCoarse import (
     build_local_field_from_coarse,
 )
@@ -42,19 +38,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-@dataclass(frozen=True)
-class SurfaceTerrainContext:
-    pole_field: ClimatePoleField
-    local_field: ClimateAnchorField
-    coarse_hm: SurfaceHeightmap
-    coarse_hydro: dict[tuple[int, int], MapCellHydrology]
-    sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology]
-    fine_z_overrides: dict[tuple[int, int], int]
-    # Pre-1.4 macro z (relief only) — light ReliefContributor base. Not hydro SoT.
-    coarse_relief_z: dict[tuple[int, int], int]
-    # Post-1.4 (+ hydro carve) macro z — hydro / fine upsample SoT.
-    # Fine-cell overrides live in fine_z_overrides.
-    coarse_surface_z: dict[tuple[int, int], int]
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfaceTerrainContext as SurfaceTerrainContext
 
 
 def require_surface_terrain_context(

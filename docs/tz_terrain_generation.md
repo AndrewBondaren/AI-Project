@@ -1956,6 +1956,25 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 ## Surface planning/cache — норматив PC-0 (2026-10-23)
 
+**PC-9A IMPLEMENTED / VERIFIED (2026-10-23), ожидается приёмка мастером.**
+`application/worldData/planning/composition` содержит SurfacePlanningCapture,
+SurfacePlanningAssembler и register_world_plan_providers: восемь baseline
+bindings, один frozen source view, explicit phase calls общего PlanningService.
+`contracts` содержит immutable discriminated source views и SurfacePlanBundle
+с проверкой world/scope/phase/version и exact dependency refs. Единственное
+определение SurfaceTerrainContext перенесено в surfacePlanningView; старый
+terrain path реэкспортирует тот же symbol. to_legacy_context создаёт отдельные
+mutable maps, сохраняя eight-field API и pre-1.4/final высотные источники.
+Capture использует existing WorldSlice/POJO normalization и request report;
+планирование/SQL/pack/cache ему не принадлежат. Source revision сохраняет
+climate mode, исключает water/routes resolution_mode и diagnostics;
+require_current_source выполняет pure world/revision check. Publication guard
+предоставляет write-owner. Typed codec bindings используют общий canonical
+codec и явный manifest стабильных type IDs, generic engine не знает домены мира.
+Проверки: consumers26/providers126/contracts69/cache20/encoding7/regression59
+OK (307 tests), pyright valid0/negative48 exact diagnostic code/location.
+Production caller/container activation и PC-8C lazy-import debt остаются PC-9.
+
 Статус: schemas и activation contract зафиксированы; runtime implementation
 и PC-12 ещё не выполнены. Delivery SoT —
 [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md), §6.25–6.33.
