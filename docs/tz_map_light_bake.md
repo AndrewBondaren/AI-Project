@@ -1859,8 +1859,8 @@ production registration PC-9A и phase/output contracts остаются пре�
 
 
 **PC-8 hydrology providers не завершены / не приняты (2026-10-23):**
-planning-обвязка смешана с доменной логикой; требуется разделение
-ответственностей до перехода к PC-8C. Текущее состояние реализации: frozen routes-stage
+R4 разделил planning-обвязку и domain owners через constructor DI;
+итоговая проверка и приёмка R5 требуются до перехода к PC-8C. Текущее состояние реализации: frozen routes-stage
 сохраняет accepted bodies/unions/open-water и coarse/fine river paths;
 final-stage читает actual river relief без повторного route/placement/carve.
 DeclaredWaterPaint переносит исходные fine lake/coastline segments,

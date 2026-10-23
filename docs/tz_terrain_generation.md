@@ -3076,7 +3076,26 @@ z_max:FineZ для полной world z validation specs. ClimateFeaturePolicy
 
 #### PC-D1. PC-8 — согласованные границы классов, методов и контрактов
 
-**Implementation R3 (2026-10-23):** CoarseRiverPlanner и FineRiverPlanner
+**Implementation R4 (2026-10-23):** оба provider переключены атомарно.
+HydrologyRoutesAssembler получает WaterBodyPlanner, CoarseRiverPlanner,
+FineRiverPlanner и DeclaredWaterPaintProjector через constructor DI; вызывает
+их public API в порядке water → coarse → fine → paint, проверяет shutdown
+между фазами и объединяет готовую диагностику без чтения code/disposition.
+HydrologyFactsAssembler проверяет coverage, actual beds и receiver identity;
+единственный расчёт ролей — existing river_bed_roles. Сборщик не маршрутизирует,
+не ищет воду и не изменяет высоты. Providers содержат только dependency
+require, exact-ref checks и делегирование assemble с immutable payloads.
+Все прежние domain helpers удалены из hydrologyPlanProvider.py; новые
+assembly owners находятся в planning/assembly/ (3 файла с init).
+Providers116/contracts69/regression59 OK; pyright valid0/negative42 exact
+(30 argument, 1 index, 11 return). Шесть новых boundary tests проверяют
+порядок/передачу public DTO, producer severity/dedup, остановку фаз,
+provider delegation/ref rejection, kernel roles и структурные ограничения.
+Extended hydrology241/242: прежний list/tuple failure в
+BasinContractTests.test_loader_and_master_preserve_fine_geometry_and_explicit_floor.
+R4 выполнен; R5 и общая приёмка PC-8 остаются, PC-8C не открыт.
+
+**Implementation R3 (2026-10-23), состояние до R4:** CoarseRiverPlanner и FineRiverPlanner
 реализованы в rivers/planning/; public results — CoarseRiverPlan и
 FineRiverPlan. Private PreparedRiver/profile switch не выходят из route
 preparation owner. plan_prepared_routes возвращает immutable routes/claims
@@ -3093,7 +3112,7 @@ Providers110/regression59 OK, pyright valid0/negative40 exact; extended
 hydrology241/242, прежний list/tuple failure. Existing providers ещё не
 переключены: R4–R5 и общая приёмка PC-8 остаются.
 
-**Implementation R2 (2026-10-23):** WaterBodyPlanner и
+**Implementation R2 (2026-10-23), состояние до R4:** WaterBodyPlanner и
 DeclaredWaterPaintProjector реализованы в owner paths карты ниже.
 Water planner выдаёт OpenWaterPlan из existing water kernel; paint projector
 выдаёт DeclaredWaterPaint из prepared loader geometry. Mutable buffers,
@@ -3116,9 +3135,9 @@ R4–R5 и общая приёмка PC-8 не завершены; R3 описа
 по owning classes ниже. Формулировка «provider выполняет hydrology» в PC-D
 означает вызов доменного API, а не размещение алгоритмов в Provider.build.
 Полный delivery-план: [geo-1-pc8-responsibility-refactor.md](../.cursor/plans/geo-1-pc8-responsibility-refactor.md).
-Архитектура принята; текущая реализация ещё не соответствует ей.
+Архитектура принята; R1–R4 реализованы, итоговая проверка и приёмка — R5.
 
-**Implementation R1 (2026-10-23):** intermediate OpenWaterPlan,
+**Implementation R1 (2026-10-23), состояние до R4:** intermediate OpenWaterPlan,
 RiverRouteBatch[S]/CoarseRiverPlan и FineRiverPlan реализованы в stages/
 по карте ниже. Required strict/frozen contracts проверяют canonical maps,
 unique UIDs, exact accepted-bed claims с route identity/edge/drainage и

@@ -260,3 +260,21 @@ def route_only_coarse_contract(inputs: HydrologyPlanInput, hm: SurfaceHeightmap,
         space=CoordinateSpace.WORLD_SURFACE_GRID,
         to_coordinate=lambda c: SurfaceGridCoord(GridX(c[0]), GridY(c[1])), control=control)
     assert_type(result, PlanBuildResult[RiverRouteBatch[SurfaceGridCoord]])
+
+
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler
+
+
+def hydrology_assembly_contracts(routes_owner: HydrologyRoutesAssembler, facts_owner: HydrologyFactsAssembler,
+    inputs: HydrologyPlanInput, final_inputs: HydrologyFinalInput, relief: ReliefPlan,
+    placement: WaterPlacementPlan, river: RiverReliefPlan, control: PlanBuildControl,
+    relief_handle: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+    water_handle: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan],
+    routes_handle: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan],
+    river_handle: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan]) -> PlanBuildResult[HydrologyPlan]:
+    HydrologyRoutesPlanProvider(relief_handle, water_handle, routes_owner)
+    HydrologyFinalPlanProvider(relief_handle, routes_handle, river_handle, facts_owner)
+    routes: PlanBuildResult[HydrologyRoutesPlan] = routes_owner.assemble(world_uid="world", inputs=inputs,
+        relief=relief, placement=placement, control=control)
+    return facts_owner.assemble(inputs=final_inputs, relief=relief, routes=routes.payload, river=river, control=control)

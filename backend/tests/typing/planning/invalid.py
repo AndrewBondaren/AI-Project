@@ -144,6 +144,8 @@ def invalid_river_relief_phase(relief: RegisteredPlanContract[ReliefPlanInput, R
 
 from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput
 from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
 from app.application.planning.service.planningService import PlanBuildControl
@@ -153,10 +155,11 @@ def invalid_hydrology_providers(relief: RegisteredPlanContract[ReliefPlanInput, 
     water: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan],
     routes: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan],
     final: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan],
+    routes_assembler: HydrologyRoutesAssembler, facts_assembler: HydrologyFactsAssembler,
     provider: HydrologyFinalPlanProvider, request: PlanRequest[HydrologyPlanInput],
     reader: PlanDependencyReader, control: PlanBuildControl) -> None:
-    HydrologyRoutesPlanProvider(final, water)  # EXPECT: reportArgumentType
-    HydrologyFinalPlanProvider(relief, final, relief)  # EXPECT: reportArgumentType (2)
+    HydrologyRoutesPlanProvider(final, water, routes_assembler)  # EXPECT: reportArgumentType
+    HydrologyFinalPlanProvider(relief, final, relief, facts_assembler)  # EXPECT: reportArgumentType (2)
     provider.build(request, reader, control)  # EXPECT: reportArgumentType
 
 
@@ -212,3 +215,16 @@ def invalid_fine_owner_dependency(owner: FineRiverPlanner, inputs: HydrologyPlan
 def invalid_coarse_owner_phase(owner: CoarseRiverPlanner, inputs: HydrologyPlanInput,
     water: OpenWaterPlan, control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
     return owner.plan(world_uid="world", inputs=inputs, surface_z=(), water=water, control=control)  # EXPECT: reportReturnType
+
+
+from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan
+
+
+def invalid_routes_assembly_dependency(owner: HydrologyRoutesAssembler, inputs: HydrologyPlanInput,
+    relief: RiverReliefPlan, placement: WaterPlacementPlan, control: PlanBuildControl) -> None:
+    owner.assemble(world_uid="world", inputs=inputs, relief=relief, placement=placement, control=control)  # EXPECT: reportArgumentType
+
+
+def invalid_facts_assembly_phase(owner: HydrologyFactsAssembler, inputs: HydrologyFinalInput,
+    relief: ReliefPlan, routes: HydrologyPlan, river: RiverReliefPlan, control: PlanBuildControl) -> None:
+    owner.assemble(inputs=inputs, relief=relief, routes=routes, river=river, control=control)  # EXPECT: reportArgumentType

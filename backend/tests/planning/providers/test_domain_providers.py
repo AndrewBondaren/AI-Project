@@ -1321,8 +1321,17 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         self.river_binding = binding(SurfacePlanSlot.RIVER_RELIEF, RiverReliefInput, RiverReliefPlan, self.river_handles)
         self.final_handles = (*self.river_handles, (SurfacePlanSlot.RIVER_RELIEF, self.river_binding))
         self.final_binding = binding(SurfacePlanSlot.HYDROLOGY, HydrologyFinalInput, HydrologyPlan, self.final_handles)
-        self.route_provider = Mock(wraps=HydrologyRoutesPlanProvider(self.binding, self.water.binding))
-        self.final_provider = Mock(wraps=HydrologyFinalPlanProvider(self.binding, self.routes_binding, self.river_binding))
+        from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+        from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler
+        from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+        from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
+        from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+        from app.application.worldData.generators.hydrology.load.paint.declaredWaterPaintProjector import DeclaredWaterPaintProjector
+        self.routes_assembler = HydrologyRoutesAssembler(WaterBodyPlanner(), CoarseRiverPlanner(),
+            FineRiverPlanner(), DeclaredWaterPaintProjector())
+        self.facts_assembler = HydrologyFactsAssembler()
+        self.route_provider = Mock(wraps=HydrologyRoutesPlanProvider(self.binding, self.water.binding, self.routes_assembler))
+        self.final_provider = Mock(wraps=HydrologyFinalPlanProvider(self.binding, self.routes_binding, self.river_binding, self.facts_assembler))
         self.h.registry.register(self.routes_binding, self.route_provider)
         self.river_provider = RiverReliefPlanProvider(self.binding, self.routes_binding)
         self.h.registry.register(self.river_binding, self.river_provider)
@@ -1386,7 +1395,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         with patch("app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live World lookup")), patch(
             "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.river_bed_spec", side_effect=AssertionError("route profile")):
             routes = self.routes()
-        with patch("app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider.assemble_water_bodies",
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies",
                    side_effect=AssertionError("final water discovery")):
             final = self.finish(routes)
         self.assertTrue(routes.payload.coarse_routes)
@@ -1571,9 +1580,9 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         from unittest.mock import patch
         routes = self.routes()
         river = self.execute(self.river_binding, self.river_inputs, self.river_handles, (self.before, routes))
-        path = "app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider."
-        with patch(path + "prepared_declared_river_requests", side_effect=AssertionError("reroute")), patch(
-            path + "assemble_water_bodies", side_effect=AssertionError("refill")), patch(
+        path = "app.application.worldData.generators.hydrology."
+        with patch(path + "rivers.planning.coarseRiverPlanner.prepared_declared_river_requests", side_effect=AssertionError("reroute")), patch(
+            path + "water.planning.waterBodyPlanner.assemble_water_bodies", side_effect=AssertionError("refill")), patch(
             "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.apply_river_bed_z",
             side_effect=AssertionError("recarve")):
             self.finish(routes, river)
@@ -1741,9 +1750,6 @@ class WaterAndPaintOwnerTests(unittest.TestCase):
         with self.assertRaises(PlanWaitCancelled): self.water()
 
     def test_paint_fine_geometry_widths_and_order_match_existing_projection(self):
-        from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import _paint
-        from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import load_prepared_declared_hydrology
-        from app.application.jsonValidation.resolve import ResolveContext
         from app.dataModel.hydrology.declaredLake import DeclaredLake
         from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
         f = self.fixture
@@ -1755,9 +1761,9 @@ class WaterAndPaintOwnerTests(unittest.TestCase):
                    f.Anchor(location_uid="b", position=(10, 0), z=None, subtype=None))
         rivers = (f.segment(), intent)
         result = self.paint(rivers=rivers, lakes=(lake,), coastlines=(coast,), anchors=anchors)
-        legacy = _paint(load_prepared_declared_hydrology([coast], [lake], list(rivers), []),
-                        {a.location_uid: a.position for a in anchors}, ResolveContext(collect_only=True))
-        self.assertEqual(result.payload, legacy)
+        self.assertEqual(result.payload.intents[0].path, ((-20, 0), (10, 0)))
+        self.assertEqual(result.payload.coastlines[0].segments, (((-20, 10), (10, 10)),))
+        self.assertEqual(result.payload.segments[0].segment, ((-20, 0), (10, 0)))
         self.assertFalse(result.diagnostics)
         self.assertEqual(result.payload.segments[0].width_fine, 2)
         self.assertEqual(result.payload.intents[0].width_wire, 1)
@@ -2011,3 +2017,134 @@ class RiverOwnerTests(unittest.TestCase):
         from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
         self.assertEqual(CoarseRiverPlanner().plan(world_uid="climate-world", inputs=self.fixture.hydro_inputs,
             surface_z=self.fixture.before.payload.surface_z, water=self.water, control=self.control), coarse)
+
+
+class HydrologyAssemblyBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        self.f = HydrologyProviderTests()
+        self.f.setUp()
+        self.addCleanup(self.f.doCleanups)
+        self.control = Mock()
+
+    def stages(self):
+        from unittest.mock import Mock
+        from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+        f = self.f
+        owner = f.routes_assembler
+        water = owner._water.plan(world_uid="climate-world", inputs=f.hydro_inputs,
+            surface_z=f.before.payload.surface_z, placement=f.water_envelope.payload, control=self.control)
+        coarse = owner._coarse.plan(world_uid="climate-world", inputs=f.hydro_inputs,
+            surface_z=f.before.payload.surface_z, water=water.payload, control=self.control)
+        fine = owner._fine.plan(world_uid="climate-world", inputs=f.hydro_inputs,
+            surface_z=f.before.payload.surface_z, water=water.payload, coarse=coarse.payload, control=self.control)
+        paint = owner._paint.project(rivers=f.hydro_inputs.declared_rivers, coastlines=f.hydro_inputs.coastlines,
+            lakes=f.hydro_inputs.declared_lakes, anchors=f.hydro_inputs.anchors)
+        calls = Mock()
+        for name, method, result in (("water", "plan", water), ("coarse", "plan", coarse),
+                                     ("fine", "plan", fine), ("paint", "project", paint)):
+            getattr(getattr(calls, name), method).return_value = result
+        return HydrologyRoutesAssembler(calls.water, calls.coarse, calls.fine, calls.paint), calls, (water, coarse, fine, paint)
+
+    def assemble(self, owner):
+        f = self.f
+        return owner.assemble(world_uid="climate-world", inputs=f.hydro_inputs,
+            relief=f.before.payload, placement=f.water_envelope.payload, control=self.control)
+
+    def test_routes_assembly_orders_public_operations_and_passes_exact_payloads(self):
+        owner, calls, (water, coarse, fine, paint) = self.stages()
+        result = self.assemble(owner)
+        self.assertEqual([c[0] for c in calls.mock_calls], ["water.plan", "coarse.plan", "fine.plan", "paint.project"])
+        self.assertIs(calls.coarse.plan.call_args.kwargs["water"], water.payload)
+        self.assertIs(calls.fine.plan.call_args.kwargs["coarse"], coarse.payload)
+        self.assertIs(calls.fine.plan.call_args.kwargs["water"], water.payload)
+        self.assertIs(calls.water.plan.call_args.kwargs["surface_z"], self.f.before.payload.surface_z)
+        self.assertEqual(result.payload, self.f.routes().payload)
+
+    def test_assembly_keeps_producer_severity_and_diagnostic_order(self):
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+        owner, calls, results = self.stages()
+        diagnostics = tuple(PlanDiagnostic(issue=FieldPathError(("test", str(i)), "producer fact", code="SAME_CODE"),
+            disposition=disposition) for i, disposition in enumerate((PlanDiagnosticDisposition.ERROR,
+                PlanDiagnosticDisposition.FALLBACK, PlanDiagnosticDisposition.NOTICE)))
+        for mock, result, ds in zip((calls.water.plan, calls.coarse.plan, calls.fine.plan, calls.paint.project),
+                                    results, ((diagnostics[0],), (diagnostics[1],), (diagnostics[2],), (diagnostics[0],))):
+            mock.return_value = result.model_copy(update={"diagnostics": ds})
+        self.assertEqual(self.assemble(owner).diagnostics, diagnostics)
+
+    def test_failure_and_shutdown_stop_subsequent_phases(self):
+        from app.application.planning.service.planningService import PlanWaitCancelled
+        for phase in ("water", "coarse", "fine"):
+            with self.subTest(phase=phase):
+                owner, calls, _ = self.stages()
+                getattr(calls, phase).plan.side_effect = ValueError("phase failed")
+                with self.assertRaisesRegex(ValueError, "phase failed"): self.assemble(owner)
+                calls.paint.project.assert_not_called()
+        owner, calls, _ = self.stages()
+        self.control.raise_if_shutdown.side_effect = [None, PlanWaitCancelled()]
+        with self.assertRaises(PlanWaitCancelled): self.assemble(owner)
+        calls.coarse.plan.assert_not_called()
+
+    def test_providers_delegate_unmodified_results_and_reject_refs_before_assembly(self):
+        from unittest.mock import Mock
+        from app.application.planning.service.planningService import PlanBuildFailure
+        from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import (
+            HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider)
+        f = self.f
+        routes = f.routes()
+        river = f.execute(f.river_binding, f.river_inputs, f.river_handles, (f.before, routes))
+        for provider_type, handles, envelopes, inputs in (
+            (HydrologyRoutesPlanProvider, (f.binding, f.water.binding), (f.before, f.water_envelope), f.hydro_inputs),
+            (HydrologyFinalPlanProvider, (f.binding, f.routes_binding, f.river_binding), (f.before, routes, river), f.final_inputs)):
+            with self.subTest(provider=provider_type.__name__):
+                assembler, reader, request = Mock(), Mock(), Mock()
+                request.inputs = inputs
+                request.key.world_uid = "climate-world"
+                reader.require.side_effect = envelopes
+                provider = provider_type(*handles, assembler)
+                self.assertIs(provider.build(request, reader, self.control), assembler.assemble.return_value)
+                self.assertIs(assembler.assemble.call_args.kwargs["inputs"], inputs)
+                self.assertIs(assembler.assemble.call_args.kwargs["relief"], f.before.payload)
+                assembler.reset_mock()
+                reader.require.side_effect = (envelopes[0].model_copy(update={"dependencies": ()}), *envelopes[1:]) if len(envelopes) == 2 else (
+                    envelopes[0], envelopes[1].model_copy(update={"dependencies": ()}), envelopes[2])
+                with self.assertRaises(PlanBuildFailure): provider.build(request, reader, self.control)
+                assembler.assemble.assert_not_called()
+
+    def test_facts_preserve_kernel_roles_instead_of_recomputing_them(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.planning.assembly import hydrologyFactsAssembler as module
+        f = self.f
+        routes = f.routes()
+        river = f.execute(f.river_binding, f.river_inputs, f.river_handles, (f.before, routes))
+        original = module.river_bed_roles
+        emitted = {}
+        def roles(*args, **kwargs):
+            result = {cell: value.model_copy(update={"z_water_level": 12345})
+                      for cell, value in original(*args, **kwargs).items()}
+            emitted.update(result)
+            return result
+        with patch.object(module, "river_bed_roles", side_effect=roles) as kernel:
+            final = f.facts_assembler.assemble(inputs=f.final_inputs, relief=f.before.payload,
+                routes=routes.payload, river=river.payload, control=self.control)
+        self.assertTrue(kernel.called and emitted)
+        self.assertTrue(all(value.z_water_level == 12345 for _, value in final.payload.sparse_fine_hydro))
+        open_cells = {cell for cell, _ in routes.payload.coarse_open_water}
+        self.assertTrue(all(value.z_water_level == 12345 for cell, value in final.payload.coarse_hydro if cell not in open_cells))
+
+    def test_source_boundaries_exclude_domain_internals_and_keep_classes_small(self):
+        import ast
+        import inspect
+        from app.application.worldData.generators.hydrology.planning import hydrologyPlanProvider as providers
+        from app.application.worldData.generators.hydrology.planning.assembly import hydrologyRoutesAssembler as assembly
+        forbidden = {"PreparedRiver", "FineRiverSampling", "AssembledWater", "MaterializedWater", "SurfaceHeightmap",
+                     "prepare_river_requests_from_inputs", "river_bed_roles", "assemble_water_bodies", "ResolveContext"}
+        for module in (providers, assembly):
+            tree = ast.parse(inspect.getsource(module))
+            names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+            self.assertFalse(names & forbidden, names & forbidden)
+            for node in tree.body:
+                if isinstance(node, ast.ClassDef): self.assertLessEqual(node.end_lineno - node.lineno + 1, 250)
+        self.assertFalse(any(isinstance(n, ast.Attribute) and n.attr in ("code", "disposition")
+                             for n in ast.walk(ast.parse(inspect.getsource(assembly)))))
