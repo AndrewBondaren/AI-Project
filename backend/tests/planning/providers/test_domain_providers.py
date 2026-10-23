@@ -355,5 +355,182 @@ class ClimateBaseProviderTests(unittest.TestCase):
         self.assertEqual(ClimatePlanSampler.sample(plan, GridX(0), GridY(0)).system_climate_zone, "alien")
 
 
+class TerrainBaseProviderTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
+        from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+
+        self.climate = ClimateBaseProviderTests()
+        self.climate.setUp()
+        self.addCleanup(self.climate.doCleanups)
+        self.h = self.climate.h
+        self.Input, self.Plan, self.Grid = TerrainBaseInput, TerrainPlan, SurfaceGridSettings
+        self.slot = PlanSlot("climate_base")
+        self.inputs = TerrainBaseInput(seed=17, bbox=self.climate.inputs.bbox, z_min=-5, z_max=5,
+                                      grid=SurfaceGridSettings(fine_span=10, light_side=2))
+        self.manifest = CanonicalSchemaManifest(entries=self.climate.manifest.entries + tuple(
+            RegisteredTypeEntry(type_id=identity, python_type=owner, kind=CanonicalTypeKind.RECORD)
+            for identity, owner in ((40, TerrainBaseInput), (41, TerrainPlan), (42, SurfaceGridSettings),
+                                    (43, SurfaceGridCoord), (44, PlanEnvelope[TerrainPlan]))))
+        metadata = PlanContractMetadata(id="surface.pc.terrain_base", schema_version=1, algorithm_version=1)
+        manifest = self.manifest
+
+        class TerrainCodec:
+            def validate(self, value):
+                return TypeAdapter(PlanEnvelope[TerrainPlan]).validate_python(value, strict=True)
+            def encode(self, value):
+                return encode(value, manifest)
+            def decode(self, encoded):
+                return decode(encoded, PlanEnvelope[TerrainPlan], manifest)
+            def retained_bytes(self, value):
+                return retained_entry_bytes(value)
+
+        def fingerprint(world, scope, inputs, deps):
+            return input_fingerprint(metadata, world, scope, inputs, deps, manifest)
+
+        climate_meta = self.climate.binding.metadata
+        declaration = PlanDependencyContract(slot=self.slot, contract_id=climate_meta.id,
+            schema_version=climate_meta.schema_version, algorithm_version=climate_meta.algorithm_version)
+        self.binding = RegisteredPlanContract(metadata, TypeAdapter(TerrainBaseInput).validate_python,
+            fingerprint, (declaration,), CacheBinding(CacheContract[PlanEnvelope[TerrainPlan]](
+                id="surface.envelope.pc.terrain_base", schema_version=1), TerrainCodec()), manifest)
+        self.provider = Mock(wraps=TerrainPlanProvider(self.climate.binding))
+        self.h.registry.register(self.binding, self.provider)
+
+    def get(self, inputs=None, climate=None, reader=None):
+        inputs = self.inputs if inputs is None else inputs
+        climate = self.climate.get() if climate is None else climate
+        deps = (PlanDependency(slot=self.slot, ref=climate.ref),)
+        metadata = self.binding.metadata
+        key = PlanKey(world_uid="climate-world", scope=WorldPlanScope(), contract_id=metadata.id,
+            schema_version=metadata.schema_version, algorithm_version=metadata.algorithm_version,
+            input_fingerprint=self.binding.fingerprint_inputs("climate-world", WorldPlanScope(), inputs, deps))
+        request = PlanRequest[self.Input](key=key, inputs=inputs, dependencies=deps)
+        reader = self.h.empty.with_plan(self.slot, self.climate.binding, climate) if reader is None else reader
+        return self.h.service.get_or_build(self.binding, request, reader, wait=Wait(5))
+
+    def test_heights_match_legacy_surface_pass_across_topology_modes(self):
+        from app.db.models.world import World
+        from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
+        from app.ids import seed_int
+        from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+        from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
+        from app.dataModel.topology.worldTopology import WorldTopologyMode
+        climate = self.climate.get()
+        box = self.inputs.bbox
+        for mode in WorldTopologyMode:
+            with self.subTest(mode=mode):
+                world = World(world_uid="climate-world", name="baseline", created_at="2026-10-23",
+                    z_min=self.inputs.z_min, z_max=self.inputs.z_max, default_climate_zone="temperate",
+                    climate_zone_registry=WorldClimateZoneRegistry.canonical_engine().model_dump(mode="json"),
+                    world_topology_mode=mode.value, world_bounds=dict(x_min=box.x_min, x_max=box.x_max,
+                                                                   y_min=box.y_min, y_max=box.y_max))
+                legacy = run_surface_pass_coarse(world, [], ClimatePoleField(climate.payload.poles, box))
+                plan = self.get(self.inputs.model_copy(update={"seed": seed_int(world)})).payload
+                self.assertEqual({(coord.gx, coord.gy): z for coord, z in plan.surface_z}, legacy.surface_z)
+                self.assertEqual(plan.bbox, legacy.bbox)
+        # Topology does not enter the frozen base-height projection or the baseline noise kernel.
+        self.assertEqual(self.provider.build.call_count, 1)
+
+    def test_clamps_at_both_bounds_and_covers_negative_coordinates(self):
+        for level in (-2, 3):
+            with self.subTest(level=level):
+                plan = self.get(self.inputs.model_copy(update={"z_min": level, "z_max": level})).payload
+                self.assertEqual({z for _, z in plan.surface_z}, {level})
+                coords = [(coord.gy, coord.gx) for coord, _ in plan.surface_z]
+                self.assertEqual(coords, sorted(coords))
+                self.assertEqual(coords[0], (-3, -2))
+                self.assertEqual(coords[-1], (5, 4))
+                self.assertEqual(len(coords), 63)
+
+    def test_hit_clear_and_fresh_service_have_identical_refs_and_diagnostics(self):
+        from app.application.planning.service.planFingerprints import cache_item_key
+        from app.dataModel.cache.identity.cacheKey import CacheKey
+        first = self.get()
+        self.assertEqual(self.get(), first)
+        self.assertEqual(self.provider.build.call_count, 1)
+        self.h.cache.evict(self.binding.cache_binding, CacheKey(contract=self.binding.cache_binding.contract,
+            item_key=cache_item_key(first.ref.key, self.manifest)))
+        self.assertEqual(self.get(), first)
+        self.assertEqual(self.provider.build.call_count, 2)
+        other = Harness(policy=PlanningExecutionPolicy(max_workers=1, max_pending_builds=2))
+        self.addCleanup(other.service.shutdown)
+        other.registry.register(self.climate.binding, self.climate.provider)
+        other.registry.register(self.binding, self.provider)
+        previous = self.h
+        self.h = other
+        try:
+            self.assertEqual(self.get(), first)
+        finally:
+            self.h = previous
+
+    def test_effective_seed_extent_scale_and_z_edits_invalidate(self):
+        first = self.get()
+        for update in ({"seed": 18}, {"bbox": self.climate.BBox(-3, 4, -3, 5)},
+                       {"z_min": -1}, {"z_max": 1},
+                       {"grid": self.Grid(fine_span=20, light_side=2)},
+                       {"grid": self.Grid(fine_span=10, light_side=4)}):
+            with self.subTest(update=update):
+                edited = self.get(self.inputs.model_copy(update=update))
+                self.assertNotEqual(edited.ref.key, first.ref.key)
+        self.assertEqual(self.provider.build.call_count, 7)
+
+    def test_dependency_edit_rebuilds_terrain_without_rebuilding_climate(self):
+        from dataclasses import replace
+        from unittest.mock import patch
+        first = self.get()
+        profiles = tuple(profile.model_copy(update={"values": replace(profile.values,
+            typical_elevation_z=4)}) for profile in self.climate.profiles)
+        climate = self.climate.get(self.climate.inputs.model_copy(update={"profiles": profiles}))
+        with patch.object(type(self.climate.provider), "build", side_effect=AssertionError("climate rebuild")):
+            changed = self.get(climate=climate)
+            self.assertEqual(self.get(climate=climate), changed)
+        self.assertNotEqual(changed.ref.key, first.ref.key)
+        self.assertNotEqual(changed.payload, first.payload)
+        self.assertEqual(changed.dependencies, (PlanDependency(slot=self.slot, ref=climate.ref),))
+        self.assertEqual(self.provider.build.call_count, 2)
+
+    def test_partial_delivery_and_independent_buffers_preserve_full_world_plan(self):
+        first = self.get()
+        full = dict(first.payload.surface_z)
+        for xs, ys in ((range(-2, 1), range(-3, 1)), (range(1, 5), range(1, 6))):
+            delivered = {coord: z for coord, z in self.get().payload.surface_z
+                         if coord.gx in xs and coord.gy in ys}
+            self.assertEqual(delivered, {coord: z for coord, z in full.items()
+                                        if coord.gx in xs and coord.gy in ys})
+            delivered.clear()
+        full.clear()
+        self.assertEqual(self.get(), first)
+        self.assertEqual(len(first.payload.surface_z), 63)
+        self.assertEqual(self.provider.build.call_count, 1)
+
+    def test_missing_or_stale_dependency_rejected_before_cached_hit(self):
+        from app.application.planning.service.planningService import PlanContractFailure
+        first = self.get()
+        with self.assertRaises(PlanContractFailure):
+            self.get(reader=self.h.empty)
+        old = self.climate.get()
+        changed = self.climate.get(self.climate.inputs.model_copy(update={"seed": 18}))
+        reader = self.h.empty.with_plan(self.slot, self.climate.binding, old)
+        with self.assertRaises(PlanContractFailure):
+            self.get(climate=changed, reader=reader)
+        self.assertEqual(self.get(), first)
+        self.assertEqual(self.provider.build.call_count, 1)
+
+    def test_payload_and_envelope_round_trip(self):
+        from app.application.encoding.canonicalCodec import encode, decode
+        first = self.get()
+        self.assertEqual(decode(encode(self.inputs, self.manifest), self.Input, self.manifest), self.inputs)
+        codec = self.binding.cache_binding.codec
+        self.assertEqual(codec.decode(codec.encode(first)), first)
+
+
 if __name__ == "__main__":
     unittest.main()

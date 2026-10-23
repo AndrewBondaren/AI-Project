@@ -1966,6 +1966,20 @@ signatures. Это один согласованный contract. Cross-domain co
 
 ### PC-0 — общие records и API
 
+**PC-6 реализован 2026-10-23:** TerrainPlanProvider находится в
+application/worldData/generators/terrain/planning/terrainPlanProvider.py.
+Принимает typed climate base contract; build читает готовый climate_base
+envelope и TerrainBaseInput, использует ClimatePlanSampler/cell_z_noise,
+возвращает полный immutable TerrainPlan с clamp по captured z bounds.
+World/registry lookup, climate rebuild и materialization внутри provider
+отсутствуют. Legacy heights равны при всех трёх topology modes; topology
+не входит в baseline base-height projection. Seed/bbox/z/grid/dependency
+edits меняют key; HIT/rebuild/fresh worker и full/partial delivery сохраняют
+refs/heights/diagnostics, mutable consumer buffers независимы от plan.
+Проверки: providers45/contracts56/regression59 — 160 tests OK;
+pyright valid 0 errors/warnings, negative23 expected diagnostics.
+Production registration/caller activation — PC-9A/PC-9; water placement — PC-6W.
+
 **PC-5 реализован 2026-10-23:** ClimateBasePlanProvider и ClimatePlanSampler
 находятся в application/worldData/generators/climate/planning. Frozen inputs
 порождают poles/profiles/blend и immutable diagnostics; sampling не читает

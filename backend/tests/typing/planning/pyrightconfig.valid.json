@@ -4,6 +4,7 @@
     "../../../app/application/cache",
     "../../../app/application/planning",
     "../../../app/application/worldData/generators/climate/planning",
+    "../../../app/application/worldData/generators/terrain/planning",
     "../../../app/application/encoding",
     "../../../app/dataModel/encoding",
     "../../../app/dataModel/planning",

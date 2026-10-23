@@ -9,6 +9,8 @@ from app.application.planning.service.planningService import PlanningService, Pl
 from app.dataModel.planning.identity.planKey import PlanSlot
 from app.application.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
+from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
+from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
@@ -107,3 +109,7 @@ def invalid_decode_type(encoded: bytes, manifest: CanonicalSchemaManifest) -> Cl
 
 def invalid_climate_sampler_domain(plan: HydrologyPlan) -> None:
     ClimatePlanSampler.sample(plan, GridX(0), GridY(0))  # EXPECT: reportArgumentType
+
+
+def invalid_terrain_climate_dependency(contract: RegisteredPlanContract[ClimateBaseInput, ClimateLocalPlan]) -> None:
+    TerrainPlanProvider(contract)  # EXPECT: reportArgumentType

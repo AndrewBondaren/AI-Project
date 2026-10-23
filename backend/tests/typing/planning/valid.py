@@ -11,6 +11,7 @@ from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
 from app.application.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateBasePlanProvider
+from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.application.cache.service.cacheService import CacheService
@@ -73,6 +74,10 @@ def canonical_decode_type(encoded: bytes, manifest: CanonicalSchemaManifest) -> 
 
 
 def climate_base_provider_type(provider: ClimateBasePlanProvider) -> PlanProvider[ClimateBaseInput, ClimateBasePlan]:
+    return provider
+
+
+def terrain_base_provider_type(provider: TerrainPlanProvider) -> PlanProvider[TerrainBaseInput, TerrainPlan]:
     return provider
 
 
