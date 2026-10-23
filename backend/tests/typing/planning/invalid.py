@@ -1,6 +1,8 @@
 """Every marked line must produce its specified pyright diagnostic."""
 
 from app.dataModel.cache.contracts.cacheContract import CacheContract
+from app.application.cache.contracts.cacheBackend import CacheBinding
+from app.application.cache.service.cacheService import CacheService
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
@@ -72,3 +74,10 @@ def invalid_hydrology_phase(routes: PlanEnvelope[HydrologyRoutesPlan], key: Cach
 
 def invalid_route_space(route: RiverRoute[SurfaceGridCoord]) -> RiverRoute[FineXY]:
     return route  # EXPECT: reportReturnType
+
+
+def invalid_service_binding(service: CacheService, binding: CacheBinding[ClimatePayload],
+                            key: CacheKey[HydroPayload], entry: CacheEntry[HydroPayload]) -> None:
+    service.get(binding, key)  # EXPECT: reportArgumentType
+    service.put(binding, entry)  # EXPECT: reportArgumentType
+    service.evict(binding, key)  # EXPECT: reportArgumentType

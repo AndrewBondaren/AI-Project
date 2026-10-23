@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import assert_type
 
+from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
+from app.application.cache.service.cacheService import CacheService
+from app.dataModel.cache.contracts.cacheEntry import CacheAdmission
+
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheLookup
 from app.dataModel.cache.identity.cacheKey import CacheKey
@@ -39,6 +43,16 @@ class ClimatePayload:
 @dataclass(frozen=True)
 class HydroPayload:
     depths: tuple[int, ...]
+
+
+def cache_service_types(service: CacheService, backend: CacheBackend,
+                        binding: CacheBinding[ClimatePayload],
+                        key: CacheKey[ClimatePayload], entry: CacheEntry[ClimatePayload]) -> None:
+    assert_type(service.get(binding, key), CacheLookup[ClimatePayload])
+    assert_type(service.put(binding, entry), CacheAdmission)
+    assert_type(service.evict(binding, key), None)
+    assert_type(backend.get(key), CacheLookup[ClimatePayload])
+    assert_type(backend.put(entry), None)
 
 
 def cache_round_trip(key: CacheKey[PlanEnvelope[ClimatePayload]],
