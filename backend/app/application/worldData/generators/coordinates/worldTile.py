@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.coordinates.types import GridX, GridY
 from app.application.worldData.generators.terrain.types import ColumnRect
 

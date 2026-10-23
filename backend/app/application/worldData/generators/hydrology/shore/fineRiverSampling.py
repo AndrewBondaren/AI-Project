@@ -3,7 +3,7 @@
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.coordinates.convert import (
     fine_to_grid_xy, grid_tile_origin_x, grid_tile_origin_y, map_cell_fine_span,
 )

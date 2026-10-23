@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import (
     map_cell_fine_span,

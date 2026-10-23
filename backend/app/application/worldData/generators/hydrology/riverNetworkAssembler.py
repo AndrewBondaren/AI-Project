@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.worldRow import hydrology
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import autoresolve_river_segments
 from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import resolve_river_type_classify

@@ -5,7 +5,7 @@ import logging
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.worldRow import hydrology
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.hydrology.basins.coastalLandformClassifier import classify_coastal_landforms
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import build_hydrology_master_input
 from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology

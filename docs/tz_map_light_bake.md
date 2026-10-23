@@ -183,6 +183,16 @@ pack/bake/worldMapBakeOrchestrator.py   # thin: compose → writer
 
 ## Координаты (контракт)
 
+**PC-0G1 реализован 2026-10-23:** общий frozen
+`GridBBox(x_min:int,x_max:int,y_min:int,y_max:int)` принадлежит
+`dataModel/spatial/grid/gridBBox.py`. Границы sampled extent inclusive.
+Legacy imports из `climatePoleField` и `terrain/types` реэкспортируют тот же
+класс; lazy dependency terrain→climate удалена. `diagonal()` сохраняет
+прежний hypot(max(1,x_max-x_min),max(1,y_max-y_min)); новое правило +1
+в диагональ не вводится. WorldBounds и half-open SurfaceGridRect/FineGridRect
+остаются отдельными контрактами. Приёмка: 68 tests OK и fresh-process
+проверка обоих порядков terrain/climate imports.
+
 ```text
 tile_macro = fine_cells_per_map_cell
 side       = 32                          # WP-10 v2: константа маски (POJO)

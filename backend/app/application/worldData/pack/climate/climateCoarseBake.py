@@ -6,7 +6,8 @@ from collections.abc import Mapping
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
-from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
+from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.coordinates import (
     map_cell_fine_span,
     grid_tile_origin_x,

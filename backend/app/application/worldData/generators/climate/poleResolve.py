@@ -6,7 +6,8 @@ from app.application.worldData.generators.climate.climatePole import (
     PoleSource,
     derived_pole_temperature,
 )
-from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
+from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.climate.locations import static_climate_poles
 from app.application.worldData.generators.climate.math import world_seed
 from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode

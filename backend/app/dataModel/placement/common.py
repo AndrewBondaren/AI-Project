@@ -5,8 +5,9 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, StringConstraints
 
+from app.dataModel.identity.uid import EntityUid as PlacementUid
 
-type PlacementUid = Annotated[StrictStr, StringConstraints(min_length=1, pattern=r"^\S(?:.*\S)?$")]
+
 type PlacementText = Annotated[StrictStr, StringConstraints(min_length=1, pattern=r"\S")]
 type NonNegativeInt = Annotated[StrictInt, Field(ge=0)]
 type Specificity = NonNegativeInt

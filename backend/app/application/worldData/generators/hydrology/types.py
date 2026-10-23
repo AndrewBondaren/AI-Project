@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.application.worldData.generators.climate.climatePoleField import GridBBox
+    from app.dataModel.spatial.grid.gridBBox import GridBBox
     from app.db.models.namedLocation import NamedLocation
 
 

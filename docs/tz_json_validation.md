@@ -1091,7 +1091,12 @@ tests, OK; полный suite заново не запускался. Остат
 
 Полный contract — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0).
 EntityUid — единственное neutral определение прежнего PlacementUid value
-contract; identity/seed formulas не меняются. Pure FieldPathError,
+contract; identity/seed formulas не меняются. **PC-0U реализован 2026-10-23:**
+`dataModel/identity/uid.py::EntityUid` и old-path `PlacementUid` — один
+объект типа; strict string/nonempty/trimmed validation сохранена, без
+добавления требования UUID-формата или удаления внутренних пробелов.
+Приёмка: 5 geometry/value-contract + 23 placement contract + 37 water
+adapter tests, все OK. Pure FieldPathError,
 ReferenceIssueContext/Reason переносятся в dataModel/validation/diagnostics/
 fieldPathError.py; ResolveContext/Report/HTTP mapping остаются application.
 ResolutionMode RUNTIME/VALIDATE_ONLY — отдельная общая validation ось.

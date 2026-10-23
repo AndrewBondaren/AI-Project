@@ -1,5 +1,6 @@
-import math
 from dataclasses import dataclass
+
+from app.dataModel.spatial.grid.gridBBox import GridBBox as GridBBox
 
 from app.application.worldData.generators.climate.climatePole import ClimatePolePoint
 from app.application.worldData.generators.climate.math import dist_euclidean, smoothstep
@@ -7,19 +8,6 @@ from app.application.worldData.generators.climate.registry import profile_for
 from app.dataModel.climate.climatePoleBlendDefaults import CLIMATE_POLE_BLEND
 from app.application.jsonValidation import climate_scalars
 from app.db.models.world import World
-
-
-@dataclass(frozen=True)
-class GridBBox:
-    x_min: int
-    x_max: int
-    y_min: int
-    y_max: int
-
-    def diagonal(self) -> float:
-        w = max(1, self.x_max - self.x_min)
-        h = max(1, self.y_max - self.y_min)
-        return math.hypot(w, h)
 
 
 @dataclass(frozen=True)
