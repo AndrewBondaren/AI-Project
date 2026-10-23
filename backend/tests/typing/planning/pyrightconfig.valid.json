@@ -1,0 +1,9 @@
+{
+  "extends": "../../../../pyrightconfig.cascade.json",
+  "include": [
+    "../../../app/dataModel/planning",
+    "../../../app/dataModel/cache",
+    "../../../app/dataModel/validation",
+    "valid.py"
+  ]
+}

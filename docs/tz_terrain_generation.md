@@ -1966,6 +1966,15 @@ signatures. Это один согласованный contract. Cross-domain co
 
 ### PC-0 — общие records и API
 
+**PC-1 реализован 2026-10-23:** общие immutable contracts находятся в
+`dataModel/planning`, `dataModel/cache`, `dataModel/validation`. Typed
+metadata entries — PlanContractMetadata/CacheContractMetadata; executable
+bindings, canonical codec, cache/service admission и domain providers
+реализуются следующими PC шагами. Старые pure issue symbols из
+application/jsonValidation/types.py реэкспортируются с сохранением identity.
+Приёмка: 110 tests OK; pyright positive — 0 errors/warnings, negative —
+8 ожидаемых diagnostics; source imports не зависят от application.
+
 Этот раздел уточняет §6.21–6.24. Ниже TARGET specification, а не
 утверждение о наличии классов в коде. Поля без указанного default обязательны;
 `X | None` означает обязательное nullable поле, а не разрешение пропустить
