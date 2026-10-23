@@ -1958,13 +1958,85 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 Статус: schemas и activation contract зафиксированы; runtime implementation
 и PC-12 ещё не выполнены. Delivery SoT —
-[geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md), §6.25–6.31.
+[geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md), §6.25–6.33.
 Общие records и исходные input projections ниже читаются вместе с final
 freeze: его точные дополнения заменяют прежние baseline bindings и
 signatures. Это один согласованный contract. Cross-domain composition
 находится вне generators; cache не источник current revision мира.
 
+### SurfacePlanSlot — словарь surface pipeline
+
+**DESIGN_CLOSED, реализация DONE (2026-10-23):** после инвентаризации
+существующих контрактов согласован SurfacePlanSlot(StrEnum). Existing
+PlanSlot = NewType("PlanSlot", str) остаётся общим opaque identifier;
+PlanDependency/PlanDependencyContract остаются единственными POJO связи
+и declaration metadata. Surface enum создан шагом PC-6S.
+
+Owner — междоменное world surface planning, слой dataModel, точный путь
+`backend/app/dataModel/surfacePlanning/surfacePlanSlot.py`. Новый namespace
+с __init__.py содержит 2 файла. Enum импортирует только stdlib; generic
+planning/cache не импортируют surfacePlanning. Domain providers и
+application/worldData/planning/composition используют этот vocabulary.
+PlacementPhase PRE_RELIEF/DEPENDENT и GradePipelineStages mill/paint
+сохраняют свои отдельные назначения.
+
+Восемь PC members: CLIMATE_BASE="climate_base", TERRAIN_BASE="terrain_base",
+WATER_PLACEMENT="water_placement", RELIEF="relief",
+HYDROLOGY_ROUTES="hydrology_routes", RIVER_RELIEF="river_relief",
+HYDROLOGY="hydrology", CLIMATE_LOCAL="climate_local". GEO-1 owning steps
+расширяют тот же enum уже предусмотренными slots TERRAIN_REGIONS="terrain_regions",
+COASTLINE_BOUNDARIES="coastline_boundaries", SURFACE_SUPPORT="surface_support",
+COATING="coating"; PC-6S их bindings не создаёт и не активирует.
+
+Application boundary: `PlanSlot(SurfacePlanSlot.TERRAIN_BASE.value)` для
+dependency declarations/requests/require; logical dependency error path —
+`(SurfacePlanSlot.TERRAIN_BASE.value, ...)`. Surface registration использует
+те же values в surface.pc.<slot>/surface.envelope.pc.<slot>; общий registry
+не парсит ids и не ограничивается этим enum. Actual schema field paths
+остаются именами JSON/POJO полей, generic/foreign domain slots сохраняют
+свои declarations. Bundle/input field names не переименовываются.
+Enum не попадает в canonical records: PlanSlot остаётся str, manifest
+entry для SurfacePlanSlot не добавляется. Values/ids/versions, dependency
+sort order, canonical bytes и fingerprints до/после замены одинаковы.
+Порядок исполнения — explicit assembler calls, не iteration enum.
+
+Delivery: новый атомарный PC-6S после PC-6W и до PC-7 (§6.33/§7 плана).
+Он создаёт enum и переводит existing PC-5/6/6W surface literals в provider
+dependency calls, logical diagnostics и domain test fixtures. PC-7/8/8C/9A
+используют enum с первого implementation. Приёмка: exact members/values,
+старые строки и canonical fingerprints равны, providers/contracts suites,
+pyright valid/invalid, отсутствие surface imports в generic engine.
+PC-6S выполнен: providers и domain fixtures используют enum; generic
+records/engine и schema field names сохранены. Providers55/contracts59 —
+114 tests OK; pyright valid0, negative25 expected code/location. Actual
+input/output fingerprints и hashes encoded envelopes трёх domain fixtures
+совпали с сохранёнными до правок значениями; generic import boundary
+и отсутствие enum в canonical manifest проверены. PC-7 — следующий шаг.
+Исторические DONE/evidence PC-5/6/6W сохраняются.
+
 ### PC-0 — общие records и API
+
+**PC-6W реализован 2026-10-23:** WaterPlacementPlanProvider находится в
+application/worldData/generators/terrain/planning/waterPlacementPlanProvider.py.
+Frozen WaterPlacementInput + exact terrain_base envelope поступают в общий
+run_prepared_water_placement existing waterPlacementPass.py; projection,
+prepare, resolve и BasinSpec mapping сохраняют baseline, без carve/fill.
+Snapshot UID сохраняет phase-формулу; required snapshot_revision:
+OutputFingerprint от terrain ref проходит Context/Preparation/Batch/Result,
+mapper проверяет world/snapshot/revision + exact prepared equality.
+Batch JSON кодирует 32-byte revision в hex; missing/wrong revision rejected.
+До PC-9 legacy wrapper вычисляет revision actual surface projection existing
+canonical codec/output_fingerprint с local explicit manifest трёх records;
+это compatibility projection, не plan registration/current-world revision.
+Provider никогда не подменяет terrain dependency этим legacy digest.
+ResolveContext.collect_only=True собирает факты без логирования и без смены
+validate_only policy; флаг наследуется child/root adapters. Projection/prep
+failures и unresolved placements — ERROR без effects; existing warnings
+с declared partial/priority fallback — FALLBACK. Context failure даёт
+PlanBuildFailure. Disabled/empty water — корректный пустой typed plan.
+Проверки: providers55/contracts56/placement86/import13/regression54 —
+264 tests OK; pyright valid0, negative24 expected codes/locations.
+Production registration/caller activation — PC-9A/PC-9; GEO-1 не активирован.
 
 **PC-6 реализован 2026-10-23:** TerrainPlanProvider находится в
 application/worldData/generators/terrain/planning/terrainPlanProvider.py.
@@ -2943,6 +3015,9 @@ z_max:FineZ для полной world z validation specs. ClimateFeaturePolicy
 
 #### PC-E. Exact bindings, bundles, capture и coherence
 
+SurfacePlanSlot из §SurfacePlanSlot — словарь surface pipeline задаёт
+slot values; общие PlanSlot records получают прежнюю str через member.value.
+
 Все paths ниже относительно backend/app. Register function остаётся
 application/worldData/planning/composition/planProviders.py.
 Восемь PC registrations: local slot указан ниже, contract id —
@@ -3098,7 +3173,7 @@ view и guard, не API cache/providers; platform WorldSnapshot не созда�
 Новых flat files в legacy roots нет. Новые leaf paths — §6.29-M, плюс
 ни одного нового module для records этого freeze; несколько связанных
 classes помещаются в owning planned modules. Counts с init:
-spatial/grid5; relief/planning2, inputs2; hydrology/planning2 PC (3 GEO),
+surfacePlanning2 (PC-6S); spatial/grid5; relief/planning2, inputs2; hydrology/planning2 PC (3 GEO),
 inputs2 PC (3 GEO); composition4; application climate/planning3,
 terrain/planning3, terrain/relief/planning2, hydrology/planning2;
 planning/{identity3,contracts5,diagnostics2,policy3};

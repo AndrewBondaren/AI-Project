@@ -7,9 +7,11 @@ from app.application.planning.providers.planProvider import PlanProvider, Regist
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
 from app.dataModel.planning.identity.planKey import PlanSlot
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.application.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
 from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
+from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
@@ -113,3 +115,11 @@ def invalid_climate_sampler_domain(plan: HydrologyPlan) -> None:
 
 def invalid_terrain_climate_dependency(contract: RegisteredPlanContract[ClimateBaseInput, ClimateLocalPlan]) -> None:
     TerrainPlanProvider(contract)  # EXPECT: reportArgumentType
+
+
+def invalid_water_terrain_dependency(contract: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan]) -> None:
+    WaterPlacementPlanProvider(contract)  # EXPECT: reportArgumentType
+
+
+def invalid_surface_slot_assignment(value: PlanSlot) -> SurfacePlanSlot:
+    return value  # EXPECT: reportReturnType

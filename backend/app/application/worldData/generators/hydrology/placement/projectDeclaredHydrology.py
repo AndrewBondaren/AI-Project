@@ -60,7 +60,7 @@ def project_declared_hydrology(hydrology: WorldHydrology, map_cell: int, *, ctx:
         update[collection] = projected
     if issues:
         facts = issues
-        if ctx.validate_only:
+        if ctx.validate_only or ctx.collect_only:
             report_issues(ctx, facts)
         else:
             log_issues(facts)

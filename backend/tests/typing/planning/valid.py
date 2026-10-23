@@ -12,6 +12,9 @@ from app.application.planning.service.planningService import PlanningService, Pl
 from app.application.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateBasePlanProvider
 from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
+from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider
+from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput
+from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.application.cache.service.cacheService import CacheService
@@ -23,6 +26,7 @@ from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.identity.planKey import PlanSlot
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.spatial.grid.coordinateTypes import GridX
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
@@ -78,6 +82,16 @@ def climate_base_provider_type(provider: ClimateBasePlanProvider) -> PlanProvide
 
 
 def terrain_base_provider_type(provider: TerrainPlanProvider) -> PlanProvider[TerrainBaseInput, TerrainPlan]:
+    return provider
+
+
+def surface_slot_boundary(member: SurfacePlanSlot) -> PlanSlot:
+    slot = PlanSlot(member.value)
+    assert_type(slot, PlanSlot)
+    return slot
+
+
+def water_placement_provider_type(provider: WaterPlacementPlanProvider) -> PlanProvider[WaterPlacementInput, WaterPlacementPlan]:
     return provider
 
 

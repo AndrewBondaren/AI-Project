@@ -74,6 +74,7 @@ class _PlacementPass:
                                   for issue in obj.diagnostics)]
         issues.sort(key=lambda item: (item.region_uid, item.code.value, item.path, item.related_uids, item.detail))
         return PlacementBatchResult(world_uid=self.batch.world_uid, snapshot_uid=self.batch.snapshot_uid,
+                                    snapshot_revision=self.batch.snapshot_revision,
                                     results=results, diagnostics=tuple(issues))
 
 

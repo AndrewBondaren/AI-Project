@@ -69,6 +69,18 @@ Resolver выполняет авторазрешение по указанном
 
 #### Placement P1
 
+**PC-6W (2026-10-23):** PlacementBatch/PlacementBatchResult и водные
+WaterPlacementContext/WaterPlacementPreparation требуют snapshot_revision:
+OutputFingerprint (strict 32 bytes; batch JSON transport — hex). Resolver
+переносит revision без пересчёта; water mapper проверяет её вместе с
+world_uid/snapshot_uid и exact prepared equality. Planning provider получает
+revision из exact terrain_base ref; phase UID сохраняет прежнюю формулу.
+Legacy pre-PC-9 caller вычисляет actual surface projection fingerprint общим
+canonical codec; эта compatibility projection не является plan/cache binding.
+ResolveContext.collect_only собирает diagnostics без логирования независимо
+от validate_only. Политика spatial resolve сохраняется; provider возвращает
+факты в immutable envelope, caller публикует их один раз при delivery.
+
 **Решение мастера 2026-10-20 (уточнение B1):** один общий resolver вызывается по мере готовности опор. После base heightmap + готовых anchors, до relief Pass 1.4, выполняется совместный проход подготовленных мировых объектов (вода/горы/поселения и другие конкуренты этого snapshot). Поздние зависимые объекты (устья, hills, districts, rooms и т.д.) используют тот же resolver на явно подготовленном snapshot, с ранее принятыми решениями. Поздний вызов не пересматривает, не перемещает и не вытесняет принятые объекты. Опоры разрешаются прежде зависимых; высокий приоритет ребёнка не изменяет этот порядок. Это заменяет буквальное требование разместить все уровни мира одним вызовом до 1.4. Локальные resolver в доменах не вводятся.
 
 **Решение мастера о specificity:** missing/null в полном intent означает auto и сохраняется как `None`; adapter обязан явно предоставить значение по утверждённому правилу. Нет правила/значения — unresolved, без подстановки 0. Явное значение — строго целое ≥0 без искусственного верхнего предела; bool, строка и дробь недопустимы. Patch missing означает «не менять», patch null — «вернуться к auto». Невалидное authored значение не скрывается auto-значением. Уже утверждённое исключение coastline без воды даёт effective 0 независимо от authored/auto значения; неизвестный факт воды не считается её отсутствием.
@@ -84,9 +96,9 @@ Resolver выполняет авторазрешение по указанном
 - `PlacementCandidate(candidate_uid, preference, footprint)`: adapter предоставляет полный конечный набор геометрически допустимых вариантов, не выбирая победителя среди объектов. preference — строго целое ≥0, меньше предпочтительнее; tie по candidate_uid. Перестановка списка вариантов не меняет выбор. Пустой список означает отсутствие кандидатов и ведёт к unresolved. `absolute_movement=forbid` допускает не более одного варианта в исходной абсолютной позиции; альтернативы абсолютного положения требуют явно заданного `explicit_candidates`. Подготовка фиксированного варианта должна сохранять authored положение, включая anchor frame; это проверяется на границе adapter/P2, не подменяется сдвигом при конфликте. Resolver не придумывает варианты/clip/clamp.
 - `PreparedPlacement(intent, original_area, candidates, auto_specificity, coastline)`: площадь — обязательное положительное конечное число cell² рабочей сетки snapshot, исходная до разрешения пересечений и tile clipping. Для primitive её получает adapter через topology-aware геометрию, для irregular fine-cell claim — геометрическая площадь объединения исходных unit squares (не число L0/L2 samples). Для 3D tie используется XY проекция исходного footprint, не объём. Площадь сохраняется одной для всех вариантов и не пересчитывается по оставшемуся пространству. Auto — строго целое ≥0 или None; применяется только если authored None. Вычисляемое `effective_specificity` остаётся None при неразрешённом auto/неизвестном coastline факте; это не валидное готовое размещение.
 - `CoastlinePlacementFact(snapshot_uid, water_presence, reason)`: enum `present | absent | unknown`, обязательная непустая причина и identity **pre-carve** снимка. Present/absent — входной факт от HY-12, не результат будущего собственного fill. Absent понижает effective priority до 0, сохраняя кандидата и исходный intent. Unknown даёт unresolved. Границы downhill footprint, budgets и water-side готовит водный adapter по HY-12/1; P1 не задаёт неутверждённые размеры/глубины или bbox-default вместо них.
-- `PlacementBatch(world_uid, snapshot_uid, phase, topology, objects, accepted)`: phase `pre_relief | dependent`, WorldTopology в единицах рабочей сетки snapshot (coarse для pre-1.4, fine для локальных проходов). `pre_relief` собирает весь конкурирующий candidate universe snapshot до 1.4, без accepted от частично выбранных bake tiles. `dependent` получает готовые accepted как неизменяемые опоры/занятое пространство. World UID, snapshot identity, unique region/candidate IDs и отсутствие self refs проверяются без повторного REF-W. IDs объектов в objects и accepted не пересекаются. Accepted не re-resolve/retry по новым приоритетам. Snapshot включает всё состояние/границы, влияющее на решение; набор выдаваемых bake tiles фильтрует только materialize/output, не prepared input.
+- `PlacementBatch(world_uid, snapshot_uid, snapshot_revision, phase, topology, objects, accepted)`: phase `pre_relief | dependent`, WorldTopology в единицах рабочей сетки snapshot (coarse для pre-1.4, fine для локальных проходов). `pre_relief` собирает весь конкурирующий candidate universe snapshot до 1.4, без accepted от частично выбранных bake tiles. `dependent` получает готовые accepted как неизменяемые опоры/занятое пространство. World UID, snapshot identity, unique region/candidate IDs и отсутствие self refs проверяются без повторного REF-W. IDs объектов в objects и accepted не пересекаются. Accepted не re-resolve/retry по новым приоритетам. Snapshot включает всё состояние/границы, влияющее на решение; набор выдаваемых bake tiles фильтрует только materialize/output, не prepared input.
 - `ResolvedPlacement(status=resolved, prepared, candidate_uid)`: хранит исходный prepared intent, ровно существующий выбранный candidate и non-null effective priority. `footprint`, `identity`, `original_area`, `effective_specificity` доступны как derived properties без дублируемых изменяемых копий. Spatial predicates ещё должен проверить resolver P2: сам constructor не доказывает отсутствие межобъектного конфликта.
-- `UnresolvedPlacement(status=unresolved, prepared, diagnostics)`: обязательно хотя бы одно unresolved сообщение, нет выбранного footprint. Пустой `PlacementBatchResult.results` — валидная пустая работа, в отличие от unresolved элемента. `PlacementBatchResult(world_uid, snapshot_uid, results, diagnostics=())` допускает resolved и unresolved независимых объектов вместе; это не разрешение частичного persist bundle.
+- `UnresolvedPlacement(status=unresolved, prepared, diagnostics)`: обязательно хотя бы одно unresolved сообщение, нет выбранного footprint. Пустой `PlacementBatchResult.results` — валидная пустая работа, в отличие от unresolved элемента. `PlacementBatchResult(world_uid, snapshot_uid, snapshot_revision, results, diagnostics=())` допускает resolved и unresolved независимых объектов вместе; это не разрешение частичного persist bundle.
 - `PlacementDiagnostic(code, region_uid, related_uids=(), path=(), detail)` — typed spatial факты без logger; codes: missing specificity, missing/failed dependency, dependency cycle, no candidates, spatial conflict, constraint violation, unknown coastline water, coastline priority lowered. Последний — диагностический факт понижения, остальные — причины unresolved. P2 дедуплицирует понижение один раз на coastline за проход с UID/причиной и передаёт факты в существующий `FieldPathError`/`ResolveReport` через `report_issues(ctx, issues)`; runtime пишет WarningError, preview получает тот же доменный результат и report без writes.
 - `ResolvedWaterPlacement(placement, z_water_level, kind, liquid)`: `placement: ResolvedPlacement`, строгий int level, существующий `BasinKind` и `MaterialKey`. `source_uid` и `footprint_cells` — свойства исходного placement, не вторая identity/геометрия. Liquid и level обязательны на resolved границе, без default: их разрешает adapter по hydrology policy. Mapping record → BasinSpec и bathymetry живёт у hydrology consumer; этот POJO не содержит floor profile и не пишет z.
 
@@ -1827,6 +1839,22 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 
 ## PC-0 — потребление frozen surface plans (2026-10-23)
+
+### Surface planning/cache — surface slot vocabulary
+
+**Уточнение PC-6S, DESIGN_CLOSED / implementation DONE (2026-10-23):**
+имена surface dependencies задаёт SurfacePlanSlot(StrEnum) в
+dataModel/surfacePlanning/surfacePlanSlot.py. Exact восемь PC members и
+GEO-расширения — [SurfacePlanSlot — словарь surface pipeline](./tz_terrain_generation.md#surfaceplanslot--словарь-surface-pipeline),
+delivery — GEO-1 §6.33/PC-6S перед PC-7. Existing PlanSlot и dependency
+POJO сохраняются. Providers/composition используют member.value для
+PlanSlot, registration ids и logical dependency error paths; generic
+planning/cache не импортируют surface enum. Поля реальных input schemas
+и порядок phase calls не меняются. Enum не сериализуется вместо прежней
+str: canonical bytes/keys/fingerprints и L0/L2 поведение сохраняются.
+Enum реализован с восемью PC members; providers/domain fixtures переведены.
+Проверки providers55/contracts59, pyright valid0/negative25 и actual
+до/после fingerprints/encoded envelopes подтверждают совместимость.
 
 Полный контракт — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0),
 PC-B…PC-F. LightGridBakeContext получает coherent SurfacePlanBundle.

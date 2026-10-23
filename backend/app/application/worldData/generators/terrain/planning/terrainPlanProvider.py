@@ -10,6 +10,7 @@ from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseIn
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.identity.planKey import PlanSlot
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.spatial.grid.coordinateTypes import FineZ, GridX, GridY, SurfaceGridCoord
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
@@ -22,7 +23,7 @@ class TerrainPlanProvider:
     def build(self, request: PlanRequest[TerrainBaseInput], dependencies: PlanDependencyReader,
               control: PlanBuildControl) -> PlanBuildResult[TerrainPlan]:
         control.raise_if_shutdown()
-        climate = dependencies.require(PlanSlot("climate_base"), self._climate_base).payload
+        climate = dependencies.require(PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value), self._climate_base).payload
         inputs = request.inputs
         surface: list[tuple[SurfaceGridCoord, FineZ]] = []
         for y in range(inputs.bbox.y_min, inputs.bbox.y_max + 1):

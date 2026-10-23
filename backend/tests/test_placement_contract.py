@@ -196,10 +196,12 @@ class PlacementResultContractTests(unittest.TestCase):
         adapter = TypeAdapter(PlacementOutcome)
         self.assertEqual(adapter.validate_json(adapter.dump_json(failed)), failed)
         good = ResolvedPlacement(prepared=prepared(), candidate_uid="candidate-a")
-        mixed = PlacementBatchResult(world_uid="world-a", snapshot_uid="s",
+        from tests.test_placement_resolver import SNAPSHOT_REVISION
+        mixed = PlacementBatchResult(world_uid="world-a", snapshot_uid="s", snapshot_revision=SNAPSHOT_REVISION,
                                      results=(good, failure(prepared(uid="other", candidates=()))))
         self.assertEqual(PlacementBatchResult.model_validate_json(mixed.model_dump_json()), mixed)
-        self.assertEqual(PlacementBatchResult(world_uid="world-a", snapshot_uid="s", results=()).results, ())
+        self.assertEqual(PlacementBatchResult(world_uid="world-a", snapshot_uid="s",
+            snapshot_revision=SNAPSHOT_REVISION, results=()).results, ())
 
     def test_water_record_reuses_material_key_and_requires_resolved_metadata(self):
         placement = ResolvedPlacement(prepared=prepared(), candidate_uid="candidate-a")
@@ -222,8 +224,21 @@ class PlacementResultContractTests(unittest.TestCase):
 
 
 class PlacementBatchContractTests(unittest.TestCase):
+    def test_revision_required_strict_and_json_hex_round_trip(self):
+        batch = self.batch()
+        self.assertEqual(PlacementBatch.model_validate_json(batch.model_dump_json()), batch)
+        wire = batch.model_dump()
+        wire.pop("snapshot_revision")
+        with self.assertRaises(ValidationError):
+            PlacementBatch.model_validate(wire)
+        for invalid in (None, b"short", "a" * 32, True):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                self.batch(snapshot_revision=invalid)
+
     def batch(self, **updates):
+        from tests.test_placement_resolver import SNAPSHOT_REVISION
         return PlacementBatch(**{"world_uid": "world-a", "snapshot_uid": "snapshot-a", "phase": "pre_relief",
+                                 "snapshot_revision": SNAPSHOT_REVISION,
                                  "topology": WorldTopology(bounds=WorldBounds(x_min=0, x_max=7,
                                                                               y_min=0, y_max=7)),
                                  "objects": (), "accepted": (), **updates})

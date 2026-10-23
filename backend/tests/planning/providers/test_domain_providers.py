@@ -27,6 +27,7 @@ from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
 from app.dataModel.cache.policy.cachePolicy import CachePolicy
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 
 
 class Data(BaseModel):
@@ -196,7 +197,7 @@ class ClimateBaseProviderTests(unittest.TestCase):
         self.inputs = ClimateBaseInput(seed=17, bbox=GridBBox(-2, 4, -3, 5), fine_span=10,
             mode=ClimatePoleMode.AUTORESOLVE, preset=ClimatePolePreset.BINARY,
             peak_min=-40, peak_max=50, default_zone="temperate", manual_poles=(), profiles=self.profiles, blend=self.blend)
-        metadata = PlanContractMetadata(id="surface.pc.climate_base", schema_version=1, algorithm_version=1)
+        metadata = PlanContractMetadata(id=f"surface.pc.{SurfacePlanSlot.CLIMATE_BASE.value}", schema_version=1, algorithm_version=1)
         manifest = self.manifest
         plan_type = PlanEnvelope[ClimateBasePlan]
 
@@ -214,7 +215,7 @@ class ClimateBaseProviderTests(unittest.TestCase):
             return input_fingerprint(metadata, world, scope, inputs, deps, manifest)
 
         self.binding = RegisteredPlanContract(metadata, TypeAdapter(ClimateBaseInput).validate_python,
-            fingerprint, (), CacheBinding(CacheContract[plan_type](id="surface.envelope.pc.climate_base", schema_version=1),
+            fingerprint, (), CacheBinding(CacheContract[plan_type](id=f"surface.envelope.pc.{SurfacePlanSlot.CLIMATE_BASE.value}", schema_version=1),
                                          ClimateCodec()), manifest)
         self.h = Harness()
         self.addCleanup(self.h.service.shutdown)
@@ -372,14 +373,14 @@ class TerrainBaseProviderTests(unittest.TestCase):
         self.addCleanup(self.climate.doCleanups)
         self.h = self.climate.h
         self.Input, self.Plan, self.Grid = TerrainBaseInput, TerrainPlan, SurfaceGridSettings
-        self.slot = PlanSlot("climate_base")
+        self.slot = PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value)
         self.inputs = TerrainBaseInput(seed=17, bbox=self.climate.inputs.bbox, z_min=-5, z_max=5,
                                       grid=SurfaceGridSettings(fine_span=10, light_side=2))
         self.manifest = CanonicalSchemaManifest(entries=self.climate.manifest.entries + tuple(
             RegisteredTypeEntry(type_id=identity, python_type=owner, kind=CanonicalTypeKind.RECORD)
             for identity, owner in ((40, TerrainBaseInput), (41, TerrainPlan), (42, SurfaceGridSettings),
                                     (43, SurfaceGridCoord), (44, PlanEnvelope[TerrainPlan]))))
-        metadata = PlanContractMetadata(id="surface.pc.terrain_base", schema_version=1, algorithm_version=1)
+        metadata = PlanContractMetadata(id=f"surface.pc.{SurfacePlanSlot.TERRAIN_BASE.value}", schema_version=1, algorithm_version=1)
         manifest = self.manifest
 
         class TerrainCodec:
@@ -400,7 +401,7 @@ class TerrainBaseProviderTests(unittest.TestCase):
             schema_version=climate_meta.schema_version, algorithm_version=climate_meta.algorithm_version)
         self.binding = RegisteredPlanContract(metadata, TypeAdapter(TerrainBaseInput).validate_python,
             fingerprint, (declaration,), CacheBinding(CacheContract[PlanEnvelope[TerrainPlan]](
-                id="surface.envelope.pc.terrain_base", schema_version=1), TerrainCodec()), manifest)
+                id=f"surface.envelope.pc.{SurfacePlanSlot.TERRAIN_BASE.value}", schema_version=1), TerrainCodec()), manifest)
         self.provider = Mock(wraps=TerrainPlanProvider(self.climate.binding))
         self.h.registry.register(self.binding, self.provider)
 
@@ -530,6 +531,234 @@ class TerrainBaseProviderTests(unittest.TestCase):
         self.assertEqual(decode(encode(self.inputs, self.manifest), self.Input, self.manifest), self.inputs)
         codec = self.binding.cache_binding.codec
         self.assertEqual(codec.decode(codec.encode(first)), first)
+
+
+class WaterPlacementProviderTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider
+        from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput, WaterAnchorInput
+        from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
+        from app.dataModel.hydrology.worldHydrology import WorldHydrology
+        from app.dataModel.hydrology.bands import HydrologyBands
+        from app.dataModel.hydrology.seas import HydrologySeasPolicy
+        from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+        from app.dataModel.hydrology.shore import HydrologyShoreDefaults
+        from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+        from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+        from app.dataModel.hydrology.declaredLake import DeclaredLake
+        from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        from app.dataModel.hydrology.enums.waterSide import WaterSide
+        from app.dataModel.spatial.regionShape import (BboxShape, PolygonShape, EllipseShape,
+            AnchorRadiusShape, CorridorShape, EdgeNoise, RegionShapeKind)
+        from app.dataModel.placement import (PlacementIdentity, PlacementIntent, PlacementCandidate,
+            PlacementFootprint, PreparedPlacement, CoastlinePlacementFact, ResolvedPlacement,
+            ResolvedWaterPlacement, PlacementMode, AbsoluteMovement, WaterPresence)
+        from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+        from app.dataModel.topology.worldTopology import WorldTopology, WorldTopologyMode
+        from app.dataModel.topology.worldBounds import WorldBounds
+        from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+
+        self.terrain = TerrainBaseProviderTests()
+        self.terrain.setUp()
+        self.addCleanup(self.terrain.doCleanups)
+        self.h = self.terrain.h
+        self.Input, self.Plan, self.Basin, self.Coast, self.Lake = (
+            WaterPlacementInput, WaterPlacementPlan, DeclaredBasin, DeclaredCoastline, DeclaredLake)
+        self.Mode, self.Topology, self.Bounds = ResolutionMode, WorldTopology, WorldBounds
+        self.slot = PlanSlot(SurfacePlanSlot.TERRAIN_BASE.value)
+        box = self.terrain.inputs.bbox
+        self.topology = WorldTopology(mode="planar", bounds=WorldBounds(x_min=box.x_min, x_max=box.x_max,
+                                                                       y_min=box.y_min, y_max=box.y_max))
+        defaults = WorldHydrology.canonical_empty()
+        self.inputs = WaterPlacementInput(enabled=True, resolution_mode=ResolutionMode.RUNTIME,
+            default_water_level=0, seas=defaults.default_seas, lakes=defaults.default_lakes,
+            basins=(DeclaredBasin.model_validate(dict(location_uid="basin", kind="ocean", floor_z=-10,
+                footprint=dict(kind="bbox", x_min=0, x_max=20, y_min=-20, y_max=0))),),
+            coastlines=(), declared_lakes=(), anchors=(), topology=self.topology,
+            grid=self.terrain.inputs.grid, z_min=-100, z_max=100, liquid_keys=frozenset(("water", "lava")))
+        records = (WaterPlacementInput, WaterAnchorInput, WaterPlacementPlan, PlanEnvelope[WaterPlacementPlan],
+            WorldTopology, WorldBounds, HydrologySeasPolicy, HydrologyLakesPolicy, HydrologyShoreDefaults,
+            HydrologyBands, DeclaredBasin, DeclaredCoastline, DeclaredLake, HydrologyWaypoint,
+            BboxShape, PolygonShape, EllipseShape, AnchorRadiusShape, CorridorShape, EdgeNoise,
+            PlacementIdentity, PlacementIntent, PlacementCandidate, PlacementFootprint, PreparedPlacement,
+            CoastlinePlacementFact, ResolvedPlacement, ResolvedWaterPlacement, BasinSpec)
+        enums = (BasinKind, WaterSide, RegionShapeKind, WorldTopologyMode, GeographicSubtype,
+                 ResolutionMode, CoordinateSpace, PlacementMode, AbsoluteMovement, WaterPresence)
+        self.manifest = CanonicalSchemaManifest(entries=self.terrain.manifest.entries + tuple(
+            RegisteredTypeEntry(type_id=index, python_type=owner, kind=CanonicalTypeKind.RECORD)
+            for index, owner in enumerate(records, 50)) + tuple(
+            RegisteredTypeEntry(type_id=index, python_type=owner, kind=CanonicalTypeKind.ENUM)
+            for index, owner in enumerate(enums, 100)))
+        manifest = self.manifest
+        metadata = PlanContractMetadata(id=f"surface.pc.{SurfacePlanSlot.WATER_PLACEMENT.value}", schema_version=1, algorithm_version=1)
+
+        class WaterCodec:
+            def validate(self, value):
+                return TypeAdapter(PlanEnvelope[WaterPlacementPlan]).validate_python(value, strict=True)
+            def encode(self, value):
+                return encode(value, manifest)
+            def decode(self, encoded):
+                return decode(encoded, PlanEnvelope[WaterPlacementPlan], manifest)
+            def retained_bytes(self, value):
+                return retained_entry_bytes(value)
+
+        def fingerprint(world, scope, inputs, deps):
+            return input_fingerprint(metadata, world, scope, inputs, deps, manifest)
+
+        terrain_meta = self.terrain.binding.metadata
+        self.binding = RegisteredPlanContract(metadata, TypeAdapter(WaterPlacementInput).validate_python,
+            fingerprint, (PlanDependencyContract(slot=self.slot, contract_id=terrain_meta.id,
+                schema_version=terrain_meta.schema_version, algorithm_version=terrain_meta.algorithm_version),),
+            CacheBinding(CacheContract[PlanEnvelope[WaterPlacementPlan]](
+                id=f"surface.envelope.pc.{SurfacePlanSlot.WATER_PLACEMENT.value}", schema_version=1), WaterCodec()), manifest)
+        self.provider = Mock(wraps=WaterPlacementPlanProvider(self.terrain.binding))
+        self.h.registry.register(self.binding, self.provider)
+
+    def get(self, inputs=None, terrain=None, reader=None):
+        inputs = self.inputs if inputs is None else inputs
+        terrain = self.terrain.get() if terrain is None else terrain
+        deps = (PlanDependency(slot=self.slot, ref=terrain.ref),)
+        meta = self.binding.metadata
+        key = PlanKey(world_uid="climate-world", scope=WorldPlanScope(), contract_id=meta.id,
+            schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
+            input_fingerprint=self.binding.fingerprint_inputs("climate-world", WorldPlanScope(), inputs, deps))
+        request = PlanRequest[self.Input](key=key, inputs=inputs, dependencies=deps)
+        reader = self.h.empty.with_plan(self.slot, self.terrain.binding, terrain) if reader is None else reader
+        return self.h.service.get_or_build(self.binding, request, reader, wait=Wait(5))
+
+    def test_basin_legacy_equivalence_and_revision_through_shared_kernel(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.placement.waterPlacementPass import (
+            run_water_placement_pass, run_prepared_water_placement, legacy_surface_revision)
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from tests.hydrology_fixtures import hydro_world
+        terrain = self.terrain.get()
+        hm = SurfaceHeightmap(world_uid="climate-world", bbox=terrain.payload.bbox,
+            surface_z={(coord.gx, coord.gy): z for coord, z in terrain.payload.surface_z})
+        world = hydro_world(world_uid="climate-world", fine_cells_per_map_cell=10,
+            hydrology=dict(enabled=True, declared_basins=[self.inputs.basins[0].model_dump(mode="json")]), z_min=-100)
+        before = dict(hm.surface_z)
+        legacy = run_water_placement_pass(world, [], hm)
+        path = "app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider.run_prepared_water_placement"
+        with patch(path, wraps=run_prepared_water_placement) as kernel:
+            current = self.get(terrain=terrain)
+        context = kernel.call_args.args[1]
+        self.assertEqual(context.snapshot_revision, terrain.ref.output_fingerprint)
+        self.assertEqual(legacy.preparation.snapshot_revision, legacy.batch_result.snapshot_revision)
+        self.assertEqual(legacy.preparation.snapshot_revision, legacy_surface_revision(hm))
+        self.assertEqual(current.payload.records, legacy.records)
+        self.assertEqual(current.payload.basin_specs, legacy.basin_specs)
+        self.assertEqual(hm.surface_z, before)
+        self.assertEqual(current.payload.records[0].footprint_cells,
+                         frozenset((x, y) for x in range(3) for y in range(-2, 1)))
+
+    def test_disabled_and_empty_inputs_return_typed_empty_plan_without_resolve(self):
+        from unittest.mock import patch
+        path = "app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider.run_prepared_water_placement"
+        with patch(path, side_effect=AssertionError("empty water resolved")):
+            for update in ({"enabled": False}, {"basins": ()}):
+                result = self.get(self.inputs.model_copy(update=update))
+                self.assertEqual((result.payload.records, result.payload.basin_specs, result.diagnostics), ((), (), ()))
+
+    def test_hit_and_rebuild_preserve_diagnostics_without_logging(self):
+        from app.application.planning.service.planFingerprints import cache_item_key
+        from app.dataModel.cache.identity.cacheKey import CacheKey
+        coast = self.Coast.model_validate(dict(location_uid="basin", kind="sea", closed=False,
+            path=[dict(x=0, y=-20), dict(x=0, y=0)]))
+        inputs = self.inputs.model_copy(update={"coastlines": (coast,)})
+        with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+            first = self.get(inputs)
+            self.assertEqual(self.get(inputs), first)
+            self.h.cache.evict(self.binding.cache_binding, CacheKey(contract=self.binding.cache_binding.contract,
+                item_key=cache_item_key(first.ref.key, self.manifest)))
+            self.assertEqual(self.get(inputs), first)
+        self.assertIn("WATER_PLACEMENT_MERGED_SOURCES", {d.issue.code for d in first.diagnostics})
+        self.assertTrue(all(d.disposition == PlanDiagnosticDisposition.FALLBACK for d in first.diagnostics))
+        self.assertEqual(self.provider.build.call_count, 2)
+
+    def test_collapsed_geometry_is_explicit_error_with_independent_basin_preserved(self):
+        tiny = self.Basin.model_validate(dict(location_uid="tiny", kind="ocean", floor_z=-10,
+            footprint=dict(kind="polygon", vertices=[[0, 0], [1, 0], [1, 1]])))
+        inputs = self.inputs.model_copy(update={"basins": (*self.inputs.basins, tiny)})
+        for mode in (self.Mode.RUNTIME, self.Mode.VALIDATE_ONLY):
+            with self.subTest(mode=mode), self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+                result = self.get(inputs.model_copy(update={"resolution_mode": mode}))
+                self.assertEqual(tuple(r.source_uid for r in result.payload.records), ("basin",))
+                diagnostic, = result.diagnostics
+                self.assertEqual(diagnostic.disposition, PlanDiagnosticDisposition.ERROR)
+                self.assertEqual(diagnostic.issue.path, ("hydrology", "declared_basins", 1))
+
+    def test_terrain_edit_invalidates_and_revision_mismatch_rejected_before_hit(self):
+        from app.application.planning.service.planningService import PlanContractFailure
+        first = self.get()
+        old = self.terrain.get()
+        edited = self.terrain.get(self.terrain.inputs.model_copy(update={"seed": 18}))
+        second = self.get(terrain=edited)
+        self.assertNotEqual(first.ref.key, second.ref.key)
+        self.assertEqual(first.payload, second.payload)
+        reader = self.h.empty.with_plan(self.slot, self.terrain.binding, old)
+        with self.assertRaises(PlanContractFailure):
+            self.get(terrain=edited, reader=reader)
+        with self.assertRaises(PlanContractFailure):
+            self.get(reader=self.h.empty)
+
+    def test_input_edits_invalidate_and_cached_geometry_cannot_be_mutated(self):
+        from pydantic import ValidationError
+        first = self.get()
+        for update in ({"default_water_level": 1},
+                       {"seas": self.inputs.seas.model_copy(update={"placement_specificity": 2})},
+                       {"grid": self.terrain.Grid(fine_span=20, light_side=2)}):
+            with self.subTest(update=update):
+                self.assertNotEqual(self.get(self.inputs.model_copy(update=update)).ref.key, first.ref.key)
+        record, = first.payload.records
+        shape = record.placement.prepared.intent.shape
+        with self.assertRaises(ValidationError):
+            shape.x_min = -999
+        with self.assertRaises(AttributeError):
+            record.footprint_cells.add((999, 999))
+        cells = set(record.footprint_cells)
+        cells.clear()
+        self.assertEqual(self.get(), first)
+        self.assertEqual(len(record.footprint_cells), 9)
+
+    def test_input_envelope_codec_round_trip_and_lake_projection(self):
+        from app.application.encoding.canonicalCodec import encode, decode
+        lake = self.Lake.model_validate(dict(location_uid="lake", shoreline=[
+            dict(x=0, y=-20), dict(x=20, y=-20), dict(x=20, y=0), dict(x=0, y=0)]))
+        inputs = self.inputs.model_copy(update={"basins": (), "declared_lakes": (lake,)})
+        first = self.get(inputs)
+        record, = first.payload.records
+        self.assertEqual(record.kind.value, "lake")
+        self.assertEqual(record.footprint_cells, frozenset(((1, -1),)))
+        self.assertEqual(decode(encode(inputs, self.manifest), self.Input, self.manifest), inputs)
+        codec = self.binding.cache_binding.codec
+        self.assertEqual(codec.decode(codec.encode(first)), first)
+
+    def test_topology_seam_projection_preserves_baseline_geometry(self):
+        from app.dataModel.spatial.grid.gridBBox import GridBBox
+        terrain = self.terrain.get(self.terrain.inputs.model_copy(update={"bbox": GridBBox(-2, 5, -3, 5)}))
+        basin = self.Basin.model_validate(dict(location_uid="seam", kind="ocean", floor_z=-10,
+            footprint=dict(kind="bbox", x_min=40, x_max=70, y_min=-10, y_max=0)))
+        for mode in ("wrapped", "sphere"):
+            topology = self.Topology(mode=mode, bounds=self.Bounds(x_min=-2, x_max=5, y_min=-3, y_max=5))
+            result = self.get(self.inputs.model_copy(update={"topology": topology, "basins": (basin,)}), terrain=terrain)
+            self.assertEqual(result.payload.records[0].footprint_cells,
+                frozenset((x, y) for x in (4, 5, -2, -1) for y in (-1, 0)))
+
+    def test_incoherent_extent_or_z_range_fails_without_cached_empty_plan(self):
+        from app.application.planning.service.planningService import PlanBuildFailure
+        invalid_topology = self.Topology(mode="planar",
+            bounds=self.Bounds(x_min=-2, x_max=5, y_min=-3, y_max=5))
+        for update in ({"topology": invalid_topology}, {"z_max": 0}):
+            with self.subTest(update=update), self.assertRaises(PlanBuildFailure):
+                self.get(self.inputs.model_copy(update=update))
 
 
 if __name__ == "__main__":

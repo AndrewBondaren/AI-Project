@@ -40,6 +40,7 @@ class ResolveContext:
     report: ResolveReport = field(default_factory=ResolveReport)
     schema_id: str | None = None
     validate_only: bool = False
+    collect_only: bool = False  # Collect facts without logging; independent of validation policy.
 
     @property
     def errors(self) -> list[FieldPathError]:
@@ -57,6 +58,7 @@ class ResolveContext:
         return ResolveContext(
             mode=self.mode,
             validate_only=self.validate_only,
+            collect_only=self.collect_only,
             partial=self.partial,
             path_prefix=self.path_prefix + (segment,),
             report=self.report,
@@ -104,7 +106,7 @@ def report_issues(ctx: ResolveContext, issues: Iterable[FieldPathError]) -> None
     """Shared policy-resolve reporting for rejecting and diagnostic callers."""
     issues = tuple(dict.fromkeys(issues))
     ctx.errors.extend(issues)
-    if not ctx.validate_only:
+    if not ctx.validate_only and not ctx.collect_only:
         log_issues(issues)
 
 
@@ -328,6 +330,8 @@ def _log_resolve_transform(
     ctx: ResolveContext | None,
 ) -> None:
     """Log original wire JSON vs resolved POJO when they differ."""
+    if ctx is not None and ctx.collect_only:
+        return
     before = _wire_snapshot(wire if isinstance(wire, dict) else {})
     after = _resolved_snapshot(result)
     before_json = _json_line(before)
@@ -439,7 +443,7 @@ def resolve_root_list(
         return empty_factory()
     active_ctx = ResolveContext(mode=active_ctx.mode, partial=False,
         path_prefix=active_ctx.path_prefix, report=active_ctx.report,
-        schema_id=active_ctx.schema_id, validate_only=active_ctx.validate_only)
+        schema_id=active_ctx.schema_id, validate_only=active_ctx.validate_only, collect_only=active_ctx.collect_only)
     return resolve_model(registry_cls, raw, label=label, ctx=active_ctx)
 
 
@@ -460,5 +464,5 @@ def resolve_root_dict(
         return empty_factory()
     active_ctx = ResolveContext(mode=active_ctx.mode, partial=False,
         path_prefix=active_ctx.path_prefix, report=active_ctx.report,
-        schema_id=active_ctx.schema_id, validate_only=active_ctx.validate_only)
+        schema_id=active_ctx.schema_id, validate_only=active_ctx.validate_only, collect_only=active_ctx.collect_only)
     return resolve_model(registry_cls, raw, label=label, ctx=active_ctx)

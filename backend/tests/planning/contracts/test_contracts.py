@@ -31,6 +31,7 @@ from app.dataModel.registryKey import RegistryKey, registry_key_target
 from app.dataModel.validation.diagnostics import fieldPathError as shared
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex, RuntimeIssueContext
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 
 
 @dataclass(frozen=True)
@@ -230,6 +231,70 @@ class CacheContractTests(unittest.TestCase):
                      {"max_workers": 2, "max_pending_builds": -1}):
             with self.assertRaises(ValidationError):
                 PlanningExecutionPolicy.model_validate(wire)
+
+
+class SurfacePlanSlotTests(unittest.TestCase):
+    def test_exact_baseline_vocabulary_without_geo_activation(self):
+        expected = {
+            "CLIMATE_BASE": "climate_base", "TERRAIN_BASE": "terrain_base",
+            "WATER_PLACEMENT": "water_placement", "RELIEF": "relief",
+            "HYDROLOGY_ROUTES": "hydrology_routes", "RIVER_RELIEF": "river_relief",
+            "HYDROLOGY": "hydrology", "CLIMATE_LOCAL": "climate_local",
+        }
+        self.assertEqual({name: member.value for name, member in SurfacePlanSlot.__members__.items()}, expected)
+        self.assertTrue(issubclass(SurfacePlanSlot, StrEnum))
+        for value in ("terrain_regions", "unknown"):
+            with self.assertRaises(ValueError):
+                SurfacePlanSlot(value)
+
+    def test_boundary_preserves_string_encoding_keys_and_fingerprints(self):
+        from app.application.encoding.canonicalCodec import CanonicalCodec
+        from app.application.planning.service.planFingerprints import (
+            input_fingerprint, output_fingerprint, cache_item_key,
+        )
+        from tests.planning.providers.test_domain_providers import Data, MANIFEST
+        codec = CanonicalCodec(MANIFEST)
+        for member in SurfacePlanSlot:
+            with self.subTest(member=member):
+                old = PlanDependency(slot=PlanSlot(member.name.lower()), ref=plan_ref())
+                new = PlanDependency(slot=PlanSlot(member.value), ref=plan_ref())
+                self.assertIs(type(new.slot), str)
+                self.assertEqual(codec.encode(new), codec.encode(old))
+                old_meta = PlanContractMetadata(id="surface.pc." + member.name.lower(),
+                    schema_version=1, algorithm_version=1)
+                new_meta = old_meta.model_copy(update={"id": "surface.pc." + member.value})
+                inputs = Data(value=2)
+                before = input_fingerprint(old_meta, "world", WorldPlanScope(), inputs, (old,), MANIFEST)
+                after = input_fingerprint(new_meta, "world", WorldPlanScope(), inputs, (new,), MANIFEST)
+                self.assertEqual(after, before)
+                old_key = plan_key(contract_id=old_meta.id, input_fingerprint=before)
+                new_key = plan_key(contract_id=new_meta.id, input_fingerprint=after)
+                self.assertEqual(codec.encode(new_key), codec.encode(old_key))
+                self.assertEqual(cache_item_key(new_key, MANIFEST), cache_item_key(old_key, MANIFEST))
+                self.assertEqual(output_fingerprint(inputs, (new,), (), MANIFEST),
+                                 output_fingerprint(inputs, (old,), (), MANIFEST))
+                # The vocabulary is deliberately absent from the canonical manifest.
+                with self.assertRaises(ValueError):
+                    codec.encode(member)
+        foreign = PlanDependency(slot=PlanSlot("other-domain.custom-slot"), ref=plan_ref())
+        self.assertEqual(foreign.slot, "other-domain.custom-slot")
+
+    def test_generic_engine_and_enum_keep_domain_import_boundaries(self):
+        import ast
+        from pathlib import Path
+        backend = Path(__file__).resolve().parents[3]
+        for root in ("app/application/planning", "app/application/cache",
+                     "app/dataModel/planning", "app/dataModel/cache"):
+            for path in (backend / root).rglob("*.py"):
+                tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+                for node in ast.walk(tree):
+                    names = ([node.module or ""] if isinstance(node, ast.ImportFrom) else
+                             [item.name for item in node.names] if isinstance(node, ast.Import) else [])
+                    self.assertFalse(any("surfacePlanning" in name for name in names), str(path))
+        tree = ast.parse((backend / "app/dataModel/surfacePlanning/surfacePlanSlot.py").read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                self.assertEqual(node.module, "enum")
 
 
 if __name__ == "__main__":

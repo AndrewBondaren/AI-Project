@@ -9,6 +9,7 @@ from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire,
 from app.dataModel.placement.common import PlacementModel, PlacementText, PlacementUid
 from app.dataModel.placement.intent import PlacementIdentity
 from app.dataModel.placement.prepared import PlacementFootprint, PreparedPlacement
+from app.dataModel.planning.identity.planKey import OutputFingerprint
 
 
 class PlacementIssueCode(StrEnum):
@@ -87,8 +88,11 @@ type PlacementOutcome = Annotated[ResolvedPlacement | UnresolvedPlacement, Field
 
 
 class PlacementBatchResult(PlacementModel):
+    model_config = {**PlacementModel.model_config, "ser_json_bytes": "hex", "val_json_bytes": "hex"}
+
     world_uid: StrictOnWire[PlacementUid]
     snapshot_uid: StrictOnWire[PlacementUid]
+    snapshot_revision: StrictOnWire[OutputFingerprint] = Field(strict=True, min_length=32, max_length=32)
     results: StrictOnWire[tuple[PlacementOutcome, ...]]
     diagnostics: DefaultWhenMissing[tuple[PlacementDiagnostic, ...]] = ()
 

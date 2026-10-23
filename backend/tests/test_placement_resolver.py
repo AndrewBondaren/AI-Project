@@ -1,6 +1,7 @@
 """P2 behavior: priority, dependency readiness, stable results and policy parity."""
 
 from itertools import permutations
+from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
 import unittest
 from unittest.mock import patch
@@ -13,6 +14,9 @@ from app.dataModel.placement import (
 )
 from app.dataModel.topology.worldBounds import WorldBounds
 from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.planning.identity.planKey import OutputFingerprint
+
+SNAPSHOT_REVISION = OutputFingerprint(sha256(b"test-pre-relief-surface").digest())
 
 
 def variant(uid, cells, *, preference=0, z=(None, None)):
@@ -48,6 +52,7 @@ def topology(mode="planar", *, x_max=31, y_max=15):
 
 def batch(*objects, accepted=(), phase="pre_relief", world_topology=None):
     return PlacementBatch(world_uid="world", snapshot_uid="snapshot", phase=phase,
+                          snapshot_revision=SNAPSHOT_REVISION,
                           topology=world_topology or topology(), objects=objects, accepted=accepted)
 
 

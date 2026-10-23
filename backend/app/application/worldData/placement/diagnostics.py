@@ -20,7 +20,7 @@ def emit_diagnostics(result: PlacementBatchResult, ctx: ResolveContext) -> None:
     ) for item in result.diagnostics]
     # Same nonblocking runtime / author report boundary as regionIdentity.
     # Policy changes only the sink, never the spatial result or candidate set.
-    if ctx.validate_only:
+    if ctx.validate_only or ctx.collect_only:
         report_issues(ctx, issues)
     else:
         log_issues(issues)

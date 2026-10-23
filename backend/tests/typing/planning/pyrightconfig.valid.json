@@ -8,6 +8,7 @@
     "../../../app/application/encoding",
     "../../../app/dataModel/encoding",
     "../../../app/dataModel/planning",
+    "../../../app/dataModel/surfacePlanning",
     "../../../app/dataModel/cache",
     "../../../app/dataModel/validation",
     "../../../app/dataModel/climate/planning",

@@ -2,18 +2,22 @@
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from app.dataModel.annotationPolicy import StrictEnumOnWire, StrictOnWire
 from app.dataModel.placement.common import PlacementModel, PlacementPhase, PlacementUid
 from app.dataModel.placement.prepared import PreparedPlacement
 from app.dataModel.placement.result import ResolvedPlacement
 from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.planning.identity.planKey import OutputFingerprint
 
 
 class PlacementBatch(PlacementModel):
+    model_config = {**PlacementModel.model_config, "ser_json_bytes": "hex", "val_json_bytes": "hex"}
+
     world_uid: StrictOnWire[PlacementUid]
     snapshot_uid: StrictOnWire[PlacementUid]
+    snapshot_revision: StrictOnWire[OutputFingerprint] = Field(strict=True, min_length=32, max_length=32)
     phase: StrictEnumOnWire[PlacementPhase]
     topology: StrictOnWire[WorldTopology]
     objects: StrictOnWire[tuple[PreparedPlacement, ...]]

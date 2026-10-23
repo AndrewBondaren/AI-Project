@@ -14,12 +14,12 @@ from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
 from app.dataModel.placement import (
     PlacementDependency, PlacementIssueCode, PlacementOverlap, PlacementSeparation, ResolvedPlacement, WaterPresence,
 )
-from tests.test_placement_resolver import batch, obj, topology
+from tests.test_placement_resolver import batch, obj, topology, SNAPSHOT_REVISION
 
 
 def context(mode="planar", *, z=3, auto=None, subtypes=None):
     surface = {(x, y): z for x in range(20) for y in range(12)}
-    return WaterPlacementContext("world", "snapshot", topology(mode, x_max=19, y_max=11),
+    return WaterPlacementContext("world", "snapshot", SNAPSHOT_REVISION, topology(mode, x_max=19, y_max=11),
                                  surface, -100, {}, {} if subtypes is None else subtypes,
                                  {} if auto is None else auto, {}, {}, {})
 
@@ -56,6 +56,26 @@ def resolve(preparation, snapshot, *others):
 
 
 class WaterBasinAdapterTests(unittest.TestCase):
+    def test_mapper_rejects_other_revision_with_identical_world_snapshot_and_geometry(self):
+        from hashlib import sha256
+        from app.dataModel.planning.identity.planKey import OutputFingerprint
+        snap = context()
+        prep = prepare(basins=[basin()], snapshot=snap)
+        result, _ = resolve(prep, snap)
+        self.assertEqual(result.snapshot_revision, prep.snapshot_revision)
+        changed = result.model_copy(update={"snapshot_revision": OutputFingerprint(sha256(b"edited-surface").digest())})
+        with self.assertRaisesRegex(ValueError, "revision"):
+            resolved_water_placements(prep, changed)
+
+    def test_context_rejects_missing_or_malformed_revision_without_logging_when_collecting(self):
+        snap = context()
+        for invalid in (None, b"short", "a" * 32):
+            with self.subTest(invalid=invalid), self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+                ctx = ResolveContext(collect_only=True)
+                with self.assertRaises(UnresolvedModelError):
+                    prepare(basins=[basin()], snapshot=replace(snap, snapshot_revision=invalid), ctx=ctx)
+                self.assertTrue(ctx.errors)
+
     def test_resolved_record_preserves_authored_metadata_and_does_not_mutate_heightmap(self):
         snap = context()
         before = dict(snap.surface_z)

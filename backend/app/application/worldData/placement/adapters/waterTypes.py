@@ -15,6 +15,7 @@ from app.dataModel.placement import (
     PlacementDependency, PlacementOverlap, PlacementSeparation, PreparedPlacement,
 )
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
+from app.dataModel.planning.identity.planKey import OutputFingerprint
 
 
 class WaterPreparationCode(StrEnum):
@@ -35,6 +36,7 @@ class WaterGeometryError(ValueError):
 class WaterPlacementContext:
     world_uid: str
     snapshot_uid: str
+    snapshot_revision: OutputFingerprint
     topology: WorldTopology
     surface_z: Mapping[Coord, int]
     z_min: int
@@ -66,6 +68,7 @@ class WaterPreparationFailure:
 class WaterPlacementPreparation:
     world_uid: str
     snapshot_uid: str
+    snapshot_revision: OutputFingerprint
     entries: tuple[PreparedWaterEntry, ...]
     failures: tuple[WaterPreparationFailure, ...]
     notices: tuple[FieldPathError, ...]

@@ -53,6 +53,8 @@ def _validate_context(context: WaterPlacementContext, hydrology: WorldHydrology,
     if any(not uid or uid != uid.strip() for uid in (context.world_uid, context.snapshot_uid)):
         errors.append(_context_issue(context, ctx,
                              "nonempty world/snapshot identities are required"))
+    if type(context.snapshot_revision) is not bytes or len(context.snapshot_revision) != 32:
+        errors.append(_context_issue(context, ctx, "snapshot revision must be a 32-byte output fingerprint"))
     bounds = topology.bounds
     if (len(context.surface_z) != bounds.width * bounds.height
             or any(len(cell) != 2 or any(type(value) is not int for value in cell)
@@ -223,19 +225,20 @@ def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementC
                                              members.index(prepared_members[primary_position][0])))
             entries.append(outcome)
     facts = [failure.issue for failure in failures] + notices
-    if ctx.validate_only:
+    if ctx.validate_only or ctx.collect_only:
         report_issues(ctx, facts)
     else:
         log_issues(facts)
-    return WaterPlacementPreparation(context.world_uid, context.snapshot_uid, tuple(entries),
+    return WaterPlacementPreparation(context.world_uid, context.snapshot_uid, context.snapshot_revision, tuple(entries),
                                       tuple(failures), tuple(notices))
 
 
 def resolved_water_placements(preparation: WaterPlacementPreparation,
                               result: PlacementBatchResult) -> tuple[ResolvedWaterPlacement, ...]:
     """Project a shared result; caller retains its unresolved and preparation failures."""
-    if result.world_uid != preparation.world_uid or result.snapshot_uid != preparation.snapshot_uid:
-        raise ValueError("water preparation and common result must refer to the same world/snapshot")
+    if (result.world_uid != preparation.world_uid or result.snapshot_uid != preparation.snapshot_uid
+            or result.snapshot_revision != preparation.snapshot_revision):
+        raise ValueError("water preparation and common result must refer to the same world/snapshot/revision")
     outcomes = {outcome.prepared.intent.identity.region_uid: outcome for outcome in result.results}
     records = []
     for entry in preparation.entries:
