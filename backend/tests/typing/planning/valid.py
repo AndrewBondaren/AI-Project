@@ -15,6 +15,10 @@ from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
+from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverBedRecord
+from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, RiverRoute
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
 
 
 @dataclass(frozen=True)
@@ -89,4 +93,20 @@ def terrain_domain_round_trip(request: PlanRequest[TerrainBaseInput],
                               entry: CacheEntry[PlanEnvelope[TerrainPlan]]) -> TerrainPlan:
     assert_type(request.inputs, TerrainBaseInput)
     assert_type(entry.value.payload, TerrainPlan)
+    return entry.value.payload
+
+
+def relief_domain(entry: CacheEntry[PlanEnvelope[ReliefPlan]],
+                  bed: RiverBedRecord[SurfaceGridCoord]) -> ReliefPlan:
+    assert_type(bed.bed_z[0][0], SurfaceGridCoord)
+    assert_type(entry.value.payload, ReliefPlan)
+    return entry.value.payload
+
+
+def hydrology_domain(request: PlanRequest[HydrologyPlanInput],
+                     entry: CacheEntry[PlanEnvelope[HydrologyPlan]],
+                     route: RiverRoute[SurfaceGridCoord]) -> HydrologyPlan:
+    assert_type(request.inputs, HydrologyPlanInput)
+    assert_type(route.receiver_cell, SurfaceGridCoord)
+    assert_type(entry.value.payload, HydrologyPlan)
     return entry.value.payload

@@ -613,3 +613,16 @@ PC-1R определяет contracts, PC-7 — оба providers, PC-9/10/11 — 
 production cutover. Формулы identity/seed прежние; устранение отдельного
 light mountain selection и зависимости height от terrain color — явные
 baseline deltas с приёмкой, а не cache-only equivalence.
+
+**PC-1R реализован 2026-10-23:** immutable contracts находятся в
+`dataModel/terrain/relief/planning/reliefPlan.py` и
+`planning/inputs/reliefPlanInput.py`. MountainLayout сохраняет полные
+stamped specs, templates и pick policy; ReliefPlan содержит pre-river
+coarse/light outputs, RiverReliefPlan — отдельные post-river surfaces и
+typed beds по UID/space. Дубли identity/координат/UID и неполные peak sides
+отклоняются. Unstamped declarations допустимы только в source input.
+Проверки bbox/light_side/z bounds требуют captured input/dependency context
+и выполняются при provider/admission; output schemas не получают fake limits.
+BasinSpec уже перенесён в PC-1T. Selection/carve algorithms не изменены.
+Приёмка: 116 tests OK; pyright positive 0 errors/warnings, negative
+12 ожидаемых diagnostics; imports не загружают application/db.

@@ -7,6 +7,9 @@
     "../../../app/dataModel/climate/planning",
     "../../../app/dataModel/terrain/planning",
     "../../../app/dataModel/terrain/relief/bathymetry",
+    "../../../app/dataModel/terrain/relief/planning",
+    "../../../app/dataModel/hydrology/planning",
+    "../../../app/dataModel/hydrology/enums/planning",
     "../../../app/dataModel/spatial/grid/gridSettings.py",
     "valid.py"
   ]

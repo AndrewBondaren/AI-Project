@@ -10,6 +10,9 @@ from app.dataModel.cache.contracts.cacheContract import CacheSchemaVersion
 from app.dataModel.spatial.grid.coordinateTypes import FineX
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan, ClimateLocalPlan
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverReliefPlan, RiverBedRecord
+from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, HydrologyRoutesPlan, RiverRoute
 from tests.typing.planning.valid import (
     ClimatePayload, HydroInput, HydroPayload, build_climate, require_climate, require_grid_x,
 )
@@ -53,3 +56,19 @@ def invalid_climate_phase(local: PlanEnvelope[ClimateLocalPlan], key: CacheKey[P
 
 def invalid_terrain_payload(terrain: PlanEnvelope[TerrainPlan], key: CacheKey[PlanEnvelope[ClimateBasePlan]]) -> None:
     CacheEntry[PlanEnvelope[ClimateBasePlan]](key=key, value=terrain)  # EXPECT: reportArgumentType
+
+
+def invalid_relief_phase(relief: PlanEnvelope[ReliefPlan], key: CacheKey[PlanEnvelope[RiverReliefPlan]]) -> None:
+    CacheEntry[PlanEnvelope[RiverReliefPlan]](key=key, value=relief)  # EXPECT: reportArgumentType
+
+
+def invalid_river_bed_space(bed: RiverBedRecord[FineXY]) -> RiverBedRecord[SurfaceGridCoord]:
+    return bed  # EXPECT: reportReturnType
+
+
+def invalid_hydrology_phase(routes: PlanEnvelope[HydrologyRoutesPlan], key: CacheKey[PlanEnvelope[HydrologyPlan]]) -> None:
+    CacheEntry[PlanEnvelope[HydrologyPlan]](key=key, value=routes)  # EXPECT: reportArgumentType
+
+
+def invalid_route_space(route: RiverRoute[SurfaceGridCoord]) -> RiverRoute[FineXY]:
+    return route  # EXPECT: reportReturnType

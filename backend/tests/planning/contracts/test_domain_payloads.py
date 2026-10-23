@@ -385,5 +385,265 @@ class TerrainPlanningPayloadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class ReliefPlanningPayloadTests(unittest.TestCase):
+    def peak(self, **updates):
+        return MountainSpec.model_validate({**PEAK, "sides": [{"kind": "slope"}] * 6} | updates)
+
+    def merge(self):
+        from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import TerrainMergeEntry
+        return (TerrainMergeEntry(key=RegistryKey[WorldTerrainRegistry]("mountain"), merge_rank=10),
+                TerrainMergeEntry(key=RegistryKey[WorldTerrainRegistry]("ravine"), merge_rank=5))
+
+    def layout(self, **updates):
+        from app.dataModel.terrain.relief.planning.reliefPlan import MountainLayout
+        from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
+        return MountainLayout.model_validate(dict(entries=(self.peak(),), templates=(),
+            world_pick=ReliefContextPickPolicy(), terrain_key="mountain") | updates)
+
+    def light(self, **updates):
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, LightCellRef
+        from app.dataModel.terrain.relief.planning.reliefPlan import LightReliefPlan
+        return LightReliefPlan.model_validate(dict(base_surface_z=tuple(
+            (LightCellRef(0, 0, tx, ty), FineZ(3)) for ty in range(2) for tx in range(2)),
+            mountain_cells=(), ravine_cells=(), ravine_terrain="ravine", terrain_merge=self.merge()) | updates)
+
+    def test_mountain_layout_preserves_full_specs_and_requires_stamped_sides(self):
+        ridge = MountainRangeSpec.model_validate({"spine": [[0, 0], [10, 0]], "peaks": [self.peak()],
+            "peak_spacings_m": [9], "saddles": [{"peak_a_index": 0, "peak_b_index": 1}], "location_uid": "ridge"})
+        layout = self.layout(entries=(ridge, self.peak()))
+        self.assertEqual(layout.entries[0], ridge)
+        self.assertEqual(layout.entries[0].identity_key(), ridge.identity_key())
+        self.assertEqual(layout.entries[0].peak_spacings_m, (9,))
+        for entries in ((self.peak(), self.peak()), (MountainSpec.model_validate(PEAK),),
+                        (ridge.model_copy(update={"peaks": (MountainSpec.model_validate(PEAK),)}),)):
+            with self.assertRaises(ValidationError):
+                self.layout(entries=entries)
+        with self.assertRaises(ValidationError):
+            layout.entries[0].peaks[0].origin_x_m = 99
+
+    def test_templates_are_unique_sorted_and_retain_recipe_edit(self):
+        from app.dataModel.terrain.relief.enums import ReliefContext
+        from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
+        template = MountainTemplateInput(template_uid="a", context=ReliefContext.MOUNTAIN, side_recipe=None)
+        self.assertIsNone(self.layout(templates=(template,)).templates[0].side_recipe)
+        other = template.model_copy(update={"template_uid": "b"})
+        for templates in ((template, template), (other, template)):
+            with self.assertRaises(ValidationError):
+                self.layout(templates=templates)
+        with self.assertRaises(ValidationError):
+            MountainTemplateInput(template_uid="wrong", context=ReliefContext.SHORE, side_recipe=None)
+        edited = template.model_copy(update={"side_recipe": MountainSideRecipe(side_kinds=("slope", "sheer"))})
+        self.assertNotEqual(self.layout(templates=(template,)), self.layout(templates=(edited,)))
+
+    def test_light_effects_require_unique_ordered_cells_inside_the_base(self):
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, LightCellRef
+        from app.dataModel.terrain.relief.planning.reliefPlan import LightMountainCell
+        light = self.light()
+        first = light.base_surface_z[0][0]
+        effect = LightMountainCell(cell=first, surface_z=FineZ(7), facing=None)
+        self.assertEqual(self.light(mountain_cells=(effect,)).mountain_cells[0].surface_z, 7)
+        for updates in ({"base_surface_z": (light.base_surface_z[0],) * 2},
+                        {"base_surface_z": tuple(reversed(light.base_surface_z))},
+                        {"mountain_cells": (effect, effect)},
+                        {"mountain_cells": (effect.model_copy(update={"cell": LightCellRef(1, 0, 0, 0)}),)},
+                        {"terrain_merge": tuple(reversed(self.merge()))}):
+            with self.assertRaises(ValidationError):
+                self.light(**updates)
+        with self.assertRaises(ValidationError):
+            light.mountain_cells = ()
+
+    def test_relief_surface_retains_coarse_and_light_extent(self):
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, SurfaceGridCoord
+        from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan
+        surface = ((SurfaceGridCoord(GridX(0), GridY(0)), FineZ(7)),)
+        plan = ReliefPlan(surface_z=surface, mountain_layout=self.layout(), light=self.light())
+        self.assertEqual(plan.surface_z, surface)
+        with self.assertRaises(ValidationError):
+            ReliefPlan(surface_z=(), mountain_layout=self.layout(), light=self.light())
+
+    def test_relief_input_and_river_depths_capture_existing_policy_values(self):
+        from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType as Kind
+        from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
+        from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
+        from app.dataModel.terrainMasks.worldTerrainMasks import RavinesCategoryPolicy
+        grid = SurfaceGridSettings(fine_span=1000, light_side=2)
+        captured = ReliefPlanInput.model_validate(dict(seed=42, masks_enabled=True, mountains=MountainsCategoryPolicy(),
+            ravines=RavinesCategoryPolicy(), declared_mountains=(MountainSpec.model_validate(PEAK),), anchors=(), grid=grid,
+            z_min=-10, z_max=10, mountain_templates=(), mountain_pick=ReliefContextPickPolicy(), terrain_merge=self.merge()))
+        self.assertEqual(captured.declared_mountains[0].sides, ())  # source has not been stamped yet
+        policy = HydrologyRiversPolicy()
+        depths = tuple((kind, policy.channel_depth_for(kind)) for kind in sorted((Kind.RIVER, Kind.MOUNTAIN_RIVER)))
+        wire = dict(z_min=-10, z_max=10, grid=grid, topology=TerrainPlanningPayloadTests().topology(), channel_depths=depths)
+        self.assertEqual(RiverReliefInput.model_validate(wire).channel_depths, depths)
+        for updates in ({"channel_depths": depths[:1]}, {"channel_depths": (depths[0], depths[0])},
+                        {"channel_depths": ((depths[0][0], True), depths[1])}, {"z_min": 11}):
+            with self.assertRaises(ValidationError):
+                RiverReliefInput.model_validate(wire | updates)
+
+    def test_river_beds_keep_spaces_and_reject_duplicate_uids_or_missing_surface(self):
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, SurfaceGridCoord
+        from app.dataModel.terrain.relief.planning.reliefPlan import RiverBedRecord, RiverReliefPlan
+        coord = SurfaceGridCoord(GridX(0), GridY(0))
+        coarse = RiverBedRecord[SurfaceGridCoord](river_uid="river", bed_z=((coord, FineZ(2)),))
+        from app.dataModel.spatial.grid.coordinateTypes import FineXY
+        fine = RiverBedRecord[FineXY](river_uid="river", bed_z=(((FineX(0), FineY(0)), FineZ(1)),))
+        wire = dict(surface_z=coarse.bed_z, fine_surface_z=fine.bed_z, coarse_beds=(coarse,), fine_beds=(fine,))
+        plan = RiverReliefPlan(**wire)
+        self.assertEqual(plan.coarse_beds[0].river_uid, plan.fine_beds[0].river_uid)
+        for updates in ({"coarse_beds": (coarse, coarse)}, {"fine_surface_z": ()}, {"coarse_beds": (fine,)}):
+            with self.assertRaises(ValidationError):
+                RiverReliefPlan(**(wire | updates))
+        with self.assertRaises(ValidationError):
+            RiverBedRecord[SurfaceGridCoord](river_uid="river", bed_z=coarse.bed_z * 2)
+
+    def test_relief_modules_import_in_both_orders_without_application(self):
+        paths = ("app.dataModel.terrain.relief.planning.reliefPlan", "app.dataModel.terrain.relief.planning.inputs.reliefPlanInput")
+        for order in (paths, tuple(reversed(paths))):
+            script = (f"import importlib,sys; [importlib.import_module(p) for p in {order!r}]; "
+                      "assert not any(n.startswith(('app.application', 'app.db')) for n in sys.modules)")
+            result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class HydrologyPlanningPayloadTests(unittest.TestCase):
+    def paint(self):
+        from app.dataModel.hydrology.planning.hydrologyPlan import DeclaredWaterPaint
+        return DeclaredWaterPaint(lakes=(), coastlines=(), segments=(), intents=())
+
+    def body(self):
+        from app.dataModel.hydrology.waterBody import WaterBody
+        return WaterBody(water_body_uid="lake", location_uid="lake-location", kind="lake",
+                         liquid="water", declared_level=2, z_water_level=2, parent_system_uid="system")
+
+    def route(self, uid="river", receiver="lake", *, fine=False):
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType as Kind
+        from app.dataModel.hydrology.planning.hydrologyPlan import RiverPathSegment, RiverRoute
+        from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
+        from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
+        a, b = ((FineX(0), FineY(0)), (FineX(1), FineY(0))) if fine else (
+            SurfaceGridCoord(GridX(0), GridY(0)), SurfaceGridCoord(GridX(1), GridY(0)))
+        coordinate_type = FineXY if fine else SurfaceGridCoord
+        segment = RiverPathSegment[coordinate_type](path=(a, b), connection_type=Kind.RIVER,
+            edge_uid=None, location_uid=None, declared=False)
+        drainage = RiverDrainageLink(river_uid=uid, river_type=Kind.RIVER, receiver_uid=receiver,
+            receiver_kind=BasinKind.LAKE if receiver == "lake" else Kind.RIVER,
+            receiver_cell=(1, 0) if fine else (1000, 0))
+        return RiverRoute[coordinate_type](river_uid=uid, segments=(segment,), receiver_cell=b, drainage=drainage)
+
+    def routes(self, **updates):
+        from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan
+        return HydrologyRoutesPlan.model_validate(dict(coarse_open_water=(), water_bodies=(self.body(),),
+            physical_unions=(), coarse_routes=(self.route(),), fine_routes=(), fine_base_surface_z=(),
+            declared_paint=self.paint()) | updates)
+
+    def test_scope_move_preserves_identity_values_and_bootstrap(self):
+        from app.application.worldData.generators.hydrology.types import HydrologyScope as Old, HYDROLOGY_BOOTSTRAP_SCOPES as OldSet
+        from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope, HYDROLOGY_BOOTSTRAP_SCOPES
+        self.assertIs(Old, HydrologyScope)
+        self.assertIs(OldSet, HYDROLOGY_BOOTSTRAP_SCOPES)
+        self.assertEqual(tuple(scope.value for scope in HydrologyScope), ("coastal_sea", "open_ocean", "lakes", "rivers", "landforms"))
+        self.assertNotIn(HydrologyScope.LANDFORMS, HYDROLOGY_BOOTSTRAP_SCOPES)
+
+    def test_declared_paint_keeps_geometry_and_two_width_units(self):
+        from app.dataModel.hydrology.planning.hydrologyPlan import DeclaredWaterPaint, IntentRiverPaint, SegmentRiverPaint
+        from app.dataModel.spatial.grid.coordinateTypes import FineDelta
+        path = ((FineX(0), FineY(0)), (FineX(10), FineY(5)))
+        segment = SegmentRiverPaint(edge_uid="edge", location_uid=None, segment=path, width_fine=FineDelta(100))
+        intent = IntentRiverPaint(river_uid="river", path=path, width_wire=0)
+        paint = DeclaredWaterPaint(lakes=(), coastlines=(), segments=(segment,), intents=(intent,))
+        self.assertEqual(DeclaredWaterPaint.model_validate_json(paint.model_dump_json()), paint)
+        self.assertEqual(paint.intents[0].path, path)
+        for updates in ({"width_wire": -1}, {"width_wire": 999}, {"width_wire": True}, {"path": path[:1]}):
+            with self.assertRaises(ValidationError):
+                IntentRiverPaint.model_validate(intent.model_dump() | updates)
+        with self.assertRaises(ValidationError):
+            SegmentRiverPaint.model_validate(segment.model_dump() | {"width_fine": 0})
+
+    def test_routes_require_terminal_receiver_bed_and_matching_drainage(self):
+        from app.dataModel.hydrology.planning.hydrologyPlan import RiverRoute
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
+        route = self.route()
+        for updates in ({"receiver_cell": route.segments[0].path[0]},
+                        {"segments": (route.segments[0].model_copy(update={"path": (route.receiver_cell,)}),)},
+                        {"drainage": route.drainage.model_copy(update={"river_uid": "wrong"})},
+                        {"drainage": route.drainage.model_copy(update={"receiver_uid": "river"})}):
+            with self.assertRaises(ValidationError):
+                RiverRoute[SurfaceGridCoord].model_validate(route.model_dump() | updates)
+        self.assertEqual(route.drainage.receiver_cell, (1000, 0))  # diagnostic fine coordinate is preserved
+
+    def test_rooted_drainage_and_fine_height_coverage(self):
+        fine = self.route(fine=True)
+        base = tuple((cell, 3) for cell in fine.segments[0].path)
+        self.assertEqual(self.routes(fine_routes=(fine,), fine_base_surface_z=base).fine_routes[0], fine)
+        for updates in ({"coarse_routes": (self.route(), self.route())},
+                        {"coarse_routes": (self.route(receiver="missing"),)},
+                        {"coarse_routes": (self.route(uid="a", receiver="b"), self.route(uid="b", receiver="a"))},
+                        {"fine_routes": (fine,), "fine_base_surface_z": base[:1]}):
+            with self.assertRaises(ValidationError):
+                self.routes(**updates)
+        accepted = self.routes(coarse_routes=(self.route(uid="tributary", receiver="main"), self.route(uid="main")))
+        self.assertEqual(len(accepted.coarse_routes), 2)
+        from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+        route = self.route()
+        invalid = route.model_copy(update={"drainage": route.drainage.model_copy(
+            update={"receiver_kind": HydrologyConnectionType.RIVER})})
+        with self.assertRaises(ValidationError):
+            self.routes(coarse_routes=(invalid,))
+
+    def test_final_facts_detach_from_working_map_and_round_trip(self):
+        from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+        from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, SurfaceGridCoord
+        coord = SurfaceGridCoord(GridX(0), GridY(0))
+        cell = MapCellHydrology(role="lake", water_body_uid="lake", z_water_level=2)
+        working = {coord: cell}
+        plan = HydrologyPlan(coarse_surface_z=((coord, FineZ(1)),), coarse_hydro=tuple(working.items()),
+            sparse_fine_hydro=(), fine_z_overrides=(), water_bodies=(self.body(),), physical_unions=(), declared_paint=self.paint())
+        working.clear()
+        self.assertEqual(plan.coarse_hydro[0][1].water_body_uid, "lake")
+        self.assertEqual(HydrologyPlan.model_validate_json(plan.model_dump_json()), plan)
+        self.assertEqual(plan.water_bodies[0].parent_system_uid, "system")
+        with self.assertRaises(ValidationError):
+            plan.water_bodies[0].z_water_level = 99
+        for updates in ({"coarse_hydro": plan.coarse_hydro * 2}, {"coarse_surface_z": ()},
+                        {"water_bodies": plan.water_bodies * 2}):
+            with self.assertRaises(ValidationError):
+                HydrologyPlan.model_validate(plan.model_dump() | updates)
+
+    def test_inputs_keep_mode_scope_and_nullable_anchor_fields_explicit(self):
+        from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope, HYDROLOGY_BOOTSTRAP_SCOPES
+        from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput, HydrologyFinalInput, HydrologyAnchorInput
+        from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+        from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+        from app.dataModel.hydrology.seas import HydrologySeasPolicy
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        grid = SurfaceGridSettings(fine_span=1000, light_side=2)
+        anchor = HydrologyAnchorInput(location_uid="anchor", position=None, z=None, subtype=None)
+        wire = dict(enabled=False, seed=42, resolution_mode=ResolutionMode.RUNTIME, scopes=HYDROLOGY_BOOTSTRAP_SCOPES,
+            default_water_level=0, seas=HydrologySeasPolicy(), lakes=HydrologyLakesPolicy(), rivers=HydrologyRiversPolicy(),
+            declared_rivers=(), coastlines=(), declared_lakes=(), anchors=(anchor,), grid=grid,
+            topology=TerrainPlanningPayloadTests().topology(), z_min=-10, z_max=10, liquid_keys=frozenset(), change_uid="change")
+        captured = HydrologyPlanInput.model_validate(wire)
+        self.assertEqual(captured.anchors, (anchor,))
+        for updates in ({"scopes": frozenset({HydrologyScope.LANDFORMS})}, {"z_min": 11}, {"seed": True}):
+            with self.assertRaises(ValidationError):
+                HydrologyPlanInput.model_validate(wire | updates)
+        with self.assertRaises(ValidationError):
+            HydrologyAnchorInput.model_validate({"location_uid": "anchor", "position": None, "z": None})
+        final = HydrologyFinalInput(enabled=False, grid=grid, topology=wire["topology"])
+        self.assertNotIn("rivers", type(final).model_fields)
+
+    def test_hydrology_contract_imports_do_not_load_application_or_db(self):
+        script = ("import sys; from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan; "
+                  "from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput; "
+                  "assert not any(n.startswith(('app.application', 'app.db')) for n in sys.modules)")
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

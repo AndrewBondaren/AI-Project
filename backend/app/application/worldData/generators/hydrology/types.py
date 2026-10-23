@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
+from app.dataModel.hydrology.enums.planning.hydrologyScope import (
+    HydrologyScope as HydrologyScope, HYDROLOGY_BOOTSTRAP_SCOPES as HYDROLOGY_BOOTSTRAP_SCOPES,
+)
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -24,22 +26,6 @@ from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
 )
-
-
-class HydrologyScope(StrEnum):
-    COASTAL_SEA = "coastal_sea"
-    OPEN_OCEAN  = "open_ocean"
-    LAKES       = "lakes"
-    RIVERS      = "rivers"
-    LANDFORMS   = "landforms"
-
-
-HYDROLOGY_BOOTSTRAP_SCOPES = frozenset({
-    HydrologyScope.COASTAL_SEA,
-    HydrologyScope.OPEN_OCEAN,
-    HydrologyScope.LAKES,
-    HydrologyScope.RIVERS,
-})
 
 
 @dataclass(frozen=True)

@@ -1880,3 +1880,16 @@ PC-1H определяет records, PC-8 разделяет existing route/final
 PC-10 переключает L0 consumers. HY-RIV-1 procedural fine source search
 этой подготовкой не включается. GEO source mapping/classification decisions
 передаются через отдельный GeoHydrologyRoutesPlan, без consumer cast.
+
+**PC-1H реализован 2026-10-23:** immutable inputs, declared paint,
+route-stage/final outputs находятся в `dataModel/hydrology/planning`.
+Generic route coordinates разделяют coarse и fine; accepted routes
+сохраняют terminal receiver и drainage proof до known water root, fine
+pre-river heights покрывают path и receiver. Final payload сохраняет
+body/union identity, levels и geometry без live World/working buffers.
+HydrologyScope/bootstrap set имеют единственные definitions в
+`enums/planning/hydrologyScope.py`; old-path imports сохраняют identity,
+LANDFORMS в planning input не активируется. Segment fine width и intent
+wire width остаются разными контрактами; wire bounds берутся из
+HydrologyMaskWire. Приёмка: 123 tests OK, pyright positive 0 errors/warnings,
+negative 14 ожидаемых diagnostics. Runtime cutover остаётся PC-8/9/10/11.
