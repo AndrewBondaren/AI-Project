@@ -23,7 +23,7 @@ from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.identity.cacheKey import CacheKey
-from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope, PlanBuildResult
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.identity.planKey import InputFingerprint, OutputFingerprint, SchemaVersion
 from app.dataModel.cache.contracts.cacheContract import CacheSchemaVersion
@@ -173,3 +173,42 @@ def invalid_fine_stage_route(route: RiverRoute[SurfaceGridCoord]) -> None:
 
 def invalid_coarse_stage_claim(batch: RiverRouteBatch[FineXY]) -> None:
     CoarseRiverPlan(routes=(), claims=batch.claims)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.application.worldData.generators.hydrology.load.paint.declaredWaterPaintProjector import DeclaredWaterPaintProjector
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyAnchorInput
+
+
+def invalid_water_owner_input(owner: WaterBodyPlanner, inputs: HydrologyFinalInput,
+    placement: WaterPlacementPlan, control: PlanBuildControl) -> None:
+    owner.plan(world_uid="world", inputs=inputs, surface_z=(), placement=placement, control=control)  # EXPECT: reportArgumentType
+
+
+def invalid_water_owner_phase(owner: WaterBodyPlanner, inputs: HydrologyPlanInput,
+    placement: WaterPlacementPlan, control: PlanBuildControl) -> PlanBuildResult[HydrologyPlan]:
+    return owner.plan(world_uid="world", inputs=inputs, surface_z=(), placement=placement, control=control)  # EXPECT: reportReturnType
+
+
+def invalid_paint_owner_declarations(owner: DeclaredWaterPaintProjector, anchors: tuple[HydrologyAnchorInput, ...]) -> None:
+    owner.project(rivers=anchors, coastlines=(), lakes=(), anchors=anchors)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
+from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+
+
+def invalid_coarse_owner_input(owner: CoarseRiverPlanner, inputs: HydrologyFinalInput,
+    water: OpenWaterPlan, control: PlanBuildControl) -> None:
+    owner.plan(world_uid="world", inputs=inputs, surface_z=(), water=water, control=control)  # EXPECT: reportArgumentType
+
+
+def invalid_fine_owner_dependency(owner: FineRiverPlanner, inputs: HydrologyPlanInput,
+    water: OpenWaterPlan, fine: FineRiverPlan, control: PlanBuildControl) -> None:
+    owner.plan(world_uid="world", inputs=inputs, surface_z=(), water=water, coarse=fine, control=control)  # EXPECT: reportArgumentType
+
+
+def invalid_coarse_owner_phase(owner: CoarseRiverPlanner, inputs: HydrologyPlanInput,
+    water: OpenWaterPlan, control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
+    return owner.plan(world_uid="world", inputs=inputs, surface_z=(), water=water, control=control)  # EXPECT: reportReturnType

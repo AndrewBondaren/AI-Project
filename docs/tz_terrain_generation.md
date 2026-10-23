@@ -3076,6 +3076,38 @@ z_max:FineZ для полной world z validation specs. ClimateFeaturePolicy
 
 #### PC-D1. PC-8 — согласованные границы классов, методов и контрактов
 
+**Implementation R3 (2026-10-23):** CoarseRiverPlanner и FineRiverPlanner
+реализованы в rivers/planning/; public results — CoarseRiverPlan и
+FineRiverPlan. Private PreparedRiver/profile switch не выходят из route
+preparation owner. plan_prepared_routes возвращает immutable routes/claims
+и ready diagnostics; входные claims копируются, heights не меняются,
+profile/carve не выполняются. prepare_procedural_river_requests владеет UID,
+classification и request conversion; legacy/frozen producers используют
+единый owner kernel. Fine sampling/retained set находится в FineRiverPlanner,
+использует pre-river heights и coarse occupancy/drainage claims, без HY-RIV-1.
+River diagnostic disposition выбирается producer после фактического
+решения: ERROR при отказе, FALLBACK после принятого redirected land route.
+Неудачная подготовка redirect не публикует FALLBACK; formatter не читает
+code для классификации. Legacy diagnostic/profile пути сохранены.
+Providers110/regression59 OK, pyright valid0/negative40 exact; extended
+hydrology241/242, прежний list/tuple failure. Existing providers ещё не
+переключены: R4–R5 и общая приёмка PC-8 остаются.
+
+**Implementation R2 (2026-10-23):** WaterBodyPlanner и
+DeclaredWaterPaintProjector реализованы в owner paths карты ниже.
+Water planner выдаёт OpenWaterPlan из existing water kernel; paint projector
+выдаёт DeclaredWaterPaint из prepared loader geometry. Mutable buffers,
+AssembledWater/LoadedDeclaredHydrology не выходят за их public границы.
+Все 9 water_issue call sites передают explicit disposition в ветке domain
+решения. Callback emit доставляет PlanDiagnostic без двойного report/log;
+без callback сохранены legacy collect/preview/runtime sinks. Inventory
+включает единственный water_issue в hydrologyGeneratorService.py (ERROR),
+без изменения его pipeline. Подключение новых owners к обоим providers
+остаётся атомарному R4, поэтому прежний provider code ещё не соответствует
+целевой границе. Providers96/regression59 OK, pyright valid0/negative37 exact;
+extended hydrology241/242, прежний list/tuple failure остаётся учтённым.
+R4–R5 и общая приёмка PC-8 не завершены; R3 описан выше.
+
 **DESIGN_ACCEPTED (2026-10-23), implementation НЕ ЗАВЕРШЕНА.**
 Зафиксировано по указанию мастера после разбора смешанных ответственностей.
 Данный норматив уточняет размещение и API PC-8 поверх PC-D/E/F;
@@ -3096,7 +3128,7 @@ edge metadata. Retained fine samples могут включать unchanged/rejec
 cells. Generic PlanBuildResult/PlanDiagnostic переиспользованы; новые cache
 registrations/codec ids/versions не добавлены. Contracts69 OK, pyright valid0,
 negative34 exact code/location. Domain owners/providers ещё не разделены;
-R2–R5 и приёмка PC-8 остаются.
+R4–R5 и приёмка PC-8 остаются; R2/R3 описаны выше.
 
 ##### 1. Архитектурная граница
 

@@ -1577,3 +1577,437 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
             "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.apply_river_bed_z",
             side_effect=AssertionError("recarve")):
             self.finish(routes, river)
+
+
+class WaterAndPaintOwnerTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+        from app.application.worldData.generators.hydrology.load.paint.declaredWaterPaintProjector import DeclaredWaterPaintProjector
+        self.fixture = HydrologyProviderTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.water_owner, self.paint_owner, self.control = WaterBodyPlanner(), DeclaredWaterPaintProjector(), Mock()
+
+    def water(self, inputs=None, surface=None, placement=None):
+        f = self.fixture
+        return self.water_owner.plan(world_uid="climate-world", inputs=inputs or f.hydro_inputs,
+            surface_z=f.before.payload.surface_z if surface is None else surface,
+            placement=placement or f.water_envelope.payload, control=self.control)
+
+    def paint(self, **updates):
+        f = self.fixture
+        args = dict(rivers=f.hydro_inputs.declared_rivers, coastlines=(), lakes=(), anchors=()) | updates
+        return self.paint_owner.project(**args)
+
+    def test_water_owner_matches_existing_accepted_geometry_and_calls_one_kernel(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
+        f = self.fixture
+        before = f.before.payload.surface_z
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies",
+                   wraps=assemble_water_bodies) as kernel, patch(
+            "app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live read")):
+            result = self.water()
+        kernel.assert_called_once()
+        legacy = f.routes().payload
+        self.assertEqual(result.payload.coarse_open_water, legacy.coarse_open_water)
+        self.assertEqual(result.payload.water_bodies, legacy.water_bodies)
+        self.assertEqual(result.payload.physical_unions, legacy.physical_unions)
+        self.assertEqual(f.before.payload.surface_z, before)
+        self.assertIsNotNone(kernel.call_args.kwargs["emit"])
+        self.assertTrue(kernel.call_args.kwargs["ctx"].collect_only)
+
+    def test_category_scopes_and_disabled_inputs_preserve_empty_contract(self):
+        from unittest.mock import patch
+        from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
+        f = self.fixture
+        for update in ({"enabled": False}, {"scopes": frozenset()}, {"scopes": frozenset((HydrologyScope.RIVERS,))}):
+            with self.subTest(update=update), patch(
+                "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+                result = self.water(inputs=f.hydro_inputs.model_copy(update=update))
+                self.assertFalse(result.payload.coarse_open_water or result.payload.water_bodies or result.payload.physical_unions)
+                self.assertFalse(result.diagnostics)
+                kernel.assert_not_called()
+        disabled_seas = f.hydro_inputs.model_copy(update={"seas": f.hydro_inputs.seas.model_copy(update={"enabled": False})})
+        self.assertFalse(self.water(inputs=disabled_seas).payload.water_bodies)
+        only_ocean = f.hydro_inputs.model_copy(update={"scopes": frozenset((HydrologyScope.OPEN_OCEAN,))})
+        self.assertTrue(self.water(inputs=only_ocean).payload.water_bodies)
+
+    def test_missing_duplicate_unordered_out_of_range_and_wrong_topology_fail(self):
+        from app.application.planning.service.planningService import PlanBuildFailure
+        f = self.fixture
+        rows = f.before.payload.surface_z
+        for surface in (rows[:-1], rows + rows[:1], tuple(reversed(rows)),
+                        ((rows[0][0], 101), *rows[1:])):
+            with self.subTest(surface=surface[:1]), self.assertRaises(PlanBuildFailure):
+                self.water(surface=surface)
+        other = f.water_envelope.payload.model_copy(update={"topology": f.water.topology.model_copy(update={"mode": "wrapped"})})
+        with self.assertRaises(PlanBuildFailure):
+            self.water(placement=other)
+
+    def test_water_rejection_notice_and_fallback_are_decided_by_producers(self):
+        from dataclasses import replace
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        f = self.fixture
+        puddle_inputs = f.hydro_inputs.model_copy(update={"seas": f.hydro_inputs.seas.model_copy(update={"min_water_cells": 50})})
+        puddle = self.water(inputs=puddle_inputs)
+        self.assertFalse(puddle.payload.water_bodies)
+        self.assertEqual([(d.issue.code, d.disposition) for d in puddle.diagnostics],
+                         [("WATER_PUDDLE", PlanDiagnosticDisposition.ERROR)])
+        ocean = self.water(surface=tuple((cell, -2) for cell, _ in f.before.payload.surface_z))
+        self.assertTrue(ocean.payload.water_bodies)
+        self.assertIn(("WATER_WORLD_OCEAN", PlanDiagnosticDisposition.NOTICE),
+                      [(d.issue.code, d.disposition) for d in ocean.diagnostics])
+        placement = f.water_envelope.payload.model_copy(update={
+            "records": tuple(record.model_copy(update={"kind": BasinKind.LAKE}) for record in f.water_envelope.payload.records),
+            "basin_specs": tuple(replace(spec, kind=BasinKind.LAKE) for spec in f.water_envelope.payload.basin_specs)})
+        fallback = self.water(placement=placement)
+        self.assertTrue(fallback.payload.water_bodies)
+        self.assertTrue(all(body.kind is BasinKind.LAKE for body in fallback.payload.water_bodies))
+        self.assertIn(("WATER_KIND_MISMATCH", PlanDiagnosticDisposition.FALLBACK),
+                      [(d.issue.code, d.disposition) for d in fallback.diagnostics])
+
+    def test_replacing_diagnostic_code_and_message_cannot_reclassify_producer_outcome(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+        f = self.fixture
+        inputs = f.hydro_inputs.model_copy(update={"seas": f.hydro_inputs.seas.model_copy(update={"min_water_cells": 50})})
+        original = self.water(inputs=inputs)
+        def renamed(ctx, uid, message, code, *, disposition, emit=None):
+            water_issue(ctx, uid, "different message", "opaque", disposition=disposition, emit=emit)
+        with patch("app.application.worldData.generators.hydrology.water.waterMaterialize.water_issue", side_effect=renamed):
+            changed = self.water(inputs=inputs)
+        self.assertEqual(changed.payload, original.payload)
+        self.assertEqual([d.disposition for d in changed.diagnostics], [d.disposition for d in original.diagnostics])
+        self.assertTrue(all(d.issue.code == "opaque" for d in changed.diagnostics))
+
+    def test_diagnostic_callback_is_explicit_and_does_not_double_report(self):
+        from unittest.mock import patch
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+        path = "app.application.worldData.generators.hydrology.water.waterDiagnostics."
+        for disposition in PlanDiagnosticDisposition:
+            ctx, emitted = ResolveContext(), []
+            with patch(path + "log_issues") as log, patch(path + "report_issues") as report:
+                water_issue(ctx, "uid", "message", "same-code", disposition=disposition, emit=emitted.append)
+            self.assertEqual(len(emitted), 1)
+            self.assertIs(emitted[0].disposition, disposition)
+            self.assertFalse(ctx.errors)
+            log.assert_not_called()
+            report.assert_not_called()
+        with self.assertRaises(TypeError):
+            water_issue(ResolveContext(), "uid", "message", "code")
+
+    def test_legacy_water_reporting_keeps_collect_preview_and_runtime_sinks(self):
+        from unittest.mock import patch
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+        path = "app.application.worldData.generators.hydrology.water.waterDiagnostics."
+        for ctx in (ResolveContext(collect_only=True), ResolveContext(validate_only=True)):
+            with patch(path + "log_issues") as log:
+                water_issue(ctx, "uid", "message", "code", disposition=PlanDiagnosticDisposition.ERROR)
+            self.assertEqual(len(ctx.errors), 1)
+            log.assert_not_called()
+        with patch(path + "log_issues") as log:
+            water_issue(ResolveContext(), "uid", "message", "code", disposition=PlanDiagnosticDisposition.NOTICE)
+        log.assert_called_once()
+
+    def test_water_physical_unions_and_levels_remain_existing_kernel_results(self):
+        from app.dataModel.spatial.regionShape import BboxShape
+        f = self.fixture
+        inputs = f.water_inputs.model_copy(update={"basins": (
+            f.water_inputs.basins[0].model_copy(update={"footprint": BboxShape(x_min=0, x_max=10, y_min=0, y_max=10)}),
+            f.water_inputs.basins[0].model_copy(update={"location_uid": "other",
+                "footprint": BboxShape(x_min=20, x_max=30, y_min=0, y_max=10)}))})
+        placement = f.water.get(inputs=inputs)
+        result = self.water(placement=placement.payload)
+        deps = tuple(PlanDependency(slot=dep.slot, ref=placement.ref if dep.slot == SurfacePlanSlot.WATER_PLACEMENT.value else dep.ref)
+                     for dep in f.before.dependencies)
+        before = f.signed(f.before, f.before.payload, f.manifest, deps)
+        legacy = f.routes(before=before, water=placement).payload
+        self.assertTrue(result.payload.physical_unions)
+        self.assertEqual(result.payload.water_bodies, legacy.water_bodies)
+        self.assertEqual(result.payload.physical_unions, legacy.physical_unions)
+        self.assertEqual(result.payload.coarse_open_water, legacy.coarse_open_water)
+
+    def test_owner_rebuilds_are_equal_and_shutdown_is_observed(self):
+        from app.application.planning.service.planningService import PlanWaitCancelled
+        first = self.water()
+        self.assertEqual(self.water(), first)
+        self.assertEqual(type(self.water_owner)().plan(world_uid="climate-world", inputs=self.fixture.hydro_inputs,
+            surface_z=self.fixture.before.payload.surface_z, placement=self.fixture.water_envelope.payload, control=self.control), first)
+        self.control.raise_if_shutdown.side_effect = PlanWaitCancelled()
+        with self.assertRaises(PlanWaitCancelled): self.water()
+
+    def test_paint_fine_geometry_widths_and_order_match_existing_projection(self):
+        from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import _paint
+        from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import load_prepared_declared_hydrology
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.dataModel.hydrology.declaredLake import DeclaredLake
+        from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+        f = self.fixture
+        pt = lambda x, y: dict(x=x, y=y)
+        lake = DeclaredLake.model_validate(dict(location_uid="lake", shoreline=[pt(-20, 0), pt(10, 0), pt(10, 10)]))
+        coast = DeclaredCoastline.model_validate(dict(location_uid="coast", kind="sea", path=[pt(-20, 10), pt(10, 10)]))
+        intent = f.Declare.model_validate(dict(location_uid="intent", declare_mode="via_locations", route_location_uids=["a", "b"]))
+        anchors = (f.Anchor(location_uid="a", position=(-20, 0), z=None, subtype=None),
+                   f.Anchor(location_uid="b", position=(10, 0), z=None, subtype=None))
+        rivers = (f.segment(), intent)
+        result = self.paint(rivers=rivers, lakes=(lake,), coastlines=(coast,), anchors=anchors)
+        legacy = _paint(load_prepared_declared_hydrology([coast], [lake], list(rivers), []),
+                        {a.location_uid: a.position for a in anchors}, ResolveContext(collect_only=True))
+        self.assertEqual(result.payload, legacy)
+        self.assertFalse(result.diagnostics)
+        self.assertEqual(result.payload.segments[0].width_fine, 2)
+        self.assertEqual(result.payload.intents[0].width_wire, 1)
+        self.assertEqual(result.payload.lakes[0].shoreline_segments[-1], ((10, 10), (-20, 0)))
+        self.assertEqual(self.paint(rivers=rivers, lakes=(lake,), coastlines=(coast,), anchors=anchors), result)
+
+    def test_paint_rejects_only_incomplete_or_invalid_width_objects_without_logging(self):
+        from unittest.mock import patch
+        f = self.fixture
+        bad = f.segment(uid="bad-width")
+        bad = bad.model_copy(update={"segments": tuple(s.model_copy(update={"width_cells": 0}) for s in bad.segments)})
+        intent = f.Declare.model_validate(dict(location_uid="incomplete", declare_mode="via_locations", route_location_uids=["a", "missing", "b"]))
+        anchors = (f.Anchor(location_uid="a", position=(-20, 0), z=None, subtype=None),
+                   f.Anchor(location_uid="b", position=(10, 0), z=None, subtype=None))
+        with patch("app.application.jsonValidation.resolve.log_issues") as log:
+            result = self.paint(rivers=(bad, f.segment(), intent), anchors=anchors)
+        self.assertEqual([s.location_uid for s in result.payload.segments], ["river"])
+        self.assertFalse(result.payload.intents)
+        self.assertEqual({d.issue.code for d in result.diagnostics}, {"RIVER_INVALID_PAINT_WIDTH", "RIVER_MISSING_PAINT_GEOMETRY"})
+        self.assertTrue(all(d.disposition is PlanDiagnosticDisposition.ERROR for d in result.diagnostics))
+        log.assert_not_called()
+
+    def test_paint_endpoint_anchor_and_system_only_empty_case(self):
+        f = self.fixture
+        system = f.Declare.model_validate(dict(location_uid="system", system_role="system", river_system_topology="basin"))
+        empty = self.paint(rivers=(system,))
+        self.assertFalse(empty.payload.lakes or empty.payload.coastlines or empty.payload.segments or empty.payload.intents or empty.diagnostics)
+        intent = f.Declare.model_validate(dict(location_uid="intent", declare_mode="endpoints", source=dict(x=-20, y=0), mouth=dict(location_uid="mouth")))
+        result = self.paint(rivers=(intent,), anchors=(f.Anchor(location_uid="mouth", position=(10, 0), z=None, subtype=None),))
+        self.assertEqual(result.payload.intents[0].path, ((-20, 0), (10, 0)))
+
+
+class RiverOwnerTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+        from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
+        from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+        self.fixture = HydrologyProviderTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.coarse_owner, self.fine_owner, self.control = CoarseRiverPlanner(), FineRiverPlanner(), Mock()
+        f = self.fixture
+        self.water = WaterBodyPlanner().plan(world_uid="climate-world", inputs=f.hydro_inputs,
+            surface_z=f.before.payload.surface_z, placement=f.water_envelope.payload, control=self.control).payload
+
+    def coarse(self, inputs=None, surface=None):
+        f = self.fixture
+        return self.coarse_owner.plan(world_uid="climate-world", inputs=inputs or f.hydro_inputs,
+            surface_z=f.before.payload.surface_z if surface is None else surface, water=self.water, control=self.control)
+
+    def fine(self, inputs=None, coarse=None, surface=None):
+        f = self.fixture
+        inputs = inputs or f.hydro_inputs
+        coarse = coarse or self.coarse(inputs, surface).payload
+        return self.fine_owner.plan(world_uid="climate-world", inputs=inputs,
+            surface_z=f.before.payload.surface_z if surface is None else surface, water=self.water,
+            coarse=coarse, control=self.control)
+
+    def test_declared_coarse_fine_and_samples_equal_existing_route_stage(self):
+        f = self.fixture
+        original = f.before.payload.surface_z
+        coarse = self.coarse()
+        fine = self.fine(coarse=coarse.payload)
+        existing = f.routes().payload
+        self.assertEqual(coarse.payload.routes, existing.coarse_routes)
+        self.assertEqual(fine.payload.routes, existing.fine_routes)
+        self.assertEqual(fine.payload.base_surface_z, existing.fine_base_surface_z)
+        self.assertEqual(f.before.payload.surface_z, original)
+        receiver = coarse.payload.routes[0].receiver_cell
+        self.assertNotIn(receiver, dict(coarse.payload.claims))
+        self.assertEqual(dict(fine.payload.base_surface_z)[fine.payload.routes[0].receiver_cell], -2)
+        self.assertEqual(dict(fine.payload.base_surface_z)[(-20, 0)], 8)  # pre-river, not channel floor
+
+    def test_procedural_seed_uid_path_equal_baseline_and_fine_autoresolve_stays_off(self):
+        from unittest.mock import patch
+        f = self.fixture
+        inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (),
+            "rivers": f.hydro_inputs.rivers.model_copy(update={"autoresolve": True})})
+        coarse = self.coarse(inputs)
+        self.assertTrue(coarse.payload.routes)
+        self.assertEqual(coarse.payload.routes, f.routes(inputs).payload.coarse_routes)
+        with patch("app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve.plan_prepared_river_network",
+                   side_effect=AssertionError("fine procedural source discovery")):
+            fine = self.fine(inputs, coarse.payload)
+        self.assertFalse(fine.payload.routes or fine.payload.base_surface_z)
+        self.assertEqual(self.coarse(inputs), coarse)
+
+    def test_runtime_redirect_and_preview_rejection_match_baseline_with_ready_diagnostics(self):
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        f = self.fixture
+        bad = f.segment(uid="bad", start=(-20, 10), end=(40, 10))
+        for mode in ResolutionMode:
+            inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (bad,), "resolution_mode": mode})
+            coarse = self.coarse(inputs)
+            fine = self.fine(inputs, coarse.payload)
+            existing = f.routes(inputs)
+            self.assertEqual(coarse.payload.routes, existing.payload.coarse_routes)
+            self.assertEqual(fine.payload.routes, existing.payload.fine_routes)
+            self.assertEqual(fine.payload.base_surface_z, existing.payload.fine_base_surface_z)
+            self.assertEqual(tuple(dict.fromkeys(coarse.diagnostics + fine.diagnostics)), existing.diagnostics)
+            if mode is ResolutionMode.RUNTIME:
+                self.assertTrue(coarse.payload.routes)
+                self.assertIs(coarse.diagnostics[0].disposition, PlanDiagnosticDisposition.FALLBACK)
+            else:
+                self.assertFalse(coarse.payload.routes)
+                self.assertIs(coarse.diagnostics[0].disposition, PlanDiagnosticDisposition.ERROR)
+
+    def test_invalid_types_remain_independent_object_failures(self):
+        f = self.fixture
+        inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (
+            f.segment(uid="road", kind="road"), f.segment(uid="coast", kind="coastline"), f.segment())})
+        coarse = self.coarse(inputs)
+        fine = self.fine(inputs, coarse.payload)
+        self.assertEqual([r.river_uid for r in coarse.payload.routes], ["river"])
+        self.assertEqual([r.river_uid for r in fine.payload.routes], ["river"])
+        self.assertEqual({d.issue.path[-1] for d in coarse.diagnostics}, {"road", "coast"})
+        self.assertTrue(all(d.disposition is PlanDiagnosticDisposition.ERROR for d in coarse.diagnostics))
+
+    def test_rooted_tributary_is_prepared_after_parent_and_preserves_its_claim(self):
+        f = self.fixture
+        child = f.Declare.model_validate(dict(location_uid="child", system_role="tributary", parent_location_uid="parent",
+            declare_mode="segments", segments=[{"from": dict(x=-20, y=20), "to": dict(x=-20, y=0), "connection_type": "river"}]))
+        inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (child, f.segment(uid="parent"))})
+        coarse = self.coarse(inputs)
+        fine = self.fine(inputs, coarse.payload)
+        self.assertEqual([r.river_uid for r in coarse.payload.routes], ["parent", "child"])
+        receiver = coarse.payload.routes[1].receiver_cell
+        self.assertEqual(dict(coarse.payload.claims)[receiver].water_body_uid, "parent")
+        self.assertEqual(coarse.payload.routes[1].drainage.receiver_uid, "parent")
+        existing = f.routes(inputs).payload
+        self.assertEqual(coarse.payload.routes, existing.coarse_routes)
+        self.assertEqual(fine.payload.routes, existing.fine_routes)
+
+    def test_endpoint_and_via_location_requests_keep_identity_in_both_spaces(self):
+        f = self.fixture
+        anchors = (f.Anchor(location_uid="start", position=(-20, 0), z=None, subtype=None),
+                   f.Anchor(location_uid="mouth", position=(10, 0), z=None, subtype=None))
+        for data in (dict(location_uid="intent", declare_mode="via_locations", route_location_uids=["start", "mouth"]),
+                     dict(location_uid="intent", declare_mode="endpoints", source=dict(x=-20, y=0), mouth=dict(location_uid="mouth"))):
+            inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (f.Declare.model_validate(data),), "anchors": anchors})
+            coarse = self.coarse(inputs)
+            fine = self.fine(inputs, coarse.payload)
+            self.assertEqual([r.river_uid for r in coarse.payload.routes], ["intent"])
+            self.assertEqual([r.river_uid for r in fine.payload.routes], ["intent"])
+            self.assertEqual(coarse.payload.routes[0].drainage.receiver_uid, "basin")
+
+    def test_disabled_scopes_and_disabled_auto_do_not_enable_extra_discovery(self):
+        from unittest.mock import patch
+        f = self.fixture
+        for update in ({"enabled": False}, {"scopes": frozenset()}):
+            inputs = f.hydro_inputs.model_copy(update=update)
+            coarse, fine = self.coarse(inputs), self.fine(inputs)
+            self.assertFalse(coarse.payload.routes or coarse.payload.claims)
+            self.assertFalse(fine.payload.routes or fine.payload.base_surface_z)
+        inputs = f.hydro_inputs.model_copy(update={"rivers": f.hydro_inputs.rivers.model_copy(update={"enabled": False, "autoresolve": True})})
+        with patch("app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner.prepare_procedural_river_requests") as auto:
+            coarse = self.coarse(inputs)
+        self.assertTrue(coarse.payload.routes)  # existing declare behavior is retained
+        auto.assert_not_called()
+
+    def test_rejected_authored_samples_are_retained_without_bed_mutation(self):
+        f = self.fixture
+        inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (f.segment(start=(10, 0), end=(20, 0)),)})
+        coarse = self.coarse(inputs)
+        fine = self.fine(inputs, coarse.payload)
+        self.assertFalse(coarse.payload.routes or fine.payload.routes)
+        self.assertTrue(fine.payload.base_surface_z)
+        self.assertEqual(fine.payload.base_surface_z, f.routes(inputs).payload.fine_base_surface_z)
+        self.assertTrue(all(z == -2 for _, z in fine.payload.base_surface_z))
+
+    def test_route_only_boundary_does_not_compute_profiles_or_write_heights(self):
+        from unittest.mock import patch
+        with patch("app.application.worldData.generators.hydrology.rivers.riverPrepare.river_bed_spec",
+                   side_effect=AssertionError("route profile")), patch(
+            "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.apply_river_bed_z",
+            side_effect=AssertionError("route carve")):
+            coarse = self.coarse()
+            fine = self.fine(coarse=coarse.payload)
+        self.assertTrue(coarse.payload.routes and fine.payload.routes)
+
+    def test_redirect_diagnostic_is_emitted_only_after_land_route_acceptance(self):
+        from unittest.mock import patch
+        f = self.fixture
+        inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (f.segment(uid="bad", start=(-20, 10), end=(40, 10)),)})
+        with patch("app.application.worldData.generators.hydrology.rivers.riverPrepare._selected_segments", return_value=()):
+            result = self.coarse(inputs)
+        self.assertFalse(result.payload.routes or result.payload.claims)
+        self.assertEqual(len(result.diagnostics), 1)
+        self.assertIs(result.diagnostics[0].disposition, PlanDiagnosticDisposition.ERROR)
+        self.assertEqual(result.diagnostics[0].issue.code, "RIVER_INVALID_SOURCE")
+
+    def test_diagnostic_code_does_not_override_explicit_domain_disposition(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.rivers.riverPrepare import _diagnostic
+        from app.dataModel.hydrology.riverRouting import RiverRoutingCode
+        f = self.fixture
+        inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (f.segment(uid="bad", start=(-20, 10), end=(40, 10)),)})
+        baseline = self.coarse(inputs)
+        def renamed(*args, **kwargs):
+            return _diagnostic(*args, **kwargs).model_copy(update={"code": RiverRoutingCode.TARGET_UNREACHABLE})
+        with patch("app.application.worldData.generators.hydrology.rivers.riverPrepare._diagnostic", side_effect=renamed):
+            result = self.coarse(inputs)
+        self.assertEqual(result.payload, baseline.payload)
+        self.assertIs(result.diagnostics[0].disposition, PlanDiagnosticDisposition.FALLBACK)
+        self.assertEqual(result.diagnostics[0].issue.code, "RIVER_TARGET_UNREACHABLE")
+
+    def test_route_only_api_preserves_caller_claims_and_rejects_wrong_coordinate_conversion(self):
+        from app.application.worldData.generators.hydrology.rivers.riverPrepare import plan_prepared_routes
+        from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import request_from_prepared_segments
+        from app.application.worldData.generators.hydrology.types import RiverSegment
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from app.application.planning.service.planningService import PlanBuildFailure
+        from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord, GridX, GridY, FineX, FineY
+        f = self.fixture
+        occupied = {(cell.gx, cell.gy): value for cell, value in self.water.coarse_open_water}
+        original = dict(occupied)
+        hm = SurfaceHeightmap("climate-world", f.water.terrain.inputs.bbox, {(cell.gx, cell.gy): z for cell, z in f.before.payload.surface_z})
+        segment = RiverSegment([(-2, 0), (-1, 0), (0, 0), (1, 0)], "river", location_uid="river", declared=True)
+        request = request_from_prepared_segments(10, (segment,), occupied, hm.surface_z, space=CoordinateSpace.WORLD_SURFACE_GRID)
+        kwargs = dict(world_uid="climate-world", span=10, heightmap=hm, requests=(request,), claims=occupied,
+            topology=f.water.topology, policy=f.hydro_inputs.rivers, water_bodies=self.water.water_bodies,
+            resolution_mode=f.hydro_inputs.resolution_mode, z_min=f.hydro_inputs.z_min,
+            space=CoordinateSpace.WORLD_SURFACE_GRID, control=self.control)
+        original_heights = dict(hm.surface_z)
+        result = plan_prepared_routes(**kwargs, to_coordinate=lambda c: SurfaceGridCoord(GridX(c[0]), GridY(c[1])))
+        self.assertEqual(occupied, original)
+        self.assertTrue(result.payload.claims)
+        self.assertEqual(hm.surface_z, original_heights)
+        self.assertTrue(all(value.role.value == "river_bed" for _, value in result.payload.claims))
+        with self.assertRaises(PlanBuildFailure):
+            plan_prepared_routes(**kwargs, to_coordinate=lambda c: (FineX(c[0]), FineY(c[1])))
+        self.assertEqual(occupied, original)
+
+    def test_incomplete_surface_fails_and_shutdown_does_not_publish_partial_results(self):
+        from app.application.planning.service.planningService import PlanBuildFailure, PlanWaitCancelled
+        with self.assertRaises(PlanBuildFailure): self.coarse(surface=self.fixture.before.payload.surface_z[:-1])
+        with self.assertRaises(PlanBuildFailure): self.fine(coarse=self.coarse().payload, surface=self.fixture.before.payload.surface_z[:-1])
+        self.control.raise_if_shutdown.side_effect = PlanWaitCancelled()
+        with self.assertRaises(PlanWaitCancelled): self.coarse()
+        with self.assertRaises(PlanWaitCancelled): self.fine()
+
+    def test_rebuild_equality_and_no_live_world_reads(self):
+        from unittest.mock import patch
+        with patch("app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live World")):
+            coarse = self.coarse()
+            fine = self.fine(coarse=coarse.payload)
+            self.assertEqual(self.coarse(), coarse)
+            self.assertEqual(self.fine(coarse=coarse.payload), fine)
+        from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
+        self.assertEqual(CoarseRiverPlanner().plan(world_uid="climate-world", inputs=self.fixture.hydro_inputs,
+            surface_z=self.fixture.before.payload.surface_z, water=self.water, control=self.control), coarse)

@@ -18,6 +18,7 @@ from app.application.worldData.generators.hydrology.waterBodyAssembler import as
 from app.application.worldData.generators.terrain.reliefObjects.bathymetry import BasinSpec
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.basinKind import BasinKind
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -66,7 +67,7 @@ class HydrologyGeneratorService:
         if seas or lakes:
             if basin_specs is None and (policy.declared_basins or policy.declared_coastlines or policy.declared_lakes):
                 water_issue(ctx, world.world_uid, "declared water requires resolved post-carve BasinSpec input",
-                            "WATER_PLACEMENT_REQUIRED")
+                            "WATER_PLACEMENT_REQUIRED", disposition=PlanDiagnosticDisposition.ERROR)
             specs = [spec for spec in (basin_specs or ())
                      if (lakes and policy.default_lakes.enabled if spec.kind is BasinKind.LAKE
                          else seas and policy.default_seas.enabled)]

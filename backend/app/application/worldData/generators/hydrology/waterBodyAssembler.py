@@ -1,6 +1,6 @@
 """Post-1.4 water orchestration: components → levels → fill/classify → shore."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
 from app.application.jsonValidation.resolve import ResolveContext
@@ -16,6 +16,7 @@ from app.dataModel.hydrology.enums.waterSystemKind import WaterSystemKind
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.ids.waterSystemIdentity import water_system_uid
 
 
@@ -29,21 +30,23 @@ def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec
                           topology: WorldTopology, policy: WorldHydrology, *,
                           change_uid: str, auto_seas: bool, auto_lakes: bool,
                           ctx: ResolveContext | None = None,
-                          allowed_kinds: frozenset[BasinKind] | None = None) -> AssembledWater:
+                          allowed_kinds: frozenset[BasinKind] | None = None,
+                          emit: Callable[[PlanDiagnostic], None] | None = None) -> AssembledWater:
     ctx = ctx or ResolveContext()
     if not change_uid:
         raise ValueError("water resolution requires a nonempty operation UID")
     try:
         tree = depression_tree(heightmap.surface_z, topology)
     except ValueError as error:
-        water_issue(ctx, heightmap.world_uid, str(error), "WATER_TERRAIN_UNRESOLVED")
+        water_issue(ctx, heightmap.world_uid, str(error), "WATER_TERRAIN_UNRESOLVED",
+                    disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
         return AssembledWater(MaterializedWater({}, (), {}, {}, {}), ())
     sources = water_sources(heightmap.surface_z, specs, tree, topology, policy,
                              auto_seas=auto_seas, auto_lakes=auto_lakes)
     resolved = resolve_water_levels(tree, sources, world_uid=heightmap.world_uid,
                                      change_uid=change_uid,
                                      default_water_level=policy.default_water_level)
-    water = materialize_water(heightmap.surface_z, sources, resolved, topology, policy, ctx, allowed_kinds)
+    water = materialize_water(heightmap.surface_z, sources, resolved, topology, policy, ctx, allowed_kinds, emit=emit)
     # Procedural minima of one connected water are one positional body.
     normalized = {}
     aliases = {}
@@ -77,9 +80,9 @@ def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec
     ) for body in water.bodies))
     if auto_seas and not any(source.spec.z_water_level == policy.default_water_level for source in sources):
         water_issue(ctx, heightmap.world_uid, "natural-only autoresolve: no ocean depression",
-                    "WATER_NO_OCEAN_DEPRESSION")
+                    "WATER_NO_OCEAN_DEPRESSION", disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
     if (sum(water.areas.values()) * 2 >= topology.bounds.width * topology.bounds.height
             and any(body.kind is not BasinKind.LAKE for body in water.bodies)):
         water_issue(ctx, heightmap.world_uid, "world is ocean: water covers at least half the world",
-                    "WATER_WORLD_OCEAN")
+                    "WATER_WORLD_OCEAN", disposition=PlanDiagnosticDisposition.NOTICE, emit=emit)
     return AssembledWater(water, unions)

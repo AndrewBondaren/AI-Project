@@ -215,3 +215,48 @@ def intermediate_hydrology_plans(water: PlanBuildResult[OpenWaterPlan], coarse: 
     assert_type(fine_batch.routes[0].receiver_cell, FineXY)
     assert_type(fine_batch.claims[0][0], FineXY)
     assert_type(fine.base_surface_z[0][0], FineXY)
+
+
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.application.worldData.generators.hydrology.load.paint.declaredWaterPaintProjector import DeclaredWaterPaintProjector
+from app.dataModel.hydrology.planning.hydrologyPlan import DeclaredWaterPaint
+from app.dataModel.spatial.grid.coordinateTypes import FineZ
+
+
+def hydrology_water_and_paint_owners(water: WaterBodyPlanner, paint: DeclaredWaterPaintProjector,
+    inputs: HydrologyPlanInput, surface: tuple[tuple[SurfaceGridCoord, FineZ], ...],
+    placement: WaterPlacementPlan, control: PlanBuildControl) -> None:
+    assert_type(water.plan(world_uid="world", inputs=inputs, surface_z=surface,
+        placement=placement, control=control), PlanBuildResult[OpenWaterPlan])
+    assert_type(paint.project(rivers=inputs.declared_rivers, coastlines=inputs.coastlines,
+        lakes=inputs.declared_lakes, anchors=inputs.anchors), PlanBuildResult[DeclaredWaterPaint])
+
+
+from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
+from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+from app.application.worldData.generators.hydrology.rivers.riverPrepare import plan_prepared_routes
+from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import RiverRouteRequest
+from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+from app.dataModel.spatial.grid.coordinateTypes import GridY
+from app.dataModel.topology.worldTopology import Coord
+
+
+def river_owners(coarse: CoarseRiverPlanner, fine: FineRiverPlanner, inputs: HydrologyPlanInput,
+    surface: tuple[tuple[SurfaceGridCoord, FineZ], ...], water: OpenWaterPlan, control: PlanBuildControl) -> None:
+    first = coarse.plan(world_uid="world", inputs=inputs, surface_z=surface, water=water, control=control)
+    assert_type(first, PlanBuildResult[CoarseRiverPlan])
+    assert_type(fine.plan(world_uid="world", inputs=inputs, surface_z=surface, water=water,
+        coarse=first.payload, control=control), PlanBuildResult[FineRiverPlan])
+
+
+def route_only_coarse_contract(inputs: HydrologyPlanInput, hm: SurfaceHeightmap,
+    requests: tuple[RiverRouteRequest, ...], claims: dict[Coord, MapCellHydrology],
+    control: PlanBuildControl) -> None:
+    result = plan_prepared_routes(world_uid="world", span=inputs.grid.fine_span, heightmap=hm,
+        requests=requests, claims=claims, topology=inputs.topology, policy=inputs.rivers,
+        water_bodies=(), resolution_mode=inputs.resolution_mode, z_min=inputs.z_min,
+        space=CoordinateSpace.WORLD_SURFACE_GRID,
+        to_coordinate=lambda c: SurfaceGridCoord(GridX(c[0]), GridY(c[1])), control=control)
+    assert_type(result, PlanBuildResult[RiverRouteBatch[SurfaceGridCoord]])

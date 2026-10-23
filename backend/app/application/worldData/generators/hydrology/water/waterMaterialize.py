@@ -1,6 +1,6 @@
 """One final multi-source fill: cells agree with the resolved effective levels."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from app.application.jsonValidation.resolve import ResolveContext
@@ -19,6 +19,7 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,8 @@ class MaterializedWater:
 def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource, ...],
                       resolved: ResolvedWaterLevels, topology: WorldTopology,
                       policy: WorldHydrology, ctx: ResolveContext,
-                      allowed_kinds: frozenset[BasinKind] | None = None) -> MaterializedWater:
+                      allowed_kinds: frozenset[BasinKind] | None = None, *,
+                      emit: Callable[[PlanDiagnostic], None] | None = None) -> MaterializedWater:
     fill = labelled_level_fill(surface_z, tuple(
         LevelFillSource(i, source.spec.source_uid, source.seeds, resolved.levels[i])
         for i, source in enumerate(sources)
@@ -66,7 +68,8 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
         if len(component) < minimum:
             anchor = min(component, key=lambda cell: (cell[1], cell[0]))
             water_issue(ctx, sources[owners[anchor]].spec.source_uid,
-                        f"puddle: component has {len(component)} cells, minimum={minimum}", "WATER_PUDDLE")
+                        f"puddle: component has {len(component)} cells, minimum={minimum}", "WATER_PUDDLE",
+                        disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
             continue
         wet.update(component)
         anchor = min(component, key=lambda cell: (cell[1], cell[0]))
@@ -80,7 +83,7 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
             if sources[i].spec.kind is not kind:
                 water_issue(ctx, sources[i].spec.source_uid,
                             f"authored kind={sources[i].spec.kind} retained; physical class={kind}",
-                            "WATER_KIND_MISMATCH")
+                            "WATER_KIND_MISMATCH", disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
     distances = distance_from_boundary(frozenset(wet), topology)
     by_cell, areas, floors = {}, {}, {}
     bodies: dict[str, WaterBody] = {}
@@ -125,10 +128,13 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
                 )
                 areas[uid], floors[uid] = 0, source.spec.floor_z
         if source.authored and not any(surface_z[cell] < resolved.levels[i] for cell in source.seeds):
-            water_issue(ctx, uid, "basin cannot hold water", "WATER_CANNOT_HOLD")
+            water_issue(ctx, uid, "basin cannot hold water", "WATER_CANNOT_HOLD",
+                        disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
         if source.authored and resolved.declared_levels[i] < source.spec.z_water_level:
-            water_issue(ctx, uid, "level exceeds pour point", "WATER_LEVEL_SPILL")
+            water_issue(ctx, uid, "level exceeds pour point", "WATER_LEVEL_SPILL",
+                        disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
         if source.authored and resolved.declared_levels[i] != resolved.levels[i]:
-            water_issue(ctx, uid, "level superseded by physical union/reservoir", "WATER_LEVEL_SUPERSEDED")
+            water_issue(ctx, uid, "level superseded by physical union/reservoir", "WATER_LEVEL_SUPERSEDED",
+                        disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
     by_cell.update(derive_shore(surface_z, by_cell, topology))
     return MaterializedWater(by_cell, tuple(bodies[uid] for uid in sorted(bodies)), areas, floors, auto_remap)
