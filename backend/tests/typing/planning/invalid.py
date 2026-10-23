@@ -8,6 +8,8 @@ from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
 from app.dataModel.planning.identity.planKey import PlanSlot
 from app.application.encoding.canonicalCodec import decode
+from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
+from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.identity.cacheKey import CacheKey
@@ -101,3 +103,7 @@ def invalid_planning_bindings(service: PlanningService, registry: PlanRegistry,
 
 def invalid_decode_type(encoded: bytes, manifest: CanonicalSchemaManifest) -> ClimatePayload:
     return decode(encoded, HydroPayload, manifest)  # EXPECT: reportReturnType
+
+
+def invalid_climate_sampler_domain(plan: HydrologyPlan) -> None:
+    ClimatePlanSampler.sample(plan, GridX(0), GridY(0))  # EXPECT: reportArgumentType

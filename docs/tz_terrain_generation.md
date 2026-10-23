@@ -1966,6 +1966,16 @@ signatures. Это один согласованный contract. Cross-domain co
 
 ### PC-0 — общие records и API
 
+**PC-5 реализован 2026-10-23:** ClimateBasePlanProvider и ClimatePlanSampler
+находятся в application/worldData/generators/climate/planning. Frozen inputs
+порождают poles/profiles/blend и immutable diagnostics; sampling не читает
+World/registry. Legacy pole builders/sampling используют те же pure kernels.
+Rich enums canonical codec кодирует через explicit wire_value, если объявлен,
+иначе value; ClimatePolePreset round-trip не сериализует builtin metadata.
+Проверки: providers37/contracts56/encoding7/pack_climate16 — 116 tests OK;
+pyright valid 0 errors/warnings, negative22 expected diagnostics.
+Domain registration/caller activation остаётся PC-9A/PC-9, local climate — PC-8C.
+
 **PC-3E и PC-4 реализованы 2026-10-23:** canonical manifest/codec и три
 fingerprint-функции находятся в dataModel/encoding, application/encoding
 и application/planning/service/planFingerprints.py по §6.32 delivery-плана.

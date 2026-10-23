@@ -10,6 +10,8 @@ from app.application.planning.providers.planProvider import PlanProvider, Regist
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
 from app.application.encoding.canonicalCodec import decode
+from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateBasePlanProvider
+from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.application.cache.service.cacheService import CacheService
 from app.dataModel.cache.contracts.cacheEntry import CacheAdmission
@@ -68,6 +70,10 @@ def memory_backend_protocol(backend: MemoryCache) -> CacheBackend:
 
 def canonical_decode_type(encoded: bytes, manifest: CanonicalSchemaManifest) -> ClimatePayload:
     return decode(encoded, ClimatePayload, manifest)
+
+
+def climate_base_provider_type(provider: ClimateBasePlanProvider) -> PlanProvider[ClimateBaseInput, ClimateBasePlan]:
+    return provider
 
 
 def planning_service_types(service: PlanningService, registry: PlanRegistry,

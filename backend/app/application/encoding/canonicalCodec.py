@@ -55,7 +55,7 @@ class CanonicalCodec:
         if isinstance(value, Enum):
             if value.name not in type(value).__members__ or type(value).__members__[value.name] is not value:
                 raise ValueError("invalid enum member")
-            return self._tlv(6, self._encode((self._type_id(value), value.value), active))
+            return self._tlv(6, self._encode((self._type_id(value), getattr(value, "wire_value", value.value)), active))
         if type(value) is bool:
             return self._tlv(1, bytes((int(value),)))
         if isinstance(value, int):
@@ -182,7 +182,14 @@ def _decode_one(encoded: bytes, manifest: CanonicalSchemaManifest) -> tuple[obje
             raise CanonicalEncodingError("unknown or wrong canonical type id")
         owner = entry.python_type
         if tag == 6:
-            return TypeAdapter(owner).validate_python(pair[1]), end
+            if not issubclass(owner, Enum):
+                raise CanonicalEncodingError("enum id refers to a non-enum owner")
+            matches = [member for member in owner
+                if type(getattr(member, "wire_value", member.value)) is type(pair[1])
+                and getattr(member, "wire_value", member.value) == pair[1]]
+            if len(matches) != 1:
+                raise CanonicalEncodingError("unknown or ambiguous enum wire value")
+            return matches[0], end
         pairs = _tuple(pair[1])
         if any(type(field) is not tuple or len(field) != 2 or type(field[0]) is not str for field in pairs):
             raise CanonicalEncodingError("invalid record fields")

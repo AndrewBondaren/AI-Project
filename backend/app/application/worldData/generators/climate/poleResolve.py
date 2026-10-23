@@ -1,23 +1,21 @@
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.application.jsonValidation import climate_scalars
 from app.application.worldData.generators.climate.climatePole import (
     ClimatePolePoint,
-    PoleKind,
-    PoleSource,
-    derived_pole_temperature,
 )
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.climate.locations import static_climate_poles
 from app.application.worldData.generators.climate.math import world_seed
 from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode
-from app.dataModel.climate.enums.climatePolePreset import pole_specs_for_preset
+from app.dataModel.climate.enums.climatePolePreset import ClimatePolePreset
+from app.application.worldData.generators.climate.planning.climatePlanProvider import autoresolve_base_poles, manual_base_pole
+from app.dataModel.climate.planning.inputs.climateBaseInput import ManualPoleInput
+from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY
 from app.dataModel.climate.enums.poleKind import PoleKind
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
-from app.application.worldData.generators.coordinates import (
-    fine_to_grid_x,
-    fine_to_grid_y,
-)
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -68,16 +66,9 @@ def collect_manual_pole(
         return None
     peak_min, peak_max = peak_bounds(world)
     kind = infer_pole_kind(loc)
-    return ClimatePolePoint(
-        gx=fine_to_grid_x(loc.map_x, cell_m),
-        gy=fine_to_grid_y(loc.map_y, cell_m),
-        pole_kind=kind,
-        system_climate_zone=loc.system_climate_zone,
-        base_temperature=derived_pole_temperature(kind, peak_min, peak_max),
-        weight=1.0,
-        location_uid=loc.location_uid,
-        source=PoleSource.MANUAL,
-    )
+    return manual_base_pole(ManualPoleInput(location_uid=loc.location_uid,
+        position=(FineX(loc.map_x), FineY(loc.map_y)),
+        kind=PoleKind(kind), zone=RegistryKey[WorldClimateZoneRegistry](loc.system_climate_zone)), cell_m, peak_min, peak_max)
 
 
 def autoresolve_poles(
@@ -85,42 +76,8 @@ def autoresolve_poles(
     bbox: GridBBox,
 ) -> list[ClimatePolePoint]:
     peak_min, peak_max = peak_bounds(world)
-    specs              = pole_specs_for_preset(climate_scalars(world).climate_pole_preset)
-    seed               = world_seed(world)
-    cx                 = (bbox.x_min + bbox.x_max) // 2
-    cy                 = (bbox.y_min + bbox.y_max) // 2
-    points: list[ClimatePolePoint] = []
-
-    if len(specs) == 1:
-        spec = specs[0]
-        points.append(ClimatePolePoint(
-            gx=cx + (seed % 3) - 1,
-            gy=cy + ((seed >> 4) % 3) - 1,
-            pole_kind=spec.pole_kind,
-            system_climate_zone=spec.system_climate_zone,
-            base_temperature=derived_pole_temperature(spec.pole_kind, peak_min, peak_max),
-            weight=1.0,
-            location_uid=None,
-            source=PoleSource.AUTORESOLVE,
-        ))
-        return points
-
-    for idx, spec in enumerate(specs):
-        if idx == 0:
-            gx, gy = cx, bbox.y_min
-        else:
-            gx, gy = cx, bbox.y_max
-        points.append(ClimatePolePoint(
-            gx=gx,
-            gy=gy,
-            pole_kind=spec.pole_kind,
-            system_climate_zone=spec.system_climate_zone,
-            base_temperature=derived_pole_temperature(spec.pole_kind, peak_min, peak_max),
-            weight=1.0,
-            location_uid=None,
-            source=PoleSource.AUTORESOLVE,
-        ))
-    return points
+    return list(autoresolve_base_poles(world_seed(world),
+        ClimatePolePreset.from_wire(climate_scalars(world).climate_pole_preset), peak_min, peak_max, bbox))
 
 
 def resolve_pole_field(

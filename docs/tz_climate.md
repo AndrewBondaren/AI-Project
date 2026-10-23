@@ -10,6 +10,16 @@ metadata:
 
 Климат — **отдельный pure-generator**, независимый от terrain shape и weather runtime.
 
+PC-5 (2026-10-23): `climate/planning/ClimateBasePlanProvider` получает frozen
+`ClimateBaseInput` и возвращает `PlanBuildResult[ClimateBasePlan]` через общий
+PlanningService. Полюса и resolved profiles не содержат World/registry callbacks.
+`ClimatePlanSampler.sample(plan,gx,gy)` использует captured profiles/blend;
+legacy ClimatePoleField.sample делегирует тому же pure profile kernel,
+сохраняя alias fallback существующего registry adapter. Provider возвращает
+diagnostics как данные, без logging. Local anchors после final hydrology —
+отдельный PC-8C; их изменение и column z не меняют base key при неизменных
+ClimateBaseInput. Production registration/caller activation — PC-9A/PC-9.
+
 | Система | Роль |
 |---|---|
 | **ClimateGeneratorService** | spatial assignment + `temperature_base` / `rainfall` на eager generate |

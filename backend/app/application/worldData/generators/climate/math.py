@@ -1,9 +1,13 @@
 """Shared climate math helpers (DR-5 / CL-12)."""
 
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING
 
 from app.ids import seed_int
-from app.db.models.world import World
+if TYPE_CHECKING:
+    from app.db.models.world import World
 
 
 def smoothstep(t: float) -> float:
