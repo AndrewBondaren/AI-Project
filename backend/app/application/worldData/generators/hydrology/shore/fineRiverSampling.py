@@ -13,6 +13,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import classify_river_type
 from app.application.worldData.generators.hydrology.rivers.riverMouth import is_river_mouth
 from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import RiverRouteRequest
+from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import location_anchor_map
 from app.dataModel.hydrology.rivers import RiverTypeClassify
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as Role
@@ -26,9 +27,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def _authored_routes(loaded: LoadedDeclaredHydrology, locations: Sequence[NamedLocation]) -> list[list[Coord]]:
-    anchors = {loc.location_uid: (int(loc.map_x), int(loc.map_y)) for loc in locations
-               if loc.map_x is not None and loc.map_y is not None}
+def _authored_routes(loaded: LoadedDeclaredHydrology, anchors: Mapping[str, Coord]) -> list[list[Coord]]:
     routes = [list(edge.segment) for edge in loaded.river_edges]
     for river in loaded.river_intents:
         if river.declare_mode is RiverDeclareMode.ENDPOINTS:
@@ -121,13 +120,13 @@ class FineRiverSampling:
         return result
 
 
-def sample_fine_river_input(world: World, loaded: LoadedDeclaredHydrology, locations: Sequence[NamedLocation],
+def sample_prepared_fine_river_input(world_uid: str, span: int, loaded: LoadedDeclaredHydrology, locations: Mapping[str, Coord],
                             base: Mapping[Coord, int], topology: WorldTopology, space: CoordinateSpace,
                             coarse_hydro: Mapping[Coord, MapCellHydrology], fine_hydro: Mapping[Coord, MapCellHydrology],
                             policy: HydrologyRiversPolicy) -> FineRiverSampling:
     refined_uids = {edge.location_uid for edge in loaded.river_edges if edge.location_uid}
     refined_uids.update(river.location_uid for river in loaded.river_intents)
-    span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
+    span = span if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
     source_hydro = coarse_hydro if space is CoordinateSpace.WORLD_SURFACE_GRID else fine_hydro
     if space is CoordinateSpace.WORLD_SURFACE_GRID:
         wet = any(is_river_mouth(cell, base, source_hydro) for cell in source_hydro)
@@ -142,5 +141,14 @@ def sample_fine_river_input(world: World, loaded: LoadedDeclaredHydrology, locat
         surface_z = dict(base)
     occupied = _project_hydro(source_hydro, surface_z, span, refined_uids)
     bounds = topology.bounds
-    hm = SurfaceHeightmap(world.world_uid, GridBBox(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max), surface_z)
+    hm = SurfaceHeightmap(world_uid, GridBBox(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max), surface_z)
     return FineRiverSampling(hm, occupied, base, source_hydro, refined_uids, space, span)
+
+
+def sample_fine_river_input(world: World, loaded: LoadedDeclaredHydrology, locations: Sequence[NamedLocation],
+    base: Mapping[Coord, int], topology: WorldTopology, space: CoordinateSpace,
+    coarse_hydro: Mapping[Coord, MapCellHydrology], fine_hydro: Mapping[Coord, MapCellHydrology],
+    policy: HydrologyRiversPolicy,
+) -> FineRiverSampling:
+    return sample_prepared_fine_river_input(world.world_uid, (map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1), loaded,
+        location_anchor_map(locations), base, topology, space, coarse_hydro, fine_hydro, policy)

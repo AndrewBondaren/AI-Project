@@ -181,9 +181,24 @@ def collect_mountain_entries_for_coarse(
     """Pass 1.4 collect — same merge SoT as light (Q3-A: no Range→disk expand)."""
     declared = load_declared_mountains(masks)
     anchors = specs_from_geographic_locations(locations, policy)
+    return collect_prepared_mountain_entries_for_coarse(
+        seed=world_seed(world), policy=policy, declared=declared, anchors=anchors,
+        heightmap_keys=heightmap_keys, cell_m=cell_m,
+        typical_of=lambda ox, oy: _typical_from_pole(pole_field, world, ox // cell_m, oy // cell_m))
+
+
+def collect_prepared_mountain_entries_for_coarse(
+    *, seed: int, policy: MountainsCategoryPolicy,
+    declared: list[MountainEntry], anchors: list[MountainSpec],
+    heightmap_keys: Iterable[tuple[int, int]], cell_m: int,
+    typical_of: Callable[[int, int], int],
+) -> list[MountainEntry]:
+    """Single selection kernel; frozen adapter supplies canonical row-major cells.
+
+    Legacy set iteration is retained until caller cutover; ordering is an input.
+    """
     auto: list[MountainEntry] = []
     if policy.autoresolve:
-        seed = world_seed(world)
         cells: list[tuple[int, int, int, int]] = []
         ridge_m = max(1, int(policy.ridge_cell_m))
         seen_q: set[tuple[int, int]] = set()
@@ -196,17 +211,12 @@ def collect_mountain_entries_for_coarse(
             seen_q.add((qx, qy))
             cells.append((qx, qy, qx * ridge_m + ridge_m // 2, qy * ridge_m + ridge_m // 2))
 
-        def _typical(ox: int, oy: int) -> int:
-            gx = ox // max(1, cell_m)
-            gy = oy // max(1, cell_m)
-            return _typical_from_pole(pole_field, world, gx, gy)
-
         reserved: list[MountainEntry] = list(declared) + list(anchors)
         auto = candidates_from_ridge_cells(
             seed=seed,
             policy=policy,
             cells=cells,
-            typical_of=_typical,
+            typical_of=typical_of,
             reserved=reserved,
         )
     return merge_mountain_spec_sources(

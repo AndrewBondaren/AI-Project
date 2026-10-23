@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Mapping, Callable, Sequence
 from dataclasses import dataclass
 from app.application.jsonValidation.worldRow import hydrology
 
@@ -62,32 +62,20 @@ Cell = tuple[int, int]
 FineToSpace = Callable[[Cell], Cell]
 
 
-def _fine_to_space(world: object, space: CoordinateSpace) -> FineToSpace:
-    if space == CoordinateSpace.WORLD_FINE_GRID:
-        return lambda pt: pt
-    if space == CoordinateSpace.WORLD_SURFACE_GRID:
-        map_cell = map_cell_fine_span(world)  # type: ignore[arg-type]
-        return lambda pt: fine_to_grid_xy(pt[0], pt[1], map_cell)
-    raise ValueError(f"unsupported river intent space: {space}")
-
-
 def _waypoint_fine(wp: HydrologyWaypoint) -> Cell:
     return wp.x, wp.y
 
 
 def _location_anchor_fine(
     location_uid: str,
-    loc_map: dict[str, NamedLocation],
+    loc_map: Mapping[str, Coord],
 ) -> tuple[int, int] | None:
-    loc = loc_map.get(location_uid)
-    if loc is None or loc.map_x is None or loc.map_y is None:
-        return None
-    return int(loc.map_x), int(loc.map_y)
+    return loc_map.get(location_uid)
 
 
 def _resolve_mouth(
     mouth: HydrologyMouth,
-    loc_map: dict[str, NamedLocation],
+    loc_map: Mapping[str, Coord],
     occupied: dict[tuple[int, int], MapCellHydrology],
     to_space: FineToSpace,
     heightmap: SurfaceHeightmap, search: _MouthSearch,
@@ -111,7 +99,7 @@ def _resolve_mouth(
 
 def _anchors_for_river(
     river: DeclaredRiver,
-    loc_map: dict[str, NamedLocation],
+    loc_map: Mapping[str, Coord],
     to_space: FineToSpace,
     occupied: dict[tuple[int, int], MapCellHydrology],
     heightmap: SurfaceHeightmap, search: _MouthSearch,
@@ -148,7 +136,7 @@ def _anchors_for_river(
 def _polyline_for_river(
     river: DeclaredRiver,
     heightmap: SurfaceHeightmap,
-    loc_map: dict[str, NamedLocation],
+    loc_map: Mapping[str, Coord],
     to_space: FineToSpace,
     occupied: dict[tuple[int, int], MapCellHydrology],
     topology: WorldTopology, search: _MouthSearch,
@@ -176,11 +164,11 @@ def _polyline_for_river(
     return polyline
 
 
-def resolve_declared_river_intents(
-    world: object,
+def resolve_prepared_river_intents(
+    span: int, radius_fine: int,
     heightmap: SurfaceHeightmap,
     rivers: list[DeclaredRiver],
-    locations: list[NamedLocation],
+    locations: Mapping[str, Coord],
     occupied: dict[tuple[int, int], MapCellHydrology],
     type_classify: RiverTypeClassify,
     *,
@@ -202,11 +190,13 @@ def resolve_declared_river_intents(
     """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river intents require an explicit WorldTopology")
-    to_space = _fine_to_space(world, space)
-    span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
+    if space not in (CoordinateSpace.WORLD_SURFACE_GRID, CoordinateSpace.WORLD_FINE_GRID):
+        raise ValueError(f"unsupported river intent space: {space}")
+    span = span if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
+    to_space = lambda pt: fine_to_grid_xy(*pt, span)
     search = _MouthSearch(fine_topology(topology, span) if span != 1 else topology,
-                          hydrology(world).default_rivers.mouth_search_radius_fine, span, river_uids, river_cells)
-    loc_map = {loc.location_uid: loc for loc in locations}
+                          radius_fine, span, river_uids, river_cells)
+    loc_map = locations
     segments: list[RiverSegment] = []
 
     for river in rivers:
@@ -232,7 +222,7 @@ def resolve_declared_river_intents(
     return segments
 
 
-def resolve_mouth_cell(world: object, mouth: HydrologyMouth, locations: Sequence[NamedLocation],
+def resolve_prepared_mouth_cell(span: int, radius_fine: int, mouth: HydrologyMouth, locations: Mapping[str, Coord],
                        occupied: dict[Cell, MapCellHydrology], heightmap: SurfaceHeightmap, *,
                        space: CoordinateSpace, topology: WorldTopology,
                        river_uids: frozenset[str] = frozenset(),
@@ -240,9 +230,39 @@ def resolve_mouth_cell(world: object, mouth: HydrologyMouth, locations: Sequence
     """Resolve an authored anchor once without conflating location and body UID."""
     if not isinstance(topology, WorldTopology):
         raise TypeError("river mouths require an explicit WorldTopology")
-    span = map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
+    if space not in (CoordinateSpace.WORLD_SURFACE_GRID, CoordinateSpace.WORLD_FINE_GRID):
+        raise ValueError(f"unsupported river intent space: {space}")
+    span = span if space is CoordinateSpace.WORLD_SURFACE_GRID else 1
     search = _MouthSearch(fine_topology(topology, span) if span != 1 else topology,
-                         hydrology(world).default_rivers.mouth_search_radius_fine, span, river_uids, river_cells)
-    cell = _resolve_mouth(mouth, {loc.location_uid: loc for loc in locations}, occupied,
-                          _fine_to_space(world, space), heightmap, search)
+                         radius_fine, span, river_uids, river_cells)
+    cell = _resolve_mouth(mouth, locations, occupied,
+                          lambda pt: fine_to_grid_xy(*pt, span), heightmap, search)
     return topology.canonicalize(*cell) if cell is not None else None
+
+
+def resolve_declared_river_intents(world: object, heightmap: SurfaceHeightmap,
+    rivers: list[DeclaredRiver], locations: list[NamedLocation],
+    occupied: dict[Coord, MapCellHydrology], type_classify: RiverTypeClassify, *,
+    space: CoordinateSpace, topology: WorldTopology,
+    river_uids: frozenset[str] = frozenset(), river_cells: frozenset[Coord] = frozenset(),
+) -> list[RiverSegment]:
+    return resolve_prepared_river_intents((map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1),
+        hydrology(world).default_rivers.mouth_search_radius_fine, heightmap, rivers,
+        location_anchor_map(locations), occupied, type_classify, space=space,
+        topology=topology, river_uids=river_uids, river_cells=river_cells)
+
+
+def resolve_mouth_cell(world: object, mouth: HydrologyMouth, locations: Sequence[NamedLocation],
+    occupied: dict[Coord, MapCellHydrology], heightmap: SurfaceHeightmap, *,
+    space: CoordinateSpace, topology: WorldTopology,
+    river_uids: frozenset[str] = frozenset(), river_cells: frozenset[Coord] = frozenset(),
+) -> Cell | None:
+    return resolve_prepared_mouth_cell((map_cell_fine_span(world) if space is CoordinateSpace.WORLD_SURFACE_GRID else 1),
+        hydrology(world).default_rivers.mouth_search_radius_fine, mouth,
+        location_anchor_map(locations), occupied, heightmap, space=space,
+        topology=topology, river_uids=river_uids, river_cells=river_cells)
+
+
+def location_anchor_map(locations: Sequence[NamedLocation]) -> dict[str, Coord]:
+    return {loc.location_uid: (int(loc.map_x), int(loc.map_y)) for loc in locations
+            if loc.map_x is not None and loc.map_y is not None}

@@ -13,6 +13,7 @@ from app.application.worldData.generators.terrain.relief.log.log import (
 from app.ids import UidKind, seeded_index
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ObjectReliefPickPolicy,
     ReliefContextPickPolicy,
@@ -29,7 +30,7 @@ class PickResult:
 
 
 def candidates_for_context(
-    templates: Mapping[str, ReliefTemplate],
+    templates: Mapping[str, ReliefTemplate | MountainTemplateInput],
     context: ReliefContext | str,
 ) -> list[str]:
     """Pick candidates — members whose body context matches, UID order (B5)."""
@@ -40,11 +41,11 @@ def candidates_for_context(
     ]
 
 
-def resolve_picked_template(
+def resolve_picked_template[T: ReliefTemplate | MountainTemplateInput](
     pick: PickResult,
-    templates_by_uid: Mapping[str, ReliefTemplate],
+    templates_by_uid: Mapping[str, T],
     *, resolve_ctx: ResolveContext | None = None,
-) -> ReliefTemplate:
+) -> T:
     """Resolve the selected body; missing required bodies are unresolved."""
     ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_templates",))
     template = templates_by_uid.get(pick.template_uid)
@@ -57,7 +58,7 @@ def resolve_picked_template(
 def merge_pick_policy(
     *,
     context: ReliefContext | str,
-    world: WorldReliefPickPolicy,
+    world: WorldReliefPickPolicy | ReliefContextPickPolicy,
     object_policy: ObjectReliefPickPolicy | None = None,
     side_policy: ObjectReliefPickPolicy | None = None,
 ) -> tuple[ReliefContextPickPolicy, str]:
@@ -74,14 +75,14 @@ def merge_pick_policy(
         obj = object_policy.for_context(ctx)
         if obj is not None:
             return obj, "object"
-    return world.for_context(ctx), "world"
+    return (world if isinstance(world, ReliefContextPickPolicy) else world.for_context(ctx)), "world"
 
 
 def pick_template(
     *,
     context: ReliefContext | str,
-    templates: Mapping[str, ReliefTemplate],
-    world_policy: WorldReliefPickPolicy,
+    templates: Mapping[str, ReliefTemplate | MountainTemplateInput],
+    world_policy: WorldReliefPickPolicy | ReliefContextPickPolicy,
     world_seed: str,
     site_id: str,
     occurrence_seq: int = 0,

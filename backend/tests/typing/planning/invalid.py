@@ -12,7 +12,13 @@ from app.application.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
 from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
 from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider
+from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import ReliefPlanProvider, RiverReliefPlanProvider
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
+from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
+from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput
+from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
@@ -123,3 +129,47 @@ def invalid_water_terrain_dependency(contract: RegisteredPlanContract[ClimateBas
 
 def invalid_surface_slot_assignment(value: PlanSlot) -> SurfacePlanSlot:
     return value  # EXPECT: reportReturnType
+
+
+def invalid_relief_climate_dependency(local: RegisteredPlanContract[ClimateBaseInput, ClimateLocalPlan],
+    terrain: RegisteredPlanContract[TerrainBaseInput, TerrainPlan],
+    water: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan]) -> None:
+    ReliefPlanProvider(local, terrain, water)  # EXPECT: reportArgumentType
+
+
+def invalid_river_relief_phase(relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+    final: RegisteredPlanContract[HydrologyPlanInput, HydrologyPlan]) -> None:
+    RiverReliefPlanProvider(relief, final)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
+from app.application.planning.service.planningService import PlanBuildControl
+
+
+def invalid_hydrology_providers(relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+    water: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan],
+    routes: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan],
+    final: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan],
+    provider: HydrologyFinalPlanProvider, request: PlanRequest[HydrologyPlanInput],
+    reader: PlanDependencyReader, control: PlanBuildControl) -> None:
+    HydrologyRoutesPlanProvider(final, water)  # EXPECT: reportArgumentType
+    HydrologyFinalPlanProvider(relief, final, relief)  # EXPECT: reportArgumentType (2)
+    provider.build(request, reader, control)  # EXPECT: reportArgumentType
+
+
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan, RiverRouteBatch
+
+
+def invalid_stage_batch_space(batch: RiverRouteBatch[FineXY]) -> CoarseRiverPlan:
+    return batch  # EXPECT: reportReturnType
+
+
+def invalid_fine_stage_route(route: RiverRoute[SurfaceGridCoord]) -> None:
+    FineRiverPlan(routes=(route,), base_surface_z=())  # EXPECT: reportArgumentType
+
+
+def invalid_coarse_stage_claim(batch: RiverRouteBatch[FineXY]) -> None:
+    CoarseRiverPlan(routes=(), claims=batch.claims)  # EXPECT: reportArgumentType

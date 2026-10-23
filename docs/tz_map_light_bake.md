@@ -1840,6 +1840,49 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 ## PC-0 — потребление frozen surface plans (2026-10-23)
 
+**PC-8: архитектура DESIGN_ACCEPTED, реализация не завершена (2026-10-23).**
+Норматив [PC-D1 — owning classes/methods/contracts](./tz_terrain_generation.md#pc8-responsibility-boundaries)
+разделяет routes/final planning providers и domain owners: water bodies,
+coarse rivers, fine rivers, authored paint и согласованное final state.
+Provider получает envelopes/checks refs и вызывает assembly API; алгоритмы
+и mutable intermediate buffers остаются внутри domain owners.
+DeclaredWaterPaintProjector.project возвращает готовую immutable geometry;
+HydroContributor выполняет fine→light raster/tile paint без повторного
+разрешения anchors/width/route. HydrologyFactsAssembler сохраняется единым:
+проверки coverage/bed/receiver и сборка final facts делегируют правила ролей
+existing river_bed_roles, не вводят новые решения о воде.
+Серьёзность PlanDiagnostic задаёт producer фактического domain decision;
+HIT/MISS/reporting сохраняют готовый disposition. Внешняя классификация
+по code и HydrologyDiagnosticsAdapter не входят в целевую архитектуру.
+Приёмка PC-8 требует соответствия этой границе; consumer cutover PC-10,
+production registration PC-9A и phase/output contracts остаются прежними.
+
+
+**PC-8 hydrology providers не завершены / не приняты (2026-10-23):**
+planning-обвязка смешана с доменной логикой; требуется разделение
+ответственностей до перехода к PC-8C. Текущее состояние реализации: frozen routes-stage
+сохраняет accepted bodies/unions/open-water и coarse/fine river paths;
+final-stage читает actual river relief без повторного route/placement/carve.
+DeclaredWaterPaint переносит исходные fine lake/coastline segments,
+river fine widths и authored intent anchors в прежнем порядке. Missing
+anchors/invalid geometry дают immutable diagnostic без synthetic path.
+Consumer cutover остаётся PC-10; provider registration — PC-9A.
+
+
+**PC-7 provider готов (2026-10-23):** ReliefPlan.light содержит полный
+base field и sparse absolute mountain z/facing/ravine z из одного
+mountain_layout. Coarse и light используют единственный frozen selection;
+light depression detection видит полный generation extent без новых
+wrap-соседей. Отклонённый terrain color не отменяет height effect.
+Actual contributor cutover остаётся PC-10; текущие consumers не включают
+новый provider автоматически. Existing legacy collector сохраняет свой
+порядок до PC-9, frozen provider получает row-major TerrainPlan cells.
+Вторая фаза RiverReliefPlanProvider также готова: получает accepted
+routes, пишет river beds от pre-river surface без нового relief selection;
+receiver исключается из собственного river profile, overlapping targets
+merge min однократно. Coarse/fine materializers потребляют готовые
+post-river heights; routes/final water providers реализуются в PC-8.
+
 ### Surface planning/cache — surface slot vocabulary
 
 **Уточнение PC-6S, DESIGN_CLOSED / implementation DONE (2026-10-23):**

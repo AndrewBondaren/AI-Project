@@ -13,6 +13,8 @@ from app.application.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateBasePlanProvider
 from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
 from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider
+from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import ReliefPlanProvider, RiverReliefPlanProvider
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput
 from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
@@ -33,7 +35,7 @@ from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
-from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverBedRecord
+from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverReliefPlan, RiverBedRecord
 from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, RiverRoute
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
@@ -92,6 +94,14 @@ def surface_slot_boundary(member: SurfacePlanSlot) -> PlanSlot:
 
 
 def water_placement_provider_type(provider: WaterPlacementPlanProvider) -> PlanProvider[WaterPlacementInput, WaterPlacementPlan]:
+    return provider
+
+
+def relief_provider_type(provider: ReliefPlanProvider) -> PlanProvider[ReliefPlanInput, ReliefPlan]:
+    return provider
+
+
+def river_relief_provider_type(provider: RiverReliefPlanProvider) -> PlanProvider[RiverReliefInput, RiverReliefPlan]:
     return provider
 
 
@@ -174,3 +184,34 @@ def hydrology_domain(request: PlanRequest[HydrologyPlanInput],
     assert_type(route.receiver_cell, SurfaceGridCoord)
     assert_type(entry.value.payload, HydrologyPlan)
     return entry.value.payload
+
+
+from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput
+from app.application.planning.service.planningService import PlanBuildControl
+from app.application.planning.providers.planRegistry import PlanDependencyReader
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+
+
+def hydrology_providers(routes: HydrologyRoutesPlanProvider, final: HydrologyFinalPlanProvider,
+    route_request: PlanRequest[HydrologyPlanInput], final_request: PlanRequest[HydrologyFinalInput],
+    reader: PlanDependencyReader, control: PlanBuildControl) -> None:
+    assert_type(routes.build(route_request, reader, control), PlanBuildResult[HydrologyRoutesPlan])
+    assert_type(final.build(final_request, reader, control), PlanBuildResult[HydrologyPlan])
+
+
+from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan, RiverRouteBatch
+from app.dataModel.spatial.grid.coordinateTypes import FineXY
+
+
+def intermediate_hydrology_plans(water: PlanBuildResult[OpenWaterPlan], coarse: CoarseRiverPlan,
+    fine_batch: RiverRouteBatch[FineXY], fine: FineRiverPlan) -> None:
+    assert_type(water.payload, OpenWaterPlan)
+    assert_type(coarse, RiverRouteBatch[SurfaceGridCoord])
+    assert_type(coarse.routes[0].receiver_cell, SurfaceGridCoord)
+    assert_type(coarse.claims[0][0], SurfaceGridCoord)
+    assert_type(fine_batch.routes[0].receiver_cell, FineXY)
+    assert_type(fine_batch.claims[0][0], FineXY)
+    assert_type(fine.base_surface_z[0][0], FineXY)

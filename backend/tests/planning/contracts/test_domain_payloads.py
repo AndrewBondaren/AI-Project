@@ -645,5 +645,156 @@ class HydrologyPlanningPayloadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class HydrologyStagePayloadTests(unittest.TestCase):
+    def setUp(self):
+        from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+        from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan, RiverRouteBatch
+        from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+        from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord, FineXY
+        self.Open, self.Coarse, self.Fine, self.Batch = OpenWaterPlan, CoarseRiverPlan, FineRiverPlan, RiverRouteBatch
+        self.Cell, self.FineXY, self.Hydro, self.Role = SurfaceGridCoord, FineXY, MapCellHydrology, HydrologyCellRole
+        self.fixture = HydrologyPlanningPayloadTests()
+
+    def claim(self, route, edge_uid=None):
+        return self.Hydro(role=self.Role.RIVER_BED, water_body_uid=route.river_uid,
+                          connection_edge_uid=edge_uid, river_drainage=route.drainage)
+
+    def coarse(self):
+        route = self.fixture.route()
+        return self.Coarse(routes=(route,), claims=((route.segments[0].path[0], self.claim(route)),))
+
+    def test_open_water_reuses_body_union_and_coordinate_contracts(self):
+        from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
+        body = self.fixture.body()
+        union = PhysicalWaterUnion(water_system_uid="system", member_uids=("lake",), child_system_uids=(), z_water_level=2)
+        cell = self.Cell(GridX(0), GridY(0))
+        plan = self.Open(coarse_open_water=((cell, self.Hydro(role=self.Role.LAKE, water_body_uid="lake", z_water_level=2)),),
+                         water_bodies=(body,), physical_unions=(union,))
+        self.assertEqual(self.Open.model_validate_json(plan.model_dump_json()), plan)
+        self.assertEqual(plan.water_bodies[0].parent_system_uid, union.water_system_uid)
+        for updates in ({"water_bodies": (body, body)}, {"physical_unions": (union, union)},
+                        {"coarse_open_water": plan.coarse_open_water * 2},
+                        {"coarse_open_water": ((self.Cell(GridX(1), GridY(0)), plan.coarse_open_water[0][1]), *plan.coarse_open_water)},
+                        {"coarse_open_water": (((FineX(0), FineY(0)), plan.coarse_open_water[0][1]),)}):
+            with self.subTest(updates=updates), self.assertRaises(ValidationError):
+                self.Open.model_validate(plan.model_dump() | updates)
+
+    def test_coarse_alias_and_route_claim_json_round_trip(self):
+        self.assertIs(self.Coarse, self.Batch[self.Cell])
+        batch = self.coarse()
+        self.assertEqual(self.Coarse.model_validate_json(batch.model_dump_json()), batch)
+        self.assertEqual(batch.claims[0][1].river_drainage, batch.routes[0].drainage)
+
+    def test_claims_require_exact_bed_coverage_and_route_metadata(self):
+        batch = self.coarse()
+        cell, claim = batch.claims[0]
+        route = batch.routes[0]
+        for updates in ({"claims": ()}, {"routes": ()}, {"routes": batch.routes * 2},
+                        {"claims": batch.claims * 2}, {"claims": (*batch.claims, (route.receiver_cell, claim))},
+                        {"claims": (((FineX(0), FineY(0)), claim),)}):
+            with self.subTest(updates=updates), self.assertRaises(ValidationError):
+                self.Coarse.model_validate(batch.model_dump() | updates)
+        for updates in ({"role": self.Role.LAKE}, {"water_body_uid": "another"},
+                        {"connection_edge_uid": "wrong-edge"}, {"river_drainage": None}):
+            invalid = claim.model_copy(update=updates)
+            with self.subTest(updates=updates), self.assertRaises(ValidationError):
+                self.Coarse(routes=batch.routes, claims=((cell, invalid),))
+
+    def test_shared_segment_boundary_uses_last_published_edge_metadata(self):
+        from app.dataModel.hydrology.planning.hydrologyPlan import RiverRoute, RiverPathSegment
+        route = self.fixture.route()
+        a, b = route.segments[0].path
+        c = self.Cell(GridX(2), GridY(0))
+        first = route.segments[0].model_copy(update={"edge_uid": "first", "path": (a, b)})
+        second = route.segments[0].model_copy(update={"edge_uid": "second", "path": (b, c)})
+        route = RiverRoute[self.Cell](river_uid=route.river_uid, segments=(first, second),
+                                     receiver_cell=c, drainage=route.drainage)
+        claims = ((a, self.claim(route, "first")), (b, self.claim(route, "second")))
+        batch = self.Coarse(routes=(route,), claims=claims)
+        self.assertEqual(batch.claims[1][1].connection_edge_uid, "second")
+        with self.assertRaises(ValidationError):
+            self.Coarse(routes=(route,), claims=((a, self.claim(route, "first")), (b, self.claim(route, "first"))))
+
+    def test_parent_bed_remains_claimed_when_it_is_a_tributary_receiver(self):
+        from app.dataModel.hydrology.planning.hydrologyPlan import RiverRoute
+        parent = self.fixture.route(uid="parent")
+        junction = parent.segments[0].path[0]
+        source = self.Cell(GridX(0), GridY(1))
+        template = self.fixture.route(uid="child", receiver="parent")
+        child = RiverRoute[self.Cell](river_uid="child", receiver_cell=junction, drainage=template.drainage,
+            segments=(template.segments[0].model_copy(update={"path": (source, junction)}),))
+        batch = self.Coarse(routes=(parent, child), claims=((junction, self.claim(parent)), (source, self.claim(child))))
+        self.assertEqual(batch.claims[0][1].water_body_uid, "parent")
+
+    def test_fine_batch_preserves_its_space_and_rejects_unspecialized_mixed_spaces(self):
+        fine = self.fixture.route(fine=True)
+        cell = fine.segments[0].path[0]
+        batch = self.Batch[self.FineXY](routes=(fine,), claims=((cell, self.claim(fine)),))
+        self.assertEqual(self.Batch[self.FineXY].model_validate_json(batch.model_dump_json()), batch)
+        coarse = self.coarse()
+        with self.assertRaises(ValidationError):
+            self.Batch(routes=(*coarse.routes, fine.model_copy(update={"river_uid": "fine",
+                "drainage": fine.drainage.model_copy(update={"river_uid": "fine"})})), claims=coarse.claims)
+        with self.assertRaises(ValidationError):
+            self.Batch[self.FineXY](routes=coarse.routes, claims=coarse.claims)
+
+    def test_fine_samples_include_receiver_and_preserve_unrelated_retained_samples(self):
+        fine = self.fixture.route(fine=True)
+        rows = tuple((cell, 7) for cell in fine.segments[0].path) + (((FineX(2), FineY(0)), 11),)
+        plan = self.Fine(routes=(fine,), base_surface_z=rows)
+        self.assertEqual(plan.base_surface_z[-1][1], 11)
+        self.assertEqual(self.Fine.model_validate_json(plan.model_dump_json()), plan)
+        # Samples from rejected authored routes can remain even without accepted routes.
+        self.assertEqual(self.Fine(routes=(), base_surface_z=rows).base_surface_z, rows)
+        for updates in ({"base_surface_z": rows[:1]}, {"base_surface_z": rows[1:]},
+                        {"base_surface_z": tuple(reversed(rows))}, {"base_surface_z": rows * 2},
+                        {"routes": (fine, fine)}, {"routes": (self.fixture.route(),)},
+                        {"base_surface_z": ((self.Cell(GridX(0), GridY(0)), 7),)}):
+            with self.subTest(updates=updates), self.assertRaises(ValidationError):
+                self.Fine.model_validate(plan.model_dump() | updates)
+
+    def test_stage_contracts_are_required_strict_and_recursively_frozen(self):
+        for owner, payload in ((self.Open, dict(coarse_open_water=(), water_bodies=(), physical_unions=())),
+                               (self.Coarse, dict(routes=(), claims=())), (self.Fine, dict(routes=(), base_surface_z=()))):
+            model = owner.model_validate(payload)
+            for name in payload:
+                with self.subTest(owner=owner, field=name), self.assertRaises(ValidationError):
+                    owner.model_validate({k: v for k, v in payload.items() if k != name})
+                with self.assertRaises(ValidationError):
+                    owner.model_validate(payload | {name: []})
+                with self.assertRaises(ValidationError):
+                    setattr(model, name, ())
+            with self.assertRaises(ValidationError):
+                owner.model_validate(payload | {"unplanned": ()})
+        batch = self.coarse()
+        with self.assertRaises(ValidationError):
+            batch.claims[0][1].water_body_uid = "changed"
+        with self.assertRaises(ValidationError):
+            batch.routes[0].drainage.receiver_uid = "changed"
+        with self.assertRaises(ValidationError):
+            self.Fine(routes=(), base_surface_z=(((FineX(0), FineY(0)), True),))
+        with self.assertRaises(ValidationError):
+            self.Fine(routes=(), base_surface_z=(((True, FineY(0)), 1),))
+
+    def test_existing_build_result_keeps_explicit_diagnostic_disposition(self):
+        from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        plan = self.Open(coarse_open_water=(), water_bodies=(), physical_unions=())
+        for disposition in PlanDiagnosticDisposition:
+            fact = PlanDiagnostic(issue=FieldPathError(("hydrology",), "producer decision", code="opaque"), disposition=disposition)
+            result = PlanBuildResult[self.Open](payload=plan, diagnostics=(fact,))
+            self.assertEqual(result.diagnostics[0].disposition, disposition)
+            self.assertEqual(PlanBuildResult[self.Open].model_validate_json(result.model_dump_json()), result)
+
+    def test_stage_contract_imports_do_not_load_application_or_db(self):
+        script = ("import sys; from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan; "
+                  "from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan; "
+                  "assert not any(n.startswith(('app.application', 'app.db')) for n in sys.modules)")
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -224,8 +224,8 @@ def plan_path_to_target(
     return []
 
 
-def plan_river_network(
-    world: Any,
+def plan_prepared_river_network(
+    world_uid: str, seed: int, policy: HydrologyRiversPolicy,
     heightmap: SurfaceHeightmap,
     occupied: dict[tuple[int, int], MapCellHydrology],
     type_classify: RiverTypeClassify,
@@ -240,12 +240,10 @@ def plan_river_network(
     """
     if not isinstance(topology, WorldTopology):
         raise TypeError("river planning requires an explicit WorldTopology")
-    world_uid = getattr(world, "world_uid", "world")
     sources = find_river_sources(heightmap, occupied, type_classify, world_uid=world_uid, topology=topology)
     if not sources:
         return []
 
-    seed = world_seed(world)
     sources.sort(key=lambda c: (c[0] * 31 + c[1]) ^ seed)
 
     polylines: list[list[tuple[int, int]]] = []
@@ -257,7 +255,7 @@ def plan_river_network(
             break
         if source in claimed:
             continue
-        path = plan_descent_path(heightmap, source, occupied, topology=topology, policy=hydrology(world).default_rivers)
+        path = plan_descent_path(heightmap, source, occupied, topology=topology, policy=policy)
         if len(path) < 2:
             continue
         interior = set(path[:-1])
@@ -267,3 +265,11 @@ def plan_river_network(
         claimed.update(path)
 
     return polylines
+
+
+def plan_river_network(world: Any, heightmap: SurfaceHeightmap,
+    occupied: dict[tuple[int, int], MapCellHydrology], type_classify: RiverTypeClassify,
+    *, topology: WorldTopology,
+) -> list[list[tuple[int, int]]]:
+    return plan_prepared_river_network(getattr(world, "world_uid", "world"), world_seed(world),
+        hydrology(world).default_rivers, heightmap, occupied, type_classify, topology=topology)

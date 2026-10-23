@@ -761,5 +761,819 @@ class WaterPlacementProviderTests(unittest.TestCase):
                 self.get(self.inputs.model_copy(update=update))
 
 
+class ReliefProviderFixture:
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import ReliefPlanProvider
+        from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, MountainAnchorInput, TerrainMergeEntry
+        from app.dataModel.terrain.relief.planning.reliefPlan import (MountainTemplateInput, MountainLayout,
+            LightReliefPlan, LightMountainCell, LightRavineCell, ReliefPlan)
+        from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy, ObjectReliefPickPolicy
+        from app.dataModel.terrain.relief.mountainSideRecipe import MountainSideRecipe
+        from app.dataModel.terrain.relief.specs import ReliefSideSpec
+        from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
+        from app.dataModel.terrainMasks.worldTerrainMasks import MountainsCategoryPolicy, RavinesCategoryPolicy
+        from app.dataModel.terrainMasks.mountain.specs import (MountainSpec, MountainRangeSpec, MountainFormBySides,
+            StarForm, PeakForm, PlateauForm, MountainRangeSides, MountainSaddleSpec)
+        from app.dataModel.terrainMasks.mountain.enums import MountainKind, MountainRangeStyle
+        from app.dataModel.spatial.grid.coordinateTypes import LightCellRef
+        from app.dataModel.spatial.facing import Facing
+
+        self.water = WaterPlacementProviderTests()
+        self.water.setUp()
+        self.addCleanup(self.water.doCleanups)
+        self.h = self.water.h
+        self.Input, self.Plan, self.Peak, self.Range = ReliefPlanInput, ReliefPlan, MountainSpec, MountainRangeSpec
+        self.Template, self.Recipe, self.Pick, self.Anchor = MountainTemplateInput, MountainSideRecipe, ReliefContextPickPolicy, MountainAnchorInput
+        self.Context = ReliefContext
+        self.inputs = ReliefPlanInput(seed=17, masks_enabled=True,
+            mountains=MountainsCategoryPolicy(autoresolve=False, default_radius_m=12),
+            ravines=RavinesCategoryPolicy(autoresolve=True), declared_mountains=(), anchors=(),
+            grid=self.water.inputs.grid, z_min=-100, z_max=100, mountain_templates=(),
+            mountain_pick=ReliefContextPickPolicy(), terrain_merge=tuple(TerrainMergeEntry(key=key, merge_rank=rank)
+                for key, rank in (("mountain", 30), ("plains", 10), ("ravine", 20))))
+        records = (ReliefPlanInput, MountainAnchorInput, TerrainMergeEntry, MountainTemplateInput, MountainLayout,
+            LightReliefPlan, LightMountainCell, LightRavineCell, ReliefPlan, PlanEnvelope[ReliefPlan],
+            MountainsCategoryPolicy, RavinesCategoryPolicy, ReliefContextPickPolicy, ObjectReliefPickPolicy,
+            MountainSideRecipe, ReliefSideSpec, MountainSpec, MountainRangeSpec, MountainFormBySides,
+            StarForm, PeakForm, PlateauForm, MountainRangeSides, MountainSaddleSpec, LightCellRef)
+        enums = (ReliefContext, ReliefPickMode, ReliefSideKind, MountainKind, MountainRangeStyle, Facing)
+        self.manifest = CanonicalSchemaManifest(entries=self.water.manifest.entries + tuple(
+            RegisteredTypeEntry(type_id=index, python_type=owner, kind=CanonicalTypeKind.RECORD)
+            for index, owner in enumerate(records, 200)) + tuple(
+            RegisteredTypeEntry(type_id=index, python_type=owner, kind=CanonicalTypeKind.ENUM)
+            for index, owner in enumerate(enums, 250)))
+        manifest = self.manifest
+        metadata = PlanContractMetadata(id=f"surface.pc.{SurfacePlanSlot.RELIEF.value}", schema_version=1, algorithm_version=1)
+
+        class ReliefCodec:
+            def validate(self, value):
+                return TypeAdapter(PlanEnvelope[ReliefPlan]).validate_python(value, strict=True)
+            def encode(self, value):
+                return encode(value, manifest)
+            def decode(self, encoded):
+                return decode(encoded, PlanEnvelope[ReliefPlan], manifest)
+            def retained_bytes(self, value):
+                return retained_entry_bytes(value)
+
+        def fingerprint(world, scope, inputs, deps):
+            return input_fingerprint(metadata, world, scope, inputs, deps, manifest)
+
+        self.handles = ((SurfacePlanSlot.CLIMATE_BASE, self.water.terrain.climate.binding),
+                        (SurfacePlanSlot.TERRAIN_BASE, self.water.terrain.binding),
+                        (SurfacePlanSlot.WATER_PLACEMENT, self.water.binding))
+        declarations = tuple(PlanDependencyContract(slot=PlanSlot(slot.value), contract_id=handle.metadata.id,
+            schema_version=handle.metadata.schema_version, algorithm_version=handle.metadata.algorithm_version)
+            for slot, handle in self.handles)
+        self.binding = RegisteredPlanContract(metadata, TypeAdapter(ReliefPlanInput).validate_python,
+            fingerprint, declarations, CacheBinding(CacheContract[PlanEnvelope[ReliefPlan]](
+                id=f"surface.envelope.pc.{SurfacePlanSlot.RELIEF.value}", schema_version=1), ReliefCodec()), manifest)
+        self.provider = Mock(wraps=ReliefPlanProvider(*(handle for _, handle in self.handles)))
+        self.h.registry.register(self.binding, self.provider)
+
+    def peak(self, **update):
+        return self.Peak.model_validate(dict(origin_x_m=5, origin_y_m=-5, radius_m=12,
+            form=dict(form_type="by_sides", side_count=4),
+            sides=[dict(kind="slope")] * 4) | update)
+
+    def get(self, inputs=None, climate=None, terrain=None, water=None):
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        inputs = self.inputs if inputs is None else inputs
+        climate = self.water.terrain.climate.get() if climate is None else climate
+        terrain = self.water.terrain.get(climate=climate) if terrain is None else terrain
+        water = self.water.get(terrain=terrain) if water is None else water
+        envelopes = (climate, terrain, water)
+        deps = tuple(PlanDependency(slot=PlanSlot(slot.value), ref=envelope.ref)
+            for (slot, _), envelope in zip(self.handles, envelopes))
+        reader = self.h.empty
+        for (slot, handle), envelope in zip(self.handles, envelopes):
+            reader = reader.with_plan(PlanSlot(slot.value), handle, envelope)
+        meta = self.binding.metadata
+        key = PlanKey(world_uid="climate-world", scope=WorldPlanScope(), contract_id=meta.id,
+            schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
+            input_fingerprint=self.binding.fingerprint_inputs("climate-world", WorldPlanScope(), inputs, deps))
+        return self.h.service.get_or_build(self.binding,
+            PlanRequest[self.Input](key=key, inputs=inputs, dependencies=deps), reader, wait=Wait(10))
+
+
+class ReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
+    def test_coarse_matches_legacy_with_mountain_reservation_ravine_and_basin(self):
+        from app.ids import seed_int
+        from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+        from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from tests.hydrology_fixtures import hydro_world
+        climate, terrain, water = self.water.terrain.climate.get(), self.water.terrain.get(), self.water.get()
+        peak = self.peak()
+        inputs = self.inputs.model_copy(update={"declared_mountains": (peak,)})
+        result = self.get(inputs).payload
+        world = hydro_world(world_uid="climate-world", fine_cells_per_map_cell=10,
+            world_map_cells_per_tile=2, z_min=-100, z_max=100, default_climate_zone="temperate",
+            terrain_masks=dict(default_mountains=inputs.mountains.model_dump(mode="json"),
+                default_ravines=inputs.ravines.model_dump(mode="json"), declared_mountains=[peak.model_dump(mode="json")]))
+        hm = SurfaceHeightmap(world_uid="climate-world", bbox=terrain.payload.bbox,
+            surface_z={(coord.gx, coord.gy): z for coord, z in terrain.payload.surface_z})
+        before = dict(hm.surface_z)
+        apply_relief_objects_z(world, [], hm, pole_field=ClimatePoleField(climate.payload.poles, climate.payload.bbox),
+            light_side=2, basin_specs=water.payload.basin_specs, topology=water.payload.topology)
+        self.assertEqual({(c.gx, c.gy): z for c, z in result.surface_z}, hm.surface_z)
+        self.assertEqual({(c.gx, c.gy): z for c, z in terrain.payload.surface_z}, before)
+        self.assertTrue(any(hm.surface_z[cell] > before[cell] for cell in water.payload.basin_specs[0].footprint))
+        self.assertEqual(result.mountain_layout.entries, (peak,))
+        self.assertEqual(len(result.light.base_surface_z), len(before) * 4)
+
+    def test_full_light_base_matches_existing_relief_contributor(self):
+        from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
+        from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
+        from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+        from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+        from app.ids import seed_int
+        from types import SimpleNamespace
+        from tests.hydrology_fixtures import hydro_world
+        world = hydro_world(world_uid="climate-world", z_min=-100, z_max=100, default_climate_zone="temperate")
+        terrain, climate = self.water.terrain.get(), self.water.terrain.climate.get()
+        coarse = {(c.gx, c.gy): z for c, z in terrain.payload.surface_z}
+        compose = LightGridCompose(LightGridScale.from_tile(10, 2))
+        context = SimpleNamespace(world=world, pole_field=ClimatePoleField(climate.payload.poles, climate.payload.bbox),
+            surface_planning=SimpleNamespace(coarse_relief_z=coarse), tiles=list(coarse))
+        ReliefContributor().apply(compose, context)
+        result = self.get(self.inputs.model_copy(update={"seed": seed_int(world)})).payload.light
+        for cell, z in result.base_surface_z:
+            self.assertEqual(z, compose.get(cell.gx, cell.gy, cell.tx, cell.ty).surface_z)
+
+    def test_disabled_masks_and_categories_keep_water_and_full_base_without_effects(self):
+        inputs = self.inputs.model_copy(update={"masks_enabled": False, "declared_mountains": (self.peak(),)})
+        result = self.get(inputs).payload
+        self.assertEqual(result.mountain_layout.entries, ())
+        self.assertEqual((result.light.mountain_cells, result.light.ravine_cells), ((), ()))
+        water = self.water.get().payload
+        surface = {(c.gx, c.gy): z for c, z in result.surface_z}
+        self.assertTrue(all(surface[cell] < spec.z_water_level for spec in water.basin_specs for cell in spec.footprint))
+
+    def test_same_layout_selected_once_and_hit_rebuild_have_equal_refs(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.terrain.mountains.collect import collect_prepared_mountain_entries_for_coarse
+        path = "app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider.collect_prepared_mountain_entries_for_coarse"
+        inputs = self.inputs.model_copy(update={"declared_mountains": (self.peak(),)})
+        with patch(path, wraps=collect_prepared_mountain_entries_for_coarse) as collect:
+            first = self.get(inputs)
+            self.assertEqual(self.get(inputs), first)
+            self.assertEqual(collect.call_count, 1)
+            self.h.backend.clear()
+            self.assertEqual(self.get(inputs), first)
+            self.assertEqual(collect.call_count, 2)
+        local = dict(first.payload.light.base_surface_z)
+        for tile in ((0, 0), (0, -1)):
+            selected = [cell for cell, _ in self.get(inputs).payload.light.base_surface_z
+                        if (cell.gx, cell.gy) == tile]
+            self.assertEqual(len(selected), 4)
+            self.assertTrue(all(cell in local for cell in selected))
+        local.clear()
+        self.assertEqual(len(first.payload.light.base_surface_z), 252)
+        other = Harness(policy=PlanningExecutionPolicy(max_workers=1, max_pending_builds=2))
+        self.addCleanup(other.service.shutdown)
+        for (_, handle), provider in zip(self.handles, (self.water.terrain.climate.provider,
+                                                       self.water.terrain.provider, self.water.provider)):
+            other.registry.register(handle, provider)
+        other.registry.register(self.binding, self.provider)
+        previous, self.h = self.h, other
+        try:
+            self.assertEqual(self.get(inputs), first)
+        finally:
+            self.h = previous
+
+    def test_input_policy_seed_merge_and_upstream_edits_invalidate(self):
+        first = self.get()
+        for update in ({"seed": 18}, {"terrain_merge": tuple(entry.model_copy(update={"merge_rank": 99})
+                       for entry in self.inputs.terrain_merge)},
+                       {"ravines": self.inputs.ravines.model_copy(update={"drop_z": 3})}):
+            self.assertNotEqual(self.get(self.inputs.model_copy(update=update)).ref.key, first.ref.key)
+        terrain = self.water.terrain.get(self.water.terrain.inputs.model_copy(update={"seed": 18}))
+        self.assertNotEqual(self.get(terrain=terrain).ref.key, first.ref.key)
+        self.assertEqual(self.get(), first)
+
+    def test_mixed_upstream_refs_are_rejected_without_replanning(self):
+        from app.application.planning.service.planningService import PlanBuildFailure
+        old = self.water.terrain.get()
+        climate = self.water.terrain.climate.get(self.water.terrain.climate.inputs.model_copy(update={"seed": 18}))
+        with self.assertRaises(PlanBuildFailure):
+            self.get(climate=climate, terrain=old)
+
+    def test_ravines_use_full_extent_without_wrapped_edge_neighbors(self):
+        from app.dataModel.spatial.grid.coordinateTypes import FineZ, LightCellRef
+        grid = self.water.terrain.Grid(fine_span=10, light_side=1)
+        inputs = self.water.terrain.inputs.model_copy(update={"grid": grid})
+        original = self.water.terrain.provider.build._mock_wraps
+
+        def base_surface(request, reader, control):
+            result = original(request, reader, control)
+            surface = tuple((cell, FineZ(-5 if (cell.gx, cell.gy) in ((0, 0), (-2, -3)) else 0))
+                            for cell, _ in result.payload.surface_z)
+            return PlanBuildResult[self.water.terrain.Plan](payload=result.payload.model_copy(
+                update={"surface_z": surface}), diagnostics=())
+
+        self.water.terrain.provider.build.side_effect = base_surface
+        terrain = self.water.terrain.get(inputs)
+        topology = self.water.topology.model_copy(update={"mode": self.water.topology.mode.__class__.WRAPPED})
+        water = self.water.get(self.water.inputs.model_copy(update={"enabled": False, "grid": grid,
+            "topology": topology}), terrain=terrain)
+        policy = self.inputs.ravines.model_copy(update={"min_neighbors": 8})
+        relief_input = self.inputs.model_copy(update={"grid": grid, "ravines": policy})
+        result = self.get(relief_input, terrain=terrain, water=water).payload
+        coarse = {(cell.gx, cell.gy): z for cell, z in result.surface_z}
+        self.assertEqual(coarse[(0, 0)], -6)
+        self.assertEqual(coarse[(-2, -3)], -5)
+        base = dict(result.light.base_surface_z)
+        ravines = {effect.cell: effect.surface_z for effect in result.light.ravine_cells}
+        center, edge = LightCellRef(0, 0, 0, 0), LightCellRef(-2, -3, 0, 0)
+        self.assertEqual(ravines[center], base[center] - 1)
+        self.assertNotIn(edge, ravines)
+
+
+class ReliefTemplateProviderTests(ReliefProviderFixture, unittest.TestCase):
+    def test_missing_template_is_error_and_independent_declared_peak_keeps_its_effect(self):
+        missing = self.peak(sides=[], location_uid="needs-template")
+        declared = self.peak(origin_x_m=25, sides=[dict(kind="sheer")] * 4, location_uid="declared")
+        inputs = self.inputs.model_copy(update={"declared_mountains": (missing, declared)})
+        with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+            first = self.get(inputs)
+            self.assertEqual(self.get(inputs), first)
+        self.assertEqual(first.payload.mountain_layout.entries, (declared,))
+        diagnostic, = first.diagnostics
+        self.assertEqual((diagnostic.issue.code, diagnostic.disposition),
+                         ("DOMAIN_NO_CANDIDATE", PlanDiagnosticDisposition.ERROR))
+        self.assertEqual(missing.sides, ())
+        self.h.backend.clear()
+        with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+            self.assertEqual(self.get(inputs), first)
+
+    def test_template_recipe_edit_and_none_recipe_on_real_member(self):
+        peak = self.peak(sides=[])
+        template = self.Template(template_uid="template-a", context=self.Context.MOUNTAIN,
+            side_recipe=self.Recipe(default_side_kind="slope"))
+        inputs = self.inputs.model_copy(update={"declared_mountains": (peak,), "mountain_templates": (template,)})
+        first = self.get(inputs)
+        self.assertEqual([side.kind.value for side in first.payload.mountain_layout.entries[0].sides], ["slope"] * 4)
+        edited = template.model_copy(update={"side_recipe": self.Recipe(default_side_kind="sheer")})
+        second = self.get(inputs.model_copy(update={"mountain_templates": (edited,)}))
+        self.assertNotEqual(second.ref.key, first.ref.key)
+        self.assertNotEqual(second.payload.light.mountain_cells, first.payload.light.mountain_cells)
+        empty_recipe = template.model_copy(update={"side_recipe": None})
+        mode_d = self.get(inputs.model_copy(update={"mountain_templates": (empty_recipe,)}))
+        self.assertEqual(len(mode_d.payload.mountain_layout.entries[0].sides), 4)
+        self.assertEqual(mode_d.diagnostics, ())
+
+    def test_range_peaks_spine_sides_saddles_and_codec_round_trip(self):
+        from app.application.encoding.canonicalCodec import encode, decode
+        range_spec = self.Range.model_validate(dict(spine=[[5, -5], [25, -5]], width_m=12,
+            peaks=[self.peak(sides=[]).model_dump(), self.peak(origin_x_m=25, sides=[]).model_dump()],
+            peak_spacings_m=[20], saddles=[dict(peak_a_index=0, peak_b_index=1, rise_fraction=0.7)],
+            sides=dict(left=dict(kind="sheer"), right=dict(kind="slope")), location_uid="range"))
+        template = self.Template(template_uid="template-a", context=self.Context.MOUNTAIN,
+            side_recipe=self.Recipe(side_kinds=["slope", "sheer"]))
+        inputs = self.inputs.model_copy(update={"declared_mountains": (range_spec,), "mountain_templates": (template,)})
+        first = self.get(inputs)
+        stamped, = first.payload.mountain_layout.entries
+        for field in ("spine", "sides", "saddles", "peak_spacings_m", "location_uid"):
+            self.assertEqual(getattr(stamped, field), getattr(range_spec, field))
+        self.assertTrue(all(len(peak.sides) == 4 for peak in stamped.peaks))
+        codec = self.binding.cache_binding.codec
+        self.assertEqual(codec.decode(codec.encode(first)), first)
+        self.assertEqual(decode(encode(inputs, self.manifest), self.Input, self.manifest), inputs)
+        self.assertTrue(first.payload.light.mountain_cells)
+
+    def test_auto_selection_anchor_precedence_and_terrain_color_do_not_reselect(self):
+        anchor = self.Anchor(location_uid="anchor", position=(5, -5))
+        policy = self.inputs.mountains.model_copy(update={"autoresolve": True, "threshold": 0.0, "ridge_cell_m": 10})
+        declared = self.peak(location_uid="anchor")
+        inputs = self.inputs.model_copy(update={"mountains": policy, "anchors": (anchor,), "declared_mountains": (declared,)})
+        first = self.get(inputs)
+        self.assertEqual(first.payload.mountain_layout.entries[0], declared)
+        color = tuple(entry.model_copy(update={"merge_rank": -50}) for entry in inputs.terrain_merge)
+        second = self.get(inputs.model_copy(update={"terrain_merge": color}))
+        self.assertEqual(second.payload.mountain_layout, first.payload.mountain_layout)
+        self.assertEqual(second.payload.light.mountain_cells, first.payload.light.mountain_cells)
+
+    def test_frozen_autoselection_uses_row_major_terrain_order(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.terrain.mountains.collect import collect_prepared_mountain_entries_for_coarse
+        policy = self.inputs.mountains.model_copy(update={"autoresolve": True, "threshold": 0.0, "ridge_cell_m": 10})
+        keys = [(x, y) for y in range(-3, 6) for x in range(-2, 5)]
+        supplied = []
+
+        def collect(**kwargs):
+            cells = tuple(kwargs["heightmap_keys"])
+            supplied.extend(cells)
+            return collect_prepared_mountain_entries_for_coarse(**(kwargs | {"heightmap_keys": cells}))
+
+        path = "app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider.collect_prepared_mountain_entries_for_coarse"
+        with patch(path, side_effect=collect):
+            result = self.get(self.inputs.model_copy(update={"mountains": policy}))
+        self.assertEqual(supplied, keys)
+        self.assertTrue(result.payload.mountain_layout.entries)
+
+    def test_object_template_policy_overrides_resolved_world_policy(self):
+        peak = self.peak(sides=[], relief_pick_policy={"mountain": {
+            "mode": "fixed", "default_template_uid": "b"}})
+        templates = tuple(self.Template(template_uid=uid, context=self.Context.MOUNTAIN,
+            side_recipe=self.Recipe(default_side_kind=kind)) for uid, kind in (("a", "slope"), ("b", "sheer")))
+        inputs = self.inputs.model_copy(update={"declared_mountains": (peak,), "mountain_templates": templates,
+            "mountain_pick": self.Pick(mode="fixed", default_template_uid="a")})
+        result = self.get(inputs)
+        self.assertEqual([side.kind.value for side in result.payload.mountain_layout.entries[0].sides], ["sheer"] * 4)
+        self.assertEqual(result.diagnostics, ())
+
+
+class RiverReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
+    def setUp(self):
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.planning.service.planFingerprints import output_fingerprint
+        from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import RiverReliefPlanProvider
+        from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
+        from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan, RiverBedRecord
+        from app.dataModel.hydrology.planning.hydrologyPlan import (HydrologyRoutesPlan, RiverRoute,
+            RiverPathSegment, DeclaredWaterPaint)
+        from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
+        from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
+        from app.dataModel.hydrology.waterBody import WaterBody
+        from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+        from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+        from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
+        from tests.planning.contracts.test_domain_payloads import HydrologyPlanningPayloadTests
+        super().setUp()
+        self.before = self.get()
+        self.RouteFixture = HydrologyPlanningPayloadTests()
+        self.Kind, self.RiverInput, self.RiverPlan = HydrologyConnectionType, RiverReliefInput, RiverReliefPlan
+        extra = (RiverReliefInput, RiverReliefPlan, RiverBedRecord[SurfaceGridCoord], RiverBedRecord[FineXY],
+            HydrologyRoutesPlan, RiverRoute[SurfaceGridCoord], RiverRoute[FineXY],
+            RiverPathSegment[SurfaceGridCoord], RiverPathSegment[FineXY], DeclaredWaterPaint,
+            RiverDrainageLink, WaterBody, MapCellHydrology, PlanEnvelope[RiverReliefPlan], PlanEnvelope[HydrologyRoutesPlan])
+        self.river_manifest = CanonicalSchemaManifest(entries=self.manifest.entries + tuple(
+            RegisteredTypeEntry(type_id=index, python_type=owner, kind=CanonicalTypeKind.RECORD)
+            for index, owner in enumerate(extra, 300)) + (RegisteredTypeEntry(type_id=350,
+                python_type=HydrologyConnectionType, kind=CanonicalTypeKind.ENUM),))
+        manifest = self.river_manifest
+
+        def binding(slot, input_type, payload_type, declarations):
+            meta = PlanContractMetadata(id=f"surface.pc.{slot.value}", schema_version=1, algorithm_version=1)
+            envelope_type = PlanEnvelope[payload_type]
+
+            class Codec:
+                def validate(self, value):
+                    return TypeAdapter(envelope_type).validate_python(value, strict=True)
+                def encode(self, value):
+                    return encode(value, manifest)
+                def decode(self, encoded):
+                    return decode(encoded, envelope_type, manifest)
+                def retained_bytes(self, value):
+                    return retained_entry_bytes(value)
+
+            def fingerprint(world, scope, inputs, deps):
+                return input_fingerprint(meta, world, scope, inputs, deps, manifest)
+            return RegisteredPlanContract(meta, TypeAdapter(input_type).validate_python, fingerprint, declarations,
+                CacheBinding(CacheContract[envelope_type](id=f"surface.envelope.pc.{slot.value}", schema_version=1), Codec()), manifest)
+
+        def declaration(slot, handle):
+            meta = handle.metadata
+            return PlanDependencyContract(slot=PlanSlot(slot.value), contract_id=meta.id,
+                schema_version=meta.schema_version, algorithm_version=meta.algorithm_version)
+
+        self.routes_binding = binding(SurfacePlanSlot.HYDROLOGY_ROUTES, HydrologyPlanInput, HydrologyRoutesPlan,
+            (declaration(SurfacePlanSlot.RELIEF, self.binding),))
+        # PC-8 owns route production. Tests supply a validated, signed dependency envelope.
+        self.h.registry.register(self.routes_binding, Provider(lambda *args: self.fail("route provider invoked")))
+        self.river_binding = binding(SurfacePlanSlot.RIVER_RELIEF, RiverReliefInput, RiverReliefPlan,
+            (declaration(SurfacePlanSlot.HYDROLOGY_ROUTES, self.routes_binding), declaration(SurfacePlanSlot.RELIEF, self.binding)))
+        self.h.registry.register(self.river_binding, RiverReliefPlanProvider(self.binding, self.routes_binding))
+        self.river_inputs = RiverReliefInput(z_min=-100, z_max=100, grid=self.inputs.grid,
+            topology=self.water.topology, channel_depths=((self.Kind.MOUNTAIN_RIVER, 5), (self.Kind.RIVER, 2)))
+
+    def river(self, payload, inputs=None):
+        from app.application.planning.service.planFingerprints import output_fingerprint
+        from app.dataModel.planning.identity.planKey import PlanSlot, InputFingerprint
+        inputs = self.river_inputs if inputs is None else inputs
+        meta = self.routes_binding.metadata
+        route_deps = (PlanDependency(slot=PlanSlot(SurfacePlanSlot.RELIEF.value), ref=self.before.ref),)
+        # The route producer is not part of PC-7; its opaque source-key digest is a fixture.
+        key = PlanKey(world_uid="climate-world", scope=WorldPlanScope(), contract_id=meta.id,
+            schema_version=meta.schema_version, algorithm_version=meta.algorithm_version, input_fingerprint=InputFingerprint(bytes(32)))
+        envelope = PlanEnvelope[type(payload)](ref=PlanRef(key=key, output_fingerprint=output_fingerprint(
+            payload, route_deps, (), self.river_manifest)), dependencies=route_deps, payload=payload, diagnostics=())
+        reader = self.h.empty.with_plan(PlanSlot(SurfacePlanSlot.HYDROLOGY_ROUTES.value), self.routes_binding, envelope)
+        reader = reader.with_plan(PlanSlot(SurfacePlanSlot.RELIEF.value), self.binding, self.before)
+        deps = (PlanDependency(slot=PlanSlot(SurfacePlanSlot.HYDROLOGY_ROUTES.value), ref=envelope.ref), *route_deps)
+        meta = self.river_binding.metadata
+        request = PlanRequest[self.RiverInput](key=PlanKey(world_uid="climate-world", scope=WorldPlanScope(),
+            contract_id=meta.id, schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
+            input_fingerprint=self.river_binding.fingerprint_inputs("climate-world", WorldPlanScope(), inputs, deps)),
+            inputs=inputs, dependencies=deps)
+        return self.h.service.get_or_build(self.river_binding, request, reader, wait=Wait(10))
+
+    def test_overlap_carves_once_from_original_base_and_keeps_receiver(self):
+        route = self.RouteFixture.route(uid="a")
+        other = self.RouteFixture.route(uid="b")
+        other = other.model_copy(update={"segments": tuple(segment.model_copy(update={
+            "connection_type": self.Kind.MOUNTAIN_RIVER}) for segment in other.segments),
+            "drainage": other.drainage.model_copy(update={"river_type": self.Kind.MOUNTAIN_RIVER})})
+        routes = self.RouteFixture.routes(coarse_routes=(route, other))
+        first = self.river(routes)
+        before, after = dict(self.before.payload.surface_z), dict(first.payload.surface_z)
+        start, receiver = route.segments[0].path
+        self.assertEqual(after[start], before[start] - 5)
+        self.assertEqual(after[receiver], before[receiver])
+        self.assertEqual({bed.river_uid for bed in first.payload.coarse_beds}, {"a", "b"})
+        self.assertTrue(all(dict(bed.bed_z)[start] == after[start] for bed in first.payload.coarse_beds))
+        reordered = self.river(routes.model_copy(update={"coarse_routes": (other, route)}))
+        self.assertEqual(reordered.payload.surface_z, first.payload.surface_z)
+        self.assertEqual(self.river(routes), first)
+        self.h.backend.clear()
+        self.assertEqual(self.river(routes), first)
+
+    def test_fine_keeps_receiver_and_all_unchanged_sampled_cells(self):
+        from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, FineZ
+        route = self.RouteFixture.route(fine=True)
+        base = tuple(((FineX(x), FineY(0)), FineZ(z)) for x, z in ((0, 5), (1, 9), (2, 7)))
+        routes = self.RouteFixture.routes(coarse_routes=(), fine_routes=(route,), fine_base_surface_z=base)
+        first = self.river(routes)
+        self.assertEqual([z for _, z in first.payload.fine_surface_z], [3, 9, 7])
+        self.assertEqual(first.payload.surface_z, self.before.payload.surface_z)
+        self.assertEqual(routes.fine_base_surface_z, base)
+        codec = self.river_binding.cache_binding.codec
+        self.assertEqual(codec.decode(codec.encode(first)), first)
+
+    def test_empty_routes_do_not_repeat_relief_and_missing_heights_fail(self):
+        from unittest.mock import patch
+        from app.application.planning.service.planningService import PlanBuildFailure
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord, GridX, GridY
+        routes = self.RouteFixture.routes(coarse_routes=())
+        path = "app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider._mountain_layout"
+        with patch(path, side_effect=AssertionError("mountains replanned")):
+            empty = self.river(routes)
+        self.assertEqual(empty.payload.surface_z, self.before.payload.surface_z)
+        self.assertEqual((empty.payload.coarse_beds, empty.payload.fine_beds), ((), ()))
+        route = self.RouteFixture.route()
+        segment = route.segments[0].model_copy(update={"path": (SurfaceGridCoord(GridX(999), GridY(0)), route.receiver_cell)})
+        invalid = self.RouteFixture.routes(coarse_routes=(route.model_copy(update={"segments": (segment,)}),))
+        with self.assertRaises(PlanBuildFailure):
+            self.river(invalid)
+
+    def test_profile_symbol_identity_and_z_min_clamp(self):
+        from app.application.worldData.generators.hydrology.rivers.riverBedProfile import river_bed_spec as old
+        from app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ import river_bed_spec
+        self.assertIs(old, river_bed_spec)
+        route = self.RouteFixture.route()
+        start = route.segments[0].path[0]
+        pre = dict(self.before.payload.surface_z)[start]
+        inputs = self.river_inputs.model_copy(update={"z_min": pre - 1})
+        first = self.river(self.RouteFixture.routes(), inputs)
+        self.assertEqual(dict(first.payload.surface_z)[start], pre - 1)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import (
+            HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider)
+        from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import RiverReliefPlanProvider
+        from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput, HydrologyFinalInput, HydrologyAnchorInput
+        from app.dataModel.hydrology.planning.hydrologyPlan import (HydrologyRoutesPlan, HydrologyPlan,
+            RiverRoute, RiverPathSegment, DeclaredWaterPaint, LakePaint, CoastlinePaint, SegmentRiverPaint, IntentRiverPaint)
+        from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
+        from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan, RiverBedRecord
+        from app.dataModel.hydrology.declaredRiver import DeclaredRiver, DeclaredRiverSegment, HydrologyMouth
+        from app.dataModel.hydrology.rivers import HydrologyRiversPolicy, RiverTypeClassify
+        from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+        from app.dataModel.hydrology.waterBody import WaterBody
+        from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
+        from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
+        from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+        from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
+        from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+        from app.dataModel.hydrology.enums.waterSystemKind import WaterSystemKind
+        from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
+        from app.dataModel.hydrology.enums.riverSystemRole import RiverSystemRole
+        from app.dataModel.hydrology.enums.riverSystemTopology import RiverSystemTopology
+        from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope, HYDROLOGY_BOOTSTRAP_SCOPES
+        from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord, FineXY
+        super().setUp()
+        self.HInput, self.FInput, self.RInput = HydrologyPlanInput, HydrologyFinalInput, RiverReliefInput
+        self.HPlan, self.FPlan, self.RPlan = HydrologyRoutesPlan, HydrologyPlan, RiverReliefPlan
+        self.Declare, self.Anchor, self.Kind = DeclaredRiver, HydrologyAnchorInput, HydrologyConnectionType
+        self.water_inputs = self.water.inputs.model_copy(update={
+            "seas": self.water.inputs.seas.model_copy(update={"min_water_cells": 1,
+                "autoresolve_coastal_sea": False, "autoresolve_open_ocean": False}),
+            "lakes": self.water.inputs.lakes.model_copy(update={"min_water_cells": 1, "autoresolve": False})})
+        self.water_envelope = self.water.get(inputs=self.water_inputs)
+        self.before = self.get(water=self.water_envelope)
+        self.before = self.signed(self.before, self.before.payload.model_copy(update={"surface_z": tuple(
+            (cell, (-2 if cell.gy == 0 and cell.gx in (1, 2) else 8 - (cell.gx + 2) * 2
+                    if cell.gy == 0 and cell.gx <= 0 else 10)) for cell, _ in self.before.payload.surface_z)}), self.manifest)
+        self.hydro_inputs = HydrologyPlanInput(enabled=True, seed=17, resolution_mode=self.water.Mode.RUNTIME,
+            scopes=HYDROLOGY_BOOTSTRAP_SCOPES, default_water_level=0,
+            seas=self.water_inputs.seas, lakes=self.water_inputs.lakes,
+            rivers=HydrologyRiversPolicy(autoresolve=False, max_path_cells=64, mouth_search_radius_fine=0),
+            declared_rivers=(self.segment(),), coastlines=(), declared_lakes=(), anchors=(),
+            topology=self.water.topology, grid=self.inputs.grid, z_min=-100, z_max=100,
+            liquid_keys=frozenset(("water",)), change_uid="change")
+        records = (HydrologyPlanInput, HydrologyFinalInput, HydrologyAnchorInput,
+            HydrologyRoutesPlan, HydrologyPlan, RiverReliefInput, RiverReliefPlan,
+            RiverBedRecord[SurfaceGridCoord], RiverBedRecord[FineXY],
+            RiverRoute[SurfaceGridCoord], RiverRoute[FineXY], RiverPathSegment[SurfaceGridCoord], RiverPathSegment[FineXY],
+            DeclaredWaterPaint, LakePaint, CoastlinePaint, SegmentRiverPaint, IntentRiverPaint,
+            DeclaredRiver, DeclaredRiverSegment, HydrologyMouth, HydrologyRiversPolicy, RiverTypeClassify,
+            MapCellHydrology, WaterBody, PhysicalWaterUnion, RiverDrainageLink,
+            PlanEnvelope[HydrologyRoutesPlan], PlanEnvelope[HydrologyPlan], PlanEnvelope[RiverReliefPlan])
+        enums = (HydrologyCellRole, HydrologyShoreKind, HydrologyConnectionType,
+            WaterSystemKind, RiverDeclareMode, RiverSystemRole, RiverSystemTopology, HydrologyScope)
+        self.hydro_manifest = CanonicalSchemaManifest(entries=self.manifest.entries + tuple(
+            RegisteredTypeEntry(type_id=i, python_type=t, kind=CanonicalTypeKind.RECORD) for i, t in enumerate(records, 400))
+            + tuple(RegisteredTypeEntry(type_id=i, python_type=t, kind=CanonicalTypeKind.ENUM) for i, t in enumerate(enums, 450)))
+        manifest = self.hydro_manifest
+
+        def binding(slot, input_type, payload_type, handles):
+            meta = PlanContractMetadata(id=f"surface.pc.{slot.value}", schema_version=1, algorithm_version=1)
+            envelope_type = PlanEnvelope[payload_type]
+            class Codec:
+                def validate(self, value): return TypeAdapter(envelope_type).validate_python(value, strict=True)
+                def encode(self, value): return encode(value, manifest)
+                def decode(self, value): return decode(value, envelope_type, manifest)
+                def retained_bytes(self, value): return retained_entry_bytes(value)
+            declarations = tuple(PlanDependencyContract(slot=PlanSlot(s.value), contract_id=h.metadata.id,
+                schema_version=h.metadata.schema_version, algorithm_version=h.metadata.algorithm_version) for s, h in handles)
+            return RegisteredPlanContract(meta, TypeAdapter(input_type).validate_python,
+                lambda w, s, i, d: input_fingerprint(meta, w, s, i, d, manifest), declarations,
+                CacheBinding(CacheContract[envelope_type](id="cache." + meta.id, schema_version=1), Codec()), manifest)
+        self.route_handles = ((SurfacePlanSlot.RELIEF, self.binding), (SurfacePlanSlot.WATER_PLACEMENT, self.water.binding))
+        self.routes_binding = binding(SurfacePlanSlot.HYDROLOGY_ROUTES, HydrologyPlanInput, HydrologyRoutesPlan, self.route_handles)
+        self.river_handles = ((SurfacePlanSlot.RELIEF, self.binding), (SurfacePlanSlot.HYDROLOGY_ROUTES, self.routes_binding))
+        self.river_binding = binding(SurfacePlanSlot.RIVER_RELIEF, RiverReliefInput, RiverReliefPlan, self.river_handles)
+        self.final_handles = (*self.river_handles, (SurfacePlanSlot.RIVER_RELIEF, self.river_binding))
+        self.final_binding = binding(SurfacePlanSlot.HYDROLOGY, HydrologyFinalInput, HydrologyPlan, self.final_handles)
+        self.route_provider = Mock(wraps=HydrologyRoutesPlanProvider(self.binding, self.water.binding))
+        self.final_provider = Mock(wraps=HydrologyFinalPlanProvider(self.binding, self.routes_binding, self.river_binding))
+        self.h.registry.register(self.routes_binding, self.route_provider)
+        self.river_provider = RiverReliefPlanProvider(self.binding, self.routes_binding)
+        self.h.registry.register(self.river_binding, self.river_provider)
+        self.h.registry.register(self.final_binding, self.final_provider)
+        self.river_inputs = RiverReliefInput(z_min=-100, z_max=100, grid=self.inputs.grid, topology=self.water.topology,
+            channel_depths=tuple((kind, self.hydro_inputs.rivers.channel_depth_for(kind)) for kind in (
+                HydrologyConnectionType.MOUNTAIN_RIVER, HydrologyConnectionType.RIVER)))
+        self.final_inputs = HydrologyFinalInput(enabled=True, grid=self.inputs.grid, topology=self.water.topology)
+
+    def segment(self, uid="river", start=(-20, 0), end=(10, 0), kind="river"):
+        from app.dataModel.hydrology.declaredRiver import DeclaredRiver
+        return DeclaredRiver.model_validate(dict(location_uid=uid, declare_mode="segments", segments=[
+            {"from": dict(x=start[0], y=start[1]), "to": dict(x=end[0], y=end[1]),
+             "connection_type": kind, "width_cells": 2}]))
+
+    def signed(self, envelope, payload, manifest, dependencies=None):
+        from app.application.planning.service.planFingerprints import output_fingerprint
+        deps = envelope.dependencies if dependencies is None else dependencies
+        return PlanEnvelope[type(payload)](ref=PlanRef(key=envelope.ref.key, output_fingerprint=output_fingerprint(
+            payload, deps, envelope.diagnostics, manifest)), dependencies=deps, payload=payload, diagnostics=envelope.diagnostics)
+
+    def execute(self, binding, inputs, handles, envelopes):
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        deps = tuple(sorted((PlanDependency(slot=PlanSlot(slot.value), ref=env.ref) for (slot, _), env in zip(handles, envelopes)), key=lambda dep: dep.slot))
+        reader = self.h.empty
+        for (slot, handle), env in zip(handles, envelopes):
+            reader = reader.with_plan(PlanSlot(slot.value), handle, env)
+        meta = binding.metadata
+        req = PlanRequest[type(inputs)](key=PlanKey(world_uid="climate-world", scope=WorldPlanScope(), contract_id=meta.id,
+            schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
+            input_fingerprint=binding.fingerprint_inputs("climate-world", WorldPlanScope(), inputs, deps)), inputs=inputs, dependencies=deps)
+        return self.h.service.get_or_build(binding, req, reader, wait=Wait(20))
+
+    def routes(self, inputs=None, before=None, water=None):
+        return self.execute(self.routes_binding, inputs or self.hydro_inputs, self.route_handles,
+            (before or self.before, water or self.water_envelope))
+
+    def finish(self, routes=None, river=None, before=None, inputs=None):
+        before = before or self.before
+        routes = routes or self.routes(before=before)
+        river = river or self.execute(self.river_binding, self.river_inputs, self.river_handles, (before, routes))
+        return self.execute(self.final_binding, inputs or self.final_inputs, self.final_handles, (before, routes, river))
+
+    def test_routes_final_match_legacy_without_recarve_or_world_reads(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
+        from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import apply_declared_fine_river_carves
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from app.dataModel.topology.fineTopology import fine_topology
+        from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+        from tests.hydrology_fixtures import hydro_world
+        source = {(cell.gx, cell.gy): z for cell, z in self.before.payload.surface_z}
+        hm = SurfaceHeightmap("climate-world", self.water.terrain.inputs.bbox, dict(source))
+        w = hydro_world(world_uid="climate-world", fine_cells_per_map_cell=10, z_min=-100, hydrology=dict(
+            default_water_level=0, default_seas=self.hydro_inputs.seas.model_dump(), default_lakes=self.hydro_inputs.lakes.model_dump(),
+            default_rivers=self.hydro_inputs.rivers.model_dump(), declared_rivers=[self.segment().model_dump()]))
+        legacy = HydrologyGeneratorService().apply(w, [], hm, basin_specs=self.water_envelope.payload.basin_specs,
+            topology=self.water.topology, change_uid="change")
+        fine, z = apply_declared_fine_river_carves(w, [], source, topology=fine_topology(self.water.topology, 10),
+            base_space=CoordinateSpace.WORLD_SURFACE_GRID, coarse_hydro=legacy.cell_index.by_cell, water_bodies=legacy.water_bodies)
+        with patch("app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live World lookup")), patch(
+            "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.river_bed_spec", side_effect=AssertionError("route profile")):
+            routes = self.routes()
+        with patch("app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider.assemble_water_bodies",
+                   side_effect=AssertionError("final water discovery")):
+            final = self.finish(routes)
+        self.assertTrue(routes.payload.coarse_routes)
+        self.assertTrue(routes.payload.fine_routes)
+        self.assertEqual(dict(final.payload.coarse_surface_z), {cell: hm.surface_z[(cell.gx, cell.gy)] for cell, _ in final.payload.coarse_surface_z})
+        self.assertEqual({(c.gx, c.gy): v for c, v in final.payload.coarse_hydro}, legacy.cell_index.by_cell)
+        self.assertEqual(dict(final.payload.sparse_fine_hydro), fine)
+        self.assertEqual(dict(final.payload.fine_z_overrides), z)
+        self.assertEqual(final.payload.water_bodies, legacy.water_bodies)
+        self.assertEqual(final.payload.physical_unions, legacy.physical_unions)
+        self.assertEqual({(c.gx, c.gy): z for c, z in self.before.payload.surface_z}, source)
+
+    def test_cache_clear_rebuild_restart_and_codec_equality(self):
+        first, routes = self.finish(), self.routes()
+        self.assertEqual(self.finish(), first)
+        self.assertEqual(self.route_provider.build.call_count, 1)
+        self.assertEqual(self.final_provider.build.call_count, 1)
+        self.h.backend.clear()
+        self.assertEqual(self.finish(), first)
+        for binding, env in ((self.routes_binding, routes), (self.final_binding, first)):
+            codec = binding.cache_binding.codec
+            self.assertEqual(codec.decode(codec.encode(env)), env)
+        original = self.h
+        self.h = Harness(policy=PlanningExecutionPolicy(max_workers=1, max_pending_builds=2))
+        self.addCleanup(self.h.service.shutdown)
+        for binding, provider in ((self.binding, self.provider), (self.water.binding, self.water.provider),
+            (self.routes_binding, self.route_provider), (self.river_binding, self.river_provider),
+            (self.final_binding, self.final_provider)):
+            self.h.registry.register(binding, provider)
+        self.assertEqual(self.finish(), first)
+
+    def test_routing_failure_is_partial_and_runtime_fallback_is_frozen(self):
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        bad = self.segment(uid="bad", start=(-20, 10), end=(40, 10))
+        inputs = self.hydro_inputs.model_copy(update={"declared_rivers": (bad,)})
+        runtime = self.routes(inputs)
+        self.assertTrue(any(d.disposition is PlanDiagnosticDisposition.FALLBACK for d in runtime.diagnostics))
+        preview = self.routes(inputs.model_copy(update={"resolution_mode": ResolutionMode.VALIDATE_ONLY}))
+        self.assertFalse(preview.payload.coarse_routes)
+        self.assertTrue(preview.payload.water_bodies)
+        self.assertTrue(all(d.disposition is PlanDiagnosticDisposition.ERROR for d in preview.diagnostics))
+        invalid = self.routes(self.hydro_inputs.model_copy(update={"declared_rivers": (self.segment(uid="bad", kind="road"), self.segment(uid="not-river", kind="coastline"), self.segment())}))
+        self.assertEqual([route.river_uid for route in invalid.payload.coarse_routes], ["river"])
+        self.assertTrue(any(d.issue.code == "RIVER_INVALID_CONNECTION_TYPE" for d in invalid.diagnostics))
+
+    def test_empty_disabled_and_scoped_water_keep_terrain(self):
+        from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
+        for inputs in (self.hydro_inputs.model_copy(update={"enabled": False}),
+                       self.hydro_inputs.model_copy(update={"scopes": frozenset()})):
+            routes = self.routes(inputs)
+            self.assertFalse(routes.payload.coarse_routes or routes.payload.fine_routes or routes.payload.water_bodies)
+            final = self.finish(routes, inputs=self.final_inputs.model_copy(update={"enabled": inputs.enabled}))
+            self.assertEqual(final.payload.coarse_surface_z, self.before.payload.surface_z)
+            self.assertFalse(final.payload.coarse_hydro)
+        no_rivers = self.routes(self.hydro_inputs.model_copy(update={"scopes": frozenset((HydrologyScope.OPEN_OCEAN,))}))
+        self.assertTrue(no_rivers.payload.water_bodies)
+        self.assertFalse(no_rivers.payload.coarse_routes)
+
+    def test_edit_invalidates_dependencies_and_bad_bed_mapping_fails(self):
+        from app.application.planning.service.planningService import PlanBuildFailure
+        first = self.routes()
+        changed = self.signed(self.before, self.before.payload.model_copy(update={"surface_z": tuple(
+            (cell, z + 1 if cell.gx == -2 else z) for cell, z in self.before.payload.surface_z)}), self.manifest)
+        second = self.routes(before=changed)
+        self.assertNotEqual(first.ref, second.ref)
+        self.assertNotEqual(self.finish(first).ref, self.finish(second, before=changed).ref)
+        with self.assertRaises(PlanBuildFailure): self.finish(first, before=changed)
+        river = self.execute(self.river_binding, self.river_inputs, self.river_handles, (self.before, first))
+        bad = self.signed(river, river.payload.model_copy(update={"coarse_beds": ()}), self.hydro_manifest)
+        with self.assertRaises(PlanBuildFailure): self.finish(first, bad)
+        self.assertFalse(self.finish(first).diagnostics)
+
+    def test_declared_paint_preserves_fine_geometry_order_width_and_missing_anchors(self):
+        from app.dataModel.hydrology.declaredLake import DeclaredLake
+        from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+        point = lambda x, y: dict(x=x, y=y)
+        intent = self.Declare.model_validate(dict(location_uid="intent", declare_mode="via_locations",
+            route_location_uids=["a", "missing", "b"]))
+        inputs = self.hydro_inputs.model_copy(update={"declared_rivers": (self.segment(), intent),
+            "anchors": (self.Anchor(location_uid="a", position=(-20, 0), z=None, subtype=None),
+                        self.Anchor(location_uid="b", position=(10, 0), z=None, subtype=None)),
+            "declared_lakes": (DeclaredLake.model_validate(dict(location_uid="lake", shoreline=[point(0, 0), point(10, 0), point(10, 10)])),),
+            "coastlines": (DeclaredCoastline.model_validate(dict(location_uid="coast", kind="sea", path=[point(0, 0), point(10, 0)])),)})
+        result = self.routes(inputs)
+        paint = result.payload.declared_paint
+        self.assertEqual(paint.segments[0].segment, ((-20, 0), (10, 0)))
+        self.assertEqual(paint.segments[0].width_fine, 2)
+        self.assertEqual(paint.lakes[0].shoreline_segments[-1], ((10, 10), (0, 0)))
+        self.assertFalse(paint.intents)
+        self.assertTrue(any(d.issue.code == "RIVER_MISSING_PAINT_GEOMETRY" for d in result.diagnostics))
+
+
+    def test_procedural_baseline_keeps_seed_identity_and_geometry(self):
+        from app.application.worldData.generators.hydrology.riverNetworkAssembler import assemble_rivers
+        from app.application.worldData.generators.hydrology.types import HydrologyMasterInput, LoadedConnectionGraph
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from tests.hydrology_fixtures import hydro_world
+        inputs = self.hydro_inputs.model_copy(update={"declared_rivers": (),
+            "rivers": self.hydro_inputs.rivers.model_copy(update={"autoresolve": True})})
+        hm = SurfaceHeightmap("climate-world", self.water.terrain.inputs.bbox,
+            {(cell.gx, cell.gy): z for cell, z in self.before.payload.surface_z})
+        w = hydro_world(world_uid="climate-world", seed=inputs.seed, fine_cells_per_map_cell=10, z_min=-100,
+            hydrology=dict(default_rivers=inputs.rivers.model_dump()))
+        from app.ids import seed_int
+        inputs = inputs.model_copy(update={"seed": seed_int(w)})
+        routes = self.routes(inputs)
+        self.assertTrue(routes.payload.coarse_routes)
+        occupied = {(cell.gx, cell.gy): v for cell, v in routes.payload.coarse_open_water}
+        master = HydrologyMasterInput(world_uid="climate-world", hydrology_enabled=True, scopes=inputs.scopes,
+            connection_graph=LoadedConnectionGraph([], []))
+        legacy = assemble_rivers(w, hm, master, occupied=occupied, topology=inputs.topology,
+            water_bodies=routes.payload.water_bodies)
+        expected = [(segment.edge_uid, tuple(segment.polyline_cells)) for segment in legacy.segments]
+        self.assertEqual([(segment.edge_uid, tuple((cell.gx, cell.gy) for cell in segment.path))
+            for route in routes.payload.coarse_routes for segment in route.segments], expected)
+        first = self.finish(routes)
+        self.assertEqual({(cell.gx, cell.gy): z for cell, z in first.payload.coarse_surface_z}, hm.surface_z)
+        self.h.backend.clear()
+        self.assertEqual(self.routes(inputs), routes)
+
+    def test_endpoint_and_via_anchors_preserve_identity_and_wire_width(self):
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        for via in (False, True):
+            data = dict(location_uid="intent", declare_mode="via_locations", route_location_uids=["start", "mouth"]) if via else dict(
+                location_uid="intent", declare_mode="endpoints", source=dict(x=-20, y=0), mouth=dict(location_uid="mouth"))
+            intent = self.Declare.model_validate(data)
+            inputs = self.hydro_inputs.model_copy(update={"declared_rivers": (intent,),
+                "resolution_mode": ResolutionMode.VALIDATE_ONLY,
+                "anchors": (self.Anchor(location_uid="start", position=(-20, 0), z=None, subtype=None),
+                            self.Anchor(location_uid="mouth", position=(10, 0), z=None, subtype=None))})
+            routes = self.routes(inputs)
+            self.assertEqual([r.river_uid for r in routes.payload.coarse_routes], ["intent"])
+            self.assertEqual([r.river_uid for r in routes.payload.fine_routes], ["intent"])
+            self.assertEqual(routes.payload.coarse_routes[0].drainage.receiver_uid, "basin")
+            self.assertEqual(routes.payload.declared_paint.intents[0].path, ((-20, 0), (10, 0)))
+            self.assertEqual(routes.payload.declared_paint.intents[0].width_wire, 1)
+            self.finish(routes)
+
+    def test_confluence_is_rooted_and_receiver_bed_is_written_by_parent_once(self):
+        parent = self.segment(uid="parent")
+        child = self.Declare.model_validate(dict(location_uid="child", system_role="tributary", parent_location_uid="parent",
+            declare_mode="segments", segments=[{"from": dict(x=-20, y=20), "to": dict(x=-20, y=0), "connection_type": "river"}]))
+        # The vertical approach is flat and never uphill at the parent junction.
+        before = self.signed(self.before, self.before.payload.model_copy(update={"surface_z": tuple(
+            (cell, 10 if cell.gx == -2 and cell.gy > 0 else z) for cell, z in self.before.payload.surface_z)}), self.manifest)
+        routes = self.routes(self.hydro_inputs.model_copy(update={"declared_rivers": (child, parent)}), before)
+        self.assertEqual([r.river_uid for r in routes.payload.coarse_routes], ["parent", "child"])
+        self.assertEqual(routes.payload.coarse_routes[1].drainage.receiver_uid, "parent")
+        final = self.finish(routes, before=before)
+        receiver = routes.payload.coarse_routes[1].receiver_cell
+        self.assertEqual(dict(final.payload.coarse_surface_z)[receiver], dict(before.payload.surface_z)[receiver] - 3)
+
+    def test_physical_union_and_water_diagnostics_survive_cache(self):
+        # Disjoint authored footprints meet through the existing physical fill.
+        from app.dataModel.spatial.regionShape import BboxShape
+        water_inputs = self.water_inputs.model_copy(update={"basins": (
+            self.water_inputs.basins[0].model_copy(update={"footprint": BboxShape(x_min=0, x_max=10, y_min=0, y_max=10)}),
+            self.water_inputs.basins[0].model_copy(update={"location_uid": "other",
+                "footprint": BboxShape(x_min=20, x_max=30, y_min=0, y_max=10)}))})
+        water = self.water.get(inputs=water_inputs)
+        deps = tuple(PlanDependency(slot=dep.slot, ref=water.ref if dep.slot == SurfacePlanSlot.WATER_PLACEMENT.value else dep.ref)
+                     for dep in self.before.dependencies)
+        before = self.signed(self.before, self.before.payload, self.manifest, deps)
+        routes = self.routes(before=before, water=water)
+        self.assertEqual({b.water_body_uid for b in routes.payload.water_bodies}, {"basin", "other"})
+        self.assertTrue(routes.payload.physical_unions)
+        final = self.finish(routes, before=before)
+        self.assertEqual(final.payload.physical_unions, routes.payload.physical_unions)
+        self.h.backend.clear()
+        self.assertEqual(self.routes(before=before, water=water), routes)
+
+    def test_final_rejects_incoherent_water_and_receiver_mapping(self):
+        from app.application.planning.service.planningService import PlanBuildFailure
+        water = self.water.get(inputs=self.water_inputs.model_copy(update={"enabled": False}))
+        with self.assertRaises(PlanBuildFailure): self.routes(water=water)
+        routes = self.routes()
+        bad_payload = routes.payload.model_copy(update={"coarse_open_water": ()})
+        bad_routes = self.signed(routes, bad_payload, self.hydro_manifest)
+        with self.assertRaises(PlanBuildFailure): self.finish(bad_routes)
+
+    def test_final_never_routes_profiles_discovers_or_writes(self):
+        from unittest.mock import patch
+        routes = self.routes()
+        river = self.execute(self.river_binding, self.river_inputs, self.river_handles, (self.before, routes))
+        path = "app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider."
+        with patch(path + "prepared_declared_river_requests", side_effect=AssertionError("reroute")), patch(
+            path + "assemble_water_bodies", side_effect=AssertionError("refill")), patch(
+            "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.apply_river_bed_z",
+            side_effect=AssertionError("recarve")):
+            self.finish(routes, river)

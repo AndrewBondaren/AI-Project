@@ -12,7 +12,7 @@ def is_runtime_river_context(ctx: ResolveContext) -> bool:
 def emit_river_diagnostic(ctx: ResolveContext, diagnostic: RiverRouteDiagnostic) -> None:
     issue = FieldPathError(path=("hydrology", "rivers", diagnostic.object_uid),
                            message=diagnostic.model_dump_json(), code=diagnostic.code.value)
-    if not is_runtime_river_context(ctx):
+    if ctx.collect_only or not is_runtime_river_context(ctx):
         report_issues(ctx, (issue,))
     else:
         log_issues((issue,))

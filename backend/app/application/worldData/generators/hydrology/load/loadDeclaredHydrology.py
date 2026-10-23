@@ -134,6 +134,14 @@ def load_declared_hydrology(
             if basin.floor_z < z_min:
                 raise ValueError(f"basin {basin.location_uid}: floor_z is below world z_min")
 
+    return load_prepared_declared_hydrology(coastlines, lakes, rivers, basins)
+
+
+def load_prepared_declared_hydrology(
+    coastlines: list[DeclaredCoastline], lakes: list[DeclaredLake],
+    rivers: list[DeclaredRiver], basins: list[DeclaredBasin],
+) -> LoadedDeclaredHydrology:
+    """Convert validated declarations with the same geometry order and identities."""
     coastline_specs: list[CoastlineSpec] = []
     for entry in coastlines:
         segments = _path_to_segments(list(entry.path), closed=entry.closed)

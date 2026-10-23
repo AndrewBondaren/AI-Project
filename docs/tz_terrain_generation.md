@@ -2016,6 +2016,43 @@ input/output fingerprints и hashes encoded envelopes трёх domain fixtures
 
 ### PC-0 — общие records и API
 
+**PC-7 реализован 2026-10-23:** ReliefPlanProvider в
+application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py
+читает climate_base/terrain_base/water_placement через typed handles и
+SurfacePlanSlot. Upstream refs, extent и world z bounds проверяются;
+structural mismatch → PlanBuildFailure. Один frozen mountain layout
+выбирается coarse collector и stamp; light не выполняет новый selection.
+Prepared adapters existing collect/reliefSidesStamp/templatePick принимают
+resolved inputs/policy/template projections, без World в provider.
+Missing template → ERROR без effects данного объекта; independent entries
+сохраняются; None recipe существующего member сохраняет Mode D.
+Coarse mountain/ravine/basin и mountain reservation используют прежние
+height kernels. Полный light base воспроизводит existing contributor;
+absolute mountain z/facing и full-extent ravine effects входят в ReliefPlan.
+Ravine detector не добавляет wrap-соседей; terrain color не меняет высоты.
+Mutable buffers local, нет pack writes/L2 mill или cache внутри provider.
+Frozen collector получает row-major TerrainPlan cells; legacy wrapper
+сохраняет прежний set iteration до PC-9. Сверка world_test_004 с HEAD
+подтвердила полное равенство legacy mountain selection (4 entries).
+Unified selection/height-color delta принимается отдельно PC-10/12.
+Проверки providers72/contracts59/regression79 — 210 tests OK;
+pyright valid0, negative27 exact code/location. Baseline coarse/light,
+reservations, no-wrap ravines, one selection, HIT/rebuild/single-worker,
+partial delivery, template/seed/ref edits, range fields и canonical
+round-trip проверены. Production registration/callers — PC-9A/PC-9.
+RiverReliefPlanProvider реализован этим же PC-7 (§PC-D/PC-E) в том же
+модуле. Exact pre-river relief + готовые routes дают RiverReliefPlan;
+первый relief не перезапускается. river_bed_spec перемещён в terrain
+riverBedZ.py, прежний hydrology symbol — identity-preserving re-export.
+Coarse/fine профили вычисляются от untouched pre-river base; receiver
+исключён из профиля своей реки. Existing writer объединяет overlapping
+absolute targets через min, без повторного subtraction. Bed records
+связаны по river_uid в каждом space и содержат actual итоговые z;
+coarse surface полная, fine сохраняет весь sparse sample set.
+No-river case сохраняет поверхность, missing bed/receiver heights —
+PlanBuildFailure. Identity/replay/overlap/z_min/fine sample round-trip
+проверены; route/final hydrology providers остаются задачей PC-8.
+
 **PC-6W реализован 2026-10-23:** WaterPlacementPlanProvider находится в
 application/worldData/generators/terrain/planning/waterPlacementPlanProvider.py.
 Frozen WaterPlacementInput + exact terrain_base envelope поступают в общий
@@ -2933,6 +2970,27 @@ river corridors → lake/coastline → coarse open water и river preservation.
 
 #### PC-D. River routes → terrain riverbed → final water
 
+**PC-8 не завершён и не принят (2026-10-23):** текущая реализация
+смешивает planning-обвязку с доменной сборкой и правилами гидрологии.
+Требуется разделение по модулям-владельцам; успешные проверки ниже
+не означают архитектурную приёмку. Переход к PC-8C отложен.
+Текущее состояние реализации:
+`application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py`
+содержит HydrologyRoutesPlanProvider и HydrologyFinalPlanProvider.
+Routes используют frozen inputs + exact relief/water_placement refs,
+existing fill/level/union/routing/fallback kernels и pre-river fine sampling.
+Route feasibility не вычисляет profiles; claims используют pre-z, запись
+русел остаётся RiverReliefPlanProvider. Final соединяет actual bed records
+с routes по river UID в каждом space, проверяет refs/coverage/receiver
+identity и публикует immutable roles/drainage/final heights/declared paint.
+Bodies/unions/levels сохраняются, нового discovery/reroute/carve в final нет.
+Legacy callers пока не переключены: registration PC-9A, activation PC-9.
+Pure prepared helpers получают UID/span/policy/anchor map, без live World.
+Shared water/river diagnostic sinks учитывают collect_only; water paths —
+typed tuple. Retained kind/level fallback — FALLBACK, world-ocean — NOTICE,
+route rejection — ERROR, redirect — FALLBACK; final не копирует upstream issues.
+
+
 Все новые records immutable, required fields, no default injection.
 `S` ниже — invariant coordinate parameter с двумя зарегистрированными
 bindings: SurfaceGridCoord либо FineXY; union разных spaces внутри route
@@ -2953,7 +3011,8 @@ bindings: SurfaceGridCoord либо FineXY; union разных spaces внутр
   fine_base_surface_z:tuple[tuple[FineXY,FineZ],...],
   declared_paint:DeclaredWaterPaint)`.
 
-Provider routes не пишет z. Он выделяет existing fill/route validation/
+Provider routes не пишет z и вызывает доменный assembly API §PC-D1.
+Доменные владельцы переиспользуют existing fill/route validation/
 fallback/drainage-order semantics из assemble_rivers/prepare_river_requests
 и fineHydrologyIndex. Route feasibility проверяется на pre-river relief;
 проверка наличия land-bed cells — проверка path/receiver/missing heights,
@@ -3012,6 +3071,396 @@ topology:WorldTopology)`; policy decisions/routes/water identities уже
 из того же captured source, не второй read. WaterPlacementInput дополняется
 z_max:FineZ для полной world z validation specs. ClimateFeaturePolicy
 включает оба TerrainKey поля из §6.29-M.
+
+<a id="pc8-responsibility-boundaries"></a>
+
+#### PC-D1. PC-8 — согласованные границы классов, методов и контрактов
+
+**DESIGN_ACCEPTED (2026-10-23), implementation НЕ ЗАВЕРШЕНА.**
+Зафиксировано по указанию мастера после разбора смешанных ответственностей.
+Данный норматив уточняет размещение и API PC-8 поверх PC-D/E/F;
+фазовый граф, registered ids/versions и конечные cached payloads не меняются.
+Два provider class остаются в прежнем module; доменная работа распределяется
+по owning classes ниже. Формулировка «provider выполняет hydrology» в PC-D
+означает вызов доменного API, а не размещение алгоритмов в Provider.build.
+Полный delivery-план: [geo-1-pc8-responsibility-refactor.md](../.cursor/plans/geo-1-pc8-responsibility-refactor.md).
+Архитектура принята; текущая реализация ещё не соответствует ей.
+
+**Implementation R1 (2026-10-23):** intermediate OpenWaterPlan,
+RiverRouteBatch[S]/CoarseRiverPlan и FineRiverPlan реализованы в stages/
+по карте ниже. Required strict/frozen contracts проверяют canonical maps,
+unique UIDs, exact accepted-bed claims с route identity/edge/drainage и
+fine sample coverage включая receiver. Receiver исключается только из
+своих claims; shared segment boundary сохраняет последнее опубликованное
+edge metadata. Retained fine samples могут включать unchanged/rejected-route
+cells. Generic PlanBuildResult/PlanDiagnostic переиспользованы; новые cache
+registrations/codec ids/versions не добавлены. Contracts69 OK, pyright valid0,
+negative34 exact code/location. Domain owners/providers ещё не разделены;
+R2–R5 и приёмка PC-8 остаются.
+
+##### 1. Архитектурная граница
+
+Provider владеет только адаптацией общего planning lifecycle к доменному
+API: require dependency envelopes, проверка exact upstream refs, вызов
+одного доменного assembly API. Cache/keys/refs остаются общему engine и
+provider boundary; тело доменного алгоритма не получает PlanRequest,
+PlanDependencyReader, RegisteredPlanContract, PlanEnvelope или PlanRef.
+
+Доменная assembly знает порядок публичных операций, но не их реализацию.
+Она не получает PreparedRiver, FineRiverSampling, SurfaceHeightmap,
+AssembledWater или MaterializedWater, не назначает UID, не фильтрует
+BasinSpec по policy, не выбирает retained samples/receiver/roles.
+Владельцы операций возвращают immutable typed results.
+
+PlanBuildResult[T] переиспользуется как существующий immutable result
+(payload, diagnostics). Это осознанный общий return contract application
+сборки, не cache envelope. Новый одинаковый Result[T] не создаётся.
+Использование PlanBuildResult не даёт доменному компоненту доступа к
+registry/cache/key/ref. Промежуточные results не регистрируются в cache.
+PlanBuildControl используется только как публичный cancellation contract.
+
+##### 2. Точная карта исполняемых классов
+
+Все application пути ниже относительно
+backend/app/application/worldData/generators/.
+Конструкторы получают перечисленные collaborators через DI. World/SQL/
+pack чтение запрещено. Существующие алгоритмы переиспользуются.
+
+###### 2.1 HydrologyRoutesPlanProvider — существующий, изменить
+
+Файл: hydrology/planning/hydrologyPlanProvider.py.
+Слой application, владелец hydrology planning integration.
+Ответственность: подключение routes-stage к общему planning protocol.
+
+Методы:
+- __init__(relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+  water_placement: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan],
+  assembler: HydrologyRoutesAssembler).
+- build(request: PlanRequest[HydrologyPlanInput],
+  dependencies: PlanDependencyReader, control: PlanBuildControl)
+  -> PlanBuildResult[HydrologyRoutesPlan].
+- _require_refs(relief: PlanEnvelope[ReliefPlan],
+  water: PlanEnvelope[WaterPlacementPlan]) -> None: exact upstream ref check.
+
+build вызывает require(RELIEF), require(WATER_PLACEMENT), _require_refs,
+assembler.assemble(world_uid=request.key.world_uid, inputs=request.inputs,
+relief=relief.payload, placement=water.payload, control=control).
+Возвращает готовый PlanBuildResult без domain postprocessing.
+
+###### 2.2 HydrologyFinalPlanProvider — существующий, изменить
+
+Тот же файл и слой; ответственность: final-stage integration.
+Методы:
+- __init__(relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+  hydrology_routes: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan],
+  river_relief: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan],
+  assembler: HydrologyFactsAssembler).
+- build(request: PlanRequest[HydrologyFinalInput],
+  dependencies: PlanDependencyReader, control: PlanBuildControl)
+  -> PlanBuildResult[HydrologyPlan].
+- _require_refs(relief: PlanEnvelope[ReliefPlan],
+  routes: PlanEnvelope[HydrologyRoutesPlan],
+  river: PlanEnvelope[RiverReliefPlan]) -> None:
+  exact relief/routes refs, без cell/geometry проверок.
+
+build вызывает require трёх slots, _require_refs, затем
+assembler.assemble(inputs=request.inputs, relief=relief.payload,
+routes=routes.payload, river=river.payload, control=control).
+
+###### 2.3 HydrologyRoutesAssembler — новый
+
+Файл: hydrology/planning/assembly/hydrologyRoutesAssembler.py.
+Слой application; владелец: гидрология, последовательность routes-stage.
+Ответственность: согласовать результаты публичных hydrology operations.
+
+Методы:
+- __init__(water: WaterBodyPlanner, coarse: CoarseRiverPlanner,
+  fine: FineRiverPlanner, paint: DeclaredWaterPaintProjector).
+- assemble(*, world_uid: EntityUid, inputs: HydrologyPlanInput,
+  relief: ReliefPlan, placement: WaterPlacementPlan,
+  control: PlanBuildControl) -> PlanBuildResult[HydrologyRoutesPlan].
+
+Последовательность: water.plan -> coarse.plan -> fine.plan -> paint.project.
+Параллелизм не вводится. На границах фаз — control.raise_if_shutdown().
+Собирает HydrologyRoutesPlan из готовых полей intermediate payloads,
+объединяет их уже классифицированные diagnostics в этом порядке,
+дедупликация existing issue semantics. Диагностика не читает наружный ctx.
+Чтение именованных публичных DTO fields — часть контракта; раскрытие
+внутренних buffers/jobs/samplers запрещено.
+
+###### 2.4 WaterBodyPlanner — новый
+
+Файл: hydrology/water/planning/waterBodyPlanner.py.
+Слой application; владелец hydrology water bodies.
+Ответственность: получить принятый open-water plan на pre-river surface.
+
+Методы:
+- plan(*, world_uid: EntityUid, inputs: HydrologyPlanInput,
+  surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...],
+  placement: WaterPlacementPlan, control: PlanBuildControl)
+  -> PlanBuildResult[OpenWaterPlan].
+- _select_specs(inputs, specs: tuple[BasinSpec, ...]) -> tuple[BasinSpec, ...]:
+  единственный владелец existing scopes/enabled/category admission этого path.
+- _require_surface(surface_z, topology, z_min, z_max) -> None:
+  canonical/full extent и world z validation.
+
+plan строит собственный local SurfaceHeightmap, вызывает existing
+assemble_water_bodies с existing policy projection. Только этот класс
+разворачивает AssembledWater/MaterializedWater в OpenWaterPlan. Disabled/
+исключённые scopes дают корректный пустой OpenWaterPlan, а не fake terrain.
+UID/levels/unions algorithms остаются existing water kernels, не копируются.
+
+###### 2.5 CoarseRiverPlanner — новый
+
+Файл: hydrology/rivers/planning/coarseRiverPlanner.py.
+Слой application; владелец coarse river route planning.
+Ответственность: принятые coarse routes и их occupancy/drainage claims.
+
+Методы:
+- plan(*, world_uid: EntityUid, inputs: HydrologyPlanInput,
+  surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...],
+  water: OpenWaterPlan, control: PlanBuildControl)
+  -> PlanBuildResult[CoarseRiverPlan].
+
+plan вызывает public prepared declare/request/route kernels, затем
+baseline procedural producer и route kernel для auto candidates.
+Владение policy последовательностью declare-before-auto — здесь.
+Procedural UID/classification принадлежат existing
+hydrology/autoresolve/proceduralRiverAutoresolve.py: новый pure public
+prepare_procedural_river_requests(world_uid, seed, policy, surface,
+occupied, topology, span) -> tuple[RiverRouteRequest, ...].
+Он объединяет existing plan_prepared_river_network, classification,
+UID formula и request conversion. Формула UID не находится в planner.
+
+Existing riverPrepare.py получает public route-only API
+plan_prepared_routes[S](..., to_coordinate: Callable[[Coord], S],
+control) -> PlanBuildResult[RiverRouteBatch[S]].
+Его typed inputs перечисляются ниже; PreparedRiver и build_profiles=False
+становятся внутренними деталями route owner. Вызвавший planner не читает
+job.segments/specs и не формирует claims вручную.
+
+###### 2.6 FineRiverPlanner — новый
+
+Файл: hydrology/rivers/planning/fineRiverPlanner.py.
+Слой application; владелец fine river route planning.
+Ответственность: fine routes и retained pre-river samples на заданном extent.
+
+Методы:
+- plan(*, world_uid: EntityUid, inputs: HydrologyPlanInput,
+  surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...],
+  water: OpenWaterPlan, coarse: CoarseRiverPlan,
+  control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan].
+
+Последовательность принадлежащих fine planning действий: fine_topology,
+sample_prepared_fine_river_input -> prepared_declared_river_requests ->
+FineRiverSampling.sample_requests -> plan_prepared_routes[FineXY] ->
+FineRiverSampling.output_heightmap. Working sampler известен только этому
+владельцу. Retained set сохраняет existing accepted + rejected authored
+route samples и unchanged cells; не только изменённые river beds.
+Coarse claims читаются через CoarseRiverPlan, без post-carve высот.
+Fine процедурный source search/HY-RIV-1 не включаются.
+
+###### 2.7 DeclaredWaterPaintProjector — новый
+
+Файл: hydrology/load/paint/declaredWaterPaintProjector.py.
+Слой application; владелец authored hydrology geometry projection.
+Ответственность: authored declarations -> immutable declared paint.
+
+Методы:
+- project(*, rivers: tuple[DeclaredRiver, ...],
+  coastlines: tuple[DeclaredCoastline, ...], lakes: tuple[DeclaredLake, ...],
+  anchors: tuple[HydrologyAnchorInput, ...])
+  -> PlanBuildResult[DeclaredWaterPaint].
+- _intent_path(river, anchors: Mapping[EntityUid, FineXY])
+  -> tuple[FineXY, ...] | None: полный authored anchor path, без reroute.
+- _segments(loaded: LoadedDeclaredHydrology, ctx: ResolveContext)
+  -> tuple[SegmentRiverPaint, ...]: width/segment projection;
+  ctx принадлежит вызову project и собирает issues локально.
+
+Existing load_prepared_declared_hydrology используется только за public
+project/plan boundary; assembler/provider не получает LoadedDeclaredHydrology.
+Именно сюда переезжает _paint; public result содержит typed diagnostics.
+Geometry order/closure/fine-width/wire clamp остаются прежними.
+
+###### 2.8 HydrologyFactsAssembler — новый
+
+Файл: hydrology/planning/assembly/hydrologyFactsAssembler.py.
+Слой application; владелец final hydrology facts.
+Ответственность: сформировать согласованные final water facts из принятых
+routes и actual river relief. Не выбирать routes/bodies/levels заново.
+
+Методы:
+- assemble(*, inputs: HydrologyFinalInput, relief: ReliefPlan,
+  routes: HydrologyRoutesPlan, river: RiverReliefPlan,
+  control: PlanBuildControl) -> PlanBuildResult[HydrologyPlan].
+- _require_coverage(inputs, relief, routes, river) -> None:
+  full coarse/sampled fine coverage, canonical coordinates.
+- _river_roles[S](routes: tuple[RiverRoute[S], ...],
+  beds: tuple[RiverBedRecord[S], ...], surface: tuple[tuple[S, FineZ], ...],
+  to_xy: Callable[[S], Coord], control: PlanBuildControl)
+  -> dict[Coord, MapCellHydrology]: UID join, actual bed validation и роли.
+- _require_receivers[S](routes: tuple[RiverRoute[S], ...],
+  occupied: Mapping[Coord, MapCellHydrology],
+  to_xy: Callable[[S], Coord]) -> None:
+  actual receiver identity, включая coarse->fine projection внутри assemble.
+
+Сюда переходят _final_roles, _receivers и domain часть final build.
+Внутри _river_roles existing river_bed_roles остаётся единственным kernel
+ролей; RiverSegment/RiverBedSpec — local adapters, не публичный результат.
+Класс остаётся единым: coverage/UID join/receiver validation/roles/output —
+операции одной ответственности, получения согласованного final state.
+_require_* проверяют соответствие уже принятым данным, не выбирают новые
+receiver/kind/level/flow/fallback. _river_roles только адаптирует accepted
+path + actual bed к existing river_bed_roles; собственная формула ролей,
+ручное создание альтернативных role rules, reroute и carve запрещены.
+Если existing kernel не покрывает требуемое правило, сначала меняется
+контракт/kernel его владельца, assembler не достраивает правило локально.
+Structural test: patched river_bed_roles выдаёт контрольный результат,
+assembler переносит его без пересчёта; contract mismatch fail-fast, без
+repair/reroute. Нет автоматического дробления класса по числу методов.
+Consistency failure -> PlanBuildFailure с existing FieldPathError, без
+нового error taxonomy. Final не копирует upstream diagnostics.
+
+###### 2.9 Серьёзность диагностики принадлежит producer доменного решения
+
+HydrologyDiagnosticsAdapter исключён из целевой карты. Домен возвращает
+готовый PlanDiagnostic с явным disposition в момент принятия решения.
+Ни один внешний компонент не восстанавливает policy по строке code.
+PlanDiagnostic переиспользуется как существующий neutral immutable DTO;
+параллельный DiagnosticFact(issue, disposition) не создаётся.
+
+Точные владельцы решений:
+- water/waterMaterialize.py: materialize_water решает retain/reject и
+  выпускает соответствующий disposition в той же ветке решения.
+- waterBodyAssembler.py: assemble_water_bodies выпускает собственные
+  world/terrain-resolution diagnostics с явным disposition.
+- rivers/riverPrepare.py: prepare_river_from_inputs/его diagnostic helper
+  выпускают ERROR при отказе или FALLBACK при реально принятом redirect.
+- load/paint/declaredWaterPaintProjector.py: projector выпускает ERROR
+  одновременно с исключением некорректной authored-геометрии.
+
+Разрешён общий formatting helper: принимает FieldPathError и уже выбранный
+PlanDiagnosticDisposition, создаёт PlanDiagnostic, не читает code для
+выбора disposition. Класса ради этой упаковки нет.
+Existing water_issue получает keyword-only required
+`disposition: PlanDiagnosticDisposition` и optional
+`emit: Callable[[PlanDiagnostic], None] | None = None`.
+Call sites явно передают disposition из ветки доменного решения. Existing
+assemble_water_bodies/materialize_water получают тот же optional emit и
+передают без интерпретации. Route preparation получает collector аналогично;
+legacy RiverRouteDiagnostic сохраняется, его severity наружный adapter не
+угадывает. Новые prepared paths используют collect-only и callback; existing
+legacy reporting сохраняет свой sink и не получает двойного emission.
+Запрещён hidden shared collector singleton или расширение ResolveContext
+ради локального severity storage. Каждый вызов владеет собственным collector.
+
+Providers и HydrologyRoutesAssembler только передают/объединяют готовые
+PlanDiagnostic. Request reporter интерпретирует explicit disposition для
+показа/лога, не переопределяет domain outcome. Code остаётся идентификатором
+ситуации, не источником серьёзности. Новые call-site параметры и emission
+проверяются на всех existing water_issue usages до изменения сигнатуры.
+
+##### 3. Новые промежуточные POJO — точные поля и владельцы
+
+Все strict/frozen, без injected defaults; только dataModel и validators.
+Не public cache schemas; версии/ids frozen PC bindings не меняются.
+
+backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py:
+OpenWaterPlan(coarse_open_water: tuple[tuple[SurfaceGridCoord, MapCellHydrology], ...],
+water_bodies: tuple[WaterBody, ...], physical_unions: tuple[PhysicalWaterUnion, ...]).
+Producer WaterBodyPlanner; consumers CoarseRiverPlanner/FineRiverPlanner/
+HydrologyRoutesAssembler.
+
+backend/app/dataModel/hydrology/planning/stages/riverRoutePlans.py:
+- RiverRouteBatch[S](routes: tuple[RiverRoute[S], ...],
+  claims: tuple[tuple[S, MapCellHydrology], ...]).
+- CoarseRiverPlan — type alias RiverRouteBatch[SurfaceGridCoord], не второй POJO.
+- FineRiverPlan(routes: tuple[RiverRoute[FineXY], ...],
+  base_surface_z: tuple[tuple[FineXY, FineZ], ...]).
+Producer route kernel/CoarseRiverPlanner/FineRiverPlanner; consumers fine
+planner/routes assembler. Claims содержат river occupancy/drainage, не z.
+
+Существующие конечные HydrologyRoutesPlan, HydrologyPlan, RiverReliefPlan,
+RiverRoute/RiverPathSegment/RiverBedRecord и generic planning contracts
+не меняют полей/семантики. Validators intermediate POJO: unique canonical
+coordinate maps, space parameter invariant, unique routes per river UID,
+claims согласованы с принятыми routes, fine paths/receiver имеют samples.
+
+Pure plan_prepared_routes[S] принимает world_uid: EntityUid, span: int,
+heightmap: SurfaceHeightmap (local caller-owned), requests:
+Sequence[RiverRouteRequest], claims: dict[Coord, MapCellHydrology],
+topology: WorldTopology, policy: HydrologyRiversPolicy,
+water_bodies: Sequence[WaterBody], resolution_mode: ResolutionMode,
+z_min: FineZ, space: CoordinateSpace, to_coordinate: Callable[[Coord], S],
+control: PlanBuildControl; результат PlanBuildResult[RiverRouteBatch[S]].
+Kernel создаёт local diagnostic collector; classification уже принадлежит
+веткам domain decisions, возвращаемый result содержит готовые diagnostics.
+Private bridge сохраняет existing prepare_river_requests_from_inputs и
+ResolveContext collect-only; explicit diagnostic emission собирается внутри
+boundary без code-to-severity mapping. Legacy prepare_river_requests profile path делегирует прежнему
+kernel и не переводится на route-only result.
+
+##### 4. Целевой граф вызовов
+
+PlanningService -> PlanRegistry -> HydrologyRoutesPlanProvider.build
+ -> HydrologyRoutesAssembler.assemble
+    -> WaterBodyPlanner.plan -> existing assemble_water_bodies
+    -> CoarseRiverPlanner.plan -> prepared declare/procedural/route APIs
+    -> FineRiverPlanner.plan -> sampling + prepared route APIs
+    -> DeclaredWaterPaintProjector.project -> prepared declaration loader
+ -> PlanBuildResult[HydrologyRoutesPlan] -> общий envelope/cache.
+
+Отдельная внешняя terrain стадия RiverReliefPlanProvider создаёт
+RiverReliefPlan. Hydrology assembler/provider её не вызывает.
+
+PlanningService -> PlanRegistry -> HydrologyFinalPlanProvider.build
+ -> HydrologyFactsAssembler.assemble -> existing river_bed_roles
+ -> PlanBuildResult[HydrologyPlan] -> общий envelope/cache.
+
+Providers получают assembly collaborators в конструкторах. В PC-8
+фактические вызовы собираются fixture composition; production factory
+injection новых collaborators относится к PC-9A. Запрещено создавать
+новые planners/samplers/cache внутри Provider.build.
+
+##### 5. Полная судьба текущих helpers hydrologyPlanProvider.py
+
+_failure -> локальный planning failure helper у provider; domain cell
+failures создаёт owning domain module, без импорта provider helper.
+_coarse/_fine -> conversion helpers внутри owning domain modules;
+общеиспользуемые aliases/convert уже существуют, новые классы ради них нет.
+_heightmap -> private WaterBodyPlanner surface adapter для water kernel;
+river planners используют собственные caller-owned heightmap adapters
+с existing SurfaceHeightmap (не получают mutable water planner buffer).
+_routes/_claims -> existing rivers/riverPrepare.py route-only public boundary.
+_paint -> DeclaredWaterPaintProjector.project/_intent_path/_segments.
+_final_roles -> HydrologyFactsAssembler._river_roles.
+_receivers -> HydrologyFactsAssembler._require_receivers.
+Provider.build scopes/spec filtering -> WaterBodyPlanner._select_specs.
+Provider.build coarse declare/auto -> CoarseRiverPlanner.plan.
+Provider.build UID formula/classification -> existing procedural owner API.
+Provider.build fine sampling/retained-set -> FineRiverPlanner.plan.
+Provider.build severity/code mapping -> удаляется; severity принадлежит
+producer ветке domain decision по §2.9, наружу идёт готовый PlanDiagnostic.
+Provider.build immutable output assembly -> HydrologyRoutesAssembler /
+HydrologyFactsAssembler. Planning refs остаются только providers.
+
+##### 6. Композиция и scope
+
+Application hydrology/planning: 2->2 flat files, добавляются подпапки
+assembly (init + 2 = 3). Отдельной diagnostics подпапки/adapter нет.
+water10->10, rivers15->15, load9->9 flat files; новые подпапки
+water/planning2, rivers/planning3, load/paint2. Existing autoresolve2->2.
+DataModel hydrology/planning2->2; новая stages3 (init + 2).
+WARN existing water10/rivers15/load9 обязателен перед implementation;
+переполненные roots не расширяются. Каждый executable class <=250 строк
+по требованию мастера; разделение по responsibility, не по половинам файла.
+Метод не превышает границу своей ответственности за счёт свободных
+функций в том же module; helpers также принадлежат указанному owner.
+PC-7 RiverReliefPlanProvider остаётся external typed boundary; его
+внутренняя архитектура не объявляется проверенной или автоматически
+исправленной этим PC-8 планом. GEO strategies/HY-RIV-1/caller activation,
+SQL/DAG/backend start/commits вне scope.
+
 
 #### PC-E. Exact bindings, bundles, capture и coherence
 
