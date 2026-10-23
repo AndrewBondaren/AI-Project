@@ -20,6 +20,11 @@ diagnostics как данные, без logging. Local anchors после final 
 отдельный PC-8C; их изменение и column z не меняют base key при неизменных
 ClimateBaseInput. Production registration/caller activation — PC-9A/PC-9.
 
+Коды диагностики базового planning объявлены как ClimateBaseIssueCode рядом
+с ClimateBaseInput; модель создаёт FieldPathError через diagnostic_issue.
+Пути выводятся из typed FieldRef к manual_poles/zone, не из строк в provider.
+Wire values и пути ошибок при этом сохраняются.
+
 | Система | Роль |
 |---|---|
 | **ClimateGeneratorService** | spatial assignment + `temperature_base` / `rainfall` на eager generate |

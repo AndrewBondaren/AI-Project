@@ -12,13 +12,12 @@ from app.dataModel.climate.enums.poleKind import PoleKind
 from app.dataModel.climate.enums.poleSource import PoleSource
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.climate.planning.climatePoints import ClimateKey, ClimatePolePoint
-from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput, ManualPoleInput
+from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput, ClimateBaseIssueCode, ManualPoleInput
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.spatial.grid.gridBBox import GridBBox
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 def autoresolve_base_poles(seed: int, preset: ClimatePolePreset, peak_min: int, peak_max: int,
@@ -53,18 +52,18 @@ def manual_base_pole(manual: ManualPoleInput, fine_span: int, peak_min: int, pea
 def build_climate_base(inputs: ClimateBaseInput) -> PlanBuildResult[ClimateBasePlan]:
     diagnostics: list[PlanDiagnostic] = []
 
-    def issue(code: str, path: tuple[str | int, ...], message: str) -> None:
-        diagnostics.append(PlanDiagnostic(issue=FieldPathError(path, message, code=code),
+    def issue(code: ClimateBaseIssueCode, message: str) -> None:
+        diagnostics.append(PlanDiagnostic(issue=inputs.diagnostic_issue(code, message),
             disposition=PlanDiagnosticDisposition.FALLBACK))
 
     poles: tuple[ClimatePolePoint, ...] = ()
     if inputs.manual_poles:
         if len(inputs.manual_poles) > 1:
-            issue("multiple_poles", ("manual_poles",),
+            issue(ClimateBaseIssueCode.MULTIPLE_POLES,
                   f"declared {len(inputs.manual_poles)} poles; using first only")
         manual = next(iter(inputs.manual_poles))
         if manual.zone is None:
-            issue("pole_no_zone", ("manual_poles", 0, "zone"),
+            issue(ClimateBaseIssueCode.POLE_NO_ZONE,
                   f"pole={manual.location_uid} has no system_climate_zone; ignored")
         else:
             point = manual_base_pole(manual, inputs.fine_span, inputs.peak_min, inputs.peak_max)
@@ -76,7 +75,7 @@ def build_climate_base(inputs: ClimateBaseInput) -> PlanBuildResult[ClimateBaseP
             poles = autoresolve_base_poles(inputs.seed, inputs.preset, inputs.peak_min, inputs.peak_max,
                                            inputs.bbox if inputs.bbox is not None else GridBBox(0, 1, 0, 1))
         else:
-            issue("manual_mode_no_pole", ("manual_poles",), "mode=manual with no climate_pole; empty pole field")
+            issue(ClimateBaseIssueCode.MANUAL_MODE_NO_POLE, "mode=manual with no climate_pole; empty pole field")
     plan = ClimateBasePlan(poles=poles, bbox=inputs.bbox, default_zone=inputs.default_zone,
                            profiles=inputs.profiles, blend=inputs.blend)
     return PlanBuildResult[ClimateBasePlan](payload=plan, diagnostics=tuple(diagnostics))
