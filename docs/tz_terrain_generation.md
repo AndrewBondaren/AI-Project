@@ -2970,10 +2970,10 @@ river corridors → lake/coastline → coarse open water и river preservation.
 
 #### PC-D. River routes → terrain riverbed → final water
 
-**PC-8 IMPLEMENTED / VERIFIED, ожидается приёмка мастером (2026-10-23).**
+**PC-8 DONE (2026-10-23): реализация принята мастером.**
 R1–R4 разделили planning-обвязку и domain owners по карте PC-D1;
-R5 подтвердил реализацию и baseline/cache contracts. Техническая проверка
-не заменяет приёмку мастером; переход к PC-8C остаётся отложенным.
+R5 подтвердил реализацию и baseline/cache contracts; приёмка пройдена,
+PC-8C открыт.
 Текущее состояние реализации:
 `application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py`
 содержит HydrologyRoutesPlanProvider и HydrologyFinalPlanProvider.
@@ -3076,7 +3076,7 @@ z_max:FineZ для полной world z validation specs. ClimateFeaturePolicy
 
 #### PC-D1. PC-8 — согласованные границы классов, методов и контрактов
 
-**R5 — техническая проверка пройдена (2026-10-23), ожидается приёмка мастером.**
+**R5 — DONE (2026-10-23): техническая проверка пройдена, реализация принята мастером.**
 Карта всех восьми owning classes/methods/contracts подтверждена; размеры
 классов: routes provider20, final provider26, routes assembler27, facts
 assembler70, water planner58, coarse planner43, fine planner42, paint
@@ -3098,9 +3098,9 @@ Pyright valid0; negative42 exact code/location: 30 reportArgumentType,
 Cache20 повторён вне sandbox после PermissionError временного config.toml;
 detailed-bake regression также вне sandbox по известному socketpair boundary.
 Новые cache ids/versions, GEO algorithms, production wiring/activation,
-SQL/DAG и commits не добавлены. PC-8: IMPLEMENTED / VERIFIED,
-AWAITING_MASTER_ACCEPTANCE; DONE и переход PC-8C — после приёмки мастером
-по критерию Done этого плана. План пока не переименовывается в -done.
+SQL/DAG и commits не добавлены. PC-8 принят мастером, DONE (2026-10-23);
+PC-8C открыт. Детализация переименована в
+geo-1-pc8-responsibility-refactor-done.md.
 
 **Implementation R4 (2026-10-23), состояние до R5:** оба provider переключены атомарно.
 HydrologyRoutesAssembler получает WaterBodyPlanner, CoarseRiverPlanner,
@@ -3160,9 +3160,8 @@ R4–R5 и общая приёмка PC-8 не завершены; R3 описа
 Два provider class остаются в прежнем module; доменная работа распределяется
 по owning classes ниже. Формулировка «provider выполняет hydrology» в PC-D
 означает вызов доменного API, а не размещение алгоритмов в Provider.build.
-Полный delivery-план: [geo-1-pc8-responsibility-refactor.md](../.cursor/plans/geo-1-pc8-responsibility-refactor.md).
-Архитектура принята; R1–R4 реализованы, R5 технически проверен;
-ожидается приёмка реализации мастером.
+Полный delivery-план: [geo-1-pc8-responsibility-refactor-done.md](../.cursor/plans/geo-1-pc8-responsibility-refactor-done.md).
+Архитектура принята; R1–R5 реализованы, проверены и приняты мастером.
 
 **Implementation R1 (2026-10-23), состояние до R4:** intermediate OpenWaterPlan,
 RiverRouteBatch[S]/CoarseRiverPlan и FineRiverPlan реализованы в stages/
