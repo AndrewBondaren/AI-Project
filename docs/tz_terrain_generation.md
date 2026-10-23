@@ -2970,10 +2970,10 @@ river corridors → lake/coastline → coarse open water и river preservation.
 
 #### PC-D. River routes → terrain riverbed → final water
 
-**PC-8 не завершён и не принят (2026-10-23):** текущая реализация
-смешивает planning-обвязку с доменной сборкой и правилами гидрологии.
-Требуется разделение по модулям-владельцам; успешные проверки ниже
-не означают архитектурную приёмку. Переход к PC-8C отложен.
+**PC-8 IMPLEMENTED / VERIFIED, ожидается приёмка мастером (2026-10-23).**
+R1–R4 разделили planning-обвязку и domain owners по карте PC-D1;
+R5 подтвердил реализацию и baseline/cache contracts. Техническая проверка
+не заменяет приёмку мастером; переход к PC-8C остаётся отложенным.
 Текущее состояние реализации:
 `application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py`
 содержит HydrologyRoutesPlanProvider и HydrologyFinalPlanProvider.
@@ -3076,7 +3076,33 @@ z_max:FineZ для полной world z validation specs. ClimateFeaturePolicy
 
 #### PC-D1. PC-8 — согласованные границы классов, методов и контрактов
 
-**Implementation R4 (2026-10-23):** оба provider переключены атомарно.
+**R5 — техническая проверка пройдена (2026-10-23), ожидается приёмка мастером.**
+Карта всех восьми owning classes/methods/contracts подтверждена; размеры
+классов: routes provider20, final provider26, routes assembler27, facts
+assembler70, water planner58, coarse planner43, fine planner42, paint
+projector60 строк. Providers не содержат domain helpers; domain owners
+не получают planning envelopes/requests/refs/cache. Facts используют
+river_bed_roles без собственного расчёта ролей, assembler объединяет
+producer diagnostics без классификации по code.
+Providers118/contracts69/cache20/regression59 OK. Два новых acceptance
+cases проверяют полную карту восьми owners и nonempty ERROR/FALLBACK
+outcomes в runtime/preview: HIT без build, clear с rebuild, codec roundtrip,
+новая composition с новыми owners и max_workers=1 вместо 2 сохраняют
+весь envelope (geometry/UID/ref/diagnostics). Final не копирует upstream
+issues. TTL остаётся отключённым по CachePolicy.ttl_seconds: None.
+Pyright valid0; negative42 exact code/location: 30 reportArgumentType,
+1 reportIndexIssue, 11 reportReturnType. Пять обязательных baseline suites
+прошли; extended hydrology241/242, единственный прежний list/tuple failure
+в BasinContractTests.test_loader_and_master_preserve_fine_geometry_and_explicit_floor
+(test_hydrology_hy12_contract.py:103). Тест и контракт не менялись.
+Cache20 повторён вне sandbox после PermissionError временного config.toml;
+detailed-bake regression также вне sandbox по известному socketpair boundary.
+Новые cache ids/versions, GEO algorithms, production wiring/activation,
+SQL/DAG и commits не добавлены. PC-8: IMPLEMENTED / VERIFIED,
+AWAITING_MASTER_ACCEPTANCE; DONE и переход PC-8C — после приёмки мастером
+по критерию Done этого плана. План пока не переименовывается в -done.
+
+**Implementation R4 (2026-10-23), состояние до R5:** оба provider переключены атомарно.
 HydrologyRoutesAssembler получает WaterBodyPlanner, CoarseRiverPlanner,
 FineRiverPlanner и DeclaredWaterPaintProjector через constructor DI; вызывает
 их public API в порядке water → coarse → fine → paint, проверяет shutdown
@@ -3135,7 +3161,8 @@ R4–R5 и общая приёмка PC-8 не завершены; R3 описа
 по owning classes ниже. Формулировка «provider выполняет hydrology» в PC-D
 означает вызов доменного API, а не размещение алгоритмов в Provider.build.
 Полный delivery-план: [geo-1-pc8-responsibility-refactor.md](../.cursor/plans/geo-1-pc8-responsibility-refactor.md).
-Архитектура принята; R1–R4 реализованы, итоговая проверка и приёмка — R5.
+Архитектура принята; R1–R4 реализованы, R5 технически проверен;
+ожидается приёмка реализации мастером.
 
 **Implementation R1 (2026-10-23), состояние до R4:** intermediate OpenWaterPlan,
 RiverRouteBatch[S]/CoarseRiverPlan и FineRiverPlan реализованы в stages/

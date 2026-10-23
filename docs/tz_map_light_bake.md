@@ -1840,7 +1840,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 ## PC-0 — потребление frozen surface plans (2026-10-23)
 
-**PC-8: архитектура DESIGN_ACCEPTED, реализация не завершена (2026-10-23).**
+**PC-8: DESIGN_ACCEPTED; IMPLEMENTED / VERIFIED, ожидается приёмка мастером (2026-10-23).**
 Норматив [PC-D1 — owning classes/methods/contracts](./tz_terrain_generation.md#pc8-responsibility-boundaries)
 разделяет routes/final planning providers и domain owners: water bodies,
 coarse rivers, fine rivers, authored paint и согласованное final state.
@@ -1858,9 +1858,13 @@ HIT/MISS/reporting сохраняют готовый disposition. Внешняя
 production registration PC-9A и phase/output contracts остаются прежними.
 
 
-**PC-8 hydrology providers не завершены / не приняты (2026-10-23):**
+**PC-8 hydrology providers технически проверены, ожидается приёмка мастером (2026-10-23).**
 R4 разделил planning-обвязку и domain owners через constructor DI;
-итоговая проверка и приёмка R5 требуются до перехода к PC-8C. Текущее состояние реализации: frozen routes-stage
+R5 подтвердил карту восьми классов, сохранение geometry/UID/ref/diagnostics
+на HIT/clear/codec/fresh composition и при смене числа workers.
+Providers118/contracts69/cache20/regression59 OK, pyright valid0/negative42 exact.
+Extended hydrology241/242 — прежний list/tuple failure в test_hydrology_hy12_contract.py:103.
+До приёмки мастером PC-8 не DONE, PC-8C не открыт. Текущее состояние реализации: frozen routes-stage
 сохраняет accepted bodies/unions/open-water и coarse/fine river paths;
 final-stage читает actual river relief без повторного route/placement/carve.
 DeclaredWaterPaint переносит исходные fine lake/coastline segments,

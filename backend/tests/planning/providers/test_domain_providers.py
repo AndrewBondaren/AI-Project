@@ -2148,3 +2148,76 @@ class HydrologyAssemblyBoundaryTests(unittest.TestCase):
                 if isinstance(node, ast.ClassDef): self.assertLessEqual(node.end_lineno - node.lineno + 1, 250)
         self.assertFalse(any(isinstance(n, ast.Attribute) and n.attr in ("code", "disposition")
                              for n in ast.walk(ast.parse(inspect.getsource(assembly)))))
+
+
+    def test_diagnostic_outcomes_and_geometry_survive_hit_clear_and_fresh_composition(self):
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        for mode in (ResolutionMode.RUNTIME, ResolutionMode.VALIDATE_ONLY):
+            with self.subTest(mode=mode):
+                f = self.f
+                inputs = f.hydro_inputs.model_copy(update={"resolution_mode": mode, "declared_rivers": (
+                    f.segment(uid="redirect", start=(-20, 10), end=(40, 10)),
+                    f.segment(uid="invalid", kind="road"))})
+                first = f.routes(inputs)
+                self.assertTrue(first.diagnostics)
+                dispositions = {d.disposition for d in first.diagnostics}
+                self.assertIn(PlanDiagnosticDisposition.ERROR, dispositions)
+                if mode is ResolutionMode.RUNTIME:
+                    self.assertIn(PlanDiagnosticDisposition.FALLBACK, dispositions)
+                else:
+                    self.assertEqual(dispositions, {PlanDiagnosticDisposition.ERROR})
+                final = f.finish(first)
+                builds = f.route_provider.build.call_count, f.final_provider.build.call_count
+                self.assertEqual(f.routes(inputs), first)
+                self.assertEqual(f.finish(first), final)
+                self.assertEqual((f.route_provider.build.call_count, f.final_provider.build.call_count), builds)
+                f.h.backend.clear()
+                self.assertEqual(f.routes(inputs), first)
+                self.assertEqual(f.finish(first), final)
+                self.assertEqual((f.route_provider.build.call_count, f.final_provider.build.call_count),
+                                 (builds[0] + 1, builds[1] + 1))
+                for binding, envelope in ((f.routes_binding, first), (f.final_binding, final)):
+                    codec = binding.cache_binding.codec
+                    self.assertEqual(codec.decode(codec.encode(envelope)), envelope)
+                fresh = HydrologyProviderTests()
+                fresh.setUp()
+                self.addCleanup(fresh.doCleanups)
+                fresh.h.service.shutdown()
+                fresh.h = Harness(policy=PlanningExecutionPolicy(max_workers=1, max_pending_builds=2))
+                self.addCleanup(fresh.h.service.shutdown)
+                for binding, provider in ((fresh.binding, fresh.provider), (fresh.water.binding, fresh.water.provider),
+                    (fresh.routes_binding, fresh.route_provider), (fresh.river_binding, fresh.river_provider),
+                    (fresh.final_binding, fresh.final_provider)):
+                    fresh.h.registry.register(binding, provider)
+                rebuilt = fresh.routes(inputs)
+                self.assertEqual(rebuilt, first)
+                self.assertEqual(fresh.finish(rebuilt), final)
+                self.assertFalse(final.diagnostics)  # Final does not copy upstream diagnostics.
+
+    def test_all_eight_owners_obey_size_and_planning_boundaries(self):
+        import ast
+        import inspect
+        from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import (
+            HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider)
+        f = self.f
+        owners = (f.routes_assembler, f.facts_assembler, f.routes_assembler._water,
+                  f.routes_assembler._coarse, f.routes_assembler._fine, f.routes_assembler._paint)
+        planning_types = {"PlanRequest", "PlanEnvelope", "PlanRef", "PlanDependencyReader", "RegisteredPlanContract",
+                          "PlanningService", "CacheService", "MemoryCache"}
+        for owner in (*owners, HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider):
+            cls = owner if isinstance(owner, type) else type(owner)
+            source = inspect.getsource(cls)
+            tree = ast.parse(source)
+            self.assertLessEqual(len(source.splitlines()), 250, cls.__name__)
+            if not isinstance(owner, type):
+                names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+                self.assertFalse(names & planning_types, (cls.__name__, names & planning_types))
+        from app.application.worldData.generators.hydrology.planning import hydrologyPlanProvider as providers
+        tree = ast.parse(inspect.getsource(providers))
+        self.assertEqual({node.name for node in tree.body if isinstance(node, ast.FunctionDef)}, {"_failure"})
+        self.assertEqual({node.name for node in tree.body if isinstance(node, ast.ClassDef)},
+                         {"HydrologyRoutesPlanProvider", "HydrologyFinalPlanProvider"})
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                self.assertEqual({method.name for method in node.body if isinstance(method, ast.FunctionDef)},
+                                 {"__init__", "build", "_require_refs"})
