@@ -58,8 +58,8 @@ class DeclaredRiver(BaseModel):
     declare_mode: DefaultWhenMissing[RiverDeclareMode | None] = None
     source: DefaultWhenMissing[HydrologyWaypoint | None] = None
     mouth: DefaultWhenMissing[HydrologyMouth | None] = None
-    route_location_uids: DefaultWhenMissing[list[str]] = Field(default_factory=list)
-    segments: DefaultWhenMissing[list[DeclaredRiverSegment]] = Field(default_factory=list)
+    route_location_uids: DefaultWhenMissing[tuple[str, ...]] = Field(default_factory=tuple)
+    segments: DefaultWhenMissing[tuple[DeclaredRiverSegment, ...]] = Field(default_factory=tuple)
 
     @field_validator("system_role", mode="before")
     @classmethod
@@ -128,7 +128,7 @@ def _segment_angle_deg(
     return math.degrees(math.acos(cos_a))
 
 
-def _validate_segment_turns(segments: list[DeclaredRiverSegment]) -> None:
+def _validate_segment_turns(segments: tuple[DeclaredRiverSegment, ...]) -> None:
     if len(segments) < 2:
         return
     points = [segments[0].from_wp] + [seg.to_wp for seg in segments]

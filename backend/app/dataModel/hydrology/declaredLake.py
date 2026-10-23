@@ -16,4 +16,4 @@ class DeclaredLake(BaseModel):
 
     location_uid: StrictOnWire[str]
     liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]] = "water"
-    shoreline: DefaultWhenMissing[list[HydrologyWaypoint]] = Field(default_factory=list)
+    shoreline: DefaultWhenMissing[tuple[HydrologyWaypoint, ...]] = Field(default_factory=tuple)

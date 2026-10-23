@@ -1104,7 +1104,13 @@ ResolutionMode RUNTIME/VALIDATE_ONLY — отдельная общая validatio
 PC-0I переводит перечисленные в нормативе shape/hydrology/mountain source
 collections и MountainSideRecipe.side_kinds в tuple. JSON arrays и
 DefaultWhenMissing/StrictOnWire semantics сохраняются; _reference_issues
-обходит tuple так же, как list, включая RegistryKey children. model_copy/
+обходит tuple так же, как list, включая RegistryKey children.
+**PC-0I реализован 2026-10-23:** source fields/defaults и resolved_sides
+переведены в tuple; constructor/stamping helpers сохраняют immutable
+вложения. Существующий registry_key_target распознаёт также
+tuple[RegistryKey[R], ...] и nullable members, сохраняя REF-W paths.
+Приёмка: 186 tests OK; expanded JSON schemas девяти source моделей
+эквивалентны прежним; mountain identity_key не изменён. model_copy/
 construct не обходят recursive cache admission: actual enum/numeric fields,
 nested containers, duplicates, required fields и cross-field invariants
 проверяются даже на already-typed instances. Missing field не получает

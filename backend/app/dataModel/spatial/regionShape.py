@@ -122,9 +122,9 @@ class PolygonShape(RegionShapeBase):
     """Simple closed ring; last-to-first edge is implicit or explicitly repeated."""
 
     kind: Literal[RegionShapeKind.POLYGON] = RegionShapeKind.POLYGON
-    vertices: list[Point] = Field(min_length=3)
+    vertices: tuple[Point, ...] = Field(min_length=3)
 
-    def _ring(self) -> list[Point]:
+    def _ring(self) -> tuple[Point, ...]:
         return self.vertices[:-1] if self.vertices[0] == self.vertices[-1] else self.vertices
 
     @model_validator(mode="after")
@@ -200,7 +200,7 @@ class CorridorShape(RegionShapeBase):
     """Union of round-capped segments in one authored unrolled frame."""
 
     kind: Literal[RegionShapeKind.CORRIDOR] = RegionShapeKind.CORRIDOR
-    path: list[Point] = Field(min_length=2)
+    path: tuple[Point, ...] = Field(min_length=2)
     width: int = Field(gt=0)
 
     @model_validator(mode="after")
@@ -211,7 +211,7 @@ class CorridorShape(RegionShapeBase):
 
     def distance(self, x: float, y: float) -> float:
         from app.dataModel.topology.corridorGeometry import polyline_distance2
-        return sqrt(polyline_distance2((x, y), self.path))
+        return sqrt(polyline_distance2((x, y), list(self.path)))
 
     def contains(self, x: float, y: float) -> bool:
         return self.distance(x, y) <= self.width / 2

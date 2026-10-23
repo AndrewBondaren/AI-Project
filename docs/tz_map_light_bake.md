@@ -193,6 +193,16 @@ Legacy imports из `climatePoleField` и `terrain/types` реэкспортир
 остаются отдельными контрактами. Приёмка: 68 tests OK и fresh-process
 проверка обоих порядков terrain/climate imports.
 
+**PC-0G2 реализован 2026-10-23:** CoordinateSpace находится в
+`dataModel/spatial/grid/coordinateSpace.py`; GridX/GridY/FineX/FineY/FineZ/
+FineDelta, SurfaceGridCoord/FineGridCoord/SurfaceGridRect/FineGridRect и
+LightCellRef — в `coordinateTypes.py`, там же FineXY=tuple[FineX,FineY].
+Old coordinates/{space,types} и masks/footprint.LightCellRef реэкспортируют
+те же symbols. Enum wire values, frozen/slots semantics и half-open rect
+границы сохранены. Convert/rect/worldTile algorithms и city imports
+не менялись. Приёмка: 69 tests OK; pyright новых shared modules без ошибок;
+fresh import общего spatial/grid не загружает application.
+
 ```text
 tile_macro = fine_cells_per_map_cell
 side       = 32                          # WP-10 v2: константа маски (POJO)

@@ -21,7 +21,7 @@ class DeclaredCoastline(BaseModel):
     liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]] = "water"
     closed: DefaultWhenMissing[bool] = False
     water_side: DefaultWhenMissing[WaterSide | None] = None
-    path: DefaultWhenMissing[list[HydrologyWaypoint]] = Field(default_factory=list)
+    path: DefaultWhenMissing[tuple[HydrologyWaypoint, ...]] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
     def valid_line(self) -> DeclaredCoastline:

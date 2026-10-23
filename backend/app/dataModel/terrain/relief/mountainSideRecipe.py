@@ -22,7 +22,7 @@ class MountainSideRecipe(BaseModel):
 
     slope_weight: DefaultWhenMissing[float | None] = None
     sheer_weight: DefaultWhenMissing[float | None] = None
-    side_kinds: DefaultWhenMissing[list[ReliefSideKind] | None] = None
+    side_kinds: DefaultWhenMissing[tuple[ReliefSideKind, ...] | None] = None
     default_side_kind: DefaultWhenMissing[ReliefSideKind | None] = None
 
     @model_validator(mode="after")

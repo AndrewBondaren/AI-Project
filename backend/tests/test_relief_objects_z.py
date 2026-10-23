@@ -342,7 +342,7 @@ class TestTerrainMasksKnobs(unittest.TestCase):
         masks = WorldTerrainMasks.canonical_defaults()
         self.assertEqual(masks.default_mountains.default_radius_m, 500)
         self.assertEqual(masks.default_mountains.default_kind, MountainKind.ROCKY)
-        self.assertEqual(masks.default_mountains.sides, [])
+        self.assertEqual(masks.default_mountains.sides, ())
         sides = masks.default_mountains.resolved_sides()
         self.assertEqual(len(sides), 6)
         self.assertEqual(mountain_kind_profile(MountainKind.ROCKY).rise_fraction_of_z_max, 0.35)

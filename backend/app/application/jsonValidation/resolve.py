@@ -244,7 +244,7 @@ def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistry
             target = registry_key_target(info.annotation)
             if target is not None and item is not None:
                 keys = references.keys_for_registry(target)
-                tokens = list(enumerate(item)) if isinstance(item, list) else [(None, item)]
+                tokens = list(enumerate(item)) if isinstance(item, (list, tuple)) else [(None, item)]
                 for index, token in tokens:
                     if token is None:
                         continue  # A validated optional list member is not a reference.
@@ -255,8 +255,8 @@ def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistry
                             code="REF_W_UNAVAILABLE" if keys is None else "REF_W_UNKNOWN"))
             else:
                 issues.extend(_reference_issues(item, child, references))
-    elif isinstance(value, (list, dict)):
-        for index, item in (enumerate(value) if isinstance(value, list) else value.items()):
+    elif isinstance(value, (list, tuple, dict)):
+        for index, item in (enumerate(value) if isinstance(value, (list, tuple)) else value.items()):
             issues.extend(_reference_issues(item, ctx.child(index), references))
     return issues
 

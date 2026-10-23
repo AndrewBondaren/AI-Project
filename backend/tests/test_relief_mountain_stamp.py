@@ -77,7 +77,7 @@ class MountainReliefStampTest(unittest.TestCase):
         from app.application.jsonValidation.resolve import UnresolvedModelError
         with self.assertRaises(UnresolvedModelError):
             stamp_mountain_sides_from_relief(spec, world=world, world_seed="w1", templates_by_uid={})
-        self.assertEqual(spec.sides, [])
+        self.assertEqual(spec.sides, ())
 
 
 if __name__ == "__main__":

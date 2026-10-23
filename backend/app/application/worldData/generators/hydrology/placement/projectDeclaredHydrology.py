@@ -10,7 +10,7 @@ from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 
 
-def _project_waypoints(waypoints: list[HydrologyWaypoint], map_cell: int) -> list[HydrologyWaypoint]:
+def _project_waypoints(waypoints: tuple[HydrologyWaypoint, ...], map_cell: int) -> list[HydrologyWaypoint]:
     return [
         waypoint.model_copy(update=dict(zip(("x", "y"), fine_to_grid_xy(waypoint.x, waypoint.y, map_cell))))
         for waypoint in waypoints

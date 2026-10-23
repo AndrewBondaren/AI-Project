@@ -75,7 +75,7 @@ def stamp_mountain_sides_from_relief(
         mountain_id=mountain_id,
         declare_sides=[],
     )
-    return spec.model_copy(update={"sides": sides})
+    return spec.model_copy(update={"sides": tuple(sides)})
 
 
 def stamp_entries_from_relief(
@@ -106,7 +106,7 @@ def stamp_entries_from_relief(
                 )
                 for p in entry.peaks
             ]
-            out.append(entry.model_copy(update={"peaks": peaks}))
+            out.append(entry.model_copy(update={"peaks": tuple(peaks)}))
         else:
             out.append(entry)
     return out

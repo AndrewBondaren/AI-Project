@@ -52,7 +52,7 @@ class RegistryKey[R](str):
 
 
 def _peel_aliases(annotation: Any) -> Any:
-    """Follow PEP 695 aliases, ``T | None``, and ``list[T]`` so branded keys resolve to ``R``."""
+    """Follow aliases, optional keys and list/variadic tuple members to registry ``R``."""
     inner = annotation
     while True:
         if type(inner).__name__ == "TypeAliasType":
@@ -70,6 +70,11 @@ def _peel_aliases(annotation: Any) -> Any:
         if origin is list:
             args = get_args(inner)
             if len(args) == 1:
+                inner = args[0]
+                continue
+        if origin is tuple:
+            args = get_args(inner)
+            if len(args) == 2 and args[1] is Ellipsis:
                 inner = args[0]
                 continue
         break

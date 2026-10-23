@@ -74,9 +74,9 @@ def default_sides_for_count(
     side_count: int,
     *,
     kind: MountainSideKind = MountainSideKind.SLOPE,
-) -> list[MountainSideSpec]:
+) -> tuple[MountainSideSpec, ...]:
     n = max(3, int(side_count))
-    return [MountainSideSpec(kind=kind) for _ in range(n)]
+    return tuple(MountainSideSpec(kind=kind) for _ in range(n))
 
 
 def form_side_count(form: MountainFormBySides | StarForm | PeakForm | PlateauForm) -> int:
@@ -96,11 +96,11 @@ class MountainSpec(BaseModel):
     radius_m: DefaultWhenMissing[int] = Field(default_factory=_policy_default_radius_m, ge=1)
     kind: DefaultEnumWhenMissing[MountainKind] = MountainKind.ROCKY
     form: MountainForm = Field(default_factory=MountainFormBySides)
-    sides: DefaultWhenMissing[list[MountainSideSpec]] = Field(default_factory=list)
+    sides: DefaultWhenMissing[tuple[MountainSideSpec, ...]] = Field(default_factory=tuple)
     relief_pick_policy: DefaultWhenMissing[ObjectReliefPickPolicy | None] = None
     location_uid: str | None = None
 
-    def resolved_sides(self) -> list[MountainSideSpec]:
+    def resolved_sides(self) -> tuple[MountainSideSpec, ...]:
         """Prefer declare/stamp-filled ``sides``; empty → all-SLOPE defaults.
 
         RELIEF-T-10: R33 template materialize must run via
@@ -109,7 +109,7 @@ class MountainSpec(BaseModel):
         """
         n = form_side_count(self.form)
         if len(self.sides) == n:
-            return list(self.sides)
+            return self.sides
         if self.sides:
             raise ValueError(
                 f"MountainSpec.sides length {len(self.sides)} != form side_count {n}"
@@ -164,16 +164,16 @@ class MountainRangeSpec(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     entry_type: Literal["range"] = "range"
-    spine: list[tuple[int, int]] = Field(min_length=2)
+    spine: tuple[tuple[int, int], ...] = Field(min_length=2)
     width_m: DefaultWhenMissing[int] = Field(default_factory=_policy_default_radius_m, ge=1)
     kind: DefaultEnumWhenMissing[MountainKind] = MountainKind.ROCKY
     sides: DefaultWhenMissing[MountainRangeSides] = Field(default_factory=MountainRangeSides)
-    peaks: DefaultWhenMissing[list[MountainSpec]] = Field(default_factory=list)
+    peaks: DefaultWhenMissing[tuple[MountainSpec, ...]] = Field(default_factory=tuple)
     style: DefaultEnumWhenMissing[MountainRangeStyle] = MountainRangeStyle.BROKEN
     peak_spacing_m: int | None = Field(default=None, ge=1)
-    peak_spacings_m: DefaultWhenMissing[list[int]] = Field(default_factory=list)
+    peak_spacings_m: DefaultWhenMissing[tuple[int, ...]] = Field(default_factory=tuple)
     saddle_rise_fraction: float | None = None
-    saddles: DefaultWhenMissing[list[MountainSaddleSpec]] = Field(default_factory=list)
+    saddles: DefaultWhenMissing[tuple[MountainSaddleSpec, ...]] = Field(default_factory=tuple)
     location_uid: str | None = None
 
     def identity_key(self) -> tuple[object, ...]:

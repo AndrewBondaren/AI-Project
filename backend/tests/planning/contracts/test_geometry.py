@@ -87,3 +87,82 @@ class GridBBoxTests(TestCase):
         self.assertEqual(list(iter_macro_tiles(macro)), [(-1, 2), (0, 2)])
         self.assertEqual(fine_bbox_for_tile(-1, 2, 4), GridBBox(-4, -1, 8, 11))
         self.assertEqual(macro_bbox_to_fine_bbox(macro, 4), GridBBox(-4, 3, 8, 11))
+
+
+class CoordinateValueTests(TestCase):
+    def test_coordinate_symbols_are_shared_by_all_import_paths(self):
+        from app.application.worldData.generators import coordinates as legacy
+        from app.application.worldData.generators.coordinates import types as legacy_types
+        from app.dataModel.spatial import grid
+        from app.dataModel.spatial.grid import coordinateTypes as shared
+
+        for name in ("GridX", "GridY", "FineX", "FineY", "FineZ", "FineDelta",
+                     "SurfaceGridCoord", "FineGridCoord", "SurfaceGridRect", "FineGridRect"):
+            with self.subTest(symbol=name):
+                self.assertIs(getattr(legacy, name), getattr(shared, name))
+                self.assertIs(getattr(legacy_types, name), getattr(shared, name))
+                self.assertIs(getattr(grid, name), getattr(shared, name))
+        self.assertIs(legacy_types.FineXY, shared.FineXY)
+        self.assertIs(grid.FineXY, shared.FineXY)
+
+    def test_newtypes_retain_distinct_units_and_integer_values(self):
+        from app.dataModel.spatial.grid import coordinateTypes as shared
+
+        types = [shared.GridX, shared.GridY, shared.FineX, shared.FineY, shared.FineZ, shared.FineDelta]
+        self.assertEqual(len(set(types)), len(types))
+        for scalar in types:
+            with self.subTest(scalar=scalar):
+                self.assertIs(scalar.__supertype__, int)
+                self.assertEqual(scalar(-3), -3)
+
+    def test_coordinate_space_keeps_legacy_wire_values(self):
+        from app.application.worldData.generators.coordinates import CoordinateSpace as LegacySpace
+        from app.application.worldData.generators.coordinates.space import CoordinateSpace as LegacyModuleSpace
+        from app.dataModel.spatial.grid import CoordinateSpace
+
+        self.assertIs(LegacySpace, CoordinateSpace)
+        self.assertIs(LegacyModuleSpace, CoordinateSpace)
+        self.assertEqual({item.name: item.value for item in CoordinateSpace}, {
+            "WORLD_SURFACE_GRID": "world_surface_grid",
+            "WORLD_FINE_GRID": "world_fine_grid",
+            "LOCATION_FINE_GRID": "location_fine_grid",
+        })
+
+    def test_rectangles_retain_half_open_boundaries(self):
+        from app.application.worldData.generators.coordinates.rect import (
+            cell_in_fine_rect, cell_in_surface_grid_rect,
+        )
+        from app.dataModel.spatial.grid import FineGridRect, FineX, FineY, FineZ, GridX, GridY, SurfaceGridRect
+
+        surface = SurfaceGridRect(GridX(-2), GridY(1), GridX(0), GridY(3))
+        fine = FineGridRect(FineX(-2), FineY(1), FineX(0), FineY(3), FineZ(7))
+        self.assertEqual(surface.as_tuple(), (-2, 1, 0, 3))
+        self.assertEqual(fine.as_tuple(), (-2, 1, 0, 3, 7))
+        for x, y, expected in ((-2, 1, True), (-1, 2, True), (0, 2, False),
+                               (-1, 3, False), (-3, 1, False)):
+            with self.subTest(x=x, y=y):
+                self.assertEqual(cell_in_surface_grid_rect(x, y, surface), expected)
+                self.assertEqual(cell_in_fine_rect(x, y, fine), expected)
+
+    def test_existing_conversion_helpers_accept_shared_records(self):
+        from app.application.worldData.generators.coordinates.convert import (
+            coarse_cell_fine_xy, fine_to_grid_xy, grid_tile_origin_x,
+        )
+        from app.dataModel.spatial.grid import FineGridCoord, FineX, FineY, FineZ
+
+        self.assertEqual(fine_to_grid_xy(-1, -9, 8), (-1, -2))
+        self.assertEqual(grid_tile_origin_x(-1, 8), -8)
+        self.assertEqual(coarse_cell_fine_xy(FineGridCoord(FineX(-4), FineY(6), FineZ(0)),
+                                             -1, 2, 8), (-12, 22))
+
+    def test_light_cell_reference_keeps_mask_compatibility(self):
+        from app.application.worldData.masks.footprint import LightCellRef as LegacyLightCellRef, MaskFootprint
+        from app.dataModel.spatial.grid import LightCellRef
+
+        self.assertIs(LegacyLightCellRef, LightCellRef)
+        cell = LightCellRef(-1, 2, 3, 0)
+        self.assertEqual(cell.as_absolute(4), (-1, 8))
+        footprint = MaskFootprint(frozenset({cell}), elevation_fraction={cell: 0.5})
+        self.assertEqual(footprint.elevation_fraction[LegacyLightCellRef(-1, 2, 3, 0)], 0.5)
+        with self.assertRaises(FrozenInstanceError):
+            setattr(cell, "tx", 1)

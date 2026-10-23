@@ -51,7 +51,7 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
     default_kind: DefaultEnumWhenMissing[MountainKind] = MountainKind.ROCKY
     default_form: MountainForm = Field(default_factory=MountainFormBySides)
     default_radius_m: DefaultWhenMissing[int] = Field(default=500, ge=1)
-    sides: DefaultWhenMissing[list[MountainSideSpec]] = Field(default_factory=list)
+    sides: DefaultWhenMissing[tuple[MountainSideSpec, ...]] = Field(default_factory=tuple)
     default_range_style: DefaultEnumWhenMissing[MountainRangeStyle] = MountainRangeStyle.BROKEN
     hybrid_smooth_edge_factor: DefaultWhenMissing[float] = constrained_field(
         default=1.5, greater_equals=0.0,
@@ -70,11 +70,11 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
     )
     enable_secondary_ridges: DefaultWhenMissing[bool] = True
 
-    def resolved_sides(self) -> list[MountainSideSpec]:
+    def resolved_sides(self) -> tuple[MountainSideSpec, ...]:
         """Assemble Spec.sides — empty → N× MountainSideSpec(); wrong len → raise."""
         n = form_side_count(self.default_form)
         if len(self.sides) == n:
-            return list(self.sides)
+            return self.sides
         if self.sides:
             raise ValueError(
                 f"MountainsCategoryPolicy.sides length {len(self.sides)} "
