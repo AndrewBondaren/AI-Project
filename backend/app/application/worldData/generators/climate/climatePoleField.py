@@ -1,3 +1,5 @@
+from app.dataModel.climate.planning.climatePoints import PoleClimateSample as PoleClimateSample
+
 from dataclasses import dataclass
 
 from app.dataModel.spatial.grid.gridBBox import GridBBox as GridBBox
@@ -8,14 +10,6 @@ from app.application.worldData.generators.climate.registry import profile_for
 from app.dataModel.climate.climatePoleBlendDefaults import CLIMATE_POLE_BLEND
 from app.application.jsonValidation import climate_scalars
 from app.db.models.world import World
-
-
-@dataclass(frozen=True)
-class PoleClimateSample:
-    system_climate_zone:       str
-    zone_location_uid:         str | None
-    typical_elevation_z:       int
-    base_temperature_override: int | None
 
 
 @dataclass(frozen=True)

@@ -11,6 +11,8 @@ from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.spatial.grid.coordinateTypes import GridX
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
+from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
+from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 
 
 @dataclass(frozen=True)
@@ -70,3 +72,12 @@ class Reason(StrEnum):
 
 def widen_context(value: RuntimeIssueContext[Action, Reason]) -> RuntimeIssueContext[StrEnum, StrEnum]:
     return value
+
+
+def climate_domain_round_trip(request: PlanRequest[ClimateBaseInput],
+                              lookup: CacheLookup[PlanEnvelope[ClimateBasePlan]]) -> int | None:
+    assert_type(request.inputs, ClimateBaseInput)
+    if isinstance(lookup, CacheHit):
+        assert_type(lookup.entry.value.payload, ClimateBasePlan)
+        return lookup.entry.value.payload.profiles[0].values.base_temperature
+    return None

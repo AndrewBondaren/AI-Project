@@ -1265,3 +1265,13 @@ ClimateBasePlan/GridX/GridY без World/profile accessor. Manual pole order
 climate_base key, но final z edit меняет dependent local anchors. Base
 planning не записывает materialized temperature/rainfall. Reports/NOTICE/
 FALLBACK на HIT/MISS одинаковы по общему envelope/report contract.
+
+**PC-1C реализован 2026-10-23:** immutable base/local inputs и plans,
+ResolvedClimateProfile и shared point/sample definitions находятся в
+`dataModel/climate/planning`. Профили включают default/manual/preset либо
+default/pole keys, повторные ключи отклоняются; ручной порядок сохраняется.
+ClimateFeaturePolicy хранит прежние METRIC/50/25/10/32/2 defaults и два
+required TerrainKey; legacy modules читают те же defaults. Старые imports
+реэкспортируют те же types. Sampling/feature algorithms не изменены,
+переключение на pure sampler остаётся PC-5. Проверки: 111 tests OK,
+pyright positive 0 errors/warnings, negative 9 ожидаемых diagnostics.

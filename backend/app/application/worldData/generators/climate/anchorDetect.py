@@ -1,5 +1,8 @@
+from app.dataModel.climate.planning.inputs.climateLocalInput import (
+    ClimateFeaturePolicy, ProminenceScale as ProminenceScale, ProminenceThresholds as ProminenceThresholds,
+)
+
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Literal
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
@@ -8,17 +11,10 @@ from app.db.models.mapCell import MapCell
 TerrainFeatureKind = Literal["peak", "basin", "water"]
 
 # Relative to 8-neighbor ring (meters). Positions only — climate comes from world/coarse field.
-MIN_PEAK_PROMINENCE_M = 50
-MIN_BASIN_PROMINENCE_M = 25
-MIN_LIQUID_PROMINENCE_M = 10
-MAX_AUTO_FEATURES = 32
-
-
-class ProminenceScale(StrEnum):
-    """Caller must choose — no silent metric default."""
-
-    METRIC = "metric"  # absolute MIN_*_PROMINENCE_M (detailed / climate)
-    GRID = "grid"      # scale to heightmap z span (coarse / light hydro)
+MIN_PEAK_PROMINENCE_M = ClimateFeaturePolicy.peak_min
+MIN_BASIN_PROMINENCE_M = ClimateFeaturePolicy.basin_min
+MIN_LIQUID_PROMINENCE_M = ClimateFeaturePolicy.liquid_min
+MAX_AUTO_FEATURES = ClimateFeaturePolicy.max_features
 
 
 @dataclass(frozen=True)
@@ -29,15 +25,6 @@ class TerrainFeaturePoint:
     gy:       int
     kind:     TerrainFeatureKind
     prominence: int
-
-
-@dataclass(frozen=True)
-class ProminenceThresholds:
-    """Min prominence for peak / basin / liquid-body detect."""
-
-    peak: int
-    basin: int
-    liquid: int
 
 
 def metric_prominence_thresholds() -> ProminenceThresholds:

@@ -4,6 +4,7 @@
     "../../../app/dataModel/planning",
     "../../../app/dataModel/cache",
     "../../../app/dataModel/validation",
+    "../../../app/dataModel/climate/planning",
     "valid.py"
   ]
 }
