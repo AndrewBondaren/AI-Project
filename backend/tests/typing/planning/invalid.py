@@ -3,6 +3,12 @@
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.application.cache.contracts.cacheBackend import CacheBinding
 from app.application.cache.service.cacheService import CacheService
+from app.application.planning.providers.planProvider import PlanProvider, RegisteredPlanContract
+from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
+from app.application.planning.service.planningService import PlanningService, PlanWaitControl
+from app.dataModel.planning.identity.planKey import PlanSlot
+from app.application.encoding.canonicalCodec import decode
+from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
@@ -16,7 +22,7 @@ from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverRe
 from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, HydrologyRoutesPlan, RiverRoute
 from tests.typing.planning.valid import (
-    ClimatePayload, HydroInput, HydroPayload, build_climate, require_climate, require_grid_x,
+    ClimateInput, ClimatePayload, HydroInput, HydroPayload, build_climate, require_climate, require_grid_x,
 )
 
 
@@ -81,3 +87,17 @@ def invalid_service_binding(service: CacheService, binding: CacheBinding[Climate
     service.get(binding, key)  # EXPECT: reportArgumentType
     service.put(binding, entry)  # EXPECT: reportArgumentType
     service.evict(binding, key)  # EXPECT: reportArgumentType
+
+
+def invalid_planning_bindings(service: PlanningService, registry: PlanRegistry,
+                               contract: RegisteredPlanContract[ClimateInput, ClimatePayload],
+                               provider: PlanProvider[HydroInput, HydroPayload],
+                               request: PlanRequest[HydroInput], reader: PlanDependencyReader,
+                               wait: PlanWaitControl) -> PlanEnvelope[HydroPayload]:
+    registry.register(contract, provider)  # EXPECT: reportArgumentType
+    service.get_or_build(contract, request, reader, wait=wait)  # EXPECT: reportArgumentType
+    return reader.require(PlanSlot("climate"), contract)  # EXPECT: reportReturnType
+
+
+def invalid_decode_type(encoded: bytes, manifest: CanonicalSchemaManifest) -> ClimatePayload:
+    return decode(encoded, HydroPayload, manifest)  # EXPECT: reportReturnType

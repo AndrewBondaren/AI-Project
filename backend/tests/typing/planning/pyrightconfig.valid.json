@@ -2,6 +2,9 @@
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
     "../../../app/application/cache",
+    "../../../app/application/planning",
+    "../../../app/application/encoding",
+    "../../../app/dataModel/encoding",
     "../../../app/dataModel/planning",
     "../../../app/dataModel/cache",
     "../../../app/dataModel/validation",

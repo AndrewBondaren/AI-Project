@@ -5,6 +5,8 @@ from threading import RLock
 
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.service.cacheService import CacheService
+from app.application.planning.providers.planRegistry import PlanRegistry
+from app.application.planning.service.planningService import PlanningService
 from app.core.appSettings import app_settings
 from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
 
@@ -75,6 +77,8 @@ class WorldDataWiring:
         self._planning_memory_cache: MemoryCache | None = None
         self._planning_cache_service: CacheService | None = None
         self._planning_cache_lock = RLock()
+        self._plan_registry: PlanRegistry | None = None
+        self._planning_service: PlanningService | None = None
 
     def planning_resources(self) -> PlanningRuntimeSettings:
         with self._planning_cache_lock:
@@ -95,6 +99,23 @@ class WorldDataWiring:
             if self._planning_cache_service is None:
                 self._planning_cache_service = CacheService(self.planning_memory_cache(), self.planning_resources().cache)
             return self._planning_cache_service
+
+    def plan_registry(self) -> PlanRegistry:
+        with self._planning_cache_lock:
+            if self._plan_registry is None:
+                self._plan_registry = PlanRegistry()
+            return self._plan_registry
+
+    def planning_service(self) -> PlanningService:
+        with self._planning_cache_lock:
+            if self._planning_service is None:
+                self._planning_service = PlanningService(self.plan_registry(),
+                    self.planning_cache_service(), self.planning_resources().execution)
+            return self._planning_service
+
+    def shutdown_planning(self, *, wait: bool = True) -> None:
+        if self._planning_service is not None:
+            self._planning_service.shutdown(wait=wait)
 
     def world_service(self) -> WorldService:
         if self._world_service is None:

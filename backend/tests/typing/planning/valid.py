@@ -6,6 +6,11 @@ from typing import assert_type
 
 from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
 from app.application.cache.backends.memoryCache import MemoryCache
+from app.application.planning.providers.planProvider import PlanProvider, RegisteredPlanContract
+from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
+from app.application.planning.service.planningService import PlanningService, PlanWaitControl
+from app.application.encoding.canonicalCodec import decode
+from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.application.cache.service.cacheService import CacheService
 from app.dataModel.cache.contracts.cacheEntry import CacheAdmission
 
@@ -14,6 +19,7 @@ from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheLookup
 from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
+from app.dataModel.planning.identity.planKey import PlanSlot
 from app.dataModel.spatial.grid.coordinateTypes import GridX
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
@@ -58,6 +64,20 @@ def cache_service_types(service: CacheService, backend: CacheBackend,
 
 def memory_backend_protocol(backend: MemoryCache) -> CacheBackend:
     return backend
+
+
+def canonical_decode_type(encoded: bytes, manifest: CanonicalSchemaManifest) -> ClimatePayload:
+    return decode(encoded, ClimatePayload, manifest)
+
+
+def planning_service_types(service: PlanningService, registry: PlanRegistry,
+                            contract: RegisteredPlanContract[ClimateInput, ClimatePayload],
+                            provider: PlanProvider[ClimateInput, ClimatePayload],
+                            request: PlanRequest[ClimateInput], reader: PlanDependencyReader,
+                            wait: PlanWaitControl) -> PlanEnvelope[ClimatePayload]:
+    registry.register(contract, provider)
+    assert_type(reader.require(PlanSlot("base"), contract), PlanEnvelope[ClimatePayload])
+    return service.get_or_build(contract, request, reader, wait=wait)
 
 
 def cache_round_trip(key: CacheKey[PlanEnvelope[ClimatePayload]],

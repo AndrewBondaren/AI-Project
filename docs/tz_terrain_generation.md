@@ -1966,6 +1966,20 @@ signatures. Это один согласованный contract. Cross-domain co
 
 ### PC-0 — общие records и API
 
+**PC-3E и PC-4 реализованы 2026-10-23:** canonical manifest/codec и три
+fingerprint-функции находятся в dataModel/encoding, application/encoding
+и application/planning/service/planFingerprints.py по §6.32 delivery-плана.
+RegisteredPlanContract дополнен required manifest:CanonicalSchemaManifest;
+registry проверяет identity зарегистрированного handle, dependency reader —
+exact selected refs/world/scope/phase. PlanningService проверяет inputs/key/
+output digest на HIT/MISS и исполняет bounded single-flight. Отмена/timeout
+waiter не отменяет общий worker; failed build допускает retry; shutdown
+прекращает admission и не публикует cancelled результат. Cache не определяет
+current revision мира. Shared singleton factories доступны в WorldDataWiring;
+production domain registration/caller/lifecycle activation остаётся PC-9.
+Проверки: encoding7/providers27/contracts56/cache20 — 110 tests OK;
+pyright valid 0 errors/warnings, negative 21 ожидаемых diagnostics.
+
 **PC-3 реализован 2026-10-23:** bounded process-local MemoryCache в
 application/cache/backends/memoryCache.py разделяет один LRU/byte budget
 между typed namespaces; clear/evict/replacement освобождают accounting.
@@ -2105,6 +2119,18 @@ domain-моделью. HIT повторно проверяет entry проти�
 `CacheFailure` с enum reason CONTRACT_MISMATCH / INVALID_PAYLOAD /
 BACKEND_FAILURE; не MISS и не молчаливый обход кэша.
 
+Общий canonical encoder — `application/encoding/canonicalCodec.py`,
+декларации type ids — `dataModel/encoding/schemaManifest.py`
+(`CanonicalSchemaManifest`/`RegisteredTypeEntry`: unique `type_id`,
+kind RECORD|ENUM, стабильные при переносе Python-модуля). Encoder —
+общий механизм слоя, не сабдомен planning; он не импортирует
+planning-типы и потребляется envelope codec bindings и domain payload
+codec'ами. Fingerprint формулы — единая реализация
+`application/planning/service/planFingerprints.py`, используемая
+`RegisteredPlanContract.fingerprint_inputs` и `PlanningService`;
+binding подаёт свой manifest, копий формул в доменах нет.
+Реализация — шаг PC-3E плана geo-1-designed-water до PC-4.
+
 **Общий sync API и ошибки.** В application:
 - `CacheBackend.get[T](key: CacheKey[T]) -> CacheLookup[T]`,
   `put[T](entry: CacheEntry[T]) -> None`,
@@ -2131,6 +2157,8 @@ BACKEND_FAILURE; не MISS и не молчаливый обход кэша.
   `validate_inputs: Callable[[object], I]`,
   `fingerprint_inputs: Callable[[EntityUid, PlanScope, I, tuple[PlanDependency, ...]], InputFingerprint]`,
   `dependency_contracts: tuple[PlanDependencyContract,...]`, `cache_binding`.
+  Уточнение PC-3E/PC-4: required `manifest:CanonicalSchemaManifest`;
+  fingerprints используют единственную реализацию planFingerprints.py.
   PlanDependencyContract — exact slot/id/schema/algorithm requirements §6.31-A.
   Нет current-world accessor.
 - `PlanningService.get_or_build[I,T](contract: RegisteredPlanContract[I,T],
