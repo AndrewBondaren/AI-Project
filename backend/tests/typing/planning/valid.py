@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import assert_type
 
 from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
+from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.service.cacheService import CacheService
 from app.dataModel.cache.contracts.cacheEntry import CacheAdmission
 
@@ -53,6 +54,10 @@ def cache_service_types(service: CacheService, backend: CacheBackend,
     assert_type(service.evict(binding, key), None)
     assert_type(backend.get(key), CacheLookup[ClimatePayload])
     assert_type(backend.put(entry), None)
+
+
+def memory_backend_protocol(backend: MemoryCache) -> CacheBackend:
+    return backend
 
 
 def cache_round_trip(key: CacheKey[PlanEnvelope[ClimatePayload]],

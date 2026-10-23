@@ -92,7 +92,7 @@ class CacheServiceTests(unittest.TestCase):
         self.key = CacheKey[Payload](contract=self.binding.contract, item_key=bytes(32))
         self.payload = Payload(points=(Point(1),), limit=10, mode=Mode.NORMAL)
         self.entry = CacheEntry[Payload](key=self.key, value=self.payload)
-        self.service = CacheService(self.backend, CachePolicy(max_retained_bytes=100, max_entry_bytes=50))
+        self.service = CacheService(self.backend, CachePolicy(max_retained_bytes=100000, max_entry_bytes=50000))
 
     def fails(self, reason, action):
         with self.assertRaises(CacheFailure) as caught:
@@ -103,7 +103,7 @@ class CacheServiceTests(unittest.TestCase):
 
     def test_backend_substitution_hit_miss_and_evict(self):
         for backend in (self.backend, BackendDouble()):
-            service = CacheService(backend, CachePolicy(max_retained_bytes=100, max_entry_bytes=50))
+            service = CacheService(backend, CachePolicy(max_retained_bytes=100000, max_entry_bytes=50000))
             self.assertIsInstance(service.get(self.binding, self.key), CacheMiss)
             self.assertEqual(service.put(self.binding, self.entry), CacheAdmission.STORED)
             self.assertEqual(service.get(self.binding, self.key).entry.value, self.payload)
@@ -180,11 +180,11 @@ class CacheServiceTests(unittest.TestCase):
             self.fails(CacheFailureReason.CONTRACT_MISMATCH, lambda: self.service.evict(self.binding, bad))
 
     def test_oversize_skips_storage_without_changing_value(self):
-        self.codec.cost = 51
+        self.codec.cost = 50001
         self.assertEqual(self.service.put(self.binding, self.entry), CacheAdmission.SKIPPED_OVERSIZE)
         self.assertEqual(self.entry.value, self.payload)
         self.assertEqual(self.backend.calls, [])
-        self.codec.cost = 50
+        self.codec.cost = 50000
         self.assertEqual(self.service.put(self.binding, self.entry), CacheAdmission.STORED)
         for cost in (True, -1, 1.5):
             self.codec.cost = cost

@@ -3,6 +3,7 @@
 from dataclasses import fields, is_dataclass
 from enum import Enum, StrEnum
 from math import isfinite
+from sys import getsizeof
 
 from pydantic import BaseModel
 
@@ -36,6 +37,39 @@ def _complete_record(value: BaseModel) -> None:
     """Instance revalidation alone may silently restore missing default fields."""
     if set(vars(value)) != set(type(value).model_fields) or value.model_extra:
         raise ValueError("missing or extra record fields")
+
+
+def retained_entry_bytes(value: object) -> int:
+    """Conservative retained graph accounting, including entry/key metadata.
+
+    Each object identity is counted once within this graph. Class/schema objects
+    and process globals are not owned by an entry. RAM stores no encoded copy.
+    This is a retention budget, not a bound on process RSS or build memory.
+    """
+    visited: set[int] = set()
+
+    def size(item: object) -> int:
+        identity = id(item)
+        if identity in visited:
+            return 0
+        visited.add(identity)
+        cost = getsizeof(item)
+        if isinstance(item, dict):
+            return cost + sum(size(key) + size(child) for key, child in item.items())
+        if isinstance(item, (tuple, list, set, frozenset)):
+            return cost + sum(size(child) for child in item)
+        if isinstance(item, Enum):
+            return cost + size(item.value)
+        if isinstance(item, BaseModel):
+            return (cost + size(vars(item)) + size(item.__pydantic_fields_set__)
+                    + size(item.__pydantic_extra__) + size(item.__pydantic_private__))
+        if is_dataclass(item) and not isinstance(item, type):
+            if hasattr(item, "__dict__"):
+                return cost + size(vars(item))
+            return cost + sum(size(getattr(item, field.name)) for field in fields(item))
+        return cost
+
+    return size(value)
 
 
 def _immutable(value: object, active: set[int]) -> None:
@@ -142,6 +176,7 @@ class CacheService:
             cost = binding.codec.retained_bytes(validated.value)
             if type(cost) is not int or cost < 0:
                 raise ValueError("retained byte cost must be a nonnegative integer")
+            cost = max(cost, retained_entry_bytes(validated))
         except Exception as exc:
             raise _failure(CacheFailureReason.INVALID_PAYLOAD, str(exc)) from exc
         if cost > self._policy.max_entry_bytes:

@@ -1,6 +1,12 @@
 """worldData wiring: domain services, persist, transitions, orchestrators."""
 
 from collections.abc import Mapping, Sequence
+from threading import RLock
+
+from app.application.cache.backends.memoryCache import MemoryCache
+from app.application.cache.service.cacheService import CacheService
+from app.core.appSettings import app_settings
+from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
 
 from app.application.jsonValidation.worldRow import transition_types
 from app.application.worldData.transitions.transitionService import TransitionService
@@ -65,6 +71,30 @@ class WorldDataWiring:
         self._patch_store_service: PatchStoreService | None = None
         self._pack_materialization_orchestrator = None
         self._entry_refine_orchestrator = None
+        self._planning_resources: PlanningRuntimeSettings | None = None
+        self._planning_memory_cache: MemoryCache | None = None
+        self._planning_cache_service: CacheService | None = None
+        self._planning_cache_lock = RLock()
+
+    def planning_resources(self) -> PlanningRuntimeSettings:
+        with self._planning_cache_lock:
+            if self._planning_resources is None:
+                if app_settings.planning is None:
+                    raise ValueError("Planning requires explicit [planning.cache] and [planning.execution] configuration")
+                self._planning_resources = PlanningRuntimeSettings.model_validate(app_settings.planning)
+            return self._planning_resources
+
+    def planning_memory_cache(self) -> MemoryCache:
+        with self._planning_cache_lock:
+            if self._planning_memory_cache is None:
+                self._planning_memory_cache = MemoryCache(self.planning_resources().cache)
+            return self._planning_memory_cache
+
+    def planning_cache_service(self) -> CacheService:
+        with self._planning_cache_lock:
+            if self._planning_cache_service is None:
+                self._planning_cache_service = CacheService(self.planning_memory_cache(), self.planning_resources().cache)
+            return self._planning_cache_service
 
     def world_service(self) -> WorldService:
         if self._world_service is None:

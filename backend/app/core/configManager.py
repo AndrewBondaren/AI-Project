@@ -99,10 +99,14 @@ class ConfigManager:
         if "logger_levels" in data:
             result["logger_levels"] = _flatten_logger_levels(dict(data["logger_levels"]))
 
+        if "planning" in data:
+            from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
+            result["planning"] = PlanningRuntimeSettings.model_validate(data["planning"])
+
         return result
 
     def _to_nested(self, s) -> dict:
-        return {
+        result = {
             "llm": {
                 "qwen": {
                     "base_url": s.qwen_base_url,
@@ -140,6 +144,11 @@ class ConfigManager:
             },
             "logger_levels": dict(s.logger_levels),
         }
+        if s.planning is not None:
+            from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
+            result["planning"] = PlanningRuntimeSettings.model_validate(s.planning).model_dump(
+                mode="json", exclude_none=True)
+        return result
 
 
 def _copy(dst: dict, src: dict, src_key: str, dst_key: str | None = None) -> None:

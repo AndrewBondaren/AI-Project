@@ -1966,6 +1966,22 @@ signatures. Это один согласованный contract. Cross-domain co
 
 ### PC-0 — общие records и API
 
+**PC-3 реализован 2026-10-23:** bounded process-local MemoryCache в
+application/cache/backends/memoryCache.py разделяет один LRU/byte budget
+между typed namespaces; clear/evict/replacement освобождают accounting.
+CacheService admission и backend используют общий retained_entry_bytes
+(service/cacheService.py): visited identity внутри entry, instance storage
+и key metadata; RAM не сохраняет encoded copy. Admission берёт максимум
+codec estimate и graph cost. Это retention accounting, не process RSS.
+PlanningRuntimeSettings требует CachePolicy и PlanningExecutionPolicy;
+AppSettings.planning=None означает отсутствие TOML секции. ConfigManager
+нормализует [planning.cache]/[planning.execution] через POJO, без числовых
+defaults; None не сериализуется в TOML. WorldDataWiring создаёт один RAM
+backend/service на container и проверяет required configuration перед первым
+запуском planning path; production activation остаётся PC-9.
+Проверки: cache 20 tests и contracts 56 tests OK; pyright valid — 0 ошибок,
+negative — 17 ожидаемых diagnostics. Single-flight/registry — PC-4.
+
 **PC-1 реализован 2026-10-23:** общие immutable contracts находятся в
 `dataModel/planning`, `dataModel/cache`, `dataModel/validation`. Typed
 metadata entries — PlanContractMetadata/CacheContractMetadata; executable
