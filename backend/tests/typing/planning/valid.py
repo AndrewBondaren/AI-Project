@@ -278,3 +278,19 @@ def hydrology_assembly_contracts(routes_owner: HydrologyRoutesAssembler, facts_o
     routes: PlanBuildResult[HydrologyRoutesPlan] = routes_owner.assemble(world_uid="world", inputs=inputs,
         relief=relief, placement=placement, control=control)
     return facts_owner.assemble(inputs=final_inputs, relief=relief, routes=routes.payload, river=river, control=control)
+
+
+from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateLocalPlanProvider
+from app.application.worldData.generators.climate.localFieldFromCoarse import build_local_plan_from_coarse
+from app.dataModel.climate.planning.inputs.climateLocalInput import ClimateLocalInput
+from app.dataModel.climate.planning.climatePlan import ClimateLocalPlan
+
+
+def valid_local_provider(provider: ClimateLocalPlanProvider, request: PlanRequest[ClimateLocalInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[ClimateLocalPlan]:
+    return provider.build(request, dependencies, control)
+
+
+def valid_local_adapter(inputs: ClimateLocalInput, base: ClimateBasePlan,
+    hydrology: HydrologyPlan) -> PlanBuildResult[ClimateLocalPlan]:
+    return build_local_plan_from_coarse(inputs, base, hydrology)

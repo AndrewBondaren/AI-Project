@@ -1588,6 +1588,216 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
             self.finish(routes, river)
 
 
+class ClimateLocalProviderTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateLocalPlanProvider
+        from app.dataModel.climate.planning.climatePlan import ClimateLocalPlan
+        from app.dataModel.climate.planning.climatePoints import ClimateAnchorPoint, AnchorSource
+        from app.dataModel.climate.planning.inputs.climateLocalInput import (
+            ClimateLocalInput, ClimateFeaturePolicy, ProminenceScale)
+        from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        self.f = HydrologyProviderTests()
+        self.f.setUp()
+        self.addCleanup(self.f.doCleanups)
+        self.base_fixture = self.f.water.terrain.climate
+        self.base = self.base_fixture.get()
+        self.hydro = self.f.finish()
+        self.Input, self.Plan, self.Point, self.Source = ClimateLocalInput, ClimateLocalPlan, ClimateAnchorPoint, AnchorSource
+        self.inputs = ClimateLocalInput(manual=(), admin=(), feature_policy=ClimateFeaturePolicy(
+            synthetic_surface_terrain="plains", water_feature_terrain="liquid_body"))
+        records = (ClimateLocalInput, ClimateLocalPlan, ClimateAnchorPoint, ClimateFeaturePolicy, PlanEnvelope[ClimateLocalPlan])
+        self.manifest = CanonicalSchemaManifest(entries=self.f.hydro_manifest.entries + tuple(
+            RegisteredTypeEntry(type_id=i, python_type=t, kind=CanonicalTypeKind.RECORD) for i, t in enumerate(records, 500))
+            + (RegisteredTypeEntry(type_id=510, python_type=AnchorSource, kind=CanonicalTypeKind.ENUM),
+               RegisteredTypeEntry(type_id=511, python_type=ProminenceScale, kind=CanonicalTypeKind.ENUM)))
+        manifest = self.manifest
+        meta = PlanContractMetadata(id=f"surface.pc.{SurfacePlanSlot.CLIMATE_LOCAL.value}", schema_version=1, algorithm_version=1)
+        self.handles = ((SurfacePlanSlot.CLIMATE_BASE, self.base_fixture.binding), (SurfacePlanSlot.HYDROLOGY, self.f.final_binding))
+        declarations = tuple(PlanDependencyContract(slot=PlanSlot(slot.value), contract_id=handle.metadata.id,
+            schema_version=1, algorithm_version=1) for slot, handle in self.handles)
+        class Codec:
+            def validate(self, value): return TypeAdapter(PlanEnvelope[ClimateLocalPlan]).validate_python(value, strict=True)
+            def encode(self, value): return encode(value, manifest)
+            def decode(self, value): return decode(value, PlanEnvelope[ClimateLocalPlan], manifest)
+            def retained_bytes(self, value): return retained_entry_bytes(value)
+        self.binding = RegisteredPlanContract(meta, TypeAdapter(ClimateLocalInput).validate_python,
+            lambda w, s, i, d: input_fingerprint(meta, w, s, i, d, manifest), declarations,
+            CacheBinding(CacheContract[PlanEnvelope[ClimateLocalPlan]](id="cache." + meta.id, schema_version=1), Codec()), manifest)
+        self.provider = Mock(wraps=ClimateLocalPlanProvider(self.base_fixture.binding, self.f.final_binding))
+        self.f.h.registry.register(self.binding, self.provider)
+
+    def get(self, inputs=None, base=None, hydro=None):
+        return self.f.execute(self.binding, inputs or self.inputs, self.handles, (base or self.base, hydro or self.hydro))
+
+    def surface(self, heights):
+        from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord, GridX, GridY, FineZ
+        payload = self.hydro.payload.model_copy(update={"coarse_surface_z": tuple(
+            (SurfaceGridCoord(GridX(x), GridY(y)), FineZ(z)) for (x, y), z in heights.items()), "coarse_hydro": ()})
+        return self.f.signed(self.hydro, payload, self.f.hydro_manifest)
+
+    def point(self, x=0, y=0, source=None):
+        return self.Point(gx=x, gy=y, system_climate_zone="arctic", location_uid="anchor",
+                          source=source or self.Source.MANUAL)
+
+    def test_final_z_invalidation_and_base_hit_without_pole_replanning(self):
+        from unittest.mock import patch
+        flat = self.surface({(x, y): 0 for y in range(-1, 2) for x in range(-1, 2)})
+        first = self.get(hydro=flat)
+        raised = self.surface({(x, y): 60 if (x, y) == (0, 0) else 0 for y in range(-1, 2) for x in range(-1, 2)})
+        with patch.object(self.base_fixture.provider, "build", side_effect=AssertionError("base HIT")), patch(
+            "app.application.worldData.generators.climate.planning.climatePlanProvider.build_climate_base",
+            side_effect=AssertionError("no pole replanning")):
+            second = self.get(hydro=raised)
+            self.assertEqual(self.base_fixture.get(), self.base)
+        self.assertNotEqual(first.ref.key, second.ref.key)
+        self.assertFalse(first.payload.anchors)
+        self.assertEqual([(p.gx, p.gy) for p in second.payload.anchors], [(0, 0)])
+        self.assertEqual(self.provider.build.call_count, 2)
+        self.assertEqual(second.dependencies[0].ref, self.base.ref)
+
+    def test_legacy_coarse_baseline_manual_exclusion_admin_and_pole_assignment(self):
+        from app.application.worldData.generators.climate.localFieldFromCoarse import (
+            build_local_field_from_coarse, _default_surface_terrain_key)
+        from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from app.db.models.world import World
+        from app.db.models.namedLocation import NamedLocation
+        from app.dataModel.spatial.grid.gridBBox import GridBBox
+        w = World(world_uid="climate-world", name="test", created_at="", fine_cells_per_map_cell=10)
+        terrain = _default_surface_terrain_key()
+        heights = {(x, y): 0 for y in range(-2, 3) for x in range(-4, 5)}
+        heights[(0, 0)], heights[(3, 0)], heights[(-3, 0)] = 80, 60, -30
+        hydro = self.surface(heights)
+        hm = SurfaceHeightmap(w.world_uid, GridBBox(-4, 4, -2, 2), heights)
+        for poles in (self.base.payload.poles, ()):
+            base = self.f.signed(self.base, self.base.payload.model_copy(update={"poles": poles}), self.base_fixture.manifest)
+            for manual in ((), (self.point(),)):
+                locations = [NamedLocation(location_uid="anchor", world_uid=w.world_uid, display_name="A",
+                    system_location_type="climate_anchor", created_at="", map_x=0, map_y=0, map_z=0,
+                    system_climate_zone="arctic")] if manual else []
+                inputs = self.inputs.model_copy(update={"manual": manual, "feature_policy":
+                    self.inputs.feature_policy.__class__(synthetic_surface_terrain=terrain, water_feature_terrain="liquid_body")})
+                legacy = build_local_field_from_coarse(w, locations, ClimatePoleField(poles, base.payload.bbox), hm)
+                self.assertEqual(self.get(inputs, base, hydro).payload.anchors, legacy.anchors)
+
+    def test_admin_fallback_active_poles_notice_and_no_upstream_diagnostic_copy(self):
+        inputs = self.inputs.model_copy(update={"admin": (self.point(source=self.Source.ADMIN),)})
+        flat = self.surface({(0, 0): 0})
+        active = self.get(inputs, hydro=flat)
+        self.assertFalse(active.payload.anchors)
+        self.assertEqual([d.issue.code for d in active.diagnostics], ["admin_skipped_active_pole"])
+        no_poles = self.f.signed(self.base, self.base.payload.model_copy(update={"poles": ()}), self.base_fixture.manifest)
+        self.assertEqual(self.get(inputs, no_poles, flat).payload.anchors, inputs.admin)
+        manual = inputs.model_copy(update={"manual": (self.point(),)})
+        self.assertEqual(self.get(manual, hydro=flat).payload.anchors, manual.manual)
+
+    def test_pure_build_reads_only_final_coarse_surface_and_binding_graph_is_acyclic(self):
+        from unittest.mock import patch
+        handles = (self.base_fixture.binding, self.f.water.terrain.binding, self.f.water.binding,
+                   self.f.binding, self.f.routes_binding, self.f.river_binding, self.f.final_binding, self.binding)
+        seen = set()
+        for handle in handles:
+            self.assertTrue(all(dep.contract_id in seen for dep in handle.dependency_contracts))
+            seen.add(handle.metadata.id)
+        self.assertFalse(self.base_fixture.binding.dependency_contracts)
+        self.assertEqual([dep.slot for dep in self.binding.dependency_contracts],
+                         [SurfacePlanSlot.CLIMATE_BASE.value, SurfacePlanSlot.HYDROLOGY.value])
+        with patch("app.application.worldData.generators.climate.registry.profile_for", side_effect=AssertionError("registry read")), patch(
+            "app.application.worldData.generators.climate.localFieldFromCoarse.cells_from_coarse_heightmap",
+            side_effect=AssertionError("ORM adapter")), patch(
+            "app.application.worldData.generators.climate.anchorAssign.ClimateGeneratorService",
+            side_effect=AssertionError("legacy service")):
+            result = self.get()
+        changed = self.f.signed(self.hydro, self.hydro.payload.model_copy(update={"fine_z_overrides": ()}), self.f.hydro_manifest)
+        self.assertEqual(self.get(hydro=changed).payload, result.payload)
+        issue = PlanDiagnostic(issue=FieldPathError(("upstream",), "upstream only", code="upstream"),
+                               disposition=PlanDiagnosticDisposition.FALLBACK)
+        from app.application.planning.service.planFingerprints import output_fingerprint
+        upstream = self.hydro.model_copy(update={"diagnostics": (issue,), "ref": self.hydro.ref.model_copy(update={
+            "output_fingerprint": output_fingerprint(self.hydro.payload, self.hydro.dependencies, (issue,), self.f.hydro_manifest)})})
+        self.assertNotIn(issue, self.get(hydro=upstream).diagnostics)
+
+    def test_feature_policy_water_grid_thresholds_and_stable_equal_prominence_order(self):
+        from dataclasses import replace
+        from app.dataModel.climate.planning.inputs.climateLocalInput import ProminenceScale
+        heights = {(x, y): 0 for y in range(3) for x in range(6)}
+        heights[(1, 1)], heights[(4, 1)] = -15, -15
+        hydro = self.surface(heights)
+        self.assertFalse(self.get(hydro=hydro).payload.anchors)
+        water_policy = replace(self.inputs.feature_policy, synthetic_surface_terrain="liquid_body", max_features=1)
+        water = self.get(self.inputs.model_copy(update={"feature_policy": water_policy}), hydro=hydro)
+        self.assertEqual([(p.gx, p.gy) for p in water.payload.anchors], [(1, 1)])
+        grid_policy = replace(self.inputs.feature_policy, scale=ProminenceScale.GRID)
+        grid = self.get(self.inputs.model_copy(update={"feature_policy": grid_policy}), hydro=hydro)
+        self.assertEqual([(p.gx, p.gy) for p in grid.payload.anchors], [(1, 1), (4, 1)])
+        self.assertEqual(self.get(self.inputs.model_copy(update={"feature_policy": grid_policy}), hydro=hydro), grid)
+
+    def test_manual_exclusion_is_inclusive_and_admin_legacy_fallback_matches(self):
+        from app.application.worldData.generators.climate.anchorCollect import merge_local_anchors
+        from app.application.worldData.generators.climate.localFieldFromCoarse import build_local_field_from_coarse
+        from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from app.db.models.world import World
+        from app.db.models.namedLocation import NamedLocation
+        from app.dataModel.spatial.grid.gridBBox import GridBBox
+        manual = (self.point(),)
+        auto = tuple(self.point(x=x, source=self.Source.AUTO) for x in (0, 1, 2, 3))
+        self.assertEqual(merge_local_anchors(manual, auto, 2), manual + (auto[-1],))
+        base = self.f.signed(self.base, self.base.payload.model_copy(update={"poles": ()}), self.base_fixture.manifest)
+        admin = self.point(source=self.Source.ADMIN)
+        inputs = self.inputs.model_copy(update={"admin": (admin,)})
+        w = World(world_uid="climate-world", name="test", created_at="", fine_cells_per_map_cell=10)
+        locations = [NamedLocation(location_uid="anchor", world_uid=w.world_uid, display_name="A", created_at="",
+            system_location_type="region", system_climate_zone="arctic", map_x=0, map_y=0, map_z=0)]
+        hm = SurfaceHeightmap(w.world_uid, GridBBox(0, 0, 0, 0), {(0, 0): 0})
+        legacy = build_local_field_from_coarse(w, locations, ClimatePoleField((), base.payload.bbox), hm)
+        self.assertEqual(self.get(inputs, base, self.surface({(0, 0): 0})).payload.anchors, legacy.anchors)
+
+    def test_cap_diagnostics_cache_clear_codec_and_fresh_single_worker(self):
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.planning.service.planningService import PlanningService
+        heights = {(x, y): (60 if x % 3 == 0 and y % 3 == 0 else 0) for y in range(6) for x in range(6)}
+        hydro = self.surface(heights)
+        policy = self.inputs.feature_policy.__class__(synthetic_surface_terrain="plains", water_feature_terrain="liquid_body", max_features=2)
+        inputs = self.inputs.model_copy(update={"feature_policy": policy})
+        first = self.get(inputs, hydro=hydro)
+        self.assertEqual(len(first.payload.anchors), 2)
+        self.assertEqual([d.issue.code for d in first.diagnostics], ["auto_features_capped"])
+        self.assertEqual(self.get(inputs, hydro=hydro), first)
+        self.assertEqual(self.provider.build.call_count, 1)
+        self.f.h.backend.clear()
+        self.assertEqual(self.get(inputs, hydro=hydro), first)
+        self.assertEqual(self.provider.build.call_count, 2)
+        self.assertEqual(decode(encode(first, self.manifest), PlanEnvelope[self.Plan], self.manifest), first)
+        self.f.h.service.shutdown()
+        self.f.h.service = PlanningService(self.f.h.registry, self.f.h.cache, PlanningExecutionPolicy(max_workers=1, max_pending_builds=4))
+        self.addCleanup(self.f.h.service.shutdown)
+        self.f.h.backend.clear()
+        self.assertEqual(self.get(inputs, hydro=hydro), first)
+
+    def test_exact_refs_missing_dependencies_and_shutdown(self):
+        from app.application.planning.service.planningService import PlanBuildFailure, PlanContractFailure
+        from unittest.mock import Mock
+        from app.dataModel.planning.identity.planKey import PlanSlot
+        from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateLocalPlanProvider
+        self.get()
+        req, reader, _ = self.provider.build.call_args.args
+        provider = ClimateLocalPlanProvider(self.base_fixture.binding, self.f.final_binding)
+        control = Mock()
+        bad = tuple(d.model_copy(update={"ref": self.hydro.ref}) if d.slot == PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value) else d
+                    for d in req.dependencies)
+        with self.assertRaises(PlanBuildFailure):
+            provider.build(req.model_copy(update={"dependencies": bad}), reader, control)
+        with self.assertRaises(PlanContractFailure):
+            provider.build(req, self.f.h.empty, control)
+        control.raise_if_shutdown.side_effect = RuntimeError("shutdown")
+        with self.assertRaisesRegex(RuntimeError, "shutdown"):
+            provider.build(req, reader, control)
+
+
 class WaterAndPaintOwnerTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import Mock

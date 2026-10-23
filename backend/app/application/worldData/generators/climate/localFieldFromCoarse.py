@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.application.worldData.generators.assemblers.climateAssembler.passes.anchorCollectPass import (
     run_anchor_collect_pass,
+    collect_resolved_local_anchors,
 )
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
@@ -12,6 +13,10 @@ from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.dataModel.climate.planning.climatePlan import ClimateBasePlan, ClimateLocalPlan
+from app.dataModel.climate.planning.inputs.climateLocalInput import ClimateLocalInput
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 
 
 def _default_surface_terrain_key() -> str:
@@ -43,3 +48,9 @@ def build_local_field_from_coarse(
 ) -> ClimateAnchorField:
     cells = cells_from_coarse_heightmap(world, coarse_hm)
     return run_anchor_collect_pass(world, locations, cells, pole_field)
+
+
+def build_local_plan_from_coarse(inputs: ClimateLocalInput, base: ClimateBasePlan,
+                                  hydrology: HydrologyPlan) -> PlanBuildResult[ClimateLocalPlan]:
+    """Final coarse z drives local anchors; hydro roles do not replace synthetic terrain."""
+    return collect_resolved_local_anchors(inputs, base, hydrology.coarse_surface_z)

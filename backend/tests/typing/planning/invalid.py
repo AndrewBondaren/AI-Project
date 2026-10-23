@@ -228,3 +228,22 @@ def invalid_routes_assembly_dependency(owner: HydrologyRoutesAssembler, inputs: 
 def invalid_facts_assembly_phase(owner: HydrologyFactsAssembler, inputs: HydrologyFinalInput,
     relief: ReliefPlan, routes: HydrologyPlan, river: RiverReliefPlan, control: PlanBuildControl) -> None:
     owner.assemble(inputs=inputs, relief=relief, routes=routes, river=river, control=control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateLocalPlanProvider
+from app.application.worldData.generators.climate.localFieldFromCoarse import build_local_plan_from_coarse
+from app.dataModel.climate.planning.inputs.climateLocalInput import ClimateLocalInput
+
+
+def invalid_local_request(provider: ClimateLocalPlanProvider, request: PlanRequest[ClimateBaseInput],
+    reader: PlanDependencyReader, control: PlanBuildControl) -> None:
+    provider.build(request, reader, control)  # EXPECT: reportArgumentType
+
+
+def invalid_local_surface(inputs: ClimateLocalInput, base: ClimateBasePlan, relief: ReliefPlan) -> None:
+    build_local_plan_from_coarse(inputs, base, relief)  # EXPECT: reportArgumentType
+
+
+def invalid_local_result(provider: ClimateLocalPlanProvider, request: PlanRequest[ClimateLocalInput],
+    reader: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[ClimateBasePlan]:
+    return provider.build(request, reader, control)  # EXPECT: reportReturnType

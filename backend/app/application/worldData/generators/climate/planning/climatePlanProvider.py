@@ -1,4 +1,4 @@
-"""Pure base pole layout; no World, registry lookups, logging or private cache."""
+"""Base pole layout and local climate dependency boundary; no live reads or private cache."""
 
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
@@ -18,6 +18,15 @@ from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.spatial.grid.gridBBox import GridBBox
+from app.application.planning.providers.planProvider import RegisteredPlanContract
+from app.application.planning.service.planningService import PlanBuildFailure
+from app.dataModel.climate.planning.climatePlan import ClimateLocalPlan
+from app.dataModel.climate.planning.inputs.climateLocalInput import ClimateLocalInput
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput
+from app.dataModel.planning.identity.planKey import PlanSlot
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 def autoresolve_base_poles(seed: int, preset: ClimatePolePreset, peak_min: int, peak_max: int,
@@ -88,6 +97,28 @@ class ClimateBasePlanProvider:
         if request.dependencies:
             raise ValueError("base climate has no dependencies")
         result = build_climate_base(request.inputs)
+        control.raise_if_shutdown()
+        return result
+
+
+class ClimateLocalPlanProvider:
+    def __init__(self, climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
+                 hydrology: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan]) -> None:
+        self._base, self._hydrology = climate_base, hydrology
+
+    def build(self, request: PlanRequest[ClimateLocalInput], dependencies: PlanDependencyReader,
+              control: PlanBuildControl) -> PlanBuildResult[ClimateLocalPlan]:
+        # poleResolve imports this module during legacy service initialization.
+        from app.application.worldData.generators.climate.localFieldFromCoarse import build_local_plan_from_coarse
+
+        control.raise_if_shutdown()
+        base_slot, hydro_slot = PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value), PlanSlot(SurfacePlanSlot.HYDROLOGY.value)
+        base = dependencies.require(base_slot, self._base)
+        hydrology = dependencies.require(hydro_slot, self._hydrology)
+        refs = {dependency.slot: dependency.ref for dependency in request.dependencies}
+        if refs != {base_slot: base.ref, hydro_slot: hydrology.ref}:
+            raise PlanBuildFailure((FieldPathError(("dependencies",), "local climate requires exact upstream refs"),))
+        result = build_local_plan_from_coarse(request.inputs, base.payload, hydrology.payload)
         control.raise_if_shutdown()
         return result
 
