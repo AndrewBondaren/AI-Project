@@ -50,12 +50,24 @@ class PlanningResourceTests(unittest.TestCase):
             self.assertIn("[planning.cache]", text)
             self.assertIn("[planning.execution]", text)
             self.assertNotIn("ttl_seconds", text)
+            self.assertNotIn("wait_timeout_seconds", text)
             self.assertEqual(manager.load()["planning"], configured())
             # Migration of unrelated defaults must preserve the planning policy.
             path.write_text(text.replace('max_passes = 3\n', ''), encoding="utf-8")
             self.assertEqual(manager.load()["planning"], configured())
             manager.save(AppSettings())
             self.assertNotIn("planning", manager.load())
+
+    def test_optional_wait_timeout_round_trips_without_changing_execution_limits(self):
+        with TemporaryDirectory() as directory:
+            manager = ConfigManager(Path(directory) / "timeout.toml")
+            baseline = configured()
+            execution = baseline.execution.model_copy(update={"wait_timeout_seconds": 2.5})
+            settings = AppSettings(planning=baseline.model_copy(update={"execution": execution}))
+            manager.save(settings)
+            loaded = manager.load()["planning"]
+            self.assertEqual(loaded.execution, execution)
+            self.assertEqual(loaded.cache, baseline.cache)
 
     def test_incomplete_or_invalid_toml_fails_without_migrating_fake_limits(self):
         for fragment in ("[planning]\n", "[planning.cache]\nmax_retained_bytes = 100\n",

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import json
 
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+
+
 from app.application.worldData.materialize.loadingProgress import (
     LoadingPhase,
     LoadingProgressSnapshot,
@@ -62,14 +67,16 @@ def _world_map_phase(
 
 
 class PackLoadingProgressFacade:
-    def __init__(self, context: PackReadContext) -> None:
+    def __init__(self, context: PackReadContext, *, planning: SurfacePlanningAssembler | None = None,
+                 capture: SurfacePlanningCapture | None = None) -> None:
         self._ctx = context
-        self._classifier = PackCompletenessClassifier()
+        self._classifier = PackCompletenessClassifier(planning=planning, capture=capture)
 
     def get_loading_progress(
         self,
         world: World,
         *,
+        wait: PlanWaitControl,
         locations: list[NamedLocation] | None = None,
     ) -> LoadingProgressSnapshot:
         if not self._ctx.has_pack_for(world):
@@ -106,7 +113,7 @@ class PackLoadingProgressFacade:
             snap = self._classifier.classify(
                 world,
                 locations,
-                manifest=manifest,
+                manifest=manifest, wait=wait,
                 locations_index=index,
             )
             pack_completeness = snap.to_dict()

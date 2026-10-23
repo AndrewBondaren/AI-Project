@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+
+
 from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.read.packDebugReadFacade import PackDebugReadFacade
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
@@ -30,6 +34,7 @@ def build_pack_read_services(
     patches: PatchStoreService,
     *,
     db_path: str,
+    planning: SurfacePlanningAssembler | None = None, capture: SurfacePlanningCapture | None = None,
     region_state_repo: IRegionStateRepository | None = None,
 ) -> PackReadServices:
     context = PackReadContext(world_uid, db_path=db_path)
@@ -37,7 +42,7 @@ def build_pack_read_services(
     debug = PackDebugReadFacade(context, patches, world_map)
     gameplay = MapCellQueryFacade(context, patches, world_map, region_state_repo=region_state_repo)
     debug.bind_gameplay(gameplay)
-    loading = PackLoadingProgressFacade(context)
+    loading = PackLoadingProgressFacade(context, planning=planning, capture=capture)
     fine_terrain_read = PackFineTerrainReadFacade(context, gameplay)
     render = PackRenderReadFacade(context)
     return PackReadServices(

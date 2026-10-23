@@ -10,13 +10,14 @@ import logging
 import time
 from collections.abc import Callable
 
+from app.application.jsonValidation.resolve import ResolveContext
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_context
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
+from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+
 from app.application.worldData.materialize.persistResult import PersistResult
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    require_surface_terrain_context,
-)
 from app.application.worldData.materialize.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
@@ -82,9 +83,13 @@ class PackMaterializationOrchestrator:
         relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
         region_state_repo: IRegionStateRepository | None = None,
+        planning: SurfacePlanningAssembler | None = None,
+        capture: SurfacePlanningCapture | None = None,
+        publication_guard: SourcePublicationGuard | None = None,
     ) -> None:
+        self._planning, self._capture, self._publication_guard = planning, capture, publication_guard
         self._terrain = terrain
-        self._world_map = world_map or WorldMapBakeOrchestrator()
+        self._world_map = world_map or WorldMapBakeOrchestrator(planning=planning, capture=capture)
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
         if world_repository is not None and db is None:
@@ -143,7 +148,8 @@ class PackMaterializationOrchestrator:
         max_tiles: int | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
     ) -> MaterializationJobReport:
@@ -158,7 +164,7 @@ class PackMaterializationOrchestrator:
                 max_tiles=max_tiles,
                 nodes=nodes,
                 edges=edges,
-                hydrology_generator=hydrology_generator,
+                wait=wait, resolve_ctx=resolve_ctx,
                 anchor_x=anchor_x,
                 anchor_y=anchor_y,
             )
@@ -173,7 +179,8 @@ class PackMaterializationOrchestrator:
         *,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
     ) -> MaterializationJobReport:
         """full_bake — same L0 pipeline, all macro-tiles in world_bounds / resolved AABB."""
         with generation_world_log(world_uid, mode="full"):
@@ -187,7 +194,7 @@ class PackMaterializationOrchestrator:
                 max_tiles=None,
                 nodes=nodes,
                 edges=edges,
-                hydrology_generator=hydrology_generator,
+                wait=wait, resolve_ctx=resolve_ctx,
             )
 
     async def _materialize_l0_pack(
@@ -202,14 +209,23 @@ class PackMaterializationOrchestrator:
         max_tiles: int | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
     ) -> MaterializationJobReport:
-        surface_ctx = require_surface_terrain_context(
-            world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=hydrology_generator,
-        )
+        if self._planning is None or self._capture is None:
+            raise ValueError("surface planning dependencies required")
+        request_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext()
+        if request_ctx.validate_only:
+            raise ValueError("validation cannot materialize a pack")
+        relief_templates = await _load_relief_templates(self._relief_loader, world)
+        templates = mountain_template_inputs(relief_templates)
+        captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+            mountain_templates=templates, resolve_ctx=request_ctx)
+        surface_ctx = prepare_captured_context(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
+        if surface_ctx is None:
+            raise ValueError("surface terrain context unavailable")
         plan = self._planner.plan(
             world, locations, surface_ctx, scope=scope, max_tiles=max_tiles,
         )
@@ -241,7 +257,6 @@ class PackMaterializationOrchestrator:
         locations_index = build_locations_index(locations, world)
         writer.write_locations_index(locations_index)
 
-        relief_templates = await _load_relief_templates(self._relief_loader, world)
         region_states = await load_region_state_snapshot(self._region_state_repo, world_uid)
 
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
@@ -249,7 +264,7 @@ class PackMaterializationOrchestrator:
             world, locations, writer, tiles,
             surface_ctx=surface_ctx,
             locations_index=locations_index,
-            nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
+            nodes=nodes, edges=edges, wait=wait,
             bake_mode=bake_mode,
             relief_templates_by_uid=relief_templates,
             region_state_snapshot=region_states,
@@ -280,9 +295,14 @@ class PackMaterializationOrchestrator:
             if read_ctx is None and self._read_context_for is not None:
                 read_ctx = self._read_context_for(world_uid)
             assert self._db is not None
+            if self._publication_guard is None:
+                raise ValueError("source publication guard required")
             async with self._db.transaction_if_needed():
+                current = await self._publication_guard.require_fresh(captured, mode=ResolutionMode.RUNTIME,
+                    mountain_templates=templates, resolve_ctx=request_ctx)
+                writer.recalc_manifest_counters()
                 await finalize_pack_on_world(
-                    self._world_repository, world, writer,
+                    self._world_repository, current, writer,
                     db_path=self._db.path, read_context=read_ctx,
                 )
 

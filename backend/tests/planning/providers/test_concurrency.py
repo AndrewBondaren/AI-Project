@@ -2,6 +2,11 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
+from time import monotonic
+from unittest.mock import patch
+
+from app.application.cancellation.cancellationToken import CancellationToken
+from app.application.cancellation.requestPlanWait import RequestPlanWait
 import unittest
 
 from app.application.planning.service.planningService import (
@@ -57,14 +62,15 @@ class ConcurrencyTests(unittest.TestCase):
 
     def test_cancelling_initiator_does_not_cancel_shared_worker(self):
         binding, provider = self.h.register(provider=Provider(self.blocked))
-        first, second = TrackingWait(), TrackingWait()
+        token = CancellationToken("initiator")
+        first, second = RequestPlanWait(token, None), TrackingWait()
         with ThreadPoolExecutor(max_workers=2) as pool:
             initiator = pool.submit(self.h.get, binding, wait=first)
-            self.assertTrue(first.entered.wait(2))
+            self.assertTrue(self.started.wait(2))
             survivor = pool.submit(self.h.get, binding, wait=second)
             try:
                 self.assertTrue(second.entered.wait(2))
-                first.cancelled.set()
+                token.cancel()
                 with self.assertRaises(PlanWaitCancelled):
                     initiator.result(2)
             finally:
@@ -75,10 +81,10 @@ class ConcurrencyTests(unittest.TestCase):
 
     def test_deadline_only_detaches_that_waiter(self):
         binding, provider = self.h.register(provider=Provider(self.blocked))
-        expired, survivor_wait = TrackingWait(0.15), TrackingWait()
+        expired, survivor_wait = RequestPlanWait(None, monotonic() + 0.15), TrackingWait()
         with ThreadPoolExecutor(max_workers=2) as pool:
             timed = pool.submit(self.h.get, binding, wait=expired)
-            self.assertTrue(expired.entered.wait(2))
+            self.assertTrue(self.started.wait(2))
             survivor = pool.submit(self.h.get, binding, wait=survivor_wait)
             try:
                 self.assertTrue(survivor_wait.entered.wait(2))
@@ -201,3 +207,32 @@ class ConcurrencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RequestPlanWaitTests(unittest.TestCase):
+    def test_unbounded_and_deadline_clock(self):
+        wait = RequestPlanWait.unbounded()
+        wait.raise_if_cancelled()
+        self.assertIsNone(wait.remaining_seconds())
+        with patch("app.application.cancellation.requestPlanWait.time.monotonic", return_value=10.0):
+            self.assertEqual(RequestPlanWait(None, 12.5).remaining_seconds(), 2.5)
+            self.assertEqual(RequestPlanWait(None, 5.0).remaining_seconds(), 0.0)
+
+    def test_already_cancelled_token_rejected_before_cache_or_build(self):
+        h = Harness()
+        self.addCleanup(h.service.shutdown)
+        binding, provider = h.register()
+        token = CancellationToken("cancelled")
+        token.cancel()
+        with self.assertRaises(PlanWaitCancelled):
+            h.get(binding, wait=RequestPlanWait(token, None))
+        self.assertEqual(provider.count, 0)
+
+    def test_policy_timeout_is_optional_finite_positive_and_not_a_numeric_default(self):
+        from pydantic import ValidationError
+        baseline = dict(max_workers=1, max_pending_builds=1)
+        self.assertIsNone(PlanningExecutionPolicy(**baseline).wait_timeout_seconds)
+        self.assertEqual(PlanningExecutionPolicy(**baseline, wait_timeout_seconds=2.5).wait_timeout_seconds, 2.5)
+        for value in (0, -1, float("inf"), float("nan"), True, "2"):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                PlanningExecutionPolicy(**baseline, wait_timeout_seconds=value)

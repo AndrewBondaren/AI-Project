@@ -8,6 +8,9 @@ See ``docs/tz_terrain_generation.md`` § multi-pass skeleton; WP-PERF-22 Parent 
 
 from __future__ import annotations
 from collections.abc import Mapping
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 import logging
@@ -16,9 +19,6 @@ from dataclasses import dataclass, replace
 from app.application.imports.result import ImportResult
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
-)
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
 )
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
@@ -64,7 +64,10 @@ class TerrainBatchOrchestrator:
         self,
         map_cell_service: MapCellService,
         generator: TerrainGeneratorService | None = None,
+        *, planning: SurfacePlanningAssembler | None = None,
+        capture: SurfacePlanningCapture | None = None,
     ) -> None:
+        self._planning, self._capture = planning, capture
         self._map_cells = map_cell_service
         self._generator = generator or TerrainGeneratorService()
 
@@ -75,17 +78,19 @@ class TerrainBatchOrchestrator:
         *,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
         max_tiles: int | None = None,
+        wait: PlanWaitControl,
     ) -> list[tuple[int, int]]:
         from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 
+        if self._planning is None or self._capture is None:
+            raise ValueError("surface planning dependencies required")
         ctx = prepare_surface_terrain_context(
             world,
             locations,
+            planning=self._planning, capture=self._capture, wait=wait,
             nodes=nodes,
             edges=edges,
-            hydrology_generator=hydrology_generator,
         )
         if ctx is None:
             return []

@@ -116,6 +116,19 @@ class FineTerrainRefineOrchestrator:
         return result.persist, result.wilderness_chunks_written, result.rect_count
 
     async def refine_rect(
+        self, world: World, locations: list[NamedLocation], writer: WorldPackWriter,
+        mat_ctx: MaterializationContext, surface_ctx: SurfaceTerrainContext,
+        tile_gx: int, tile_gy: int, rect: ColumnRect,
+        location_volumes: list[TerritoryVolume] | None = None, *,
+        refine_role: ChunkRefineRole = "background", stages: GradePipelineStages | None = None,
+    ) -> FineRefineResult:
+        """Standalone single-rect operation; nested queued work does not publish."""
+        result = await self._refine_rect(world, locations, writer, mat_ctx, surface_ctx,
+            tile_gx, tile_gy, rect, location_volumes, refine_role=refine_role, stages=stages)
+        writer.save_manifest()
+        return result
+
+    async def _refine_rect(
         self,
         world: World,
         locations: list[NamedLocation],
@@ -218,7 +231,7 @@ class FineTerrainRefineOrchestrator:
         stages: GradePipelineStages | None = None,
     ) -> FineRefineResult:
         rect = fine_chunk_rect(world, tile_gx, tile_gy, cx, cy)
-        return await self.refine_rect(
+        return await self._refine_rect(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, rect,
             refine_role="background",

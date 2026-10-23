@@ -1,6 +1,7 @@
 """Unit tests — resolve_light_tile_cap, PackTilePlanner scopes, completeness."""
 
 from __future__ import annotations
+from app.application.cancellation.requestPlanWait import RequestPlanWait
 
 import unittest
 from types import SimpleNamespace
@@ -223,7 +224,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         snap = PackCompletenessClassifier().classify(
-            world, [], manifest=None,
+            world, [], manifest=None, wait=RequestPlanWait.unbounded(),
         )
         self.assertEqual(snap.completeness, "absent")
 
@@ -258,7 +259,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
             return_value=MagicMock(),
         ):
             snap = PackCompletenessClassifier(planner).classify(
-                world, [], manifest=manifest, locations_index=None,
+                world, [], manifest=manifest, locations_index=None, surface_ctx=MagicMock(), wait=RequestPlanWait.unbounded(),
             )
         self.assertEqual(snap.completeness, "light_complete")
         self.assertEqual(snap.expected_l0_full, 2)

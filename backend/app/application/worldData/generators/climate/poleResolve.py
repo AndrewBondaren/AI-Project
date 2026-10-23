@@ -11,7 +11,7 @@ from app.application.worldData.generators.climate.locations import static_climat
 from app.application.worldData.generators.climate.math import world_seed
 from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode
 from app.dataModel.climate.enums.climatePolePreset import ClimatePolePreset
-from app.application.worldData.generators.climate.planning.climatePlanProvider import autoresolve_base_poles, manual_base_pole
+from app.application.worldData.generators.climate.planning.basePoleLayout import autoresolve_base_poles, manual_base_pole
 from app.dataModel.climate.planning.inputs.climateBaseInput import ManualPoleInput
 from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY
 from app.dataModel.climate.enums.poleKind import PoleKind

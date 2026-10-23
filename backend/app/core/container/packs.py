@@ -27,6 +27,7 @@ class PacksWiring:
                 world_uid,
                 self.patch_store_service(),
                 db_path=app_settings.db_path,
+                planning=self.surface_planning(), capture=self.surface_planning_capture(),
                 region_state_repo=SqliteRegionStateRepository(self._db),
             )
             self._pack_read_services[world_uid] = services

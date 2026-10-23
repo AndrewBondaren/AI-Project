@@ -52,6 +52,8 @@ def make_lifespan(db: Database):
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        container = app.state.container
+        container.planning_resources()
         await db.connect()
         await db.apply_migrations()
         await db.validate_schema(_models)
@@ -70,8 +72,11 @@ def make_lifespan(db: Database):
         validate_world_row_map_resolution_columns(World)
         validate_world_row_relief_obstacle_columns(World)
         await SqlitePendingRepository(db).cleanup_stale()
-        yield
-        await db.disconnect()
+        try:
+            yield
+        finally:
+            container.shutdown_planning()
+            await db.disconnect()
     return lifespan
 
 

@@ -234,8 +234,6 @@ class PackDetailedBakeOrchestrator:
                 ):
                     climate_fine_tiles += 1
 
-        writer.recalc_manifest_counters()
-        writer.save_manifest()
         grade_persist_s = await persist_detailed_grades(
             self._relief_grade_repo, world.world_uid, aggregate,
         )

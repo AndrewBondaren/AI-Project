@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
     prepare_surface_terrain_context,
@@ -28,7 +31,9 @@ def _locations_expected_from_index(index: LocationsIndexWire | None) -> list[str
 
 
 class PackCompletenessClassifier:
-    def __init__(self, planner: PackTilePlanner | None = None) -> None:
+    def __init__(self, planner: PackTilePlanner | None = None, *, planning: SurfacePlanningAssembler | None = None,
+                 capture: SurfacePlanningCapture | None = None) -> None:
+        self._planning, self._capture = planning, capture
         self._planner = planner or PackTilePlanner()
 
     def classify(
@@ -36,6 +41,7 @@ class PackCompletenessClassifier:
         world: World,
         locations: list[NamedLocation],
         *,
+        wait: PlanWaitControl,
         manifest: WorldPackManifest | None,
         surface_ctx: SurfaceTerrainContext | None = None,
         locations_index: LocationsIndexWire | None = None,
@@ -46,7 +52,10 @@ class PackCompletenessClassifier:
 
         ctx = surface_ctx
         if ctx is None:
-            ctx = prepare_surface_terrain_context(world, locations)
+            if self._planning is None or self._capture is None:
+                raise ValueError("surface planning dependencies required")
+            ctx = prepare_surface_terrain_context(world, locations,
+                planning=self._planning, capture=self._capture, wait=wait)
         if ctx is None:
             return PackCompletenessSnapshot(completeness="partial")
 

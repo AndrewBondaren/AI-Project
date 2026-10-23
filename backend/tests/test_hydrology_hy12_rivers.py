@@ -136,23 +136,34 @@ class RiverWaterlineTests(unittest.TestCase):
         self.assertEqual(elevations[(4, 0)], -10)
 
     def test_pipeline_supplies_pre_river_elevation_to_fine_profiles(self):
-        from app.application.worldData.generators.terrain.passes import surfaceTerrainContext as module
-        hm = flat_heightmap(0, 1, 0, 1, z=10)
-
-        def hydro_apply(*args, **kwargs):
-            hm.surface_z[(0, 0)] = 9
-            return SimpleNamespace(cell_index=SimpleNamespace(by_cell={}), water_bodies=())
-
-        with patch.object(module, "run_pole_resolve_pass"), \
-                patch.object(module, "run_surface_pass_coarse", return_value=hm), \
-                patch.object(module, "run_water_placement_pass", return_value=None), \
-                patch.object(module, "apply_relief_objects_z"), \
-                patch.object(module, "build_local_field_from_coarse"), \
-                patch.object(module, "apply_declared_fine_river_carves", return_value=({}, {})) as fine:
-            module.prepare_surface_terrain_context(hydro_world(), [],
-                hydrology_generator=SimpleNamespace(apply=hydro_apply))
-        self.assertEqual(hm.surface_z[(0, 0)], 9)
-        self.assertEqual(fine.call_args.args[2][(0, 0)], 10)
+        from tests.planning.consumers.test_wiring import Composition, capture, world
+        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        from app.application.cancellation.requestPlanWait import RequestPlanWait
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        source = world(world_bounds=dict(x_min=0, x_max=3, y_min=0, y_max=2),
+            world_topology_mode="planar", z_min=-100, z_max=1, hydrology={"enabled": True,
+                "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+                "default_lakes": {"autoresolve": False},
+                "default_rivers": {"autoresolve": False, "mouth_search_radius_fine": 0},
+                "declared_basins": [{"location_uid": "basin", "kind": "ocean", "floor_z": -10,
+                    "footprint": {"kind": "bbox", "x_min": 0, "x_max": 10, "y_min": 0, "y_max": 20}}],
+                "declared_rivers": [{"location_uid": "river", "declare_mode": "segments", "segments": [
+                    {"from": {"x": 35, "y": 5}, "to": {"x": 5, "y": 5},
+                     "connection_type": "river", "width_cells": 2}]}]})
+        source.map_settings = {"global_cell_size_m": 10}
+        from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+        original = FineRiverPlanner.plan
+        with patch.object(FineRiverPlanner, "plan", autospec=True, side_effect=original) as fine:
+            ctx = prepare_surface_terrain_context(source, [], planning=composition.assembler,
+                capture=SurfacePlanningCapture(), wait=RequestPlanWait.unbounded())
+        bundle = composition.prepare(capture(source))
+        self.assertTrue(bundle.river_relief.payload.coarse_beds)
+        self.assertTrue(ctx.fine_z_overrides)
+        self.assertEqual(fine.call_args.kwargs["surface_z"], bundle.relief.payload.surface_z)
+        self.assertNotEqual(bundle.relief.payload.surface_z, bundle.hydrology.payload.coarse_surface_z,
+            "fine routing must sample pre-river heights even when coarse river beds changed them")
 
 
 if __name__ == "__main__":

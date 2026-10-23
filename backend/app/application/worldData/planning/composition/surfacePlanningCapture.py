@@ -47,6 +47,8 @@ from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import (
     ReliefPlanInput, RiverReliefInput, MountainAnchorInput, TerrainMergeEntry,
 )
 from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
@@ -194,3 +196,9 @@ class SurfacePlanningCapture:
         return RiverReliefInput(z_min=routes.z_min, z_max=routes.z_max, grid=routes.grid, topology=routes.topology,
             channel_depths=tuple((kind, routes.rivers.channel_depth_for(kind)) for kind in sorted(
                 (HydrologyConnectionType.RIVER, HydrologyConnectionType.MOUNTAIN_RIVER), key=lambda kind: kind.value)))
+
+
+def mountain_template_inputs(templates: dict[str, "ReliefTemplate"]) -> tuple[MountainTemplateInput, ...]:
+    """Freeze the caller-loaded mountain subset without reading the template store."""
+    return tuple(MountainTemplateInput(template_uid=uid, context=body.context, side_recipe=body.side_recipe)
+        for uid, body in sorted(templates.items()) if body.context is ReliefContext.MOUNTAIN)

@@ -3,6 +3,7 @@
 from dataclasses import replace
 from pathlib import Path
 import tempfile
+from app.application.cancellation.requestPlanWait import RequestPlanWait
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -208,10 +209,10 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
         planner.plan.return_value.cap_applied = None
         world_map.bake_tiles.side_effect = ComputeBoundary
         owner = PackMaterializationOrchestrator(terrain, world_map=world_map,
-            entry=entry, climate_bake=climate, tile_planner=planner, region_state_repo=repo)
-        with patch("app.application.worldData.pack.bake.packMaterializationOrchestrator.require_surface_terrain_context",
+            entry=entry, climate_bake=climate, tile_planner=planner, region_state_repo=repo, planning=MagicMock(), capture=MagicMock())
+        with patch("app.application.worldData.pack.bake.packMaterializationOrchestrator.prepare_captured_context",
                    return_value=fine._surface_ctx()), self.assertRaises(ComputeBoundary):
-            await owner.materialize_light_pack(world.world_uid, world, [], writer, mat_ctx)
+            await owner.materialize_light_pack(world.world_uid, world, [], writer, mat_ctx, wait=RequestPlanWait.unbounded())
         self.assertEqual(world_map.bake_tiles.call_args.kwargs["region_state_snapshot"]["r"].current_type, "plains")
         runner = FineChunkRunner(terrain, region_state_repo=repo)
         with patch("app.application.worldData.pack.refine.fine.fineChunkRunner.prepare_fine_tile",

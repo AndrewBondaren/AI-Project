@@ -1,139 +1,43 @@
-"""Shared coarse + hydrology planning for fine-tile materialization."""
-
-from __future__ import annotations
-
-from app.application.worldData.generators.coordinates.space import CoordinateSpace
-from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
-from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
-from app.dataModel.topology.fineTopology import fine_topology
-from app.dataModel.topology.worldTopology import WorldTopology
+"""Compatibility entry: capture once, then delegate to surface planning."""
 
 from app.application.jsonValidation.resolve import ResolveContext
-from app.dataModel.hydrology.waterBody import WaterBody
-
-from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
-    run_pole_resolve_pass,
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import (
+    SurfacePlanningAssembler, prepare_captured_context,
 )
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
-from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
-    is_hydrology_enabled,
-)
-from app.application.worldData.generators.hydrology.placement import (
-    run_water_placement_pass,
-)
-from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import (
-    apply_declared_fine_river_carves,
-)
-from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
-from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
-from app.application.worldData.generators.climate.localFieldFromCoarse import (
-    build_local_field_from_coarse,
-)
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext as SurfaceTerrainContext
+from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-from app.application.worldData.planning.contracts.surfacePlanningView import SurfaceTerrainContext as SurfaceTerrainContext
+def prepare_surface_terrain_context(
+    world: World, locations: list[NamedLocation], *,
+    planning: SurfacePlanningAssembler, capture: SurfacePlanningCapture, wait: PlanWaitControl,
+    nodes: list[ConnectionNode] | None = None, edges: list[ConnectionEdge] | None = None,
+    resolve_ctx: ResolveContext | None = None,
+    mountain_templates: tuple[MountainTemplateInput, ...] = (),
+) -> SurfaceTerrainContext | None:
+    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext()
+    mode = ResolutionMode.VALIDATE_ONLY if ctx.validate_only else ResolutionMode.RUNTIME
+    view = capture.capture(world, locations, mode=mode,
+        mountain_templates=mountain_templates, resolve_ctx=ctx)
+    return prepare_captured_context(view, planning=planning, wait=wait, resolve_ctx=ctx)
 
 
 def require_surface_terrain_context(
-    world: World,
-    locations: list[NamedLocation],
-    *,
-    nodes: list[ConnectionNode] | None = None,
-    edges: list[ConnectionEdge] | None = None,
-    hydrology_generator: HydrologyGeneratorService | None = None,
+    world: World, locations: list[NamedLocation], *,
+    planning: SurfacePlanningAssembler, capture: SurfacePlanningCapture, wait: PlanWaitControl,
+    nodes: list[ConnectionNode] | None = None, edges: list[ConnectionEdge] | None = None,
     resolve_ctx: ResolveContext | None = None,
+    mountain_templates: tuple[MountainTemplateInput, ...] = (),
 ) -> SurfaceTerrainContext:
-    """Fail-closed planning for pack bake / refine HTTP and orchestrators."""
-    ctx = prepare_surface_terrain_context(
-        world,
-        locations,
-        nodes=nodes,
-        edges=edges,
-        hydrology_generator=hydrology_generator,
-        resolve_ctx=resolve_ctx,
-    )
-    if ctx is None:
+    result = prepare_surface_terrain_context(world, locations, planning=planning, capture=capture,
+        wait=wait, nodes=nodes, edges=edges, resolve_ctx=resolve_ctx, mountain_templates=mountain_templates)
+    if result is None:
         raise ValueError("surface terrain context unavailable")
-    return ctx
-
-
-def prepare_surface_terrain_context(
-    world: World,
-    locations: list[NamedLocation],
-    *,
-    nodes: list[ConnectionNode] | None = None,
-    edges: list[ConnectionEdge] | None = None,
-    hydrology_generator: HydrologyGeneratorService | None = None,
-    resolve_ctx: ResolveContext | None = None,
-) -> SurfaceTerrainContext | None:
-    pole_field = run_pole_resolve_pass(world, locations)
-    coarse_hm = run_surface_pass_coarse(world, locations, pole_field)
-    if coarse_hm is None:
-        return None
-
-    # Pre-1.4 snapshot for light relief (avoid double-rise when mountain raises on light).
-    coarse_relief_z = dict(coarse_hm.surface_z)
-
-    water = run_water_placement_pass(world, locations, coarse_hm)
-
-    topology = water.topology if water is not None else resolve_hydrology_topology(
-        world, coarse_hm, locations=locations)
-
-    if not isinstance(topology, WorldTopology):
-        raise TypeError("surface terrain requires resolved WorldTopology")
-
-    # Pass 1.4 — mountain rise / ravine drop before hydrology detect (1.5).
-    apply_relief_objects_z(
-        world, locations, coarse_hm, pole_field=pole_field,
-        basin_specs=water.basin_specs if water else (),
-        topology=topology,
-    )
-
-    # Fine profiles sample the same pre-river snapshot, avoiding a second bed cut.
-    pre_river_z = dict(coarse_hm.surface_z)
-    coarse_hydro: dict[tuple[int, int], MapCellHydrology] = {}
-    water_bodies: tuple[WaterBody, ...] = ()
-    if is_hydrology_enabled(world):
-        hydro = hydrology_generator or HydrologyGeneratorService()
-        hydro_result = hydro.apply(
-            world,
-            locations,
-            coarse_hm,
-            nodes=nodes or [],
-            edges=edges or [],
-            basin_specs=water.basin_specs if water else (),
-            topology=topology,
-            ctx=resolve_ctx,
-        )
-        coarse_hydro = hydro_result.cell_index.by_cell
-        water_bodies = hydro_result.water_bodies
-
-    sparse_fine_hydro, fine_z_overrides = apply_declared_fine_river_carves(
-        world,
-        locations,
-        pre_river_z,
-        topology=fine_topology(topology, map_cell_fine_span(world)),
-        base_space=CoordinateSpace.WORLD_SURFACE_GRID,
-        coarse_hydro=coarse_hydro,
-        water_bodies=water_bodies,
-        ctx=resolve_ctx,
-    )
-    local_field = build_local_field_from_coarse(world, locations, pole_field, coarse_hm)
-
-    return SurfaceTerrainContext(
-        pole_field=pole_field,
-        local_field=local_field,
-        coarse_hm=coarse_hm,
-        coarse_hydro=coarse_hydro,
-        sparse_fine_hydro=sparse_fine_hydro,
-        fine_z_overrides=fine_z_overrides,
-        coarse_relief_z=coarse_relief_z,
-        coarse_surface_z=dict(coarse_hm.surface_z),
-    )
+    return result

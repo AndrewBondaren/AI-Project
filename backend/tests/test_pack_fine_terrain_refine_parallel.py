@@ -94,6 +94,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(written, 4)
         self.assertEqual(result.succeeded, 4)
         self.assertEqual(terrain.generate_chunk_cells_sync.call_count, 4)
+        writer.save_manifest.assert_not_called()
 
     async def test_refine_rects_serial_when_single_chunk(self) -> None:
         terrain, writer, rects, mat_ctx = self._setup()
@@ -128,6 +129,18 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(total, 1)
         self.assertEqual(written, 1)
         self.assertEqual(result.succeeded, 1)
+        writer.save_manifest.assert_not_called()
+
+    async def test_standalone_rect_publishes_but_nested_queued_work_does_not(self):
+        from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
+        terrain, writer, rects, mat_ctx = self._setup()
+        runner = MagicMock()
+        runner.refine_rects = AsyncMock(return_value=FineRefineResult.empty())
+        facade = FineTerrainRefineOrchestrator(terrain, runner=runner)
+        await facade.refine_queued_chunk(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, 0, 0)
+        writer.save_manifest.assert_not_called()
+        await facade.refine_rect(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, rects[0])
+        writer.save_manifest.assert_called_once_with()
 
     async def test_facade_delegates_refine_rects(self) -> None:
         terrain, writer, rects, mat_ctx = self._setup()

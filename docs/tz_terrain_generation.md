@@ -1956,14 +1956,14 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 ## Surface planning/cache — норматив PC-0 (2026-10-23)
 
-**PC-9A IMPLEMENTED / VERIFIED (2026-10-23), ожидается приёмка мастером.**
+**PC-9A ACCEPTED (2026-10-24); PC-9 IMPLEMENTED / VERIFIED (2026-10-24), ожидается приёмка мастером.**
 `application/worldData/planning/composition` содержит SurfacePlanningCapture,
 SurfacePlanningAssembler и register_world_plan_providers: восемь baseline
 bindings, один frozen source view, explicit phase calls общего PlanningService.
 `contracts` содержит immutable discriminated source views и SurfacePlanBundle
 с проверкой world/scope/phase/version и exact dependency refs. Единственное
-определение SurfaceTerrainContext перенесено в surfacePlanningView; старый
-terrain path реэкспортирует тот же symbol. to_legacy_context создаёт отдельные
+определение SurfaceTerrainContext находится в planning/legacy/surfaceTerrainContext.py;
+старые terrain и surfacePlanningView paths реэкспортируют тот же symbol. to_legacy_context создаёт отдельные
 mutable maps, сохраняя eight-field API и pre-1.4/final высотные источники.
 После review correction единственная декларация графа/IDs/версий находится
 в dataModel/surfacePlanning/surfacePlanBindings.py; wiring и bundle validator
@@ -1978,12 +1978,29 @@ publication guard предоставляет write-owner. planning/encoding со
 validate_immutable. Все 165 type IDs и исходные canonical fingerprints сохранены.
 Проверки: consumers35/providers126/contracts69/cache20/encoding7/regression59
 OK (316 tests), pyright valid0/negative48 exact diagnostic code/location.
-Production caller/container activation и PC-8C lazy-import debt остаются PC-9.
-PC-9 также отделяет transitional SurfaceTerrainContext от frozen contracts,
-убирая generator imports из surfacePlanningView при сохранении old type identity.
+PC-9 переключает production caller/container boundaries на assembler,
+сохраняя required planning/capture/wait и None/require semantics shim.
+RequestPlanWait живёт в application/cancellation, pack/map boundaries передают
+явный unbounded waiter; wait_timeout_seconds optional/default None в policy
+зарезервирован до включения request timeouts. Resource limits required,
+startup проверяет наличие конфигурации, lifecycle закрывает executor.
+PC-8C lazy-import debt устранён через climate/planning/basePoleLayout.py.
+SurfaceTerrainContext отделён от frozen view, old type identity сохранён.
 
-Статус: schemas/activation contract зафиксированы, PC-9A реализован и проверен;
-production activation PC-9 и итоговая приёмка PC-12 ещё не выполнены. Delivery SoT —
+Publication ownership PC-9: FineChunkPersist пишет blobs/sidecars и обновляет
+counters только в памяти; checkpoint/save из нижнего persist удалены,
+флага публикации нет. L0 owner сохраняет через finalize_pack_on_world,
+detailed owner — после возврата bake; scene/path/drain сами не публикуют.
+Standalone refine_rect/debug operation entry выполняет финальное сохранение.
+Transitional SourcePublicationGuard перечитывает world+locations через repos
+и выполняет re-capture/check в caller transaction_if_needed перед L0/detailed
+публикацией; compute не держит SQL lock. Stale → rollback без manifest publish,
+blobs допускаются без удаления/auto-retry. После отдельного трека
+world-source-versioning OCC заменяется revision-set stamp; этот трек PC-9
+не реализует. Settlement publication остаётся отдельным долгом.
+
+Статус: PC-9A принят; PC-9 caller/DI/publication ownership реализованы и проверены.
+PC-10/PC-11 consumer cutover и итоговая приёмка PC-12 ещё не выполнены. Delivery SoT —
 [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md), §6.25–6.33.
 Общие records и исходные input projections ниже читаются вместе с final
 freeze: его точные дополнения заменяют прежние baseline bindings и

@@ -1,17 +1,12 @@
-"""One captured source projection and the legacy request-local working view."""
+"""Immutable captured source projection; legacy symbol remains a compatibility re-export."""
 
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
-from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.climate.planning.inputs.climateLocalInput import ClimateLocalInput
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput, HydrologyPlanInput
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
@@ -73,18 +68,5 @@ class NoExtentSurfacePlanningView(BaseModel):
 type SurfacePlanningView = Annotated[
     ReadySurfacePlanningView | NoExtentSurfacePlanningView, Field(discriminator="kind")]
 
-
-@dataclass(frozen=True)
-class SurfaceTerrainContext:
-    """Legacy eight-field working copy; no mutable map belongs to the plan cache."""
-
-    pole_field: ClimatePoleField
-    local_field: ClimateAnchorField
-    coarse_hm: SurfaceHeightmap
-    coarse_hydro: dict[tuple[int, int], MapCellHydrology]
-    sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology]
-    fine_z_overrides: dict[tuple[int, int], int]
-    # Before relief objects/basins, as required by the existing light consumer.
-    coarse_relief_z: dict[tuple[int, int], int]
-    # Final post-river coarse heights. Fine overrides stay in their own map.
-    coarse_surface_z: dict[tuple[int, int], int]
+# Preserve the PC-9A type import path while consumers migrate.
+from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext as SurfaceTerrainContext

@@ -156,43 +156,17 @@ class TestGridDetectThresholds(unittest.TestCase):
 
 class TestPrepareSurfaceOrder(unittest.TestCase):
     def test_relief_objects_called_before_hydro(self) -> None:
-        from app.application.worldData.generators.terrain.passes import surfaceTerrainContext as mod
-
-        world = _world()
-        locations: list = []
-        order: list[str] = []
-
-        coarse = SurfaceHeightmap(
-            world_uid=world.world_uid,
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={(0, 0): 1},
-        )
-
-        def fake_relief(*_a, **_k):
-            order.append("relief")
-            return coarse
-
-        hydro = MagicMock()
-        hydro.apply.side_effect = lambda *_a, **_k: (
-            order.append("hydro"),
-            SimpleNamespace(cell_index=SimpleNamespace(by_cell={}), water_bodies=()),
-        )[1]
-
-        with (
-            patch.object(mod, "run_pole_resolve_pass", return_value=MagicMock()),
-            patch.object(mod, "run_surface_pass_coarse", return_value=coarse),
-            patch.object(mod, "apply_relief_objects_z", side_effect=fake_relief),
-            patch.object(mod, "is_hydrology_enabled", return_value=True),
-            patch.object(mod, "apply_declared_fine_river_carves", return_value=({}, {})),
-            patch.object(mod, "build_local_field_from_coarse", return_value=MagicMock()),
-        ):
-            ctx = mod.prepare_surface_terrain_context(
-                world, locations, hydrology_generator=hydro,
-            )
-        self.assertIsNotNone(ctx)
-        self.assertEqual(order, ["relief", "hydro"])
-        assert ctx is not None
-        self.assertEqual(ctx.coarse_relief_z, {(0, 0): 1})
+        from tests.planning.consumers.test_wiring import world, planning_kwargs, capture
+        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
+        deps = planning_kwargs(self)
+        composition = self._surface_composition
+        source = world()
+        with patch.object(composition.registry, "build", wraps=composition.registry.build) as builds:
+            ctx = prepare_surface_terrain_context(source, [], **deps)
+        phases = [str(call.args[0].metadata.id) for call in builds.call_args_list]
+        self.assertLess(phases.index("surface.pc.relief"), phases.index("surface.pc.hydrology_routes"))
+        terrain = composition.prepare(capture(source))
+        self.assertEqual(ctx.coarse_relief_z, {(cell.gx, cell.gy): z for cell, z in terrain.terrain_base.payload.surface_z})
 
 
 class TestAntiDoubleRise(unittest.TestCase):

@@ -3,6 +3,8 @@
 Reads a bundle without importing/persisting it; never starts the backend.
 Run from the repository: python backend/scripts/smoke_hydrology_hy12.py --render
 L0 masks/bands remain the separate HY-10 acceptance.
+Frozen planning emits accepted river beds; legacy waterfall-drop diagnostics are not part of this output.
+Requires explicit planning resource policies in backend/config.toml.
 """
 
 from __future__ import annotations
@@ -19,9 +21,14 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
+from app.application.cancellation.requestPlanWait import RequestPlanWait
+from app.application.jsonValidation.resolve import ResolveContext
+from app.application.worldData.planning.composition.surfacePlanningAssembler import to_legacy_context
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from app.core.appSettings import app_settings
+from app.core.configManager import ConfigManager
+from app.core.container import Container
 from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
 from app.dataModel.topology.topologyGeometry import canonical_neighbors4
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -38,19 +45,13 @@ def load_fixture(path: Path) -> tuple[World, list[NamedLocation]]:
     return world, locations
 
 
-class SmokeHydrology(HydrologyGeneratorService):
-    """Capture the real facade output for assertions, without a second fill."""
-
-    def apply(self, *args, **kwargs):
-        self.result = super().apply(*args, **kwargs)
-        return self.result
-
-
-def coarse_snapshot(world, locations) -> dict:
-    service = SmokeHydrology()
-    context = prepare_surface_terrain_context(world, locations, hydrology_generator=service)
-    if context is None:
+def coarse_snapshot(world, locations, *, planning, capture, wait) -> dict:
+    view = capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+        mountain_templates=(), resolve_ctx=ResolveContext())
+    bundle = planning.prepare(view, wait=wait)
+    if bundle is None:
         raise AssertionError("empty coarse heightmap")
+    context = to_legacy_context(bundle)
     topology = resolve_hydrology_topology(world, context.coarse_hm, locations=locations)
     index = context.coarse_hydro
     water = {cell: entry for cell, entry in index.items()
@@ -64,7 +65,7 @@ def coarse_snapshot(world, locations) -> dict:
         assert entry.z_water_level is not None, (cell, entry)
         assert context.coarse_hm.surface_z[cell] >= entry.z_water_level, (cell, entry)
         assert any(neighbor in water for neighbor in canonical_neighbors4(topology, cell)), cell
-    result = service.result
+    result = bundle.hydrology.payload
     cells = [{"x": x, "y": y, "base_z": context.coarse_relief_z[(x, y)], "z": z,
               "hydrology": index[(x, y)].model_dump(mode="json", exclude_none=True)
               if (x, y) in index else None}
@@ -75,9 +76,10 @@ def coarse_snapshot(world, locations) -> dict:
         "water_cells": len(water), "shore_cells": len(shores), "cells": cells,
         "bodies": [body.model_dump(mode="json") for body in result.water_bodies],
         "unions": [union.model_dump(mode="json") for union in result.physical_unions],
-        "rivers": [{"cells": segment.polyline_cells, "uid": segment.location_uid,
-                    "edge": segment.edge_uid} for segment in result.river_segments],
-        "drops": [drop.model_dump(mode="json") for drop in result.waterfall_drops],
+        "rivers": [{"cells": [(cell.gx, cell.gy) for cell in segment.path], "uid": segment.location_uid,
+                    "edge": segment.edge_uid} for route in bundle.hydrology_routes.payload.coarse_routes
+                   for segment in route.segments],
+        "river_beds": [bed.model_dump(mode="json") for bed in bundle.river_relief.payload.coarse_beds],
     }
 
 
@@ -118,8 +120,17 @@ def main() -> None:
     parser.add_argument("--render", action="store_true")
     args = parser.parse_args()
     world, locations = load_fixture(args.fixture)
-    first = coarse_snapshot(world, locations)
-    second = coarse_snapshot(world, locations)
+    config = ConfigManager()
+    loaded = config.load()
+    if loaded:
+        app_settings.update(**loaded)
+    container = Container(config, None)
+    try:
+        dependencies = dict(planning=container.surface_planning(), capture=container.surface_planning_capture())
+        first = coarse_snapshot(world, locations, wait=RequestPlanWait.unbounded(), **dependencies)
+        second = coarse_snapshot(world, locations, wait=RequestPlanWait.unbounded(), **dependencies)
+    finally:
+        container.shutdown_planning()
     assert first == second, "coarse re-bake changed physical facts"
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "acceptance.json").write_text(json.dumps(first, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

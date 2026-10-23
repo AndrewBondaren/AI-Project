@@ -1,4 +1,7 @@
 """Debug selector reads manifest snapshots; outlines derive geometry from world data."""
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import require_surface_terrain_context
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
@@ -15,7 +18,9 @@ class RegionOutlineStaleError(ValueError):
 
 
 class WildernessRegionReadService:
-    def __init__(self, context: PackReadContext) -> None:
+    def __init__(self, context: PackReadContext, *, planning: SurfacePlanningAssembler | None = None,
+                 capture: SurfacePlanningCapture | None = None) -> None:
+        self._planning, self._capture = planning, capture
         self._context = context
 
     def get_snapshot(self, world: World, region_uid: str) -> WildernessRegionSnapshot | None:
@@ -24,11 +29,14 @@ class WildernessRegionReadService:
         entry = self._context.reader_for(world).manifest.wilderness_region_entry(region_uid)
         return WildernessRegionSnapshot(entry=entry) if entry is not None else None
 
-    def outline(self, world: World, locations: list[NamedLocation], region_uid: str) -> WildernessRegionOutline | None:
+    def outline(self, world: World, locations: list[NamedLocation], region_uid: str, *, wait: PlanWaitControl) -> WildernessRegionOutline | None:
         if self.get_snapshot(world, region_uid) is None:
             return None
         manifest = self._context.reader_for(world).manifest
-        surface = require_surface_terrain_context(world, locations)
+        if self._planning is None or self._capture is None:
+            raise ValueError("surface planning dependencies required")
+        surface = require_surface_terrain_context(world, locations,
+            planning=self._planning, capture=self._capture, wait=wait)
         ctx = LightGridBakeContext(world, locations, build_locations_index(locations,world), [],
             LightGridScale.from_tile(manifest.fine_cells_per_map_cell,manifest.world_map_cells_per_tile),
             surface_planning=surface)

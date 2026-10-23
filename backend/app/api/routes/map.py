@@ -20,11 +20,9 @@ from fastapi.responses import JSONResponse
 from dataclasses import asdict
 
 from app.api.deps import get_container
+from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     require_surface_terrain_context,
 )
@@ -33,6 +31,7 @@ from app.application.worldData.materialize.materializationContext import resolve
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log
+from app.core.appSettings import app_settings
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeScopeKind
 from app.dataModel.worldPack.bake.packBakeDefaults import resolve_detailed_grade_stages
@@ -40,7 +39,6 @@ from app.dataModel.worldPack.bake.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
 
 router = APIRouter()
-_hydrology_generator = HydrologyGeneratorService()
 
 
 @router.get("/worlds/{world_uid}/map/loading-progress")
@@ -55,7 +53,7 @@ async def get_loading_progress(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.get_all(world_uid)
-    return facade.pack.loading.get_loading_progress(world, locations=locations).to_dict()
+    return facade.pack.loading.get_loading_progress(world, locations=locations, wait=RequestPlanWait.unbounded()).to_dict()
 
 
 @router.get("/worlds/{world_uid}/map/bootstrap-tiles")
@@ -88,7 +86,7 @@ async def list_bootstrap_tiles(
             scope=scope,
             max_tiles=max_tiles,
             nodes=nodes, edges=edges,
-            hydrology_generator=_hydrology_generator,
+            wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -178,7 +176,7 @@ async def bake_world_pack(
             tile_gy=tile_gy,
             grade_mill=grade_mill,
             grade_paint=grade_paint,
-            nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+            nodes=nodes, edges=edges, wait=RequestPlanWait.unbounded(),
             anchor_x=anchor_x, anchor_y=anchor_y,
         )
     except MissingParentLightError as exc:
@@ -187,7 +185,7 @@ async def bake_world_pack(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     progress = container.map_cell_read_service(world_uid).pack.loading.get_loading_progress(
-        world, locations=locations,
+        world, locations=locations, wait=RequestPlanWait.unbounded(),
     )
     result.loading_progress = progress.to_dict()
     status_code = 207 if result.is_partial() else 200
@@ -276,7 +274,7 @@ async def export_map(
 
 @router.post("/worlds/{world_uid}/map/import")
 async def import_map(
-    
+
     world_uid: str,
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
@@ -507,7 +505,8 @@ async def refine_from_entry_route(
     try:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=_hydrology_generator,
+            planning=container.surface_planning(), capture=container.surface_planning_capture(),
+            wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -542,9 +541,10 @@ async def refine_from_entry_route(
                     heading=entry.heading,
                 )
             await finalize_pack_on_world(
-                world_svc,
+                container.world_repository(),
                 world,
                 writer,
+                db_path=app_settings.db_path,
                 read_context=container.pack_read_services(world_uid).context,
             )
     except MissingParentLightError as exc:
@@ -606,7 +606,8 @@ async def refine_chunk_route(
     try:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=_hydrology_generator,
+            planning=container.surface_planning(), capture=container.surface_planning_capture(),
+            wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -624,9 +625,10 @@ async def refine_chunk_route(
                 stages=stages,
             )
             await finalize_pack_on_world(
-                world_svc,
+                container.world_repository(),
                 world,
                 writer,
+                db_path=app_settings.db_path,
                 read_context=container.pack_read_services(world_uid).context,
             )
     except MissingParentLightError as exc:
@@ -674,7 +676,8 @@ async def schedule_chunk_refine_route(
     try:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=_hydrology_generator,
+            planning=container.surface_planning(), capture=container.surface_planning_capture(),
+            wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -694,9 +697,10 @@ async def schedule_chunk_refine_route(
             heading_dy=heading_dy,
         )
         await finalize_pack_on_world(
-            world_svc,
+            container.world_repository(),
             world,
             writer,
+            db_path=app_settings.db_path,
             read_context=container.pack_read_services(world_uid).context,
         )
     except MissingParentLightError as exc:
@@ -719,7 +723,8 @@ async def get_wilderness_region(world_uid: str, region_uid: str, container=Depen
     world = await container.world_service().get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context)
+    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context,
+        planning=container.surface_planning(), capture=container.surface_planning_capture())
     snapshot = service.get_snapshot(world, region_uid)
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Region '{region_uid}' not found in pack snapshot")
@@ -734,10 +739,11 @@ async def get_wilderness_region_outline(world_uid: str, region_uid: str, contain
     world = await container.world_service().get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context)
+    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context,
+        planning=container.surface_planning(), capture=container.surface_planning_capture())
     locations = await container.location_service().get_all(world_uid)
     try:
-        outline = service.outline(world, locations, region_uid)
+        outline = service.outline(world, locations, region_uid, wait=RequestPlanWait.unbounded())
     except RegionOutlineStaleError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if outline is None:

@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.application.cancellation.requestPlanWait import RequestPlanWait
+
 from app.api.deps import get_container
 from app.api.routes.map import router
 from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, Sublocation, StateSnapshotEntry
@@ -200,7 +202,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             def compose(ctx):
                 return compose_light_grid(ctx,contributors=(LandcoverContributor(),))
             with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
-                WorldMapBakeOrchestrator().bake_tiles(world,[],writer,[(0,0)],surface_ctx=f.ctx.surface_planning)
+                WorldMapBakeOrchestrator().bake_tiles(world,[],writer,[(0,0)],surface_ctx=f.ctx.surface_planning,wait=RequestPlanWait.unbounded())
             writer.save_manifest()
             uid = region_uid(world.world_uid,name="indexed")
             self.assertIsNotNone(writer.manifest.wilderness_region_entry(uid))
@@ -239,7 +241,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             f.declare()
             world.terrain_masks = f.world.terrain_masks
             with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
-                WorldMapBakeOrchestrator().bake_tile(world,f.ctx.surface_planning,0,0,writer,locations=[])
+                WorldMapBakeOrchestrator().bake_tile(world,f.ctx.surface_planning,0,0,writer,locations=[],wait=RequestPlanWait.unbounded())
             self.assertEqual(writer.manifest.wilderness_region_entries,[])
 
 

@@ -5,6 +5,9 @@ from __future__ import annotations
 import time
 from collections import Counter
 from collections.abc import Mapping
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 from app.application.jsonValidation import terrain_system_keys
@@ -13,9 +16,6 @@ from app.dataModel.worldPack.bake.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
-)
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
 )
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
@@ -78,7 +78,9 @@ def _hydro_cell_role_label(cell_hydro: object | None) -> str | None:
 class WorldMapBakeOrchestrator:
     """Persist L0 tiles from LightGridCompose — no per-field sampling here."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, planning: SurfacePlanningAssembler | None = None,
+                 capture: SurfacePlanningCapture | None = None) -> None:
+        self._planning, self._capture = planning, capture
         self.last_relief_grade_instances: list[ReliefGradeInstance] = []
 
     def bake_tiles(
@@ -88,11 +90,11 @@ class WorldMapBakeOrchestrator:
         writer: WorldPackWriter,
         tiles: list[tuple[int, int]],
         *,
+        wait: PlanWaitControl,
         surface_ctx: SurfaceTerrainContext | None = None,
         locations_index: LocationsIndexWire | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
         bake_mode: PackBakeMode = PACK_BAKE_LIGHT,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
@@ -102,12 +104,14 @@ class WorldMapBakeOrchestrator:
         graph_nodes = list(nodes or [])
         graph_edges = list(edges or [])
         if surface_ctx is None:
+            if self._planning is None or self._capture is None:
+                raise ValueError("surface planning dependencies required")
             surface_ctx = prepare_surface_terrain_context(
                 world,
                 locations,
+                planning=self._planning, capture=self._capture, wait=wait,
                 nodes=graph_nodes,
                 edges=graph_edges,
-                hydrology_generator=hydrology_generator,
             )
         if surface_ctx is None:
             log_pack_surface_context(world_uid, ok=False, started_at=ctx_t0)
@@ -190,8 +194,6 @@ class WorldMapBakeOrchestrator:
                 ),
             )
         writer.manifest.bake_mode = bake_mode
-        writer.recalc_manifest_counters()
-        writer.save_manifest()
         log_pack_world_map_bake_done(
             world_uid,
             total_cells=total,
@@ -210,12 +212,14 @@ class WorldMapBakeOrchestrator:
         gy: int,
         writer: WorldPackWriter,
         *,
+        wait: PlanWaitControl,
         cells_per_side: int | None = None,
         locations: list[NamedLocation] | None = None,
         locations_index: LocationsIndexWire | None = None,
         region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
     ) -> tuple[list[WorldMapCellWire], str]:
         """Single-tile convenience wrapper around compose pipeline."""
+        wait.raise_if_cancelled()
         locs = locations or []
         tile_macro = map_cell_fine_span(world)
         side = cells_per_side or resolve_world_map_cells_per_tile(

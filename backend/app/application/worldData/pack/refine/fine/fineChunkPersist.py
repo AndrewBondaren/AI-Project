@@ -83,7 +83,8 @@ def location_for_cell(
 class FineChunkPersist:
     """Single-writer pack side of refine_rects. Generate stays in compute_rect.
 
-    ``finish`` writes pack files only (location zst, slot sidecar, manifest).
+    ``finish`` writes blobs/sidecars and updates manifest counters in memory.
+    Publication belongs to the operation owner.
     T-3c catalog emit is ``emit_fine_grade_catalog`` on the runner.
     """
 
@@ -141,7 +142,6 @@ class FineChunkPersist:
             )
             self._total_cells += len(wilderness)
             self._written += 1
-            self._writer.maybe_checkpoint_manifest(self._written)
         log_pack_wilderness_chunk_done(
             ctx.world_uid,
             phase=ctx.phase_name,
@@ -196,7 +196,6 @@ class FineChunkPersist:
         occupancy = set(self._fine_surface_z)
         sidecar_s, validate_s = self._persist_grade_cell_slots(occupancy)
         self._writer.recalc_manifest_counters()
-        self._writer.save_manifest()
         pipeline = self._pipeline_s.with_wall(
             sidecar_s=sidecar_s,
             validate_s=validate_s,

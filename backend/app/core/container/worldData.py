@@ -3,6 +3,11 @@
 from collections.abc import Mapping, Sequence
 from threading import RLock
 
+from app.application.worldData.planning.composition.planProviders import WorldPlanProviders, register_world_plan_providers
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
+
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.service.cacheService import CacheService
 from app.application.planning.providers.planRegistry import PlanRegistry
@@ -79,6 +84,10 @@ class WorldDataWiring:
         self._planning_cache_lock = RLock()
         self._plan_registry: PlanRegistry | None = None
         self._planning_service: PlanningService | None = None
+        self._world_plan_providers: WorldPlanProviders | None = None
+        self._surface_planning: SurfacePlanningAssembler | None = None
+        self._surface_capture: SurfacePlanningCapture | None = None
+        self._source_publication: SourcePublicationGuard | None = None
 
     def planning_resources(self) -> PlanningRuntimeSettings:
         with self._planning_cache_lock:
@@ -112,6 +121,28 @@ class WorldDataWiring:
                 self._planning_service = PlanningService(self.plan_registry(),
                     self.planning_cache_service(), self.planning_resources().execution)
             return self._planning_service
+
+    def surface_planning(self) -> SurfacePlanningAssembler:
+        with self._planning_cache_lock:
+            if self._surface_planning is None:
+                if self._world_plan_providers is None:
+                    self._world_plan_providers = register_world_plan_providers(self.plan_registry())
+                self._surface_planning = SurfacePlanningAssembler(self.planning_service(),
+                    self.plan_registry(), self._world_plan_providers)
+            return self._surface_planning
+
+    def surface_planning_capture(self) -> SurfacePlanningCapture:
+        with self._planning_cache_lock:
+            if self._surface_capture is None:
+                self._surface_capture = SurfacePlanningCapture()
+            return self._surface_capture
+
+    def source_publication_guard(self) -> SourcePublicationGuard:
+        with self._planning_cache_lock:
+            if self._source_publication is None:
+                self._source_publication = SourcePublicationGuard(self.world_repository(),
+                    self.location_repository(), self.surface_planning_capture())
+            return self._source_publication
 
     def shutdown_planning(self, *, wait: bool = True) -> None:
         if self._planning_service is not None:
@@ -192,6 +223,7 @@ class WorldDataWiring:
         if self._terrain_batch_orchestrator is None:
             self._terrain_batch_orchestrator = TerrainBatchOrchestrator(
                 map_cell_service=self.map_cell_service(),
+                planning=self.surface_planning(), capture=self.surface_planning_capture(),
             )
         return self._terrain_batch_orchestrator
 
@@ -207,6 +239,8 @@ class WorldDataWiring:
         if self._surface_materialization_orchestrator is None:
             self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
                 pack=self.pack_materialization_orchestrator(),
+                planning=self.surface_planning(), capture=self.surface_planning_capture(),
+                db=self._db, publication_guard=self.source_publication_guard(),
                 outdoor=self.settlement_outdoor_orchestrator(),
             )
         return self._surface_materialization_orchestrator
@@ -283,6 +317,8 @@ class WorldDataWiring:
             entry = self.entry_refine_orchestrator()
             self._pack_materialization_orchestrator = PackMaterializationOrchestrator(
                 self.terrain_batch_orchestrator(),
+                planning=self.surface_planning(), capture=self.surface_planning_capture(),
+                publication_guard=self.source_publication_guard(),
                 region_state_repo=SqliteRegionStateRepository(self._db),
                 entry=entry,
                 climate_bake=entry.climate_bake,

@@ -1,6 +1,8 @@
 {
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
+    "../../../app/application/cancellation/requestPlanWait.py",
+    "../../../app/application/worldData/generators/terrain/passes/surfaceTerrainContext.py",
     "../../../app/application/cache",
     "../../../app/application/planning",
     "../../../app/application/jsonValidation/worldSlices.py",

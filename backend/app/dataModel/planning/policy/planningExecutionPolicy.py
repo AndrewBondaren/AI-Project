@@ -8,3 +8,4 @@ class PlanningExecutionPolicy(BaseModel):
 
     max_workers: StrictInt = Field(gt=0)
     max_pending_builds: StrictInt = Field(gt=0)
+    wait_timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False, strict=True)

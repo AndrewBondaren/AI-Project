@@ -1,6 +1,11 @@
 """Explicit phase calls over one frozen view; cache/scheduling delegate to PlanningService."""
 
+import logging
+
 from pydantic import TypeAdapter
+
+from app.application.jsonValidation.resolve import ResolveContext, report_issues, UnresolvedModelError
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
 
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
@@ -11,8 +16,9 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.planning.composition.planProviders import WorldPlanProviders
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.planning.contracts.surfacePlanningView import (
-    NoExtentSurfacePlanningView, ReadySurfacePlanningView, SurfacePlanningView, SurfaceTerrainContext,
+    NoExtentSurfacePlanningView, ReadySurfacePlanningView, SurfacePlanningView,
 )
+from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext
 from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
@@ -88,3 +94,26 @@ def to_legacy_context(bundle: SurfacePlanBundle) -> SurfaceTerrainContext:
         sparse_fine_hydro=dict(final.sparse_fine_hydro), fine_z_overrides=dict(final.fine_z_overrides),
         coarse_relief_z={(cell.gx, cell.gy): z for cell, z in bundle.terrain_base.payload.surface_z},
         coarse_surface_z=dict(surface))
+
+
+def prepare_captured_context(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
+                             wait: PlanWaitControl, resolve_ctx: ResolveContext) -> SurfaceTerrainContext | None:
+    """One report boundary for frozen plans and their transitional working copies."""
+    bundle = planning.prepare(view, wait=wait)
+    diagnostics = list(view.capture_diagnostics)
+    if bundle is not None:
+        for envelope in (bundle.climate_base, bundle.terrain_base, bundle.water_placement,
+                         bundle.relief, bundle.hydrology_routes, bundle.river_relief,
+                         bundle.hydrology, bundle.climate_local):
+            diagnostics.extend(envelope.diagnostics)
+    diagnostics = list(dict.fromkeys(diagnostics))
+    issues = tuple(item.issue for item in diagnostics
+        if item.disposition is not PlanDiagnosticDisposition.NOTICE)
+    report_issues(resolve_ctx, (issue for issue in issues if issue not in resolve_ctx.errors))
+    for item in diagnostics:
+        if item.disposition is PlanDiagnosticDisposition.NOTICE and not resolve_ctx.collect_only:
+            logging.getLogger(__name__).info("surface planning | path=%s code=%s | %s",
+                item.issue.path, item.issue.code, item.issue.message)
+    if resolve_ctx.validate_only and issues:
+        raise UnresolvedModelError(list(dict.fromkeys(issues)))
+    return to_legacy_context(bundle) if bundle is not None else None

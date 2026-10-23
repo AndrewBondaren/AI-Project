@@ -294,15 +294,18 @@ class Round2RiverTests(unittest.TestCase):
                     function(*args, topology=topology, policy=None)
 
     def test_surface_context_rejects_missing_topology_before_relief(self):
-        from app.application.worldData.generators.terrain.passes import surfaceTerrainContext as module
-        hm = flat_heightmap(0, 1, 0, 0)
-        with patch.object(module, "run_pole_resolve_pass", return_value=None), \
-                patch.object(module, "run_surface_pass_coarse", return_value=hm), \
-                patch.object(module, "run_water_placement_pass", return_value=SimpleNamespace(topology=None)), \
-                patch.object(module, "apply_relief_objects_z") as writer:
-            with self.assertRaisesRegex(TypeError, "WorldTopology"):
-                module.prepare_surface_terrain_context(world(), [])
-        writer.assert_not_called()
+        from tests.planning.consumers.test_wiring import Composition, capture, world as source_world
+        from app.application.cancellation.requestPlanWait import RequestPlanWait
+        from pydantic import ValidationError
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        view = capture(source_world())
+        malformed_water = view.water_placement.model_copy(update={"topology": None})
+        malformed = view.model_copy(update={"water_placement": malformed_water})
+        with patch.object(composition.registry, "build", wraps=composition.registry.build) as build:
+            with self.assertRaises(ValidationError):
+                composition.assembler.prepare(malformed, wait=RequestPlanWait.unbounded())
+        build.assert_not_called()
 
     def test_confluence_drop_reads_receiver_final_bed_and_mountain_kind(self):
         hm = flat_heightmap(0, 6, 0, 2, z=20)

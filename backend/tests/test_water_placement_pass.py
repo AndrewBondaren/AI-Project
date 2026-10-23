@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from tests.planning.consumers.test_wiring import planning_kwargs
 from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,11 @@ def _fixture_world_and_locations():
     world = hydro_world(**({"z_min": None} | {k: v for k, v in bundle["world"].items()
                                              if k != "world_uid"}),
                         world_uid=bundle["world"]["world_uid"])
+    from app.db.models.world import World
+    row = World(world_uid=world.world_uid, name="fixture", created_at="")
+    for key, value in vars(world).items():
+        setattr(row, key, value)
+    world = row
     known = {f.name for f in fields(NamedLocation)}
     locations = [NamedLocation(**{k: v for k, v in row.items() if k in known})
                  for row in bundle["locations"]]
@@ -110,7 +116,7 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         # The fixture intentionally duplicates location_uid between a declared basin and
         # a declared coastline; runtime merges them with one structured warning.
         with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
-            ctx = prepare_surface_terrain_context(world, locations)
+            ctx = prepare_surface_terrain_context(world, locations, **planning_kwargs(self))
         self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line
                             and "loc-geo-ocean-west-004" in line for line in log.output))
         self.assertIsNotNone(ctx)
@@ -145,8 +151,8 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
 
     def test_world_test_004_pass_is_deterministic(self):
         world, locations = _fixture_world_and_locations()
-        first = prepare_surface_terrain_context(world, locations)
-        second = prepare_surface_terrain_context(world, locations)
+        first = prepare_surface_terrain_context(world, locations, **planning_kwargs(self))
+        second = prepare_surface_terrain_context(world, locations, **planning_kwargs(self))
         self.assertEqual(first.coarse_hm.surface_z, second.coarse_hm.surface_z)
         self.assertEqual(first.coarse_hydro, second.coarse_hydro)
 

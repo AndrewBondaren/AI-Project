@@ -93,16 +93,6 @@ class WorldPackWriter:
     def bake_defaults(self) -> PackBakeDefaults:
         return self._bake_defaults
 
-    def maybe_checkpoint_manifest(self, wilderness_chunks_written: int) -> None:
-        """Periodic save so debug clients see online progress (detailed bake)."""
-        every = int(self._bake_defaults.detailed_manifest_save_every_chunks)
-        if every <= 0 or wilderness_chunks_written <= 0:
-            return
-        if wilderness_chunks_written % every != 0:
-            return
-        self.recalc_manifest_counters()
-        self.save_manifest()
-
     def sync_world_metadata(self, world: World, *, cells_per_side: int) -> None:
         self._manifest.fine_cells_per_map_cell = world.fine_cells_per_map_cell
         self._manifest.world_map_cells_per_tile = cells_per_side

@@ -186,3 +186,139 @@ class RevisionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PublicationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        import tempfile
+        from pathlib import Path
+        from app.db.database import Database
+        from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
+        from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
+        from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+        from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.db = Database(str(Path(self.tmp.name) / "source.db"))
+        await self.db.connect()
+        self.addAsyncCleanup(self.db.disconnect)
+        await self.db.apply_migrations()
+        self.worlds, self.locations = SqliteWorldRepository(self.db), SqliteNamedLocationRepository(self.db)
+        await self.worlds.create(world())
+        self.source = await self.worlds.get_by_id("surface-world")
+        self.capture = SurfacePlanningCapture()
+        self.guard = SourcePublicationGuard(self.worlds, self.locations, self.capture)
+        self.c = Composition()
+        self.addCleanup(self.c.service.shutdown)
+        self.writer = WorldPackWriter(WorldPackPaths.from_db_parent(self.db.path, self.source.world_uid))
+        self.writer.save_manifest()
+        self.before = self.writer.paths.manifest_path().read_bytes()
+        self.sql = []
+        await self.db.main_conn.set_trace_callback(self.sql.append)
+
+    async def operation(self, kind, *, stale=False, validation=False):
+        from unittest.mock import AsyncMock, MagicMock
+        from app.application.cancellation.requestPlanWait import RequestPlanWait
+        from app.application.worldData.materialize.materializationContext import MaterializationContext
+        from app.application.worldData.materialize.persistResult import PersistResult
+        from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+        from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import WorldSurfaceMaterializationOrchestrator
+        from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import PackDetailedBakeResult
+        from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
+        async def compute(*args, **kwargs):
+            self.assertFalse(self.db.main_conn.owns_unit_of_work, "bake must not hold the publication lock")
+            if stale:
+                await self.worlds.update(replace(self.source, z_min=-200))
+            return None, 0
+        climate = MagicMock()
+        climate.bake_coarse = AsyncMock(side_effect=compute)
+        climate.bake_fine_for_l0_policy = AsyncMock(return_value=0)
+        entry = MagicMock()
+        entry.has_job_repo, entry.refine_queue = False, []
+        planner = MagicMock()
+        planner.plan.return_value.tile_tuples.return_value = []
+        planner.plan.return_value.cap_applied = None
+        world_map = MagicMock()
+        world_map.bake_tiles.return_value = 0
+        world_map.last_relief_grade_instances = []
+        pack = PackMaterializationOrchestrator(MagicMock(), world_map=world_map,
+            entry=entry, climate_bake=climate, tile_planner=planner,
+            world_repository=self.worlds, db=self.db, planning=self.c.assembler,
+            capture=self.capture, publication_guard=self.guard)
+        if kind == "l0":
+            return await pack.materialize_light_pack(self.source.world_uid, self.source, [], self.writer,
+                MaterializationContext(1), wait=RequestPlanWait.unbounded(),
+                resolve_ctx=ResolveContext(validate_only=validation))
+        detailed = MagicMock()
+        async def compute_detailed(*args, **kwargs):
+            await compute()
+            return PackDetailedBakeResult(scope="wilderness", terrain=PersistResult.from_counts(0, 0))
+        detailed.bake = AsyncMock(side_effect=compute_detailed)
+        owner = WorldSurfaceMaterializationOrchestrator(pack, detailed=detailed,
+            planning=self.c.assembler, capture=self.capture, db=self.db, publication_guard=self.guard)
+        return await owner.materialize_pack_detailed(self.source, [], MaterializationContext(1), self.writer,
+            DetailedBakeRequest(scope="wilderness", tile_gx=0, tile_gy=0), wait=RequestPlanWait.unbounded(),
+            resolve_ctx=ResolveContext(validate_only=validation))
+
+    async def test_stale_l0_rolls_back_without_manifest_publication(self):
+        await self.stale("l0")
+
+    async def test_stale_detailed_rolls_back_without_manifest_publication(self):
+        await self.stale("detailed")
+
+    async def stale(self, kind):
+        with patch.object(self.writer, "save_manifest", wraps=self.writer.save_manifest) as save:
+            with self.assertRaises(SurfacePlanningStale):
+                await self.operation(kind, stale=True)
+            save.assert_not_called()
+        self.assertEqual(self.writer.paths.manifest_path().read_bytes(), self.before)
+        self.assertIn("ROLLBACK", self.sql)
+        self.assertFalse(self.db.main_conn.in_transaction)
+        self.assertEqual((await self.worlds.get_by_id(self.source.world_uid)).z_min, -200)
+
+    async def test_fresh_l0_checks_and_publishes_in_the_same_uow(self):
+        await self.fresh("l0")
+
+    async def test_fresh_detailed_checks_and_publishes_in_the_same_uow(self):
+        await self.fresh("detailed")
+
+    async def fresh(self, kind):
+        save, check = self.writer.save_manifest, self.guard.require_fresh
+        events = []
+        async def require(*args, **kwargs):
+            self.assertTrue(self.db.main_conn.owns_unit_of_work)
+            events.append("check")
+            return await check(*args, **kwargs)
+        def publish():
+            self.assertTrue(self.db.main_conn.owns_unit_of_work)
+            events.append("publish")
+            save()
+        with patch.object(self.guard, "require_fresh", side_effect=require), patch.object(
+                self.writer, "save_manifest", side_effect=publish), patch.object(
+                self.capture, "capture", wraps=self.capture.capture) as captures:
+            await self.operation(kind)
+        self.assertEqual(events, ["check", "publish"])
+        self.assertEqual(captures.call_count, 2, "one entry capture and one authoritative re-capture")
+        self.assertIn("COMMIT", self.sql)
+
+    async def test_validation_never_bakes_or_publishes_l0_or_detailed(self):
+        for kind in ("l0", "detailed"):
+            with self.subTest(kind=kind), patch.object(self.writer, "save_manifest") as save:
+                with self.assertRaisesRegex(ValueError, "validation"):
+                    await self.operation(kind, validation=True)
+                save.assert_not_called()
+        self.assertEqual(self.writer.paths.manifest_path().read_bytes(), self.before)
+
+    async def test_location_change_is_part_of_authoritative_check(self):
+        initial = self.capture.capture(self.source, [], mode=ResolutionMode.RUNTIME,
+            mountain_templates=(), resolve_ctx=ResolveContext())
+        pole = NamedLocation(location_uid="new-pole", world_uid=self.source.world_uid,
+            display_name="pole", created_at="", system_location_type="climate_pole",
+            system_climate_zone="arctic", map_x=0, map_y=0)
+        await self.locations.upsert_bulk([pole])
+        async with self.db.transaction_if_needed():
+            with self.assertRaises(SurfacePlanningStale):
+                await self.guard.require_fresh(initial, mode=ResolutionMode.RUNTIME,
+                    mountain_templates=(), resolve_ctx=ResolveContext())
