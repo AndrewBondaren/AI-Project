@@ -1999,13 +1999,17 @@ blobs допускаются без удаления/auto-retry. После от
 world-source-versioning OCC заменяется revision-set stamp; этот трек PC-9
 не реализует. Settlement publication остаётся отдельным долгом.
 
-Статус: PC-9A принят; PC-9 caller/DI/publication ownership и PC-10/PC-11
-consumer cutover реализованы и проверены. PC-11 (2026-10-24): L2 detailed/entry/
-queue/climate callers передают SurfacePlanBundle; final hydro overrides и typed
-landcover observations читаются из envelopes. Pre-relief facts берутся из
-terrain_base, persisted parent-light/fine-detail recipe/publication guard сохранены.
-Baseline delta PC-11 не обнаружена. Приёмка PC-12 ещё не выполнена; delivery SoT —
-[geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md), §6.25–6.33 и §7 PC-11.
+Статус: PC-9A принят; PC-9 caller/DI/publication ownership и PC-10 реализованы
+и проверены. **PC-11 REOPENED / NOT DONE (2026-10-24): архитектурная приёмка
+не пройдена.** Функциональный L2 bundle cutover и baseline evidence сохранены,
+но остаются смешение owners, self-capture, generator→pack.bake, повторные
+world-map projections и dual legacy/typed inputs. Обязательные исправления —
+PC-11.1…PC-11.8; PC-12 заблокирован до их закрытия и приёмки мастером.
+Delivery SoT — [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md),
+§6.25–6.33 и §7 PC-11. Карта PC-11.1 сначала фиксирует домен, владельца,
+ответственность и точный путь; только затем закрываются пробелы на стыках.
+Рабочие проекции принадлежат своим доменам, composition связывает их результаты
+и не поглощает domain logic; необходимость агрегата refs определяется callers.
 Общие records и исходные input projections ниже читаются вместе с final
 freeze: его точные дополнения заменяют прежние baseline bindings и
 signatures. Это один согласованный contract. Cross-domain composition

@@ -439,10 +439,10 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
     async def test_climate_bundle_preserves_coarse_and_fine_wire_baseline(self):
         from app.application.worldData.materialize.materializationContext import MaterializationContext
         from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-        from app.application.worldData.pack.climate.climateCoarseBake import build_climate_coarse_wire, build_climate_tile_wire
+        from app.application.worldData.pack.climate.climateCoarseBake import build_climate_coarse_wire, build_climate_tile_wire, sample_climate_tile_ty_rows
         from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
         from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
-        source = world(world_bounds=dict(x_min=0, x_max=0, y_min=0, y_max=0), fine_cells_per_map_cell=2)
+        source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=0), fine_cells_per_map_cell=2)
         c = Composition()
         self.addCleanup(c.service.shutdown)
         bundle = c.prepare(capture(source))
@@ -458,8 +458,11 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         writer.write_climate_coarse.return_value = "hash"
         climate = ClimatePackBakeOrchestrator()
         with patch("app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
-                   side_effect=AssertionError("legacy climate view")):
+                   side_effect=AssertionError("legacy climate view")), patch(
+                   "app.application.worldData.pack.climate.climatePackBakeOrchestrator.sample_climate_tile_ty_rows",
+                   wraps=sample_climate_tile_ty_rows) as sample_rows:
             await climate.bake_coarse(source, bundle, writer, MaterializationContext(1))
             await climate.bake_fine_tile(source, bundle, writer, MaterializationContext(1), 0, 0, parent_light=parent)
         self.assertEqual(writer.write_climate_coarse.call_args.args[0], expected_coarse)
         self.assertEqual(writer.write_climate_tile.call_args.args[2], expected_fine)
+        self.assertEqual(set(sample_rows.call_args.kwargs["coarse_surface_z"]), {(0, 0)})

@@ -225,8 +225,14 @@ class ClimatePackBakeOrchestrator:
         pole_field = ClimatePoleField(surface_bundle.climate_base.payload.poles,
                                      surface_bundle.climate_base.payload.bbox)
         local_field = ClimateAnchorField(surface_bundle.climate_local.payload.anchors)
-        coarse_z: dict[tuple[int, int], int] = {(cell.gx, cell.gy): z for cell, z in surface_bundle.hydrology.payload.coarse_surface_z}
-        fine_z: dict[tuple[int, int], int] = dict(surface_bundle.hydrology.payload.fine_z_overrides)
+        coarse_z: dict[tuple[int, int], int] = {
+            (cell.gx, cell.gy): z for cell, z in surface_bundle.hydrology.payload.coarse_surface_z
+            if cell.gx == tile_gx and cell.gy == tile_gy
+        }
+        fine_z: dict[tuple[int, int], int] = {
+            (xm, ym): z for (xm, ym), z in surface_bundle.hydrology.payload.fine_z_overrides
+            if xm // tile_macro == tile_gx and ym // tile_macro == tile_gy
+        }
         workers = resolve_climate_workers(mat_ctx, world)
         samples = await _map_climate_row_batches(
             workers,

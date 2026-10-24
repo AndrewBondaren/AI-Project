@@ -28,10 +28,10 @@ def compose_light_grid(
     compose = LightGridCompose(ctx.scale)
     pipeline = contributors or DEFAULT_CONTRIBUTORS
     t0 = time.perf_counter()
-    if ctx.surface_planning is None:
+    if ctx.surface_bundle is None:
         logger.warning(
-            "light_compose_no_surface_planning | world=%s — relief/landcover/climate "
-            "and coarse SEA/LAKE fill will be skipped or limited",
+            "light_compose_no_surface_bundle | world=%s — "
+            "frozen surface bundle required by planning contributors",
             ctx.world.world_uid,
         )
     logger.info(

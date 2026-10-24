@@ -95,7 +95,7 @@ class WorldMapBakeOrchestrator:
         tiles: list[tuple[int, int]],
         *,
         wait: PlanWaitControl,
-        surface_ctx: SurfaceTerrainContext | None = None,
+        surface_ctx: SurfaceTerrainContext | None = None,  # Transitional: ignored; derived from bundle.
         surface_bundle: SurfacePlanBundle | None = None,
         locations_index: LocationsIndexWire | None = None,
         nodes: list[ConnectionNode] | None = None,
@@ -213,7 +213,7 @@ class WorldMapBakeOrchestrator:
     def bake_tile(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext,
+        surface_ctx: SurfaceTerrainContext,  # Transitional positional argument; ignored.
         gx: int,
         gy: int,
         writer: WorldPackWriter,

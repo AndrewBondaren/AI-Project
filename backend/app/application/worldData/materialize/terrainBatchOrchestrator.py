@@ -164,7 +164,7 @@ class TerrainBatchOrchestrator:
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
         tile_macro = parent_light.tile_macro
-        for (xm, ym), z in dict(bundle.hydrology.payload.fine_z_overrides).items():
+        for (xm, ym), z in bundle.hydrology.payload.fine_z_overrides:
             if xm // tile_macro == tile_gx and ym // tile_macro == tile_gy:
                 base = fine_z.get((xm, ym), z)
                 lo = base - policy.z_band
@@ -199,7 +199,11 @@ class TerrainBatchOrchestrator:
             bbox=fine_bbox,
             surface_z=fine_z,
         )
-        tile_hydro = merge_hydro_hard_corridor(parent_light, dict(bundle.hydrology.payload.sparse_fine_hydro))
+        tile_sparse_hydro: dict[tuple[int, int], MapCellHydrology] = {
+            (xm, ym): entry for (xm, ym), entry in bundle.hydrology.payload.sparse_fine_hydro
+            if xm // tile_macro == tile_gx and ym // tile_macro == tile_gy
+        }
+        tile_hydro = merge_hydro_hard_corridor(parent_light, tile_sparse_hydro)
         n_eff = run_gap_analysis(world, heightmap)
         return TileSurfaceState(
             heightmap=heightmap,
