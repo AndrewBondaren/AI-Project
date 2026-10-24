@@ -7,11 +7,17 @@ from app.application.worldData.regions.regionFacts import ReliefFacts
 
 
 def contribute(context: FactConsumerContext) -> ReliefFacts | None:
-    if context.surface is None or not context.cells:
+    surface_z = context.relief_z
+    if surface_z is None and context.surface is not None:
+        surface_z = context.surface.coarse_relief_z
+    if surface_z is None or not context.cells:
         return None
-    heights = [context.surface.coarse_relief_z.get(cell) for cell in sorted(set(context.cells))]
-    if any(height is None for height in heights):
-        return None
+    heights: list[int] = []
+    for cell in sorted(set(context.cells)):
+        height = surface_z.get(cell)
+        if height is None:
+            return None
+        heights.append(height)
     return ReliefFacts(
         elevation_mean=fsum(heights) / len(heights),
         # Exact flatness only; no undocumented variance/lowland threshold.

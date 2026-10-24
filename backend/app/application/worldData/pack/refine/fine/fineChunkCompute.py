@@ -95,7 +95,7 @@ def compute_rect(
             )
     mat_t0 = time.perf_counter()
     cells = terrain.generate_chunk_cells_sync(
-        ctx.world, ctx.locations, ctx.surface_ctx, ctx.tile_gx, ctx.tile_gy, rect,
+        ctx.world, ctx.locations, ctx.surface_bundle, ctx.tile_gx, ctx.tile_gy, rect,
         surface_state=chunk_state,
     )
     materialize_s = time.perf_counter() - mat_t0

@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 import logging
@@ -22,7 +23,6 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
 )
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
     prepare_surface_terrain_context,
 )
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
@@ -118,7 +118,7 @@ class TerrainBatchOrchestrator:
         self,
         world: World,
         locations: list[NamedLocation],
-        ctx: SurfaceTerrainContext,
+        bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         *,
@@ -151,6 +151,8 @@ class TerrainBatchOrchestrator:
             world_z_min,
         )
 
+        if bundle.world_uid != world.world_uid:
+            raise ValueError("surface bundle belongs to another world")
         if parent_light.gx != tile_gx or parent_light.gy != tile_gy:
             raise ValueError(
                 f"parent_light tile mismatch: got ({parent_light.gx},{parent_light.gy}) "
@@ -162,7 +164,7 @@ class TerrainBatchOrchestrator:
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
         tile_macro = parent_light.tile_macro
-        for (xm, ym), z in ctx.fine_z_overrides.items():
+        for (xm, ym), z in dict(bundle.hydrology.payload.fine_z_overrides).items():
             if xm // tile_macro == tile_gx and ym // tile_macro == tile_gy:
                 base = fine_z.get((xm, ym), z)
                 lo = base - policy.z_band
@@ -175,7 +177,7 @@ class TerrainBatchOrchestrator:
         fine_region_uid = paint_regions_fine(
             world,
             locations,
-            ctx,
+            bundle,
             parent_light,
             fine_terrain=fine_terrain,
             l0_hydro=l0_hydro,
@@ -197,7 +199,7 @@ class TerrainBatchOrchestrator:
             bbox=fine_bbox,
             surface_z=fine_z,
         )
-        tile_hydro = merge_hydro_hard_corridor(parent_light, ctx.sparse_fine_hydro)
+        tile_hydro = merge_hydro_hard_corridor(parent_light, dict(bundle.hydrology.payload.sparse_fine_hydro))
         n_eff = run_gap_analysis(world, heightmap)
         return TileSurfaceState(
             heightmap=heightmap,
@@ -213,7 +215,7 @@ class TerrainBatchOrchestrator:
         self,
         world: World,
         locations: list[NamedLocation],
-        ctx: SurfaceTerrainContext,
+        bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         rect: ColumnRect,
@@ -222,7 +224,7 @@ class TerrainBatchOrchestrator:
         parent_light: ParentLightTile | None = None,
     ) -> list[MapCell]:
         return self.generate_chunk_cells_sync(
-            world, locations, ctx, tile_gx, tile_gy, rect,
+            world, locations, bundle, tile_gx, tile_gy, rect,
             surface_state=surface_state,
             parent_light=parent_light,
         )
@@ -231,7 +233,7 @@ class TerrainBatchOrchestrator:
         self,
         world: World,
         locations: list[NamedLocation],
-        ctx: SurfaceTerrainContext,
+        bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         rect: ColumnRect,
@@ -245,7 +247,7 @@ class TerrainBatchOrchestrator:
                     "parent_light or surface_state required for L2 generate (WP-PERF-22)",
                 )
             surface_state = self.build_tile_surface_state(
-                world, locations, ctx, tile_gx, tile_gy, parent_light=parent_light,
+                world, locations, bundle, tile_gx, tile_gy, parent_light=parent_light,
             )
         return self._generator.generate_surface_chunk(
             world,

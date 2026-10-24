@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_bundle
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -259,11 +259,11 @@ class WorldSurfaceMaterializationOrchestrator:
         templates = mountain_template_inputs(relief_templates)
         captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
-        surface_ctx = prepare_captured_context(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
-        if surface_ctx is None:
+        surface_bundle = prepare_captured_bundle(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
+        if surface_bundle is None:
             raise ValueError("surface terrain context unavailable")
         detailed = await self._detailed.bake(
-            world, locations, pack_writer, ctx, surface_ctx, request,
+            world, locations, pack_writer, ctx, surface_bundle, request,
         )
         async with self._db.transaction_if_needed():
             await self._publication_guard.require_fresh(captured, mode=ResolutionMode.RUNTIME,

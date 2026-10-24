@@ -182,7 +182,7 @@ class L0Tests(unittest.TestCase):
     def test_declared_hydro_partial_matches_full_and_preserves_river_inside_sea(self):
         from app.db.models.namedLocation import NamedLocation
         source = world(z_min=-100, world_map_cells_per_tile=4, hydrology={"enabled": True,
-            "default_lakes": {"autoresolve": False},
+            "default_lakes": {"autoresolve": False, "min_water_cells": 1},
             "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
             "default_rivers": {"autoresolve": False},
             "declared_basins": [{"location_uid": "basin", "kind": "ocean", "floor_z": -10,
@@ -232,3 +232,133 @@ class L0Tests(unittest.TestCase):
         bundle = self.c.prepare(capture(source))
         cells, _ = orchestrator.bake_tile(source, to_legacy_context(bundle), 0, 0, writer, wait=Wait())
         self.assertEqual(cells, first)
+
+
+def frozen_surface_fixture(source, parent=None, *, bbox=None):
+    """Real frozen bundle for old parent/column fixtures; no production adapter."""
+    from dataclasses import fields
+    from app.db.models.world import World
+    values = {field.name: vars(source)[field.name] for field in fields(World)
+              if field.name in vars(source)}
+    values.setdefault("hydrology", {"enabled": False})
+    values.setdefault("terrain_masks", {"enabled": False})
+    values.setdefault("name", "L2 fixture")
+    values.setdefault("created_at", "")
+    if parent is not None:
+        values["world_map_cells_per_tile"] = parent.side
+        values["world_bounds"] = dict(x_min=parent.gx, x_max=parent.gx,
+                                    y_min=parent.gy, y_max=parent.gy)
+    if bbox is not None:
+        values["world_bounds"] = dict(x_min=bbox.x_min, x_max=bbox.x_max,
+                                    y_min=bbox.y_min, y_max=bbox.y_max)
+    frozen_world = World(**values)
+    if parent is not None:
+        frozen_world.map_settings = {"global_cell_size_m": parent.tile_macro}
+    composition = Composition()
+    try:
+        return composition.prepare(capture(frozen_world))
+    finally:
+        composition.service.shutdown()
+
+
+class L2Tests(unittest.TestCase):
+    def setUp(self):
+        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        self.c = Composition()
+        self.addCleanup(self.c.service.shutdown)
+        self.source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=2),
+                            z_min=-20, z_max=40)
+        self.source.map_settings = {"global_cell_size_m": 8}
+        self.terrain = TerrainBatchOrchestrator(Mock())
+
+    def parents(self, bundle):
+        from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+        ctx = LightGridBakeContext(world=self.source, locations=[], locations_index=LocationsIndexWire(),
+            tiles=[(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
+            scale=LightGridScale.from_tile(8, 2), surface_bundle=bundle)
+        compose = compose_light_grid(ctx, contributors=PIPELINE)
+        return {tile: ParentLightTile.from_cells(world_uid=self.source.world_uid, gx=tile[0], gy=tile[1],
+            side=2, tile_macro=8, cells=compose.to_wire_tile(*tile)) for tile in ctx.tiles}
+
+    def states(self, bundle, parents, tiles=None):
+        return {tile: self.terrain.build_tile_surface_state(self.source, [], bundle, *tile,
+            parent_light=parents[tile]) for tile in (tiles if tiles is not None else parents)}
+
+    def test_l2_cache_hit_clear_restart_and_reverse_tiles_are_equal(self):
+        view = capture(self.source)
+        first = self.c.prepare(view)
+        parents = self.parents(first)
+        expected = self.states(first, parents)
+        with patch.object(self.c.registry, "build", side_effect=AssertionError("HIT rebuilt")):
+            hit = self.c.prepare(view)
+        self.c.backend.clear()
+        rebuilt = self.c.prepare(view)
+        fresh = Composition(workers=1)
+        self.addCleanup(fresh.service.shutdown)
+        restarted = fresh.prepare(view)
+        for bundle in (hit, rebuilt, restarted):
+            self.assertEqual(self.states(bundle, parents, list(reversed(parents))), expected)
+        self.assertEqual(first, hit)
+
+    def test_l2_uses_persisted_parent_and_does_not_replan_or_mutate_payloads(self):
+        from dataclasses import replace
+        bundle = self.c.prepare(capture(self.source))
+        before = deepcopy(bundle)
+        parents = self.parents(bundle)
+        parent = parents[(0, 0)]
+        # A persisted edit changes the fine base; coarse relief is not rebuilt instead.
+        changed = parent.model_copy(update={"cells": {xy: cell.model_copy(update={"surface_z": 9})
+                                                      for xy, cell in parent.cells.items()}})
+        with patch.object(self.c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
+                "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
+                side_effect=AssertionError("legacy view")):
+            state = self.terrain.build_tile_surface_state(self.source, [], bundle, 0, 0, parent_light=changed)
+        self.assertTrue(all(8 <= z <= 10 for z in state.heightmap.surface_z.values()))
+        self.assertEqual(bundle, before)
+        with self.assertRaisesRegex(ValueError, "another world"):
+            self.terrain.build_tile_surface_state(replace(self.source, world_uid="foreign"), [], bundle,
+                                                  0, 0, parent_light=parent)
+
+    def test_landcover_facts_use_typed_terrain_base_final_hydro_and_local_anchors(self):
+        from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
+        from app.application.worldData.regions.factConsumers import collect_facts
+        from app.application.worldData.regions.factConsumers.context import FactConsumerContext
+        from app.application.worldData.generators.climate.registry import profile_for
+        bundle = self.c.prepare(capture(self.source))
+        legacy = to_legacy_context(bundle)
+        profiles = {str(a.system_climate_zone): profile_for(self.source, a.system_climate_zone)
+                    for a in legacy.local_field.anchors}
+        ctx = LightGridBakeContext(world=self.source, locations=[], locations_index=LocationsIndexWire(),
+            tiles=[(0, 0)], scale=LightGridScale.from_tile(8, 2), surface_bundle=bundle)
+        inputs = prepare_landcover_inputs(ctx)
+        for coord, _ in bundle.terrain_base.payload.surface_z:
+            expected = collect_facts(FactConsumerContext(legacy, ((coord.gx, coord.gy),), profiles))
+            self.assertEqual(inputs.facts_at((coord.gx * 8, coord.gy * 8)), expected)
+
+    def test_hydro_full_sampled_overrides_clamp_and_hard_corridor(self):
+        from app.application.worldData.generators.terrain.passes.parentLightUpsample import upsample_from_parent_light
+        from app.application.worldData.generators.hydrology.shore.parentLightHydroCorridor import merge_hydro_hard_corridor
+        from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+        self.source.hydrology = {"enabled": True,
+            "default_rivers": {"autoresolve": False}, "default_lakes": {"autoresolve": False, "min_water_cells": 1},
+            "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+            "declared_basins": [{"location_uid": "receiver", "kind": "lake", "floor_z": -10,
+                "footprint": {"kind": "bbox", "x_min": 16, "x_max": 23, "y_min": 8, "y_max": 15}}],
+            "declared_rivers": [{"location_uid": "river", "declare_mode": "segments", "segments": [
+                {"from": {"x": 0, "y": 8}, "to": {"x": 23, "y": 8},
+                 "connection_type": "river", "width_cells": 2}]}]}
+        bundle = self.c.prepare(capture(self.source))
+        hydro = bundle.hydrology.payload
+        self.assertTrue(hydro.fine_z_overrides, "must cover sampled surface, not just river beds")
+        self.assertTrue(hydro.sparse_fine_hydro)
+        parents = self.parents(bundle)
+        policy = ParentLightRefinePolicy(detail_noise_amplitude=0)
+        overrides = dict(hydro.fine_z_overrides)
+        for tile, parent in parents.items():
+            state = self.terrain.build_tile_surface_state(self.source, [], bundle, *tile,
+                parent_light=parent, refine_policy=policy)
+            base = upsample_from_parent_light(parent, self.source, policy=policy)
+            for xy, z in state.heightmap.surface_z.items():
+                target = overrides.get(xy, base[xy])
+                self.assertEqual(z, max(base[xy] - policy.z_band, min(base[xy] + policy.z_band, target)))
+            self.assertEqual(state.hydrology or {}, merge_hydro_hard_corridor(parent, dict(hydro.sparse_fine_hydro)))

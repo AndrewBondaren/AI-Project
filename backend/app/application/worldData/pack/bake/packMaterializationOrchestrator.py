@@ -244,7 +244,7 @@ class PackMaterializationOrchestrator:
         drain = self._defaults.background_drain_per_request
         if self._entry.has_job_repo and drain > 0:
             await self._entry.drain_persisted(
-                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                world_uid, world, locations, writer, mat_ctx, surface_bundle,
                 max_jobs=drain,
             )
 
@@ -252,7 +252,7 @@ class PackMaterializationOrchestrator:
         climate_coarse_samples = 0
         climate_fine_tiles = 0
         climate_result, climate_coarse_samples = await self._climate.bake_coarse(
-            world, surface_ctx, writer, mat_ctx, locations=locations,
+            world, surface_bundle, writer, mat_ctx, locations=locations,
         )
 
         locations_index = build_locations_index(locations, world)
@@ -278,7 +278,7 @@ class PackMaterializationOrchestrator:
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
 
         climate_fine_tiles = await self._climate.bake_fine_for_l0_policy(
-            world, surface_ctx, writer, mat_ctx, tiles, locations,
+            world, surface_bundle, writer, mat_ctx, tiles, locations,
             scope=scope,
             anchor_x=anchor_x,
             anchor_y=anchor_y,

@@ -20,9 +20,7 @@ from app.application.jsonValidation import terrain, terrain_masks, terrain_syste
 from app.application.worldData.generators.terrain.landcover.materializer import (
     LandcoverMaterializer,
 )
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.masks.regionPrecedence import (
     RegionCandidate,
     compare_region_candidates,
@@ -70,7 +68,7 @@ def _hydro_preserved(coord: Coord, l0_hydro: dict[Coord, MapCellHydrology]) -> b
 def paint_regions_fine(
     world: World,
     locations: list[NamedLocation],
-    surface: SurfaceTerrainContext | None,
+    bundle: SurfacePlanBundle,
     parent_light: ParentLightTile,
     *,
     fine_terrain: dict[Coord, str],
@@ -93,7 +91,7 @@ def paint_regions_fine(
         locations_index=LocationsIndexWire(),
         tiles=[(parent_light.gx, parent_light.gy)],
         scale=scale,
-        surface_planning=surface,
+        surface_bundle=bundle,
         region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
     )
     materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))

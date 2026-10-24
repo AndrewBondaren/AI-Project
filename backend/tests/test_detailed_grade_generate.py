@@ -78,9 +78,8 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         w.terrain_scalars = None
         w.closed_planet_grid = False
         w.magma_band_thickness = None
-        ctx = MagicMock()
-        ctx.fine_z_overrides = {}
-        ctx.sparse_fine_hydro = {}
+        from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
+        ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
         )
@@ -1419,7 +1418,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1477,7 +1476,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1533,7 +1532,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1588,7 +1587,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,

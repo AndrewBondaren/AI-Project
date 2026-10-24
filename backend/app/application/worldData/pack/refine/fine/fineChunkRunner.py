@@ -11,9 +11,7 @@ from dataclasses import replace
 from functools import partial
 
 from app.application.worldData.materialize.chunkComputePool import ChunkComputePool
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import log_pack_l2_formation_done
@@ -49,7 +47,7 @@ class FineChunkRunner:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         rects: list[ColumnRect],
@@ -72,7 +70,7 @@ class FineChunkRunner:
             locations,
             writer,
             mat_ctx,
-            surface_ctx,
+            surface_bundle,
             tile_gx,
             tile_gy,
             rects,

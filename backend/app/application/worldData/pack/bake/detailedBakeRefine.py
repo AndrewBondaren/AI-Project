@@ -11,9 +11,7 @@ import time
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.coordinates import map_cell_fine_span
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
@@ -53,7 +51,7 @@ async def refine_detailed_tiles(
     locations: list[NamedLocation],
     writer: WorldPackWriter,
     mat_ctx: MaterializationContext,
-    surface_ctx: SurfaceTerrainContext,
+    surface_bundle: SurfacePlanBundle,
     plan: DetailedScopePlan,
     *,
     phase: str = "detailed",
@@ -76,7 +74,7 @@ async def refine_detailed_tiles(
         if not rects:
             continue
         refined = await runner.refine_rects(
-            world, locations, writer, mat_ctx, surface_ctx,
+            world, locations, writer, mat_ctx, surface_bundle,
             gx, gy, rects, plan.location_volumes,
             refine_role=plan.refine_role,
             phase=phase,

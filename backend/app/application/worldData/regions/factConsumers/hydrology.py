@@ -6,14 +6,20 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 
 def contribute(context: FactConsumerContext) -> HydroFacts | None:
-    if context.surface is None or not context.cells or not context.surface.coarse_hydro:
+    hydro, surface_z = context.hydro, context.surface_z
+    if context.surface is not None:
+        if hydro is None:
+            hydro = context.surface.coarse_hydro
+        if surface_z is None:
+            surface_z = context.surface.coarse_surface_z
+    if not context.cells or not hydro or surface_z is None:
         return None
     cells = set(context.cells)
-    observed = [context.surface.coarse_hydro.get(cell) for cell in cells]
+    observed = [hydro.get(cell) for cell in cells]
     if any(value is not None and not isinstance(value, MapCellHydrology) for value in observed):
         return None
     # The prepared hydro index is sparse: missing entries are dry within its surface extent.
-    if any(cell not in context.surface.coarse_surface_z for cell in cells):
+    if any(cell not in surface_z for cell in cells):
         return None
     water = sum(value is not None and value.role is not None and value.role.is_open_water_role()
                 for value in observed)

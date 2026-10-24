@@ -9,12 +9,9 @@ import unittest
 from math import isqrt
 from unittest.mock import MagicMock
 
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
 from app.application.worldData.generators.terrain.hills.hillRaster import raster_hill
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
@@ -264,16 +261,7 @@ class TestHillsInTilePrep(unittest.TestCase):
             "default_plains": {"hills": {"min_spacing": 8, "radius": 2, "height": 2}},
             "default_forests": {"hills": {"min_spacing": 64, "radius": 2, "height": 2}},
         }
-        ctx = SurfaceTerrainContext(
-            pole_field=MagicMock(),
-            local_field=ClimateAnchorField(()),
-            coarse_hm=MagicMock(),
-            coarse_hydro={},
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={},
-            coarse_surface_z={},
-        )
+        ctx = frozen_surface_fixture(w, parent)
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
             refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0),

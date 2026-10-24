@@ -173,7 +173,7 @@ class RegionRevisionTests(unittest.TestCase):
         world = fine._world(ForestSpec(name="woods", shape=self.old.shape))
         uid = fine.region_uid(world.world_uid, name="woods")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], fine._surface_ctx(), 0, 0, parent_light=fine._parent(),
+            world, [], fine._surface_ctx(world), 0, 0, parent_light=fine._parent(),
             region_state_snapshot={uid: StateSnapshotEntry(fine.FOREST, True)})
         self.assertFalse(state.surface_region_uid)
         self.assertEqual(set(state.surface_terrain.values()), {fine.PLAINS})
@@ -183,7 +183,7 @@ class RegionRevisionTests(unittest.TestCase):
         world = fine._world(spec)
         uid = fine.region_uid(world.world_uid, name="woods")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], fine._surface_ctx(), 0, 0, parent_light=fine._parent(),
+            world, [], fine._surface_ctx(world), 0, 0, parent_light=fine._parent(),
             region_state_snapshot={uid: StateSnapshotEntry(fine.PLAINS, False, "old-revision")})
         self.assertEqual(state.surface_region_uid, {(x, y): uid for x in (4, 5) for y in (4, 5)})
         self.assertEqual(set(state.surface_terrain.values()), {fine.PLAINS})
@@ -211,13 +211,13 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
         owner = PackMaterializationOrchestrator(terrain, world_map=world_map,
             entry=entry, climate_bake=climate, tile_planner=planner, region_state_repo=repo, planning=MagicMock(), capture=MagicMock())
         with patch("app.application.worldData.pack.bake.packMaterializationOrchestrator.prepare_captured_context",
-                   return_value=fine._surface_ctx()), self.assertRaises(ComputeBoundary):
+                   return_value=fine._surface_ctx(world)), self.assertRaises(ComputeBoundary):
             await owner.materialize_light_pack(world.world_uid, world, [], writer, mat_ctx, wait=RequestPlanWait.unbounded())
         self.assertEqual(world_map.bake_tiles.call_args.kwargs["region_state_snapshot"]["r"].current_type, "plains")
         runner = FineChunkRunner(terrain, region_state_repo=repo)
         with patch("app.application.worldData.pack.refine.fine.fineChunkRunner.prepare_fine_tile",
                    side_effect=ComputeBoundary) as prep, self.assertRaises(ComputeBoundary):
-            await runner.refine_rects(world, [], writer, mat_ctx, fine._surface_ctx(),
+            await runner.refine_rects(world, [], writer, mat_ctx, fine._surface_ctx(world),
                                      0, 0, [MagicMock()], [])
         self.assertEqual(prep.call_args.kwargs["region_state_snapshot"]["r"].spec_fingerprint, "old")
         self.assertEqual(repo.get_by_world.await_count, 2)

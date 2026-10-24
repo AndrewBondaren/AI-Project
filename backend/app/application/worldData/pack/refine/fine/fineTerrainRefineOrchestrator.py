@@ -33,9 +33,7 @@ from app.application.worldData.pack.refine.pathCorridorSelect import (
     select_path_corridor_rects,
 )
 from app.application.worldData.pack.refine.pathHeading import PathHeading
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
@@ -81,7 +79,7 @@ class FineTerrainRefineOrchestrator:
         anchor_y: int,
         mat_ctx: MaterializationContext,
         *,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         xy_radius: int,
@@ -107,7 +105,7 @@ class FineTerrainRefineOrchestrator:
         )
         result = await _run_refine_phase(
             self._runner, self._relief_grade_repo,
-            world, locations, writer, mat_ctx, surface_ctx,
+            world, locations, writer, mat_ctx, surface_bundle,
             tile_gx, tile_gy, scene_rects, loc_volumes,
             role="scene",
             phase="scene",
@@ -117,13 +115,13 @@ class FineTerrainRefineOrchestrator:
 
     async def refine_rect(
         self, world: World, locations: list[NamedLocation], writer: WorldPackWriter,
-        mat_ctx: MaterializationContext, surface_ctx: SurfaceTerrainContext,
+        mat_ctx: MaterializationContext, surface_bundle: SurfacePlanBundle,
         tile_gx: int, tile_gy: int, rect: ColumnRect,
         location_volumes: list[TerritoryVolume] | None = None, *,
         refine_role: ChunkRefineRole = "background", stages: GradePipelineStages | None = None,
     ) -> FineRefineResult:
         """Standalone single-rect operation; nested queued work does not publish."""
-        result = await self._refine_rect(world, locations, writer, mat_ctx, surface_ctx,
+        result = await self._refine_rect(world, locations, writer, mat_ctx, surface_bundle,
             tile_gx, tile_gy, rect, location_volumes, refine_role=refine_role, stages=stages)
         writer.save_manifest()
         return result
@@ -134,7 +132,7 @@ class FineTerrainRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         rect: ColumnRect,
@@ -149,7 +147,7 @@ class FineTerrainRefineOrchestrator:
         resolved = stages or GradePipelineStages.off()
         templates = await self._relief_templates(world) if resolved.mill else None
         result = await self._runner.refine_rects(
-            world, locations, writer, mat_ctx, surface_ctx,
+            world, locations, writer, mat_ctx, surface_bundle,
             tile_gx, tile_gy, [rect], loc_volumes,
             refine_role=refine_role,
             phase=refine_role,
@@ -222,7 +220,7 @@ class FineTerrainRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         cx: int,
@@ -232,7 +230,7 @@ class FineTerrainRefineOrchestrator:
     ) -> FineRefineResult:
         rect = fine_chunk_rect(world, tile_gx, tile_gy, cx, cy)
         return await self._refine_rect(
-            world, locations, writer, mat_ctx, surface_ctx,
+            world, locations, writer, mat_ctx, surface_bundle,
             tile_gx, tile_gy, rect,
             refine_role="background",
             stages=stages,
@@ -246,7 +244,7 @@ class FineTerrainRefineOrchestrator:
         anchor_x: int,
         anchor_y: int,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         tile_gx: int,
         tile_gy: int,
         *,
@@ -275,7 +273,7 @@ class FineTerrainRefineOrchestrator:
         )
         result = await _run_refine_phase(
             self._runner, self._relief_grade_repo,
-            world, locations, writer, mat_ctx, surface_ctx,
+            world, locations, writer, mat_ctx, surface_bundle,
             tile_gx, tile_gy, corridor, loc_volumes,
             role="path",
             phase="path",
@@ -328,7 +326,7 @@ async def _run_refine_phase(
     locations: list[NamedLocation],
     writer: WorldPackWriter,
     mat_ctx: MaterializationContext,
-    surface_ctx: SurfaceTerrainContext,
+    surface_bundle: SurfacePlanBundle,
     tile_gx: int,
     tile_gy: int,
     rects: list[ColumnRect],
@@ -340,7 +338,7 @@ async def _run_refine_phase(
 ) -> FineRefineResult:
     """One refine pass + grade persist + phase-done log (scene/path share it)."""
     result = await runner.refine_rects(
-        world, locations, writer, mat_ctx, surface_ctx,
+        world, locations, writer, mat_ctx, surface_bundle,
         tile_gx, tile_gy, rects, location_volumes,
         refine_role=role,
         phase=phase,

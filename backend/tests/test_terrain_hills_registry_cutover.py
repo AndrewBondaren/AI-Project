@@ -26,15 +26,10 @@ from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.ids.regionIdentity import region_uid
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import SurfaceTerrainContext
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
 from tests.test_relief_grade_system_t3c import _open_template
 
 
-def _surface_ctx():
-    return SurfaceTerrainContext(
-        pole_field=MagicMock(), local_field=ClimateAnchorField(()), coarse_hm=MagicMock(),
-        coarse_hydro={}, sparse_fine_hydro={}, fine_z_overrides={},
-        coarse_relief_z={}, coarse_surface_z={})
 
 
 def _steppe(**updates):
@@ -112,7 +107,7 @@ class RegistryCutoverTests(unittest.TestCase):
         # The caller's state-reader seam remains a stub until 9a; exercise its typed snapshot.
         with patch.object(finePaint, "prepare_landcover_inputs", side_effect=with_state):
             state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-                world, [], _surface_ctx(), 0, 0, parent_light=parent,
+                world, [], frozen_surface_fixture(world, parent), 0, 0, parent_light=parent,
                 refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0))
         self.assertEqual(set(state.surface_terrain.values()), {"steppe"})
         self.assertEqual(set(state.surface_region_uid.values()), {uid})

@@ -47,6 +47,17 @@
     "../../../app/application/worldData/pack/bake/lightGrid/bakeContext.py",
     "../../../app/application/worldData/pack/bake/lightGrid/paintTerrain.py",
     "../../../app/application/worldData/pack/bake/worldMapBakeOrchestrator.py",
-    "../../../app/application/worldData/pack/bake/packMaterializationOrchestrator.py"
+    "../../../app/application/worldData/pack/bake/packMaterializationOrchestrator.py",
+    "../../../app/application/worldData/materialize/terrainBatchOrchestrator.py",
+    "../../../app/application/worldData/materialize/worldSurfaceMaterializationOrchestrator.py",
+    "../../../app/application/worldData/pack/bake/packDetailedBakeOrchestrator.py",
+    "../../../app/application/worldData/pack/bake/detailedBakeRefine.py",
+    "../../../app/application/worldData/pack/refine/fine",
+    "../../../app/application/worldData/pack/refine/chunks/chunkRefineWorker.py",
+    "../../../app/application/worldData/pack/refine/entry/entryRefineOrchestrator.py",
+    "../../../app/application/worldData/pack/climate/climatePackBakeOrchestrator.py",
+    "../../../app/application/worldData/generators/terrain/landcover/finePaint.py",
+    "../../../app/application/worldData/regions/factConsumers",
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/landcoverInputs.py"
   ]
 }

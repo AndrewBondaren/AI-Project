@@ -34,13 +34,9 @@ def _world(**kwargs) -> SimpleNamespace:
 
 def _surface_ctx(*, y_max: int = 7) -> MagicMock:
     bbox = GridBBox(x_min=0, x_max=1, y_min=0, y_max=y_max)
-    ctx = MagicMock()
-    ctx.coarse_hm.bbox = bbox
-    ctx.pole_field = ClimatePoleField(poles=(), bbox=bbox)
-    ctx.local_field = ClimateAnchorField(())
-    ctx.coarse_surface_z = {}
-    ctx.fine_z_overrides = {}
-    return ctx
+    from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
+    return frozen_surface_fixture(_world(), bbox=bbox)
+
 
 
 def _dummy_sample(*_args, **_kwargs) -> ClimateSampleWire:

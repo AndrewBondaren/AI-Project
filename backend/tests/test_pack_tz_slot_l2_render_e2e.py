@@ -133,7 +133,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=bbox,

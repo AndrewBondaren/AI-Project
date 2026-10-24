@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from app.ids import runtime_uid
 from app.application.worldData.materialize.materializationContext import MaterializationContext
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
@@ -62,14 +60,14 @@ class ChunkRefineWorker:
     async def drain_climate_fine(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext | None,
+        surface_bundle: SurfacePlanBundle | None,
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
         *,
         max_tiles: int = 0,
     ) -> int:
         """Bake pending fine climate tiles. max_tiles<=0 means all pending."""
-        if self._climate is None or self._climate_fine is None or surface_ctx is None:
+        if self._climate is None or self._climate_fine is None or surface_bundle is None:
             return 0
         baked = 0
         while True:
@@ -80,7 +78,7 @@ class ChunkRefineWorker:
                 break
             gx, gy = nxt
             if await self._climate.bake_fine_tile_with_parent(
-                world, surface_ctx, writer, mat_ctx, gx, gy, require_parent=True,
+                world, surface_bundle, writer, mat_ctx, gx, gy, require_parent=True,
             ):
                 baked += 1
         return baked
@@ -92,7 +90,7 @@ class ChunkRefineWorker:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         queue: ChunkRefineQueue,
         *,
         max_jobs: int = 0,
@@ -107,7 +105,7 @@ class ChunkRefineWorker:
                 break
             gx, gy, cx, cy = nxt
             result = await self._fine_terrain.refine_queued_chunk(
-                world, locations, writer, mat_ctx, surface_ctx,
+                world, locations, writer, mat_ctx, surface_bundle,
                 gx, gy, cx, cy,
                 stages=GradePipelineStages.off(),
             )
@@ -121,7 +119,7 @@ class ChunkRefineWorker:
                 chunk_cy=cy,
                 cells=result.persist.succeeded,
             )
-        fine_tiles = await self.drain_climate_fine(world, surface_ctx, writer, mat_ctx)
+        fine_tiles = await self.drain_climate_fine(world, surface_bundle, writer, mat_ctx)
         log_pack_drain_queue_done(world_uid, processed=processed, started_at=drain_t0)
         return processed, fine_tiles
 
@@ -132,12 +130,12 @@ class ChunkRefineWorker:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         *,
         max_jobs: int = 1,
     ) -> int:
         if self._jobs is None or max_jobs <= 0:
-            fine = await self.drain_climate_fine(world, surface_ctx, writer, mat_ctx)
+            fine = await self.drain_climate_fine(world, surface_bundle, writer, mat_ctx)
             return fine
         processed = 0
         while processed < max_jobs:
@@ -145,7 +143,7 @@ class ChunkRefineWorker:
             if job is None:
                 break
             result = await self._fine_terrain.refine_queued_chunk(
-                world, locations, writer, mat_ctx, surface_ctx,
+                world, locations, writer, mat_ctx, surface_bundle,
                 job.gx, job.gy, job.cx, job.cy,
                 stages=GradePipelineStages.off(),
             )
@@ -161,5 +159,5 @@ class ChunkRefineWorker:
                 cells=result.persist.succeeded,
                 job=job.job_uid,
             )
-        processed += await self.drain_climate_fine(world, surface_ctx, writer, mat_ctx)
+        processed += await self.drain_climate_fine(world, surface_bundle, writer, mat_ctx)
         return processed

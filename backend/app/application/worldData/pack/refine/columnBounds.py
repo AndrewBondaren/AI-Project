@@ -7,10 +7,17 @@ from typing import Protocol
 
 
 class ColumnBounds(Protocol):
-    x_min: int
-    x_max: int
-    y_min: int
-    y_max: int
+    @property
+    def x_min(self) -> int: ...
+
+    @property
+    def x_max(self) -> int: ...
+
+    @property
+    def y_min(self) -> int: ...
+
+    @property
+    def y_max(self) -> int: ...
 
 
 @dataclass(frozen=True, slots=True)

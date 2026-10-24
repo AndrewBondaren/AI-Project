@@ -12,9 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
 from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.pack.read.mapCellToFineTerrainWire import (
     cells_to_fine_terrain_chunk,
@@ -63,17 +61,8 @@ def _world(*specs) -> SimpleNamespace:
     return world
 
 
-def _surface_ctx() -> SurfaceTerrainContext:
-    return SurfaceTerrainContext(
-        pole_field=MagicMock(),
-        local_field=ClimateAnchorField(()),
-        coarse_hm=MagicMock(),
-        coarse_hydro={},
-        sparse_fine_hydro={},
-        fine_z_overrides={},
-        coarse_relief_z={},
-        coarse_surface_z={},
-    )
+def _surface_ctx(source):
+    return frozen_surface_fixture(source, _parent())
 
 
 def _parent() -> ParentLightTile:
@@ -105,7 +94,7 @@ class FineRegionPaintTests(unittest.TestCase):
         self.world = _world(self.spec)
         self.uid = region_uid(self.world.world_uid, name="woods")
         self.state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            self.world, [], _surface_ctx(), 0, 0, parent_light=_parent(),
+            self.world, [], _surface_ctx(self.world), 0, 0, parent_light=_parent(),
         )
 
     def test_fine_edge_cuts_inside_light_cell(self) -> None:
@@ -157,7 +146,7 @@ class FineRegionPaintTests(unittest.TestCase):
         world.terrain_masks = WorldTerrainMasks(default_landcover=LandcoverRegionsCategoryPolicy.canonical_defaults().model_copy(
             update={"enabled": False})).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], _surface_ctx(), 0, 0, parent_light=_parent(),
+            world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
         )
         assert state.surface_terrain is not None
         self.assertEqual(state.surface_terrain[(0, 6)], FOREST)  # pure upsample
@@ -168,7 +157,7 @@ class FineRegionPaintTests(unittest.TestCase):
         must be restored to the zone fallback, not keep the stale terrain."""
         world = _world()  # enabled policy, no declared regions, no autoresolve
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], _surface_ctx(), 0, 0, parent_light=_parent(),
+            world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
         )
         terrain = state.surface_terrain
         assert terrain is not None
@@ -183,7 +172,7 @@ class FineRegionPaintTests(unittest.TestCase):
             declared_regions=[self.spec],
         ).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], _surface_ctx(), 0, 0, parent_light=_parent())
+            world, [], _surface_ctx(world), 0, 0, parent_light=_parent())
         self.assertIn(self.uid, state.surface_region_uid.values())
 
 

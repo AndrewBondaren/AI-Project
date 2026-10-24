@@ -10,9 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
@@ -94,7 +92,7 @@ class PackDetailedBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
         with generation_world_log(world.world_uid, mode="detailed"):
@@ -105,7 +103,7 @@ class PackDetailedBakeOrchestrator:
                 grade_paint=request.grade_paint,
             )
             return await self._bake_in_log_scope(
-                world, locations, writer, mat_ctx, surface_ctx, request,
+                world, locations, writer, mat_ctx, surface_bundle, request,
             )
 
     async def _bake_in_log_scope(
@@ -114,7 +112,7 @@ class PackDetailedBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
         relief_templates: dict[str, ReliefTemplate] = {}
@@ -128,11 +126,11 @@ class PackDetailedBakeOrchestrator:
             )
         if request.scope == "location":
             return await self._bake_location_scope(
-                world, locations, writer, mat_ctx, surface_ctx, request,
+                world, locations, writer, mat_ctx, surface_bundle, request,
                 relief_templates=relief_templates,
             )
         return await self._bake_wilderness_scope(
-            world, locations, writer, mat_ctx, surface_ctx, request,
+            world, locations, writer, mat_ctx, surface_bundle, request,
             relief_templates=relief_templates,
         )
 
@@ -142,7 +140,7 @@ class PackDetailedBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
         *,
         relief_templates: dict[str, ReliefTemplate],
@@ -151,7 +149,7 @@ class PackDetailedBakeOrchestrator:
         if plan is None:
             return self._skip_location_result(world, request)
         return await self._run(
-            world, locations, writer, mat_ctx, surface_ctx, request, plan,
+            world, locations, writer, mat_ctx, surface_bundle, request, plan,
             relief_templates=relief_templates,
         )
 
@@ -161,7 +159,7 @@ class PackDetailedBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
         *,
         relief_templates: dict[str, ReliefTemplate],
@@ -169,7 +167,7 @@ class PackDetailedBakeOrchestrator:
         plan = resolve_detailed_scope(world, locations, writer, request)
         assert plan is not None
         return await self._run(
-            world, locations, writer, mat_ctx, surface_ctx, request, plan,
+            world, locations, writer, mat_ctx, surface_bundle, request, plan,
             relief_templates=relief_templates,
         )
 
@@ -209,7 +207,7 @@ class PackDetailedBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
         plan: DetailedScopePlan,
         *,
@@ -217,7 +215,7 @@ class PackDetailedBakeOrchestrator:
     ) -> PackDetailedBakeResult:
         l2_t0 = time.perf_counter()
         aggregate = await self._refine_tiles(
-            world, locations, writer, mat_ctx, surface_ctx, plan,
+            world, locations, writer, mat_ctx, surface_bundle, plan,
             relief_templates_by_uid=relief_templates,
             stages=request.stages,
         )
@@ -227,7 +225,7 @@ class PackDetailedBakeOrchestrator:
         if plan.location_uid is not None and self._defaults.detailed_include_climate_fine:
             for gx, gy in plan.tiles:
                 if await self._climate.bake_fine_tile_with_parent(
-                    world, surface_ctx, writer, mat_ctx, gx, gy,
+                    world, surface_bundle, writer, mat_ctx, gx, gy,
                     l2_surface_z=aggregate.fine_surface_z or None,
                     locations=locations,
                     require_parent=True,
@@ -270,7 +268,7 @@ class PackDetailedBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         plan: DetailedScopePlan,
         *,
         phase: str = "detailed",
@@ -279,7 +277,7 @@ class PackDetailedBakeOrchestrator:
     ) -> DetailedRefineAggregate:
         return await refine_detailed_tiles(
             self._runner,
-            world, locations, writer, mat_ctx, surface_ctx, plan,
+            world, locations, writer, mat_ctx, surface_bundle, plan,
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages,

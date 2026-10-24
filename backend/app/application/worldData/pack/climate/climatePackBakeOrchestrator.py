@@ -13,9 +13,9 @@ from app.application.worldData.generators.coordinates import (
     grid_tile_origin_y,
     map_cell_fine_span,
 )
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.climate.climateCoarseBake import (
@@ -128,7 +128,7 @@ class ClimatePackBakeOrchestrator:
     async def bake_coarse(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
         *,
@@ -141,7 +141,11 @@ class ClimatePackBakeOrchestrator:
             if locations is not None
             else None
         )
-        bbox = surface_ctx.coarse_hm.bbox
+        bbox = surface_bundle.terrain_base.payload.bbox
+        pole_field = ClimatePoleField(surface_bundle.climate_base.payload.poles,
+                                     surface_bundle.climate_base.payload.bbox)
+        local_field = ClimateAnchorField(surface_bundle.climate_local.payload.anchors)
+        coarse_z: dict[tuple[int, int], int] = {(cell.gx, cell.gy): z for cell, z in surface_bundle.hydrology.payload.coarse_surface_z}
         workers = resolve_climate_workers(mat_ctx, world)
         width = bbox.x_max - bbox.x_min + 1
         samples = await _map_climate_row_batches(
@@ -149,11 +153,11 @@ class ClimatePackBakeOrchestrator:
             coarse_gy_rows(bbox),
             lambda gys: sample_climate_coarse_gy_rows(
                 world,
-                surface_ctx.pole_field,
+                pole_field,
                 bbox,
                 gys,
-                local_field=surface_ctx.local_field,
-                coarse_surface_z=surface_ctx.coarse_surface_z,
+                local_field=local_field,
+                coarse_surface_z=coarse_z,
                 uid_map=uid_map,
             ),
             world_uid=world.world_uid,
@@ -162,10 +166,10 @@ class ClimatePackBakeOrchestrator:
         )
         coarse = build_climate_coarse_wire(
             world,
-            surface_ctx.pole_field,
+            pole_field,
             bbox,
-            local_field=surface_ctx.local_field,
-            coarse_surface_z=surface_ctx.coarse_surface_z,
+            local_field=local_field,
+            coarse_surface_z=coarse_z,
             uid_map=uid_map,
             samples=samples,
         )
@@ -183,7 +187,7 @@ class ClimatePackBakeOrchestrator:
     async def bake_fine_tile(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
         tile_gx: int,
@@ -218,21 +222,26 @@ class ClimatePackBakeOrchestrator:
             if l2_surface_z is not None
             else None
         )
+        pole_field = ClimatePoleField(surface_bundle.climate_base.payload.poles,
+                                     surface_bundle.climate_base.payload.bbox)
+        local_field = ClimateAnchorField(surface_bundle.climate_local.payload.anchors)
+        coarse_z: dict[tuple[int, int], int] = {(cell.gx, cell.gy): z for cell, z in surface_bundle.hydrology.payload.coarse_surface_z}
+        fine_z: dict[tuple[int, int], int] = dict(surface_bundle.hydrology.payload.fine_z_overrides)
         workers = resolve_climate_workers(mat_ctx, world)
         samples = await _map_climate_row_batches(
             workers,
             list(range(side)),
             lambda tys: sample_climate_tile_ty_rows(
                 world,
-                surface_ctx.pole_field,
+                pole_field,
                 origin_x=origin_x,
                 origin_y=origin_y,
                 step=step,
                 side=side,
                 ty_rows=tys,
-                local_field=surface_ctx.local_field,
-                coarse_surface_z=surface_ctx.coarse_surface_z,
-                fine_z_overrides=surface_ctx.fine_z_overrides,
+                local_field=local_field,
+                coarse_surface_z=coarse_z,
+                fine_z_overrides=fine_z,
                 parent_light=parent_light,
                 l2_surface_z=l2_lookup,
                 uid_map=uid_map,
@@ -245,13 +254,13 @@ class ClimatePackBakeOrchestrator:
         )
         tile_field = build_climate_tile_wire(
             world,
-            surface_ctx.pole_field,
+            pole_field,
             tile_gx,
             tile_gy,
-            local_field=surface_ctx.local_field,
+            local_field=local_field,
             cells_per_side=side,
-            coarse_surface_z=surface_ctx.coarse_surface_z,
-            fine_z_overrides=surface_ctx.fine_z_overrides,
+            coarse_surface_z=coarse_z,
+            fine_z_overrides=fine_z,
             parent_light=parent_light,
             uid_map=uid_map,
             samples=samples,
@@ -270,7 +279,7 @@ class ClimatePackBakeOrchestrator:
     async def bake_fine_tile_with_parent(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
         tile_gx: int,
@@ -299,7 +308,7 @@ class ClimatePackBakeOrchestrator:
             )
             return False
         await self.bake_fine_tile(
-            world, surface_ctx, writer, mat_ctx, tile_gx, tile_gy,
+            world, surface_bundle, writer, mat_ctx, tile_gx, tile_gy,
             parent_light=parent,
             l2_surface_z=l2_surface_z,
             locations=locations,
@@ -309,7 +318,7 @@ class ClimatePackBakeOrchestrator:
     async def bake_fine_for_l0_policy(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
         tiles: list[tuple[int, int]],
@@ -331,7 +340,7 @@ class ClimatePackBakeOrchestrator:
         baked = 0
         for gx, gy in fine_tiles:
             if await self.bake_fine_tile_with_parent(
-                world, surface_ctx, writer, mat_ctx, gx, gy,
+                world, surface_bundle, writer, mat_ctx, gx, gy,
                 locations=locations,
                 require_parent=True,
             ):

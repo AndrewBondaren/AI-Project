@@ -6,9 +6,7 @@ from dataclasses import dataclass
 
 from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.materialize.materializationContext import MaterializationContext
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_drain_persisted_done,
     log_pack_drain_persisted_start,
@@ -146,13 +144,13 @@ class EntryRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         *,
         max_jobs: int,
     ) -> int:
         drain_t0 = log_pack_drain_persisted_start(world_uid, max_jobs=max_jobs)
         drained = await self._worker.drain_persisted(
-            world_uid, world, locations, writer, mat_ctx, surface_ctx,
+            world_uid, world, locations, writer, mat_ctx, surface_bundle,
             max_jobs=max_jobs,
         )
         log_pack_drain_persisted_done(world_uid, processed=drained, started_at=drain_t0)
@@ -165,7 +163,7 @@ class EntryRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         *,
         kind: AnchorKind,
         anchor_x: int,
@@ -190,12 +188,12 @@ class EntryRefineOrchestrator:
 
         terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
             world, locations, writer, anchor_x, anchor_y, mat_ctx,
-            surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
+            surface_bundle=surface_bundle, tile_gx=tile_gx, tile_gy=tile_gy,
             xy_radius=policy.scene_xy_radius,
         )
 
         path_chunks = await self._fine_terrain.refine_path_corridor(
-            world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_ctx,
+            world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_bundle,
             tile_gx, tile_gy,
             heading=resolved_heading,
             depth_tiles=app_settings.path_ahead_depth,
@@ -219,7 +217,7 @@ class EntryRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx: SurfaceTerrainContext,
+        surface_bundle: SurfacePlanBundle,
         *,
         anchor_x: int,
         anchor_y: int,
@@ -276,13 +274,13 @@ class EntryRefineOrchestrator:
         climate_fine_tiles = 0
         if self._defaults.background_drain_per_request > 0:
             _drained_chunks, fine_tiles = await self._worker.drain_queue(
-                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                world_uid, world, locations, writer, mat_ctx, surface_bundle,
                 self._queue, max_jobs=self._defaults.background_drain_per_request,
             )
             climate_fine_tiles += fine_tiles
         else:
             climate_fine_tiles += await self._worker.drain_climate_fine(
-                world, surface_ctx, writer, mat_ctx,
+                world, surface_bundle, writer, mat_ctx,
             )
 
         return ScheduleChunkRefineResult(

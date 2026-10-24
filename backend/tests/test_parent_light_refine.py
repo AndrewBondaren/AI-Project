@@ -19,11 +19,8 @@ from app.application.worldData.generators.terrain.passes.parentLightUpsample imp
     upsample_from_parent_light,
 )
 from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
@@ -179,16 +176,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         w.z_max = 8
         w.terrain_masks = None
         w.terrain_scalars = None
-        ctx = SurfaceTerrainContext(
-            pole_field=MagicMock(),
-            local_field=ClimateAnchorField(()),
-            coarse_hm=MagicMock(),
-            coarse_hydro={},
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={},
-            coarse_surface_z={},
-        )
+        ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
         )
@@ -278,16 +266,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         w.terrain_registry = None
         w.terrain_scalars = None
         w.terrain_masks = None
-        ctx = SurfaceTerrainContext(
-            pole_field=MagicMock(),
-            local_field=ClimateAnchorField(()),
-            coarse_hm=MagicMock(),
-            coarse_hydro={},
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={},
-            coarse_surface_z={},
-        )
+        ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
         )
@@ -336,7 +315,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
                     [],
                     writer,
                     MaterializationContext(free_cores=1),
-                    surface_ctx=MagicMock(),
+                    surface_bundle=MagicMock(),
                     tile_gx=0,
                     tile_gy=0,
                     rects=[ColumnRect(x_min=0, x_max=1, y_min=0, y_max=1)],

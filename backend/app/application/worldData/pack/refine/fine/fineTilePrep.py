@@ -7,9 +7,7 @@ from app.application.worldData.generators.terrain.landcover.types import StateSn
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import fine_bbox_for_tile
 from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
     force_serial_terrain_generate,
@@ -48,7 +46,7 @@ def prepare_fine_tile(
     locations: list[NamedLocation],
     writer: WorldPackWriter,
     mat_ctx: MaterializationContext,
-    surface_ctx: SurfaceTerrainContext,
+    surface_bundle: SurfacePlanBundle,
     tile_gx: int,
     tile_gy: int,
     rects: list[ColumnRect],
@@ -67,7 +65,9 @@ def prepare_fine_tile(
     run_paint = stages.paint
     chunk_size = terrain_chunk_columns(world)
     tile_macro = map_cell_fine_span(world)
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
+    tile_bbox = fine_bbox_for_tile(tile_gx, tile_gy, tile_macro)
+    fine_bbox = ColumnRect(x_min=tile_bbox.x_min, x_max=tile_bbox.x_max,
+                           y_min=tile_bbox.y_min, y_max=tile_bbox.y_max)
     location_pairs = territory_volumes_by_location(world, locations)
     reader = WorldPackReader(writer.paths)
     parent = require_parent_light(
@@ -79,7 +79,7 @@ def prepare_fine_tile(
         tile_macro=tile_macro,
     )
     surface_state = terrain.build_tile_surface_state(
-        world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
+        world, locations, surface_bundle, tile_gx, tile_gy, parent_light=parent,
         region_state_snapshot=region_state_snapshot,
     )
     surface_columns = (fine_bbox.x_max - fine_bbox.x_min + 1) * (
@@ -131,7 +131,7 @@ def prepare_fine_tile(
     return FineTileContext(
         world=world,
         locations=locations,
-        surface_ctx=surface_ctx,
+        surface_bundle=surface_bundle,
         tile_gx=tile_gx,
         tile_gy=tile_gy,
         fine_bbox=fine_bbox,
