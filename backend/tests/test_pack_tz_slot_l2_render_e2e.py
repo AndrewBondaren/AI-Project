@@ -171,6 +171,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
             ),
         )
         pack = persist.finish()
+        writer.save_manifest()  # The test is the operation owner (PC-9).
         services = build_pack_read_services(uid, PatchStoreService(), db_path=db_path)
         payload = PackMapGridRender(services.render).render_wilderness_tile_grid(
             world, 0, 0,

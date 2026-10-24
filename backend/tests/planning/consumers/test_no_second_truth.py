@@ -118,3 +118,26 @@ class BoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class L2BoundaryTests(unittest.TestCase):
+    def test_refine_transits_have_no_legacy_context_or_planning_entry(self):
+        root = APP / "application/worldData"
+        paths = ("pack/bake/packDetailedBakeOrchestrator.py", "pack/bake/detailedBakeRefine.py",
+            "pack/refine/fine/fineChunkRunner.py", "pack/refine/fine/fineTilePrep.py",
+            "pack/refine/fine/fineTileContext.py", "pack/refine/fine/fineChunkCompute.py",
+            "pack/refine/fine/fineTerrainRefineOrchestrator.py", "pack/refine/entry/entryRefineOrchestrator.py",
+            "pack/refine/chunks/chunkRefineWorker.py", "generators/terrain/landcover/finePaint.py",
+            "pack/climate/climatePackBakeOrchestrator.py")
+        for path in paths:
+            text = (root / path).read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                self.assertNotIn("SurfaceTerrainContext", text)
+                self.assertNotIn("to_legacy_context", text)
+                self.assertNotIn("prepare_captured", text)
+                self.assertNotIn("surface_ctx", text)
+                if "fineChunkCompute" not in path:
+                    self.assertIn("SurfacePlanBundle", text)
+        route = (APP / "api/routes/map.py").read_text(encoding="utf-8")
+        self.assertEqual(route.count("= require_surface_plan_bundle("), 3)
+        self.assertNotIn("require_surface_terrain_context", route)

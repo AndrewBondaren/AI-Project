@@ -210,7 +210,7 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
         world_map.bake_tiles.side_effect = ComputeBoundary
         owner = PackMaterializationOrchestrator(terrain, world_map=world_map,
             entry=entry, climate_bake=climate, tile_planner=planner, region_state_repo=repo, planning=MagicMock(), capture=MagicMock())
-        with patch("app.application.worldData.pack.bake.packMaterializationOrchestrator.prepare_captured_context",
+        with patch("app.application.worldData.pack.bake.packMaterializationOrchestrator.prepare_captured_bundle",
                    return_value=fine._surface_ctx(world)), self.assertRaises(ComputeBoundary):
             await owner.materialize_light_pack(world.world_uid, world, [], writer, mat_ctx, wait=RequestPlanWait.unbounded())
         self.assertEqual(world_map.bake_tiles.call_args.kwargs["region_state_snapshot"]["r"].current_type, "plains")
