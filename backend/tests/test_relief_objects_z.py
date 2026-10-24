@@ -170,111 +170,40 @@ class TestPrepareSurfaceOrder(unittest.TestCase):
 
 
 class TestAntiDoubleRise(unittest.TestCase):
-    def test_light_relief_uses_pre14_not_post14(self) -> None:
-        """Relief base is coarse_relief_z; mountain then applies one rise (not 2×)."""
-        from app.application.worldData.generators.climate.climateAnchorField import (
-            ClimateAnchorField,
-        )
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-            SurfaceTerrainContext,
-        )
-        from app.application.worldData.generators.terrain.reliefObjects import (
-            mountain_rise_amount,
-        )
-        from app.application.worldData.pack.bake.lightGrid.contributors.relief import (
-            ReliefContributor,
-        )
-        from app.dataModel.terrainMasks.mountain import MountainKind
-
-        world = _world(z_max=8, z_min=0, fine_cells_per_map_cell=1000)
-        rise = mountain_rise_amount(MountainKind.ROCKY, 8)
-        self.assertEqual(rise, 3)
-
-        pole = MagicMock()
-        pole.sample.return_value = SimpleNamespace(
-            typical_elevation_z=1,
-            system_climate_zone="temperate",
-        )
-        hm = SurfaceHeightmap(
-            world_uid=world.world_uid,
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={(0, 0): 1 + rise},
-        )
-        surface = SurfaceTerrainContext(
-            pole_field=pole,
-            local_field=ClimateAnchorField(()),
-            coarse_hm=hm,
-            coarse_hydro={},
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={(0, 0): 1},
-            coarse_surface_z={(0, 0): 1 + rise},
-        )
-        scale = LightGridScale.from_tile(1000, 4)
-        compose = LightGridCompose(scale=scale)
-        ctx = LightGridBakeContext(
-            world=world,
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            surface_planning=surface,
-            pole_field=pole,
-        )
+    def test_light_base_is_frozen_pre_mountain_and_never_double_rises(self) -> None:
+        from tests.planning.consumers.test_l0_l2 import mountain_source, context
+        from tests.planning.consumers.test_wiring import Composition, capture
+        from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        source = mountain_source()
+        bundle = composition.prepare(capture(source))
+        ctx = context(source, bundle)
+        compose = LightGridCompose(ctx.scale)
         ReliefContributor().apply(compose, ctx)
-        relief_z = compose.get(0, 0, 0, 0).surface_z
-        # Base from pre-1.4 (=1) ± noise amplitude 1 → in [0, 2], not post-1.4.
-        self.assertLessEqual(relief_z, 1 + 1)
-        self.assertNotEqual(relief_z, 1 + rise)
-
-        world.terrain_masks = {
-            "default_mountains": {
-                "autoresolve": True,
-                "threshold": 0.0,
-                "default_radius_m": 800,
-            },
-        }
-        cell = compose.get(0, 0, 0, 0)
-        assert cell is not None
-        cell.climate_zone_id = ClimateZone.TEMPERATE.world_map_wire_id()
-        before = cell.surface_z
+        for ref, z in bundle.relief.payload.light.base_surface_z:
+            self.assertEqual(compose.get(ref.gx, ref.gy, ref.tx, ref.ty).surface_z, z)
         MountainContributor().apply(compose, ctx)
-        after = compose.get(0, 0, 0, 0).surface_z
-        self.assertEqual(compose.get(0, 0, 0, 0).system_terrain, "mountain")
-        self.assertGreaterEqual(after, before)
-        self.assertLessEqual(after, min(8, before + rise))
+        first = [compose.to_wire_tile(*tile) for tile in ctx.tiles]
+        MountainContributor().apply(compose, ctx)
+        self.assertEqual(first, [compose.to_wire_tile(*tile) for tile in ctx.tiles])
 
 
 class TestMountainLightZ(unittest.TestCase):
-    def test_paint_mountain_raises_surface_z(self) -> None:
-        world = _world(z_max=8, z_min=0)
-        world.terrain_masks = {
-            "default_mountains": {
-                "autoresolve": True,
-                "threshold": 0.0,
-                "default_radius_m": 800,
-            },
-        }
-        scale = LightGridScale.from_tile(1000, 4)
-        compose = LightGridCompose(scale=scale)
-        cell = compose.ensure(0, 0, 0, 0)
-        cell.surface_z = 2
-        cell.climate_zone_id = ClimateZone.TEMPERATE.world_map_wire_id()
-        base_z = cell.surface_z
-
-        ctx = LightGridBakeContext(
-            world=world,
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            surface_planning=None,
-            nodes=[],
-            edges=[],
-        )
+    def test_paint_mountain_uses_frozen_absolute_surface_z(self) -> None:
+        from tests.planning.consumers.test_l0_l2 import mountain_source, context
+        from tests.planning.consumers.test_wiring import Composition, capture
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        source = mountain_source()
+        bundle = composition.prepare(capture(source))
+        ctx = context(source, bundle)
+        compose = LightGridCompose(ctx.scale)
         MountainContributor().apply(compose, ctx)
-        self.assertEqual(compose.get(0, 0, 0, 0).system_terrain, "mountain")
-        self.assertGreater(compose.get(0, 0, 0, 0).surface_z, base_z)
+        self.assertTrue(bundle.relief.payload.light.mountain_cells)
+        for effect in bundle.relief.payload.light.mountain_cells:
+            ref = effect.cell
+            self.assertEqual(compose.get(ref.gx, ref.gy, ref.tx, ref.ty).surface_z, effect.surface_z)
 
 
 class TestMutateContract(unittest.TestCase):

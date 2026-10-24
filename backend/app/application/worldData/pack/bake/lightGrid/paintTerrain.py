@@ -8,6 +8,7 @@ from app.application.worldData.masks.terrainMerge import (
 )
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import TerrainMergeEntry
 
 
 def paint_system_terrain(
@@ -15,7 +16,7 @@ def paint_system_terrain(
     light_cells: set[tuple[int, int]],
     system_terrain: str,
     *,
-    registry: WorldTerrainRegistry,
+    registry: WorldTerrainRegistry | tuple[TerrainMergeEntry, ...],
     tile_set: set[tuple[int, int]],
     preserve_hydro: bool = True,
 ) -> int:
@@ -50,7 +51,7 @@ def paint_system_terrain_cell(
     ty: int,
     system_terrain: str,
     *,
-    registry: WorldTerrainRegistry,
+    registry: WorldTerrainRegistry | tuple[TerrainMergeEntry, ...],
     preserve_hydro: bool = True,
 ) -> bool:
     cell = compose.ensure(gx, gy, tx, ty)

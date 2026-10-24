@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
-    LoadedDeclaredHydrology,
-)
+from app.dataModel.hydrology.planning.hydrologyPlan import DeclaredWaterPaint
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
@@ -14,17 +12,11 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
 )
 from app.dataModel.worldPack.wire.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
 
-# Intent corridors without explicit width — HydrologyMaskWire clamp is SoT.
-_INTENT_RIVER_WIDTH = HydrologyMaskWire(
-    role=WorldMapHydrologyRole.RIVER,
-    width=1,
-).width
-
 
 def apply_declared_rivers(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
-    declared: LoadedDeclaredHydrology,
+    declared: DeclaredWaterPaint,
 ) -> dict[str, int]:
     scale = compose.scale
     tile_set = set(ctx.tiles)
@@ -32,14 +24,14 @@ def apply_declared_rivers(
     edges_used = 0
     intents_used = 0
 
-    for edge in declared.river_edges:
+    for edge in declared.segments:
         (x0, y0), (x1, y1) = edge.segment
         light_cells = set(light_polyline_from_fine([(x0, y0), (x1, y1)], scale))
-        radius = max(0, (int(edge.width_cells) + scale.light_span - 1) // scale.light_span - 1)
+        radius = max(0, (int(edge.width_fine) + scale.light_span - 1) // scale.light_span - 1)
         light_cells = dilate(light_cells, radius)
         width = HydrologyMaskWire(
             role=WorldMapHydrologyRole.RIVER,
-            width=int(edge.width_cells),
+            width=int(edge.width_fine),
         ).width
         n, _ = paint_role(
             compose,
@@ -52,39 +44,13 @@ def apply_declared_rivers(
             edges_used += 1
             painted += n
 
-    loc_map = {loc.location_uid: loc for loc in ctx.locations}
-
-    def _anchor_xy(uid: str | None) -> tuple[int, int] | None:
-        if not uid:
-            return None
-        loc = loc_map.get(uid)
-        if loc is None or loc.map_x is None or loc.map_y is None:
-            return None
-        return int(loc.map_x), int(loc.map_y)
-
-    for river in declared.river_intents:
-        anchors: list[tuple[int, int]] = []
-        if river.source is not None and river.source.x is not None and river.source.y is not None:
-            anchors.append((int(river.source.x), int(river.source.y)))
-        for uid in river.route_location_uids:
-            pt = _anchor_xy(uid)
-            if pt is not None:
-                anchors.append(pt)
-        if river.mouth is not None:
-            if river.mouth.x is not None and river.mouth.y is not None:
-                anchors.append((int(river.mouth.x), int(river.mouth.y)))
-            else:
-                pt = _anchor_xy(river.mouth.location_uid)
-                if pt is not None:
-                    anchors.append(pt)
-        if len(anchors) < 2:
-            continue
-        light_cells = set(light_polyline_from_fine(anchors, scale))
+    for river in declared.intents:
+        light_cells = set(light_polyline_from_fine(list(river.path), scale))
         n, _ = paint_role(
             compose,
             light_cells,
             WorldMapHydrologyRole.RIVER,
-            width=_INTENT_RIVER_WIDTH,
+            width=river.width_wire,
             tile_set=tile_set,
         )
         if n:
@@ -92,9 +58,9 @@ def apply_declared_rivers(
             painted += n
 
     return {
-        "edges_in": len(declared.river_edges),
+        "edges_in": len(declared.segments),
         "edges_painted": edges_used,
-        "intents_in": len(declared.river_intents),
+        "intents_in": len(declared.intents),
         "intents_painted": intents_used,
         "cells_painted": painted,
     }

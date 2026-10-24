@@ -19,14 +19,9 @@ from app.application.worldData.generators.terrain.mountains.peakAssembler import
     assemble_peak_from_policy,
 )
 from app.application.worldData.generators.terrain.mountains.ridgePlacement import (
-    iter_ridge_cells_in_meter_rect,
     place_ridge_candidates,
 )
 from app.application.worldData.masks.mergeDeclare import merge_declare_over_auto
-from app.application.worldData.pack.bake.lightGrid.coords import (
-    light_to_macro_local,
-    fine_to_light,
-)
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
 from app.dataModel.terrainMasks.worldTerrainMasks import (
     MountainsCategoryPolicy,
@@ -34,7 +29,6 @@ from app.dataModel.terrainMasks.worldTerrainMasks import (
 )
 
 if TYPE_CHECKING:
-    from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.world import World
 
@@ -120,50 +114,6 @@ def candidates_from_ridge_cells(
         candidates,
         policy,
         seed=seed,
-        reserved=reserved,
-    )
-
-
-def autoresolve_mountain_specs(
-    ctx: LightGridBakeContext,
-    policy: MountainsCategoryPolicy,
-    *,
-    reserved: list[MountainEntry] | None = None,
-) -> list[MountainEntry]:
-    """Placement → MountainPassBuilder → MountainSpec | MountainRangeSpec."""
-    if not policy.autoresolve:
-        return []
-    seed = world_seed(ctx.world)
-    scale = ctx.scale
-    tile_set = set(ctx.tiles)
-    cells: list[tuple[int, int, int, int]] = []
-    for gx, gy in ctx.tiles:
-        x0 = gx * scale.tile_macro
-        y0 = gy * scale.tile_macro
-        x1 = x0 + scale.tile_macro - 1
-        y1 = y0 + scale.tile_macro - 1
-        cells.extend(
-            iter_ridge_cells_in_meter_rect(
-                x0=x0, y0=y0, x1=x1, y1=y1, ridge_cell_m=int(policy.ridge_cell_m),
-            )
-        )
-
-    def _typical(ox: int, oy: int) -> int:
-        lx, ly = fine_to_light(ox, oy, scale)
-        mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
-        return _typical_from_pole(ctx.pole_field, ctx.world, mgx, mgy)
-
-    def _accept(ox: int, oy: int) -> bool:
-        lx, ly = fine_to_light(ox, oy, scale)
-        mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
-        return (mgx, mgy) in tile_set
-
-    return candidates_from_ridge_cells(
-        seed=seed,
-        policy=policy,
-        cells=cells,
-        typical_of=_typical,
-        accept=_accept,
         reserved=reserved,
     )
 

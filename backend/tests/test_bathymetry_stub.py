@@ -26,45 +26,25 @@ from tests.hydrology_fixtures import hydro_world
 
 class TestLightSeaZ(unittest.TestCase):
     def _bake(self, floor_z, *, level=0, role=HydrologyCellRole.COASTAL_SEA, river=False):
-        world = hydro_world(
-            world_uid="world-bath-stub",
-            z_min=-20,
-            z_max=8,
-            fine_cells_per_map_cell=1000,
-            hydrology={"enabled": True},
-        )
-        pole = MagicMock(spec=ClimatePoleField)
-        hm = SurfaceHeightmap(
-            world_uid=world.world_uid,
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={(0, 0): 0},
-        )
-        surface = SurfaceTerrainContext(
-            pole_field=pole,
-            local_field=ClimateAnchorField(()),
-            coarse_hm=hm,
-            coarse_hydro={
-                (0, 0): MapCellHydrology(role=role, z_water_level=level),
-            },
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={(0, 0): 4},
-            coarse_surface_z={} if floor_z is None else {(0, 0): floor_z},
-        )
-        scale = LightGridScale.from_tile(1000, 4)
-        compose = LightGridCompose(scale=scale)
-        # Plains-like relief base on a land cell outside sea paint path.
+        from tests.planning.consumers.test_l0_l2 import context
+        from tests.planning.consumers.test_wiring import Composition, capture, world
+        source = world(z_min=-100, z_max=40,
+            world_map_cells_per_tile=4, hydrology={"enabled": True, "default_water_level": level,
+                "default_lakes": {"autoresolve": False},
+                "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+                "declared_basins": [{"location_uid": "water", "kind": "lake" if role is HydrologyCellRole.LAKE else "ocean",
+                    "floor_z": floor_z if floor_z is not None else -12, "z_water_level": level,
+                    "footprint": {"kind": "bbox", "x_min": 0, "x_max": 3000, "y_min": 0, "y_max": 3000}}]})
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        bundle = composition.prepare(capture(source))
+        ctx = context(source, bundle, [(0, 0)])
+        if floor_z is None:
+            ctx.surface_bundle = None
+        compose = LightGridCompose(ctx.scale)
         compose.ensure(0, 0, 0, 0).surface_z = 4
         if river:
             compose.ensure(0, 0, 0, 0).hydrology_role = WorldMapHydrologyRole.RIVER
-        ctx = LightGridBakeContext(
-            world=world,
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            surface_planning=surface,
-        )
         stats = apply_coarse_open_water(compose, ctx)
         return compose.get(0, 0, 0, 0), stats
 
@@ -80,10 +60,9 @@ class TestLightSeaZ(unittest.TestCase):
         self.assertEqual(lake.surface_z, 20)
         self.assertEqual(lake.hydrology_role, WorldMapHydrologyRole.LAKE)
 
-    def test_missing_snapshot_does_not_invent_floor(self):
-        sea, stats = self._bake(None)
-        self.assertEqual(sea.surface_z, 4)
-        self.assertEqual(stats["z_applied"], 0)
+    def test_missing_snapshot_is_an_explicit_contract_error(self):
+        with self.assertRaisesRegex(ValueError, "frozen surface plan"):
+            self._bake(None)
 
     def test_declared_river_height_survives_coarse_paint(self):
         river, stats = self._bake(-12, river=True)

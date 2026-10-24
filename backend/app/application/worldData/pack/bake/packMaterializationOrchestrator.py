@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_bundle, to_legacy_context
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -223,9 +223,10 @@ class PackMaterializationOrchestrator:
         templates = mountain_template_inputs(relief_templates)
         captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
-        surface_ctx = prepare_captured_context(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
-        if surface_ctx is None:
+        surface_bundle = prepare_captured_bundle(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
+        if surface_bundle is None:
             raise ValueError("surface terrain context unavailable")
+        surface_ctx = to_legacy_context(surface_bundle)
         plan = self._planner.plan(
             world, locations, surface_ctx, scope=scope, max_tiles=max_tiles,
         )
@@ -262,7 +263,7 @@ class PackMaterializationOrchestrator:
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
-            surface_ctx=surface_ctx,
+            surface_ctx=surface_ctx, surface_bundle=surface_bundle,
             locations_index=locations_index,
             nodes=nodes, edges=edges, wait=wait,
             bake_mode=bake_mode,

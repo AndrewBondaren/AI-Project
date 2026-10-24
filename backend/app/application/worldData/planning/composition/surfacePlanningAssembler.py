@@ -98,6 +98,12 @@ def to_legacy_context(bundle: SurfacePlanBundle) -> SurfaceTerrainContext:
 
 def prepare_captured_context(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
                              wait: PlanWaitControl, resolve_ctx: ResolveContext) -> SurfaceTerrainContext | None:
+    bundle = prepare_captured_bundle(view, planning=planning, wait=wait, resolve_ctx=resolve_ctx)
+    return to_legacy_context(bundle) if bundle is not None else None
+
+
+def prepare_captured_bundle(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
+                            wait: PlanWaitControl, resolve_ctx: ResolveContext) -> SurfacePlanBundle | None:
     """One report boundary for frozen plans and their transitional working copies."""
     bundle = planning.prepare(view, wait=wait)
     diagnostics = list(view.capture_diagnostics)
@@ -116,4 +122,4 @@ def prepare_captured_context(view: SurfacePlanningView, *, planning: SurfacePlan
                 item.issue.path, item.issue.code, item.issue.message)
     if resolve_ctx.validate_only and issues:
         raise UnresolvedModelError(list(dict.fromkeys(issues)))
-    return to_legacy_context(bundle) if bundle is not None else None
+    return bundle

@@ -87,32 +87,16 @@ class TestLightBakeCleanup(unittest.TestCase):
             width=1,
             tile_set=tile_set,
         )
-        pole = MagicMock(spec=ClimatePoleField)
-        hm = SurfaceHeightmap(
-            world_uid="w",
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={(0, 0): 0},
-        )
-        surface = SurfaceTerrainContext(
-            pole_field=pole,
-            local_field=ClimateAnchorField(()),
-            coarse_hm=hm,
-            coarse_hydro={
-                (0, 0): MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA),
-            },
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={(0, 0): 0},
-            coarse_surface_z={(0, 0): 0},
-        )
-        ctx = LightGridBakeContext(
-            world=SimpleNamespace(world_uid="w"),
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            surface_planning=surface,
-        )
+        from tests.planning.consumers.test_wiring import Composition, capture, world
+        from tests.planning.consumers.test_l0_l2 import context
+        source = world(world_map_cells_per_tile=4, z_min=-100, hydrology={"enabled": True,
+            "default_lakes": {"autoresolve": False},
+            "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+            "declared_basins": [{"location_uid": "basin", "kind": "ocean", "floor_z": -10,
+                "footprint": {"kind": "bbox", "x_min": 0, "x_max": 3000, "y_min": 0, "y_max": 3000}}]})
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        ctx = context(source, composition.prepare(capture(source)), [(0, 0)])
         apply_coarse_open_water(compose, ctx)
         self.assertEqual(
             compose.ensure(0, 0, 1, 1).hydrology_role,

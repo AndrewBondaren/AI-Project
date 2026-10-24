@@ -190,6 +190,9 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
         f.ctx.surface_planning.sparse_fine_hydro = {}
         f.ctx.surface_planning.fine_z_overrides = {}
         f.ctx.surface_planning.pole_field = None
+        from tests.planning.consumers.test_wiring import planning_kwargs
+        deps = planning_kwargs(self)
+        world.map_settings = {"global_cell_size_m": f.ctx.scale.tile_macro}
         world.fine_cells_per_map_cell = f.ctx.scale.tile_macro
         world.world_map_cells_per_tile = f.ctx.scale.side
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,7 +205,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             def compose(ctx):
                 return compose_light_grid(ctx,contributors=(LandcoverContributor(),))
             with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
-                WorldMapBakeOrchestrator().bake_tiles(world,[],writer,[(0,0)],surface_ctx=f.ctx.surface_planning,wait=RequestPlanWait.unbounded())
+                WorldMapBakeOrchestrator(planning=deps["planning"], capture=deps["capture"]).bake_tiles(world,[],writer,[(0,0)],surface_ctx=f.ctx.surface_planning,wait=RequestPlanWait.unbounded())
             writer.save_manifest()
             uid = region_uid(world.world_uid,name="indexed")
             self.assertIsNotNone(writer.manifest.wilderness_region_entry(uid))
@@ -241,7 +244,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             f.declare()
             world.terrain_masks = f.world.terrain_masks
             with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
-                WorldMapBakeOrchestrator().bake_tile(world,f.ctx.surface_planning,0,0,writer,locations=[],wait=RequestPlanWait.unbounded())
+                WorldMapBakeOrchestrator(planning=deps["planning"], capture=deps["capture"]).bake_tile(world,f.ctx.surface_planning,0,0,writer,locations=[],wait=RequestPlanWait.unbounded())
             self.assertEqual(writer.manifest.wilderness_region_entries,[])
 
 

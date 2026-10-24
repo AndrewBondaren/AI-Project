@@ -1,4 +1,4 @@
-"""Coarse SEA/LAKE fill from surface_planning — Path A areal open water.
+"""Coarse SEA/LAKE fill from the final frozen hydrology plan — Path A areal open water.
 
 Invariant (narrow): do **not** overwrite light cells that already have
 ``hydrology_role == RIVER`` from declared corridors. Global ``WorldMapHydrologyRole.merge``
@@ -24,16 +24,7 @@ def apply_coarse_open_water(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
 ) -> dict[str, int]:
-    planning = ctx.surface_planning
-    if planning is None:
-        return {
-            "skipped_no_planning": 1,
-            "sea_macros": 0,
-            "lake_macros": 0,
-            "cells_painted": 0,
-            "river_preserved": 0,
-            "z_applied": 0,
-        }
+    planning = ctx.require_surface_bundle().hydrology.payload
     scale = compose.scale
     tile_set = set(ctx.tiles)
     sea_macros = 0
@@ -42,10 +33,12 @@ def apply_coarse_open_water(
     preserved = 0
     z_applied = 0
 
-    coarse_z_map = planning.coarse_surface_z
+    coarse_z_map: dict[tuple[int, int], int] = {(ref.gx, ref.gy): z for ref, z in planning.coarse_surface_z}
+    coarse_hydro = {(int(ref.gx), int(ref.gy)): hydro for ref, hydro in planning.coarse_hydro}
+    # Final post-river envelope only.
 
     for gx, gy in ctx.tiles:
-        role = world_map_hydro_role_from_cell(planning.coarse_hydro.get((gx, gy)))
+        role = world_map_hydro_role_from_cell(coarse_hydro.get((gx, gy)))
         if role not in _OPEN_WATER:
             continue
         if role is WorldMapHydrologyRole.SEA:

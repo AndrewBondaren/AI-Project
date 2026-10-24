@@ -5,7 +5,6 @@ from __future__ import annotations
 from app.application.worldData.generators.terrain.mountains.materializer import (
     MountainMaskMaterializer,
 )
-from app.application.worldData.masks.runMaskDomain import run_mask_domain
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
@@ -18,4 +17,4 @@ class MountainContributor:
         self._materializer = materializer or MountainMaskMaterializer()
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
-        run_mask_domain(compose, ctx, self._materializer)
+        self._materializer.apply_plan(compose, ctx)

@@ -1,0 +1,234 @@
+"""PC-10: real L0 frozen consumers, cache equality, and partial delivery."""
+
+from app.application.jsonValidation import terrain_system_keys
+from contextlib import ExitStack
+from copy import deepcopy
+from dataclasses import replace
+import unittest
+from unittest.mock import Mock, patch
+
+from tests.planning.consumers.test_wiring import Composition, Wait, capture, world
+from app.application.worldData.planning.composition.surfacePlanningAssembler import to_legacy_context
+from app.application.worldData.pack.bake.lightGrid.bake import compose_light_grid
+from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
+from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.climate import ClimateContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.mountain import MountainContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.ravine import RavineContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.hydro.hydro import HydroContributor
+from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+
+
+PIPELINE = (ReliefContributor(), ClimateContributor(), MountainContributor(), RavineContributor(), HydroContributor())
+
+
+def mountain_source():
+    return world(z_min=-10, z_max=40, world_topology_mode="planar", world_map_cells_per_tile=4,
+        terrain_masks={"enabled": True, "default_mountains": {"autoresolve": False},
+            "default_ravines": {"autoresolve": True, "min_drop_z": 1, "min_neighbors": 3},
+            "declared_mountains": [{"entry_type": "mountain", "origin_x_m": 1000, "origin_y_m": 1000, "radius_m": 1500,
+                "form": {"form_type": "by_sides", "side_count": 4}, "sides": [{"kind": "slope"}] * 4}]})
+
+
+def context(source, bundle, tiles=None):
+    scale = LightGridScale.from_tile(1000, source.world_map_cells_per_tile)
+    return LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(locations=[]),
+        tiles=tiles if tiles is not None else [(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
+        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, surface_planning=to_legacy_context(bundle))
+
+
+def bind_frozen_context(test, ctx):
+    """Migrate old compose fixtures at the caller boundary, never in production."""
+    from dataclasses import fields
+    from app.db.models.world import World
+    from app.application.worldData.planning.composition.surfacePlanningCapture import mountain_template_inputs
+    values = {field.name: getattr(ctx.world, field.name) for field in fields(World)
+        if hasattr(ctx.world, field.name)}
+    values.setdefault("name", "L0 fixture")
+    values.setdefault("created_at", "")
+    values["world_map_cells_per_tile"] = ctx.scale.side
+    if not values.get("world_bounds"):
+        values["world_bounds"] = dict(x_min=min(x for x, _ in ctx.tiles), x_max=max(x for x, _ in ctx.tiles),
+            y_min=min(y for _, y in ctx.tiles), y_max=max(y for _, y in ctx.tiles))
+    ctx.world = World(**values)
+    ctx.world.map_settings = {"global_cell_size_m": ctx.scale.tile_macro}
+    composition = Composition()
+    test.addCleanup(composition.service.shutdown)
+    ctx.surface_bundle = composition.prepare(capture(ctx.world, locations=ctx.locations,
+        templates=mountain_template_inputs(ctx.relief_templates_by_uid)))
+    ctx.surface_planning = to_legacy_context(ctx.surface_bundle)
+    return ctx
+
+
+class L0Tests(unittest.TestCase):
+    def setUp(self):
+        self.c = Composition()
+        self.addCleanup(self.c.service.shutdown)
+
+    def test_frozen_relief_absolute_z_and_partial_tiles_are_equal(self):
+        source = mountain_source()
+        bundle = self.c.prepare(capture(source))
+        self.assertTrue(bundle.relief.payload.light.mountain_cells)
+        self.assertTrue(bundle.relief.payload.light.ravine_cells)
+        full = compose_light_grid(context(source, bundle), contributors=PIPELINE)
+        for tile in context(source, bundle).tiles:
+            partial = compose_light_grid(context(source, bundle, [tile]), contributors=PIPELINE)
+            self.assertEqual(partial.to_wire_tile(*tile), full.to_wire_tile(*tile))
+        for effect in bundle.relief.payload.light.ravine_cells:
+            ref = effect.cell
+            self.assertEqual(full.get(ref.gx, ref.gy, ref.tx, ref.ty).surface_z, effect.surface_z)
+
+    def test_no_live_detection_selection_or_template_stamp_and_no_instance_state(self):
+        source = mountain_source()
+        bundle = self.c.prepare(capture(source))
+        original = deepcopy(bundle)
+        expected = compose_light_grid(context(source, bundle), contributors=PIPELINE)
+        source.terrain_masks = {"enabled": False}
+        source.hydrology = {"enabled": True}
+        with ExitStack() as stack:
+            for target in ("app.application.worldData.generators.climate.climatePoleField.ClimatePoleField.sample",
+                "app.application.worldData.generators.terrain.mountains.collect.collect_prepared_mountain_entries_for_coarse",
+                "app.application.worldData.generators.terrain.mountains.reliefSidesStamp.stamp_entries_from_relief",
+                "app.application.worldData.generators.terrain.reliefObjects.depressionDetect.detect_depression_cells",
+                "app.application.worldData.generators.hydrology.load.loadDeclaredHydrology.load_declared_hydrology"):
+                stack.enter_context(patch(target, side_effect=AssertionError(target)))
+            actual = compose_light_grid(context(source, bundle), contributors=PIPELINE)
+        self.assertEqual(bundle, original)
+        for tile in context(source, bundle).tiles:
+            self.assertEqual(actual.to_wire_tile(*tile), expected.to_wire_tile(*tile))
+        materializer = PIPELINE[2]._materializer
+        self.assertEqual(materializer.collect(context(source, bundle)), bundle.relief.payload.mountain_layout.entries)
+        self.assertEqual(vars(materializer), {})
+
+    def test_height_does_not_depend_on_successful_terrain_paint(self):
+        source = mountain_source()
+        bundle = self.c.prepare(capture(source))
+        ctx = context(source, bundle)
+        compose = LightGridCompose(ctx.scale)
+        ReliefContributor().apply(compose, ctx)
+        for ref, _ in bundle.relief.payload.light.base_surface_z:
+            compose.ensure(ref.gx, ref.gy, ref.tx, ref.ty).hydrology_role = WorldMapHydrologyRole.RIVER
+        MountainContributor().apply(compose, ctx)
+        for effect in bundle.relief.payload.light.mountain_cells:
+            ref = effect.cell
+            cell = compose.get(ref.gx, ref.gy, ref.tx, ref.ty)
+            self.assertIsNone(cell.system_terrain)
+            self.assertEqual(cell.surface_z, effect.surface_z)
+        RavineContributor().apply(compose, ctx)
+        for effect in bundle.relief.payload.light.ravine_cells:
+            ref = effect.cell
+            self.assertEqual(compose.get(ref.gx, ref.gy, ref.tx, ref.ty).surface_z, effect.surface_z)
+
+    def test_hit_clear_restart_and_edit_without_eager_materialize(self):
+        source = mountain_source()
+        view = capture(source)
+        first = self.c.prepare(view)
+        with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
+            hit = self.c.prepare(view)
+        builds.assert_not_called()
+        self.c.backend.clear()
+        rebuilt = self.c.prepare(view)
+        fresh = Composition(workers=1)
+        self.addCleanup(fresh.service.shutdown)
+        restarted = fresh.prepare(view)
+        ctx = context(source, first)
+        expected = compose_light_grid(ctx, contributors=PIPELINE)
+        for bundle in (hit, rebuilt, restarted):
+            actual = compose_light_grid(context(source, bundle), contributors=PIPELINE)
+            for tile in ctx.tiles:
+                self.assertEqual(actual.to_wire_tile(*tile), expected.to_wire_tile(*tile))
+        with patch("app.application.worldData.pack.bake.lightGrid.bake.compose_light_grid",
+                   side_effect=AssertionError("eager materialize")):
+            changed = capture(replace(source, z_max=60))
+            self.c.prepare(changed)
+        self.assertNotEqual(changed.revision, view.revision)
+
+    def test_real_default_compose_and_writer_light_full_partial_delivery(self):
+        source = mountain_source()
+        bundle = self.c.prepare(capture(source))
+        ctx = context(source, bundle)
+        writer = Mock()
+        writer.write_world_map_tile.return_value = "content-hash"
+        for mode in ("light", "full"):
+            count = WorldMapBakeOrchestrator().bake_tiles(source, [], writer, ctx.tiles,
+                surface_bundle=bundle, wait=Wait(), bake_mode=mode)
+            self.assertEqual(count, len(ctx.tiles) * ctx.scale.side ** 2)
+        self.assertEqual(writer.write_world_map_tile.call_count, 2 * len(ctx.tiles))
+        expected = compose_light_grid(ctx).to_wire_tile(0, 0)
+        cells, _ = WorldMapBakeOrchestrator().bake_tile(source, to_legacy_context(bundle), 0, 0,
+            writer, wait=Wait(), surface_bundle=bundle)
+        self.assertEqual(cells, expected)
+
+    def test_missing_foreign_bundle_and_wrong_scale_fail_before_writes(self):
+        source = mountain_source()
+        bundle = self.c.prepare(capture(source))
+        ctx = context(source, bundle)
+        ctx.surface_bundle = None
+        with self.assertRaisesRegex(ValueError, "frozen"):
+            ReliefContributor().apply(LightGridCompose(ctx.scale), ctx)
+        ctx.surface_bundle = bundle
+        ctx.world = replace(source, world_uid="foreign")
+        with self.assertRaisesRegex(ValueError, "another world"):
+            ctx.require_surface_bundle()
+        ctx.world = source
+        ctx.scale = LightGridScale.from_tile(1000, 2)
+        with self.assertRaisesRegex(ValueError, "scale"):
+            ctx.require_surface_bundle()
+
+    def test_declared_hydro_partial_matches_full_and_preserves_river_inside_sea(self):
+        from app.db.models.namedLocation import NamedLocation
+        source = world(z_min=-100, world_map_cells_per_tile=4, hydrology={"enabled": True,
+            "default_lakes": {"autoresolve": False},
+            "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+            "default_rivers": {"autoresolve": False},
+            "declared_basins": [{"location_uid": "basin", "kind": "ocean", "floor_z": -10,
+                "footprint": {"kind": "bbox", "x_min": 0, "x_max": 3000, "y_min": 0, "y_max": 3000}}],
+            "declared_lakes": [{"location_uid": "lake", "shoreline": [
+                {"x": 1000, "y": 1000}, {"x": 2000, "y": 1000},
+                {"x": 2000, "y": 2000}, {"x": 1000, "y": 2000}]}],
+            "declared_coastlines": [{"location_uid": "coast", "kind": "sea", "path": [
+                {"x": 0, "y": 2500}, {"x": 2500, "y": 2500}]}],
+            "declared_rivers": [
+                {"location_uid": "segment", "declare_mode": "segments", "segments": [
+                    {"from": {"x": 0, "y": 500}, "to": {"x": 2500, "y": 500},
+                     "connection_type": "river", "width_cells": 700}]},
+                {"location_uid": "intent", "declare_mode": "via_locations", "route_location_uids": ["a", "b"]}]})
+        locations = [NamedLocation(location_uid=uid, world_uid=source.world_uid, display_name=uid,
+            created_at="", system_location_type="geographic", map_x=x, map_y=1500) for uid, x in (("a", 0), ("b", 2500))]
+        bundle = self.c.prepare(capture(source, locations=locations))
+        paint = bundle.hydrology.payload.declared_paint
+        self.assertEqual(len(paint.segments), 1)
+        self.assertEqual(paint.intents[0].path, ((0, 1500), (2500, 1500)))
+        self.assertTrue(paint.lakes and paint.coastlines)
+        self.assertTrue(bundle.hydrology.payload.coarse_hydro)
+        full = compose_light_grid(context(source, bundle), contributors=PIPELINE)
+        for tile in context(source, bundle).tiles:
+            partial = compose_light_grid(context(source, bundle, [tile]), contributors=PIPELINE)
+            self.assertEqual(full.to_wire_tile(*tile), partial.to_wire_tile(*tile))
+        self.assertEqual(full.get(0, 0, 0, 2).hydrology_role, WorldMapHydrologyRole.RIVER)
+        self.assertEqual(full.get(0, 0, 0, 2).hydrology_width, 15)
+        self.assertEqual(full.get(0, 1, 0, 2).hydrology_width, paint.intents[0].width_wire)
+        # Intent path has no dilation; the adjacent light row is coarse sea.
+        self.assertEqual(full.get(0, 1, 0, 3).hydrology_role, WorldMapHydrologyRole.SEA)
+        final_z = {(c.gx, c.gy): z for c, z in bundle.hydrology.payload.coarse_surface_z}
+        self.assertEqual(full.get(0, 1, 0, 3).surface_z, final_z[(0, 1)])
+
+    def test_standalone_l0_uses_injected_planning_on_miss_and_hit(self):
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        source = mountain_source()
+        writer = Mock()
+        writer.write_world_map_tile.return_value = "hash"
+        orchestrator = WorldMapBakeOrchestrator(planning=self.c.assembler, capture=SurfacePlanningCapture())
+        orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait())
+        first = writer.write_world_map_tile.call_args.args[2]
+        with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
+            orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait())
+        builds.assert_not_called()
+        self.assertEqual(first, writer.write_world_map_tile.call_args.args[2])
+        bundle = self.c.prepare(capture(source))
+        cells, _ = orchestrator.bake_tile(source, to_legacy_context(bundle), 0, 0, writer, wait=Wait())
+        self.assertEqual(cells, first)

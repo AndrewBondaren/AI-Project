@@ -36,6 +36,17 @@
     "../../../app/dataModel/hydrology/planning",
     "../../../app/dataModel/hydrology/enums/planning",
     "../../../app/dataModel/spatial/grid/gridSettings.py",
-    "valid.py"
+    "valid.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/relief.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/climate.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/ravine.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/mountain.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/hydro",
+    "../../../app/application/worldData/generators/terrain/mountains/materializer.py",
+    "../../../app/application/worldData/masks/terrainMerge.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/bakeContext.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/paintTerrain.py",
+    "../../../app/application/worldData/pack/bake/worldMapBakeOrchestrator.py",
+    "../../../app/application/worldData/pack/bake/packMaterializationOrchestrator.py"
   ]
 }

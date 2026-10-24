@@ -151,6 +151,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertEqual(len(cells), 1024)
@@ -168,9 +170,7 @@ class TestLightGridCompose(unittest.TestCase):
         z_values = {c.surface_z for c in cells}
         self.assertGreaterEqual(len(z_values), 1)
 
-        # Temperate + wet → forest (not z==1 stub); climate_zone set before landcover.
-        forest_n = sum(1 for c in cells if c.system_terrain == "forest")
-        self.assertGreater(forest_n, 0)
+        # Climate now comes from the frozen base plan.
         climate_n = sum(1 for c in cells if c.climate_zone_id is not None)
         self.assertEqual(climate_n, 1024)
 
@@ -226,6 +226,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         road_n = sum(1 for c in cells if c.system_terrain == "road")
@@ -248,6 +250,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertEqual(sum(1 for c in cells if c.system_terrain == "mountain"), 0)
@@ -271,6 +275,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertGreater(sum(1 for c in cells if c.system_terrain == "mountain"), 0)

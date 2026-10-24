@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from collections.abc import Mapping
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
 
@@ -32,6 +33,7 @@ class LightGridBakeContext:
     nodes: list[ConnectionNode] = field(default_factory=list)
     edges: list[ConnectionEdge] = field(default_factory=list)
     surface_planning: SurfaceTerrainContext | None = None
+    surface_bundle: SurfacePlanBundle | None = None
     pole_field: ClimatePoleField | None = None
     terrain_system_keys: set[str] = field(default_factory=set)
     wilderness_region_entries: list[WildernessRegionEntry] = field(default_factory=list)
@@ -42,3 +44,13 @@ class LightGridBakeContext:
     painted_road_edges: list[PaintedRoadEdge] = field(default_factory=list)
     # §8c Grade entities (L0 outdoor ribbon removed — R36u-T-8; may stay empty)
     relief_grade_instances: list[ReliefGradeInstance] = field(default_factory=list)
+
+    def require_surface_bundle(self) -> SurfacePlanBundle:
+        if self.surface_bundle is None:
+            raise ValueError("L0 compose requires a frozen surface plan bundle")
+        if self.surface_bundle.world_uid != self.world.world_uid:
+            raise ValueError("L0 surface plan belongs to another world")
+        base = self.surface_bundle.relief.payload.light.base_surface_z
+        if base and base[-1][0].tx + 1 != self.scale.side:
+            raise ValueError("L0 scale differs from frozen surface plan")
+        return self.surface_bundle

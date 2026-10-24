@@ -885,24 +885,19 @@ class ReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
         self.assertEqual(result.mountain_layout.entries, (peak,))
         self.assertEqual(len(result.light.base_surface_z), len(before) * 4)
 
-    def test_full_light_base_matches_existing_relief_contributor(self):
-        from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
-        from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-        from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
-        from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+    def test_full_light_base_matches_pre_cutover_relief_baseline(self):
+        from app.application.worldData.generators.terrain.noise import cell_z_noise
+        from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_fine
         from app.ids import seed_int
-        from types import SimpleNamespace
         from tests.hydrology_fixtures import hydro_world
-        world = hydro_world(world_uid="climate-world", z_min=-100, z_max=100, default_climate_zone="temperate")
-        terrain, climate = self.water.terrain.get(), self.water.terrain.climate.get()
+        source = hydro_world(world_uid="climate-world", z_min=-100, z_max=100, default_climate_zone="temperate")
+        terrain = self.water.terrain.get()
         coarse = {(c.gx, c.gy): z for c, z in terrain.payload.surface_z}
-        compose = LightGridCompose(LightGridScale.from_tile(10, 2))
-        context = SimpleNamespace(world=world, pole_field=ClimatePoleField(climate.payload.poles, climate.payload.bbox),
-            surface_planning=SimpleNamespace(coarse_relief_z=coarse), tiles=list(coarse))
-        ReliefContributor().apply(compose, context)
-        result = self.get(self.inputs.model_copy(update={"seed": seed_int(world)})).payload.light
+        seed = seed_int(source)
+        result = self.get(self.inputs.model_copy(update={"seed": seed})).payload.light
         for cell, z in result.base_surface_z:
-            self.assertEqual(z, compose.get(cell.gx, cell.gy, cell.tx, cell.ty).surface_z)
+            x, y = light_cell_center_fine(cell.gx, cell.gy, cell.tx, cell.ty, LightGridScale.from_tile(10, 2))
+            self.assertEqual(z, max(-100, min(100, cell_z_noise(seed, x, y, coarse[(x // 10, y // 10)], amplitude=1))))
 
     def test_disabled_masks_and_categories_keep_water_and_full_base_without_effects(self):
         inputs = self.inputs.model_copy(update={"masks_enabled": False, "declared_mountains": (self.peak(),)})

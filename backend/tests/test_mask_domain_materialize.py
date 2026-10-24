@@ -103,8 +103,11 @@ class TestMountainMaterialize(unittest.TestCase):
             scale=scale,
             relief_templates_by_uid=_relief_templates(),
         )
-        n = run_mask_domain(compose, ctx, MountainMaskMaterializer())
-        self.assertEqual(n, 1)
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
+        materializer = MountainMaskMaterializer()
+        self.assertEqual(len(materializer.collect(ctx)), 1)
+        materializer.apply_plan(compose, ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertGreater(sum(1 for c in cells if c.system_terrain == "mountain"), 0)
 
@@ -149,19 +152,12 @@ class TestSpecSourcesP0(unittest.TestCase):
             scale=scale,
             relief_templates_by_uid=_relief_templates(),
         )
-        mat = MountainMaskMaterializer()
-        declared = mat.load_declared(ctx)
-        anchors = mat.load_anchor_specs(ctx)
-        self.assertEqual(len(declared), 1)
-        self.assertEqual(declared[0].origin_x_m, 100)
-        self.assertEqual(len(anchors), 1)
-        self.assertEqual(anchors[0].location_uid, "peak-1")
-        from app.application.jsonValidation import terrain_masks as read_tm
-
-        policy = mat.category_policy(read_tm(world))
-        self.assertFalse(policy.autoresolve)
-        collected = mat.collect(ctx, policy)
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
+        collected = MountainMaskMaterializer().collect(ctx)
         self.assertEqual(len(collected), 2)
+        self.assertEqual(collected[0].origin_x_m, 100)
+        self.assertEqual(collected[1].location_uid, "peak-1")
 
 
 class TestMaskFootprintTyped(unittest.TestCase):
