@@ -264,3 +264,13 @@ def invalid_surface_legacy(view: SurfacePlanningView) -> None:
 
 def invalid_surface_final_as_routes(bundle: SurfacePlanBundle) -> PlanEnvelope[HydrologyRoutesPlan]:
     return bundle.hydrology  # EXPECT: reportReturnType
+
+
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+
+
+def invalid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY) -> None:
+    working.terrain.relief_z[(gx, gy)] = 1  # EXPECT: reportIndexIssue
+    working.hydrology.fine_z_for_tile(gx, gy)[(gx, gy)] = 1  # EXPECT: reportIndexIssue
+    working.climate = working.climate  # EXPECT: reportAttributeAccessIssue
+    working.climate.sample_pole(1, 2)  # EXPECT: reportArgumentType

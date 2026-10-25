@@ -2009,7 +2009,75 @@ Delivery SoT — [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md
 §6.25–6.33 и §7 PC-11. Карта PC-11.1 сначала фиксирует домен, владельца,
 ответственность и точный путь; только затем закрываются пробелы на стыках.
 Рабочие проекции принадлежат своим доменам, composition связывает их результаты
-и не поглощает domain logic; необходимость агрегата refs определяется callers.
+и не поглощает domain logic. Выбран application DTO SurfaceWorkingMaps
+(planning/contracts/surfaceWorkingMaps.py), содержащий только climate/terrain/
+hydrology refs; extent-probe остаётся у request entry без prepare, а private
+climate profile memo синхронизируется request-local lock. Точные контракты и
+матрица NoExtent/absent/error поведения — R1/R2/R3 PC-11.1 в delivery SoT.
+Решение мастера 2026-10-25: каждый snapshot, включая начальный, иммутабелен;
+последующие модификации образуют последовательность snapshots. Управление
+этой последовательностью и получение актуального состояния — отдельный
+snapshot-трек, вне PC-11. Материализация по запросу читает актуальные
+запланированные метаданные и строит только нужную область/объект и LOD;
+создание snapshot не запускает материализацию, накопленная история не
+материализуется целиком. Topology остаётся в домене топологии; отдельные
+методы её получения для planning/materialization сами по себе не являются
+дублированием доменной логики и не требуют зависимости landcover от водного
+payload. Адресные уточнения этого решения внесены в карту/R1/R2 PC-11.1,
+PC-11.2/11.3/11.5/11.6a/11.6b и критерии PC-11.8 delivery SoT:
+request working views не являются snapshots мира, capture/prepare не управляет
+их историей, pack adapter не присваивает topology policy. Точный доменный
+шов получения topology остаётся частью согласования signatures PC-11.1.
+Переходное состояние реализации отдельно от решения: PC-11 не меняет текущие
+revision/publication guards; их существование не задаёт целевую архитектуру
+snapshots. Этот cutover рассматривается отдельно в world-source-versioning.
+LOD сначала читает запланированные метаданные, затем проверяет наличие
+фактической материализации нужной области/объекта и LOD: read использует
+готовые слои/L0 fallback по WP-20; недостающее строится отдельным explicit
+write/refine запросом по WP-13. Новый snapshot freshness checker и provenance
+не вводятся в PC-11; existing cell/patch CRUD и read facades переиспользуются.
+Incremental chunk skip/auto-resume остаётся existing backlog WP-28. В будущем
+добавляется проверка наличия snapshot через единый snapshot CRUD. Сейчас
+snapshot runtime не реализован; общий интерфейс/реализация и адресация
+от объекта/чанка до fine_cell — отдельный трек по tz_world_snapshot.md,
+без параллельного snapshot store в planning/materialization. Scope и LOD —
+раздельные параметры; будущая snapshot-проверка не входит в реализацию PC-11.
+Задел PC-11: в application owner LOD-чтения рядом с проверкой метаданных/
+материализации оставить TODO интеграции snapshot CRUD со ссылкой на
+план `.cursor/plans/world-state-crud-transition.md`, §7 «Связь с PC-11 и
+будущими snapshots». В PC-11.6b owner — WildernessRegionReadService.outline,
+до membership early return; точный текст и ledger — PC-11.1-D/E delivery SoT.
+Outline — debug selector с явным исключением: absent в baked индексе → None
+без planning/state reads; present → подготовка metadata/inputs → render;
+missing matching geometry → existing RegionOutlineStaleError. Контур вычисляется
+для read-ответа, материализация L0/L2 не записывается. Gameplay merged read
+сохраняет WP-20 и не получает capture/prepare на каждую клетку. Explicit write
+materialize_pack_*/refine_from_entry проверяется отдельно от read; read TODO
+в refine_from_entry не размещается. При WS cutover TODO переносится к общему
+application read-owner по caller ledger; порядок будущего snapshot lookup
+и missing semantics фиксируются отдельным WS/snapshot design.
+Новый snapshot interface/service или фиктивная проверка в PC-11 не вводятся.
+Методная карта для приёмки зафиксирована в delivery SoT PC-11.1-A…F:
+entry делегирует domain factories, working views принадлежат climate/terrain/
+hydrology, region facts и landcover не зависят от pack context, pack владеет
+materialization IO/coverage. Будущий IWorldSnapshotCrud/WorldSnapshotService
+принадлежит worldSnapshot только для lifecycle истории. Общий CRUD текущего
+состояния — IWorldStateCrud/WorldStateService в общем worldState домене,
+вне generators; домены generators — потребители IWorldStateRead/готовых inputs.
+Existing cell/pack/patch CRUD/read classes становятся backend adapters,
+без переноса topology/selection/generation в общий service. Контракт разделения —
+tz_world_snapshot.md § «Общий World State CRUD и snapshot lifecycle»;
+поклассовый переход — .cursor/plans/world-state-crud-transition.md, WS-0…WS-5.
+Порядок согласован мастером 2026-10-26: сначала read freeze WS-0/WS-0A,
+затем PC-11 с согласованными inputs; общий read port подключается одним
+WS-3 cutover того же caller ledger после готовности WS-1/WS-2a. Детализация
+dependencies и пошаговая приёмка — PC-11.1-E и WS-план §7; второй entry API
+не создаётся. Region state читается operation owner один раз и передаётся
+readonly ref всем tiles/scene/path/internal drains; самостоятельный следующий
+drain-запрос получает новый read, FineChunkRunner не перезагружает состояния.
+Точные owners/signature ledger — PC-11.1-D. Это request read domain state,
+не общий snapshot мира. Методная карта не закрывает OPEN и не разрешает
+runtime правки.
 Общие records и исходные input projections ниже читаются вместе с final
 freeze: его точные дополнения заменяют прежние baseline bindings и
 signatures. Это один согласованный contract. Cross-domain composition

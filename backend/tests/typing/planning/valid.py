@@ -305,3 +305,17 @@ def valid_surface_composition(assembler: SurfacePlanningAssembler, view: Surface
     wait: PlanWaitControl) -> SurfaceTerrainContext | None:
     bundle: SurfacePlanBundle | None = assembler.prepare(view, wait=wait)
     return None if bundle is None else to_legacy_context(bundle)
+
+
+from collections.abc import Mapping
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+from app.dataModel.climate.planning.climatePoints import ClimateKey, PoleClimateSample
+from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
+
+
+def valid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY,
+                          zone: ClimateKey) -> PoleClimateSample:
+    assert_type(working.hydrology.fine_z_for_tile(gx, gy), Mapping[tuple[int, int], int])
+    assert_type(working.climate.profile_for_key(zone), ClimateZoneProfile)
+    assert_type(working.terrain.relief_z, Mapping[tuple[int, int], int])
+    return working.climate.sample_pole(gx, gy)

@@ -1,5 +1,7 @@
 """Pure pole sampling from frozen profiles; one kernel for legacy and plans."""
 
+from collections.abc import Mapping
+
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
 
@@ -14,10 +16,10 @@ from app.dataModel.spatial.grid.gridBBox import GridBBox
 
 def sample_resolved_profiles(poles: tuple[ClimatePolePoint, ...], bbox: GridBBox | None,
                              default_zone: ClimateKey,
-                             profiles: tuple[tuple[ClimateKey, ClimateZoneProfile], ...],
+                             profiles: Mapping[ClimateKey, ClimateZoneProfile],
                              blend: ClimatePoleBlendDefaults, gx: GridX, gy: GridY) -> PoleClimateSample:
     """Legacy aliases retain their resolved profile key, without live lookups."""
-    index = dict(profiles)
+    index = profiles
     default = index[default_zone]
     if not poles:
         return PoleClimateSample(system_climate_zone=RegistryKey[WorldClimateZoneRegistry](default.system_climate), zone_location_uid=None,
@@ -55,7 +57,12 @@ def sample_resolved_profiles(poles: tuple[ClimatePolePoint, ...], bbox: GridBBox
 class ClimatePlanSampler:
     @staticmethod
     def sample(plan: ClimateBasePlan, gx: GridX, gy: GridY) -> PoleClimateSample:
-        profiles = tuple((profile.key, ClimateZoneProfile.from_data(profile.key, profile.values))
-                         for profile in plan.profiles)
+        profiles = {profile.key: ClimateZoneProfile.from_data(profile.key, profile.values)
+                    for profile in plan.profiles}
+        return ClimatePlanSampler.sample_prepared(plan, profiles, gx, gy)
+
+    @staticmethod
+    def sample_prepared(plan: ClimateBasePlan, profiles: Mapping[ClimateKey, ClimateZoneProfile],
+                        gx: GridX, gy: GridY) -> PoleClimateSample:
         return sample_resolved_profiles(plan.poles, plan.bbox, plan.default_zone, profiles, plan.blend, gx, gy)
 

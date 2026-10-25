@@ -30,6 +30,6 @@ class ClimatePoleField:
     def sample(self, world: World, gx: int, gy: int) -> PoleClimateSample:
         default = RegistryKey[WorldClimateZoneRegistry](climate_scalars(world).default_climate_zone)
         keys = dict.fromkeys((default, *(pole.system_climate_zone for pole in self.poles)))
-        profiles = tuple((key, profile_for(world, key)) for key in keys)
+        profiles = {key: profile_for(world, key) for key in keys}
         return sample_resolved_profiles(self.poles, self.bbox, default, profiles, CLIMATE_POLE_BLEND,
                                          GridX(gx), GridY(gy))

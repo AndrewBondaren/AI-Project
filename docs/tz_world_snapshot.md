@@ -27,6 +27,130 @@ metadata:
 
 ## Что это **не** является
 
+### Уточнение общего CRUD и LOD-чтения (решение мастера, 2026-10-25)
+
+Runtime snapshot ещё не реализован. Цель отдельного snapshot-трека — один
+общий CRUD-интерфейс и его реализация, без самостоятельных world snapshot
+источников у planning/materialization. Начальный snapshot при инициализации
+также иммутабелен; модификации создают последующие snapshots. Update/delete
+в будущем CRUD должны сохранять эту неизменяемость; точные операции и
+физическое хранение истории определяются при проектировании трека.
+
+Контракт должен позволять адресовать данные от объекта/чанка/области до
+конкретной fine_cell. Пространственный scope/единица адресации и LOD
+результата задаются отдельно. Полнота логического состояния snapshot не
+означает полную материализацию мира или replay всех промежуточных snapshots.
+
+LOD сначала читает запланированные метаданные, затем проверяет наличие
+фактической материализации требуемого scope/LOD. На текущем этапе existing
+cell/patch CRUD и pack read facades читают готовые слои с fallback по WP-20;
+materialize/refine — отдельный explicit write по WP-13, не side effect read.
+Snapshot freshness/provenance и новый inspector не являются частью PC-11.
+Создание snapshot не запускает materialization. После реализации общего
+snapshot CRUD путь LOD также проверяет наличие snapshot; точное место этой
+проверки, поведение при отсутствии и связь с world-source-versioning
+нужно определить в отдельном треке. PC-11 этот CRUD и проверку не реализует.
+Задел PC-11 ограничивается TODO в коде application owner LOD-чтения рядом
+с metadata/materialization lookup, со ссылкой на
+[WS-план, §7](../.cursor/plans/world-state-crud-transition.md#7-связь-с-pc-11-и-будущими-snapshots).
+Read-owner cutover PC-11.6b — WildernessRegionReadService.outline; TODO
+ставится до membership early return. Точный текст:
+`TODO(snapshot): integrate snapshot existence lookup via the shared CRUD;
+see .cursor/plans/world-state-crud-transition.md, section 7 (PC-11 and future snapshots).`
+Debug outline имеет явное исключение из общего порядка gameplay LOD-read:
+сначала membership в baked индексе; absent → None без planning/state reads,
+present → подготовка metadata/inputs → render контура для ответа; отсутствие
+matching geometry → existing RegionOutlineStaleError. Вычисление контура
+не создаёт и не публикует L0/L2. Gameplay read сохраняет WP-20 merge/fallback,
+без capture/prepare на каждую клетку. EntryRefineOrchestrator.refine_from_entry
+и materialize_pack_* — отдельные explicit write операции; read TODO им не
+назначается. При WS cutover он переносится к общему application read-owner
+по caller ledger. Будущий порядок snapshot lookup и missing semantics
+остаются предметом отдельного WS/snapshot design. Заглушки,
+новые snapshot API и фиктивная existence-проверка в PC-11 не создаются.
+
+Следующие таблицы описывают терминологию; существующие черновые API/blob
+контракты ниже требуют согласования с этим уточнением до реализации.
+
+### Общий World State CRUD и snapshot lifecycle
+
+Решение мастера 2026-10-25: общий интерфейс состояния мира и его реализация
+принадлежат платформенному домену **worldState**, вне generators:
+IWorldStateCrud / WorldStateService. IWorldStateRead — read-only capability
+того же service instance; домены terrain/climate/landcover и другие генераторы
+являются потребителями этого контракта либо подготовленных через него DTO.
+В compute kernels/worker loops IO не встраивается; application boundary
+получает typed metadata/data до pure generation.
+
+Existing WorldService, NamedLocationService, MapCellService, MapCellQueryFacade,
+PatchStoreService и region-state owner подключаются через typed adapters к
+общей реализации. Их доменные algorithms, merge/fallback и atomic writes не
+переносятся в WorldStateService. Read не вызывает materialization. Общий CRUD
+текущего состояния реализуется без ожидания snapshot runtime и не создаёт
+параллельного state store.
+
+WorldSnapshotService отвечает только за историю/immutable snapshot lifecycle;
+будущий snapshot backend подключается к общему worldState contract. Snapshot
+не владеет текущим CRUD terrain/climate/regions. Полная карта классов, методов,
+путей и перехода WS-0…WS-5 —
+[world-state-crud-transition](../.cursor/plans/world-state-crud-transition.md).
+План пока DESIGN ДЛЯ ПРИЁМКИ; код/полный DTO freeze им не разрешены.
+Архитектура query/mutation фасадов, независимых CRUD capabilities, backend
+ports и UOW детализирована в
+[WS-0A](../.cursor/plans/world-state-crud-capabilities-uow.md) §7–13.
+Эта общая реализация работает с текущим состоянием; snapshot lifecycle не
+внедряется ради её реализации и не становится владельцем domain mutation.
+
+### Домен snapshot CRUD и методы (design для приёмки, 2026-10-25)
+
+Владелец только snapshot lifecycle — платформенный домен **worldSnapshot**. Контракт
+`IWorldSnapshotCrud` принадлежит application/worldSnapshot/contracts/
+snapshotCrud.py, реализация — `WorldSnapshotService` в существующем target
+application/worldSnapshot/worldSnapshotService.py. Это одна реализация
+публичного lifecycle, с делегированием serializer/repository/domain handlers.
+Файлы пока не создаются; snapshot runtime вне PC-11.
+
+| Интерфейс → реализация | Typed вход → выход | Семантика |
+|---|---|---|
+| IWorldSnapshotCrud.create → WorldSnapshotService.create | SnapshotCreate → SnapshotRef | Начальный immutable snapshot из согласованных доменных данных |
+| IWorldSnapshotCrud.read → WorldSnapshotService.read | SnapshotQuery → SnapshotReadResult | Metadata/scoped read выбранного состояния, без генерации отсутствующих данных |
+| IWorldSnapshotCrud.update → WorldSnapshotService.update | SnapshotUpdate(base_ref, typed_changes) → SnapshotRef | Новое immutable состояние; исходный snapshot сохраняется |
+| IWorldSnapshotCrud.delete → WorldSnapshotService.delete | SnapshotDelete(base_ref, typed_targets) → SnapshotRef | Логическое удаление данных в новом состоянии; не физическое удаление истории |
+
+Snapshot identity/query/mutation/result DTO — dataModel/worldSnapshot/;
+payload/patch типы и операции над ними принадлежат соответствующим доменам.
+WorldScope — dataModel/spatial/query/worldScope.py, typed union ObjectScope,
+ChunkScope, AreaScope, FineCellScope. FineCellScope использует existing
+FineGridCoord; AreaScope задаёт координатную систему явно, chunk size берётся
+из метаданных. Scope, requested LOD и физическая единица хранения независимы.
+Object→footprint разрешает домен объекта; neighbor/canonicalize принадлежат
+домену topology, не CRUD service.
+
+Read selector различает latest и конкретный SnapshotRef, включая timeline/
+world. Latest разрешается один раз на запрос и возвращается как resolved ref;
+следующие scoped reads используют его. Player accepted state не подменяется
+latest мастера. Result различает missing snapshot и missing scoped data;
+самостоятельного parallel existence-store нет. Update/delete принимают явный
+base_ref; conflict/branch policy фиксируется до реализации, скрытой перезаписи
+head нет. GC/prune удерживаемой истории не является CRUD delete.
+
+WorldSnapshotService владеет lineage/refs, согласованностью сохранения и scoped
+чтением. Доменные handlers проверяют/применяют свои typed changes; serializer
+кодирует, repository сохраняет. Сервис не импортирует hydrology jobs/buffers,
+terrain placement, climate scorer/tier kernel и не выполняет LOD/materialize.
+Planning/pack views — потребители/производные, не реализации snapshot CRUD.
+Это граница против monster-adapter из layer-boundaries.mdc: делегирование
+доменному API вместо переноса алгоритмов в общий сервис.
+
+До кода snapshot-трек обязан завершить freeze DTO/versions, точных storage
+портов и путей, transaction/conflict protocol и folder composition. Настоящая
+карта фиксирует домен и публичные операции, но не означает готовность runtime
+к реализации. Черновые capture_turn/restore/list_timeline/branch_from ниже —
+операционные сценарии того же WorldSnapshotService; они не создают второй
+CRUD/хранилище. Restore не запускает domain materialization, branch не копирует
+мир через генераторы. Соответствие этим сценариям и world-source-versioning
+нужно детализировать в отдельном треке.
+
 | Сущность | Что это | Где |
 |---|---|---|
 | **`SurfaceClimateField`** | Derived **horizontal field** `(gx, gy)` — pole + tier blend для climate LOD | climate generator; может **входить** в blob snapshot как часть мира или пересчитываться при restore |

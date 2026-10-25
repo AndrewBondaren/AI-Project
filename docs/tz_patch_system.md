@@ -103,6 +103,40 @@ class PatchSet(BaseModel):  # дельта одного хода
 
 См. правило `layer-boundaries.mdc` — persist и LLM не в генераторе; patch-система расширяет это до всех изменений состояния.
 
+### World State CRUD: capabilities и atomic command (design 2026-10-25)
+
+Целевая общая application boundary принадлежит worldState, вне generators.
+WorldStateService делегирует WorldStateQueryFacade.read и
+WorldStateMutationFacade.create/update/delete. Read/create/update/delete —
+отдельные capabilities; read-only backend не реализует always-fail writer.
+Unsupported operation, запрет домена/прав и storage failure — разные исходы.
+Query читает existing merged state/metadata без скрытого materialize.
+
+Атомарность охватывает целую typed domain command, не один repository метод.
+Mutation facade открывает WorldStateUnitOfWork.transaction или явно
+присоединяется через WorldMutationSession; один root владеет commit/rollback.
+Handlers делегируют existing domain validators/writers, не коммитят отдельно.
+Joined failure помечает root rollback-only даже при перехвате caller'ом.
+SQL transaction не объявляется atomic publish для pack files.
+
+Selective cell patch различает Keep/SetValue/ResetOverride; незатронутые
+override сохраняются, scoped delete не удаляет base pack cell. Generic
+INSERT OR REPLACE не является реализацией этого контракта. Fine_cell жидкости
+— контрольный сценарий atomic/selective update, не готовая fluid model;
+surface MapCellHydrology не расширяется попутно до runtime volume.
+Точные class/method/path/port и matrix —
+[WS-0A](../.cursor/plans/world-state-crud-capabilities-uow.md) §7–13.
+Уточнение freeze review 2026-10-26: is_structural поддерживается в existing
+structural-OR семантике (SetTrue/Reset, не false override); остальные legacy
+payload columns вне первого mutable whitelist сохраняются. Удаление пустой
+строки проверяет полный persistence payload, не read has_data. NOT NULL
+поля вставляются из model/policy defaults. Ambient без session отклоняется
+типизированно до BEGIN. Два семейства SQL-writer допустимы по selective
+field last-committed-write-wins; live whole-row replace запрещает rollout
+нового writer, а не объявляется безопасным из-за SQL lock. Точные masks,
+predicate, class/method bindings и acceptance cases — WS-0A §10–13.
+Статус design для приёмки; snapshot runtime и код реализации вне этой записи.
+
 ---
 
 ## Две цепочки snapshot — world и player

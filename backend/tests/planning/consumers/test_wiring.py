@@ -300,6 +300,149 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(bundle, self.c.prepare(view))
 
 
+class WorkingFieldsTests(unittest.TestCase):
+    """PC-11.2a: request lifetime, concurrent profile access, readonly projections."""
+
+    def setUp(self):
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+        self.c = Composition()
+        self.addCleanup(self.c.service.shutdown)
+        self.source = world()
+        self.view = capture(self.source)
+        self.entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
+
+    def prepared(self):
+        return self.entry.prepare_captured(self.view, world=self.source,
+            wait=Wait(), resolve_ctx=ResolveContext(collect_only=True))
+
+    def test_request_factories_once_and_cache_hit_gets_new_views(self):
+        from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+        from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
+        from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
+        with patch.object(ClimateWorkingFields, "from_plans", wraps=ClimateWorkingFields.from_plans) as climate, \
+             patch.object(TerrainWorkingFields, "from_plan", wraps=TerrainWorkingFields.from_plan) as terrain, \
+             patch.object(HydrologyWorkingFields, "from_plan", wraps=HydrologyWorkingFields.from_plan) as hydro:
+            bundle, working = self.prepared()
+            for x, y in ((0, 0), (1, 0), (2, 2)):
+                self.assertIs(working.hydrology.fine_z_for_tile(x, y),
+                              working.hydrology.fine_z_for_tile(x, y))
+            self.assertEqual((climate.call_count, terrain.call_count, hydro.call_count), (1, 1, 1))
+        with patch.object(self.c.registry, "build", side_effect=AssertionError("HIT rebuilt")):
+            cached, other = self.prepared()
+        self.assertEqual(bundle, cached)
+        for name in ("climate", "terrain", "hydrology"):
+            self.assertIsNot(getattr(working, name), getattr(other, name))
+        self.assertIsNot(working.climate._lock, other.climate._lock)
+        self.assertEqual(working.terrain.relief_z,
+                         {(cell.gx, cell.gy): z for cell, z in bundle.terrain_base.payload.surface_z})
+        self.assertEqual(working.hydrology.coarse_surface_z,
+                         {(cell.gx, cell.gy): z for cell, z in bundle.hydrology.payload.coarse_surface_z})
+        from dataclasses import FrozenInstanceError
+        with self.assertRaises(FrozenInstanceError):
+            working.climate = other.climate
+        with self.assertRaises(TypeError):
+            working.terrain.relief_z[(0, 0)] = 100
+        with self.assertRaises(TypeError):
+            working.hydrology.coarse_surface_z[(0, 0)] = 100
+
+    def test_profile_memo_concurrent_frozen_hit_failure_retry_and_request_isolation(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from time import sleep
+        from unittest.mock import Mock
+        from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+        from app.dataModel.climate.enums.climateZone import ClimateZone
+        from app.dataModel.registryKey import RegistryKey
+        from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
+        bundle, _ = self.prepared()
+        key = RegistryKey[WorldClimateZoneRegistry]("request-custom")
+        first, second = ClimateZone.TEMPERATE.to_profile(), ClimateZone.ARCTIC.to_profile()
+
+        def resolve(zone):
+            self.assertEqual(zone, key)
+            sleep(.01)
+            return first
+
+        resolver = Mock(side_effect=resolve)
+        working = ClimateWorkingFields.from_plans(bundle.climate_base.payload,
+            bundle.climate_local.payload, resolver)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(working.profile_for_key, [key] * 32))
+        self.assertTrue(all(value is first for value in results))
+        resolver.assert_called_once_with(key)
+        default_key = bundle.climate_base.payload.default_zone
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            frozen = list(pool.map(working.profile_for_key, [default_key] * 32))
+        self.assertTrue(all(value is frozen[0] for value in frozen))
+        resolver.assert_called_once()
+        retry_resolver = Mock(side_effect=[RuntimeError("failed lookup"), second])
+        retry = ClimateWorkingFields.from_plans(bundle.climate_base.payload,
+            bundle.climate_local.payload, retry_resolver)
+        with self.assertRaisesRegex(RuntimeError, "failed lookup"):
+            retry.profile_for_key(key)
+        self.assertIs(retry.profile_for_key(key), second)
+        self.assertIs(retry.profile_for_key(key), second)
+        self.assertEqual(retry_resolver.call_count, 2)
+        self.assertIs(working.profile_for_key(key), first)
+        different = RegistryKey[WorldClimateZoneRegistry]("another-custom")
+        other_resolver = Mock(return_value=second)
+        other = ClimateWorkingFields.from_plans(bundle.climate_base.payload,
+            bundle.climate_local.payload, other_resolver)
+        self.assertIs(other.profile_for_key(different), second)
+        other_resolver.assert_called_once_with(different)
+
+    def test_prepared_pole_sampler_matches_live_adapter_and_frozen_sampler(self):
+        from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
+        bundle, working = self.prepared()
+        with patch("app.application.worldData.generators.climate.registry.profile_for",
+                   side_effect=AssertionError("frozen pole sampled live registry")):
+            for x, y in ((0, 0), (1, 1), (-1, 2), (5, -2)):
+                expected = ClimatePlanSampler.sample(bundle.climate_base.payload, x, y)
+                self.assertEqual(working.climate.sample_pole(x, y), expected)
+                self.assertEqual(working.climate.sample_pole(x, y),
+                                 working.climate.pole_field.sample(self.source, x, y))
+
+    def test_hydrology_tile_index_negative_boundaries_and_readonly_empty_maps(self):
+        from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
+        from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+        from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        bundle, _ = self.prepared()
+        points = ((-9, -1), (-8, -1), (-1, -1), (0, 0), (7, 0), (8, 0))
+        water = MapCellHydrology(role=HydrologyCellRole.LAKE)
+        plan = bundle.hydrology.payload.model_copy(update={
+            "fine_z_overrides": tuple((point, index) for index, point in enumerate(points)),
+            "sparse_fine_hydro": tuple((point, water) for point in points)})
+        fields = HydrologyWorkingFields.from_plan(plan, SurfaceGridSettings(fine_span=8, light_side=2))
+        with patch("app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields._tile_index",
+                   side_effect=AssertionError("tile lookup rebuilt index")):
+            for gx, gy in ((-2, -1), (-1, -1), (0, 0), (1, 0), (4, 4)):
+                expected = {point: index for index, point in enumerate(points)
+                            if (point[0] // 8, point[1] // 8) == (gx, gy)}
+                self.assertEqual(fields.fine_z_for_tile(gx, gy), expected)
+                self.assertEqual(set(fields.fine_hydro_for_tile(gx, gy)), set(expected))
+                with self.assertRaises(TypeError):
+                    fields.fine_z_for_tile(gx, gy)[(100, 100)] = 7
+                with self.assertRaises(TypeError):
+                    fields.fine_hydro_for_tile(gx, gy)[(100, 100)] = water
+        self.assertEqual(plan.fine_z_overrides, tuple((point, index) for index, point in enumerate(points)))
+
+    def test_no_extent_probe_and_foreign_world_do_not_project(self):
+        from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningViewKind
+        from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+        view = capture(world(world_bounds=None))
+        with patch.object(self.c.assembler, "prepare", wraps=self.c.assembler.prepare) as prepare, \
+             patch.object(ClimateWorkingFields, "from_plans", side_effect=AssertionError("unexpected projection")):
+            self.assertEqual(self.entry.extent_status(view), SurfacePlanningViewKind.NO_EXTENT)
+            prepare.assert_not_called()
+            self.assertIsNone(self.entry.prepare_captured(view, world=self.source,
+                wait=Wait(), resolve_ctx=ResolveContext(collect_only=True)))
+            prepare.assert_called_once()
+            with self.assertRaisesRegex(ValueError, "another world"):
+                self.entry.prepare_captured(self.view, world=world(world_uid="foreign-world"),
+                    wait=Wait(), resolve_ctx=ResolveContext(collect_only=True))
+            prepare.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
 
