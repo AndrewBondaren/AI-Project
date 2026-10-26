@@ -723,8 +723,7 @@ async def get_wilderness_region(world_uid: str, region_uid: str, container=Depen
     world = await container.world_service().get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context,
-        planning=container.surface_planning(), capture=container.surface_planning_capture())
+    service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context)
     snapshot = service.get_snapshot(world, region_uid)
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Region '{region_uid}' not found in pack snapshot")
@@ -740,7 +739,7 @@ async def get_wilderness_region_outline(world_uid: str, region_uid: str, contain
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context,
-        planning=container.surface_planning(), capture=container.surface_planning_capture(),
+        entry=container.surface_planning_entry(),
         region_state_repo=container.region_state_repository())
     locations = await container.location_service().get_all(world_uid)
     try:

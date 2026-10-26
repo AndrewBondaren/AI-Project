@@ -1,7 +1,5 @@
 """Debug selector reads manifest snapshots; outlines derive geometry from world data."""
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
-from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
 from app.application.worldData.regions.inputs.landcoverInputs import prepare_landcover_inputs
@@ -20,10 +18,9 @@ class RegionOutlineStaleError(ValueError):
 
 
 class WildernessRegionReadService:
-    def __init__(self, context: PackReadContext, *, planning: SurfacePlanningAssembler | None = None,
-                 capture: SurfacePlanningCapture | None = None,
+    def __init__(self, context: PackReadContext, *, entry: SurfacePlanningEntry | None = None,
                  region_state_repo: IRegionStateRepository | None = None) -> None:
-        self._planning, self._capture = planning, capture
+        self._entry = entry
         self._context = context
         self._region_state_repo = region_state_repo
 
@@ -39,11 +36,11 @@ class WildernessRegionReadService:
         if self.get_snapshot(world, region_uid) is None:
             return None
         manifest = self._context.reader_for(world).manifest
-        if self._planning is None or self._capture is None:
-            raise ValueError("surface planning dependencies required")
+        if self._entry is None:
+            raise ValueError("surface planning entry required")
         if self._region_state_repo is None:
             raise ValueError("region state repository required for outline")
-        _, working = SurfacePlanningEntry(self._planning, self._capture).require_plan_inputs(
+        _, working = self._entry.require_plan_inputs(
             world, locations, wait=wait)
         snapshot = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
         inputs = prepare_landcover_inputs(working, snapshot)

@@ -8748,6 +8748,22 @@ Done: pure нижние контракты и owners готовы; production п
 PC-11.7 этим заходом не выполнялся. Код не коммитился.
 
 Приёмочный отчёт PC-11.6b:
+- DI follow-up (согласовано мастером): WildernessRegionReadService получает
+  готовый SurfacePlanningEntry через keyword-only entry, а не assembler/capture.
+  Создание entry остаётся existing container.surface_planning_entry(); outline
+  только вызывает entry.require_plan_inputs. Snapshot-only service сохраняет
+  возможность отсутствия entry; present outline без entry — явная ошибка,
+  после прежнего membership gate. Новый orchestrator/интерфейс не вводится.
+  Файлы: pack/read/wildernessRegionReadService.py, api/routes/map.py,
+  tests/test_wilderness_region_index.py. Проверки: outline/HTTP/state baseline,
+  вызов именно injected entry один раз, absent gate и missing-entry error;
+  Результат: внедрение entry выполнено, snapshot-only route entry не создаёт.
+  unittest test_wilderness_region_index/test_region_coverage_contract/
+  test_region_state_contract — 37 OK, включая HTTP 200/404/409, ранний gate,
+  injected-entry call/no-construction, missing-entry error и real prepare.
+  Planning pyright valid — 210 files, 0 errors/warnings; negative exact —
+  58 diagnostics на 56 EXPECT строках, missing/unexpected=0. Шесть прежних
+  stale include notices неизменны. Коммитов нет.
 - LandcoverMaterializer/collect получают LandcoverCollectContext. Домен
   владеет declarations/anchors/autoresolve, identity, coverage, read-only
   state overlay, claim cache и rasterization. У materializer больше нет
