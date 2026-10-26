@@ -27,7 +27,8 @@ from app.application.worldData.pack.refine.entry.entryAnchorTracker import (
     EntryAnchor,
     EntryAnchorTracker,
 )
-from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
+from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
 from app.application.worldData.pack.refine.pathHeading import PathHeading, resolve_path_heading
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.core.appSettings import app_settings
@@ -65,14 +66,16 @@ class EntryRefineOrchestrator:
 
     def __init__(
         self,
-        fine_terrain: FineTerrainRefineOrchestrator,
+        entry_ops: FineEntryRefineOps,
+        rect_refiner: FineRectRefiner,
         *,
         job_repo: IChunkRefineJobRepository | None = None,
         bake_defaults: PackBakeDefaults | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         read_context: PackReadContext | None = None,
     ) -> None:
-        self._fine_terrain = fine_terrain
+        self._entry_ops = entry_ops
+        self._rect_refiner = rect_refiner
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._anchors = EntryAnchorTracker()
         self._queue = ChunkRefineQueue(max_workers=self._defaults.refine_queue_max_workers)
@@ -80,7 +83,7 @@ class EntryRefineOrchestrator:
         self._climate = climate_bake or ClimatePackBakeOrchestrator(read_context=read_context)
         self._jobs = job_repo
         self._worker = ChunkRefineWorker(
-            self._fine_terrain,
+            self._rect_refiner,
             job_repo=job_repo,
             climate_bake=self._climate,
             climate_fine=self._climate_fine,
@@ -91,8 +94,8 @@ class EntryRefineOrchestrator:
         return self._queue
 
     @property
-    def fine_terrain(self) -> FineTerrainRefineOrchestrator:
-        return self._fine_terrain
+    def rect_refiner(self) -> FineRectRefiner:
+        return self._rect_refiner
 
     @property
     def anchor_tracker(self) -> EntryAnchorTracker:
@@ -120,7 +123,7 @@ class EntryRefineOrchestrator:
         """Record spawn / tile_cross / location_entry (no refine)."""
         gx, gy = tile_gx, tile_gy
         if gx is None or gy is None:
-            gx, gy = self._fine_terrain.tile_for_anchor(world, entry_x, entry_y)
+            gx, gy = self._entry_ops.tile_for_anchor(world, entry_x, entry_y)
         return self._anchors.set_anchor(
             kind, entry_x, entry_y,
             tile_gx=gx, tile_gy=gy, location_uid=location_uid,
@@ -196,7 +199,7 @@ class EntryRefineOrchestrator:
             heading=heading, heading_dx=heading_dx, heading_dy=heading_dy,
         )
 
-        terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
+        terrain_result, chunks_done, chunks_total = await self._entry_ops.refine_scene_volume(
             world, locations, writer, anchor_x, anchor_y, mat_ctx,
             surface_bundle=surface_bundle, tile_gx=tile_gx, tile_gy=tile_gy,
             xy_radius=policy.scene_xy_radius,
@@ -204,7 +207,7 @@ class EntryRefineOrchestrator:
             working=working,
         )
 
-        path_chunks = await self._fine_terrain.refine_path_corridor(
+        path_chunks = await self._entry_ops.refine_path_corridor(
             world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_bundle,
             tile_gx, tile_gy,
             heading=resolved_heading,
@@ -257,23 +260,23 @@ class EntryRefineOrchestrator:
             ):
                 gx, gy = current.tile_gx, current.tile_gy
             else:
-                gx, gy = self._fine_terrain.tile_for_anchor(world, anchor_x, anchor_y)
+                gx, gy = self._entry_ops.tile_for_anchor(world, anchor_x, anchor_y)
 
         resolved_heading = self._resolve_heading(
             heading=heading, heading_dx=heading_dx, heading_dy=heading_dy,
         )
 
         before = len(self._queue)
-        skip = self._fine_terrain.scene_chunk_indices(
+        skip = self._entry_ops.scene_chunk_indices(
             world, gx, gy, anchor_x, anchor_y,
             xy_radius=policy.scene_xy_radius,
         )
-        await self._fine_terrain.schedule_tile_background(
+        await self._entry_ops.schedule_tile_background(
             world, self._queue, anchor_x, anchor_y, gx, gy,
             skip_scene_rects=skip,
         )
         if resolved_heading is not None:
-            await self._fine_terrain.schedule_path_ahead_tiles(
+            await self._entry_ops.schedule_path_ahead_tiles(
                 world, self._queue, anchor_x, anchor_y, gx, gy,
                 resolved_heading,
                 depth_tiles=app_settings.path_ahead_depth,

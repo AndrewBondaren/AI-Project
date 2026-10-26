@@ -453,7 +453,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
         from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
         from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
-        from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+        from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
+        from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
         from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
         from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
         from app.application.worldData.pack.refine.chunks.chunkRefineWorker import ChunkRefineWorker
@@ -465,8 +466,9 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         working = working_fixture(source, bundle)
         terrain = TerrainBatchOrchestrator()
         runner = FineChunkRunner(terrain)
-        fine = FineTerrainRefineOrchestrator(terrain, runner=runner)
-        entry = EntryRefineOrchestrator(fine)
+        entry_ops = FineEntryRefineOps(terrain, runner=runner)
+        refiner = FineRectRefiner(terrain, runner=runner)
+        entry = EntryRefineOrchestrator(entry_ops, refiner)
         rect = ColumnRect(0, 1, 0, 1)
         plan = DetailedScopePlan([(0, 0)], lambda gx, gy: [rect], [], "background", None, None)
         mat = MaterializationContext(1)
@@ -488,7 +490,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(expected.columns)
                 # Cold writer forces parent decode from the baked blob.
                 cold = WorldPackWriter(paths)
-                result = await fine.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, region_state_snapshot={}, working=working)
+                result = await refiner.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, region_state_snapshot={}, working=working)
                 self.assertEqual(result.fine_surface_z, detailed.fine_surface_z)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 await entry.refine_from_entry(source.world_uid, source, [], cold, mat, bundle,
@@ -497,7 +499,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 queue = ChunkRefineQueue()
                 queue.enqueue_chunk(0, 0, 0, 0, anchor_x=0, anchor_y=0, chunk_columns=2, tile_macro=2)
-                worker = ChunkRefineWorker(fine)
+                worker = ChunkRefineWorker(refiner)
                 self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue, region_state_snapshot={}, working=working), (1, 0))
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 from types import SimpleNamespace
@@ -506,7 +508,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 jobs.pop_next_pending = AsyncMock(return_value=SimpleNamespace(
                     gx=0, gy=0, cx=0, cy=0, job_uid="persisted-job"))
                 jobs.mark_complete = AsyncMock()
-                persisted = ChunkRefineWorker(fine, job_repo=jobs)
+                persisted = ChunkRefineWorker(refiner, job_repo=jobs)
                 self.assertEqual(await persisted.drain_persisted(source.world_uid, source, [], cold,
                     mat, bundle, region_state_snapshot={}, max_jobs=1, working=working), 1)
                 jobs.mark_complete.assert_awaited_once_with("persisted-job")

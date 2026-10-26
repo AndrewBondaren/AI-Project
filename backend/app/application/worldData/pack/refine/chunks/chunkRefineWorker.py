@@ -12,7 +12,7 @@ from app.application.worldData.planning.contracts.surfacePlanBundle import Surfa
 from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_drain_queue_done,
     log_pack_drain_queue_start,
@@ -29,13 +29,13 @@ from app.db.repositories.sqlite.chunkRefineJobRepository import new_chunk_refine
 class ChunkRefineWorker:
     def __init__(
         self,
-        fine_terrain: FineTerrainRefineOrchestrator,
+        rect_refiner: FineRectRefiner,
         *,
         job_repo: IChunkRefineJobRepository | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         climate_fine: ClimateFinePending | None = None,
     ) -> None:
-        self._fine_terrain = fine_terrain
+        self._rect_refiner = rect_refiner
         self._jobs = job_repo
         self._climate = climate_bake
         self._climate_fine = climate_fine
@@ -112,7 +112,7 @@ class ChunkRefineWorker:
             if nxt is None:
                 break
             gx, gy, cx, cy = nxt
-            result = await self._fine_terrain.refine_queued_chunk(
+            result = await self._rect_refiner.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_bundle,
                 gx, gy, cx, cy,
                 stages=GradePipelineStages.off(),
@@ -154,7 +154,7 @@ class ChunkRefineWorker:
             job = await self._jobs.pop_next_pending(world_uid)
             if job is None:
                 break
-            result = await self._fine_terrain.refine_queued_chunk(
+            result = await self._rect_refiner.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_bundle,
                 job.gx, job.gy, job.cx, job.cy,
                 stages=GradePipelineStages.off(),
