@@ -32,8 +32,8 @@ from app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator import Worl
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
-from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
+from app.application.worldData.pack.refine.fine.fineScenePathRefine import FineScenePathRefine
+from app.application.worldData.pack.refine.fine.fineRectDrain import FineRectDrain
 from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.bake.finalize.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
@@ -73,8 +73,8 @@ class PackMaterializationOrchestrator:
         terrain: TerrainBatchOrchestrator,
         *,
         world_map: WorldMapBakeOrchestrator | None = None,
-        entry_ops: FineEntryRefineOps | None = None,
-        rect_refiner: FineRectRefiner | None = None,
+        scene_path: FineScenePathRefine | None = None,
+        rect_drain: FineRectDrain | None = None,
         entry: EntryRefineOrchestrator | None = None,
         job_repo: IChunkRefineJobRepository | None = None,
         world_repository: IWorldRepository | None = None,
@@ -111,8 +111,8 @@ class PackMaterializationOrchestrator:
         else:
             self._entry, self._climate = _default_entry_stack(
                 terrain,
-                entry_ops=entry_ops,
-                rect_refiner=rect_refiner,
+                scene_path=scene_path,
+                rect_drain=rect_drain,
                 job_repo=job_repo,
                 read_context=read_context,
                 bake_defaults=self._defaults,
@@ -383,8 +383,8 @@ async def _persist_bake_relief_grades(
 def _default_entry_stack(
     terrain: TerrainBatchOrchestrator,
     *,
-    entry_ops: FineEntryRefineOps | None,
-    rect_refiner: FineRectRefiner | None,
+    scene_path: FineScenePathRefine | None,
+    rect_drain: FineRectDrain | None,
     job_repo: IChunkRefineJobRepository | None,
     read_context: PackReadContext | None,
     bake_defaults: PackBakeDefaults,
@@ -398,20 +398,20 @@ def _default_entry_stack(
         bake_defaults=bake_defaults,
     )
     runner = FineChunkRunner(terrain)
-    ops = entry_ops or FineEntryRefineOps(
+    scene = scene_path or FineScenePathRefine(
         terrain,
         runner=runner,
         relief_grade_repo=relief_grade_repo,
     )
-    refiner = rect_refiner or FineRectRefiner(
+    drain = rect_drain or FineRectDrain(
         terrain,
         runner=runner,
         relief_loader=relief_loader,
         relief_grade_repo=relief_grade_repo,
     )
     return EntryRefineOrchestrator(
-        ops,
-        refiner,
+        scene,
+        drain,
         job_repo=job_repo,
         bake_defaults=bake_defaults,
         climate_bake=climate,

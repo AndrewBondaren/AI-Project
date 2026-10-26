@@ -1,9 +1,9 @@
-"""L2 fine-terrain drain-time refine — standalone/queued single-rect operations.
+"""L2 fine-terrain rect drain — standalone/queued single-rect operations.
 
-Drain zone split out of the former ``FineTerrainRefineOrchestrator`` facade
+Drain domain split out of the former ``FineTerrainRefineOrchestrator`` facade
 (FM-5): nested queued work does not publish; the public ``refine_rect`` commits
-the manifest itself. Entry-time scene/path/schedule lives on
-``FineEntryRefineOps``.
+the manifest itself. Entry-time scene/path passes live on ``FineScenePathRefine``;
+enqueue policy is called by the entry facade directly.
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ from app.db.models.world import World
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 
 
-class FineRectRefiner:
-    """Drain-time L2 refine: standalone/queued single-rect operations."""
+class FineRectDrain:
+    """Drain-domain L2 refine: standalone/queued single-rect operations."""
 
     def __init__(
         self,

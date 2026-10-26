@@ -1,9 +1,10 @@
-"""L2 fine-terrain entry-time operations — scene/path volumes + queue scheduling.
+"""L2 fine-terrain scene/path refine passes — selection + phase lifecycle.
 
-Entry zone split out of the former ``FineTerrainRefineOrchestrator`` facade
-(FM-5): synchronous scene/path refine passes and background enqueue helpers
-used by ``EntryRefineOrchestrator``. Drain-time single-rect refine lives on
-``FineRectRefiner``.
+Domain: which rects belong to the scene volume / path corridor, and the shared
+pass recipe (select → runner.refine_rects → grade persist → phase log).
+Enqueue policy lives in ``chunkSchedule``/``entryRingGeom`` (called by the
+entry facade directly); single-rect drain lives on ``FineRectDrain``.
+Split out of the former ``FineTerrainRefineOrchestrator`` facade (FM-5).
 """
 
 from __future__ import annotations
@@ -26,15 +27,8 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
-from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
-from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.chunks.chunkSchedule import (
-    schedule_path_ahead_tiles as schedule_path_ahead_tiles_fn,
-    schedule_tile_background as schedule_tile_background_fn,
-)
 from app.application.worldData.pack.refine.entry.entryRingGeom import (
     chunk_within_ring,
-    scene_chunk_indices as geom_scene_chunk_indices,
 )
 from app.application.worldData.pack.refine.fine.chunk.fineChunkGeom import (
     rects_for_macro_tile,
@@ -58,8 +52,8 @@ from app.db.models.world import World
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 
 
-class FineEntryRefineOps:
-    """Entry-time L2 refine: scene/path synchronous passes + background scheduling."""
+class FineScenePathRefine:
+    """Entry-time L2 refine: scene-volume and path-corridor synchronous passes."""
 
     def __init__(
         self,
@@ -166,67 +160,6 @@ class FineEntryRefineOps:
             working=working,
         )
         return result.wilderness_chunks_written
-
-    async def schedule_tile_background(
-        self,
-        world: World,
-        queue: ChunkRefineQueue,
-        anchor_x: int,
-        anchor_y: int,
-        tile_gx: int,
-        tile_gy: int,
-        *,
-        skip_scene_rects: set[tuple[int, int]] | None = None,
-        max_radius_fine: float | None = None,
-    ) -> int:
-        return await schedule_tile_background_fn(
-            world, queue, anchor_x, anchor_y, tile_gx, tile_gy,
-            skip_scene_rects=skip_scene_rects,
-            max_radius_fine=max_radius_fine,
-        )
-
-    def scene_chunk_indices(
-        self,
-        world: World,
-        tile_gx: int,
-        tile_gy: int,
-        anchor_x: int,
-        anchor_y: int,
-        *,
-        xy_radius: int | None = None,
-    ) -> set[tuple[int, int]]:
-        """Chunk (cx,cy) indices covered by scene volume around anchor."""
-        from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-
-        radius = (
-            xy_radius
-            if xy_radius is not None
-            else SceneVolumePolicy.canonical_defaults().scene_xy_radius
-        )
-        return geom_scene_chunk_indices(
-            world, tile_gx, tile_gy, anchor_x, anchor_y, xy_radius=radius,
-        )
-
-    async def schedule_path_ahead_tiles(
-        self,
-        world: World,
-        queue: ChunkRefineQueue,
-        anchor_x: int,
-        anchor_y: int,
-        tile_gx: int,
-        tile_gy: int,
-        heading: PathHeading,
-        *,
-        depth_tiles: int,
-    ) -> int:
-        return await schedule_path_ahead_tiles_fn(
-            world, queue, anchor_x, anchor_y, tile_gx, tile_gy, heading,
-            depth_tiles=depth_tiles,
-        )
-
-    @staticmethod
-    def tile_for_anchor(world: World, anchor_x: int, anchor_y: int) -> tuple[int, int]:
-        return tile_for_anchor(world, anchor_x, anchor_y)
 
 
 async def _run_refine_phase(

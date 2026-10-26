@@ -7,8 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
-from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
+from app.application.worldData.pack.refine.chunks.chunkSchedule import schedule_tile_background
+from app.application.worldData.pack.refine.entry.entryRingGeom import scene_chunk_indices
+from app.application.worldData.pack.refine.fine.fineRectDrain import FineRectDrain
 from app.application.worldData.generators.coordinates.worldTile import (
     iter_fine_chunks,
     fine_bbox_for_tile,
@@ -29,7 +30,6 @@ def _world(*, tile_macro: int = 1000, chunk: int = 32) -> SimpleNamespace:
 class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
     async def test_enqueue_capped_by_background_expand_radius(self) -> None:
         world = _world()
-        orch = FineEntryRefineOps(MagicMock())
         queue = ChunkRefineQueue(max_workers=1)
         policy = SceneVolumePolicy.canonical_defaults()
         tile_macro = world.fine_cells_per_map_cell
@@ -40,7 +40,7 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
         # Anchor near tile center so ring is interior.
         ax = tile_macro // 2
         ay = tile_macro // 2
-        enqueued = await orch.schedule_tile_background(
+        enqueued = await schedule_tile_background(
             world, queue, ax, ay, 0, 0,
         )
         self.assertGreater(enqueued, 0)
@@ -52,12 +52,12 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
 
     async def test_skip_scene_rects_excludes_scene_chunks(self) -> None:
         world = _world()
-        orch = FineEntryRefineOps(MagicMock())
         queue = ChunkRefineQueue(max_workers=1)
         ax, ay = 500, 500
-        skip = orch.scene_chunk_indices(world, 0, 0, ax, ay)
+        policy = SceneVolumePolicy.canonical_defaults()
+        skip = scene_chunk_indices(world, 0, 0, ax, ay, xy_radius=policy.scene_xy_radius)
         self.assertGreater(len(skip), 0)
-        enqueued = await orch.schedule_tile_background(
+        enqueued = await schedule_tile_background(
             world, queue, ax, ay, 0, 0,
             skip_scene_rects=skip,
         )
@@ -70,7 +70,7 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
 class TestRefineQueuedChunkIndex(unittest.IsolatedAsyncioTestCase):
     async def test_rejects_out_of_range_chunk(self) -> None:
         world = _world()
-        orch = FineRectRefiner(MagicMock())
+        orch = FineRectDrain(MagicMock())
         with self.assertRaises(ValueError):
             await orch.refine_queued_chunk(
                 world, [], MagicMock(), MagicMock(), MagicMock(),

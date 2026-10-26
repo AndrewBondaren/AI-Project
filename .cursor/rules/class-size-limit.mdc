@@ -22,6 +22,24 @@ alwaysApply: true
 ✅ facade (гейты) + TopologyJob + PackingJob + contract
 ```
 
+## Инвариант хорошего planner/orchestrator'а
+
+Хороший planner/orchestrator **не меняется**, когда меняется имплементация job'а — до тех пор, пока неизменен сам план / pipeline. Он владеет только порядком, гейтами и сигнатурой контракта.
+
+Проверка: мысленно поменяй внутренности любого job'а — если orchestrator пришлось править, в него просочилась чужая зона знаний и деление было по строкам, а не по ответственности.
+
+```text
+❌ split «нарезкой как было»: перенести методы в `FooOps` потому, что они
+   висели на старом фасаде — на классе pass-зоны остаются delegates
+   schedule_*/geom/anchor-resolve, домен которых — enqueue-политика и
+   геометрия, а не сам pass.
+✅ facade = гейты + порядок и зовёт модульные функции напрямую;
+   класс-job = один домен знаний (pass recipe ИЛИ drain boundary
+   ИЛИ enqueue policy), а не «половина методов бывшего фасада».
+```
+
+Пример из FM-5 (2026-10-26): `FineTerrainRefineOrchestrator` резали в `FineEntryRefineOps` вместе с delegate-методами `schedule_tile_background` / `scene_chunk_indices` / `tile_for_anchor` — антипаттерн: зоны знаний `chunkSchedule`/`entryRingGeom` оказались на классе pass-рецепта. Правильно: фасад `EntryRefineOrchestrator` вызывает эти модульные функции напрямую, класс держит только свой домен.
+
 ## Не этот порог
 
 - POJO / Pydantic / SQL-модель: много **полей**, мало оркестрации

@@ -54,8 +54,8 @@ from app.application.worldData.registries.seedService import SeedService
 from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
-from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
+from app.application.worldData.pack.refine.fine.fineScenePathRefine import FineScenePathRefine
+from app.application.worldData.pack.refine.fine.fineRectDrain import FineRectDrain
 from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
 
@@ -309,12 +309,12 @@ class WorldDataWiring:
             terrain = self.terrain_batch_orchestrator()
             runner = FineChunkRunner(terrain)
             self._entry_refine_orchestrator = EntryRefineOrchestrator(
-                FineEntryRefineOps(
+                FineScenePathRefine(
                     terrain,
                     runner=runner,
                     relief_grade_repo=self.relief_grade_repository(),
                 ),
-                FineRectRefiner(
+                FineRectDrain(
                     terrain,
                     runner=runner,
                     relief_loader=self.template_snapshot_loader(),

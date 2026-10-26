@@ -453,8 +453,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
         from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
         from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
-        from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
-        from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
+        from app.application.worldData.pack.refine.fine.fineScenePathRefine import FineScenePathRefine
+        from app.application.worldData.pack.refine.fine.fineRectDrain import FineRectDrain
         from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
         from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
         from app.application.worldData.pack.refine.chunks.chunkRefineWorker import ChunkRefineWorker
@@ -466,9 +466,9 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         working = working_fixture(source, bundle)
         terrain = TerrainBatchOrchestrator()
         runner = FineChunkRunner(terrain)
-        entry_ops = FineEntryRefineOps(terrain, runner=runner)
-        refiner = FineRectRefiner(terrain, runner=runner)
-        entry = EntryRefineOrchestrator(entry_ops, refiner)
+        scene_path = FineScenePathRefine(terrain, runner=runner)
+        refiner = FineRectDrain(terrain, runner=runner)
+        entry = EntryRefineOrchestrator(scene_path, refiner)
         rect = ColumnRect(0, 1, 0, 1)
         plan = DetailedScopePlan([(0, 0)], lambda gx, gy: [rect], [], "background", None, None)
         mat = MaterializationContext(1)

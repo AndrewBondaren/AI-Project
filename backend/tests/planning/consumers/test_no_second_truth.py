@@ -126,7 +126,7 @@ class L2BoundaryTests(unittest.TestCase):
         paths = ("pack/bake/detailed/packDetailedBakeOrchestrator.py", "pack/bake/detailed/detailedBakeRefine.py",
             "pack/refine/fine/chunk/fineChunkRunner.py", "pack/refine/fine/prep/fineTilePrep.py",
             "pack/refine/fine/prep/fineTileContext.py", "pack/refine/fine/chunk/fineChunkCompute.py",
-            "pack/refine/fine/fineEntryRefineOps.py", "pack/refine/fine/fineRectRefiner.py",
+            "pack/refine/fine/fineScenePathRefine.py", "pack/refine/fine/fineRectDrain.py",
             "pack/refine/entry/entryRefineOrchestrator.py",
             "pack/refine/chunks/chunkRefineWorker.py", "generators/terrain/landcover/finePaint.py",
             "pack/climate/climatePackBakeOrchestrator.py", "materialize/terrain/terrainBatchOrchestrator.py")

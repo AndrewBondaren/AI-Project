@@ -616,7 +616,7 @@ async def refine_chunk_route(
     entry_orch = container.entry_refine_orchestrator()
     try:
         with generation_world_log(world_uid, mode="entry"):
-            result = await entry_orch.rect_refiner.refine_queued_chunk(
+            result = await entry_orch.rect_drain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_bundle,
                 gx, gy, cx, cy,
                 stages=stages,

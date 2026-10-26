@@ -20,15 +20,23 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
 from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.refine.chunks.chunkRefineWorker import ChunkRefineWorker
+from app.application.worldData.pack.refine.chunks.chunkSchedule import (
+    schedule_path_ahead_tiles,
+    schedule_tile_background,
+)
 from app.application.worldData.pack.refine.entry.entryAnchorTracker import (
     AnchorKind,
     EntryAnchor,
     EntryAnchorTracker,
 )
-from app.application.worldData.pack.refine.fine.fineEntryRefineOps import FineEntryRefineOps
-from app.application.worldData.pack.refine.fine.fineRectRefiner import FineRectRefiner
+from app.application.worldData.pack.refine.entry.entryRingGeom import (
+    scene_chunk_indices,
+)
+from app.application.worldData.pack.refine.fine.fineScenePathRefine import FineScenePathRefine
+from app.application.worldData.pack.refine.fine.fineRectDrain import FineRectDrain
 from app.application.worldData.pack.refine.pathHeading import PathHeading, resolve_path_heading
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.core.appSettings import app_settings
@@ -66,16 +74,16 @@ class EntryRefineOrchestrator:
 
     def __init__(
         self,
-        entry_ops: FineEntryRefineOps,
-        rect_refiner: FineRectRefiner,
+        scene_path: FineScenePathRefine,
+        rect_drain: FineRectDrain,
         *,
         job_repo: IChunkRefineJobRepository | None = None,
         bake_defaults: PackBakeDefaults | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         read_context: PackReadContext | None = None,
     ) -> None:
-        self._entry_ops = entry_ops
-        self._rect_refiner = rect_refiner
+        self._scene_path = scene_path
+        self._rect_drain = rect_drain
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._anchors = EntryAnchorTracker()
         self._queue = ChunkRefineQueue(max_workers=self._defaults.refine_queue_max_workers)
@@ -83,7 +91,7 @@ class EntryRefineOrchestrator:
         self._climate = climate_bake or ClimatePackBakeOrchestrator(read_context=read_context)
         self._jobs = job_repo
         self._worker = ChunkRefineWorker(
-            self._rect_refiner,
+            self._rect_drain,
             job_repo=job_repo,
             climate_bake=self._climate,
             climate_fine=self._climate_fine,
@@ -94,8 +102,8 @@ class EntryRefineOrchestrator:
         return self._queue
 
     @property
-    def rect_refiner(self) -> FineRectRefiner:
-        return self._rect_refiner
+    def rect_drain(self) -> FineRectDrain:
+        return self._rect_drain
 
     @property
     def anchor_tracker(self) -> EntryAnchorTracker:
@@ -123,7 +131,7 @@ class EntryRefineOrchestrator:
         """Record spawn / tile_cross / location_entry (no refine)."""
         gx, gy = tile_gx, tile_gy
         if gx is None or gy is None:
-            gx, gy = self._entry_ops.tile_for_anchor(world, entry_x, entry_y)
+            gx, gy = tile_for_anchor(world, entry_x, entry_y)
         return self._anchors.set_anchor(
             kind, entry_x, entry_y,
             tile_gx=gx, tile_gy=gy, location_uid=location_uid,
@@ -199,7 +207,7 @@ class EntryRefineOrchestrator:
             heading=heading, heading_dx=heading_dx, heading_dy=heading_dy,
         )
 
-        terrain_result, chunks_done, chunks_total = await self._entry_ops.refine_scene_volume(
+        terrain_result, chunks_done, chunks_total = await self._scene_path.refine_scene_volume(
             world, locations, writer, anchor_x, anchor_y, mat_ctx,
             surface_bundle=surface_bundle, tile_gx=tile_gx, tile_gy=tile_gy,
             xy_radius=policy.scene_xy_radius,
@@ -207,7 +215,7 @@ class EntryRefineOrchestrator:
             working=working,
         )
 
-        path_chunks = await self._entry_ops.refine_path_corridor(
+        path_chunks = await self._scene_path.refine_path_corridor(
             world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_bundle,
             tile_gx, tile_gy,
             heading=resolved_heading,
@@ -260,23 +268,23 @@ class EntryRefineOrchestrator:
             ):
                 gx, gy = current.tile_gx, current.tile_gy
             else:
-                gx, gy = self._entry_ops.tile_for_anchor(world, anchor_x, anchor_y)
+                gx, gy = tile_for_anchor(world, anchor_x, anchor_y)
 
         resolved_heading = self._resolve_heading(
             heading=heading, heading_dx=heading_dx, heading_dy=heading_dy,
         )
 
         before = len(self._queue)
-        skip = self._entry_ops.scene_chunk_indices(
+        skip = scene_chunk_indices(
             world, gx, gy, anchor_x, anchor_y,
             xy_radius=policy.scene_xy_radius,
         )
-        await self._entry_ops.schedule_tile_background(
+        await schedule_tile_background(
             world, self._queue, anchor_x, anchor_y, gx, gy,
             skip_scene_rects=skip,
         )
         if resolved_heading is not None:
-            await self._entry_ops.schedule_path_ahead_tiles(
+            await schedule_path_ahead_tiles(
                 world, self._queue, anchor_x, anchor_y, gx, gy,
                 resolved_heading,
                 depth_tiles=app_settings.path_ahead_depth,

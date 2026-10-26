@@ -295,8 +295,8 @@ class TestTerrainMaskCarry(unittest.TestCase):
 
 class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
     async def test_refine_rects_missing_parent_raises(self) -> None:
-        from app.application.worldData.pack.refine.fine.fineRectRefiner import (
-            FineRectRefiner,
+        from app.application.worldData.pack.refine.fine.fineRectDrain import (
+            FineRectDrain,
         )
         from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
         from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
@@ -305,7 +305,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
         writer = MagicMock()
         writer.paths = MagicMock()
         writer.parent_light_cache = MagicMock()
-        l2 = FineRectRefiner(terrain)
+        l2 = FineRectDrain(terrain)
         world = SimpleNamespace(
             world_uid="w-miss",
             fine_cells_per_map_cell=32,
