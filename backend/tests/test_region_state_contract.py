@@ -174,7 +174,7 @@ class RegionRevisionTests(unittest.TestCase):
     def test_fine_tombstone_restores_last_parent_region_to_background(self):
         world = fine._world(ForestSpec(name="woods", shape=self.old.shape))
         uid = fine.region_uid(world.world_uid, name="woods")
-        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
             world, [], fine._surface_ctx(world), 0, 0, parent_light=fine._parent(),
             region_state_snapshot={uid: StateSnapshotEntry(fine.FOREST, True)}, working=working_fixture(world, fine._surface_ctx(world)))
         self.assertFalse(state.surface_region_uid)
@@ -184,7 +184,7 @@ class RegionRevisionTests(unittest.TestCase):
         spec = ForestSpec(name="woods", shape=BboxShape(x_min=4, y_min=4, x_max=5, y_max=5))
         world = fine._world(spec)
         uid = fine.region_uid(world.world_uid, name="woods")
-        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
             world, [], fine._surface_ctx(world), 0, 0, parent_light=fine._parent(),
             region_state_snapshot={uid: StateSnapshotEntry(fine.PLAINS, False, "old-revision")}, working=working_fixture(world, fine._surface_ctx(world)))
         self.assertEqual(state.surface_region_uid, {(x, y): uid for x in (4, 5) for y in (4, 5)})

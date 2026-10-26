@@ -173,16 +173,3 @@ def run_column_fill(
     return cells
 
 
-def run_column_fill_single(
-    world: World,
-    heightmap: SurfaceHeightmap,
-    n_eff: dict[tuple[int, int], int],
-    gx: int,
-    gy: int,
-    z_lo: int,
-    z_hi: int,
-) -> list[MapCell]:
-    """Fill one column between z_lo and z_hi (lazy z-slice)."""
-    rect = ColumnRect(x_min=gx, x_max=gx, y_min=gy, y_max=gy)
-    all_cells = run_column_fill(world, heightmap, n_eff, rect=rect)
-    return [c for c in all_cells if z_lo <= c.z <= z_hi]

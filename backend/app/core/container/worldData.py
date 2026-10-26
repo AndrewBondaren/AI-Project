@@ -228,10 +228,7 @@ class WorldDataWiring:
 
     def terrain_batch_orchestrator(self) -> TerrainBatchOrchestrator:
         if self._terrain_batch_orchestrator is None:
-            self._terrain_batch_orchestrator = TerrainBatchOrchestrator(
-                map_cell_service=self.map_cell_service(),
-                planning=self.surface_planning(), capture=self.surface_planning_capture(),
-            )
+            self._terrain_batch_orchestrator = TerrainBatchOrchestrator()
         return self._terrain_batch_orchestrator
 
     def climate_batch_orchestrator(self) -> ClimateBatchOrchestrator:

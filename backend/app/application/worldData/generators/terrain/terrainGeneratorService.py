@@ -2,7 +2,6 @@ from app.application.worldData.generators.climate.climatePoleField import Climat
 from app.application.worldData.generators.terrain.terrainZ import surface_biome_terrain
 from app.application.worldData.generators.terrain.passes.columnFillPass import (
     run_column_fill,
-    run_column_fill_single,
 )
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
@@ -55,34 +54,6 @@ class TerrainGeneratorService:
             surface_facing=surface_facing,
             surface_grade_uid=surface_grade_uid,
         )
-
-    def build_surface_heightmap(
-        self,
-        world: World,
-        locations: list[NamedLocation],
-        pole_field: ClimatePoleField,
-    ) -> tuple[SurfaceHeightmap | None, dict[tuple[int, int], int]]:
-        heightmap = run_surface_pass(world, locations, pole_field)
-        if heightmap is None:
-            return None, {}
-        return heightmap, run_gap_analysis(world, heightmap)
-
-    def generate_z_slice(
-        self,
-        world: World,
-        locations: list[NamedLocation],
-        pole_field: ClimatePoleField,
-        gx: int,
-        gy: int,
-        z_lo: int,
-        z_hi: int,
-    ) -> list[MapCell]:
-        heightmap, n_eff = self.build_surface_heightmap(
-            world, locations, pole_field,
-        )
-        if heightmap is None or (gx, gy) not in heightmap.surface_z:
-            return []
-        return run_column_fill_single(world, heightmap, n_eff, gx, gy, z_lo, z_hi)
 
     def generate_minimal(
         self,

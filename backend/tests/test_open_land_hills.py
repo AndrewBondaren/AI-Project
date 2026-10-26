@@ -263,7 +263,7 @@ class TestHillsInTilePrep(unittest.TestCase):
             "default_forests": {"hills": {"min_spacing": 64, "radius": 2, "height": 2}},
         }
         ctx = frozen_surface_fixture(w, parent)
-        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
             refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0),
             region_state_snapshot={},

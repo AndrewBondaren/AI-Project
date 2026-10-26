@@ -95,7 +95,7 @@ class FineRegionPaintTests(unittest.TestCase):
         self.spec = ForestSpec(name="woods", shape=BboxShape(x_min=0, y_min=0, x_max=5, y_max=6))
         self.world = _world(self.spec)
         self.uid = region_uid(self.world.world_uid, name="woods")
-        self.state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        self.state = TerrainBatchOrchestrator().build_tile_surface_state(
             self.world, [], _surface_ctx(self.world), 0, 0, parent_light=_parent(),
             region_state_snapshot={},
             working=working_fixture(self.world, _surface_ctx(self.world)),
@@ -149,7 +149,7 @@ class FineRegionPaintTests(unittest.TestCase):
         world = _world()
         world.terrain_masks = WorldTerrainMasks(default_landcover=LandcoverRegionsCategoryPolicy.canonical_defaults().model_copy(
             update={"enabled": False})).model_dump(mode="json")
-        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
             region_state_snapshot={},
             working=working_fixture(world, _surface_ctx(world)),
@@ -162,7 +162,7 @@ class FineRegionPaintTests(unittest.TestCase):
         """Category on but collect() returns []: region-painted parent cells
         must be restored to the zone fallback, not keep the stale terrain."""
         world = _world()  # enabled policy, no declared regions, no autoresolve
-        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
             region_state_snapshot={},
             working=working_fixture(world, _surface_ctx(world)),
@@ -179,7 +179,7 @@ class FineRegionPaintTests(unittest.TestCase):
         world.terrain_masks = WorldTerrainMasks(
             declared_regions=[self.spec],
         ).model_dump(mode="json")
-        state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
             region_state_snapshot={},
             working=working_fixture(world, _surface_ctx(world)))

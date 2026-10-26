@@ -1,7 +1,7 @@
 """Compatibility entry: capture once, then delegate to surface planning.
 
-Transitional legacy-context producer only (region outline + L2 bootstrap until
-PC-11.6b/PC-11.4). The plan-bundle request boundary lives on
+Transitional legacy-context producer only (region outline until
+PC-11.6b). The plan-bundle request boundary lives on
 ``SurfacePlanningEntry`` in planning/composition.
 """
 

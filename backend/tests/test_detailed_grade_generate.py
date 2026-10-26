@@ -65,7 +65,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         parent = ParentLightTile.from_cells(
             world_uid="w", gx=0, gy=0, side=1, tile_macro=4, cells=cells,
         )
-        terrain = TerrainBatchOrchestrator(MagicMock())
+        terrain = TerrainBatchOrchestrator()
         w = MagicMock()
         w.world_uid = "w"
         w.fine_cells_per_map_cell = 4

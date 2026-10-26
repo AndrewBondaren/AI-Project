@@ -1,6 +1,5 @@
-"""Terrain surface helpers for pack L2 refine — parent-light upsample + chunk generate.
+"""Pack L2 surface helpers — parent-light upsample + chunk generate.
 
-Legacy map_cells ``save_terrain_batch`` / ``_materialize_fine_tile`` removed.
 Pack L0 bake + fine refine own persist via ``WorldPackWriter``.
 
 See ``docs/tz_terrain_generation.md`` § multi-pass skeleton; WP-PERF-22 Parent light SoT.
@@ -10,32 +9,19 @@ from __future__ import annotations
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from collections.abc import Mapping
-from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
-from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 import logging
 from dataclasses import dataclass, replace
 
-from app.application.imports.result import ImportResult
-from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
-    run_pole_resolve_pass,
-)
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    prepare_surface_terrain_context,
-)
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
-from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
-from app.db.models.connectionEdge import ConnectionEdge
-from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -60,61 +46,10 @@ def refresh_tile_gaps(world: World, state: TileSurfaceState) -> TileSurfaceState
 
 
 class TerrainBatchOrchestrator:
-    """Pack L2 surface state + chunk generate; bootstrap tile planning for L0 bake."""
+    """Pack L2 surface state + chunk generate."""
 
-    def __init__(
-        self,
-        map_cell_service: MapCellService,
-        generator: TerrainGeneratorService | None = None,
-        *, planning: SurfacePlanningAssembler | None = None,
-        capture: SurfacePlanningCapture | None = None,
-    ) -> None:
-        self._planning, self._capture = planning, capture
-        self._map_cells = map_cell_service
+    def __init__(self, generator: TerrainGeneratorService | None = None) -> None:
         self._generator = generator or TerrainGeneratorService()
-
-    def plan_bootstrap_tiles(
-        self,
-        world: World,
-        locations: list[NamedLocation],
-        *,
-        nodes: list[ConnectionNode] | None = None,
-        edges: list[ConnectionEdge] | None = None,
-        max_tiles: int | None = None,
-        wait: PlanWaitControl,
-    ) -> list[tuple[int, int]]:
-        from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
-
-        if self._planning is None or self._capture is None:
-            raise ValueError("surface planning dependencies required")
-        ctx = prepare_surface_terrain_context(
-            world,
-            locations,
-            planning=self._planning, capture=self._capture, wait=wait,
-            nodes=nodes,
-            edges=edges,
-        )
-        if ctx is None:
-            return []
-        plan = PackTilePlanner().plan(
-            world, locations, scope="light", max_tiles=max_tiles,
-        )
-        return plan.tile_tuples()
-
-    async def save_z_slice(
-        self,
-        world: World,
-        locations: list[NamedLocation],
-        gx: int,
-        gy: int,
-        z_lo: int,
-        z_hi: int,
-    ) -> ImportResult:
-        pole_field = run_pole_resolve_pass(world, locations)
-        cells = self._generator.generate_z_slice(
-            world, locations, pole_field, gx, gy, z_lo, z_hi,
-        )
-        return await self._map_cells.save_pass(cells, "terrain")
 
     def build_tile_surface_state(
         self,

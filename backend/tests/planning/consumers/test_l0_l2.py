@@ -272,7 +272,7 @@ class L2Tests(unittest.TestCase):
         self.source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=2),
                             z_min=-20, z_max=40)
         self.source.map_settings = {"global_cell_size_m": 8}
-        self.terrain = TerrainBatchOrchestrator(Mock())
+        self.terrain = TerrainBatchOrchestrator()
 
     def parents(self, bundle):
         from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
@@ -420,7 +420,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 WorldMapBakeOrchestrator().bake_tiles(source, [], writer, tiles,
                     surface_bundle=bundle, region_state_snapshot={},
                     working=working, wait=Wait())
-                terrain = TerrainBatchOrchestrator(Mock())
+                terrain = TerrainBatchOrchestrator()
                 climate = ClimatePackBakeOrchestrator()
                 for gx, gy in reversed(tiles):
                     parent = require_parent_light(source.world_uid, gx, gy, reader=WorldPackReader(writer.paths),
@@ -463,7 +463,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(c.service.shutdown)
         bundle = c.prepare(capture(source))
         working = working_fixture(source, bundle)
-        terrain = TerrainBatchOrchestrator(Mock())
+        terrain = TerrainBatchOrchestrator()
         runner = FineChunkRunner(terrain)
         fine = FineTerrainRefineOrchestrator(terrain, runner=runner)
         entry = EntryRefineOrchestrator(fine)

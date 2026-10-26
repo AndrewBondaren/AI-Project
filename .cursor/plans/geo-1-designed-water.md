@@ -8341,6 +8341,50 @@ Done: один preparation owner вне generators; mandatory inputs у consumer
   мёртвых аргументов нет; authoritative guard и publication ownership прежние.
 
 **PC-11.4 — разделить три зоны TerrainBatchOrchestrator.**
+**IMPLEMENTED / VERIFIED (2026-10-26), ожидает приёмки мастера.**
+- `TerrainBatchOrchestrator` оставлен с одной зоной L2 surface/chunk
+  materialization: build_tile_surface_state, generate_chunk_cells(_sync),
+  refresh_tile_gaps, TileSurfaceState. Удалены мёртвый plan_bootstrap_tiles
+  (единственный caller map.py вызывает копию на preview facade) и
+  save_z_slice вместе с dep MapCellService; _planning/_capture удалены,
+  конструктор — generator-only.
+- z-slice цепочка удалена атомарно: TerrainGeneratorService.generate_z_slice,
+  build_surface_heightmap (живых callers не осталось) и
+  columnFillPass.run_column_fill_single. Новый owner/import module не
+  создаётся — решение стыка 3 PC-11.1.
+- Bootstrap preview tile sets остаются у WorldSurfaceMaterializationOrchestrator:
+  entry extent-probe → NO_EXTENT ValueError → pure PackTilePlanner.plan без
+  materialization prepare и неиспользуемого context. Файлы
+  worldSurfaceMaterializationOrchestrator.py, pack/bake/packTilePlanner.py и
+  api/routes/map.py не менялись — контракт уже выполнялся после PC-11.3.
+- DI `terrain_batch_orchestrator()` в core/container/worldData.py возвращает
+  `TerrainBatchOrchestrator()` без planning/capture/map_cell_service.
+- Boundary закреплён в consumers/test_no_second_truth.py: модуль добавлен в
+  transit-path assertion (нет SurfaceTerrainContext/to_legacy_context/
+  prepare_captured/surface_ctx/SurfacePlanBundle) и новый
+  test_terrain_batch_has_single_l2_zone запрещает map_cells/MapCellService/
+  save_z_slice/generate_z_slice/plan_bootstrap_tiles/
+  prepare_surface_terrain_context/planning.composition/ImportResult/
+  PlanWaitControl в модуле и фиксирует signature `__init__(self, generator)`.
+- surfaceTerrainContext.py — только docstring: transitional legacy-context
+  producer (до PC-11.6b); prepare/require helpers сохранены для existing
+  callers до PC-11.7.
+- Проверки `PYTHONPATH=.:tests .venv314/bin/python -m unittest`: discover
+  tests/planning/consumers — 71 OK; regression
+  test_water_placement_pass + test_relief_objects_z +
+  test_hydrology_hy12_rivers + test_pack_bake_modes + test_detailed_bake_c11 —
+  59 OK; связанные suites (terrain_hills_registry_cutover,
+  landcover_fine_paint, region_state_contract, detailed_grade_generate,
+  l0_l2, open_land_hills, parent_light_refine и detailed/pack callers) —
+  56 + 81 OK. Единственный failure
+  test_container_repository_wiring_and_caller_rollback — pre-existing на base
+  (воспроизведён через git stash до diff): окружению не хватает
+  [planning.cache]/[planning.execution] конфигурации, не связан с изменением.
+- pyright §6.27 — failed prerequisite: node_modules/.bin/pyright и node/npx
+  в окружении отсутствуют; зависимости автоматически не скачивались.
+- Новых файлов нет; WARN по затронутым переполненным папкам выдан в чат
+  (materialize/=11, pack/bake=16, refine/fine=10, refine/detailed=14).
+  SQL/DAG/backend-start/коммитов нет. Baseline delta нет.
 Зависимости: PC-11.1/11.3.
 Цель: оставить классу только L2 surface/chunk materialization.
 ТЗ: tz_terrain_generation §Multi-pass terrain skeleton и §Surface planning/cache;

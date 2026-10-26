@@ -162,7 +162,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             self.assertNotIn(outside, merged)
 
     def test_build_tile_surface_state_requires_parent(self) -> None:
-        terrain = TerrainBatchOrchestrator(MagicMock())
+        terrain = TerrainBatchOrchestrator()
         with self.assertRaises(TypeError):
             terrain.build_tile_surface_state(
                 MagicMock(), [], MagicMock(), 0, 0,
@@ -260,7 +260,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         self.assertNotIn("forest", terrains)
 
     def test_build_tile_surface_state_carries_mixed_mask(self) -> None:
-        terrain = TerrainBatchOrchestrator(MagicMock())
+        terrain = TerrainBatchOrchestrator()
         parent = _parent_mixed_terrain(side=2, tile_macro=8)
         w = _world_stub()
         w.world_uid = "w-mask"
