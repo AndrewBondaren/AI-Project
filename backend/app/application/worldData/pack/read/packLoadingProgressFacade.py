@@ -122,10 +122,9 @@ class PackLoadingProgressFacade:
             if manifest.tiles:
                 if self._entry is None:
                     raise ValueError("surface planning dependencies required")
-                view = self._entry.capture_view(world, locations,
+                extent_status = self._entry.probe_extent(world, locations,
                     mode=ResolutionMode.RUNTIME, mountain_templates=(),
                     resolve_ctx=ResolveContext())
-                extent_status = self._entry.extent_status(view)
             snap = self._classifier.classify(
                 world,
                 locations,

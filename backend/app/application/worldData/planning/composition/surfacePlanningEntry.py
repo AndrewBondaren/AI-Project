@@ -10,7 +10,7 @@ from app.application.worldData.generators.climate.registry import profile_for
 from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
 from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
 from app.application.worldData.planning.composition.surfacePlanningAssembler import (
-    SurfacePlanningAssembler, prepare_captured_bundle,
+    SurfacePlanningAssembler, prepare_captured_bundle, report_surface_diagnostics,
 )
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
@@ -36,6 +36,15 @@ class SurfacePlanningEntry:
 
     def extent_status(self, view: SurfacePlanningView) -> SurfacePlanningViewKind:
         return view.kind
+
+    def probe_extent(self, world: World, locations: Sequence[NamedLocation], *,
+                     mode: ResolutionMode, mountain_templates: tuple[MountainTemplateInput, ...],
+                     resolve_ctx: ResolveContext) -> SurfacePlanningViewKind:
+        """Capture and report without preparing plans or projecting working maps."""
+        view = self.capture_view(world, locations, mode=mode,
+            mountain_templates=mountain_templates, resolve_ctx=resolve_ctx)
+        report_surface_diagnostics(view.capture_diagnostics, resolve_ctx=resolve_ctx)
+        return self.extent_status(view)
 
     def prepare_captured(self, view: SurfacePlanningView, *, world: World,
                          wait: PlanWaitControl, resolve_ctx: ResolveContext

@@ -63,6 +63,7 @@ def _orch(*, outdoor=None, bake_result=None):
     guard.require_fresh = AsyncMock()
     return WorldSurfaceMaterializationOrchestrator(
         pack, planning=MagicMock(), capture=MagicMock(), db=db, publication_guard=guard,
+        region_state_repo=AsyncMock(get_by_world=AsyncMock(return_value=[])),
         detailed=detailed,
         outdoor=outdoor,
     )

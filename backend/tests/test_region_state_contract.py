@@ -26,6 +26,7 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape
 from app.dataModel.terrainMasks.regions import ForestSpec, PlainSpec
 from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 from app.db.database import Database
 from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
 from app.db.repositories.iRegionStateRepository import IRegionStateRepository
@@ -191,6 +192,29 @@ class RegionRevisionTests(unittest.TestCase):
 
 
 class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_snapshot_is_readonly_and_next_operation_reads_fresh_state(self):
+        repo = AsyncMock(spec=IRegionStateRepository)
+        state = RegionState(region_uid="r", current_type="plains", spec_fingerprint=None)
+        repo.get_by_world.return_value = [state_to_row(state, world_uid="w",
+            created_at="then", updated_at="now")]
+        first = await load_region_state_snapshot(repo, "w")
+        with self.assertRaises(TypeError):
+            first["r"] = StateSnapshotEntry("forest")
+        repo.get_by_world.return_value = []
+        second = await load_region_state_snapshot(repo, "w")
+        self.assertIn("r", first)
+        self.assertEqual(second, {})
+        self.assertIsNot(first, second)
+        with self.assertRaises(TypeError):
+            second["r"] = first["r"]
+        self.assertEqual(repo.get_by_world.await_count, 2)
+
+    async def test_optional_loader_outside_operations_retains_empty_semantics(self):
+        snapshot = await load_region_state_snapshot(None, "w")
+        self.assertEqual(snapshot, {})
+        with self.assertRaises(TypeError):
+            snapshot["r"] = StateSnapshotEntry("plains")
+
     async def test_async_owners_forward_repository_snapshot_before_compute(self):
         class ComputeBoundary(Exception):
             pass
@@ -205,24 +229,34 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
         climate = MagicMock()
         climate.bake_coarse = AsyncMock(return_value=(None, 0))
         entry, planner, world_map = MagicMock(), MagicMock(), MagicMock()
-        entry.has_job_repo = False
+        entry.has_job_repo = True
+        async def drain(*args, **kwargs):
+            self.assertEqual(repo.get_by_world.await_count, 1)
+            self.assertIn("r", kwargs["region_state_snapshot"])
+            repo.get_by_world.return_value = []
+        entry.drain_persisted = AsyncMock(side_effect=drain)
         planner.plan.return_value.tile_tuples.return_value = [(0, 0)]
         planner.plan.return_value.cap_applied = None
         world_map.bake_tiles.side_effect = ComputeBoundary
         owner = PackMaterializationOrchestrator(terrain, world_map=world_map,
+            bake_defaults=PackBakeDefaults(background_drain_per_request=1),
             entry=entry, climate_bake=climate, tile_planner=planner, region_state_repo=repo, planning=MagicMock(), capture=MagicMock())
         with patch("app.application.worldData.planning.composition.surfacePlanningEntry.SurfacePlanningEntry.prepare_captured",
                    return_value=(fine._surface_ctx(world), working_fixture(world, fine._surface_ctx(world)))), self.assertRaises(ComputeBoundary):
             await owner.materialize_light_pack(world.world_uid, world, [], writer, mat_ctx, wait=RequestPlanWait.unbounded())
         self.assertEqual(world_map.bake_tiles.call_args.kwargs["region_state_snapshot"]["r"].current_type, "plains")
+        snapshot = world_map.bake_tiles.call_args.kwargs["region_state_snapshot"]
+        self.assertIs(snapshot, entry.drain_persisted.call_args.kwargs["region_state_snapshot"])
+        self.assertEqual(repo.get_by_world.await_count, 1)
         runner = FineChunkRunner(terrain)
-        snapshot = await load_region_state_snapshot(repo, world.world_uid)
         with patch("app.application.worldData.pack.refine.fine.fineChunkRunner.prepare_fine_tile",
                    side_effect=ComputeBoundary) as prep, self.assertRaises(ComputeBoundary):
             await runner.refine_rects(world, [], writer, mat_ctx, fine._surface_ctx(world),
                                      0, 0, [MagicMock()], [], region_state_snapshot=snapshot,
                                      working=working_fixture(world, fine._surface_ctx(world)))
         self.assertEqual(prep.call_args.kwargs["region_state_snapshot"]["r"].spec_fingerprint, "old")
+        self.assertIs(prep.call_args.kwargs["region_state_snapshot"], snapshot)
+        self.assertEqual(await load_region_state_snapshot(repo, world.world_uid), {})
         self.assertEqual(repo.get_by_world.await_count, 2)
         repo.upsert.assert_not_called()
         repo.upsert_bulk.assert_not_called()

@@ -221,13 +221,16 @@ class PackMaterializationOrchestrator:
             raise ValueError("validation cannot materialize a pack")
         relief_templates = await _load_relief_templates(self._relief_loader, world)
         templates = mountain_template_inputs(relief_templates)
-        captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+        entry = SurfacePlanningEntry(self._planning, self._capture)
+        captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
-        prepared = SurfacePlanningEntry(self._planning, self._capture).prepare_captured(
+        prepared = entry.prepare_captured(
             captured, world=world, wait=wait, resolve_ctx=request_ctx)
         if prepared is None:
             raise ValueError("surface terrain context unavailable")
         surface_bundle, working = prepared
+        if self._region_state_repo is None:
+            raise ValueError("region state repository required for materialization")
         region_states = await load_region_state_snapshot(self._region_state_repo, world_uid)
         plan = self._planner.plan(
             world, locations, scope=scope, max_tiles=max_tiles,

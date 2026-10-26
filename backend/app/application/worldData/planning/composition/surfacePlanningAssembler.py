@@ -1,11 +1,12 @@
 """Explicit phase calls over one frozen view; cache/scheduling delegate to PlanningService."""
 
 import logging
+from collections.abc import Iterable
 
 from pydantic import TypeAdapter
 
 from app.application.jsonValidation.resolve import ResolveContext, report_issues, UnresolvedModelError
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
@@ -116,7 +117,14 @@ def prepare_captured_bundle(view: SurfacePlanningView, *, planning: SurfacePlann
                          bundle.relief, bundle.hydrology_routes, bundle.river_relief,
                          bundle.hydrology, bundle.climate_local):
             diagnostics.extend(envelope.diagnostics)
-    diagnostics = list(dict.fromkeys(diagnostics))
+    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
+    return bundle
+
+
+def report_surface_diagnostics(diagnostics: Iterable[PlanDiagnostic], *,
+                               resolve_ctx: ResolveContext) -> None:
+    """Shared reporting policy for capture-only probes and prepared plans."""
+    diagnostics = tuple(dict.fromkeys(diagnostics))
     issues = tuple(item.issue for item in diagnostics
         if item.disposition is not PlanDiagnosticDisposition.NOTICE)
     report_issues(resolve_ctx, (issue for issue in issues if issue not in resolve_ctx.errors))
@@ -126,4 +134,3 @@ def prepare_captured_bundle(view: SurfacePlanningView, *, planning: SurfacePlann
                 item.issue.path, item.issue.code, item.issue.message)
     if resolve_ctx.validate_only and issues:
         raise UnresolvedModelError(list(dict.fromkeys(issues)))
-    return bundle

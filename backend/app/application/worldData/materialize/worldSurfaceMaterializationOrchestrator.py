@@ -180,9 +180,9 @@ class WorldSurfaceMaterializationOrchestrator:
         if self._planning is None or self._capture is None:
             raise ValueError("surface planning dependencies required")
         entry = SurfacePlanningEntry(self._planning, self._capture)
-        view = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
+        status = entry.probe_extent(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=(), resolve_ctx=ResolveContext())
-        if entry.extent_status(view) == SurfacePlanningViewKind.NO_EXTENT:
+        if status == SurfacePlanningViewKind.NO_EXTENT:
             raise ValueError("surface terrain context unavailable")
         return self._pack.tile_planner.plan(
             world, locations,
@@ -259,13 +259,16 @@ class WorldSurfaceMaterializationOrchestrator:
         relief_templates = (await load_relief_templates_for_world(self._pack.relief_loader, world)
             if self._pack.relief_loader is not None else {})
         templates = mountain_template_inputs(relief_templates)
-        captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+        entry = SurfacePlanningEntry(self._planning, self._capture)
+        captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
-        prepared = SurfacePlanningEntry(self._planning, self._capture).prepare_captured(
+        prepared = entry.prepare_captured(
             captured, world=world, wait=wait, resolve_ctx=request_ctx)
         if prepared is None:
             raise ValueError("surface terrain context unavailable")
         surface_bundle, working = prepared
+        if self._region_state_repo is None:
+            raise ValueError("region state repository required for materialization")
         region_states = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
         detailed = await self._detailed.bake(
             world, locations, pack_writer, ctx, surface_bundle, request,

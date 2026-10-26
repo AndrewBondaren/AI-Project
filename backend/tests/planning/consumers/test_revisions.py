@@ -218,7 +218,7 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         self.sql = []
         await self.db.main_conn.set_trace_callback(self.sql.append)
 
-    async def operation(self, kind, *, stale=False, validation=False):
+    async def operation(self, kind, *, stale=False, validation=False, missing_state_source=False):
         from unittest.mock import AsyncMock, MagicMock
         from app.application.cancellation.requestPlanWait import RequestPlanWait
         from app.application.worldData.materialize.materializationContext import MaterializationContext
@@ -227,6 +227,8 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import WorldSurfaceMaterializationOrchestrator
         from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import PackDetailedBakeResult
         from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
+        from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
+        repo = None if missing_state_source else SqliteRegionStateRepository(self.db)
         async def compute(*args, **kwargs):
             self.assertFalse(self.db.main_conn.owns_unit_of_work, "bake must not hold the publication lock")
             if stale:
@@ -246,7 +248,7 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         pack = PackMaterializationOrchestrator(MagicMock(), world_map=world_map,
             entry=entry, climate_bake=climate, tile_planner=planner,
             world_repository=self.worlds, db=self.db, planning=self.c.assembler,
-            capture=self.capture, publication_guard=self.guard)
+            capture=self.capture, publication_guard=self.guard, region_state_repo=repo)
         if kind == "l0":
             return await pack.materialize_light_pack(self.source.world_uid, self.source, [], self.writer,
                 MaterializationContext(1), wait=RequestPlanWait.unbounded(),
@@ -257,7 +259,8 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
             return PackDetailedBakeResult(scope="wilderness", terrain=PersistResult.from_counts(0, 0))
         detailed.bake = AsyncMock(side_effect=compute_detailed)
         owner = WorldSurfaceMaterializationOrchestrator(pack, detailed=detailed,
-            planning=self.c.assembler, capture=self.capture, db=self.db, publication_guard=self.guard)
+            planning=self.c.assembler, capture=self.capture, db=self.db, publication_guard=self.guard,
+            region_state_repo=repo)
         return await owner.materialize_pack_detailed(self.source, [], MaterializationContext(1), self.writer,
             DetailedBakeRequest(scope="wilderness", tile_gx=0, tile_gy=0), wait=RequestPlanWait.unbounded(),
             resolve_ctx=ResolveContext(validate_only=validation))
@@ -285,6 +288,7 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         await self.fresh("detailed")
 
     async def fresh(self, kind):
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
         save, check = self.writer.save_manifest, self.guard.require_fresh
         events = []
         async def require(*args, **kwargs):
@@ -295,13 +299,23 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(self.db.main_conn.owns_unit_of_work)
             events.append("publish")
             save()
-        with patch.object(self.guard, "require_fresh", side_effect=require), patch.object(
+        with patch.object(SurfacePlanningEntry, "capture_view", autospec=True,
+                side_effect=SurfacePlanningEntry.capture_view) as entry_capture, patch.object(
+                self.guard, "require_fresh", side_effect=require), patch.object(
                 self.writer, "save_manifest", side_effect=publish), patch.object(
                 self.capture, "capture", wraps=self.capture.capture) as captures:
             await self.operation(kind)
         self.assertEqual(events, ["check", "publish"])
         self.assertEqual(captures.call_count, 2, "one entry capture and one authoritative re-capture")
+        self.assertEqual(entry_capture.call_count, 1)
         self.assertIn("COMMIT", self.sql)
+
+    async def test_missing_region_state_source_never_publishes(self):
+        for kind in ("l0", "detailed"):
+            with self.subTest(kind=kind), patch.object(self.writer, "save_manifest") as save:
+                with self.assertRaisesRegex(ValueError, "region state repository required"):
+                    await self.operation(kind, missing_state_source=True)
+                save.assert_not_called()
 
     async def test_validation_never_bakes_or_publishes_l0_or_detailed(self):
         for kind in ("l0", "detailed"):
