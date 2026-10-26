@@ -53,6 +53,46 @@ def _world(**overrides):
 
 
 class TestMergeDeclare(unittest.TestCase):
+    def test_collection_alias_identity_and_source_precedence_without_pack_context(self):
+        from app.application.worldData.masks.collection.defaultCollect import default_collect
+        from app.application.worldData.masks.runMaskDomain import default_collect as legacy
+        from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
+
+        self.assertIs(legacy, default_collect)
+        scope = object()
+        calls = []
+        declared = [("shared", "declared")]
+        anchors = [("shared", "anchor"), ("anchor", "anchor")]
+        auto = [("shared", "auto"), ("anchor", "auto"), ("auto", "auto"), ("auto", "duplicate")]
+
+        class Sources:
+            def load_declared(inner, ctx):
+                self.assertIs(ctx, scope)
+                calls.append("declared")
+                return declared
+
+            def load_anchor_specs(inner, ctx):
+                self.assertIs(ctx, scope)
+                calls.append("anchors")
+                return anchors
+
+            def autoresolve_specs(inner, ctx, policy):
+                self.assertIs(ctx, scope)
+                self.assertTrue(policy.autoresolve)
+                calls.append("auto")
+                return auto
+
+        for enabled in (False, True):
+            calls.clear()
+            result = default_collect(Sources(), scope, MaskCategoryPolicy(autoresolve=enabled), key=lambda s: s[0])
+            self.assertEqual(calls, ["declared", "anchors"] + (["auto"] if enabled else []))
+            self.assertEqual(result, [declared[0], anchors[1]] + ([auto[2]] if enabled else []))
+            self.assertIs(result[0], declared[0])
+            self.assertIs(result[1], anchors[1])
+        self.assertEqual(len(declared), 1)
+        self.assertEqual(len(anchors), 2)
+        self.assertEqual(len(auto), 4)
+
     def test_declare_wins(self) -> None:
         a = MountainSpec(origin_x_m=0, origin_y_m=0, radius_m=100, location_uid="a")
         b = MountainSpec(origin_x_m=0, origin_y_m=0, radius_m=100, location_uid="a")

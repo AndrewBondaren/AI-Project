@@ -5,6 +5,21 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import assert_type
 
+from app.application.worldData.masks.collection.defaultCollect import MaskSourceCollector, default_collect
+from app.application.worldData.masks.runMaskDomain import MaskDomainMaterializer
+from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
+from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
+
+
+def source_collection_types(
+    broad: MaskSourceCollector[object, int], ctx: LandcoverCollectContext,
+    materializer: MaskDomainMaterializer[int], policy: MaskCategoryPolicy,
+) -> MaskSourceCollector[LightGridBakeContext, int]:
+    narrow: MaskSourceCollector[LandcoverCollectContext, int] = broad
+    assert_type(default_collect(narrow, ctx, policy, key=lambda value: value), list[int])
+    return materializer
+
 from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.planning.providers.planProvider import PlanProvider, RegisteredPlanContract

@@ -1,5 +1,25 @@
 """Every marked line must produce its specified pyright diagnostic."""
 
+from app.application.worldData.masks.collection.defaultCollect import MaskSourceCollector, default_collect
+from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
+from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
+
+
+def invalid_collection_context_variance(
+    collector: MaskSourceCollector[LandcoverCollectContext, int],
+) -> MaskSourceCollector[object, int]:
+    return collector  # EXPECT: reportReturnType
+
+
+def invalid_collection_spec_variance(
+    collector: MaskSourceCollector[object, int],
+) -> MaskSourceCollector[object, object]:
+    return collector  # EXPECT: reportReturnType
+
+
+def invalid_collection_context(collector: MaskSourceCollector[int, int], policy: MaskCategoryPolicy) -> None:
+    default_collect(collector, "wrong context", policy, key=lambda value: value)  # EXPECT: reportArgumentType
+
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.application.cache.contracts.cacheBackend import CacheBinding
@@ -273,4 +293,4 @@ def invalid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY) -
     working.terrain.relief_z[(gx, gy)] = 1  # EXPECT: reportIndexIssue
     working.hydrology.fine_z_for_tile(gx, gy)[(gx, gy)] = 1  # EXPECT: reportIndexIssue
     working.climate = working.climate  # EXPECT: reportAttributeAccessIssue
-    working.climate.sample_pole(1, 2)  # EXPECT: reportArgumentType
+    working.climate.sample_pole(1, 2)  # EXPECT: reportArgumentType (2)

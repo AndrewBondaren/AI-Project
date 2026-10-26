@@ -8572,7 +8572,7 @@ Done: generator не зависит от pack bake context/adapters; все тр
   применяют один доменный контракт и тот же state snapshot.
 
 **PC-11.6a — перенос общих контрактов, геометрии и pure collection.**
-Статус: **IMPLEMENTED / VERIFIED (2026-10-26), ожидает приёмки мастера.**
+Статус: **IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-26), готов к приёмке мастера.**
 Вариант мастера: A — generic MaskSourceCollector[CtxT, SpecT] (узкий
 source-протокол); MaskDomainMaterializer удовлетворяет ему структурно,
 callers не менялись.
@@ -8603,12 +8603,89 @@ callers не менялись.
   regression (pack_bake_modes, detailed_bake_c11, wp13_entry_first,
   parent_light_refine, wilderness_region_index, world_topology) — 63 OK.
   compileall app — чисто.
-- pyright §6.27/valid0-negative — failed prerequisite: node_modules/.bin/
-  pyright и node/npx в окружении отсутствуют; не скачивались.
+- Первоначальный запуск не выполнил pyright из-за отсутствия executable в
+  том окружении; повторная проверка ниже выполнена локальным pyright 1.1.414.
 - WARN folder-composition выдан в чат; итоговые counts в пределах карты
   PC-11.1: dataModel/spatial/grid 5→6, coordinates 11→11 (+light/=2),
   masks 13→13 (+collection/=2), landcover без новых файлов.
   SQL/DAG/backend-start/коммитов нет. Baseline delta нет.
+Повторная проверка и исправления для приёмки (2026-10-26):
+- Проверены implementation commits 64b5d349/fd79acf6 и фактические тела
+  операций, не только import graph. Canonical owners: spatial/grid/
+  lightGridScale.py — размерность и локальный rim по Facing; coordinates/
+  light/grid.py — пять арифметических преобразований; masks/collection/
+  defaultCollect.py — порядок вызовов source loaders и merge; mergeDeclare.py
+  — подавление коллизий ключей. Defaults world-map policy остались в wire
+  policy; новых policy defaults/fallback в spatial/collection нет.
+- LandcoverCollectContext: только world (existing recipe), locations (anchor
+  geometry), scale, tiles (scope/diagnostics). Frozen application record,
+  пока без consumers. Нет context factory, services, callbacks, canvas,
+  plan refs/working maps, topology resolution или snapshot lifecycle.
+  Это не копия LightGridBakeContext. LandcoverInputs отдельно несёт готовые
+  topology, facts reader, anchor specs и явную state mapping, не capture API.
+- Проверена цепочка default_collect → LandcoverMaterializer loaders:
+  declarations/anchors дают identity/spec; autoresolve → coverage_registry →
+  autoresolve_regions → seedGrid/mergeSublocations/ClaimOwnersIndex даёт
+  доменные seed/claim/area, сохраняя существующий pass-local owners cache.
+  Эти операции принадлежат landcover/regions/raster, не generic collector.
+  В callbacks нет pack run/apply, planning request или repository writes.
+- Проверены collect.resolve_collected → regionRevision/regionCoverageValidation/
+  coverageResolver: fingerprint authored spec, read-only state overlay,
+  REF-W validation и anchor geometry остаются доменными операциями.
+  region state не захватывается/не сохраняется; topology не разрешается
+  из World. fine_topology — геометрическое масштабирование готовых bounds
+  в dataModel/topology, neighbor/canonicalize принадлежат WorldTopology.
+- Проверен facts_at через LandcoverObservations → factConsumers climate/
+  relief/hydrology: только чтение готовых domain working views и агрегация
+  наблюдений. Нет planning/materialize/canvas/SQL или lifecycle snapshots.
+  Проверены также source policy/identity, raster noise/density/precedence,
+  L0 contributor/input adapter, finePaint, outline, apply/applyFootprint.
+  Новой или перенесённой чужой ответственности в PC-11.6a не обнаружено;
+  существующее смешение из списка PC-11.6b ниже не выдано за исправленное.
+- Исправлена типизация fd79acf6: protocol context контравариантен
+  (CtxContraT), у default_collect отдельный CtxT; SpecT инвариантен,
+  поскольку возвращается mutable list[SpecT]. Прежняя ковариантность SpecT
+  давала reportInvalidTypeVarUse при явной проверке нового модуля.
+  key получил Callable[[SpecT], object]. Поведение сборки не менялось.
+- Добавлены positive cases structural MaskDomainMaterializer → source protocol,
+  contravariant context narrowing и list result; negative cases запрещают
+  обратное расширение context, ковариантность mutable spec и чужой context.
+  В existing negative case sample_pole(1, 2) явно указаны две diagnostics
+  (по одной на GridX/GridY), вместо неявной кратности.
+- Identity tests проверяют is всех пяти coordinate fns, scale, span и
+  default_collect на old/new путях. Geometry vectors включают отрицательные
+  границы, неделимый 1000/32, origin/center и прежний clamp; collection test
+  проверяет declared > anchors > auto, skip auto, дубликаты, identity и
+  неизменность source lists без pack context. AST-сверка с 64b5d349^:
+  scale/coordinates/span и тело collection прежние (нормализовано только
+  переименование receiver materializer → collector); методы landcover
+  materializer/collect/claim/seedGrid/mergeSublocations не изменены.
+- Проверки из корня, PYTHONPATH=backend;backend/tests,
+  .venv/Scripts/python.exe -m unittest:
+  geometry/raster/mask-domain/landcover/materializer/contributor/compose/
+  facts/state/fine-paint/index/topology + canonical codec — 124 OK;
+  повтор geometry с новыми identity/vectors и TestMergeDeclare, consumer
+  wiring/fingerprint vectors, topology_unrolled_geometry/light_bake_cleanup
+  — 72 OK; discover tests/planning/consumers — 77 OK. Группы пересекаются.
+  Canonical encoding и фиксированные revision/ref fingerprint vectors прежние.
+- node_modules/.bin/pyright.cmd --project
+  backend/tests/typing/planning/pyrightconfig.valid.json --outputjson:
+  185 files, 0 errors / 0 warnings; новые spatial/light/collection/types
+  явно добавлены в include. Negative config: 56 diagnostics на 54 EXPECT
+  строках; exact multiset (file, line, rule, multiplicity) совпал,
+  missing/unexpected=0. Шесть прежних несуществующих include paths valid
+  config дают stderr notices; новые модули реально проанализированы.
+- Явно остаётся PC-11.6b: pack runner run_mask_domain/footprint writers
+  пока в masks; LandcoverMaterializer.apply → landcover/apply → canvas writer;
+  collect/materializer signatures принимают LightGridBakeContext;
+  finePaint фабрикует bake context и использует pack background/input adapter;
+  outline/read цепочка ещё pack-context based; RegionRasterContext и
+  regionRasterizer импортируют pure scale/coordinate aliases через pack path.
+  Включая types → regionRasterContext → pack coords, это существующие aliases
+  тех же pure объектов, без нового pack execution. Caller cutover не выполнен.
+  Отдельный legacy observation channel остаётся PC-11.7, не часть приёмки 11.6a.
+- Нерешённых нарушений responsibility gate или блокеров PC-11.6a нет.
+  Родительский PC-11.6 и PC-11.6b не закрыты. Код не коммитился.
 Зависимости: принятые PC-11.1/11.5.
 Цель: подготовить нижележащие pack-free контракты без переключения всего
   L0/L2/outline caller chain в этом же diff.
@@ -8629,10 +8706,40 @@ callers не менялись.
   Перенос scale/coordinate symbols не переносит ownership WorldTopology из
   домена топологии. Macro→fine преобразование координат не является replay
   snapshots; domain context не приобретает snapshot lifecycle.
+**Обязательный gate разделения ответственности (PC-11.6a).**
+  Приёмка проверяет фактических владельцев операций и данных во всей зоне
+  влияния реализации: новые и изменённые modules, DTO, helpers, adapters,
+  вызываемые callbacks и транзитивные зависимости на затронутых стыках.
+  LightGridScale/light_span_for описывают spatial scale; coordinate functions
+  выполняют только геометрические преобразования. default_collect и узкий
+  MaskSourceCollector отвечают только за сборку/merge источников; доменные
+  loaders сохраняют свою ответственность у соответствующих owners. Сам
+  default_collect вызывает loaders и потому не заявляется строго pure.
+  Общая сборка не приобретает pack execution, canvas/footprint write,
+  planning, topology resolve или snapshot lifecycle. LandcoverCollectContext
+  несёт только доменный collection scope/recipe; копия LightGridBakeContext
+  под новым именем или универсальный контейнер зависимостей недопустимы.
+  Антипаттерн: перемещение кода либо сокрытие зависимости за generic protocol,
+  callback, context или re-export при сохранении смешения ответственности
+  в переносимой операции или его вытеснении в соседний helper/adapter.
+  Отсутствие прямого import pack и прохождение тестов сами по себе gate
+  не выполняют. Если реализация создаёт, переносит или маскирует такое
+  смешение в любой затронутой точке, PC-11.6a НЕ МОЖЕТ БЫТЬ ЗАКРЫТ.
+  Существующие зависимости, явно отложенные в PC-11.6b, перечисляются
+  отдельно и не считаются исправленными этим шагом; это исключение не
+  разрешает добавлять или переносить в них новые чужие обязанности.
+  Исправления выполняются в scope PC-11.6a; необходимость архитектурного
+  решения или расширения scope фиксируется как блокер приёмки, а не
+  обходится скрытым caller cutover или формальным переносом symbols.
 Проверка: symbol identity old/new import paths, geometry/raster/collection
   baseline, canonical encoding/fingerprint vectors и pyright valid0/negative exact.
   В diff нет смены L0/L2/outline поведения и caller cutover.
+  Обязателен review gate выше: отчёт содержит owners операций и данных,
+  проверенные стыки/транзитивные зависимости, найденные нарушения и их
+  исправления, отдельно отложенные зависимости PC-11.6b и открытые блокеры.
 Done: pure нижние контракты и owners готовы; production поведение прежнее.
+  Gate разделения ответственности пройден; нерешённых нарушений и блокеров
+  в зоне влияния реализации нет. Без этого DONE/закрытие шага запрещены.
   Это промежуточная приёмка контракта, не закрытие инверсии всего PC-11.6.
 
 **PC-11.6b — разделение domain/pack исполнения и атомарный caller cutover.**

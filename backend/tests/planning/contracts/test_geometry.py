@@ -90,6 +90,39 @@ class GridBBoxTests(TestCase):
 
 
 class CoordinateValueTests(TestCase):
+    def test_light_scale_and_all_coordinate_aliases_share_canonical_objects(self):
+        from app.application.worldData.pack.bake.lightGrid import coords as legacy
+        from app.application.worldData.generators.coordinates.light import grid
+        from app.dataModel.spatial.grid import lightGridScale as scale
+        from app.dataModel.worldPack.wire.worldMapCellsPerTile import light_span_for
+
+        for name in ("LightGridScale", "light_span_for"):
+            self.assertIs(getattr(legacy, name), getattr(scale, name))
+        self.assertIs(light_span_for, scale.light_span_for)
+        for name in ("fine_to_light", "light_to_macro_local", "light_cell_origin_fine",
+                     "light_cell_center_fine", "fine_to_macro_local"):
+            self.assertIs(getattr(legacy, name), getattr(grid, name))
+
+    def test_light_geometry_retains_negative_boundaries_and_nondivisible_span(self):
+        from app.application.worldData.generators.coordinates.light import grid
+        from app.dataModel.spatial.grid.lightGridScale import LightGridScale, light_span_for
+
+        scale = LightGridScale.from_tile(1000, 32)
+        self.assertEqual(scale.light_span, 31)
+        self.assertEqual(light_span_for(0, 0), 1)
+        self.assertEqual(LightGridScale.from_tile(0, 0), LightGridScale(1, 1, 1))
+        for fine, light, macro in ((-993, -33, (-2, 31)), (-992, -32, (-1, 0)),
+                                   (-1, -1, (-1, 31)), (0, 0, (0, 0)),
+                                   (991, 31, (0, 31)), (992, 32, (1, 0))):
+            with self.subTest(fine=fine):
+                self.assertEqual(grid.fine_to_light(fine, fine, scale), (light, light))
+                self.assertEqual(grid.light_to_macro_local(light, light, scale),
+                                 (macro[0], macro[0], macro[1], macro[1]))
+                self.assertEqual(grid.fine_to_macro_local(fine, fine, scale),
+                                 (macro[0], macro[0], macro[1], macro[1]))
+        self.assertEqual(grid.light_cell_origin_fine(-1, 2, 31, 0, scale), (-39, 2000))
+        self.assertEqual(grid.light_cell_center_fine(-1, 2, 31, 0, scale), (-24, 2015))
+
     def test_coordinate_symbols_are_shared_by_all_import_paths(self):
         from app.application.worldData.generators import coordinates as legacy
         from app.application.worldData.generators.coordinates import types as legacy_types
