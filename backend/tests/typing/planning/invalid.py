@@ -278,7 +278,7 @@ def invalid_local_result(provider: ClimateLocalPlanProvider, request: PlanReques
     return provider.build(request, reader, control)  # EXPECT: reportReturnType
 
 
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningView
 
@@ -287,8 +287,18 @@ def invalid_surface_request(assembler: SurfacePlanningAssembler, bundle: Surface
     assembler.prepare(bundle, wait=wait)  # EXPECT: reportArgumentType
 
 
-def invalid_surface_legacy(view: SurfacePlanningView, working: SurfaceWorkingMaps) -> None:
-    to_legacy_context(view, working=working)  # EXPECT: reportArgumentType
+from app.application.worldData.regions.factConsumers.context import FactConsumerContext
+
+
+def invalid_removed_observation_inputs(ctx: FactConsumerContext, bake: LightGridBakeContext) -> None:
+    FactConsumerContext(cells=(), surface=None)  # EXPECT: reportCallIssue
+    FactConsumerContext(cells=(), local_field=None)  # EXPECT: reportCallIssue
+    FactConsumerContext(cells=(), climate_profiles={})  # EXPECT: reportCallIssue
+    FactConsumerContext(cells=(), relief_z={})  # EXPECT: reportCallIssue
+    FactConsumerContext(cells=(), hydro={})  # EXPECT: reportCallIssue
+    FactConsumerContext(cells=(), surface_z={})  # EXPECT: reportCallIssue
+    ctx.surface  # EXPECT: reportAttributeAccessIssue
+    bake.surface_planning  # EXPECT: reportAttributeAccessIssue
 
 
 def invalid_surface_final_as_routes(bundle: SurfacePlanBundle) -> PlanEnvelope[HydrologyRoutesPlan]:

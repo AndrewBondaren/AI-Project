@@ -39,9 +39,6 @@ from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
 )
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.db.models.namedLocation import NamedLocation

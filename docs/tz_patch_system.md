@@ -48,10 +48,10 @@ metadata:
 к полному набору данных планирования мутации и не меняет владение доменными
 форматами.
 
-## Владелец сбора патчей — DAG (решение мастера, 2026-10-26)
+## Владельцы сбора патчей — только DAG и debug API (уточнение мастера, 2026-10-27)
 
 Контракт Patch/PatchSet сохраняется. **Сбор патчей и формирование patch set
-являются ответственностью DAG.** Доменная patch implementation формирует
+разрешены только DAG и debug API.** Доменная patch implementation формирует
 отдельный typed patch из доменного результата; общий patcher получает уже
 собранный набор и делегирует применение секций доменным обработчикам.
 Patcher и snapshot service не присваивают себе сбор патчей хода.
@@ -59,8 +59,9 @@ Patcher и snapshot service не присваивают себе сбор пат
 Генератор возвращает доменный output. Он не формирует и не собирает patches,
 не вызывает patcher/snapshot CRUD и не пишет через патчи напрямую в
 snapshots. Запись инициируется через debug API либо DAG на application
-границе. Debug API является внешним входом сценария, не переносит сбор
-patch set в генератор; сбор патчей остаётся обязанностью DAG. Наличие общего
+границе. Debug API имеет право самостоятельно собирать patch set своего
+сценария; делегирование сбора DAG не является обязательным. Ни один из этих
+входов не переносит сбор patch set в генератор или доменный handler. Наличие общего
 контракта не даёт генератору write capability к истории snapshots.
 
 **Любой домен, обходящий DAG или debug API как application-вход записи
@@ -93,7 +94,7 @@ flowchart LR
   SNAP[Snapshot<br>blob + patch set дельты хода]
 
   ENTRY[debug API / DAG — application entry]
-  DAG[DAG — сбор patch set]
+  DAG[DAG или debug API — сбор patch set]
   GEN -->|доменный output| ENTRY
   GM -->|параметры изменения| ENTRY
   ENTRY --> A
@@ -143,7 +144,7 @@ class PatchSet(BaseModel):  # дельта одного хода
 | generator | доменный output | patch, snapshot, SQL |
 | domain patch impl | output/params → `Patch` | применение чужих патчей |
 | DAG | сбор патчей и формирование patch set хода | доменная семантика payload, физическое хранение snapshot |
-| debug API | внешний application-вход сценария записи | сбор patch set вместо DAG, генераторная логика |
+| debug API | внешний application-вход сценария записи, сбор патчей и формирование patch set | генераторная логика, доменная семантика payload |
 | patcher (infra) | apply готового patch set через доменные обработчики | сбор патчей хода, доменная семантика |
 | snapshot service | serialize / commit / restore / branch | генерация, LLM payload |
 

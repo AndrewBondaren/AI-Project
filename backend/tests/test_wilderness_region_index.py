@@ -189,9 +189,6 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
         world.world_topology_mode = "planar"
         world.world_bounds = f.world.world_bounds
         world.terrain_masks = f.world.terrain_masks
-        f.ctx.surface_planning.sparse_fine_hydro = {}
-        f.ctx.surface_planning.fine_z_overrides = {}
-        f.ctx.surface_planning.pole_field = None
         from tests.planning.consumers.test_wiring import planning_kwargs
         deps = planning_kwargs(self)
         world.map_settings = {"global_cell_size_m": f.ctx.scale.tile_macro}

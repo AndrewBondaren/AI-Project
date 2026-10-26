@@ -137,7 +137,7 @@ class RiverWaterlineTests(unittest.TestCase):
 
     def test_pipeline_supplies_pre_river_elevation_to_fine_profiles(self):
         from tests.planning.consumers.test_wiring import Composition, capture, world
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
         from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
         from app.application.cancellation.requestPlanWait import RequestPlanWait
         composition = Composition()
@@ -156,11 +156,11 @@ class RiverWaterlineTests(unittest.TestCase):
         from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
         original = FineRiverPlanner.plan
         with patch.object(FineRiverPlanner, "plan", autospec=True, side_effect=original) as fine:
-            ctx = prepare_surface_terrain_context(source, [], planning=composition.assembler,
-                capture=SurfacePlanningCapture(), wait=RequestPlanWait.unbounded())
+            _, working = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture()).require_plan_inputs(
+                source, [], wait=RequestPlanWait.unbounded())
         bundle = composition.prepare(capture(source))
         self.assertTrue(bundle.river_relief.payload.coarse_beds)
-        self.assertTrue(ctx.fine_z_overrides)
+        self.assertTrue(working.hydrology.fine_z_overrides)
         self.assertEqual(fine.call_args.kwargs["surface_z"], bundle.relief.payload.surface_z)
         self.assertNotEqual(bundle.relief.payload.surface_z, bundle.hydrology.payload.coarse_surface_z,
             "fine routing must sample pre-river heights even when coarse river beds changed them")

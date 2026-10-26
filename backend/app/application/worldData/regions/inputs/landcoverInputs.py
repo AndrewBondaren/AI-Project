@@ -15,14 +15,12 @@ from app.application.worldData.generators.terrain.landcover.types import (
 from app.application.worldData.regions.factConsumers import collect_facts
 from app.application.worldData.regions.factConsumers.context import FactConsumerContext
 from app.application.worldData.regions.regionFacts import RegionFacts
-from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.spatial.regionShape import Point
 from app.dataModel.topology.worldTopology import WorldTopology
 
 if TYPE_CHECKING:
     from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
-    from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +38,7 @@ class LandcoverObservations:
         hydrology: HydrologyWorkingFields,
     ) -> LandcoverObservations:
         return cls(topology, grid, FactConsumerContext(
-            surface=None, cells=(), climate=climate, terrain=terrain, hydrology=hydrology,
+            cells=(), climate=climate, terrain=terrain, hydrology=hydrology,
         ))
 
     def facts_at(self, point: Point) -> RegionFacts:
@@ -62,15 +60,3 @@ def prepare_landcover_inputs(
 ) -> LandcoverInputs:
     """Bind state without rebuilding observations or resolving world data."""
     return working.landcover.inputs(state_snapshot, anchor_specs)
-
-
-def prepare_landcover_inputs_legacy(
-    topology: WorldTopology,
-    grid: SurfaceGridSettings,
-    surface: SurfaceTerrainContext | None,
-    climate_profiles: Mapping[str, ClimateZoneProfile] | None,
-    state_snapshot: Mapping[str, StateSnapshotEntry],
-) -> LandcoverInputs:
-    """Migration-only surface channel; removed in PC-11.7 with its remaining callers."""
-    observation = LandcoverObservations(topology, grid, FactConsumerContext(surface, (), climate_profiles))
-    return observation.inputs(state_snapshot)

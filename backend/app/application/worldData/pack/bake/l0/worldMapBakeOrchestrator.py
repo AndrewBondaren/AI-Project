@@ -7,9 +7,6 @@ import time
 from collections import Counter
 from collections.abc import Mapping
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import (
-    to_legacy_context,
-)
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
@@ -56,7 +53,7 @@ def _coarse_hydro_hist(coarse_hydro: Mapping[tuple[int, int], MapCellHydrology])
     return dict(Counter(_coarse_hydro_role_name(v) for v in coarse_hydro.values()))
 
 
-def _surface_z_hist(surface_z: dict[tuple[int, int], int]) -> dict[str, int]:
+def _surface_z_hist(surface_z: Mapping[tuple[int, int], int]) -> dict[str, int]:
     return {str(k): v for k, v in Counter(surface_z.values()).items()}
 
 
@@ -106,19 +103,19 @@ class WorldMapBakeOrchestrator:
         ctx_t0 = time.perf_counter()
         graph_nodes = list(nodes or [])
         graph_edges = list(edges or [])
-        # The working copy and frozen refs always originate from this same bundle.
-        surface_ctx = to_legacy_context(surface_bundle, working=working)
+        surface_bundle = SurfacePlanBundle.model_validate(surface_bundle)
+        hydro = working.hydrology
         log_pack_surface_context(
             world_uid,
             ok=True,
             started_at=ctx_t0,
-            coarse_surface_z_n=len(surface_ctx.coarse_surface_z),
-            coarse_hydro_n=len(surface_ctx.coarse_hydro),
-            sparse_fine_hydro_n=len(surface_ctx.sparse_fine_hydro),
-            fine_z_overrides_n=len(surface_ctx.fine_z_overrides),
+            coarse_surface_z_n=len(hydro.coarse_surface_z),
+            coarse_hydro_n=len(hydro.coarse_hydro),
+            sparse_fine_hydro_n=len(hydro.sparse_fine_hydro),
+            fine_z_overrides_n=len(hydro.fine_z_overrides),
             hydrology_enabled=is_hydrology_enabled(world),
-            hydro_role_hist=_coarse_hydro_hist(surface_ctx.coarse_hydro),
-            surface_z_hist=_surface_z_hist(surface_ctx.coarse_surface_z),
+            hydro_role_hist=_coarse_hydro_hist(hydro.coarse_hydro),
+            surface_z_hist=_surface_z_hist(hydro.coarse_surface_z),
         )
 
         tile_macro = map_cell_fine_span(world)
@@ -134,12 +131,11 @@ class WorldMapBakeOrchestrator:
             scale=scale,
             nodes=graph_nodes,
             edges=graph_edges,
-            surface_planning=surface_ctx,
             surface_bundle=surface_bundle,
             working=working,
             topology=working.landcover.topology,
             grid=working.landcover.grid,
-            pole_field=surface_ctx.pole_field,
+            pole_field=working.climate.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
             region_state_snapshot=region_state_snapshot,
@@ -181,8 +177,8 @@ class WorldMapBakeOrchestrator:
                 terrain_hist=terrain_hist,
                 hydro_hist=hydro_hist,
                 surface_z_hist={str(k): v for k, v in surface_z_hist.items()},
-                macro_hydro_role=_hydro_cell_role_label(surface_ctx.coarse_hydro.get((gx, gy))),
-                macro_surface_z=int(surface_ctx.coarse_surface_z.get((gx, gy), 0)),
+                macro_hydro_role=_hydro_cell_role_label(hydro.coarse_hydro.get((gx, gy))),
+                macro_surface_z=int(hydro.coarse_surface_z.get((gx, gy), 0)),
                 tile_uid=macro_tile_uid(
                     world_seed=pack_job_seed(world), tile_gx=gx, tile_gy=gy,
                 ),
@@ -217,7 +213,7 @@ class WorldMapBakeOrchestrator:
         """Single-tile convenience wrapper around compose pipeline."""
         wait.raise_if_cancelled()
         locs = locations or []
-        surface_ctx = to_legacy_context(surface_bundle, working=working)
+        surface_bundle = SurfacePlanBundle.model_validate(surface_bundle)
         tile_macro = map_cell_fine_span(world)
         side = cells_per_side or resolve_world_map_cells_per_tile(
             tile_macro,
@@ -230,12 +226,11 @@ class WorldMapBakeOrchestrator:
             locations_index=index,
             tiles=[(gx, gy)],
             scale=LightGridScale.from_tile(tile_macro, side),
-            surface_planning=surface_ctx,
             surface_bundle=surface_bundle,
             working=working,
             topology=working.landcover.topology,
             grid=working.landcover.grid,
-            pole_field=surface_ctx.pole_field,
+            pole_field=working.climate.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             region_state_snapshot=region_state_snapshot,
         )

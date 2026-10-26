@@ -23,13 +23,11 @@ if str(REPO / "backend") not in sys.path:
 
 from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.worldData.planning.composition.surfacePlanningAssembler import to_legacy_context
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.core.appSettings import app_settings
 from app.core.configManager import ConfigManager
 from app.core.container import Container
-from app.application.worldData.generators.hydrology.load.resolveHydrologyTopology import resolve_hydrology_topology
 from app.dataModel.topology.topologyGeometry import canonical_neighbors4
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -54,25 +52,25 @@ def coarse_snapshot(world, locations, *, planning, capture, wait) -> dict:
     if prepared is None:
         raise AssertionError("empty coarse heightmap")
     bundle, working = prepared
-    context = to_legacy_context(bundle, working=working)
-    topology = resolve_hydrology_topology(world, context.coarse_hm, locations=locations)
-    index = context.coarse_hydro
+    topology = working.landcover.topology
+    surface_z = working.hydrology.coarse_surface_z
+    index = working.hydrology.coarse_hydro
     water = {cell: entry for cell, entry in index.items()
              if entry.role is not None and entry.role.is_open_water_role()}
     for cell, entry in water.items():
         assert entry.water_body_uid and entry.z_water_level is not None, (cell, entry)
-        assert context.coarse_hm.surface_z[cell] < entry.z_water_level, (cell, entry)
+        assert surface_z[cell] < entry.z_water_level, (cell, entry)
     shores = {cell: entry for cell, entry in index.items() if entry.role and entry.role.value == "shore"}
     for cell, entry in shores.items():
         assert not entry.liquid_candidate and entry.water_body_uid, (cell, entry)
         assert entry.z_water_level is not None, (cell, entry)
-        assert context.coarse_hm.surface_z[cell] >= entry.z_water_level, (cell, entry)
+        assert surface_z[cell] >= entry.z_water_level, (cell, entry)
         assert any(neighbor in water for neighbor in canonical_neighbors4(topology, cell)), cell
     result = bundle.hydrology.payload
-    cells = [{"x": x, "y": y, "base_z": context.coarse_relief_z[(x, y)], "z": z,
+    cells = [{"x": x, "y": y, "base_z": working.terrain.relief_z[(x, y)], "z": z,
               "hydrology": index[(x, y)].model_dump(mode="json", exclude_none=True)
               if (x, y) in index else None}
-             for (x, y), z in sorted(context.coarse_hm.surface_z.items(), key=lambda item: (item[0][1], item[0][0]))]
+             for (x, y), z in sorted(surface_z.items(), key=lambda item: (item[0][1], item[0][0]))]
     return {
         "world_uid": world.world_uid, "topology": topology.model_dump(mode="json"),
         "roles": dict(sorted(Counter(entry.role.value for entry in index.values() if entry.role).items())),

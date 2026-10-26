@@ -187,7 +187,7 @@ L2_tile = refine(
 
 | Правило | Контракт |
 |---|---|
-| **SoT** | Disk wire после successful write — не live `LightGridCompose`, не пересборка маски из `SurfaceTerrainContext` |
+| **SoT** | Disk wire после successful write — не live `LightGridCompose`, не пересборка маски из planning/domain working views |
 | **Load** | `load_parent_light(gx, gy)` → wire / typed `ParentLightTile` (+ `side`, `light_span`) |
 | **Cache** | Process-local `{(world_uid, gx, gy) → ParentLightTile}` после successful `write_world_map_tile` **или** первого decode; **miss → disk**. Cache = latency, **не** второй SoT |
 | **Cache scope** | Один pack session / process bake→refine; **не** глобальный singleton без `world_uid`; cold / другой process / restart → только disk |
@@ -1048,7 +1048,7 @@ flowchart TB
 | **WP-13-OPEN-2** | **Wiring `location_entry`** | Выбор anchor из `location_entry_points` (ближайший discovered) или сторона подхода; blocking scene от entry — **не** весь `location_uid` | Service resolve entry → `refine_from_entry(kind=location_entry)`; **DAG — gate** |
 | **WP-13-OPEN-3** | **Пересортировка очереди при движении** | Внутри tile якорь не сбрасывается; head очереди — distance от **текущей** `(map_x, map_y)` + старый entry | `ChunkRefineQueue` re-prioritize / session tick |
 | **WP-13-OPEN-4** | **Prefetch соседней локации** | Фон: `get_by_location` / `l.{uid}.terrain.zst` целиком — **не** blocking path | Отдельный bg job (не внутри `refine_from_entry`) |
-| **WP-13-OPEN-5** | **Тонкий debug HTTP** | Routes сейчас сами `prepare_surface_terrain_context` + `finalize_pack` | Тонкая делегация в service/facade |
+| **WP-13-OPEN-5** | **Тонкий debug HTTP** | Исторический baseline: routes сами готовили legacy context + `finalize_pack`; после PC-11.7 старого entry нет | Тонкая делегация в service/facade |
 | **WP-13-OPEN-6** | **Session scope entry state** | `EntryRefineOrchestrator` (anchors/queue) — singleton на process в Container | Явный per-session / per-world scope при multi-player / DAG |
 | **WP-13-OPEN-7** | **DAG terrain chain** | `check_terrain` / `eager_terrain` / `lazy_terrain` → `get_scene_volume` + entry refine; blocking не `get_by_location` | Только с мастером после gate — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md), [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD-DAG |
 | **WP-13-OPEN-8** | **WP-PERF backlog** | PERF-11…13 (persist/drain/surface_ctx), PERF-20…22 (partial L2), см. § WP-PERF | Отдельный трек производительности |
@@ -2265,7 +2265,7 @@ flowchart TB
 | **WP-PERF-10** | На `mode=light` **не** enqueue весь tile в `chunk_refine_jobs` | rings/corridor (WP-13); L0 всего bounds — это `full_bake`, не light | ✅ rings; см. WP-13-OPEN-8 |
 | **WP-PERF-11** | `persist_enqueue` batch | `executemany` / bulk upsert jobs; или manifest-only queue без SQLite до фонового worker | **−3…5 s** при большой очереди |
 | **WP-PERF-12** | `drain_persisted` policy | `max_jobs=0` когда `background_drain_per_request=0`; rebake → purge stale jobs или async drain **после** HTTP | **−12 s** на повторном bake |
-| **WP-PERF-13** | Один `surface_ctx` на run | `prepare_surface_terrain_context` вызывается в `PackMaterializationOrchestrator` и повторно в `WorldMapBakeOrchestrator.bake_tiles` — передавать cached ctx | **−1 s** |
+| **WP-PERF-13** | Один `surface_ctx` на run | Исторический baseline: повторная preparation в L0 writer; после PC-11.7 writer принимает готовые bundle/working refs. Отдельного legacy context/projector нет | **−1 s** |
 
 #### P1 — L2 prep (scene / WP-A9)
 

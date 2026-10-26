@@ -145,7 +145,7 @@ Preparation содержит successful prepared entries и явные failures 
 
 | Слой | Роль |
 |---|---|
-| `SurfaceTerrainContext.coarse_hydro` | planning / L2; **не** SoT L0 mask |
+| `HydrologyWorkingFields.coarse_hydro` | planning / L2; **не** SoT L0 mask |
 | `sparse_fine_hydro` / fine carve | fine / L2; **не** write-path L0 |
 | Один sample на macro `(gx, gy)` на весь tile | **запрещённый** антипаттерн |
 
@@ -187,7 +187,7 @@ pack/bake/worldMapBakeOrchestrator.py   # thin: compose → writer
 | `hydro` contributor | light-rasterize hydro mask | fine bed / column fill |
 | `settlement` contributor | pin (+ footprint later) на light cells | `SettlementLayout` / packing / **C23 topology** (районы, gates) |
 | `WorldMapBakeOrchestrator` | `to_wire` + `write_world_map_tile` | собственный семпл hydro/z |
-| `SurfaceTerrainContext` | L2 / fine planning, climate helpers | SoT записи L0 wire |
+| `SurfacePlanBundle` / domain working views | L2 / fine planning, climate helpers | SoT записи L0 wire |
 
 Каталог: **`pack/bake/lightGrid/`** (утверждено).
 
@@ -1475,7 +1475,7 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 | `nodes` / `edges` | connection graph (hydro legs + **roads**) |
 | `locations_index` | `LocationsIndexWire`; `location_pin` = **index** в `locations[]` |
 | `tiles` | scope bake `list[(gx, gy)]` |
-| `surface_planning` | optional `SurfaceTerrainContext` — read-only adjunct; **не** write-path L0 hydro |
+| `surface_bundle` / `working` | frozen plan refs + prepared domain working views; legacy `surface_planning` удалён PC-11.7; L0 hydro пишет свой contributor |
 | climate / pole accessors | для `climate` / `landcover` |
 
 ### Coarse planning ↔ light compose — порядок z (утверждено 2026-07-17)
@@ -1492,6 +1492,12 @@ baseline и не разрешают второй выбор объектов в 
 и activation ledger фиксируются PC-0; этот текст не отмечает cutover done.
 
 **Проблема smoke:** light `mountain` красит `system_terrain=mountain` без подъёма z; hydrology на coarse видит почти плоский heightmap → peaks/basins/истоки пустые → нет procedural озёр/рек. Море живёт (edge flood), не через prominence.
+
+**PC-11.7:** единственные request inputs — SurfacePlanBundle и prepared domain
+working views. Legacy surface context/projector/entry shims удалены. Facts
+получают только typed domain observations; отсутствующий domain ref означает
+unknown. Ни L0 background, ни facts reader не восстанавливают missing views.
+Нижеследующая схема A описывает исторический порядок фаз, не актуальный API.
 
 **Два контура (не путать):**
 
@@ -1549,7 +1555,12 @@ relief → climate → landcover → [flora] → mountain → ravine → hydro �
 
 **Симптом:** import skeleton OK; `GET …/bootstrap-tiles` / pack bake → **422** `surface terrain context unavailable`.
 
-**Причина (текущий контракт caller):**
+**PC-11.7:** отсутствие locations само по себе не запрещает prepare: при
+явных world_bounds используется этот extent. NoExtent определяется captured
+source view; prepare_captured возвращает None, require_plan_inputs — ValueError.
+Ни planning, ни compose не создают synthetic extent.
+
+**Историческая причина до PC-9/PC-11 (не текущий caller):**
 
 ```text
 prepare_surface_terrain_context(world, locations)
@@ -1558,7 +1569,7 @@ prepare_surface_terrain_context(world, locations)
 ```
 
 Без хотя бы одной точки с координатами нет bbox / poles / bootstrap tile set.  
-Compose **сам** не задаёт world bounds: tile plan и `SurfaceTerrainContext` — **вход** от locations (+ hydro declare привязан к якорям/edges).
+Compose **сам** не задаёт world bounds: tile plan и prepared surface inputs — **вход** от locations (+ hydro declare привязан к якорям/edges).
 
 | Что работает | Что нет |
 |---|---|
@@ -1676,7 +1687,7 @@ flowchart TB
 Параллельно (вне write-path L0 mask):
 
 ```text
-SurfaceTerrainContext → fine / L2 materialize, meter hydro side-products
+SurfacePlanBundle + domain working views → fine / L2 materialize, meter hydro side-products
 ```
 
 ---
@@ -1711,7 +1722,7 @@ L2 `refine_chunk` читает parent light **только** через `load_pa
 
 **Terrain mask carry (✅ закрыто):** L2 surface `system_terrain` = nearest parent wire — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Terrain mask carry**; smoke `world-test-003` `(-2,-2)` принят.
 
-**Антипаттерн:** refine из live `LightGridCompose` или из `SurfaceTerrainContext` в обход baked mask.
+**Антипаттерн:** refine из live `LightGridCompose` или из planning views в обход baked mask.
 
 Приёмка согласованности карты и сцены (после кода WP-PERF-22): **MLB-8** — river/ridge L2 внутри L0 corridor / z-band (не отмечать done до имплементации).
 
@@ -1740,7 +1751,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | MLB-2 | `hydrology_role ≠ NONE` на light cells вдоль declared rivers (smoke `world_terrain_test`) — не all-NONE |
 | MLB-3 | Нет write-path L0 из «один sample на macro tile на весь 32×32» |
 | MLB-4 | `location_pin` согласован с `locations_index` indices |
-| MLB-5 | `SurfaceTerrainContext` / meter hydro не являются SoT L0 mask |
+| MLB-5 | Planning/domain working views / meter hydro не являются SoT L0 mask |
 | MLB-6 | ASCII/pack render world map показывает hydro + pins при валидном fixture (не all plains+NONE при declared rivers) |
 | MLB-7 | Новые light-cell поля и hydro merge/defaults живут в `dataModel/worldPack` (+ hydrology enums); application только staging/compose |
 | MLB-8 | L2 river/ridge внутри L0 corridor / z-band — unit ✅ (`test_parent_light_refine`); HTTP fixture smoke — backlog |

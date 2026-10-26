@@ -26,6 +26,12 @@ UOW и ошибок. Общие facade/service/adapter не поглощают �
 а не переносится на будущую интеграцию. Snapshot runtime этим gate не
 добавляется в scope текущего плана.
 
+Уточнение мастера 2026-10-27: **только DAG и debug API имеют право собирать
+патчи в patch set**; debug API может собирать их самостоятельно. Доменные
+patch implementations формируют отдельные patches, patcher применяет
+готовый набор; генераторы, handlers и snapshot service набор не собирают.
+Исключительное право DAG/debug API проверяется на каждом шаге WS.
+
 Критический gate каждого шага также включает запрет любого доменного
 пути записи в scope WS в обход DAG или debug API как application-входа.
 Проверять writer/caller ledger и фактическую цепочку entry → coordination

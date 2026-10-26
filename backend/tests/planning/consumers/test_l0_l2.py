@@ -9,7 +9,6 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tests.planning.consumers.test_wiring import Composition, Wait, capture, world
-from app.application.worldData.planning.composition.surfacePlanningAssembler import to_legacy_context
 from app.application.worldData.planning.composition.surfacePlanningEntry import surface_world_topology
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.application.worldData.pack.bake.lightGrid.bake import compose_light_grid
@@ -41,7 +40,7 @@ def context(source, bundle, tiles=None):
     scale = LightGridScale.from_tile(1000, source.world_map_cells_per_tile)
     return LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(locations=[]),
         tiles=tiles if tiles is not None else [(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
-        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, surface_planning=to_legacy_context(bundle, working=working_fixture(source, bundle)), working=working_fixture(source, bundle),
+        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, working=working_fixture(source, bundle),
         topology=surface_world_topology(source, []),
         grid=SurfaceGridSettings(fine_span=scale.tile_macro, light_side=scale.side))
 
@@ -67,7 +66,6 @@ def bind_frozen_context(test, ctx):
     test.addCleanup(composition.service.shutdown)
     ctx.surface_bundle = composition.prepare(capture(ctx.world, locations=ctx.locations,
         templates=mountain_template_inputs(ctx.relief_templates_by_uid)))
-    ctx.surface_planning = to_legacy_context(ctx.surface_bundle, working=working_fixture(world(), ctx.surface_bundle))
     ctx.working = working_fixture(ctx.world, ctx.surface_bundle)
     return ctx
 
@@ -321,9 +319,7 @@ class L2Tests(unittest.TestCase):
         # A persisted edit changes the fine base; coarse relief is not rebuilt instead.
         changed = parent.model_copy(update={"cells": {xy: cell.model_copy(update={"surface_z": 9})
                                                       for xy, cell in parent.cells.items()}})
-        with patch.object(self.c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
-                "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
-                side_effect=AssertionError("legacy view")):
+        with patch.object(self.c.assembler, "prepare", side_effect=AssertionError("second planning")):
             state = self.terrain.build_tile_surface_state(self.source, [], bundle, 0, 0, parent_light=changed, region_state_snapshot={}, working=working_fixture(self.source, bundle))
         self.assertTrue(all(8 <= z <= 10 for z in state.heightmap.surface_z.values()))
         self.assertEqual(bundle, before)
@@ -339,17 +335,28 @@ class L2Tests(unittest.TestCase):
         source = mountain_source()
         bundle = self.c.prepare(capture(source))
         self.assertNotEqual(bundle.terrain_base.payload.surface_z, bundle.relief.payload.surface_z)
-        legacy = to_legacy_context(bundle, working=working_fixture(source, bundle))
-        profiles = {str(a.system_climate_zone): profile_for(source, a.system_climate_zone)
-                    for a in legacy.local_field.anchors}
         ctx = LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(),
             tiles=[(0, 0)], scale=LightGridScale.from_tile(1000, 4), surface_bundle=bundle, working=working_fixture(source, bundle),
             topology=surface_world_topology(source, []),
             grid=SurfaceGridSettings(fine_span=1000, light_side=4))
         inputs = prepare_landcover_inputs(ctx)
         for coord, _ in bundle.terrain_base.payload.surface_z:
-            expected = collect_facts(FactConsumerContext(legacy, ((coord.gx, coord.gy),), profiles))
-            self.assertEqual(inputs.facts_at((coord.gx * 1000, coord.gy * 1000)), expected)
+            point = (coord.gx, coord.gy)
+            facts = inputs.facts_at((coord.gx * 1000, coord.gy * 1000))
+            self.assertEqual(facts.relief.elevation_mean, dict(bundle.terrain_base.payload.surface_z)[coord])
+            self.assertIsNone(facts.relief.elevation_plain)
+            if not bundle.hydrology.payload.coarse_hydro:
+                self.assertIsNone(facts.hydrology)
+            else:
+                observed = dict(bundle.hydrology.payload.coarse_hydro).get(coord)
+                self.assertEqual(facts.hydrology.open_water_fraction,
+                    float(observed is not None and observed.role is not None and observed.role.is_open_water_role()))
+            anchor = ctx.working.climate.local_field.nearest(*point)
+            if anchor is None:
+                self.assertIsNone(facts.climate)
+            else:
+                profile = ctx.working.climate.profile_for_key(anchor.system_climate_zone)
+                self.assertEqual(facts.climate.rainfall, profile.base_rainfall)
 
     def test_hydro_full_sampled_overrides_clamp_and_hard_corridor(self):
         from app.application.worldData.generators.terrain.passes.parentLightUpsample import upsample_from_parent_light
@@ -390,11 +397,10 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(composition.service.shutdown)
         bundle = composition.prepare(capture(source))
         working = working_fixture(source, bundle)
-        legacy = to_legacy_context(bundle, working=working)
-        live = build_climate_coarse_wire(source, legacy.pole_field, legacy.coarse_hm.bbox,
-            local_field=legacy.local_field, coarse_surface_z=legacy.coarse_surface_z)
-        frozen = build_climate_coarse_wire(source, legacy.pole_field, legacy.coarse_hm.bbox,
-            local_field=legacy.local_field, coarse_surface_z=legacy.coarse_surface_z, working=working.climate)
+        live = build_climate_coarse_wire(source, working.climate.pole_field, bundle.terrain_base.payload.bbox,
+            local_field=working.climate.local_field, coarse_surface_z=working.hydrology.coarse_surface_z)
+        frozen = build_climate_coarse_wire(source, working.climate.pole_field, bundle.terrain_base.payload.bbox,
+            local_field=working.climate.local_field, coarse_surface_z=working.hydrology.coarse_surface_z, working=working.climate)
         self.assertEqual(live.samples[0].temperature_base, 42)
         self.assertEqual(frozen.samples[0].temperature_base, 12)
         self.assertEqual(frozen.samples[0].rainfall, live.samples[0].rainfall)
@@ -524,9 +530,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 surface_bundle=bundle, wait=Wait(), region_state_snapshot={}, working=working)
             with patch.object(c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
                     "app.application.worldData.planning.composition.surfacePlanningCapture.SurfacePlanningCapture.capture",
-                    side_effect=AssertionError("second capture")), patch(
-                    "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
-                    side_effect=AssertionError("legacy L2 view")):
+                    side_effect=AssertionError("second capture")):
                 detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan, region_state_snapshot={}, working=working)
                 # Compare the decoded wire: the writer may choose a codec filename per layout.
                 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
@@ -570,19 +574,18 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         c = Composition()
         self.addCleanup(c.service.shutdown)
         bundle = c.prepare(capture(source))
-        legacy = to_legacy_context(bundle, working=working_fixture(source, bundle))
+        working = working_fixture(source, bundle)
         parent = ParentLightTile.from_cells(world_uid=source.world_uid, gx=0, gy=0, side=2, tile_macro=2,
             cells=[WorldMapCellWire(tx=x, ty=y, surface_z=x+y) for x in range(2) for y in range(2)])
-        expected_coarse = build_climate_coarse_wire(source, legacy.pole_field, legacy.coarse_hm.bbox,
-            local_field=legacy.local_field, coarse_surface_z=legacy.coarse_surface_z)
-        expected_fine = build_climate_tile_wire(source, legacy.pole_field, 0, 0,
-            local_field=legacy.local_field, coarse_surface_z=legacy.coarse_surface_z,
-            fine_z_overrides=legacy.fine_z_overrides, parent_light=parent)
+        expected_coarse = build_climate_coarse_wire(source, working.climate.pole_field, bundle.terrain_base.payload.bbox,
+            local_field=working.climate.local_field, coarse_surface_z=working.hydrology.coarse_surface_z)
+        expected_fine = build_climate_tile_wire(source, working.climate.pole_field, 0, 0,
+            local_field=working.climate.local_field, coarse_surface_z=working.hydrology.coarse_surface_z,
+            fine_z_overrides=working.hydrology.fine_z_overrides, parent_light=parent)
         writer = Mock()
         writer.write_climate_coarse.return_value = "hash"
         climate = ClimatePackBakeOrchestrator()
-        with patch("app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
-                   side_effect=AssertionError("legacy climate view")), patch(
+        with patch(
                    "app.application.worldData.pack.climate.climatePackBakeOrchestrator.sample_climate_tile_ty_rows",
                    wraps=sample_climate_tile_ty_rows) as sample_rows:
             await climate.bake_coarse(source, bundle, writer, MaterializationContext(1), working=working_fixture(source, bundle))

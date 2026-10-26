@@ -15,9 +15,7 @@ from app.application.worldData.generators.hydrology.load.resolveHydrologyTopolog
     resolve_hydrology_topology,
 )
 from app.application.worldData.generators.hydrology.placement import run_water_placement_pass
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    prepare_surface_terrain_context,
-)
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.db.models.namedLocation import NamedLocation
@@ -116,45 +114,50 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         # The fixture intentionally duplicates location_uid between a declared basin and
         # a declared coastline; runtime merges them with one structured warning.
         with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
-            ctx = prepare_surface_terrain_context(world, locations, **planning_kwargs(self))
+            deps = planning_kwargs(self)
+            _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(
+                world, locations, wait=deps["wait"])
         self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line
                             and "loc-geo-ocean-west-004" in line for line in log.output))
-        self.assertIsNotNone(ctx)
+        self.assertIsNotNone(working)
         projected = policy.declared_basins[0].footprint.projected(1000)
-        topology = resolve_hydrology_topology(world, ctx.coarse_hm, locations=locations)
+        topology = working.landcover.topology
         x0, y0, x1, y1 = projected.bbox()
         footprint = {
             cell
             for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)
             if projected.contains(x, y)
-            and (cell := topology.canonicalize(x, y)) in ctx.coarse_hm.surface_z
+            and (cell := topology.canonicalize(x, y)) in working.hydrology.coarse_surface_z
         }
         self.assertTrue(footprint)
         self.assertIn(-2, {x for x, _ in footprint})
         self.assertIn(2, {x for x, _ in footprint})  # crosses the wrapped x-seam
         carved = {cell for cell in footprint
-                  if ctx.coarse_hm.surface_z[cell] < policy.default_water_level}
+                  if working.hydrology.coarse_surface_z[cell] < policy.default_water_level}
         self.assertTrue(carved)
         # HY-12/4: materialized water carries the effective per-body level and
         # identity on both sides of the seam; bottom z is not the water surface.
-        water_cells = {cell: entry for cell, entry in ctx.coarse_hydro.items()
+        water_cells = {cell: entry for cell, entry in working.hydrology.coarse_hydro.items()
                        if entry.role is not None and entry.role.is_open_water_role()}
         self.assertTrue(water_cells)
         self.assertTrue({-2, 2} <= {x for x, _ in water_cells})
         self.assertIn("loc-geo-ocean-west-004", {entry.water_body_uid for entry in water_cells.values()})
         for cell, entry in water_cells.items():
             self.assertIsNotNone(entry.z_water_level)
-            self.assertLess(ctx.coarse_hm.surface_z[cell], entry.z_water_level)
+            self.assertLess(working.hydrology.coarse_surface_z[cell], entry.z_water_level)
         # The rest are mountain-reserved cells (raised in 1.4 before basinZ).
         for cell in footprint - carved:
-            self.assertNotEqual(ctx.coarse_hm.surface_z[cell], ctx.coarse_relief_z[cell])
+            self.assertNotEqual(working.hydrology.coarse_surface_z[cell], working.terrain.relief_z[cell])
 
     def test_world_test_004_pass_is_deterministic(self):
         world, locations = _fixture_world_and_locations()
-        first = prepare_surface_terrain_context(world, locations, **planning_kwargs(self))
-        second = prepare_surface_terrain_context(world, locations, **planning_kwargs(self))
-        self.assertEqual(first.coarse_hm.surface_z, second.coarse_hm.surface_z)
-        self.assertEqual(first.coarse_hydro, second.coarse_hydro)
+        deps = planning_kwargs(self)
+        entry = SurfacePlanningEntry(deps["planning"], deps["capture"])
+        _, first = entry.require_plan_inputs(world, locations, wait=deps["wait"])
+        _, second = entry.require_plan_inputs(world, locations, wait=deps["wait"])
+        self.assertEqual(first.hydrology.coarse_surface_z, second.hydrology.coarse_surface_z)
+        self.assertEqual(first.hydrology.coarse_hydro, second.hydrology.coarse_hydro)
+
 
 
 if __name__ == "__main__":

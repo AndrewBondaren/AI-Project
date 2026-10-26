@@ -12,6 +12,27 @@ APP = Path(__file__).resolve().parents[3] / "app"
 
 
 class BoundaryTests(unittest.TestCase):
+    def test_surface_observations_have_one_typed_channel_and_no_production_legacy_symbols(self):
+        from dataclasses import fields
+        from app.application.worldData.regions.factConsumers.context import FactConsumerContext
+        from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+        self.assertEqual([field.name for field in fields(FactConsumerContext)],
+                         ["cells", "climate", "terrain", "hydrology"])
+        self.assertNotIn("surface_planning", {field.name for field in fields(LightGridBakeContext)})
+        banned = {"SurfaceTerrainContext", "to_legacy_context", "prepare_captured_context",
+                  "prepare_surface_terrain_context", "require_surface_terrain_context",
+                  "prepare_landcover_inputs_legacy"}
+        for path in (APP / "application/worldData").rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8-sig"))):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    self.assertNotIn(node.name, banned, str(path))
+                elif isinstance(node, ast.Name):
+                    self.assertNotIn(node.id, banned, str(path))
+                elif isinstance(node, ast.Attribute):
+                    self.assertNotIn(node.attr, banned | {"surface_planning"}, str(path))
+                elif isinstance(node, ast.ImportFrom):
+                    self.assertNotIn("surfaceTerrainContext", node.module or "", str(path))
+
     def test_landcover_collection_raster_fine_and_outline_have_no_transitive_pack_dependency(self):
         from collections import deque
 
@@ -143,10 +164,9 @@ class BoundaryTests(unittest.TestCase):
             bundle = c.prepare(view)
         self.assertIsNotNone(bundle)
 
-    def test_compatibility_entry_contains_no_domain_planning(self):
-        source = (APP / "application/worldData/generators/terrain/passes/surfaceTerrainContext.py").read_text(encoding="utf-8")
-        self.assertIn("SurfacePlanningAssembler", source)
-        self.assertIn("prepare_captured_context", source)
+    def test_typed_entry_delegates_preparation_and_keeps_one_report_boundary(self):
+        source = (APP / "application/worldData/planning/composition/surfacePlanningEntry.py").read_text(encoding="utf-8")
+        self.assertIn("prepare_captured_bundle", source)
         for obsolete in ("run_surface_pass_coarse", "run_pole_resolve_pass", "hydrology_generator",
                          "apply_relief_objects_z", "apply_declared_fine_river_carves"):
             self.assertNotIn(obsolete, source)

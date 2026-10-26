@@ -69,7 +69,7 @@ class DeclaredRegionEditor:
             identity = declared_region_identity(after.world_uid, spec)
             # Replace the author audit marker when event/time supplies a clock.
             return RegionEvaluation(region_uid=uid, spec=spec, entry_type=spec.entry_type,
-                spec_fingerprint=identity.spec_fingerprint, context=FactConsumerContext(None, ()),
+                spec_fingerprint=identity.spec_fingerprint, context=FactConsumerContext(cells=(), climate=None, terrain=None, hydrology=None),
                 elapsed_ticks=0, at=now, updated_at=now, declaration=DeclarationFacts(True, 0),
                 previous_entry_type=previous.entry_type if previous else None)
 

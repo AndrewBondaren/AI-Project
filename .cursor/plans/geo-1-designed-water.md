@@ -8890,6 +8890,102 @@ Done: все callers переведены, domain/pack обязанности р
   только после этого родительский PC-11.6 допускается к закрытию.
 
 **PC-11.7 — удалить второй канал наблюдений и production legacy chain.**
+Статус: **IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-27), готов к приёмке мастера.**
+PC-11.8 и весь PC-11 не закрыты. Код не коммитился.
+
+Матрица удаления legacy (составлена до удаления symbols):
+
+| Caller/owner | Старый input | Единственный target input | Исполняемый regression case |
+|---|---|---|---|
+| WorldMapBakeOrchestrator.bake_tiles/bake_tile, L0 logging/context | to_legacy_context, surface_planning | готовые bundle + SurfaceWorkingMaps; logging читает hydrology view, pole field из climate view | planning/consumers/test_l0_l2, test_pack_bake_modes, test_light_grid_compose |
+| Landcover L0 inputs/background | surface_planning/profile/live fallback | mandatory working views, existing state mapping и climate.profile_for_key | test_landcover_contributor, test_region_state_contract |
+| LandcoverObservations / factConsumers climate/relief/hydrology | surface/maps/profiles dual channel | FactConsumerContext(cells, climate, terrain, hydrology), explicit None=unknown | test_region_fact_consumers, consumers/test_l0_l2 |
+| DeclaredRegionEditor.reconcile | FactConsumerContext(None, ()) | cells=(), все domain observations None | test_declared_region_edit |
+| StateChangeConsumer / RegionEvaluation | caller context со старой shape | тот же caller-owned context с typed views/None; self-capture не добавляется | test_region_state_change |
+| Outline/read | уже typed domain inputs + injected entry | тот же единственный contract, без legacy renderer fallback | test_wilderness_region_index, OutlineReadBoundaryTests |
+| Classifier / tile planner / loading progress | уже extent_status / готовый tile scope | сохранить готовые inputs; surface capture/materialize на read не добавлять | consumers/test_request_boundary, test_pack_bake_modes |
+| HY12 smoke script | to_legacy_context/coarse_hm | prepared working.hydrology/terrain + captured topology | backend/scripts/smoke_hydrology_hy12.py, replay + baseline acceptance.json |
+| Legacy entry regression fixtures и geometry comparisons | prepare/require_surface_terrain_context, legacy type aliases | existing SurfacePlanningEntry.capture/prepare/require_plan_inputs + domain views | consumers/test_wiring, test_water_placement_pass, test_relief_objects_z, test_hydrology_hy12_rivers |
+| Compose/facts fixtures | synthetic SurfaceTerrainContext | explicit frozen plans/domain working factories; отсутствующие views=None, без нового универсального DTO | test_light_grid_compose, test_landcover_contributor, test_region_fact_consumers |
+| Typing / compatibility tests | old projector/aliases и mutable legacy копии | typed bundle/working results; negative cases запрещают удалённые поля | typing/planning valid/invalid, consumers/test_no_second_truth |
+
+До удаления пройден baseline typed production entrances: 55 tests
+(consumers.test_l0_l2/test_request_boundary, wilderness_region_index,
+region_fact_consumers, region_state_change). Новые paths каждого оставшегося
+caller проверяются до удаления obsolete modules. Совместимость старых symbols
+не сохраняется: все in-repo callers переводятся; production shims и aliases
+удаляются, исторические записи плана остаются историей. Новых DTO/фабрик,
+переносящих legacy агрегат под другим именем, не вводить.
+
+Приёмочный отчёт PC-11.7:
+- FactConsumerContext теперь имеет ровно четыре поля: cells, climate, terrain,
+  hydrology. Поля surface/local_field/relief_z/hydro/surface_z/climate_profiles
+  удалены. Consumers читают только свои domain working views; None остаётся
+  unknown. Сохранены sparse-hydro semantics (пустая карта = unknown, sparse
+  miss внутри extent = dry), empty-scope и отсутствие partial averages.
+- LandcoverObservations строит тот же typed scope; legacy input factory
+  удалена. L0 input adapter только передаёт working и operation snapshot.
+  В L0 background и climate contributor удалены alternate/live пути при
+  отсутствии working. require_working в pack context только требует готовую
+  ссылку, ничего не создаёт/не разрешает. Доменные алгоритмы в context,
+  pack adapter или entry не переносились; универсального replacement DTO нет.
+- WorldMapBakeOrchestrator больше не создаёт legacy maps: logging читает
+  HydrologyWorkingFields, pole metadata — ClimateWorkingFields. Bundle
+  revalidation сохранена. LightGridBakeContext.surface_planning удалён.
+  L0/L2/outline продолжают получать прежние bundle/working/state refs.
+- Удалены to_legacy_context и prepare_captured_context, old terrain
+  prepare/require_surface_terrain_context module, сам SurfaceTerrainContext,
+  planning/legacy/__init__ и alias из surfacePlanningView. Все in-repo test/
+  script callers переведены; ни stub, ни compatibility projector не оставлены.
+- DeclaredRegionEditor явно передаёт empty cells и None domain observations;
+  StateChangeConsumer по-прежнему потребляет caller-owned RegionEvaluation,
+  без self-capture/planning. Outline/read использует уже внедрённый entry,
+  один state read и domain render; classifier/planner уже typed и не менялись.
+  NoExtent/diagnostics HIT/MISS cases перенесены с obsolete shim на реальный
+  SurfacePlanningEntry, readonly checks — на actual domain views.
+- HY12 script читает готовые terrain/hydrology maps и topology observation,
+  не фабрикует coarse_hm/замену удалённому агрегату. Frozen plan schemas,
+  manifest IDs, algorithm/schema versions, RNG, region identity и precedence
+  не менялись. Expected facts в fixtures сохранены через явные исходные
+  profiles/anchors; новый input проверяется собственными expected values,
+  а не сравнением двух observation channels.
+- До удаления modules исполнены новые пути оставшихся callers: typed facts/
+  landcover/entry — 16 OK; water placement/relief/HY12 rivers — 27 OK.
+  После удаления: discover backend/tests/planning/consumers — 79 OK;
+  region facts/state-change/declaration edit, landcover materializer/contributor/
+  fine-paint/index/state, compose/cleanup/bathymetry, light/full/detailed,
+  entry-first/parent-light regression group — 151 OK;
+  planning/contracts — 71 OK; planning/encoding — 7 OK. Canonical revision/
+  ref fingerprint vectors в test_wiring сохранены. compileall app/scripts — OK.
+  Команды: PYTHONPATH=backend;backend/tests, .venv/Scripts/python.exe -m
+  unittest с указанными existing modules/discover folders; backend не запускался.
+- Fresh-process HY12 smoke function с явно внедрёнными existing test planning
+  resources: world_test_004 before/after acceptance JSON совпадает полностью,
+  replay при HIT совпадает: 25 клеток, 11 water, 10 shore. Два существующих
+  warnings cap/duplicate source сохранены. Прямой CLI main без resources
+  остановился на прежнем требовании [planning.cache]/[planning.execution];
+  production config/defaults не менялись, standalone CLI success не заявлен.
+- Production+scripts AST проверяет отсутствие imports/definitions/usages
+  удалённых symbols; structural test проверяет ровно четыре observation поля
+  и отсутствие surface_planning в bake context. Полная transitive domain
+  dependency проверка (включая TYPE_CHECKING/package initializers) проходит.
+  Оставшиеся surface_planning()/surface_planning_capture() — legitimate
+  container factories, не удалённое поле/legacy observation channel.
+- Pyright 1.1.414 valid: 208 files, 0 errors/warnings; actual L0 orchestrator
+  явно добавлен в include, deleted module исключён. Negative exact multiset
+  (file,line,rule,multiplicity): 65 diagnostics на 63 EXPECT строках,
+  missing/unexpected=0; новые cases запрещают все удалённые observation kwargs
+  и доступ к old context fields. Шесть прежних stale include notices остались.
+- Нормативные descriptions синхронизированы в tz_terrain_generation,
+  tz_map_light_bake, tz_terrain_hydrology и tz_world_pack_storage. Исторические
+  phase diagrams/backlog descriptions явно отмечены историческими; чужие
+  backlog IDs не закрывались. Новых application modules нет; composition=5,
+  contracts=4, legacy=0, terrain/passes=8 (было 9), factConsumers=5, inputs=2,
+  pack landcover=5. Новых файлов в existing folders не добавлялось.
+- Нарушений разделения ответственности и блокеров реализации PC-11.7 не
+  осталось. DAG/SQL/data fixtures/WS read/snapshot lifecycle не менялись.
+  Общая повторная приёмка PC-11 остаётся отдельным PC-11.8 после приёмки шага.
+
 Зависимости: принятые PC-11.1…11.5 и PC-11.6a/11.6b.
 Это capstone миграции, а не ранний cleanup: до его начала новые пути должны
 работать, mandatory bundle из PC-11.3 и caller cutover PC-11.6b приняты.

@@ -1961,10 +1961,12 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 SurfacePlanningAssembler и register_world_plan_providers: восемь baseline
 bindings, один frozen source view, explicit phase calls общего PlanningService.
 `contracts` содержит immutable discriminated source views и SurfacePlanBundle
-с проверкой world/scope/phase/version и exact dependency refs. Единственное
-определение SurfaceTerrainContext находится в planning/legacy/surfaceTerrainContext.py;
-старые terrain и surfacePlanningView paths реэкспортируют тот же symbol. to_legacy_context создаёт отдельные
-mutable maps, сохраняя eight-field API и pre-1.4/final высотные источники.
+с проверкой world/scope/phase/version и exact dependency refs.
+**PC-11.7:** production SurfaceTerrainContext, to_legacy_context и old terrain/
+surfacePlanningView aliases удалены вместе с entry shims. Request owner получает
+SurfacePlanBundle + SurfaceWorkingMaps через SurfacePlanningEntry; каждый домен
+создаёт свой readonly working view. Предыдущие PC-9/PC-9A eight-field API —
+исторический промежуточный контракт, не доступный compatibility API.
 После review correction единственная декларация графа/IDs/версий находится
 в dataModel/surfacePlanning/surfacePlanBindings.py; wiring и bundle validator
 читают её. Capture использует публичный resolve_world_slice, per-slot projection
@@ -1978,14 +1980,15 @@ publication guard предоставляет write-owner. planning/encoding со
 validate_immutable. Все 165 type IDs и исходные canonical fingerprints сохранены.
 Проверки: consumers35/providers126/contracts69/cache20/encoding7/regression59
 OK (316 tests), pyright valid0/negative48 exact diagnostic code/location.
-PC-9 переключает production caller/container boundaries на assembler,
-сохраняя required planning/capture/wait и None/require semantics shim.
+Production caller/container boundaries используют SurfacePlanningEntry с
+explicit wait; prepare_captured возвращает None для NoExtent, require_plan_inputs
+выдаёт ValueError. PC-9 shim после PC-11.7 отсутствует.
 RequestPlanWait живёт в application/cancellation, pack/map boundaries передают
 явный unbounded waiter; wait_timeout_seconds optional/default None в policy
 зарезервирован до включения request timeouts. Resource limits required,
 startup проверяет наличие конфигурации, lifecycle закрывает executor.
 PC-8C lazy-import debt устранён через climate/planning/basePoleLayout.py.
-SurfaceTerrainContext отделён от frozen view, old type identity сохранён.
+SurfaceWorkingMaps отделён от frozen view; legacy type aliases после PC-11.7 удалены.
 
 Publication ownership PC-9: FineChunkPersist пишет blobs/sidecars и обновляет
 counters только в памяти; checkpoint/save из нижнего persist удалены,
@@ -2651,15 +2654,14 @@ PC-0 обязан добавить typed payload до cutover, не сохран
 - ReliefPlan выдаёт pre-river surface для coarse hydro и fine carve;
   последнее не читает уже carved surface. HydrologyPlan coarse_surface_z
   выдаёт final surface для anchors и fine upsample.
-- Bundle → legacy SurfaceTerrainContext: pole_field из climate_base;
-  local_field из climate_local; coarse_hm и coarse_surface_z из hydrology;
-  coarse_relief_z из terrain_base (existing поле означает PRE-1.4 base,
-  несмотря на имя); остальные hydro fields — из HydrologyPlan.
-  Нельзя подставить ReliefPlan.surface_z в coarse_relief_z: это изменит
-  current L0 baseline/double-rise semantics.
+- Bundle → domain working views: pole/local доступны через ClimateWorkingFields;
+  TerrainWorkingFields.relief_z берётся из terrain_base (PRE-1.4), а
+  HydrologyWorkingFields.coarse_surface_z/coarse_hydro/fine maps — из final hydrology.
+  Нельзя подставить ReliefPlan.surface_z в terrain observation: это изменит
+  L0 baseline/double-rise semantics. FactConsumerContext содержит только cells
+  и climate/terrain/hydrology refs; None означает отсутствие наблюдений.
 - water_bodies/physical_unions сохраняются в bundle через HydrologyPlan;
-  старый eight-field context остаётся compatibility view, не единственным
-  storage этих данных. Legacy mutable dicts — отдельные copies, не cache T.
+  eight-field compatibility context и отдельные mutable copies удалены PC-11.7.
 
 ### PC-0 — исходные input projections и capture
 
@@ -3765,12 +3767,12 @@ diagnostics; ClimateBaseInput.mode остаётся включённым. Per-ar
 меняет routes/river_relief/final/local, template edit relief и downstream;
 climate_base остаётся HIT при неизменных собственных inputs.
 
-Legacy SurfaceTerrainContext остаётся eight-field working view по §6.26:
-pole/local из climate envelopes; coarse_relief_z из terrain_base, не relief;
-coarse_hm/coarse_surface_z и hydro/fine fields из final hydrology. New L0
-consumers читают bundle.relief.light и mountain_layout, не eight-field
-view как единственный носитель новой layout. L2 получает тот же bundle
-и parent-light из pack: parent-light SoT/patch precedence неизменны.
+PC-11.7 оставляет единственный typed working path: climate pole/local —
+ClimateWorkingFields, pre-relief elevation — TerrainWorkingFields.relief_z,
+final hydro/fine fields — HydrologyWorkingFields. L0 consumers читают
+bundle.relief.light и mountain_layout. L2 получает тот же bundle и parent-light
+из pack: parent-light SoT/patch precedence неизменны. Legacy context/projector,
+повторный observation channel и implicit live fallback в L0 отсутствуют.
 
 #### PC-F. Activation ledger и размещение
 
@@ -3808,10 +3810,10 @@ helper при необходимости делегирует frozen kernel, liv
 PC-10 не оставляет второго light selection. PC-11 переводит
 TerrainBatchOrchestrator.build_tile_surface_state и detailed/entry callers
 на bundle refs; зёрна fine detail/parent light storage остаются прежними.
-PC-9 shim принимает обязательные keyword-only planning и capture;
-hydrology_generator удалён, nodes/edges compatibility-only, None extent
-и require ValueError сохраняются. SurfaceTerrainContext type и old
-spatial/diagnostic symbols — единственные definitions/re-exports.
+PC-9 shim и SurfaceTerrainContext удалены PC-11.7 после caller cutover.
+NoExtent/require ValueError предоставляет SurfacePlanningEntry. Старые
+spatial/diagnostic re-exports сохраняют прежние canonical symbols; это
+не compatibility API удалённого surface context.
 
 Authoritative commit guard — write-owner, не cache. В
 PackMaterializationOrchestrator._materialize_l0_pack/WorldMapBakeOrchestrator

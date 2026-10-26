@@ -9,9 +9,6 @@ from unittest.mock import MagicMock
 from app.application.worldData.generators.climate.climateAnchor import AnchorSource, ClimateAnchorPoint
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.bake import compose_light_grid
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
@@ -116,20 +113,6 @@ class TestLightGridCompose(unittest.TestCase):
             bbox=GridBBox(0, 0, 0, 0),
             surface_z={(0, 0): 1},
         )
-        surface = SurfaceTerrainContext(
-            pole_field=pole,
-            local_field=ClimateAnchorField((
-                ClimateAnchorPoint(0, 0, "temperate", "town-1", AnchorSource.AUTO),
-            )),
-            coarse_hm=hm,
-            coarse_hydro={
-                (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
-            },
-            sparse_fine_hydro={},
-            fine_z_overrides={},
-            coarse_relief_z={(0, 0): 1},
-            coarse_surface_z={(0, 0): 1},
-        )
         scale = LightGridScale.from_tile(1000, 32)
         ctx = LightGridBakeContext(
             world=world,
@@ -147,7 +130,6 @@ class TestLightGridCompose(unittest.TestCase):
             ),
             tiles=[(0, 0)],
             scale=scale,
-            surface_planning=surface,
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )

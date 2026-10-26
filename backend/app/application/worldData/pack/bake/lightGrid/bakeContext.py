@@ -10,9 +10,6 @@ from app.application.worldData.generators.terrain.landcover.types import StateSn
 from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
 
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -35,8 +32,6 @@ class LightGridBakeContext:
     scale: LightGridScale
     nodes: list[ConnectionNode] = field(default_factory=list)
     edges: list[ConnectionEdge] = field(default_factory=list)
-    # Migration-only observation channel until PC-11.7; frozen consumers use working.
-    surface_planning: SurfaceTerrainContext | None = None
     surface_bundle: SurfacePlanBundle | None = None
     working: SurfaceWorkingMaps | None = None
     # Resolved once by the operation owner at ctx construction; landcover inputs
@@ -63,3 +58,8 @@ class LightGridBakeContext:
         if base and base[-1][0].tx + 1 != self.scale.side:
             raise ValueError("L0 scale differs from frozen surface plan")
         return self.surface_bundle
+
+    def require_working(self) -> SurfaceWorkingMaps:
+        if self.working is None:
+            raise ValueError("L0 consumers require prepared domain working views")
+        return self.working

@@ -55,21 +55,30 @@ class LandcoverContributorTests(unittest.TestCase):
         self.world.climate_zone_registry = [
             {**ClimateZone.TEMPERATE.to_entry().model_dump(mode="json"), "base_rainfall": 80},
         ]
-        surface = SimpleNamespace(
-            local_field=ClimateAnchorField((ClimateAnchorPoint(
-                0, 0, ClimateZone.TEMPERATE.system_climate, None, AnchorSource.AUTO),)),
-            coarse_hydro={}, coarse_surface_z={(0, 0): 0, (1, 0): 0},
-            coarse_relief_z={(0, 0): 0, (1, 0): 0},
-        )
         self.ctx = LightGridBakeContext(
             self.world, [], LocationsIndexWire(), [(0, 0), (1, 0)],
-            LightGridScale.from_tile(32, 32), surface_planning=surface,
+            LightGridScale.from_tile(32, 32),
             terrain_system_keys={entry.system_terrain for entry in self.registry.root},
             topology=WorldTopology(mode=WorldTopologyMode.PLANAR,
                 bounds=WorldBounds(x_min=0, x_max=1, y_min=0, y_max=0)),
             grid=SurfaceGridSettings(fine_span=32, light_side=32),
         )
         self.declare()
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, self.ctx)
+        self.world = self.ctx.world
+        from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+        from app.application.worldData.generators.climate.registry import profile_for
+        from app.application.worldData.regions.inputs.landcoverInputs import LandcoverObservations
+        from functools import partial
+        local = self.ctx.surface_bundle.climate_local.payload.model_copy(update={"anchors": (
+            ClimateAnchorPoint(0, 0, ClimateZone.TEMPERATE.system_climate, None, AnchorSource.AUTO),)})
+        climate = ClimateWorkingFields.from_plans(self.ctx.surface_bundle.climate_base.payload,
+            local, partial(profile_for, self.world))
+        working = self.ctx.working
+        self.ctx.working = replace(working, climate=climate,
+            landcover=LandcoverObservations.from_views(working.landcover.topology, working.landcover.grid,
+                climate, working.terrain, working.hydrology))
 
     def declare(self, *specs):
         self.world.terrain_masks = WorldTerrainMasks(

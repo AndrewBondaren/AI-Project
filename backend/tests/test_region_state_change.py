@@ -133,7 +133,7 @@ class ConsumerTests(unittest.IsolatedAsyncioTestCase):
         spec = RegionSpecBase(name="forest", shape=BboxShape(x_min=0, y_min=0, x_max=20, y_max=20),
                               placement_specificity=3)
         return replace(RegionEvaluation(region_uid="r", entry_type="forest", spec=spec,
-            spec_fingerprint="v1", context=FactConsumerContext(None, ((0, 0),)),
+            spec_fingerprint="v1", context=FactConsumerContext(cells=((0, 0),)),
             elapsed_ticks=1, at=42, updated_at="now"), **changes)
 
     async def seed(self, **changes):
@@ -178,7 +178,7 @@ class ConsumerTests(unittest.IsolatedAsyncioTestCase):
     async def test_morph_signals_lake_metadata_without_touching_cells(self):
         await self.seed()
         result = await self.consumer.evaluate("w", self.request(
-            context=FactConsumerContext(None, ((400, 0),)), elapsed_ticks=4))
+            context=FactConsumerContext(cells=((400, 0),)), elapsed_ticks=4))
         self.assertEqual(result.state.current_type, "lowland_lake")
         self.assertFalse(result.state.tombstone)
         self.assertEqual(result.materialize[0].target.morph_hydrology_role, HydrologyCellRole.LAKE)
@@ -250,7 +250,7 @@ class ConsumerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unresolved_facts_keep_progress_and_absent_children_are_not_removed(self):
         original = await self.seed(progress=.25, pending_target="steppe")
-        result = await self.consumer.evaluate("w", self.request(context=FactConsumerContext(None, ((30, 0),))))
+        result = await self.consumer.evaluate("w", self.request(context=FactConsumerContext(cells=((30, 0),))))
         self.assertEqual(result.state.current_type, original.current_type)
         self.assertEqual(result.state.progress, original.progress)
         self.repo.mark_tombstone.assert_not_called()
@@ -283,12 +283,12 @@ class ConsumerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs("app.application.worldData.regions.coverageResolver",
                              level="WARNING") as logs:
             result = await consumer.evaluate("w", self.request(
-                context=FactConsumerContext(None, ((30, 0),))))
+                context=FactConsumerContext(cells=((30, 0),))))
         self.assertTrue(any("reason=no_eligible_candidates" in line for line in logs.output))
         self.assertEqual(result.state.current_type, "forest")
         self.assertIsNone(result.state.pending_target)
         result = await consumer.evaluate("w", self.request(region_uid="b",
-            entry_type="bare", context=FactConsumerContext(None, ((30, 0),))))
+            entry_type="bare", context=FactConsumerContext(cells=((30, 0),))))
         self.assertEqual(result.state.current_type, "bare")
         self.assertEqual([e.system_terrain for e in consumer._candidates.root],
                          ["forest", "steppe", "lowland_lake"])

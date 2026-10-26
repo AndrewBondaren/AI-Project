@@ -1,4 +1,4 @@
-"""Immutable captured source projection; legacy symbol remains a compatibility re-export."""
+"""Immutable captured source projections for the typed surface planning entry."""
 
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -67,6 +67,3 @@ class NoExtentSurfacePlanningView(BaseModel):
 
 type SurfacePlanningView = Annotated[
     ReadySurfacePlanningView | NoExtentSurfacePlanningView, Field(discriminator="kind")]
-
-# Preserve the PC-9A type import path while consumers migrate.
-from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext as SurfaceTerrainContext

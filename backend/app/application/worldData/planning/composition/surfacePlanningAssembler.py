@@ -11,16 +11,11 @@ from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, Pl
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.planning.composition.planProviders import WorldPlanProviders
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
-from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
-from app.db.models.world import World
-from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.contracts.surfacePlanningView import (
     NoExtentSurfacePlanningView, ReadySurfacePlanningView, SurfacePlanningView,
 )
-from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext
 from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
@@ -84,32 +79,9 @@ class SurfacePlanningAssembler:
             hydrology_routes=routes, river_relief=river, hydrology=final, climate_local=local)
 
 
-def to_legacy_context(bundle: SurfacePlanBundle, *, working: SurfaceWorkingMaps) -> SurfaceTerrainContext:
-    bundle = SurfacePlanBundle.model_validate(bundle)
-    hydro = working.hydrology
-    surface = dict(hydro.coarse_surface_z)
-    return SurfaceTerrainContext(
-        pole_field=working.climate.pole_field,
-        local_field=working.climate.local_field,
-        coarse_hm=SurfaceHeightmap(bundle.world_uid, bundle.terrain_base.payload.bbox, dict(surface)),
-        coarse_hydro=dict(hydro.coarse_hydro),
-        sparse_fine_hydro=dict(hydro.sparse_fine_hydro), fine_z_overrides=dict(hydro.fine_z_overrides),
-        coarse_relief_z=dict(working.terrain.relief_z),
-        coarse_surface_z=dict(surface))
-
-
-def prepare_captured_context(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
-                             capture: SurfacePlanningCapture, world: World, wait: PlanWaitControl,
-                             resolve_ctx: ResolveContext) -> SurfaceTerrainContext | None:
-    from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
-    prepared = SurfacePlanningEntry(planning, capture).prepare_captured(
-        view, world=world, wait=wait, resolve_ctx=resolve_ctx)
-    return to_legacy_context(prepared[0], working=prepared[1]) if prepared is not None else None
-
-
 def prepare_captured_bundle(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
                             wait: PlanWaitControl, resolve_ctx: ResolveContext) -> SurfacePlanBundle | None:
-    """One report boundary for frozen plans and their transitional working copies."""
+    """One report boundary for captured input and frozen plan diagnostics."""
     bundle = planning.prepare(view, wait=wait)
     diagnostics = list(view.capture_diagnostics)
     if bundle is not None:

@@ -13,10 +13,10 @@ from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.providers.planRegistry import PlanRegistry
 from app.application.planning.service.planningService import PlanningService
 from app.application.worldData.planning.composition.planProviders import register_world_plan_providers
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
-from app.application.worldData.planning.contracts.surfacePlanningView import SurfaceTerrainContext
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.dataModel.cache.policy.cachePolicy import CachePolicy
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
@@ -87,36 +87,33 @@ class WiringTests(unittest.TestCase):
             with self.assertRaises(PlanWaitCancelled):
                 assemblers[0].prepare(self.view, wait=RequestPlanWait.unbounded())
 
-    def test_shim_requires_di_and_wait_and_retains_no_extent_semantics(self):
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-            prepare_surface_terrain_context, require_surface_terrain_context)
-        from app.application.cancellation.requestPlanWait import RequestPlanWait
+    def test_entry_requires_wait_and_retains_no_extent_semantics(self):
         source = world(world_bounds=None)
+        entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
         with self.assertRaises(TypeError):
-            prepare_surface_terrain_context(source, [])
-        kwargs = dict(planning=self.c.assembler, capture=SurfacePlanningCapture(),
-            wait=RequestPlanWait.unbounded())
+            entry.require_plan_inputs(source, [])
+        view = capture(source)
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
-            self.assertIsNone(prepare_surface_terrain_context(source, [], **kwargs))
+            self.assertIsNone(entry.prepare_captured(view, world=source, wait=Wait(),
+                resolve_ctx=ResolveContext(collect_only=True)))
             with self.assertRaisesRegex(ValueError, "unavailable"):
-                require_surface_terrain_context(source, [], **kwargs)
+                entry.require_plan_inputs(source, [], wait=Wait())
         builds.assert_not_called()
 
-    def test_shim_diagnostics_are_replayed_once_on_hit_and_miss(self):
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
+    def test_entry_diagnostics_are_replayed_once_on_hit_and_miss(self):
         from app.application.jsonValidation.resolve import UnresolvedModelError
         source = world(default_climate_zone="custom")
-        kwargs = dict(planning=self.c.assembler, capture=SurfacePlanningCapture(), wait=Wait())
+        entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
         first, second = ResolveContext(collect_only=True), ResolveContext(collect_only=True)
-        prepare_surface_terrain_context(source, [], resolve_ctx=first, **kwargs)
+        entry.require_plan_inputs(source, [], resolve_ctx=first, wait=Wait())
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
-            prepare_surface_terrain_context(source, [], resolve_ctx=second, **kwargs)
+            entry.require_plan_inputs(source, [], resolve_ctx=second, wait=Wait())
         builds.assert_not_called()
         self.assertTrue(first.errors)
         self.assertEqual(first.errors, second.errors)
         self.assertEqual(len(first.errors), len(set(first.errors)))
         with self.assertRaises(UnresolvedModelError):
-            prepare_surface_terrain_context(source, [], resolve_ctx=ResolveContext(validate_only=True), **kwargs)
+            entry.require_plan_inputs(source, [], resolve_ctx=ResolveContext(validate_only=True), wait=Wait())
 
     def test_eight_real_registrations_and_explicit_phase_order(self):
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
@@ -209,31 +206,35 @@ class WiringTests(unittest.TestCase):
                 self.c.prepare(invalid)
         builds.assert_not_called()
 
-    def test_legacy_public_type_identity_and_eight_fields(self):
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import SurfaceTerrainContext as Old
-        from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext as Legacy
-        self.assertIs(Old, SurfaceTerrainContext)
-        self.assertIs(Old, Legacy)
-        self.assertEqual(len(fields(Old)), 8)
+    def test_removed_legacy_entry_modules_have_no_compatibility_shims(self):
+        from pathlib import Path
+        app = Path(__file__).resolve().parents[3] / "app"
+        for path in ("application/worldData/generators/terrain/passes/surfaceTerrainContext.py",
+                     "application/worldData/planning/legacy/surfaceTerrainContext.py"):
+            self.assertFalse((app / path).exists(), path)
 
-    def test_legacy_copies_cannot_change_cached_payload_or_other_views(self):
+    def test_working_views_cannot_change_cached_payload_or_other_requests(self):
         bundle = self.c.prepare(self.view)
-        first, second = to_legacy_context(bundle, working=working_fixture(world(), bundle)), to_legacy_context(bundle, working=working_fixture(world(), bundle))
-        saved = deepcopy(second)
-        for field in ("coarse_hydro", "sparse_fine_hydro", "fine_z_overrides", "coarse_relief_z", "coarse_surface_z"):
-            getattr(first, field).clear()
-        first.coarse_hm.surface_z.clear()
-        self.assertEqual(second, saved)
-        self.assertEqual(to_legacy_context(self.c.prepare(self.view), working=working_fixture(world(), self.c.prepare(self.view))), saved)
-        self.assertIsNot(second.coarse_hm.surface_z, second.coarse_surface_z)
-        self.assertEqual(second.coarse_relief_z,
+        saved = deepcopy(bundle)
+        first = working_fixture(world(), bundle)
+        second = working_fixture(world(), bundle)
+        for mapping in (first.hydrology.coarse_hydro, first.hydrology.sparse_fine_hydro,
+                        first.hydrology.fine_z_overrides, first.terrain.relief_z,
+                        first.hydrology.coarse_surface_z):
+            with self.assertRaises(TypeError):
+                mapping[(0, 0)] = 7
+        self.assertEqual(bundle, saved)
+        self.assertEqual(second.hydrology.coarse_surface_z, first.hydrology.coarse_surface_z)
+        self.assertEqual(second.terrain.relief_z,
             {(cell.gx, cell.gy): z for cell, z in bundle.terrain_base.payload.surface_z})
 
-    def test_legacy_no_hydrology_baseline(self):
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
+    def test_typed_no_hydrology_baseline(self):
         source = world()
-        self.assertEqual(to_legacy_context(self.c.prepare(capture(source)), working=working_fixture(source, self.c.prepare(capture(source)))), prepare_surface_terrain_context(source, [], planning=self.c.assembler,
-            capture=SurfacePlanningCapture(), wait=Wait()))
+        bundle, working = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture()).require_plan_inputs(
+            source, [], wait=Wait())
+        self.assertEqual(working.hydrology.coarse_surface_z,
+            {(cell.gx, cell.gy): z for cell, z in bundle.hydrology.payload.coarse_surface_z})
+        self.assertEqual(working.hydrology.coarse_hydro, {})
 
     def test_bundle_rejects_mixed_world_phase_and_exact_ref(self):
         bundle = self.c.prepare(self.view)
@@ -267,12 +268,11 @@ class WiringTests(unittest.TestCase):
         self.assertTrue(bundle.water_placement.payload.basin_specs)
         self.assertTrue(bundle.hydrology.payload.water_bodies)
         self.assertTrue(bundle.hydrology.payload.coarse_hydro)
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
-        legacy = prepare_surface_terrain_context(source, [], planning=self.c.assembler,
-            capture=SurfacePlanningCapture(), wait=Wait())
-        self.assertEqual(to_legacy_context(bundle, working=working_fixture(source, bundle)).coarse_surface_z, legacy.coarse_surface_z)
+        working = working_fixture(source, bundle)
+        self.assertEqual(working.hydrology.coarse_surface_z,
+            {(cell.gx, cell.gy): z for cell, z in bundle.hydrology.payload.coarse_surface_z})
         for cell, role in bundle.hydrology.payload.coarse_hydro:
-            self.assertEqual(role, legacy.coarse_hydro[(cell.gx, cell.gy)])
+            self.assertEqual(role, working.hydrology.coarse_hydro[(cell.gx, cell.gy)])
 
     def test_accepted_river_crosses_route_bed_final_chain_in_both_spaces(self):
         source = world(world_bounds=dict(x_min=0, x_max=3, y_min=0, y_max=2),

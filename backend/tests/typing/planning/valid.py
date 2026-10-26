@@ -317,15 +317,19 @@ def valid_local_adapter(inputs: ClimateLocalInput, base: ClimateBasePlan,
     return build_local_plan_from_coarse(inputs, base, hydrology)
 
 
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
-from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningView, SurfaceTerrainContext
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningView
 
 
-def valid_surface_composition(assembler: SurfacePlanningAssembler, view: SurfacePlanningView,
-    wait: PlanWaitControl, working: SurfaceWorkingMaps) -> SurfaceTerrainContext | None:
-    bundle: SurfacePlanBundle | None = assembler.prepare(view, wait=wait)
-    return None if bundle is None else to_legacy_context(bundle, working=working)
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+from app.application.jsonValidation.resolve import ResolveContext
+from app.db.models.world import World
+
+
+def valid_surface_composition(entry: SurfacePlanningEntry, view: SurfacePlanningView,
+    wait: PlanWaitControl, world: World) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps] | None:
+    return entry.prepare_captured(view, world=world, wait=wait, resolve_ctx=ResolveContext())
 
 
 from collections.abc import Mapping, Sequence

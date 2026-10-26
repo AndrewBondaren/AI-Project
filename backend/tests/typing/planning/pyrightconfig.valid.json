@@ -2,7 +2,6 @@
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
     "../../../app/application/cancellation/requestPlanWait.py",
-    "../../../app/application/worldData/generators/terrain/passes/surfaceTerrainContext.py",
     "../../../app/application/cache",
     "../../../app/application/planning",
     "../../../app/application/jsonValidation/worldSlices.py",
@@ -56,6 +55,7 @@
     "../../../app/application/worldData/generators/terrain/mountains/materializer.py",
     "../../../app/application/worldData/masks/terrainMerge.py",
     "../../../app/application/worldData/pack/bake/lightGrid/bakeContext.py",
+    "../../../app/application/worldData/pack/bake/l0/worldMapBakeOrchestrator.py",
     "../../../app/application/worldData/pack/bake/lightGrid/paintTerrain.py",
     "../../../app/application/worldData/pack/bake/worldMapBakeOrchestrator.py",
     "../../../app/application/worldData/pack/bake/packMaterializationOrchestrator.py",

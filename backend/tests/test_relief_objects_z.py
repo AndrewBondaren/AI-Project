@@ -157,16 +157,16 @@ class TestGridDetectThresholds(unittest.TestCase):
 class TestPrepareSurfaceOrder(unittest.TestCase):
     def test_relief_objects_called_before_hydro(self) -> None:
         from tests.planning.consumers.test_wiring import world, planning_kwargs, capture
-        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
         deps = planning_kwargs(self)
         composition = self._surface_composition
         source = world()
         with patch.object(composition.registry, "build", wraps=composition.registry.build) as builds:
-            ctx = prepare_surface_terrain_context(source, [], **deps)
+            _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(source, [], wait=deps["wait"])
         phases = [str(call.args[0].metadata.id) for call in builds.call_args_list]
         self.assertLess(phases.index("surface.pc.relief"), phases.index("surface.pc.hydrology_routes"))
         terrain = composition.prepare(capture(source))
-        self.assertEqual(ctx.coarse_relief_z, {(cell.gx, cell.gy): z for cell, z in terrain.terrain_base.payload.surface_z})
+        self.assertEqual(working.terrain.relief_z, {(cell.gx, cell.gy): z for cell, z in terrain.terrain_base.payload.surface_z})
 
 
 class TestAntiDoubleRise(unittest.TestCase):

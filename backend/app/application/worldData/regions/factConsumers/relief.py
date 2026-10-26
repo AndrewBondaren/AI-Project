@@ -7,14 +7,9 @@ from app.application.worldData.regions.regionFacts import ReliefFacts
 
 
 def contribute(context: FactConsumerContext) -> ReliefFacts | None:
-    if context.terrain is not None:
-        surface_z = context.terrain.relief_z
-    else:
-        surface_z = context.relief_z
-        if surface_z is None and context.surface is not None:
-            surface_z = context.surface.coarse_relief_z
-    if surface_z is None or not context.cells:
+    if context.terrain is None or not context.cells:
         return None
+    surface_z = context.terrain.relief_z
     heights: list[int] = []
     for cell in sorted(set(context.cells)):
         height = surface_z.get(cell)
