@@ -12,8 +12,8 @@ from typing import Protocol, TypeVar
 from app.application.worldData.masks.mergeDeclare import merge_declare_over_auto
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 
-SpecT = TypeVar("SpecT")
-CtxT = TypeVar("CtxT")
+SpecT = TypeVar("SpecT", covariant=True)
+CtxT = TypeVar("CtxT", contravariant=True)
 
 
 class MaskSourceCollector(Protocol[CtxT, SpecT]):
