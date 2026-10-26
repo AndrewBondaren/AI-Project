@@ -1,45 +1,67 @@
-"""Compose ready domain observations, topology and region state into LandcoverInputs.
+"""Request-owned region observations and binding of the caller's state snapshot."""
 
-Owners: climate/relief/hydrology domains prepare their request views upstream;
-this module only connects them into the fact observation — no World reads,
-registry resolves or pack objects here.
-"""
+from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
+from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
+from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
 from app.application.worldData.generators.terrain.landcover.types import (
-    AnchoredRegion,
-    LandcoverInputs,
-    StateSnapshotEntry,
+    AnchoredRegion, LandcoverInputs, StateSnapshotEntry,
 )
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
-from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.application.worldData.regions.factConsumers import collect_facts
 from app.application.worldData.regions.factConsumers.context import FactConsumerContext
+from app.application.worldData.regions.regionFacts import RegionFacts
 from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.spatial.regionShape import Point
 from app.dataModel.topology.worldTopology import WorldTopology
+
+if TYPE_CHECKING:
+    from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+    from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext
+
+
+@dataclass(frozen=True, slots=True)
+class LandcoverObservations:
+    """Prepared once per request; state snapshots are bound by each caller."""
+
+    topology: WorldTopology
+    grid: SurfaceGridSettings
+    context: FactConsumerContext
+
+    @classmethod
+    def from_views(
+        cls, topology: WorldTopology, grid: SurfaceGridSettings,
+        climate: ClimateWorkingFields, terrain: TerrainWorkingFields,
+        hydrology: HydrologyWorkingFields,
+    ) -> LandcoverObservations:
+        return cls(topology, grid, FactConsumerContext(
+            surface=None, cells=(), climate=climate, terrain=terrain, hydrology=hydrology,
+        ))
+
+    def facts_at(self, point: Point) -> RegionFacts:
+        # Region coordinates are fine cells; fact consumers observe macro cells.
+        macro = (point[0] // self.grid.fine_span, point[1] // self.grid.fine_span)
+        return collect_facts(replace(self.context, cells=(macro,)))
+
+    def inputs(
+        self, state_snapshot: Mapping[str, StateSnapshotEntry],
+        anchor_specs: tuple[AnchoredRegion, ...] = (),
+    ) -> LandcoverInputs:
+        return LandcoverInputs(self.topology, self.facts_at, state_snapshot, anchor_specs)
 
 
 def prepare_landcover_inputs(
-    topology: WorldTopology,
-    grid: SurfaceGridSettings,
     working: SurfaceWorkingMaps,
     state_snapshot: Mapping[str, StateSnapshotEntry],
     anchor_specs: tuple[AnchoredRegion, ...] = (),
 ) -> LandcoverInputs:
-    """One request-scoped observation built from domain-owned working views."""
-    observation = FactConsumerContext(
-        surface=None,
-        cells=(),
-        climate=working.climate,
-        terrain=working.terrain,
-        hydrology=working.hydrology,
-    )
-    return _landcover_inputs(topology, grid, observation, state_snapshot, anchor_specs)
+    """Bind state without rebuilding observations or resolving world data."""
+    return working.landcover.inputs(state_snapshot, anchor_specs)
 
 
 def prepare_landcover_inputs_legacy(
@@ -50,20 +72,5 @@ def prepare_landcover_inputs_legacy(
     state_snapshot: Mapping[str, StateSnapshotEntry],
 ) -> LandcoverInputs:
     """Migration-only surface channel; removed in PC-11.7 with its remaining callers."""
-    observation = FactConsumerContext(surface, (), climate_profiles)
-    return _landcover_inputs(topology, grid, observation, state_snapshot, ())
-
-
-def _landcover_inputs(
-    topology: WorldTopology,
-    grid: SurfaceGridSettings,
-    observation: FactConsumerContext,
-    state_snapshot: Mapping[str, StateSnapshotEntry],
-    anchor_specs: tuple[AnchoredRegion, ...],
-) -> LandcoverInputs:
-    def facts_at(point):
-        # Region coordinates are fine cells; fact consumers observe macro cells.
-        macro = (point[0] // grid.fine_span, point[1] // grid.fine_span)
-        return collect_facts(replace(observation, cells=(macro,)))
-
-    return LandcoverInputs(topology, facts_at, state_snapshot, anchor_specs)
+    observation = LandcoverObservations(topology, grid, FactConsumerContext(surface, (), climate_profiles))
+    return observation.inputs(state_snapshot)

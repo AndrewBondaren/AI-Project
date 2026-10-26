@@ -8428,11 +8428,12 @@ PC-11.7).
   relief.contribute → working.terrain.relief_z; hydrology.contribute →
   working.hydrology.coarse_hydro/coarse_surface_z. Legacy fallback ветки
   сохранены до PC-11.7.
-- Новый regions/inputs/landcoverInputs.py — canonical domain prepare:
-  prepare_landcover_inputs(topology, grid, working, state_snapshot,
-  anchor_specs) → LandcoverInputs; closure fine→macro + collect_facts
-  собирается один раз на request из готовых refs (не world-scoped resolve
-  на каждый tile). prepare_landcover_inputs_legacy — migration-only
+- Новый regions/inputs/landcoverInputs.py — canonical domain prepare;
+  после PC-11.5-R актуальный контракт:
+  prepare_landcover_inputs(working, state_snapshot, anchor_specs) →
+  LandcoverInputs. LandcoverObservations с fine→macro + collect_facts
+  подготавливается один раз на request, state snapshot привязывается отдельно.
+  prepare_landcover_inputs_legacy — migration-only
   surface канал, удаляется в PC-11.7.
 - LightGridBakeContext += topology: WorldTopology и
   grid: SurfaceGridSettings; заполнены один раз operation owners при
@@ -8503,6 +8504,45 @@ PC-11.7).
   разные методы их получения или любое повторное создание WorldTopology.
 Done: ответственность и стоимость подготовки наблюдений принадлежат явно
   назначенным owners; pack adapter не содержит доменного resolve.
+
+**PC-11.5-R — исправления ревью a3254409 (разрешены мастером).**
+Статус: IMPLEMENTED / VERIFIED, ожидает приёмки мастера. ТЗ: tz_map_light_bake §Регионы покрытия/§L0/L2,
+tz_terrain_generation §Surface planning/cache; контракт PC-11.5 выше.
+- Цель: request-owned observations вместо N повторных topology resolve и
+  fact-context preparation на N L2 tiles; устранить reportArgumentType.
+- Класс `LandcoverObservations`: владелец regions, слой application,
+  `regions/inputs/landcoverInputs.py`; immutable runtime view готовых topology,
+  grid и FactConsumerContext с fine→macro accessor. Не читает World/БД.
+- `SurfacePlanningEntry.prepare_captured` создаёт observations один раз из
+  captured topology/grid и тех же domain views, что входят в SurfaceWorkingMaps.
+  SurfaceWorkingMaps переносит готовый ref; snapshot региона остаётся отдельным
+  входом LandcoverInputs и не сохраняется между requests.
+- Файлы: regions/inputs/landcoverInputs.py, planning/contracts/surfaceWorkingMaps.py,
+  planning/composition/surfacePlanningEntry.py, generators/terrain/landcover/finePaint.py,
+  pack/bake/{l0/worldMapBakeOrchestrator,lightGrid/contributors/landcoverInputs}.py;
+  shared fixture test_wiring.py и regression/call-count tests test_l0_l2.py;
+  tz_terrain_generation §Surface planning/cache — sync нового application ref.
+- Контракт surface_world_topology согласован с bounds API; последующее расширение
+  всей цепочки до Sequence[NamedLocation] — locations-sequence-contract-done.md;
+  working-path больше не выполняет его на каждом tile. Legacy outline до PC-11.7
+  сохраняет прежний канал. Полный PC-11.6 cutover в этот fix не входит.
+- Новых файлов нет; contributors 10→10 (WARN в чат), regions/inputs 2→2,
+  planning/contracts 4→4, planning/composition 5→5.
+- Проверка/Done: один observation producer на N L0/L2 tiles и отсутствие
+  per-tile topology resolve, fresh refs следующего request, сохранение snapshot,
+  eligibility/wire baseline; unittest затронутых suites, pyright valid 0 и
+  negative exact по §6.27. Невыполненные проверки указываются явно.
+- Evidence: 83 теста (planning L0/L2/wiring, landcover contributor/materializer/
+  fine paint, region state contract) + 99 (region index, fine parallel,
+  detailed C11, parent light, WP13, fact consumers, light compose/masks/merge/
+  cleanup, planning revisions) — OK. Production test включает landcover,
+  проверяет один producer на L0 + 3 L2 tiles, запрещает повторный topology
+  resolve; отдельный тест — fresh observations следующего request и сохранение
+  identity каждого переданного state snapshot.
+- Pyright valid: 0 ошибок; negative exact: все 51 помеченных case покрыты
+  53 ожидаемыми diagnostics, missing/unexpected отсутствуют. Существующие
+  6 устаревших include paths в valid config выдают предупреждения инструмента
+  и этим исправлением не изменялись. Backend/DAG/SQL не запускались/не менялись.
 
 **PC-11.6 — убрать landcover dependency generators → pack.bake.**
 Зависимости: PC-11.1/11.5 → PC-11.6a → PC-11.6b.

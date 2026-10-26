@@ -21,9 +21,6 @@ from app.application.jsonValidation import terrain, terrain_masks, terrain_syste
 from app.application.worldData.generators.terrain.landcover.materializer import (
     LandcoverMaterializer,
 )
-from app.application.worldData.planning.composition.surfacePlanningEntry import (
-    surface_world_topology,
-)
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.masks.regionPrecedence import (
     RegionCandidate,
@@ -48,7 +45,6 @@ from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs 
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.spatial.regionShape import Bounds
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
@@ -88,8 +84,7 @@ def paint_regions_fine(
     if not masks.category_enabled(policy):
         return {}
 
-    # The collect path reads only world/locations/scale/surface_planning; the
-    # remaining bake-context fields are compose-time concerns (see contributor).
+    # Tile scope is local; observations come from the request preparation.
     scale = LightGridScale.from_tile(parent_light.tile_macro, parent_light.side)
     bake_ctx = LightGridBakeContext(
         world=world,
@@ -100,8 +95,8 @@ def paint_regions_fine(
         surface_bundle=bundle,
         region_state_snapshot=region_state_snapshot,
         working=working,
-        topology=surface_world_topology(world, locations),
-        grid=SurfaceGridSettings(fine_span=scale.tile_macro, light_side=scale.side),
+        topology=working.landcover.topology,
+        grid=working.landcover.grid,
     )
     materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))
     materializer.begin_pass()

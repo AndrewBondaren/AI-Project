@@ -3,11 +3,59 @@
 from __future__ import annotations
 
 import unittest
+from collections import UserList
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.application.worldData.generators.terrain.passes import bbox as bbox_module
 from app.dataModel.topology.worldBounds import WorldBounds
+from app.application.worldData.generators.climate.locations import static_map_anchors
+from app.application.worldData.planning.composition.surfacePlanningEntry import surface_world_topology
+from app.db.models.namedLocation import NamedLocation
+from app.db.models.world import World
+
+
+class TestLocationsSequence(unittest.TestCase):
+    def setUp(self):
+        self.world = World(world_uid="sequence-world", name="Sequence", created_at="",
+            fine_cells_per_map_cell=1000, grid_bbox_padding=2)
+        self.rows = [NamedLocation(location_uid=uid, world_uid=self.world.world_uid,
+            display_name=uid, created_at="", system_location_type="settlement",
+            map_x=x, map_y=y, is_mobile=mobile)
+            for uid, x, y, mobile in (("a", 0, 0, False), ("b", 3000, -1000, False),
+                                     ("moving", 100000, 100000, True), ("unset", None, None, False))]
+
+    def test_sequences_preserve_input_and_resolve_static_anchor_bounds(self):
+        expected = WorldBounds(x_min=-2, x_max=5, y_min=-3, y_max=2)
+        for locations in (self.rows, tuple(self.rows), UserList(self.rows)):
+            with self.subTest(collection=type(locations).__name__):
+                before = tuple(locations)
+                anchors = static_map_anchors(locations)
+                self.assertIsInstance(anchors, list)
+                self.assertEqual(anchors, self.rows[:2])
+                self.assertEqual(bbox_module.world_bounds_from_world(self.world, locations), expected)
+                bbox = bbox_module.grid_bbox_from_locations(self.world, locations)
+                self.assertEqual((bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max), (-2, 5, -3, 2))
+                self.assertEqual(surface_world_topology(self.world, locations).bounds, expected)
+                self.assertEqual(tuple(locations), before)
+
+    def test_empty_sequences_and_declared_bounds_priority(self):
+        for locations in ([], (), UserList()):
+            with self.subTest(collection=type(locations).__name__):
+                self.assertEqual(static_map_anchors(locations), [])
+                self.assertIsNone(bbox_module.grid_bbox_from_locations(self.world, locations))
+                self.assertIsNone(bbox_module.world_bounds_from_world(self.world, locations))
+                with self.assertRaisesRegex(ValueError, "requires world bounds"):
+                    surface_world_topology(self.world, locations)
+        self.assertIsNone(bbox_module.world_bounds_from_world(self.world))
+        declared = WorldBounds(x_min=10, x_max=11, y_min=20, y_max=21)
+        self.world.world_bounds = declared.model_dump()
+        for locations in ([], (), tuple(self.rows), UserList(self.rows)):
+            with self.subTest(declared=True, collection=type(locations).__name__):
+                self.assertEqual(bbox_module.world_bounds_from_world(self.world, locations), declared)
+                bbox = bbox_module.grid_bbox_from_locations(self.world, locations)
+                self.assertEqual((bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max), (10, 11, 20, 21))
+                self.assertEqual(surface_world_topology(self.world, locations).bounds, declared)
 
 
 class TestWorldBounds(unittest.TestCase):

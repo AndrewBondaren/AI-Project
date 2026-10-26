@@ -415,14 +415,19 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
         from app.application.worldData.pack.io.worldPackReader import WorldPackReader
         from app.application.worldData.pack.read.parentLightLoad import require_parent_light
-        source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=0), fine_cells_per_map_cell=2)
+        from app.application.worldData.regions.inputs.landcoverInputs import LandcoverObservations
+        source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=0), fine_cells_per_map_cell=2,
+            terrain_masks={"enabled": True, "default_landcover": {"autoresolve": False, "seed_spacing": 8}})
         composition = Composition()
         self.addCleanup(composition.service.shutdown)
         view = capture(source)
         entry = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture())
         with patch.object(ClimateWorkingFields, "from_plans", wraps=ClimateWorkingFields.from_plans) as climate_factory, \
              patch.object(TerrainWorkingFields, "from_plan", wraps=TerrainWorkingFields.from_plan) as terrain_factory, \
-             patch.object(HydrologyWorkingFields, "from_plan", wraps=HydrologyWorkingFields.from_plan) as hydro_factory:
+             patch.object(HydrologyWorkingFields, "from_plan", wraps=HydrologyWorkingFields.from_plan) as hydro_factory, \
+             patch.object(LandcoverObservations, "from_views", wraps=LandcoverObservations.from_views) as facts_factory, \
+             patch("app.application.worldData.planning.composition.surfacePlanningEntry.world_bounds_from_world",
+                   side_effect=AssertionError("materialization resolved world topology again")):
             bundle, working = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
             with TemporaryDirectory() as tmp:
                 writer = WorldPackWriter(WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid))
@@ -451,6 +456,36 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                         wires.append(output.write_climate_tile.call_args.args[2])
                     self.assertEqual(wires[0], wires[1])
             self.assertEqual((climate_factory.call_count, terrain_factory.call_count, hydro_factory.call_count), (1, 1, 1))
+            self.assertEqual(facts_factory.call_count, 1)
+            self.assertIs(working.landcover.topology, view.water_placement.topology)
+            self.assertIs(working.landcover.grid, view.terrain_base.grid)
+            self.assertIs(working.landcover.context.climate, working.climate)
+            self.assertIs(working.landcover.context.terrain, working.terrain)
+            self.assertIs(working.landcover.context.hydrology, working.hydrology)
+
+    def test_landcover_observations_are_fresh_per_request_and_bind_current_snapshot(self):
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        from app.application.worldData.regions.inputs.landcoverInputs import prepare_landcover_inputs
+        from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
+        source = world()
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        entry = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture())
+        view = capture(source)
+        _, first = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+        _, second = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+        self.assertIsNot(first.landcover, second.landcover)
+        self.assertIsNot(first.landcover.context, second.landcover.context)
+        old_snapshot = {"region": StateSnapshotEntry("forest")}
+        new_snapshot = {"region": StateSnapshotEntry("plains", tombstone=True)}
+        old_inputs = prepare_landcover_inputs(first, old_snapshot)
+        new_inputs = prepare_landcover_inputs(first, new_snapshot)
+        self.assertIs(old_inputs.state_snapshot, old_snapshot)
+        self.assertIs(new_inputs.state_snapshot, new_snapshot)
+        self.assertIs(old_inputs.facts_at.__self__, first.landcover)
+        self.assertIs(new_inputs.facts_at.__self__, first.landcover)
 
     async def test_detailed_entry_and_queue_reuse_bundle_and_persist_identical_columns(self):
         import tempfile

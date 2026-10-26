@@ -20,6 +20,7 @@ from app.application.worldData.planning.contracts.surfacePlanningView import (
     NoExtentSurfacePlanningView, SurfacePlanningView, SurfacePlanningViewKind,
 )
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+from app.application.worldData.regions.inputs.landcoverInputs import LandcoverObservations
 from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -67,11 +68,15 @@ class SurfacePlanningEntry:
             return None
         if bundle is None or bundle.world_uid != view.world_uid or bundle.view_revision != view.revision:
             raise ValueError("surface preparation returned a mismatched bundle")
+        climate = ClimateWorkingFields.from_plans(bundle.climate_base.payload,
+            bundle.climate_local.payload, partial(profile_for, world))
+        terrain = TerrainWorkingFields.from_plan(bundle.terrain_base.payload)
+        hydrology = HydrologyWorkingFields.from_plan(bundle.hydrology.payload, view.terrain_base.grid)
         working = SurfaceWorkingMaps(
-            climate=ClimateWorkingFields.from_plans(bundle.climate_base.payload,
-                bundle.climate_local.payload, partial(profile_for, world)),
-            terrain=TerrainWorkingFields.from_plan(bundle.terrain_base.payload),
-            hydrology=HydrologyWorkingFields.from_plan(bundle.hydrology.payload, view.terrain_base.grid))
+            climate=climate, terrain=terrain, hydrology=hydrology,
+            landcover=LandcoverObservations.from_views(
+                view.water_placement.topology, view.terrain_base.grid, climate, terrain, hydrology),
+        )
         return bundle, working
 
     def require_plan_inputs(

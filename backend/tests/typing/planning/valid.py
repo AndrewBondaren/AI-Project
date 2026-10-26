@@ -308,7 +308,24 @@ def valid_surface_composition(assembler: SurfacePlanningAssembler, view: Surface
     return None if bundle is None else to_legacy_context(bundle, working=working)
 
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from app.application.worldData.generators.climate.locations import static_map_anchors
+from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world, grid_bbox_from_locations
+from app.application.worldData.planning.composition.surfacePlanningEntry import surface_world_topology
+from app.db.models.namedLocation import NamedLocation
+from app.db.models.world import World
+
+
+def valid_locations_sequence(world: World, locations: Sequence[NamedLocation],
+                             frozen: tuple[NamedLocation, ...]) -> None:
+    for rows in (locations, frozen):
+        assert_type(static_map_anchors(rows), list[NamedLocation])
+        grid_bbox_from_locations(world, rows)
+        world_bounds_from_world(world, rows)
+        surface_world_topology(world, rows)
+    world_bounds_from_world(world, None)
+
+
 from app.dataModel.climate.planning.climatePoints import ClimateKey, PoleClimateSample
 from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
 

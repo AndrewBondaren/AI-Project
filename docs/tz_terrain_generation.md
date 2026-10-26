@@ -2010,10 +2010,22 @@ Delivery SoT — [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md
 ответственность и точный путь; только затем закрываются пробелы на стыках.
 Рабочие проекции принадлежат своим доменам, composition связывает их результаты
 и не поглощает domain logic. Выбран application DTO SurfaceWorkingMaps
-(planning/contracts/surfaceWorkingMaps.py), содержащий только climate/terrain/
-hydrology refs; extent-probe остаётся у request entry без prepare, а private
-climate profile memo синхронизируется request-local lock. Точные контракты и
-матрица NoExtent/absent/error поведения — R1/R2/R3 PC-11.1 в delivery SoT.
+(planning/contracts/surfaceWorkingMaps.py), содержащий climate/terrain/hydrology
+refs и подготовленный region-owned ref `landcover: LandcoverObservations`
+(PC-11.5-R). Его producer — `SurfacePlanningEntry.prepare_captured`: один раз
+на request связывает captured topology/grid и те же domain views, без нового
+world resolve. `LandcoverObservations` живёт в application regions/inputs,
+выполняет fine→macro fact observation; DTO только переносит ref. L0/L2
+используют один ref, текущий region-state snapshot привязывается отдельно
+без пересборки observations и не удерживается между requests.
+Extent-probe остаётся у request entry без prepare, а private
+climate profile memo синхронизируется request-local lock. Цепочка
+`surface_world_topology → world_bounds_from_world → grid_bbox_from_locations →
+static_map_anchors` принимает `Sequence[NamedLocation]` без изменения входной
+коллекции. У `world_bounds_from_world` сохраняется optional `None`, а
+`static_map_anchors` возвращает собственный `list[NamedLocation]`.
+Поддержка одноразовых iterators/generators этим контрактом не заявляется.
+Точные контракты и матрица NoExtent/absent/error поведения — R1/R2/R3 PC-11.1 в delivery SoT.
 PC-11.2b уточняет frozen climate consumption: неизвестный ключ, уже
 разрешённый capture в frozen fallback profile, при pack sampling использует
 сохранённые values. Повторный live resolve canonical fallback alias не

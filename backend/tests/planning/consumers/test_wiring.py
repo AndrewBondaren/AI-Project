@@ -470,9 +470,13 @@ def working_fixture(source, bundle):
     from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
     from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
     from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_side
-    return SurfaceWorkingMaps(
-        ClimateWorkingFields.from_plans(bundle.climate_base.payload, bundle.climate_local.payload,
-            partial(profile_for, source)),
-        TerrainWorkingFields.from_plan(bundle.terrain_base.payload),
-        HydrologyWorkingFields.from_plan(bundle.hydrology.payload, SurfaceGridSettings(
-            fine_span=map_cell_fine_span(source), light_side=resolve_world_map_side(source.world_map_cells_per_tile))))
+    from app.application.worldData.regions.inputs.landcoverInputs import LandcoverObservations
+    grid = SurfaceGridSettings(fine_span=map_cell_fine_span(source),
+                               light_side=resolve_world_map_side(source.world_map_cells_per_tile))
+    climate = ClimateWorkingFields.from_plans(bundle.climate_base.payload, bundle.climate_local.payload,
+        partial(profile_for, source))
+    terrain = TerrainWorkingFields.from_plan(bundle.terrain_base.payload)
+    hydrology = HydrologyWorkingFields.from_plan(bundle.hydrology.payload, grid)
+    return SurfaceWorkingMaps(climate, terrain, hydrology,
+        LandcoverObservations.from_views(bundle.water_placement.payload.topology, grid,
+            climate, terrain, hydrology))

@@ -26,13 +26,13 @@ def read_region_state_snapshot(ctx: LightGridBakeContext) -> Mapping[str, StateS
 
 
 def prepare_landcover_inputs(ctx: LightGridBakeContext) -> LandcoverInputs:
-    if ctx.topology is None or ctx.grid is None:
-        raise ValueError("landcover inputs require topology/grid resolved by the operation owner")
     if ctx.working is not None:
         return _compose_landcover_inputs(
-            ctx.topology, ctx.grid, ctx.working, read_region_state_snapshot(ctx))
+            ctx.working, read_region_state_snapshot(ctx))
     if ctx.surface_bundle is not None:
         raise ValueError("frozen landcover inputs require request working views")
+    if ctx.topology is None or ctx.grid is None:
+        raise ValueError("landcover inputs require topology/grid resolved by the operation owner")
     surface = ctx.surface_planning
     # Migration-only legacy channel until PC-11.7; profile resolution stays a
     # climate domain registry call, the adapter only forwards its result.

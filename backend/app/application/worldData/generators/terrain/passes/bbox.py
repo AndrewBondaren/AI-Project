@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import (
@@ -17,7 +19,7 @@ from app.db.models.world import World
 
 def world_bounds_from_world(
     world: World,
-    locations: list[NamedLocation] | None = None,
+    locations: Sequence[NamedLocation] | None = None,
 ) -> WorldBounds | None:
     """Declared ``world_bounds``, else resolved location AABB. No wrap invent."""
     parsed = WorldBounds.try_parse(getattr(world, "world_bounds", None))
@@ -50,7 +52,7 @@ def _declared_grid_bbox(world: World) -> GridBBox | None:
 
 def grid_bbox_from_locations(
     world: World,
-    locations: list[NamedLocation],
+    locations: Sequence[NamedLocation],
 ) -> GridBBox | None:
     declared = _declared_grid_bbox(world)
     if declared is not None:

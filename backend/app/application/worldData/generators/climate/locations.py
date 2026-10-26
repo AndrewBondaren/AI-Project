@@ -1,10 +1,12 @@
 """Static map anchor locations (CL-12)."""
 
+from collections.abc import Sequence
+
 from app.dataModel.climate.enums.poleKind import CLIMATE_POLE_LOCATION_TYPE
 from app.db.models.namedLocation import NamedLocation
 
 
-def static_map_anchors(locations: list[NamedLocation]) -> list[NamedLocation]:
+def static_map_anchors(locations: Sequence[NamedLocation]) -> list[NamedLocation]:
     return [
         loc for loc in locations
         if loc.map_x is not None and loc.map_y is not None and not loc.is_mobile
