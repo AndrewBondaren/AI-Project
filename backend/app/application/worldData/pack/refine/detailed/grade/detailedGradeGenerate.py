@@ -10,10 +10,10 @@ import logging
 from collections.abc import Sequence
 
 from app.application.worldData.pack.refine.columnBounds import ColumnBounds
-from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import catalog_for_surface
-from app.application.worldData.pack.refine.detailed.detailedGradeDiscover import discover_and_paint
-from app.application.worldData.pack.refine.detailed.detailedGradeHalo import grade_halo_cells
-from app.application.worldData.pack.refine.detailed.detailedGradeResult import DetailedGradeResult
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeCatalog import catalog_for_surface
+from app.application.worldData.pack.refine.detailed.fronts.detailedGradeDiscover import discover_and_paint
+from app.application.worldData.pack.refine.detailed.corridor.detailedGradeHalo import grade_halo_cells
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeResult import DetailedGradeResult
 from app.application.worldData.pack.refine.gridNeighborHalo import overlay_halo_from_surface
 from app.application.worldData.pack.refine.fineGradeSurface import Coord
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState

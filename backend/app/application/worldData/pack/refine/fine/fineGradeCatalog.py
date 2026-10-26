@@ -16,7 +16,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_grade_systems_emit_done,
     log_pack_grade_systems_emit_start,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.fine.prep.fineTileContext import VertexSlotSeam
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem

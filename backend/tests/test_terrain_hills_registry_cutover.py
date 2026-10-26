@@ -13,7 +13,7 @@ from app.application.worldData.generators.terrain.landcover import finePaint
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import open_land_terrain_keys
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.application.worldData.pack.refine.detailed.detailedGradeDiscover import discover_and_paint
+from app.application.worldData.pack.refine.detailed.fronts.detailedGradeDiscover import discover_and_paint
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.dataModel.spatial.regionShape import BboxShape, EdgeNoise
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry

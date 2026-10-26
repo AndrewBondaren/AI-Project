@@ -27,17 +27,17 @@ from app.application.worldData.generators.terrain.relief.volume.volumeMaterializ
     plan_seed_volume,
     ribbon_sign_from_dz,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeCanalCut import (
+from app.application.worldData.pack.refine.detailed.corridor.detailedGradeCanalCut import (
     canal_for_seed,
     r36t_include_cut_end,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeCorridor import (
+from app.application.worldData.pack.refine.detailed.corridor.detailedGradeCorridor import (
     r36t_corridor_cells,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeMaterialize import (
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeMaterialize import (
     instance_for_formation,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeResult import (
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeResult import (
     DetailedGradeResult,
     GradeFormation,
 )

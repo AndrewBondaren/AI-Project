@@ -13,7 +13,7 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.fineGradeSurface import Coord
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay

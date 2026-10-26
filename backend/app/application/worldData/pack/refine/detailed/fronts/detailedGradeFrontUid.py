@@ -16,8 +16,8 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
 from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     make_grade_uid,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
-from app.application.worldData.pack.refine.detailed.detailedGradeMaterialize import (
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeMaterialize import (
     inherit_segment_uid,
 )
 from app.dataModel.spatial.facing import Facing

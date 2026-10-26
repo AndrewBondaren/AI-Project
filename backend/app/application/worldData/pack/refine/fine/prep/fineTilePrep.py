@@ -22,8 +22,8 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
-from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import catalog_for_surface
-from app.application.worldData.pack.refine.detailed.detailedGradeHalo import grade_halo_cells
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeCatalog import catalog_for_surface
+from app.application.worldData.pack.refine.detailed.corridor.detailedGradeHalo import grade_halo_cells
 from app.application.worldData.pack.refine.entry.entryRingGeom import wilderness_chunk_origin
 from app.application.worldData.pack.refine.fine.prep.fineTileContext import FineTileContext
 from app.application.worldData.pack.refine.gridNeighborHalo import overlay_grid_neighbor_halos

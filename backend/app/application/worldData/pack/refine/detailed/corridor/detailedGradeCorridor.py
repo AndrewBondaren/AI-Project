@@ -21,7 +21,7 @@ from app.application.worldData.generators.terrain.relief.volume.volumeMaterializ
     RibbonVolumePlan,
     plan_seed_volume,
 )
-from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.grade.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.fineGradeSurface import (
     Coord,
     FineGradeSurface,
