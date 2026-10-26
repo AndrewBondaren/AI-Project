@@ -4,10 +4,11 @@ Legacy map_cells ``materialize_surface_stack`` removed; use pack bake modes.
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_bundle
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -259,11 +260,14 @@ class WorldSurfaceMaterializationOrchestrator:
         templates = mountain_template_inputs(relief_templates)
         captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
-        surface_bundle = prepare_captured_bundle(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
-        if surface_bundle is None:
+        prepared = SurfacePlanningEntry(self._planning, self._capture).prepare_captured(
+            captured, world=world, wait=wait, resolve_ctx=request_ctx)
+        if prepared is None:
             raise ValueError("surface terrain context unavailable")
+        surface_bundle, working = prepared
         detailed = await self._detailed.bake(
             world, locations, pack_writer, ctx, surface_bundle, request,
+            working=working,
         )
         async with self._db.transaction_if_needed():
             await self._publication_guard.require_fresh(captured, mode=ResolutionMode.RUNTIME,

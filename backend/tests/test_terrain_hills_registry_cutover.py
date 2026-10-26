@@ -1,4 +1,5 @@
 """7b: registry hills, independent grade admission and explicit N+1 profile."""
+from tests.planning.consumers.test_wiring import working_fixture
 from dataclasses import replace
 from types import SimpleNamespace
 import unittest
@@ -93,7 +94,7 @@ class RegistryCutoverTests(unittest.TestCase):
         world = SimpleNamespace(
             world_uid="cutover", seed=1, world_topology_mode="planar",
             world_bounds={"x_min": 0, "y_min": 0, "x_max": 0, "y_max": 0},
-            fine_cells_per_map_cell=32, z_min=0, z_max=20,
+            fine_cells_per_map_cell=32, world_map_cells_per_tile=1, z_min=0, z_max=20,
             terrain_registry=registry.model_dump(mode="json"),
             terrain_masks=masks.model_dump(mode="json"), hydrology={"enabled": False},
             climate_zone_registry=None, relief_pick_policy=None,
@@ -108,7 +109,7 @@ class RegistryCutoverTests(unittest.TestCase):
         with patch.object(finePaint, "prepare_landcover_inputs", side_effect=with_state):
             state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
                 world, [], frozen_surface_fixture(world, parent), 0, 0, parent_light=parent,
-                refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0))
+                refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0), working=working_fixture(world, frozen_surface_fixture(world, parent)))
         self.assertEqual(set(state.surface_terrain.values()), {"steppe"})
         self.assertEqual(set(state.surface_region_uid.values()), {uid})
         self.assertGreater(max(state.heightmap.surface_z.values()), 3)

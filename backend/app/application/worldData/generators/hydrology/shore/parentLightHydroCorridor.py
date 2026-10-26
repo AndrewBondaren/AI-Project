@@ -1,6 +1,7 @@
 """Hard hydro corridor from L0 parent light (WP-PERF-22)."""
 
 from __future__ import annotations
+from collections.abc import Mapping
 
 from app.application.worldData.generators.coordinates.worldTile import world_fine_xy
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
@@ -66,7 +67,7 @@ def hydro_mask_from_parent(
 
 def merge_hydro_hard_corridor(
     parent: ParentLightTile,
-    sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology] | None,
+    sparse_fine_hydro: Mapping[tuple[int, int], MapCellHydrology] | None,
 ) -> dict[tuple[int, int], MapCellHydrology]:
     """L0 mask is SoT; sparse declared carves kept only inside corridor."""
     mask = hydro_mask_from_parent(parent)

@@ -1,6 +1,7 @@
 """World map light bake — thin compose → writer (tz_map_light_bake / WP-15)."""
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
 from collections import Counter
@@ -103,6 +104,7 @@ class WorldMapBakeOrchestrator:
         bake_mode: PackBakeMode = PACK_BAKE_LIGHT,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+        working: SurfaceWorkingMaps,
     ) -> int:
         wait.raise_if_cancelled()
         world_uid = world.world_uid
@@ -122,7 +124,7 @@ class WorldMapBakeOrchestrator:
             log_pack_surface_context(world_uid, ok=False, started_at=ctx_t0)
             raise ValueError(f"surface terrain context unavailable for world_map bake ({world_uid})")
         # The working copy and frozen refs always originate from this same bundle.
-        surface_ctx = to_legacy_context(surface_bundle)
+        surface_ctx = to_legacy_context(surface_bundle, working=working)
         log_pack_surface_context(
             world_uid,
             ok=True,
@@ -155,6 +157,7 @@ class WorldMapBakeOrchestrator:
             terrain_system_keys=terrain_system_keys(world),
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
             region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
+            working=working,
         )
         compose = compose_light_grid(bake_ctx)
         replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
@@ -225,6 +228,7 @@ class WorldMapBakeOrchestrator:
         locations_index: LocationsIndexWire | None = None,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+        working: SurfaceWorkingMaps,
     ) -> tuple[list[WorldMapCellWire], str]:
         """Single-tile convenience wrapper around compose pipeline."""
         wait.raise_if_cancelled()
@@ -239,7 +243,7 @@ class WorldMapBakeOrchestrator:
                 wait=wait, resolve_ctx=request_ctx)
         if surface_bundle is None:
             raise ValueError("surface terrain context unavailable")
-        surface_ctx = to_legacy_context(surface_bundle)
+        surface_ctx = to_legacy_context(surface_bundle, working=working)
         tile_macro = map_cell_fine_span(world)
         side = cells_per_side or resolve_world_map_cells_per_tile(
             tile_macro,
@@ -257,6 +261,7 @@ class WorldMapBakeOrchestrator:
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
+            working=working,
         )
         compose = compose_light_grid(bake_ctx)
         replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)

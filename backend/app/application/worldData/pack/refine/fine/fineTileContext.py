@@ -11,6 +11,7 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
     GradePipelineTimings,
 )
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.fineGradeSurface import Coord
@@ -33,6 +34,7 @@ class FineTileContext:
     world: World
     locations: list[NamedLocation]
     surface_bundle: SurfacePlanBundle
+    working: SurfaceWorkingMaps
     tile_gx: int
     tile_gy: int
     fine_bbox: ColumnRect

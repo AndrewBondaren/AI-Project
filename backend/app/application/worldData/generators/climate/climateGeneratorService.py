@@ -1,3 +1,4 @@
+from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
 from dataclasses import dataclass
 from typing import Optional
 
@@ -17,6 +18,8 @@ from app.application.worldData.generators.climate.zoneField import (
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
 
 
 DEFAULT_LAPSE_RATE = WorldTerrainScalars.resolved_elevation_lapse_rate(None)
@@ -63,7 +66,7 @@ class ClimateGeneratorService:
         while current:
             if current.system_climate_zone:
                 return current.system_climate_zone
-            current = uid_map.get(current.parent_location_uid)
+            current = uid_map.get(current.parent_location_uid) if current.parent_location_uid is not None else None
         return climate_scalars(world).default_climate_zone
 
     def sample_at_pole_field(
@@ -113,11 +116,14 @@ class ClimateGeneratorService:
         local_field: ClimateAnchorField,
         gx: int,
         gy: int,
+        *,
+        working: ClimateWorkingFields | None = None,
     ) -> SurfaceClimateSample:
         from app.application.worldData.generators.climate.tierResolve import resolve_tier_sample
 
         return resolve_tier_sample(
             self, world, pole_field, local_field, gx, gy,
+            working=working,
         )
 
     def sample_at_grid(
@@ -143,8 +149,11 @@ class ClimateGeneratorService:
         system_climate: str,
         z: int,
         base_temperature_override: int | None = None,
+        *,
+        working: ClimateWorkingFields | None = None,
     ) -> tuple[int, int]:
-        profile = profile_for(world, system_climate)
+        profile = (working.profile_for_key(RegistryKey[WorldClimateZoneRegistry](system_climate))
+                   if working is not None else profile_for(world, system_climate))
         base    = (
             base_temperature_override
             if base_temperature_override is not None

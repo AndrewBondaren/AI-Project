@@ -1,6 +1,7 @@
 """Serial prep before FineChunkRunner pool — parent, surface, halo, catalog."""
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from collections.abc import Mapping
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
@@ -57,6 +58,7 @@ def prepare_fine_tile(
     relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     stages: GradePipelineStages | None = None,
     region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+    working: SurfaceWorkingMaps,
 ) -> FineTileContext:
     """Prep before the pool: parent light, upsample + hills + hydro, halo, catalog."""
     phase_name = phase or refine_role
@@ -81,6 +83,7 @@ def prepare_fine_tile(
     surface_state = terrain.build_tile_surface_state(
         world, locations, surface_bundle, tile_gx, tile_gy, parent_light=parent,
         region_state_snapshot=region_state_snapshot,
+        working=working,
     )
     surface_columns = (fine_bbox.x_max - fine_bbox.x_min + 1) * (
         fine_bbox.y_max - fine_bbox.y_min + 1
@@ -149,6 +152,7 @@ def prepare_fine_tile(
         location_pairs=location_pairs,
         volumes=volumes,
         stages=stages,
+        working=working,
     )
 
 

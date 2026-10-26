@@ -6,6 +6,7 @@ corridor select to ``pathCorridorSelect``. Public method names stable for
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.generators.terrain.types import ColumnRect
@@ -84,6 +85,7 @@ class FineTerrainRefineOrchestrator:
         tile_gy: int,
         xy_radius: int,
         location_volumes: list[TerritoryVolume] | None = None,
+        working: SurfaceWorkingMaps,
     ) -> tuple[PersistResult, int, int]:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
@@ -110,6 +112,7 @@ class FineTerrainRefineOrchestrator:
             role="scene",
             phase="scene",
             started_at=phase_t0,
+            working=working,
         )
         return result.persist, result.wilderness_chunks_written, result.rect_count
 
@@ -119,10 +122,11 @@ class FineTerrainRefineOrchestrator:
         tile_gx: int, tile_gy: int, rect: ColumnRect,
         location_volumes: list[TerritoryVolume] | None = None, *,
         refine_role: ChunkRefineRole = "background", stages: GradePipelineStages | None = None,
+        working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         """Standalone single-rect operation; nested queued work does not publish."""
         result = await self._refine_rect(world, locations, writer, mat_ctx, surface_bundle,
-            tile_gx, tile_gy, rect, location_volumes, refine_role=refine_role, stages=stages)
+            tile_gx, tile_gy, rect, location_volumes, refine_role=refine_role, stages=stages, working=working)
         writer.save_manifest()
         return result
 
@@ -140,6 +144,7 @@ class FineTerrainRefineOrchestrator:
         *,
         refine_role: ChunkRefineRole = "background",
         stages: GradePipelineStages | None = None,
+        working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
@@ -153,6 +158,7 @@ class FineTerrainRefineOrchestrator:
             phase=refine_role,
             relief_templates_by_uid=templates,
             stages=resolved,
+            working=working,
         )
         await _persist_grade_instances(self._relief_grade_repo, world, result)
         return result
@@ -227,6 +233,7 @@ class FineTerrainRefineOrchestrator:
         cy: int,
         *,
         stages: GradePipelineStages | None = None,
+        working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         rect = fine_chunk_rect(world, tile_gx, tile_gy, cx, cy)
         return await self._refine_rect(
@@ -234,6 +241,7 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, rect,
             refine_role="background",
             stages=stages,
+            working=working,
         )
 
     async def refine_path_corridor(
@@ -250,6 +258,7 @@ class FineTerrainRefineOrchestrator:
         *,
         heading: PathHeading | None = None,
         depth_tiles: int | None = None,
+        working: SurfaceWorkingMaps,
     ) -> int:
         """Refine coarse corridor ahead of anchor — PLAYER_PATH layer (MERGE-5 / DEBT-7)."""
         if heading is None or not heading.is_defined:
@@ -278,6 +287,7 @@ class FineTerrainRefineOrchestrator:
             role="path",
             phase="path",
             started_at=phase_t0,
+            working=working,
         )
         return result.wilderness_chunks_written
 
@@ -335,6 +345,7 @@ async def _run_refine_phase(
     role: ChunkRefineRole,
     phase: str,
     started_at: float,
+    working: SurfaceWorkingMaps,
 ) -> FineRefineResult:
     """One refine pass + grade persist + phase-done log (scene/path share it)."""
     result = await runner.refine_rects(
@@ -343,6 +354,7 @@ async def _run_refine_phase(
         refine_role=role,
         phase=phase,
         stages=GradePipelineStages.off(),
+        working=working,
     )
     await _persist_grade_instances(relief_grade_repo, world, result)
     log_pack_fine_terrain_phase_done(

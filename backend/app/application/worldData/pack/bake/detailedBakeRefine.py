@@ -6,6 +6,7 @@ orchestrator.
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
 from dataclasses import dataclass, field
@@ -57,6 +58,7 @@ async def refine_detailed_tiles(
     phase: str = "detailed",
     relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     stages: GradePipelineStages | None = None,
+    working: SurfaceWorkingMaps,
 ) -> DetailedRefineAggregate:
     """Require L0 parent light per tile, then refine every rect of the plan."""
     tile_macro = map_cell_fine_span(world)
@@ -80,6 +82,7 @@ async def refine_detailed_tiles(
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages or GradePipelineStages.off(),
+            working=working,
         )
         for key, z in refined.fine_surface_z.items():
             prev = aggregate.fine_surface_z.get(key)

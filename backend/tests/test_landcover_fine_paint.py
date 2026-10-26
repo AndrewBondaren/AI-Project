@@ -6,6 +6,7 @@ older than landcover.
 """
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import unittest
 from types import SimpleNamespace
@@ -47,6 +48,7 @@ def _world(*specs) -> SimpleNamespace:
     )
     world = SimpleNamespace(
         world_uid="wilderness-7", seed=7,
+        fine_cells_per_map_cell=TILE_M, world_map_cells_per_tile=SIDE,
         world_topology_mode="planar",
         world_bounds={"x_min": 0, "y_min": 0, "x_max": 0, "y_max": 0},
         terrain_registry=registry.model_dump(mode="json"),
@@ -95,6 +97,7 @@ class FineRegionPaintTests(unittest.TestCase):
         self.uid = region_uid(self.world.world_uid, name="woods")
         self.state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             self.world, [], _surface_ctx(self.world), 0, 0, parent_light=_parent(),
+            working=working_fixture(self.world, _surface_ctx(self.world)),
         )
 
     def test_fine_edge_cuts_inside_light_cell(self) -> None:
@@ -147,6 +150,7 @@ class FineRegionPaintTests(unittest.TestCase):
             update={"enabled": False})).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
+            working=working_fixture(world, _surface_ctx(world)),
         )
         assert state.surface_terrain is not None
         self.assertEqual(state.surface_terrain[(0, 6)], FOREST)  # pure upsample
@@ -158,6 +162,7 @@ class FineRegionPaintTests(unittest.TestCase):
         world = _world()  # enabled policy, no declared regions, no autoresolve
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
+            working=working_fixture(world, _surface_ctx(world)),
         )
         terrain = state.surface_terrain
         assert terrain is not None
@@ -172,7 +177,7 @@ class FineRegionPaintTests(unittest.TestCase):
             declared_regions=[self.spec],
         ).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], _surface_ctx(world), 0, 0, parent_light=_parent())
+            world, [], _surface_ctx(world), 0, 0, parent_light=_parent(), working=working_fixture(world, _surface_ctx(world)))
         self.assertIn(self.uid, state.surface_region_uid.values())
 
 

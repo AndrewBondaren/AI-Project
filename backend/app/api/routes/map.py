@@ -24,7 +24,7 @@ from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    require_surface_plan_bundle,
+    require_surface_plan_inputs,
 )
 from app.application.worldData.pack.refine.entry.entryAnchorTracker import ANCHOR_KINDS, parse_anchor_kind
 from app.application.worldData.materialize.materializationContext import resolve_materialization_context
@@ -503,7 +503,7 @@ async def refine_from_entry_route(
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     try:
-        surface_bundle = require_surface_plan_bundle(
+        surface_bundle, working = require_surface_plan_inputs(
             world, locations, nodes=nodes, edges=edges,
             planning=container.surface_planning(), capture=container.surface_planning_capture(),
             wait=RequestPlanWait.unbounded(),
@@ -529,6 +529,7 @@ async def refine_from_entry_route(
                 location_uid=location_uid,
                 heading_dx=heading_dx,
                 heading_dy=heading_dy,
+                working=working,
             )
             scheduled = None
             if schedule_bg:
@@ -539,6 +540,7 @@ async def refine_from_entry_route(
                     tile_gx=entry.tile_gx,
                     tile_gy=entry.tile_gy,
                     heading=entry.heading,
+                    working=working,
                 )
             await finalize_pack_on_world(
                 container.world_repository(),
@@ -604,7 +606,7 @@ async def refine_chunk_route(
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     try:
-        surface_bundle = require_surface_plan_bundle(
+        surface_bundle, working = require_surface_plan_inputs(
             world, locations, nodes=nodes, edges=edges,
             planning=container.surface_planning(), capture=container.surface_planning_capture(),
             wait=RequestPlanWait.unbounded(),
@@ -622,7 +624,7 @@ async def refine_chunk_route(
             result = await entry_orch.fine_terrain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_bundle,
                 gx, gy, cx, cy,
-                stages=stages,
+                stages=stages, working=working,
             )
             await finalize_pack_on_world(
                 container.world_repository(),
@@ -674,7 +676,7 @@ async def schedule_chunk_refine_route(
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     try:
-        surface_bundle = require_surface_plan_bundle(
+        surface_bundle, working = require_surface_plan_inputs(
             world, locations, nodes=nodes, edges=edges,
             planning=container.surface_planning(), capture=container.surface_planning_capture(),
             wait=RequestPlanWait.unbounded(),
@@ -695,6 +697,7 @@ async def schedule_chunk_refine_route(
             tile_gy=tile_gy,
             heading_dx=heading_dx,
             heading_dy=heading_dy,
+            working=working,
         )
         await finalize_pack_on_world(
             container.world_repository(),

@@ -25,15 +25,18 @@ def prepare_landcover_inputs(ctx: LightGridBakeContext) -> LandcoverInputs:
         raise ValueError("LANDCOVER requires world bounds independent of bake scope")
     topology = WorldTopology(mode=terrain_scalars(ctx.world).world_topology_mode, bounds=bounds)
     bundle = ctx.surface_bundle
-    if bundle is not None:
-        local = ClimateAnchorField(bundle.climate_local.payload.anchors)
-        profiles = {str(anchor.system_climate_zone): profile_for(ctx.world, anchor.system_climate_zone)
+    if ctx.working is not None:
+        working = ctx.working
+        local = working.climate.local_field
+        profiles = {str(anchor.system_climate_zone): working.climate.profile_for_key(anchor.system_climate_zone)
                     for anchor in local.anchors}
         # coarse_relief_z historically means the pre-relief terrain base.
         observation = FactConsumerContext(None, (), profiles, local_field=local,
-            relief_z={(cell.gx, cell.gy): z for cell, z in bundle.terrain_base.payload.surface_z},
-            hydro={(cell.gx, cell.gy): value for cell, value in bundle.hydrology.payload.coarse_hydro},
-            surface_z={(cell.gx, cell.gy): z for cell, z in bundle.hydrology.payload.coarse_surface_z})
+            relief_z=working.terrain.relief_z,
+            hydro=working.hydrology.coarse_hydro,
+            surface_z=working.hydrology.coarse_surface_z)
+    elif bundle is not None:
+        raise ValueError("frozen landcover inputs require request working views")
     else:
         surface = ctx.surface_planning
         profiles = ({str(anchor.system_climate_zone): profile_for(ctx.world, anchor.system_climate_zone)

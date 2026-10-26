@@ -120,7 +120,8 @@ class PackBakeResultSettlementTests(TestCase):
 class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_city_location_calls_materialize_with_skip(self, _ctx):
         outdoor = MagicMock()
@@ -148,7 +149,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_wilderness_does_not_call_c11(self, _ctx):
         outdoor = MagicMock()
@@ -172,7 +174,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_non_city_location_does_not_call_c11(self, _ctx):
         outdoor = MagicMock()
@@ -203,7 +206,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_district_uid_does_not_call_c11(self, _ctx):
         outdoor = MagicMock()
@@ -234,7 +238,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_outdoor_none_skips_c11(self, _ctx):
         orch = _orch(outdoor=None)
@@ -252,7 +257,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_c11_error_keeps_l2_and_records_settlement(self, _ctx):
         outdoor = MagicMock()
@@ -275,7 +281,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_extract_error_is_settlement_error_not_raise(self, _ctx):
         outdoor = MagicMock()
@@ -298,7 +305,8 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
 
     @patch(
         worldSurfaceMaterializationOrchestrator.__name__
-        + ".prepare_captured_bundle",
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_bake_pack_attaches_settlement(self, _ctx):
         outdoor = MagicMock()

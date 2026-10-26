@@ -1,6 +1,7 @@
 """Tests for R36u detailed grade generate on fine grid."""
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import unittest
 from unittest.mock import MagicMock
@@ -82,6 +83,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            working=working_fixture(w, ctx),
         )
         self.assertIsNone(state.surface_grade_uid)
 
@@ -1419,6 +1421,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             world=world,
             locations=[],
             surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1477,6 +1480,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             world=world,
             locations=[],
             surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1533,6 +1537,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             world=world,
             locations=[],
             surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1588,6 +1593,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             world=world,
             locations=[],
             surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
 
@@ -34,6 +35,7 @@ class LightGridBakeContext:
     edges: list[ConnectionEdge] = field(default_factory=list)
     surface_planning: SurfaceTerrainContext | None = None
     surface_bundle: SurfacePlanBundle | None = None
+    working: SurfaceWorkingMaps | None = None
     pole_field: ClimatePoleField | None = None
     terrain_system_keys: set[str] = field(default_factory=set)
     wilderness_region_entries: list[WildernessRegionEntry] = field(default_factory=list)

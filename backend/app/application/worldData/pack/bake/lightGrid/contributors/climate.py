@@ -40,7 +40,8 @@ class ClimateContributor:
                     xm, ym = light_cell_center_fine(gx, gy, tx, ty, scale)
                     mgx = int(fine_to_grid_x(xm, tile_macro))
                     mgy = int(fine_to_grid_y(ym, tile_macro))
-                    sample = ClimatePlanSampler.sample(plan, GridX(mgx), GridY(mgy))
+                    sample = (ctx.working.climate.sample_pole(GridX(mgx), GridY(mgy))
+                              if ctx.working is not None else ClimatePlanSampler.sample(plan, GridX(mgx), GridY(mgy)))
                     zone_id = _climate_zone_id(sample.system_climate_zone)
                     compose.ensure(gx, gy, tx, ty).climate_zone_id = zone_id
                     zone_hist[str(zone_id if zone_id is not None else sample.system_climate_zone)] += 1

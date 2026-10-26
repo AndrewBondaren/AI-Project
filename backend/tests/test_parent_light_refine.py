@@ -1,6 +1,7 @@
 """WP-PERF-22 — parent light cache, upsample z-band, hard hydro corridor."""
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import tempfile
 import unittest
@@ -165,6 +166,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         with self.assertRaises(TypeError):
             terrain.build_tile_surface_state(
                 MagicMock(), [], MagicMock(), 0, 0,
+                working=working_fixture(MagicMock(), MagicMock()),
             )
 
         parent = _parent_with_river(side=2, tile_macro=8)
@@ -179,6 +181,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            working=working_fixture(w, ctx),
         )
         self.assertTrue(state.heightmap.surface_z)
         self.assertTrue(state.hydrology)
@@ -269,6 +272,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            working=working_fixture(w, ctx),
         )
         assert state.surface_terrain is not None
         self.assertIn("mountain", set(state.surface_terrain.values()))
@@ -322,6 +326,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
                     volumes=[],
                     refine_role="scene",
                     phase="scene",
+                    working=MagicMock(),
                 )
 
 

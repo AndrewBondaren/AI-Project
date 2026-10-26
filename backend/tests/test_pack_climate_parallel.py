@@ -1,6 +1,7 @@
 """Pack climate row-batch pool vs serial fallback (CL-PAR)."""
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import logging
 import unittest
@@ -65,6 +66,7 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
         ):
             result, n = await orch.bake_coarse(
                 _world(), _surface_ctx(), writer, mat_ctx,
+                working=working_fixture(_world(), _surface_ctx()),
             )
 
         pool_cls.assert_called_once_with(
@@ -90,6 +92,7 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
         ):
             result, n = await orch.bake_coarse(
                 _world(), _surface_ctx(), writer, mat_ctx,
+                working=working_fixture(_world(), _surface_ctx()),
             )
 
         pool_cls.assert_not_called()
@@ -117,7 +120,7 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
                 climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
                 side_effect=_dummy_sample,
             ):
-                await orch.bake_coarse(_world(), _surface_ctx(), writer, mat_ctx)
+                await orch.bake_coarse(_world(), _surface_ctx(), writer, mat_ctx, working=working_fixture(_world(), _surface_ctx()))
         finally:
             log.removeHandler(handler)
             log.setLevel(prev)

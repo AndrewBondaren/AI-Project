@@ -2014,6 +2014,13 @@ Delivery SoT — [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md
 hydrology refs; extent-probe остаётся у request entry без prepare, а private
 climate profile memo синхронизируется request-local lock. Точные контракты и
 матрица NoExtent/absent/error поведения — R1/R2/R3 PC-11.1 в delivery SoT.
+PC-11.2b уточняет frozen climate consumption: неизвестный ключ, уже
+разрешённый capture в frozen fallback profile, при pack sampling использует
+сохранённые values. Повторный live resolve canonical fallback alias не
+подменяет их registry override. Явная baseline delta принята мастером
+2026-10-26: manual/no-poles, unknown default key и temperate override=42
+дают 12 из frozen fallback вместо прежних 42 live weather path; regression
+case и точная граница — PC-11.2b delivery SoT. Payload schema не меняется.
 Решение мастера 2026-10-25: каждый snapshot, включая начальный, иммутабелен;
 последующие модификации образуют последовательность snapshots. Управление
 этой последовательностью и получение актуального состояния — отдельный

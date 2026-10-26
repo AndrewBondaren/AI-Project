@@ -5,6 +5,7 @@ Does not enqueue background jobs (see ``chunkSchedule``).
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
 from dataclasses import replace
@@ -57,6 +58,7 @@ class FineChunkRunner:
         phase: str | None = None,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         stages: GradePipelineStages | None = None,
+        working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         """Generate + persist fine chunks; ``fine_surface_z`` for climate ladder."""
         if not rects:
@@ -80,6 +82,7 @@ class FineChunkRunner:
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages or GradePipelineStages.off(),
             region_state_snapshot=region_states,
+            working=working,
         )
         persist = FineChunkPersist(ctx, writer)
         compute = partial(compute_rect, self._terrain, ctx)

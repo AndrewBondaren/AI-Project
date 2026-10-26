@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
 from collections.abc import Mapping
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
@@ -37,9 +38,10 @@ def sample_climate_coarse_gy_rows(
     gy_rows: list[int],
     *,
     local_field: ClimateAnchorField | None = None,
-    coarse_surface_z: dict[tuple[int, int], int] | None = None,
+    coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> list[ClimateSampleWire]:
     """One coarse sample per macro cell on the given gy rows (row-major gx)."""
     svc = climate or ClimateGeneratorService()
@@ -60,6 +62,7 @@ def sample_climate_coarse_gy_rows(
                     coarse_surface_z=z_map,
                     uid_map=uid_map,
                     climate=svc,
+                    working=working,
                 ),
             )
     return samples
@@ -71,10 +74,11 @@ def build_climate_coarse_wire(
     bbox: GridBBox,
     *,
     local_field: ClimateAnchorField | None = None,
-    coarse_surface_z: dict[tuple[int, int], int] | None = None,
+    coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
     samples: list[ClimateSampleWire] | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> ClimateFieldWire:
     """Coarse: one sample per macro-grid cell over *bbox* (pole+local + coarse z)."""
     width = bbox.x_max - bbox.x_min + 1
@@ -89,6 +93,7 @@ def build_climate_coarse_wire(
             coarse_surface_z=coarse_surface_z,
             uid_map=uid_map,
             climate=climate,
+            working=working,
         )
     return ClimateFieldWire(
         climate_status="coarse",
@@ -111,12 +116,13 @@ def sample_climate_tile_ty_rows(
     side: int,
     ty_rows: list[int],
     local_field: ClimateAnchorField | None = None,
-    coarse_surface_z: dict[tuple[int, int], int] | None = None,
+    coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
     fine_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> list[ClimateSampleWire]:
     """Light-grid samples for the given ty rows (row-major tx)."""
     svc = climate or ClimateGeneratorService()
@@ -142,6 +148,7 @@ def sample_climate_tile_ty_rows(
                     light_span=step,
                     uid_map=uid_map,
                     climate=svc,
+                    working=working,
                 ),
             )
     return samples
@@ -155,13 +162,14 @@ def build_climate_tile_wire(
     *,
     local_field: ClimateAnchorField | None = None,
     cells_per_side: int | None = None,
-    coarse_surface_z: dict[tuple[int, int], int] | None = None,
+    coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
     fine_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
     samples: list[ClimateSampleWire] | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> ClimateFieldWire:
     """Fine: denser light-grid samples over one macro-tile (origin on fine grid)."""
     tile_macro = map_cell_fine_span(world)
@@ -197,6 +205,7 @@ def build_climate_tile_wire(
             l2_surface_z=l2_lookup,
             uid_map=uid_map,
             climate=climate,
+            working=working,
         )
     return ClimateFieldWire(
         climate_status="fine",

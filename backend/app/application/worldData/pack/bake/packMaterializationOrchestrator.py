@@ -5,6 +5,7 @@ L0 only (Job boundaries). Entry/L2 — ``EntryRefineOrchestrator`` /
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 
 import logging
 import time
@@ -12,7 +13,7 @@ from collections.abc import Callable
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, prepare_captured_bundle, to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -223,10 +224,12 @@ class PackMaterializationOrchestrator:
         templates = mountain_template_inputs(relief_templates)
         captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
-        surface_bundle = prepare_captured_bundle(captured, planning=self._planning, wait=wait, resolve_ctx=request_ctx)
-        if surface_bundle is None:
+        prepared = SurfacePlanningEntry(self._planning, self._capture).prepare_captured(
+            captured, world=world, wait=wait, resolve_ctx=request_ctx)
+        if prepared is None:
             raise ValueError("surface terrain context unavailable")
-        surface_ctx = to_legacy_context(surface_bundle)
+        surface_bundle, working = prepared
+        surface_ctx = to_legacy_context(surface_bundle, working=working)
         plan = self._planner.plan(
             world, locations, surface_ctx, scope=scope, max_tiles=max_tiles,
         )
@@ -246,6 +249,7 @@ class PackMaterializationOrchestrator:
             await self._entry.drain_persisted(
                 world_uid, world, locations, writer, mat_ctx, surface_bundle,
                 max_jobs=drain,
+                working=working,
             )
 
         climate_result: PersistResult | None = None
@@ -253,6 +257,7 @@ class PackMaterializationOrchestrator:
         climate_fine_tiles = 0
         climate_result, climate_coarse_samples = await self._climate.bake_coarse(
             world, surface_bundle, writer, mat_ctx, locations=locations,
+            working=working,
         )
 
         locations_index = build_locations_index(locations, world)
@@ -269,6 +274,7 @@ class PackMaterializationOrchestrator:
             bake_mode=bake_mode,
             relief_templates_by_uid=relief_templates,
             region_state_snapshot=region_states,
+            working=working,
         )
         await _persist_bake_relief_grades(
             self._relief_grade_repo,
@@ -282,6 +288,7 @@ class PackMaterializationOrchestrator:
             scope=scope,
             anchor_x=anchor_x,
             anchor_y=anchor_y,
+            working=working,
         )
         if climate_fine_tiles and climate_result is not None:
             climate_result = PersistResult.from_counts(

@@ -1,3 +1,10 @@
+from collections.abc import Callable
+from functools import partial
+from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
+from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.application.worldData.generators.climate.climateAnchor import (
     AnchorSource,
     ClimateAnchorPoint,
@@ -26,8 +33,8 @@ def _modifiers(field: ClimateAnchorField) -> list[ClimateAnchorPoint]:
     ]
 
 
-def _sample_from_anchor(world: World, anchor: ClimateAnchorPoint) -> SurfaceClimateSample:
-    profile = profile_for(world, anchor.system_climate_zone)
+def _sample_from_anchor(resolve: Callable[[str], ClimateZoneProfile], anchor: ClimateAnchorPoint) -> SurfaceClimateSample:
+    profile = resolve(anchor.system_climate_zone)
     return SurfaceClimateSample(
         system_climate_zone=profile.system_climate,
         zone_location_uid=anchor.location_uid,
@@ -35,10 +42,10 @@ def _sample_from_anchor(world: World, anchor: ClimateAnchorPoint) -> SurfaceClim
     )
 
 
-def _pole_base_temperature(world: World, pole_sample: SurfaceClimateSample) -> int:
+def _pole_base_temperature(resolve: Callable[[str], ClimateZoneProfile], pole_sample: SurfaceClimateSample) -> int:
     if pole_sample.base_temperature_override is not None:
         return pole_sample.base_temperature_override
-    return profile_for(world, pole_sample.system_climate_zone).base_temperature
+    return resolve(pole_sample.system_climate_zone).base_temperature
 
 
 def _influence_diagonal(
@@ -89,12 +96,21 @@ def resolve_tier_sample(
     local_field: ClimateAnchorField,
     gx: int,
     gy: int,
+    *, working: ClimateWorkingFields | None = None,
 ) -> SurfaceClimateSample:
     """
     Tier 1 pole base; tier 2 MANUAL/AUTO override within world-relative radius.
     ADMIN anchors skipped. Temp smoothstep in outer blend band.
     """
-    pole_sample = svc.sample_at_pole_field(world, pole_field, gx, gy)
+    resolve: Callable[[str], ClimateZoneProfile]
+    if working is None:
+        resolve = partial(profile_for, world)
+        pole_sample = svc.sample_at_pole_field(world, pole_field, gx, gy)
+    else:
+        resolve = lambda key: working.profile_for_key(RegistryKey[WorldClimateZoneRegistry](key))
+        sample = working.sample_pole(GridX(gx), GridY(gy))
+        pole_sample = SurfaceClimateSample(sample.system_climate_zone, sample.zone_location_uid,
+            sample.typical_elevation_z, sample.base_temperature_override)
     modifiers   = _modifiers(local_field)
 
     if not modifiers:
@@ -111,14 +127,14 @@ def resolve_tier_sample(
     if dist > radius:
         return pole_sample
 
-    local_sample = _sample_from_anchor(world, nearest)
+    local_sample = _sample_from_anchor(resolve, nearest)
     inner        = radius * (1.0 - LOCAL_INFLUENCE_BLEND_OUTER)
 
     if dist <= inner:
         return local_sample
 
-    local_base = profile_for(world, local_sample.system_climate_zone).base_temperature
-    pole_base  = _pole_base_temperature(world, pole_sample)
+    local_base = resolve(local_sample.system_climate_zone).base_temperature
+    pole_base  = _pole_base_temperature(resolve, pole_sample)
     band       = radius - inner
     t          = smoothstep((dist - inner) / band) if band > 0 else 1.0
     blended    = round(local_base + (pole_base - local_base) * t)

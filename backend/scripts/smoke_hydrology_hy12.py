@@ -24,6 +24,7 @@ if str(REPO / "backend") not in sys.path:
 from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.planning.composition.surfacePlanningAssembler import to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.core.appSettings import app_settings
 from app.core.configManager import ConfigManager
@@ -48,10 +49,12 @@ def load_fixture(path: Path) -> tuple[World, list[NamedLocation]]:
 def coarse_snapshot(world, locations, *, planning, capture, wait) -> dict:
     view = capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
         mountain_templates=(), resolve_ctx=ResolveContext())
-    bundle = planning.prepare(view, wait=wait)
-    if bundle is None:
+    prepared = SurfacePlanningEntry(planning, capture).prepare_captured(
+        view, world=world, wait=wait, resolve_ctx=ResolveContext())
+    if prepared is None:
         raise AssertionError("empty coarse heightmap")
-    context = to_legacy_context(bundle)
+    bundle, working = prepared
+    context = to_legacy_context(bundle, working=working)
     topology = resolve_hydrology_topology(world, context.coarse_hm, locations=locations)
     index = context.coarse_hydro
     water = {cell: entry for cell, entry in index.items()

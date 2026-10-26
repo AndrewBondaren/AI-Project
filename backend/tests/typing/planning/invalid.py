@@ -1,5 +1,6 @@
 """Every marked line must produce its specified pyright diagnostic."""
 
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.application.cache.contracts.cacheBackend import CacheBinding
 from app.application.cache.service.cacheService import CacheService
@@ -258,15 +259,14 @@ def invalid_surface_request(assembler: SurfacePlanningAssembler, bundle: Surface
     assembler.prepare(bundle, wait=wait)  # EXPECT: reportArgumentType
 
 
-def invalid_surface_legacy(view: SurfacePlanningView) -> None:
-    to_legacy_context(view)  # EXPECT: reportArgumentType
+def invalid_surface_legacy(view: SurfacePlanningView, working: SurfaceWorkingMaps) -> None:
+    to_legacy_context(view, working=working)  # EXPECT: reportArgumentType
 
 
 def invalid_surface_final_as_routes(bundle: SurfacePlanBundle) -> PlanEnvelope[HydrologyRoutesPlan]:
     return bundle.hydrology  # EXPECT: reportReturnType
 
 
-from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 
 def invalid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY) -> None:

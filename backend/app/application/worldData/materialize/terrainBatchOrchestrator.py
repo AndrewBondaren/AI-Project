@@ -7,6 +7,8 @@ See ``docs/tz_terrain_generation.md`` § multi-pass skeleton; WP-PERF-22 Parent 
 """
 
 from __future__ import annotations
+from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from collections.abc import Mapping
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
@@ -125,6 +127,7 @@ class TerrainBatchOrchestrator:
         parent_light: ParentLightTile,
         refine_policy: ParentLightRefinePolicy | None = None,
         region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+        working: SurfaceWorkingMaps,
     ) -> TileSurfaceState:
         """L2 surface: upsample + terrain carry + hills + hydro + gap (before chunk pool)."""
         from app.application.jsonValidation.terrainHillRegistry import terrain_with_hills
@@ -163,13 +166,11 @@ class TerrainBatchOrchestrator:
         fine_z = upsample_from_parent_light(parent_light, world, policy=policy)
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
-        tile_macro = parent_light.tile_macro
-        for (xm, ym), z in bundle.hydrology.payload.fine_z_overrides:
-            if xm // tile_macro == tile_gx and ym // tile_macro == tile_gy:
-                base = fine_z.get((xm, ym), z)
-                lo = base - policy.z_band
-                hi = base + policy.z_band
-                fine_z[(xm, ym)] = max(lo, min(hi, int(z)))
+        for (xm, ym), z in working.hydrology.fine_z_for_tile(GridX(tile_gx), GridY(tile_gy)).items():
+            base = fine_z.get((xm, ym), z)
+            lo = base - policy.z_band
+            hi = base + policy.z_band
+            fine_z[(xm, ym)] = max(lo, min(hi, int(z)))
 
         fine_bbox = fine_bbox_for_parent(parent_light)
         l0_hydro = hydro_mask_from_parent(parent_light)
@@ -183,6 +184,7 @@ class TerrainBatchOrchestrator:
             l0_hydro=l0_hydro,
             tile_bbox=(fine_bbox.x_min, fine_bbox.y_min, fine_bbox.x_max, fine_bbox.y_max),
             region_state_snapshot=region_state_snapshot,
+            working=working,
         )
         place_hills(
             fine_z,
@@ -199,10 +201,7 @@ class TerrainBatchOrchestrator:
             bbox=fine_bbox,
             surface_z=fine_z,
         )
-        tile_sparse_hydro: dict[tuple[int, int], MapCellHydrology] = {
-            (xm, ym): entry for (xm, ym), entry in bundle.hydrology.payload.sparse_fine_hydro
-            if xm // tile_macro == tile_gx and ym // tile_macro == tile_gy
-        }
+        tile_sparse_hydro = working.hydrology.fine_hydro_for_tile(GridX(tile_gx), GridY(tile_gy))
         tile_hydro = merge_hydro_hard_corridor(parent_light, tile_sparse_hydro)
         n_eff = run_gap_analysis(world, heightmap)
         return TileSurfaceState(
@@ -226,11 +225,13 @@ class TerrainBatchOrchestrator:
         *,
         surface_state: TileSurfaceState | None = None,
         parent_light: ParentLightTile | None = None,
+        working: SurfaceWorkingMaps,
     ) -> list[MapCell]:
         return self.generate_chunk_cells_sync(
             world, locations, bundle, tile_gx, tile_gy, rect,
             surface_state=surface_state,
             parent_light=parent_light,
+            working=working,
         )
 
     def generate_chunk_cells_sync(
@@ -244,6 +245,7 @@ class TerrainBatchOrchestrator:
         *,
         surface_state: TileSurfaceState | None = None,
         parent_light: ParentLightTile | None = None,
+        working: SurfaceWorkingMaps,
     ) -> list[MapCell]:
         if surface_state is None:
             if parent_light is None:
@@ -252,6 +254,7 @@ class TerrainBatchOrchestrator:
                 )
             surface_state = self.build_tile_surface_state(
                 world, locations, bundle, tile_gx, tile_gy, parent_light=parent_light,
+                working=working,
             )
         return self._generator.generate_surface_chunk(
             world,

@@ -5,6 +5,7 @@ See ``.cursor/plans/pack-climate-correct-resolve-done.md`` and ``docs/tz_climate
 
 from __future__ import annotations
 
+from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
 from collections.abc import Mapping
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
@@ -36,11 +37,13 @@ def resolve_pack_zone_sample(
     *,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> SurfaceClimateSample:
     """Pole + local tier — elevation does not choose zone."""
     svc = climate or ClimateGeneratorService()
     return svc.resolve_surface_sample(
         world, uid_map or {}, pole_field, local_field, mgx, mgy,
+        working=working,
     )
 
 
@@ -150,6 +153,7 @@ def sample_pack_climate_at(
     light_span: int | None = None,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> ClimateSampleWire:
     """One pack climate sample at fine cells — zone from pole+local, temp/rain from z."""
     svc = climate or ClimateGeneratorService()
@@ -157,6 +161,7 @@ def sample_pack_climate_at(
     mgy = int(fine_to_grid_y(ym, tile_macro))
     zone = resolve_pack_zone_sample(
         world, pole_field, local_field, mgx, mgy, uid_map=uid_map, climate=svc,
+        working=working,
     )
     z = resolve_pack_surface_z(
         xm=xm,
@@ -174,6 +179,7 @@ def sample_pack_climate_at(
         zone.system_climate_zone,
         z,
         base_temperature_override=zone.base_temperature_override,
+        working=working,
     )
     return ClimateSampleWire(temperature_base=temp, rainfall=rain)
 
@@ -189,6 +195,7 @@ def sample_pack_climate_at_macro(
     coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
     uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
+    working: ClimateWorkingFields | None = None,
 ) -> ClimateSampleWire:
     """Coarse grid sample — z from coarse map / typical; zone pole+local."""
     xm = tile_origin_x(mgx, tile_macro)
@@ -203,4 +210,5 @@ def sample_pack_climate_at_macro(
         coarse_surface_z=coarse_surface_z,
         uid_map=uid_map,
         climate=climate,
+        working=working,
     )

@@ -156,7 +156,7 @@ class TestSamplePackClimateVolcanicHigh(unittest.TestCase):
             base_temperature_override=35,
         )
 
-        def _wae(_world, zone, z, base_temperature_override=None):
+        def _wae(_world, zone, z, base_temperature_override=None, *, working=None):
             base = base_temperature_override if base_temperature_override is not None else 35
             return round(base - 0.65 * (z / 100)), 5
 

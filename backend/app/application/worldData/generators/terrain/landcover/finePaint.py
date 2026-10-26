@@ -7,6 +7,7 @@ cell was region-painted, in which case the per-cell fallback is restored.
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from collections.abc import Mapping
 from app.application.worldData.generators.terrain.landcover.types import (
     RegionSource,
@@ -75,6 +76,7 @@ def paint_regions_fine(
     l0_hydro: dict[Coord, MapCellHydrology],
     tile_bbox: Bounds,
     region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+    working: SurfaceWorkingMaps,
 ) -> dict[Coord, str]:
     """Paint region winners onto ``fine_terrain`` in place; return uid map."""
     masks = terrain_masks(world)
@@ -93,6 +95,7 @@ def paint_regions_fine(
         scale=scale,
         surface_bundle=bundle,
         region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
+        working=working,
     )
     materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))
     materializer.begin_pass()

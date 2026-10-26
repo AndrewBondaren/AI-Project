@@ -134,6 +134,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
             world=world,
             locations=[],
             surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=bbox,

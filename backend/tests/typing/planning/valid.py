@@ -1,5 +1,6 @@
 """Typed contracts preserve I/T, nominal units and covariant diagnostic context."""
 
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import assert_type
@@ -302,13 +303,12 @@ from app.application.worldData.planning.contracts.surfacePlanningView import Sur
 
 
 def valid_surface_composition(assembler: SurfacePlanningAssembler, view: SurfacePlanningView,
-    wait: PlanWaitControl) -> SurfaceTerrainContext | None:
+    wait: PlanWaitControl, working: SurfaceWorkingMaps) -> SurfaceTerrainContext | None:
     bundle: SurfacePlanBundle | None = assembler.prepare(view, wait=wait)
-    return None if bundle is None else to_legacy_context(bundle)
+    return None if bundle is None else to_legacy_context(bundle, working=working)
 
 
 from collections.abc import Mapping
-from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.dataModel.climate.planning.climatePoints import ClimateKey, PoleClimateSample
 from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
 

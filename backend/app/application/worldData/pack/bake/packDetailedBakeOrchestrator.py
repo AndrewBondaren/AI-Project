@@ -6,6 +6,7 @@ See docs/tz_world_pack_storage.md § Bake modes; .cursor/plans/detailed-bake-sme
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
 from dataclasses import dataclass, field
@@ -94,6 +95,8 @@ class PackDetailedBakeOrchestrator:
         mat_ctx: MaterializationContext,
         surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
+        *,
+        working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         with generation_world_log(world.world_uid, mode="detailed"):
             log_pack_detailed_bake_start(
@@ -104,6 +107,7 @@ class PackDetailedBakeOrchestrator:
             )
             return await self._bake_in_log_scope(
                 world, locations, writer, mat_ctx, surface_bundle, request,
+                working=working,
             )
 
     async def _bake_in_log_scope(
@@ -114,6 +118,8 @@ class PackDetailedBakeOrchestrator:
         mat_ctx: MaterializationContext,
         surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
+        *,
+        working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         relief_templates: dict[str, ReliefTemplate] = {}
         if request.stages.mill and self._relief_loader is not None:
@@ -128,10 +134,12 @@ class PackDetailedBakeOrchestrator:
             return await self._bake_location_scope(
                 world, locations, writer, mat_ctx, surface_bundle, request,
                 relief_templates=relief_templates,
+                working=working,
             )
         return await self._bake_wilderness_scope(
             world, locations, writer, mat_ctx, surface_bundle, request,
             relief_templates=relief_templates,
+            working=working,
         )
 
     async def _bake_location_scope(
@@ -144,6 +152,7 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
         *,
         relief_templates: dict[str, ReliefTemplate],
+        working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         plan = resolve_detailed_scope(world, locations, writer, request)
         if plan is None:
@@ -151,6 +160,7 @@ class PackDetailedBakeOrchestrator:
         return await self._run(
             world, locations, writer, mat_ctx, surface_bundle, request, plan,
             relief_templates=relief_templates,
+            working=working,
         )
 
     async def _bake_wilderness_scope(
@@ -163,12 +173,14 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
         *,
         relief_templates: dict[str, ReliefTemplate],
+        working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         plan = resolve_detailed_scope(world, locations, writer, request)
         assert plan is not None
         return await self._run(
             world, locations, writer, mat_ctx, surface_bundle, request, plan,
             relief_templates=relief_templates,
+            working=working,
         )
 
     def _skip_location_result(
@@ -212,12 +224,14 @@ class PackDetailedBakeOrchestrator:
         plan: DetailedScopePlan,
         *,
         relief_templates: dict[str, ReliefTemplate],
+        working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         l2_t0 = time.perf_counter()
         aggregate = await self._refine_tiles(
             world, locations, writer, mat_ctx, surface_bundle, plan,
             relief_templates_by_uid=relief_templates,
             stages=request.stages,
+            working=working,
         )
         l2_s = time.perf_counter() - l2_t0
 
@@ -229,6 +243,7 @@ class PackDetailedBakeOrchestrator:
                     l2_surface_z=aggregate.fine_surface_z or None,
                     locations=locations,
                     require_parent=True,
+                    working=working,
                 ):
                     climate_fine_tiles += 1
 
@@ -274,6 +289,7 @@ class PackDetailedBakeOrchestrator:
         phase: str = "detailed",
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         stages: GradePipelineStages | None = None,
+        working: SurfaceWorkingMaps,
     ) -> DetailedRefineAggregate:
         return await refine_detailed_tiles(
             self._runner,
@@ -281,4 +297,5 @@ class PackDetailedBakeOrchestrator:
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages,
+            working=working,
         )

@@ -1,6 +1,7 @@
 """WP-13 entry refine session — anchors, blocking scene/path, background schedule."""
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 from dataclasses import dataclass
 
@@ -147,11 +148,13 @@ class EntryRefineOrchestrator:
         surface_bundle: SurfacePlanBundle,
         *,
         max_jobs: int,
+        working: SurfaceWorkingMaps,
     ) -> int:
         drain_t0 = log_pack_drain_persisted_start(world_uid, max_jobs=max_jobs)
         drained = await self._worker.drain_persisted(
             world_uid, world, locations, writer, mat_ctx, surface_bundle,
             max_jobs=max_jobs,
+            working=working,
         )
         log_pack_drain_persisted_done(world_uid, processed=drained, started_at=drain_t0)
         return drained
@@ -172,6 +175,7 @@ class EntryRefineOrchestrator:
         heading: PathHeading | None = None,
         heading_dx: int | None = None,
         heading_dy: int | None = None,
+        working: SurfaceWorkingMaps,
     ) -> RefineFromEntryResult:
         """Blocking only: set anchor, scene volume, path corridor (WP-13 P0)."""
         policy = SceneVolumePolicy.canonical_defaults()
@@ -190,6 +194,7 @@ class EntryRefineOrchestrator:
             world, locations, writer, anchor_x, anchor_y, mat_ctx,
             surface_bundle=surface_bundle, tile_gx=tile_gx, tile_gy=tile_gy,
             xy_radius=policy.scene_xy_radius,
+            working=working,
         )
 
         path_chunks = await self._fine_terrain.refine_path_corridor(
@@ -197,6 +202,7 @@ class EntryRefineOrchestrator:
             tile_gx, tile_gy,
             heading=resolved_heading,
             depth_tiles=app_settings.path_ahead_depth,
+            working=working,
         )
         chunks_done += path_chunks
 
@@ -226,6 +232,7 @@ class EntryRefineOrchestrator:
         heading: PathHeading | None = None,
         heading_dx: int | None = None,
         heading_dy: int | None = None,
+        working: SurfaceWorkingMaps,
     ) -> ScheduleChunkRefineResult:
         """Background only: rings from anchor + path-ahead neighbors, then persist jobs."""
         policy = SceneVolumePolicy.canonical_defaults()
@@ -276,11 +283,13 @@ class EntryRefineOrchestrator:
             _drained_chunks, fine_tiles = await self._worker.drain_queue(
                 world_uid, world, locations, writer, mat_ctx, surface_bundle,
                 self._queue, max_jobs=self._defaults.background_drain_per_request,
+                working=working,
             )
             climate_fine_tiles += fine_tiles
         else:
             climate_fine_tiles += await self._worker.drain_climate_fine(
                 world, surface_bundle, writer, mat_ctx,
+                working=working,
             )
 
         return ScheduleChunkRefineResult(

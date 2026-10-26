@@ -218,13 +218,13 @@ class WiringTests(unittest.TestCase):
 
     def test_legacy_copies_cannot_change_cached_payload_or_other_views(self):
         bundle = self.c.prepare(self.view)
-        first, second = to_legacy_context(bundle), to_legacy_context(bundle)
+        first, second = to_legacy_context(bundle, working=working_fixture(world(), bundle)), to_legacy_context(bundle, working=working_fixture(world(), bundle))
         saved = deepcopy(second)
         for field in ("coarse_hydro", "sparse_fine_hydro", "fine_z_overrides", "coarse_relief_z", "coarse_surface_z"):
             getattr(first, field).clear()
         first.coarse_hm.surface_z.clear()
         self.assertEqual(second, saved)
-        self.assertEqual(to_legacy_context(self.c.prepare(self.view)), saved)
+        self.assertEqual(to_legacy_context(self.c.prepare(self.view), working=working_fixture(world(), self.c.prepare(self.view))), saved)
         self.assertIsNot(second.coarse_hm.surface_z, second.coarse_surface_z)
         self.assertEqual(second.coarse_relief_z,
             {(cell.gx, cell.gy): z for cell, z in bundle.terrain_base.payload.surface_z})
@@ -232,7 +232,7 @@ class WiringTests(unittest.TestCase):
     def test_legacy_no_hydrology_baseline(self):
         from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
         source = world()
-        self.assertEqual(to_legacy_context(self.c.prepare(capture(source))), prepare_surface_terrain_context(source, [], planning=self.c.assembler,
+        self.assertEqual(to_legacy_context(self.c.prepare(capture(source)), working=working_fixture(source, self.c.prepare(capture(source)))), prepare_surface_terrain_context(source, [], planning=self.c.assembler,
             capture=SurfacePlanningCapture(), wait=Wait()))
 
     def test_bundle_rejects_mixed_world_phase_and_exact_ref(self):
@@ -270,7 +270,7 @@ class WiringTests(unittest.TestCase):
         from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import prepare_surface_terrain_context
         legacy = prepare_surface_terrain_context(source, [], planning=self.c.assembler,
             capture=SurfacePlanningCapture(), wait=Wait())
-        self.assertEqual(to_legacy_context(bundle).coarse_surface_z, legacy.coarse_surface_z)
+        self.assertEqual(to_legacy_context(bundle, working=working_fixture(source, bundle)).coarse_surface_z, legacy.coarse_surface_z)
         for cell, role in bundle.hydrology.payload.coarse_hydro:
             self.assertEqual(role, legacy.coarse_hydro[(cell.gx, cell.gy)])
 
@@ -457,3 +457,22 @@ def planning_kwargs(test):
     from app.application.cancellation.requestPlanWait import RequestPlanWait
     return dict(planning=composition.assembler, capture=SurfacePlanningCapture(),
         wait=RequestPlanWait.unbounded())
+
+
+def working_fixture(source, bundle):
+    """Explicit request inputs for direct consumer tests; no process cache."""
+    from functools import partial
+    from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+    from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
+    from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
+    from app.application.worldData.generators.climate.registry import profile_for
+    from app.application.worldData.generators.coordinates import map_cell_fine_span
+    from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+    from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+    from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_side
+    return SurfaceWorkingMaps(
+        ClimateWorkingFields.from_plans(bundle.climate_base.payload, bundle.climate_local.payload,
+            partial(profile_for, source)),
+        TerrainWorkingFields.from_plan(bundle.terrain_base.payload),
+        HydrologyWorkingFields.from_plan(bundle.hydrology.payload, SurfaceGridSettings(
+            fine_span=map_cell_fine_span(source), light_side=resolve_world_map_side(source.world_map_cells_per_tile))))

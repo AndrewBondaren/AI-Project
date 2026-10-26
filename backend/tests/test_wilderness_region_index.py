@@ -1,4 +1,6 @@
 """Step 8: independent identities, snapshot index, atomic publication and debug HTTP."""
+from tests.planning.consumers.test_wiring import working_fixture
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
 from dataclasses import fields, replace
 from itertools import permutations
 from pathlib import Path
@@ -205,7 +207,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             def compose(ctx):
                 return compose_light_grid(ctx,contributors=(LandcoverContributor(),))
             with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
-                WorldMapBakeOrchestrator(planning=deps["planning"], capture=deps["capture"]).bake_tiles(world,[],writer,[(0,0)],surface_ctx=f.ctx.surface_planning,wait=RequestPlanWait.unbounded())
+                WorldMapBakeOrchestrator(planning=deps["planning"], capture=deps["capture"]).bake_tiles(world,[],writer,[(0,0)],surface_ctx=f.ctx.surface_planning,wait=RequestPlanWait.unbounded(), working=working_fixture(world, frozen_surface_fixture(world)))
             writer.save_manifest()
             uid = region_uid(world.world_uid,name="indexed")
             self.assertIsNotNone(writer.manifest.wilderness_region_entry(uid))
@@ -244,7 +246,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             f.declare()
             world.terrain_masks = f.world.terrain_masks
             with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
-                WorldMapBakeOrchestrator(planning=deps["planning"], capture=deps["capture"]).bake_tile(world,f.ctx.surface_planning,0,0,writer,locations=[],wait=RequestPlanWait.unbounded())
+                WorldMapBakeOrchestrator(planning=deps["planning"], capture=deps["capture"]).bake_tile(world,f.ctx.surface_planning,0,0,writer,locations=[],wait=RequestPlanWait.unbounded(), working=working_fixture(world, frozen_surface_fixture(world)))
             self.assertEqual(writer.manifest.wilderness_region_entries,[])
 
 

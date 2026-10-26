@@ -1,5 +1,6 @@
 """PC-10/PC-11: frozen L0/L2 consumers, cache equality and production refine."""
 
+from tests.planning.consumers.test_wiring import working_fixture
 from app.application.jsonValidation import terrain_system_keys
 from contextlib import ExitStack
 from copy import deepcopy
@@ -38,7 +39,7 @@ def context(source, bundle, tiles=None):
     scale = LightGridScale.from_tile(1000, source.world_map_cells_per_tile)
     return LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(locations=[]),
         tiles=tiles if tiles is not None else [(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
-        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, surface_planning=to_legacy_context(bundle))
+        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, surface_planning=to_legacy_context(bundle, working=working_fixture(source, bundle)), working=working_fixture(source, bundle))
 
 
 def bind_frozen_context(test, ctx):
@@ -60,7 +61,7 @@ def bind_frozen_context(test, ctx):
     test.addCleanup(composition.service.shutdown)
     ctx.surface_bundle = composition.prepare(capture(ctx.world, locations=ctx.locations,
         templates=mountain_template_inputs(ctx.relief_templates_by_uid)))
-    ctx.surface_planning = to_legacy_context(ctx.surface_bundle)
+    ctx.surface_planning = to_legacy_context(ctx.surface_bundle, working=working_fixture(world(), ctx.surface_bundle))
     return ctx
 
 
@@ -155,12 +156,12 @@ class L0Tests(unittest.TestCase):
         writer.write_world_map_tile.return_value = "content-hash"
         for mode in ("light", "full"):
             count = WorldMapBakeOrchestrator().bake_tiles(source, [], writer, ctx.tiles,
-                surface_bundle=bundle, wait=Wait(), bake_mode=mode)
+                surface_bundle=bundle, wait=Wait(), bake_mode=mode, working=working_fixture(source, bundle))
             self.assertEqual(count, len(ctx.tiles) * ctx.scale.side ** 2)
         self.assertEqual(writer.write_world_map_tile.call_count, 2 * len(ctx.tiles))
         expected = compose_light_grid(ctx).to_wire_tile(0, 0)
-        cells, _ = WorldMapBakeOrchestrator().bake_tile(source, to_legacy_context(bundle), 0, 0,
-            writer, wait=Wait(), surface_bundle=bundle)
+        cells, _ = WorldMapBakeOrchestrator().bake_tile(source, to_legacy_context(bundle, working=working_fixture(source, bundle)), 0, 0,
+            writer, wait=Wait(), surface_bundle=bundle, working=working_fixture(source, bundle))
         self.assertEqual(cells, expected)
 
     def test_missing_foreign_bundle_and_wrong_scale_fail_before_writes(self):
@@ -223,14 +224,14 @@ class L0Tests(unittest.TestCase):
         writer = Mock()
         writer.write_world_map_tile.return_value = "hash"
         orchestrator = WorldMapBakeOrchestrator(planning=self.c.assembler, capture=SurfacePlanningCapture())
-        orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait())
+        orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait(), working=working_fixture(source, frozen_surface_fixture(source)))
         first = writer.write_world_map_tile.call_args.args[2]
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
-            orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait())
+            orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait(), working=working_fixture(source, frozen_surface_fixture(source)))
         builds.assert_not_called()
         self.assertEqual(first, writer.write_world_map_tile.call_args.args[2])
         bundle = self.c.prepare(capture(source))
-        cells, _ = orchestrator.bake_tile(source, to_legacy_context(bundle), 0, 0, writer, wait=Wait())
+        cells, _ = orchestrator.bake_tile(source, to_legacy_context(bundle, working=working_fixture(source, bundle)), 0, 0, writer, wait=Wait(), working=working_fixture(source, frozen_surface_fixture(source)))
         self.assertEqual(cells, first)
 
 
@@ -275,14 +276,15 @@ class L2Tests(unittest.TestCase):
         from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
         ctx = LightGridBakeContext(world=self.source, locations=[], locations_index=LocationsIndexWire(),
             tiles=[(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
-            scale=LightGridScale.from_tile(8, 2), surface_bundle=bundle)
+            scale=LightGridScale.from_tile(8, 2), surface_bundle=bundle, working=working_fixture(self.source, bundle))
         compose = compose_light_grid(ctx, contributors=PIPELINE)
         return {tile: ParentLightTile.from_cells(world_uid=self.source.world_uid, gx=tile[0], gy=tile[1],
             side=2, tile_macro=8, cells=compose.to_wire_tile(*tile)) for tile in ctx.tiles}
 
     def states(self, bundle, parents, tiles=None):
+        working = working_fixture(self.source, bundle)
         return {tile: self.terrain.build_tile_surface_state(self.source, [], bundle, *tile,
-            parent_light=parents[tile]) for tile in (tiles if tiles is not None else parents)}
+            parent_light=parents[tile], working=working) for tile in (tiles if tiles is not None else parents)}
 
     def test_l2_cache_hit_clear_restart_and_reverse_tiles_are_equal(self):
         view = capture(self.source)
@@ -312,12 +314,12 @@ class L2Tests(unittest.TestCase):
         with patch.object(self.c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
                 "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
                 side_effect=AssertionError("legacy view")):
-            state = self.terrain.build_tile_surface_state(self.source, [], bundle, 0, 0, parent_light=changed)
+            state = self.terrain.build_tile_surface_state(self.source, [], bundle, 0, 0, parent_light=changed, working=working_fixture(self.source, bundle))
         self.assertTrue(all(8 <= z <= 10 for z in state.heightmap.surface_z.values()))
         self.assertEqual(bundle, before)
         with self.assertRaisesRegex(ValueError, "another world"):
             self.terrain.build_tile_surface_state(replace(self.source, world_uid="foreign"), [], bundle,
-                                                  0, 0, parent_light=parent)
+                                                  0, 0, parent_light=parent, working=working_fixture(replace(self.source, world_uid="foreign"), bundle))
 
     def test_landcover_facts_use_typed_terrain_base_final_hydro_and_local_anchors(self):
         from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
@@ -327,11 +329,11 @@ class L2Tests(unittest.TestCase):
         source = mountain_source()
         bundle = self.c.prepare(capture(source))
         self.assertNotEqual(bundle.terrain_base.payload.surface_z, bundle.relief.payload.surface_z)
-        legacy = to_legacy_context(bundle)
+        legacy = to_legacy_context(bundle, working=working_fixture(source, bundle))
         profiles = {str(a.system_climate_zone): profile_for(source, a.system_climate_zone)
                     for a in legacy.local_field.anchors}
         ctx = LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(),
-            tiles=[(0, 0)], scale=LightGridScale.from_tile(1000, 4), surface_bundle=bundle)
+            tiles=[(0, 0)], scale=LightGridScale.from_tile(1000, 4), surface_bundle=bundle, working=working_fixture(source, bundle))
         inputs = prepare_landcover_inputs(ctx)
         for coord, _ in bundle.terrain_base.payload.surface_z:
             expected = collect_facts(FactConsumerContext(legacy, ((coord.gx, coord.gy),), profiles))
@@ -358,7 +360,7 @@ class L2Tests(unittest.TestCase):
         overrides = dict(hydro.fine_z_overrides)
         for tile, parent in parents.items():
             state = self.terrain.build_tile_surface_state(self.source, [], bundle, *tile,
-                parent_light=parent, refine_policy=policy)
+                parent_light=parent, refine_policy=policy, working=working_fixture(self.source, bundle))
             base = upsample_from_parent_light(parent, self.source, policy=policy)
             for xy, z in state.heightmap.surface_z.items():
                 target = overrides.get(xy, base[xy])
@@ -367,6 +369,76 @@ class L2Tests(unittest.TestCase):
 
 
 class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unknown_default_profile_uses_frozen_fallback_without_alias_reresolve(self):
+        """Accepted PC-11.2b delta: missing key cannot adopt a live alias override."""
+        from app.application.worldData.pack.climate.climateCoarseBake import build_climate_coarse_wire
+        source = world(default_climate_zone="missing-profile", climate_pole_mode="manual",
+            climate_zone_registry=[{"system_climate": "temperate", "base_temperature": 42}])
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        bundle = composition.prepare(capture(source))
+        working = working_fixture(source, bundle)
+        legacy = to_legacy_context(bundle, working=working)
+        live = build_climate_coarse_wire(source, legacy.pole_field, legacy.coarse_hm.bbox,
+            local_field=legacy.local_field, coarse_surface_z=legacy.coarse_surface_z)
+        frozen = build_climate_coarse_wire(source, legacy.pole_field, legacy.coarse_hm.bbox,
+            local_field=legacy.local_field, coarse_surface_z=legacy.coarse_surface_z, working=working.climate)
+        self.assertEqual(live.samples[0].temperature_base, 42)
+        self.assertEqual(frozen.samples[0].temperature_base, 12)
+        self.assertEqual(frozen.samples[0].rainfall, live.samples[0].rainfall)
+
+    async def test_request_views_reused_by_l0_l2_and_serial_parallel_climate(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+        from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
+        from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
+        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.application.worldData.materialize.materializationContext import MaterializationContext
+        from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
+        from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+        from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+        from app.application.worldData.pack.io.worldPackReader import WorldPackReader
+        from app.application.worldData.pack.read.parentLightLoad import require_parent_light
+        source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=0), fine_cells_per_map_cell=2)
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        view = capture(source)
+        entry = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture())
+        with patch.object(ClimateWorkingFields, "from_plans", wraps=ClimateWorkingFields.from_plans) as climate_factory, \
+             patch.object(TerrainWorkingFields, "from_plan", wraps=TerrainWorkingFields.from_plan) as terrain_factory, \
+             patch.object(HydrologyWorkingFields, "from_plan", wraps=HydrologyWorkingFields.from_plan) as hydro_factory:
+            bundle, working = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+            with TemporaryDirectory() as tmp:
+                writer = WorldPackWriter(WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid))
+                tiles = [(0, 0), (1, 0), (2, 0)]
+                WorldMapBakeOrchestrator().bake_tiles(source, [], writer, tiles,
+                    surface_bundle=bundle, working=working, wait=Wait())
+                terrain = TerrainBatchOrchestrator(Mock())
+                climate = ClimatePackBakeOrchestrator()
+                for gx, gy in reversed(tiles):
+                    parent = require_parent_light(source.world_uid, gx, gy, reader=WorldPackReader(writer.paths),
+                        cache=writer.parent_light_cache, tile_macro=2)
+                    terrain.build_tile_surface_state(source, [], bundle, gx, gy, parent_light=parent, working=working)
+                    wires = []
+                    for workers in (1, 4):
+                        output = Mock()
+                        with patch("app.application.worldData.generators.climate.climatePoleField.ClimatePoleField.sample",
+                                   side_effect=AssertionError("pack used live pole adapter")), patch(
+                                   "app.application.worldData.generators.climate.tierResolve.profile_for",
+                                   side_effect=AssertionError("tier bypassed prepared accessor")), patch(
+                                   "app.application.worldData.generators.climate.climateGeneratorService.profile_for",
+                                   side_effect=AssertionError("weather bypassed prepared accessor")):
+                            await climate.bake_fine_tile(source, bundle, output,
+                                MaterializationContext(4, parallel_workers_override=workers), gx, gy,
+                                parent_light=parent, working=working)
+                        wires.append(output.write_climate_tile.call_args.args[2])
+                    self.assertEqual(wires[0], wires[1])
+            self.assertEqual((climate_factory.call_count, terrain_factory.call_count, hydro_factory.call_count), (1, 1, 1))
+
     async def test_detailed_entry_and_queue_reuse_bundle_and_persist_identical_columns(self):
         import tempfile
         from pathlib import Path
@@ -387,6 +459,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         c = Composition()
         self.addCleanup(c.service.shutdown)
         bundle = c.prepare(capture(source))
+        working = working_fixture(source, bundle)
         terrain = TerrainBatchOrchestrator(Mock())
         runner = FineChunkRunner(terrain)
         fine = FineTerrainRefineOrchestrator(terrain, runner=runner)
@@ -398,13 +471,13 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
             paths = WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid)
             writer = WorldPackWriter(paths)
             WorldMapBakeOrchestrator().bake_tiles(source, [], writer, [(0, 0)],
-                surface_bundle=bundle, wait=Wait())
+                surface_bundle=bundle, wait=Wait(), working=working)
             with patch.object(c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
                     "app.application.worldData.planning.composition.surfacePlanningCapture.SurfacePlanningCapture.capture",
                     side_effect=AssertionError("second capture")), patch(
                     "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
                     side_effect=AssertionError("legacy L2 view")):
-                detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan)
+                detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan, working=working)
                 # Compare the decoded wire: the writer may choose a codec filename per layout.
                 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
                 reader = WorldPackReader(paths)
@@ -412,16 +485,16 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(expected.columns)
                 # Cold writer forces parent decode from the baked blob.
                 cold = WorldPackWriter(paths)
-                result = await fine.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0)
+                result = await fine.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, working=working)
                 self.assertEqual(result.fine_surface_z, detailed.fine_surface_z)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 await entry.refine_from_entry(source.world_uid, source, [], cold, mat, bundle,
-                    kind="session_start", anchor_x=0, anchor_y=0)
+                    kind="session_start", anchor_x=0, anchor_y=0, working=working)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 queue = ChunkRefineQueue()
                 queue.enqueue_chunk(0, 0, 0, 0, anchor_x=0, anchor_y=0, chunk_columns=2, tile_macro=2)
                 worker = ChunkRefineWorker(fine)
-                self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue), (1, 0))
+                self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue, working=working), (1, 0))
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 from types import SimpleNamespace
                 from unittest.mock import AsyncMock
@@ -431,7 +504,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 jobs.mark_complete = AsyncMock()
                 persisted = ChunkRefineWorker(fine, job_repo=jobs)
                 self.assertEqual(await persisted.drain_persisted(source.world_uid, source, [], cold,
-                    mat, bundle, max_jobs=1), 1)
+                    mat, bundle, max_jobs=1, working=working), 1)
                 jobs.mark_complete.assert_awaited_once_with("persisted-job")
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
 
@@ -446,7 +519,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         c = Composition()
         self.addCleanup(c.service.shutdown)
         bundle = c.prepare(capture(source))
-        legacy = to_legacy_context(bundle)
+        legacy = to_legacy_context(bundle, working=working_fixture(source, bundle))
         parent = ParentLightTile.from_cells(world_uid=source.world_uid, gx=0, gy=0, side=2, tile_macro=2,
             cells=[WorldMapCellWire(tx=x, ty=y, surface_z=x+y) for x in range(2) for y in range(2)])
         expected_coarse = build_climate_coarse_wire(source, legacy.pole_field, legacy.coarse_hm.bbox,
@@ -461,8 +534,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                    side_effect=AssertionError("legacy climate view")), patch(
                    "app.application.worldData.pack.climate.climatePackBakeOrchestrator.sample_climate_tile_ty_rows",
                    wraps=sample_climate_tile_ty_rows) as sample_rows:
-            await climate.bake_coarse(source, bundle, writer, MaterializationContext(1))
-            await climate.bake_fine_tile(source, bundle, writer, MaterializationContext(1), 0, 0, parent_light=parent)
+            await climate.bake_coarse(source, bundle, writer, MaterializationContext(1), working=working_fixture(source, bundle))
+            await climate.bake_fine_tile(source, bundle, writer, MaterializationContext(1), 0, 0, parent_light=parent, working=working_fixture(source, bundle))
         self.assertEqual(writer.write_climate_coarse.call_args.args[0], expected_coarse)
         self.assertEqual(writer.write_climate_tile.call_args.args[2], expected_fine)
         self.assertEqual(set(sample_rows.call_args.kwargs["coarse_surface_z"]), {(0, 0)})

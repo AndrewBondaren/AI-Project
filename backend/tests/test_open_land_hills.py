@@ -4,6 +4,7 @@ SoT: docs/tz_world_pack_storage.md § L2 open-land hills.
 """
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import unittest
 from math import isqrt
@@ -265,6 +266,7 @@ class TestHillsInTilePrep(unittest.TestCase):
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
             refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0),
+            working=working_fixture(w, ctx),
         )
         zs = list(state.heightmap.surface_z.values())
         self.assertGreaterEqual(max(zs), 4)
