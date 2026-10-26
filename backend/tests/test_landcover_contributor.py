@@ -15,12 +15,12 @@ from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
-from app.application.worldData.masks.applyFootprint import apply_terrain_footprint
+from app.application.worldData.pack.bake.lightGrid.maskDomains.applyFootprint import apply_terrain_footprint
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.landcover import LandcoverContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
+from app.application.worldData.pack.bake.lightGrid.contributors.landcover.inputs import prepare_landcover_inputs
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.bake.lightGrid.maskDomainRegistry import contributor_for_mask_domain
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain_cell
@@ -139,7 +139,7 @@ class LandcoverContributorTests(unittest.TestCase):
         uid = region_uid(self.world.world_uid, name=spec.name)
         custom = self.registry.root[0].model_copy(update={"system_terrain": "steppe", "merge_rank": 1})
         self.world.terrain_registry = WorldTerrainRegistry([*self.registry.root, custom]).model_dump(mode="json")
-        with patch("app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs.read_region_state_snapshot",
+        with patch("app.application.worldData.pack.bake.lightGrid.contributors.landcover.inputs.read_region_state_snapshot",
                    return_value={uid: StateSnapshotEntry("steppe")}), self.assertLogs(level="DEBUG") as logs:
             cells = self.bake()[(0, 0)]
         self.assertEqual({c.system_terrain for c in cells}, {"steppe"})

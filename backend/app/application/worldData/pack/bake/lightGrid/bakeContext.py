@@ -35,6 +35,7 @@ class LightGridBakeContext:
     scale: LightGridScale
     nodes: list[ConnectionNode] = field(default_factory=list)
     edges: list[ConnectionEdge] = field(default_factory=list)
+    # Migration-only observation channel until PC-11.7; frozen consumers use working.
     surface_planning: SurfaceTerrainContext | None = None
     surface_bundle: SurfacePlanBundle | None = None
     working: SurfaceWorkingMaps | None = None

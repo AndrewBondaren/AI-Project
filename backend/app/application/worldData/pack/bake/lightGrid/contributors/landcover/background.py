@@ -5,41 +5,17 @@ from __future__ import annotations
 import logging
 
 from app.application.jsonValidation import terrain, terrain_masks
-from app.application.worldData.regions.coverageBackground import surface_coverage
+from app.application.worldData.regions.coverageBackground import background_key_for_zone
 from app.application.worldData.generators.climate.registry import profile_for
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.application.worldData.masks.applyFootprint import apply_terrain_footprint
+from app.application.worldData.pack.bake.lightGrid.maskDomains.applyFootprint import apply_terrain_footprint
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
 from app.dataModel.climate.enums.climateZone import ClimateZone
-from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
 logger = logging.getLogger(__name__)
-
-
-def background_key_for_zone(
-    climate_zone_id: int | None,
-    masks: WorldTerrainMasks,
-    terrain_set: set[str],
-    registry: WorldTerrainRegistry | None = None,
-    *, world=None,
-) -> str | None:
-    """Per-cell landcover fallback key; ``None`` — no background paint."""
-    if not masks.category_enabled(masks.default_landcover):
-        return None
-    if not terrain_set:
-        return None
-    zone = (
-        ClimateZone.from_world_map_wire_id(climate_zone_id)
-        if climate_zone_id is not None
-        else None
-    )
-    registry = registry or WorldTerrainRegistry.canonical_defaults()
-    registry = WorldTerrainRegistry([e for e in registry.root if e.system_terrain in terrain_set])
-    return surface_coverage(registry=registry, policy=masks.default_landcover,
-                            system_climate_zone=zone.system_climate if zone else None,
-                            profile=profile_for(world, zone.system_climate) if world is not None and zone else None)
 
 
 def apply_background(compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
@@ -59,7 +35,10 @@ def apply_background(compose: LightGridCompose, ctx: LightGridBakeContext) -> No
         for tx, ty, cell in compose.iter_tile(gx, gy):
             if cell.region_uid is not None:
                 continue
-            key = background_key_for_zone(cell.climate_zone_id, masks, terrain_set, registry, world=ctx.world)
+            zone = ClimateZone.from_world_map_wire_id(cell.climate_zone_id) if cell.climate_zone_id is not None else None
+            profile = (ctx.working.climate.profile_for_key(RegistryKey[WorldClimateZoneRegistry](zone.system_climate)) if ctx.working is not None
+                       else profile_for(ctx.world, zone.system_climate)) if zone is not None else None
+            key = background_key_for_zone(cell.climate_zone_id, masks, terrain_set, registry, profile=profile)
             if key is None:
                 continue
             by_key.setdefault(key, set()).add(LightCellRef(gx, gy, tx, ty))

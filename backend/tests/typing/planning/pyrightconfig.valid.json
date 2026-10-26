@@ -67,8 +67,16 @@
     "../../../app/application/worldData/pack/refine/chunks/chunkRefineWorker.py",
     "../../../app/application/worldData/pack/refine/entry/entryRefineOrchestrator.py",
     "../../../app/application/worldData/pack/climate/climatePackBakeOrchestrator.py",
-    "../../../app/application/worldData/generators/terrain/landcover/finePaint.py",
+    "../../../app/application/worldData/generators/terrain/landcover",
+    "../../../app/application/worldData/masks/regionRasterContext.py",
+    "../../../app/application/worldData/masks/regionRasterizer.py",
+    "../../../app/application/worldData/pack/bake/lightGrid/maskDomains",
+    "../../../app/application/worldData/regions/coverageBackground.py",
+    "../../../app/application/worldData/regions/inputs",
+    "../../../app/application/worldData/render/regions/regionOutline.py",
+    "../../../app/application/worldData/pack/read/wildernessRegionReadService.py",
+    "../../../app/application/worldData/materialize/terrain/terrainBatchOrchestrator.py",
     "../../../app/application/worldData/regions/factConsumers",
-    "../../../app/application/worldData/pack/bake/lightGrid/contributors/landcoverInputs.py"
+    "../../../app/application/worldData/pack/bake/lightGrid/contributors/landcover"
   ]
 }

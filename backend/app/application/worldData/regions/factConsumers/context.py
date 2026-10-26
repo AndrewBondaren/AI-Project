@@ -18,7 +18,7 @@ from app.application.worldData.generators.terrain.materialize.terrainWorkingFiel
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 if TYPE_CHECKING:
-    from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import SurfaceTerrainContext
+    from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext
 
 
 @dataclass(frozen=True)

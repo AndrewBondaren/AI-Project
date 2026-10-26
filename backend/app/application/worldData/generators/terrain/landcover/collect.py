@@ -5,9 +5,8 @@ from app.application.jsonValidation.resolve import ResolveContext, UnresolvedMod
 from app.application.worldData.generators.terrain.landcover.regionCoverageValidation import validate_region_coverage
 import logging
 
-from app.application.worldData.generators.terrain.landcover.types import LandcoverInputs, ResolvedRegion
+from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext, LandcoverInputs, ResolvedRegion
 from app.application.worldData.generators.terrain.landcover.regionRevision import region_fingerprint
-from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.regions.coverageResolver import resolve
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, EllipseShape
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
@@ -15,7 +14,7 @@ from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 logger = logging.getLogger(__name__)
 
 
-def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
+def resolve_collected(regions: list[ResolvedRegion], ctx: LandcoverCollectContext,
                       inputs: LandcoverInputs, registry: WorldTerrainRegistry) -> list[ResolvedRegion]:
     locations = {loc.location_uid: loc for loc in ctx.locations}
     resolved = []
@@ -30,7 +29,7 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
             region = replace(region, current_type=state.current_type)
         mismatch = state is not None and fingerprint != state.spec_fingerprint
         region = replace(region, spec_fingerprint=fingerprint, revision_changed=mismatch)
-        if mismatch:
+        if mismatch and state is not None:
             logger.debug("region_state | revision_mismatch | region_uid=%s tiles=%s stored=%s current=%s",
                          region.region_uid, ctx.tiles, state.spec_fingerprint, fingerprint)
         # Materialization already derives the current footprint every pass. A
@@ -59,6 +58,7 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LightGridBakeContext,
             x_min, y_min, x_max, y_max = shape.bbox()
             facts = inputs.facts_at(((x_min + x_max) // 2, (y_min + y_max) // 2))
             forest = registry.entry_for(region.current_type)
+            assert forest is not None  # validate_region_coverage already checked membership.
             if resolve(facts, WorldTerrainRegistry([forest])) is None:
                 logger.warning("landcover | declared_without_suitability | region_uid=%s entry_type=%s",
                                region.region_uid, region.current_type)

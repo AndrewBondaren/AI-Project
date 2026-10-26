@@ -8743,7 +8743,106 @@ Done: pure нижние контракты и owners готовы; production п
   Это промежуточная приёмка контракта, не закрытие инверсии всего PC-11.6.
 
 **PC-11.6b — разделение domain/pack исполнения и атомарный caller cutover.**
-Статус: **OPEN**. Зависимость: принятый PC-11.6a.
+Статус: **IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-26), готов к приёмке мастера.**
+Зависимость: принятый PC-11.6a. Родительский PC-11.6 ожидает приёмки 11.6b;
+PC-11.7 этим заходом не выполнялся. Код не коммитился.
+
+Приёмочный отчёт PC-11.6b:
+- LandcoverMaterializer/collect получают LandcoverCollectContext. Домен
+  владеет declarations/anchors/autoresolve, identity, coverage, read-only
+  state overlay, claim cache и rasterization. У materializer больше нет
+  canvas apply, L0 winners или imports pack. Context сохранил четыре поля;
+  services, planning/working refs и callbacks в него не добавлялись.
+- Pack-owned LandcoverLightAdapter в contributors/landcover/apply.py
+  владеет картой L0 winners и apply_region. Его collect только проецирует
+  pack scope в domain context и делегирует; materialize/category/begin
+  делегируют прежнему domain owner. Доменная selection не переехала в adapter.
+  Contributor собирает готовые inputs, запускает pack runner через adapter,
+  передаёт resolved_regions в existing index writer и применяет background.
+- run_mask_domain/MaskDomainMaterializer и applyFootprint перенесены в
+  pack/bake/lightGrid/maskDomains/. Runner protocol содержит только реально
+  исполняемые операции; source loaders остаются отдельным collection protocol.
+  masks/runMaskDomain.py сохранил исключительно identity re-export
+  default_collect. Других implementations runner/writer по старым путям нет.
+- background_key_for_zone теперь принадлежит regions/coverageBackground.py:
+  получает готовый profile, не World или pack context. L0 canvas background
+  находится в contributors/landcover/background.py. Frozen L0/L2 consumers
+  берут profiles из ClimateWorkingFields; existing live legacy ветка L0
+  остаётся явно ограничена отсутствием working до PC-11.7.
+- finePaint принимает LandcoverCollectContext, LandcoverInputs, parent/fine
+  buffers и ClimateWorkingFields. Фабрикация LightGridBakeContext, bundle,
+  locations и отдельный snapshot параметр из finePaint удалены. Подготовка
+  выполняется в TerrainBatchOrchestrator через existing domain inputs owner;
+  fineTilePrep/runner продолжают передавать один operation snapshot ref.
+  Новой фабрики/контейнера зависимостей вместо bake context не введено.
+- render_region_outline получает тот же domain context/input contract.
+  WildernessRegionReadService.outline стал async: baked membership → existing
+  SurfacePlanningEntry capture/full prepare → один region-state read → inputs
+  → render. Нет membership — прежний None без prepare/projectors/state read;
+  нет matching geometry — прежний RegionOutlineStaleError. Repository обязателен
+  на present outline path; None не превращается в пустой store. Map route
+  передаёт container.region_state_repository() и await-ит outline. Existing
+  loader/read-only projection переиспользованы; SQL/publication не добавлялись.
+  TODO(snapshot) установлен перед membership gate в read owner по §11.1-E.
+- Проверены все production usages materializer/runner/paint/render и
+  транзитивные callbacks facts_at → LandcoverObservations → factConsumers,
+  loaders → seedGrid/mergeSublocations/ClaimOwnersIndex, collect → revision/
+  REF-W/coverage, raster → noise/density/topology, pack apply → shared writer.
+  Raster/context imports переключены на canonical spatial/coordinate owners.
+  Обнаружена также type-only цепочка FactConsumerContext → old surface entry
+  → planning → pack alias: ссылка переведена на canonical legacy DTO, без
+  удаления legacy канала и без исполнения PC-11.7. Structural test обходит
+  imports, parent package initializers, relative imports и TYPE_CHECKING edges
+  из collection/materializer/types/finePaint/raster/coverage/inputs/facts/outline;
+  до application pack не доходит ни одна из этих цепочек.
+- Topology приходит готовой через LandcoverInputs: L0 adapter передаёт
+  existing resolved metadata; L2/outline используют working.landcover.
+  Ни domain collection, ни fine paint, ни render не требуют accepted water
+  plan, не вызывают placement/topology resolve или snapshot lifecycle.
+  Common capture/input projection и frozen payload schemas не менялись.
+- Type coverage расширен на весь landcover (включая autoresolve), raster,
+  новые pack leaves, coverage/inputs, render/read owner и terrain batch caller.
+  Выявленные прежние typing defects исправлены на этих стыках: TerrainKey
+  вместо str в seed DTO, явное brand-преобразование authored keys,
+  readonly world_uid в RasterWorld и доказанные non-None инварианты.
+  Алгоритмы/RNG/порядок выбора/fallback defaults не менялись; suppressions нет.
+  Positive fixtures проверяют domain collector и pack adapter structural
+  contracts; negative запрещают pack context в domain collect и canvas apply
+  на domain materializer.
+- Проверки (из корня, PYTHONPATH=backend;backend/tests,
+  .venv/Scripts/python.exe -m unittest):
+  test_landcover_materializer/contributor/fine_paint/cutover,
+  test_wilderness_region_index, test_region_state_contract,
+  test_region_rasterizer, test_terrain_merge, test_mask_domain_materialize,
+  test_region_fact_consumers, test_region_coverage_contract — 120 OK;
+  discover -s backend/tests/planning/consumers -p test_*.py — 78 OK;
+  no_second_truth + contracts.test_geometry + encoding.test_canonical_codec +
+  light_bake_cleanup/pack_bake_modes/detailed_bake_c11/pack_wp13_entry_first/
+  parent_light_refine — 90 OK (группы пересекаются). Фиксированные canonical
+  revision/ref fingerprint vectors сохранены.
+- Новые boundary tests: одинаковый snapshot ref до L0/fine domain inputs;
+  outline передаёт ref результата единственного loader в render без copy,
+  mapping readonly; absent membership/no extent не читают state; missing repo
+  — явная ошибка. Real capture/prepare/render outline повторно читает state
+  и учитывает tombstone при HIT planning cache. HTTP baseline 200/404/409
+  и stale index removal после bake сохранены.
+- node_modules/.bin/pyright.cmd --project
+  backend/tests/typing/planning/pyrightconfig.valid.json --outputjson:
+  210 files, 0 errors / 0 warnings. Negative config: exact multiset
+  (file,line,rule,multiplicity) — 58 diagnostics на 56 EXPECT строках,
+  missing/unexpected=0. Шесть прежних stale include paths дают stderr notices;
+  новые/изменённые owner modules явно включены. git diff --check с
+  core.whitespace=cr-at-eol — чисто.
+- Actual folder counts: contributors 10→7, contributors/landcover=5,
+  maskDomains=3, domain landcover 9→8, masks 13→12. Последний count сохраняет
+  existing source-collection compatibility module; root masks не расширялся.
+  Старые scale/coordinate aliases оставлены для внешних callers и identity
+  tests; затронутый domain path ими не пользуется.
+- Нерешённых нарушений responsibility gate и блокеров PC-11.6b не осталось.
+  Для PC-11.7 отдельно оставлены surface_planning/SurfaceTerrainContext и
+  dual observation поля/fallback readers. Общий WS read/snapshot CRUD,
+  source-version isolation и snapshot lifecycle не реализовывались здесь.
+
 Цель: применить готовые контракты во всех L0/L2/outline callers и убрать
   generators → pack.bake, включая транзитивные зависимости.
 ТЗ: tz_map_light_bake §MaskDomain materialize, §Регионы покрытия/§L0/L2;

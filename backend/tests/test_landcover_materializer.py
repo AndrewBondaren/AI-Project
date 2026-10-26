@@ -12,13 +12,14 @@ from app.application.worldData.generators.terrain.landcover.autoresolve.claim im
 from app.application.worldData.generators.terrain.landcover.autoresolve.mergeSublocations import CoverageSeed, merge_sublocations
 from app.application.worldData.generators.terrain.landcover.autoresolve.seedGrid import WorldSeed, generate_seeds
 from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
-from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, LandcoverInputs, RegionSource, StateSnapshotEntry
+from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, LandcoverCollectContext, LandcoverInputs, RegionSource, StateSnapshotEntry
 from app.application.worldData.masks.regionRasterContext import RegionRasterContext
 from app.application.worldData.masks.regionRasterizer import (
     ClaimOwnersIndex, claim_owners, rasterize_claim_fine, rasterize_fine,
 )
-from app.application.worldData.masks.runMaskDomain import run_mask_domain
+from app.application.worldData.pack.bake.lightGrid.maskDomains.runMaskDomain import run_mask_domain
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+from app.application.worldData.pack.bake.lightGrid.contributors.landcover.apply import LandcoverLightAdapter
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.regions.regionFacts import ClimateFacts, RegionFacts
@@ -52,11 +53,8 @@ class LandcoverMaterializerTests(unittest.TestCase):
                                      terrain_masks=WorldTerrainMasks(default_landcover=self.policy).model_dump(mode="json"),
                                      hydrology={"enabled": False})
         self.inputs = LandcoverInputs(self.topology, self.facts_at, {})
-        self.ctx = LightGridBakeContext(self.world, [], LocationsIndexWire(),
-                                        [(0, 0), (0, 1), (1, 0), (1, 1)], self.scale,
-                                        topology=self.topology,
-                                        grid=SurfaceGridSettings(fine_span=self.scale.tile_macro,
-                                                                 light_side=self.scale.side))
+        self.ctx = LandcoverCollectContext(self.world, (), self.scale,
+            ((0, 0), (0, 1), (1, 0), (1, 1)))
 
     @staticmethod
     def facts_at(coord):
@@ -75,7 +73,8 @@ class LandcoverMaterializerTests(unittest.TestCase):
     def paint(self, plugin, ctx=None):
         ctx = ctx or self.ctx
         compose = LightGridCompose(self.scale)
-        run_mask_domain(compose, ctx, plugin)
+        pack_ctx = LightGridBakeContext(ctx.world, list(ctx.locations), LocationsIndexWire(), list(ctx.tiles), ctx.scale)
+        run_mask_domain(compose, pack_ctx, LandcoverLightAdapter(plugin))
         return {(gx, gy, tx, ty): cell.system_terrain for gx, gy in ctx.tiles
                 for tx, ty, cell in compose.iter_tile(gx, gy)}
 
@@ -113,14 +112,14 @@ class LandcoverMaterializerTests(unittest.TestCase):
         self.no_auto()
         self.declare()
         spec = ForestSpec(name="anchor woods", shape=AnchorRadiusShape(anchor_uid="named-anchor", radius=4))
-        self.ctx.locations = [SimpleNamespace(location_uid="named-anchor", map_x=4, map_y=4)]
+        self.ctx = replace(self.ctx, locations=(SimpleNamespace(location_uid="named-anchor", map_x=4, map_y=4),))
         plugin = self.plugin(anchor_specs=(AnchoredRegion("named-anchor", spec),))
         region = plugin.collect(self.ctx, self.policy)[0]
         self.assertEqual(region.region_uid, region_uid(self.world.world_uid, anchor_uid="named-anchor"))
         self.assertEqual(region.source, RegionSource.ANCHOR)
         self.assertEqual((region.spec.shape.cx, region.spec.shape.cy), (4, 4))
         footprint = plugin.materialize(region, self.scale)
-        self.ctx.locations.clear()  # Materialize does not re-read anchors/world.
+        self.ctx = replace(self.ctx, locations=())  # Materialize does not re-read anchors/world.
         self.assertEqual(plugin.materialize(region, self.scale), footprint)
 
     def test_missing_anchor_is_unresolved_without_origin_default(self):
@@ -159,7 +158,7 @@ class LandcoverMaterializerTests(unittest.TestCase):
         self.declare(a, b)
         results = []
         for order in permutations(self.plugin().collect(self.ctx, self.policy)):
-            plugin, compose = self.plugin(), LightGridCompose(self.scale)
+            plugin, compose = LandcoverLightAdapter(self.plugin()), LightGridCompose(self.scale)
             for region in order:
                 plugin.apply(compose, plugin.materialize(region, self.scale), region,
                              WorldTerrainMasks(), tile_set=set(self.ctx.tiles), ctx=self.ctx)
@@ -175,7 +174,7 @@ class LandcoverMaterializerTests(unittest.TestCase):
         road = WorldTerrainMasks().default_roads.system_terrain
         compose.ensure(0, 0, 1, 0).system_terrain = road
         region = plugin.collect(self.ctx, self.policy)[0]
-        plugin.apply(compose, plugin.materialize(region, self.scale), region,
+        LandcoverLightAdapter(plugin).apply(compose, plugin.materialize(region, self.scale), region,
                      WorldTerrainMasks(), tile_set={(0, 0)}, ctx=self.ctx)
         self.assertIsNone(compose.get(0, 0, 0, 0).system_terrain)
         self.assertEqual(compose.get(0, 0, 1, 0).system_terrain, road)

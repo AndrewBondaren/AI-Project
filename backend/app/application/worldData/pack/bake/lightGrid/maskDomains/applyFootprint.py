@@ -39,6 +39,7 @@ def apply_terrain_footprint(
         if not may_paint_terrain(cell.system_terrain, system_terrain, registry):
             continue
         if region is not None:
+            assert winners is not None  # Required and checked before the paint loop.
             previous = winners.get(ref)
             if previous is not None and compare_region_candidates(
                 region, previous, merge_rank=partial(terrain_merge_rank, registry=registry),

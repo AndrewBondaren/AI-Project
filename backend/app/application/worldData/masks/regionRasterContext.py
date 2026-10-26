@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.dataModel.spatial.grid.lightGridScale import LightGridScale
 from app.dataModel.spatial.regionShape import EdgeNoise, Point
 from app.dataModel.terrainMasks.regions import RegionSpecBase
 from app.dataModel.topology.fineTopology import fine_topology as fine_topology
@@ -11,7 +11,8 @@ from app.dataModel.topology.worldTopology import WorldTopology
 
 
 class RasterWorld(Protocol):
-    world_uid: str
+    @property
+    def world_uid(self) -> str: ...
 
 
 @dataclass(frozen=True)

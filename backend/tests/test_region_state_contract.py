@@ -36,6 +36,35 @@ from tests import test_landcover_fine_paint as fine
 
 
 class RegionStateContractTests(unittest.TestCase):
+    def test_l0_and_fine_domain_inputs_keep_the_operation_snapshot_reference(self):
+        from types import MappingProxyType
+        from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
+        from tests.test_landcover_contributor import LandcoverContributorTests
+
+        snapshot = MappingProxyType({})
+        observed = []
+
+        def domain(inputs):
+            observed.append(inputs)
+            return LandcoverMaterializer(inputs)
+
+        l0 = LandcoverContributorTests()
+        l0.setUp()
+        l0.declare(ForestSpec(name="woods", shape=BboxShape(x_min=0, y_min=0, x_max=7, y_max=7)))
+        l0.ctx.region_state_snapshot = snapshot
+        with patch("app.application.worldData.pack.bake.lightGrid.contributors.landcover.contributor.LandcoverMaterializer",
+                   side_effect=domain):
+            l0.bake()
+        world = fine._world(ForestSpec(name="woods", shape=BboxShape(x_min=0, y_min=0, x_max=5, y_max=6)))
+        bundle = fine._surface_ctx(world)
+        with patch("app.application.worldData.generators.terrain.landcover.finePaint.LandcoverMaterializer",
+                   side_effect=domain):
+            TerrainBatchOrchestrator().build_tile_surface_state(world, [], bundle, 0, 0,
+                parent_light=fine._parent(), region_state_snapshot=snapshot, working=working_fixture(world, bundle))
+        self.assertEqual(len(observed), 2)
+        for inputs in observed:
+            self.assertIs(inputs.state_snapshot, snapshot)
+
     def test_renamed_field_serializes_spec_and_rejects_historical_key(self):
         state = self.state(spec_fingerprint="revision")
         self.assertIn("spec_fingerprint", state.model_dump())

@@ -3,9 +3,8 @@ from app.application.jsonValidation import terrain_masks
 from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
 from app.application.worldData.masks.regionRasterContext import RegionRasterContext
 from app.application.worldData.masks.regionRasterizer import claim_owners
-from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
-from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
-from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
+from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext, LandcoverInputs
+from app.application.worldData.generators.coordinates.light.grid import light_cell_center_fine
 from app.application.worldData.render.fineTerrainAsciiKernel import draw_symbol_grid
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.topology.worldBounds import WorldBounds
@@ -13,12 +12,12 @@ from app.dataModel.topology.worldTopology import WorldTopology
 from app.ids import seed_root
 
 
-def render_region_outline(ctx: LightGridBakeContext, region_uid: str) -> str | None:
+def render_region_outline(ctx: LandcoverCollectContext, inputs: LandcoverInputs, region_uid: str) -> str | None:
     """Derive a L0 outline, independent of which bake tiles currently exist."""
     masks = terrain_masks(ctx.world)
     if masks.default_landcover is None or not masks.category_enabled(masks.default_landcover):
         return None
-    plugin = LandcoverMaterializer(prepare_landcover_inputs(ctx))
+    plugin = LandcoverMaterializer(inputs)
     plugin.begin_pass()
     regions = plugin.collect(ctx, plugin.category_policy(masks))
     for region in regions:

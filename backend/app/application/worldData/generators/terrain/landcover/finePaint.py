@@ -7,11 +7,9 @@ cell was region-painted, in which case the per-cell fallback is restored.
 """
 
 from __future__ import annotations
-from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
-from collections.abc import Mapping
 from app.application.worldData.generators.terrain.landcover.types import (
     RegionSource,
-    StateSnapshotEntry,
+    LandcoverCollectContext, LandcoverInputs,
 )
 
 import logging
@@ -21,7 +19,6 @@ from app.application.jsonValidation import terrain, terrain_masks, terrain_syste
 from app.application.worldData.generators.terrain.landcover.materializer import (
     LandcoverMaterializer,
 )
-from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.masks.regionPrecedence import (
     RegionCandidate,
     compare_region_candidates,
@@ -36,22 +33,16 @@ from app.application.worldData.masks.terrainMerge import (
     may_paint_terrain,
     terrain_merge_rank,
 )
-from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
-from app.application.worldData.pack.bake.lightGrid.contributors.landcoverBackground import (
-    background_key_for_zone,
-)
-from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import (
-    prepare_landcover_inputs,
-)
-from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.application.worldData.regions.coverageBackground import background_key_for_zone
+from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
+from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.regionShape import Bounds
-from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.dataModel.topology.worldTopology import Coord
-from app.db.models.namedLocation import NamedLocation
-from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
@@ -67,40 +58,25 @@ def _hydro_preserved(coord: Coord, l0_hydro: dict[Coord, MapCellHydrology]) -> b
 
 
 def paint_regions_fine(
-    world: World,
-    locations: list[NamedLocation],
-    bundle: SurfacePlanBundle,
+    ctx: LandcoverCollectContext,
+    inputs: LandcoverInputs,
     parent_light: ParentLightTile,
     *,
     fine_terrain: dict[Coord, str],
     l0_hydro: dict[Coord, MapCellHydrology],
     tile_bbox: Bounds,
-    region_state_snapshot: Mapping[str, StateSnapshotEntry],
-    working: SurfaceWorkingMaps,
+    climate: ClimateWorkingFields,
 ) -> dict[Coord, str]:
     """Paint region winners onto ``fine_terrain`` in place; return uid map."""
+    world, scale = ctx.world, ctx.scale
     masks = terrain_masks(world)
     policy = masks.default_landcover
     if not masks.category_enabled(policy):
         return {}
 
-    # Tile scope is local; observations come from the request preparation.
-    scale = LightGridScale.from_tile(parent_light.tile_macro, parent_light.side)
-    bake_ctx = LightGridBakeContext(
-        world=world,
-        locations=locations,
-        locations_index=LocationsIndexWire(),
-        tiles=[(parent_light.gx, parent_light.gy)],
-        scale=scale,
-        surface_bundle=bundle,
-        region_state_snapshot=region_state_snapshot,
-        working=working,
-        topology=working.landcover.topology,
-        grid=working.landcover.grid,
-    )
-    materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))
+    materializer = LandcoverMaterializer(inputs)
     materializer.begin_pass()
-    regions = materializer.collect(bake_ctx, policy)
+    regions = materializer.collect(ctx, policy)
     # Even with no surviving regions, restore parent-painted cells after a
     # removal/tombstone rather than carrying their stale terrain into L2.
 
@@ -149,8 +125,10 @@ def paint_regions_fine(
             return None
         tx_ty = (int(cell.tx), int(cell.ty))
         if tx_ty not in background_cache:
+            zone = ClimateZone.from_world_map_wire_id(cell.climate_zone_id) if cell.climate_zone_id is not None else None
+            profile = climate.profile_for_key(RegistryKey[WorldClimateZoneRegistry](zone.system_climate)) if zone is not None else None
             background_cache[tx_ty] = background_key_for_zone(
-                cell.climate_zone_id, masks, terrain_set, registry, world=world,
+                cell.climate_zone_id, masks, terrain_set, registry, profile=profile,
             )
         return background_cache[tx_ty]
 

@@ -66,8 +66,7 @@ class ResolvedRegion:
 
 @dataclass(frozen=True)
 class LandcoverCollectContext:
-    """Domain collect scope (PC-11.6a declare-only; consumer signatures cut
-    over in PC-11.6b).
+    """Domain collection scope shared by L0, L2 and outline.
 
     ``world`` is the existing domain recipe input (terrain/masks/seed), not a
     snapshot API; the landcover owner reads only its own recipe fields.

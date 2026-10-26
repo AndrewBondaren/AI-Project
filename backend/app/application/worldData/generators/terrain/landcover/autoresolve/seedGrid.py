@@ -29,6 +29,7 @@ def generate_seeds(root: str, topology: WorldTopology,
             value = seeded_u01(root, UidKind.REGION, channel=RegionRngChannel.SEED, sx=sx, sy=sy)
             dx, dy = divmod(min(int(value * width * height), width * height - 1), height)
             coord = topology.canonicalize(x0 + dx, y0 + dy)
+            assert coord is not None  # The sampled point lies within topology.bounds.
             seeds.append(WorldSeed(coord, (sx, sy)))
     return tuple(sorted(seeds))
 

@@ -740,10 +740,11 @@ async def get_wilderness_region_outline(world_uid: str, region_uid: str, contain
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     service = WildernessRegionReadService(container.map_cell_read_service(world_uid).pack.context,
-        planning=container.surface_planning(), capture=container.surface_planning_capture())
+        planning=container.surface_planning(), capture=container.surface_planning_capture(),
+        region_state_repo=container.region_state_repository())
     locations = await container.location_service().get_all(world_uid)
     try:
-        outline = service.outline(world, locations, region_uid, wait=RequestPlanWait.unbounded())
+        outline = await service.outline(world, locations, region_uid, wait=RequestPlanWait.unbounded())
     except RegionOutlineStaleError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if outline is None:

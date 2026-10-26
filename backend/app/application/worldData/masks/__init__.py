@@ -1,7 +1,7 @@
 """Shared L0 terrain-mask helpers (forest/plains, mountain field, merge).
 
-MaskDomain materialize runners (``run_mask_domain``, ``apply_terrain_footprint``)
-live in sibling modules — import them directly to avoid light-grid cycles.
+L0 execution and canvas writers live in pack/bake/lightGrid/maskDomains.
+This package owns source collection, raster geometry and merge rules.
 """
 
 from app.application.worldData.masks.mountainField import (

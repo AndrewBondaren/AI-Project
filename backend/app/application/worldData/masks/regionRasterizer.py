@@ -13,7 +13,7 @@ from app.application.worldData.masks.regionRasterContext import (
     ClaimSeed, RasterWorld, RegionClaim, RegionRasterContext,
 )
 from app.application.worldData.masks.regionRasterNoise import boundary_depth, smooth_field
-from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_fine
+from app.application.worldData.generators.coordinates.light.grid import light_cell_center_fine
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.spatial.regionShape import Bounds, Point, RegionShape
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
@@ -41,7 +41,7 @@ def _membership(shape: RegionShape, root: str, ctx: RegionRasterContext,
     def contains(raw: Point, canonical: Coord) -> bool:
         if not shape.contains(*raw):
             return False
-        if noise is not None and boundary_depth(shape, *raw) < edge.amplitude * noise(*canonical):
+        if noise is not None and edge is not None and boundary_depth(shape, *raw) < edge.amplitude * noise(*canonical):
             return False
         return _density(root, ctx, canonical)
 
@@ -108,7 +108,7 @@ def claim_owners(claim: RegionClaim, root: str,
     exploration, and the caller's bake scope never truncates competition.
     Equal scores use canonical seed order, independent of input order.
     """
-    seeds = set()
+    seeds: set[ClaimSeed] = set()
     for seed in claim.seeds:
         coord = topology.canonicalize(*seed.coord)
         if coord is not None:

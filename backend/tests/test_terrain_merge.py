@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from app.application.worldData.masks.applyFootprint import apply_terrain_footprint
+from app.application.worldData.pack.bake.lightGrid.maskDomains.applyFootprint import apply_terrain_footprint
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.masks.terrainMerge import (
     PRESERVE_HYDROLOGY_ROLES, may_paint_terrain, terrain_merge_rank,

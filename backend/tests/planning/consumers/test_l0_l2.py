@@ -332,7 +332,7 @@ class L2Tests(unittest.TestCase):
                                                   0, 0, parent_light=parent, region_state_snapshot={}, working=working_fixture(replace(self.source, world_uid="foreign"), bundle))
 
     def test_landcover_facts_use_typed_terrain_base_final_hydro_and_local_anchors(self):
-        from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
+        from app.application.worldData.pack.bake.lightGrid.contributors.landcover.inputs import prepare_landcover_inputs
         from app.application.worldData.regions.factConsumers import collect_facts
         from app.application.worldData.regions.factConsumers.context import FactConsumerContext
         from app.application.worldData.generators.climate.registry import profile_for

@@ -13,7 +13,8 @@ from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import terrain, terrain_masks
 from app.application.worldData.generators.terrain.terrainZ import surface_biome_terrain
 from app.application.worldData.regions.coverageBackground import surface_coverage
-from app.application.worldData.pack.bake.lightGrid.contributors.landcoverBackground import background_key_for_zone
+from app.application.worldData.regions.coverageBackground import background_key_for_zone
+from app.application.worldData.generators.climate.registry import profile_for
 from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.masks.enums.maskDomainId import MaskDomainId, MASK_DOMAIN_CONTRIBUTOR
 from app.dataModel.terrain.hillPolicy import HillPolicy
@@ -165,7 +166,7 @@ class LandcoverCutoverTests(unittest.TestCase):
             climate_zone_registry=[{**zone.to_entry().model_dump(mode="json"), "base_rainfall": 80}])
         registry = terrain(world)
         result = background_key_for_zone(zone.world_map_wire_id(), terrain_masks(world),
-            {e.system_terrain for e in registry.root}, registry, world=world)
+            {e.system_terrain for e in registry.root}, registry, profile=profile_for(world, zone.system_climate))
         self.assertEqual(result, WorldTerrainRegistry.forest_terrain_key())
 
 

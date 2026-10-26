@@ -12,7 +12,7 @@ from app.application.worldData.generators.terrain.mountains.formPipeline import 
 )
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.masks.mergeDeclare import merge_declare_over_auto
-from app.application.worldData.masks.runMaskDomain import run_mask_domain
+from app.application.worldData.pack.bake.lightGrid.maskDomains.runMaskDomain import run_mask_domain
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale

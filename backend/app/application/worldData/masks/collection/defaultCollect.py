@@ -4,7 +4,8 @@ Canonical owner of ``MaskSourceCollector`` / ``default_collect`` (PC-11.6a
 owner map). Generic over the caller's context type — no pack/bake types here;
 the L0 execution runner belongs to a separate pack owner. The legacy
 ``masks/runMaskDomain`` path temporarily re-exports ``default_collect``;
-``MaskDomainMaterializer`` structurally satisfies this protocol.
+domain collectors structurally satisfy this protocol; pack execution uses
+a separate runner protocol.
 """
 
 from collections.abc import Callable

@@ -3,6 +3,7 @@
 from app.application.worldData.regions.coverageResolver import resolve
 from app.application.worldData.regions.regionFacts import ClimateFacts, RegionFacts
 from app.dataModel.climate.enums.climateZone import ClimateZone, ClimateZoneProfile
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 
@@ -36,3 +37,27 @@ def surface_coverage(*, registry: WorldTerrainRegistry, policy: LandcoverRegions
     result = resolve(facts, candidates) if candidates.root else None
     return result.target_key if result else (
         policy.fallback_terrain if fallback_allowed else None)
+
+
+def background_key_for_zone(
+    climate_zone_id: int | None,
+    masks: WorldTerrainMasks,
+    terrain_set: set[str],
+    registry: WorldTerrainRegistry | None = None,
+    *, profile: ClimateZoneProfile | None = None,
+) -> str | None:
+    """Per-cell landcover fallback key; ``None`` — no background paint."""
+    if not masks.category_enabled(masks.default_landcover):
+        return None
+    if not terrain_set:
+        return None
+    zone = (
+        ClimateZone.from_world_map_wire_id(climate_zone_id)
+        if climate_zone_id is not None
+        else None
+    )
+    registry = registry or WorldTerrainRegistry.canonical_defaults()
+    registry = WorldTerrainRegistry([e for e in registry.root if e.system_terrain in terrain_set])
+    return surface_coverage(registry=registry, policy=masks.default_landcover,
+                            system_climate_zone=zone.system_climate if zone else None,
+                            profile=profile)

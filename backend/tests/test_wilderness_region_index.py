@@ -51,7 +51,7 @@ class WildernessRegionIndexTests(unittest.TestCase):
     def regions(self):
         self.f.declare(ForestSpec(name="declared", shape=BboxShape(x_min=1,y_min=1,x_max=4,y_max=4)))
         spec = PlainSpec(name="anchored",shape=AnchorRadiusShape(anchor_uid="anchor",radius=2))
-        self.f.ctx.locations = [SimpleNamespace(location_uid="anchor",map_x=10,map_y=10)]
+        self.f.ctx = replace(self.f.ctx, locations=(SimpleNamespace(location_uid="anchor",map_x=10,map_y=10),))
         plugin = self.f.plugin(anchor_specs=(AnchoredRegion("anchor",spec),))
         return plugin.collect(self.f.ctx,self.f.policy)
 
@@ -169,8 +169,7 @@ class WildernessRegionIndexTests(unittest.TestCase):
         regions = plugin.collect(self.f.ctx,self.f.policy)
         entry = build_region_index(regions,self.f.scale, registry=self.f.registry)[0]
         self.assertEqual((entry.bbox.x_min,entry.bbox.x_max),(0,15))
-        with patch("app.application.worldData.render.regions.regionOutline.prepare_landcover_inputs",return_value=inputs):
-            outline = render_region_outline(self.f.ctx,entry.region_uid)
+        outline = render_region_outline(self.f.ctx, inputs, entry.region_uid)
         self.assertIn("#",outline)
         self.assertIn("derived L0",outline)
 
@@ -217,6 +216,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             service = WildernessRegionReadService(context)
             self.assertTrue(service.get_snapshot(world,uid).snapshot)
             container = MagicMock()
+            container.region_state_repository.return_value.get_by_world = AsyncMock(return_value=[])
             container.world_service.return_value.get_by_id = AsyncMock(return_value=world)
             container.map_cell_read_service.return_value.pack.context = context
             container.location_service.return_value.get_all = AsyncMock(return_value=[])
@@ -228,16 +228,16 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
                 response = client.get(f"/worlds/{world.world_uid}/map/regions/{uid}")
                 self.assertEqual(response.status_code,200)
                 self.assertTrue(response.json()["snapshot"])
-                with patch("app.application.worldData.pack.read.wildernessRegionReadService.require_surface_terrain_context",
-                           return_value=f.ctx.surface_planning):
+                with patch("app.application.worldData.pack.read.wildernessRegionReadService.SurfacePlanningEntry.require_plan_inputs",
+                           return_value=(frozen_surface_fixture(world), working_fixture(world, frozen_surface_fixture(world)))):
                     response = client.get(f"/worlds/{world.world_uid}/map/regions/{uid}/outline")
                 self.assertEqual(response.status_code,200,response.text)
                 self.assertIn("#",response.json()["outline"])
                 self.assertEqual(response.json()["source"],"derived_world_data")
                 f.declare()
                 world.terrain_masks = f.world.terrain_masks
-                with patch("app.application.worldData.pack.read.wildernessRegionReadService.require_surface_terrain_context",
-                           return_value=f.ctx.surface_planning):
+                with patch("app.application.worldData.pack.read.wildernessRegionReadService.SurfacePlanningEntry.require_plan_inputs",
+                           return_value=(frozen_surface_fixture(world), working_fixture(world, frozen_surface_fixture(world)))):
                     stale = client.get(f"/worlds/{world.world_uid}/map/regions/{uid}/outline")
                 self.assertEqual(stale.status_code,409)
                 self.assertTrue(client.get(f"/worlds/{world.world_uid}/map/regions/{uid}").json()["snapshot"])
@@ -248,6 +248,106 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             with patch("app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
                 WorldMapBakeOrchestrator().bake_tile(world,0,0,writer,locations=[],wait=RequestPlanWait.unbounded(),surface_bundle=frozen_surface_fixture(world),region_state_snapshot={}, working=working_fixture(world, frozen_surface_fixture(world)))
             self.assertEqual(writer.manifest.wilderness_region_entries,[])
+
+
+class OutlineReadBoundaryTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        from tests.test_landcover_fine_paint import _world, _surface_ctx
+        self.world = _world()
+        self.working = working_fixture(self.world, _surface_ctx(self.world))
+        self.context = MagicMock()
+        self.context.reader_for.return_value.manifest = SimpleNamespace(
+            fine_cells_per_map_cell=8, world_map_cells_per_tile=2)
+        self.repo = MagicMock()
+        self.repo.get_by_world = AsyncMock(return_value=[])
+        self.service = WildernessRegionReadService(self.context, planning=MagicMock(),
+            capture=MagicMock(), region_state_repo=self.repo)
+
+    async def test_absent_pack_or_membership_does_no_preparation_or_state_read(self):
+        for has_pack in (False, True):
+            self.context.has_pack_for.return_value = has_pack
+            self.context.reader_for.return_value.manifest.wilderness_region_entry = lambda uid: None
+            with patch("app.application.worldData.pack.read.wildernessRegionReadService.SurfacePlanningEntry") as entry:
+                self.assertIsNone(await self.service.outline(self.world, [], "missing", wait=RequestPlanWait.unbounded()))
+            entry.assert_not_called()
+        self.repo.get_by_world.assert_not_awaited()
+
+    async def test_present_prepares_once_and_forwards_one_readonly_snapshot_to_render(self):
+        self.service.get_snapshot = MagicMock(return_value=object())
+        from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
+        snapshots = []
+
+        async def read_snapshot(repo, world_uid):
+            snapshot = await load_region_state_snapshot(repo, world_uid)
+            snapshots.append(snapshot)
+            return snapshot
+
+        with patch("app.application.worldData.pack.read.wildernessRegionReadService.SurfacePlanningEntry.require_plan_inputs",
+                   return_value=(object(), self.working)) as prepare, patch(
+                   "app.application.worldData.pack.read.wildernessRegionReadService.load_region_state_snapshot",
+                   side_effect=read_snapshot) as load, patch(
+                   "app.application.worldData.pack.read.wildernessRegionReadService.render_region_outline",
+                   return_value="# outline") as render:
+            result = await self.service.outline(self.world, [], "r", wait=RequestPlanWait.unbounded())
+        self.assertEqual(result.outline, "# outline")
+        prepare.assert_called_once()
+        load.assert_awaited_once_with(self.repo, self.world.world_uid)
+        self.repo.get_by_world.assert_awaited_once_with(self.world.world_uid)
+        ctx, inputs, uid = render.call_args.args
+        from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
+        self.assertIsInstance(ctx, LandcoverCollectContext)
+        self.assertIs(ctx.world, self.world)
+        self.assertIs(inputs.topology, self.working.landcover.topology)
+        self.assertIs(inputs.state_snapshot, snapshots[0])
+        self.assertEqual((ctx.locations, ctx.tiles, uid), ((), (), "r"))
+        with self.assertRaises(TypeError):
+            inputs.state_snapshot["new"] = StateSnapshotEntry("forest")
+
+    async def test_missing_repository_is_explicit_and_stale_geometry_preserves_error(self):
+        from app.application.worldData.pack.read.wildernessRegionReadService import RegionOutlineStaleError
+        self.service.get_snapshot = MagicMock(return_value=object())
+        with patch("app.application.worldData.pack.read.wildernessRegionReadService.SurfacePlanningEntry.require_plan_inputs",
+                   return_value=(object(), self.working)) as prepare:
+            with self.assertRaises(RegionOutlineStaleError):
+                await self.service.outline(self.world, [], "missing-geometry", wait=RequestPlanWait.unbounded())
+            self.service._region_state_repo = None
+            with self.assertRaisesRegex(ValueError, "repository required"):
+                await self.service.outline(self.world, [], "r", wait=RequestPlanWait.unbounded())
+            prepare.assert_called_once()
+        self.repo.get_by_world.assert_awaited_once()
+
+    async def test_no_extent_never_reads_region_state(self):
+        self.service.get_snapshot = MagicMock(return_value=object())
+        with patch("app.application.worldData.pack.read.wildernessRegionReadService.SurfacePlanningEntry.require_plan_inputs",
+                   side_effect=ValueError("surface terrain context unavailable")):
+            with self.assertRaisesRegex(ValueError, "unavailable"):
+                await self.service.outline(self.world, [], "r", wait=RequestPlanWait.unbounded())
+        self.repo.get_by_world.assert_not_awaited()
+
+    async def test_real_prepare_and_cached_plan_still_read_fresh_state_for_each_outline(self):
+        from tests.planning.consumers.test_wiring import planning_kwargs
+        from tests.test_landcover_fine_paint import _world
+        from app.application.worldData.regions.regionStateMapping import state_to_row
+        from app.dataModel.regions.regionState import RegionState
+        from app.application.worldData.pack.read.wildernessRegionReadService import RegionOutlineStaleError
+
+        source = _world(ForestSpec(name="woods", shape=BboxShape(x_min=0, y_min=0, x_max=5, y_max=6)))
+        allowed = {field.name for field in fields(World)} - {"world_uid", "name", "created_at"}
+        self.world = World(world_uid=source.world_uid, name="outline", created_at="now",
+            **{key: value for key, value in vars(source).items() if key in allowed})
+        uid = region_uid(self.world.world_uid, name="woods")
+        deps = planning_kwargs(self)
+        service = WildernessRegionReadService(self.context, region_state_repo=self.repo,
+            planning=deps["planning"], capture=deps["capture"])
+        service.get_snapshot = MagicMock(return_value=object())
+        first = await service.outline(self.world, [], uid, wait=RequestPlanWait.unbounded())
+        self.assertIn("#", first.outline)
+        state = RegionState(region_uid=uid, current_type="forest", tombstone=True)
+        self.repo.get_by_world.return_value = [state_to_row(state, world_uid=self.world.world_uid,
+            created_at="then", updated_at="now")]
+        with self.assertRaises(RegionOutlineStaleError):
+            await service.outline(self.world, [], uid, wait=RequestPlanWait.unbounded())
+        self.assertEqual(self.repo.get_by_world.await_count, 2)
 
 
 if __name__ == "__main__":

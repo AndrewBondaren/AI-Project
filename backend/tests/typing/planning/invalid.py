@@ -3,6 +3,14 @@
 from app.application.worldData.masks.collection.defaultCollect import MaskSourceCollector, default_collect
 from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
+from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
+from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+
+
+def invalid_landcover_pack_scope(materializer: LandcoverMaterializer, ctx: LightGridBakeContext,
+                                 policy: MaskCategoryPolicy) -> None:
+    materializer.collect(ctx, policy)  # EXPECT: reportArgumentType
+    materializer.apply  # EXPECT: reportAttributeAccessIssue
 
 
 def invalid_collection_context_variance(

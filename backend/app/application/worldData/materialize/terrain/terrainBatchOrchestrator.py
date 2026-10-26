@@ -10,7 +10,9 @@ from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from collections.abc import Mapping
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
-from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
+from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext, StateSnapshotEntry
+from app.application.worldData.regions.inputs.landcoverInputs import prepare_landcover_inputs
+from app.dataModel.spatial.grid.lightGridScale import LightGridScale
 
 import logging
 from dataclasses import dataclass, replace
@@ -111,15 +113,14 @@ class TerrainBatchOrchestrator:
         l0_hydro = hydro_mask_from_parent(parent_light)
         # L0 carry is the background only; regions paint pointwise in fine cells.
         fine_region_uid = paint_regions_fine(
-            world,
-            locations,
-            bundle,
+            LandcoverCollectContext(world, tuple(locations),
+                LightGridScale.from_tile(parent_light.tile_macro, parent_light.side), ((tile_gx, tile_gy),)),
+            prepare_landcover_inputs(working, region_state_snapshot),
             parent_light,
             fine_terrain=fine_terrain,
             l0_hydro=l0_hydro,
             tile_bbox=(fine_bbox.x_min, fine_bbox.y_min, fine_bbox.x_max, fine_bbox.y_max),
-            region_state_snapshot=region_state_snapshot,
-            working=working,
+            climate=working.climate,
         )
         place_hills(
             fine_z,

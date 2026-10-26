@@ -12,6 +12,59 @@ APP = Path(__file__).resolve().parents[3] / "app"
 
 
 class BoundaryTests(unittest.TestCase):
+    def test_landcover_collection_raster_fine_and_outline_have_no_transitive_pack_dependency(self):
+        from collections import deque
+
+        def module_path(name):
+            path = APP.parent.joinpath(*name.split("."))
+            if path.with_suffix(".py").is_file():
+                return path.with_suffix(".py")
+            if (path / "__init__.py").is_file():
+                return path / "__init__.py"
+            return None
+
+        dependencies = {}
+
+        def imports(name):
+            if name in dependencies:
+                return dependencies[name]
+            path = module_path(name)
+            tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+            parts = name.split(".")
+            found = {".".join(parts[:i]) for i in range(1, len(parts))}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    found.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level:
+                        package = name if path.name == "__init__.py" else name.rsplit(".", 1)[0]
+                        parts = package.split(".")
+                        prefix = ".".join(parts[:len(parts) - node.level + 1])
+                        owner = ".".join(part for part in (prefix, node.module) if part)
+                    else:
+                        owner = node.module or ""
+                    found.add(owner)
+                    found.update(owner + "." + alias.name for alias in node.names)
+            dependencies[name] = {item for item in found if item.startswith("app.") and module_path(item)}
+            return dependencies[name]
+
+        roots = ["app.application.worldData.generators.terrain.landcover." + name
+                 for name in ("types", "materializer", "collect", "finePaint")]
+        roots += ["app.application.worldData." + name for name in (
+            "masks.collection.defaultCollect", "masks.regionRasterContext", "masks.regionRasterizer",
+            "regions.coverageBackground", "regions.inputs.landcoverInputs", "regions.factConsumers",
+            "render.regions.regionOutline")]
+        for root in roots:
+            seen, queue = set(), deque([(root,)])
+            while queue:
+                chain = queue.popleft()
+                name = chain[-1]
+                if name in seen:
+                    continue
+                seen.add(name)
+                self.assertFalse(name.startswith("app.application.worldData.pack"), " -> ".join(chain))
+                queue.extend(chain + (dependency,) for dependency in imports(name) if dependency not in seen)
+
     def test_frozen_view_has_no_generator_imports(self):
         module = APP / "application/worldData/planning/contracts/surfacePlanningView.py"
         tree = ast.parse(module.read_text(encoding="utf-8"))
@@ -137,7 +190,11 @@ class L2BoundaryTests(unittest.TestCase):
                 self.assertNotIn("to_legacy_context", text)
                 self.assertNotIn("prepare_captured", text)
                 self.assertNotIn("surface_ctx", text)
-                if "fineChunkCompute" not in path:
+                if "landcover/finePaint" in path:
+                    self.assertIn("LandcoverCollectContext", text)
+                    self.assertIn("LandcoverInputs", text)
+                    self.assertNotIn("SurfacePlanBundle", text)
+                elif "fineChunkCompute" not in path:
                     self.assertIn("SurfacePlanBundle", text)
         route = (APP / "api/routes/map.py").read_text(encoding="utf-8")
         self.assertEqual(route.count("require_plan_inputs("), 3)

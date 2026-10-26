@@ -7,6 +7,7 @@ from app.application.worldData.generators.terrain.landcover.autoresolve.seedGrid
 from app.application.worldData.generators.terrain.landcover.types import Sublocation
 from app.dataModel.spatial.facing import GRID_DELTA_TO_FACING, GRID_OUTWARD_DELTA, opposite
 from app.dataModel.spatial.regionShape import Point
+from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.ids.regionIdentity import region_uid
@@ -15,13 +16,13 @@ from app.ids.regionIdentity import region_uid
 @dataclass(frozen=True)
 class CoverageSeed:
     seed: WorldSeed
-    target_key: str
+    target_key: TerrainKey
 
 
 @dataclass(frozen=True)
 class SeedRegion:
     region_uid: str
-    target_key: str
+    target_key: TerrainKey
     seeds: tuple[CoverageSeed, ...]
     sublocations: tuple[Sublocation, ...]
 
