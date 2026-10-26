@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import macro_tile_of
-from app.application.worldData.pack.bake.packTileCollect import (
+from app.application.worldData.pack.bake.plan.packTileCollect import (
     declared_hydro_tiles,
     location_anchor_tiles,
 )

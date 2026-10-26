@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.jsonValidation.worldRow import location_types
-from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationsIndexRead import load_locations_index

@@ -13,7 +13,7 @@ from app.application.jsonValidation.settlementVolumeSeparation import (
     log_settlement_volume_separation,
 )
 from app.application.worldData.locations.namedLocationService import NamedLocationService
-from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )

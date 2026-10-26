@@ -21,7 +21,7 @@ from app.application.worldData.materialize.surface.loadingProgress import (
     progress_pct,
 )
 from app.application.worldData.pack.bake.packBakeLog import log_pack_loading_progress
-from app.application.worldData.pack.bake.packCompletenessClassifier import (
+from app.application.worldData.pack.bake.finalize.packCompletenessClassifier import (
     PackCompletenessClassifier,
 )
 from app.application.worldData.pack.read.packReadContext import PackReadContext

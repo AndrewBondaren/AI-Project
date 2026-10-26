@@ -15,7 +15,7 @@ from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFac
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
-from app.application.worldData.pack.bake.macroTileUid import (
+from app.application.worldData.pack.bake.plan.macroTileUid import (
     macro_tile_uid as l0_macro_tile_uid,
     pack_job_seed,
 )

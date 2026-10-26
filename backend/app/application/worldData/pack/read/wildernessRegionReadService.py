@@ -5,7 +5,7 @@ from app.application.worldData.planning.composition.surfacePlanningCapture impor
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import require_surface_terrain_context
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
-from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.render.regions.regionOutline import render_region_outline
 from app.dataModel.worldPack.meta.wildernessRegionDebug import WildernessRegionSnapshot, WildernessRegionOutline

@@ -25,8 +25,8 @@ from app.application.worldData.pack.bake.lightGrid.bake import compose_light_gri
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.bake.lightGrid.worldSeam import apply_world_seam
-from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
-from app.application.worldData.pack.bake.macroTileUid import macro_tile_uid, pack_job_seed
+from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.plan.macroTileUid import macro_tile_uid, pack_job_seed
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_surface_context,
     log_pack_world_map_bake_done,
@@ -34,7 +34,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_world_map_tile_done,
     MISSING_SYSTEM_TERRAIN,
 )
-from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
+from app.application.worldData.pack.bake.l0.worldMapHydrology import world_map_hydro_role_from_cell
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire

@@ -14,9 +14,9 @@ from app.application.worldData.generators.terrain.landcover.collect import resol
 from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, StateSnapshotEntry
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
-from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.bake.wildernessRegionIndex import build_region_index
+from app.application.worldData.pack.bake.l0.wildernessRegionIndex import build_region_index
 from app.application.worldData.regions.regionStateMapping import state_from_row, state_to_row
 from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
 from app.dataModel.regions.regionState import (

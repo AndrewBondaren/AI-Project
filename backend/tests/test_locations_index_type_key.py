@@ -13,7 +13,7 @@ from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistr
 from app.application.jsonValidation.sourceValidation import registry_vocabulary, validate_reference_value
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.structureGeneratorService import _room_to_named_location
-from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationsIndexRead import load_locations_index

@@ -5,7 +5,7 @@ docs/tz_world_pack_storage.md § Bake modes (master contract 2026-07-19).
 
 from __future__ import annotations
 
-from app.application.worldData.pack.bake.packTileCollect import (
+from app.application.worldData.pack.bake.plan.packTileCollect import (
     light_l0_tiles,
     world_bounds_l0_tiles,
 )

@@ -13,8 +13,8 @@ from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.application.worldData.errors import WorldDataNotFoundError, WorldDataValidationError
-from app.application.worldData.pack.bake import packBakeFinalize
-from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.bake.finalize import packBakeFinalize
+from app.application.worldData.pack.bake.finalize.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.io import packManifestStore
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths

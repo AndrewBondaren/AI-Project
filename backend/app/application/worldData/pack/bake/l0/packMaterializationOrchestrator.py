@@ -28,13 +28,13 @@ from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
-from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
-from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
-from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
-from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.finalize.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.materialize.shared.parallelPolicy import (

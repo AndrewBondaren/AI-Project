@@ -13,7 +13,7 @@ from __future__ import annotations
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import paint_role
-from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
+from app.application.worldData.pack.bake.l0.worldMapHydrology import world_map_hydro_role_from_cell
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 _PRESERVE_DECLARED_RIVER = frozenset({WorldMapHydrologyRole.RIVER})

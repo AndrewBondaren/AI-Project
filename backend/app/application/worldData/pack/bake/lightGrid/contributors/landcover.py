@@ -1,7 +1,7 @@
 """Unified LANDCOVER runner and per-cell background."""
 
 from app.application.jsonValidation import terrain_masks, terrain
-from app.application.worldData.pack.bake.wildernessRegionIndex import build_region_index
+from app.application.worldData.pack.bake.l0.wildernessRegionIndex import build_region_index
 from app.application.worldData.generators.terrain.landcover.materializer import LandcoverMaterializer
 from app.application.worldData.masks.runMaskDomain import run_mask_domain
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext

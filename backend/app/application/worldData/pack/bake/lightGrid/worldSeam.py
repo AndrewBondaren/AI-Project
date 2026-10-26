@@ -10,7 +10,7 @@ import logging
 from collections.abc import Iterable
 
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.application.worldData.pack.bake.macroTileUid import macro_tile_uid
+from app.application.worldData.pack.bake.plan.macroTileUid import macro_tile_uid
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing, opposite
 from app.dataModel.topology.worldBounds import WorldBounds
 

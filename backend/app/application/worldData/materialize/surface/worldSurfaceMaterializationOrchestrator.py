@@ -18,7 +18,7 @@ from app.application.worldData.planning.contracts.surfacePlanningView import (
 from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
 from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
-from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
+from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
     PackDetailedBakeResult,
 )
@@ -52,7 +52,7 @@ from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.database import Database
-from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.templateLibrary.loadReliefTemplatesForWorld import load_relief_templates_for_world
 
 

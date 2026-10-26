@@ -12,7 +12,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_detailed_bake_skip_not_in_index,
     log_pack_settlement_skip_not_in_index,
 )
-from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
+from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
 )
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths

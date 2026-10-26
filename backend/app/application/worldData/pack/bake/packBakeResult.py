@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.application.worldData.materialize.surface.materializationContext import MaterializationJobReport
-from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
+from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
 from app.application.worldData.materialize.shared.persistResult import PersistResult

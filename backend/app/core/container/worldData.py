@@ -51,7 +51,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.application.worldData.registries.stateService import StateService
 from app.application.worldData.registries.seedService import SeedService
-from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults

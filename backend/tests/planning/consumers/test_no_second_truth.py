@@ -41,7 +41,7 @@ class BoundaryTests(unittest.TestCase):
         self.assertNotIn("maybe_checkpoint_manifest", calls)
         self.assertIn("recalc_manifest_counters", calls)
         for relative in ("pack/refine/fine/fineChunkRunner.py", "pack/refine/chunks/chunkRefineWorker.py",
-                         "pack/refine/entry/entryRefineOrchestrator.py", "pack/bake/packDetailedBakeOrchestrator.py"):
+                         "pack/refine/entry/entryRefineOrchestrator.py", "pack/bake/detailed/packDetailedBakeOrchestrator.py"):
             source = (APP / "application/worldData" / relative).read_text(encoding="utf-8")
             self.assertNotIn("save_manifest(", source, relative)
             self.assertNotIn("publish_manifest", source, relative)
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 class L2BoundaryTests(unittest.TestCase):
     def test_refine_transits_have_no_legacy_context_or_planning_entry(self):
         root = APP / "application/worldData"
-        paths = ("pack/bake/packDetailedBakeOrchestrator.py", "pack/bake/detailedBakeRefine.py",
+        paths = ("pack/bake/detailed/packDetailedBakeOrchestrator.py", "pack/bake/detailed/detailedBakeRefine.py",
             "pack/refine/fine/fineChunkRunner.py", "pack/refine/fine/fineTilePrep.py",
             "pack/refine/fine/fineTileContext.py", "pack/refine/fine/fineChunkCompute.py",
             "pack/refine/fine/fineTerrainRefineOrchestrator.py", "pack/refine/entry/entryRefineOrchestrator.py",

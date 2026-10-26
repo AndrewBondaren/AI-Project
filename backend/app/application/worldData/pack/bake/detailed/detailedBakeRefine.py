@@ -20,7 +20,7 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
     GradePipelineTimings,
 )
 from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
-from app.application.worldData.pack.bake.detailedBakeScope import DetailedScopePlan
+from app.application.worldData.pack.bake.detailed.detailedBakeScope import DetailedScopePlan
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light

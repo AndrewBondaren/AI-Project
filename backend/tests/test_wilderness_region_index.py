@@ -20,8 +20,8 @@ from app.api.deps import get_container
 from app.api.routes.map import router
 from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, Sublocation, StateSnapshotEntry
 from app.application.worldData.generators.terrain.landcover.regionIdentityCheck import require_unique_region_uids
-from app.application.worldData.pack.bake.wildernessRegionIndex import build_region_index
-from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.application.worldData.pack.bake.l0.wildernessRegionIndex import build_region_index
+from app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.application.worldData.pack.io.wildernessRegionIndexWriter import replace_region_index
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
@@ -206,7 +206,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             from app.application.worldData.pack.bake.lightGrid.contributors.landcover import LandcoverContributor
             def compose(ctx):
                 return compose_light_grid(ctx,contributors=(LandcoverContributor(),))
-            with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
+            with patch("app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
                 WorldMapBakeOrchestrator().bake_tiles(world,[],writer,[(0,0)],surface_bundle=frozen_surface_fixture(world),wait=RequestPlanWait.unbounded(),region_state_snapshot={}, working=working_fixture(world, frozen_surface_fixture(world)))
             writer.save_manifest()
             uid = region_uid(world.world_uid,name="indexed")
@@ -245,7 +245,7 @@ class WildernessRegionBakeAndHttpTests(unittest.TestCase):
             # A subsequent bake with no regions must remove stale entries.
             f.declare()
             world.terrain_masks = f.world.terrain_masks
-            with patch("app.application.worldData.pack.bake.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
+            with patch("app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator.compose_light_grid",side_effect=compose):
                 WorldMapBakeOrchestrator().bake_tile(world,0,0,writer,locations=[],wait=RequestPlanWait.unbounded(),surface_bundle=frozen_surface_fixture(world),region_state_snapshot={}, working=working_fixture(world, frozen_surface_fixture(world)))
             self.assertEqual(writer.manifest.wilderness_region_entries,[])
 

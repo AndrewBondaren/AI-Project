@@ -8,7 +8,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.worldData.generators.terrain.landcover.collect import resolve_collected
 from app.application.worldData.generators.terrain.landcover.types import ResolvedRegion, StateSnapshotEntry
-from app.application.worldData.pack.bake.wildernessRegionIndex import build_region_index
+from app.application.worldData.pack.bake.l0.wildernessRegionIndex import build_region_index
 from app.application.worldData.pack.io.wildernessRegionIndexWriter import replace_region_index
 from app.application.worldData.pack.read.wildernessRegionReadService import WildernessRegionReadService
 from app.dataModel.registryKey import RegistryKey, registry_key_target

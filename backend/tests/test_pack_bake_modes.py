@@ -8,8 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.application.worldData.generators.terrain.passes import bbox
-from app.application.worldData.pack.bake import packCompletenessClassifier
-from app.application.worldData.pack.bake import packTileCollect, packTilePlanner
+from app.application.worldData.pack.bake.finalize import packCompletenessClassifier
+from app.application.worldData.pack.bake.plan import packTileCollect, packTilePlanner
 from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningViewKind
 from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.bake.packBakeDefaults import (
@@ -120,7 +120,7 @@ class TestDetailedBakeRequestGradeStages(unittest.TestCase):
 
 class TestPackTilePlannerScopes(unittest.TestCase):
     def test_light_is_all_location_tiles_full_is_world_bounds(self):
-        from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+        from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
 
         world = SimpleNamespace(
             world_uid="w1",
@@ -186,7 +186,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
         self.assertTrue(light_set <= full_set)
 
     def test_light_debug_cap_via_resolve(self):
-        from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+        from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000, hydrology=None)
         locations: list = []
@@ -203,7 +203,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
         self.assertEqual(light.cap_applied, 1)
 
     def test_defaults_max_tiles_light_applies_when_max_tiles_none(self):
-        from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+        from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         with patch(
@@ -220,7 +220,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
 
 class TestPackCompletenessClassifier(unittest.TestCase):
     def test_absent_without_tiles(self):
-        from app.application.worldData.pack.bake.packCompletenessClassifier import (
+        from app.application.worldData.pack.bake.finalize.packCompletenessClassifier import (
             PackCompletenessClassifier,
         )
 
@@ -231,10 +231,10 @@ class TestPackCompletenessClassifier(unittest.TestCase):
         self.assertEqual(snap.completeness, "absent")
 
     def test_light_complete_when_baked_covers_light_not_full(self):
-        from app.application.worldData.pack.bake.packCompletenessClassifier import (
+        from app.application.worldData.pack.bake.finalize.packCompletenessClassifier import (
             PackCompletenessClassifier,
         )
-        from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+        from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         planner = MagicMock(spec=PackTilePlanner)

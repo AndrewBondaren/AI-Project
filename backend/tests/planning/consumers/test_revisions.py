@@ -223,9 +223,9 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         from app.application.cancellation.requestPlanWait import RequestPlanWait
         from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
         from app.application.worldData.materialize.shared.persistResult import PersistResult
-        from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+        from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
         from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import WorldSurfaceMaterializationOrchestrator
-        from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import PackDetailedBakeResult
+        from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import PackDetailedBakeResult
         from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
         from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
         repo = None if missing_state_source else SqliteRegionStateRepository(self.db)

@@ -8,7 +8,7 @@ from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
-from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
+from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
 from app.application.worldData.materialize.shared.persistResult import PersistResult
@@ -19,7 +19,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
     MaterializeResult,
     SettlementOutdoorError,
 )
-from app.application.worldData.materialize import worldSurfaceMaterializationOrchestrator
+from app.application.worldData.materialize.surface import worldSurfaceMaterializationOrchestrator
 from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )

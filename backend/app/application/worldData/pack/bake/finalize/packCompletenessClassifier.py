@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
 from app.application.worldData.planning.contracts.surfacePlanningView import (
     SurfacePlanningViewKind,
 )

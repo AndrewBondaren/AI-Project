@@ -61,7 +61,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "regionStateLog",
             ),
             (
-                "app.application.worldData.pack.bake.packDetailedBakeOrchestrator",
+                "app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator",
                 "pack",
                 "packDetailedBake",
             ),

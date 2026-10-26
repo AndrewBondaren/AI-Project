@@ -19,7 +19,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.climate import C
 from app.application.worldData.pack.bake.lightGrid.contributors.mountain import MountainContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.ravine import RavineContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.hydro import HydroContributor
-from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
@@ -448,8 +448,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
         from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.pack.bake.detailedBakeRefine import refine_detailed_tiles
-        from app.application.worldData.pack.bake.detailedBakeScope import DetailedScopePlan
+        from app.application.worldData.pack.bake.detailed.detailedBakeRefine import refine_detailed_tiles
+        from app.application.worldData.pack.bake.detailed.detailedBakeScope import DetailedScopePlan
         from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
         from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
         from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner

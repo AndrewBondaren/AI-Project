@@ -19,12 +19,12 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
     GradePipelineTimings,
 )
 from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
-from app.application.worldData.pack.bake.detailedBakeRefine import (
+from app.application.worldData.pack.bake.detailed.detailedBakeRefine import (
     DetailedRefineAggregate,
     persist_detailed_grades,
     refine_detailed_tiles,
 )
-from app.application.worldData.pack.bake.detailedBakeScope import (
+from app.application.worldData.pack.bake.detailed.detailedBakeScope import (
     DetailedScopePlan,
     resolve_detailed_scope,
 )
