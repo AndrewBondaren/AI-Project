@@ -13,8 +13,9 @@ from typing import Protocol, TypeVar
 
 from app.application.jsonValidation import terrain_masks as read_terrain_masks
 from app.application.worldData.masks.applyFootprint import apply_terrain_footprint
+# Temporary re-export (PC-11.6a); canonical owner: masks/collection/defaultCollect.
+from app.application.worldData.masks.collection.defaultCollect import default_collect
 from app.application.worldData.masks.footprint import MaskFootprint
-from app.application.worldData.masks.mergeDeclare import merge_declare_over_auto
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
@@ -72,23 +73,6 @@ class MaskDomainMaterializer(Protocol[SpecT]):
     ) -> None: ...
 
     def category_policy(self, masks: WorldTerrainMasks) -> MaskCategoryPolicy: ...
-
-
-def default_collect(
-    materializer: MaskDomainMaterializer[SpecT],
-    ctx: LightGridBakeContext,
-    policy: MaskCategoryPolicy,
-    *,
-    key,
-) -> list[SpecT]:
-    """Merge order: declared > anchors > autoresolve."""
-    declared = materializer.load_declared(ctx)
-    anchors = materializer.load_anchor_specs(ctx)
-    base = merge_declare_over_auto(declared, anchors, key=key)
-    if not bool(policy.autoresolve):
-        return base
-    auto = materializer.autoresolve_specs(ctx, policy)
-    return merge_declare_over_auto(base, auto, key=key)
 
 
 def run_mask_domain(

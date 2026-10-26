@@ -11,6 +11,17 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
+from app.dataModel.spatial.grid.lightGridScale import light_span_for
+
+__all__ = [
+    "WORLD_MAP_CELLS_PER_TILE",
+    "WorldMapCellsPerTilePolicy",
+    "coerce_world_map_override",
+    "light_span_for",
+    "resolve_world_map_cells_per_tile",
+    "resolve_world_map_side",
+]
+
 WORLD_MAP_CELLS_PER_TILE = 32
 
 
@@ -70,10 +81,5 @@ def resolve_world_map_side(
     pol = policy or WorldMapCellsPerTilePolicy.canonical_defaults()
     return pol.resolve_side(override)
 
-
-def light_span_for(tile_macro: int, side: int) -> int:
-    """Fine cells per light cell: ``fine_cells_per_map_cell // side`` (WP-10).
-
-    Single SoT for ``LightGridScale.light_span`` and ``ParentLightTile.light_span``.
-    """
-    return max(1, int(tile_macro) // max(1, int(side)))
+# ``light_span_for`` is re-exported from dataModel/spatial/grid/lightGridScale
+# (canonical owner since PC-11.6a); alias resolves in PC-11.6b.

@@ -15,7 +15,7 @@ from app.application.worldData.masks.regionRasterContext import (
 from app.application.worldData.masks.regionRasterizer import (
     ClaimOwnersIndex, rasterize_claim_light, rasterize_light,
 )
-from app.application.worldData.masks.runMaskDomain import default_collect
+from app.application.worldData.masks.collection.defaultCollect import default_collect
 from app.application.worldData.regions.coverageBackground import coverage_registry
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose

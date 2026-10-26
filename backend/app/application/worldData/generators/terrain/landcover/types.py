@@ -9,7 +9,10 @@ from enum import StrEnum
 
 from app.application.worldData.masks.regionRasterContext import RegionClaim
 from app.application.worldData.regions.regionFacts import RegionFacts
+from app.db.models.namedLocation import NamedLocation
+from app.db.models.world import World
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.spatial.grid.lightGridScale import LightGridScale
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, Point
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry, RegionSpecBase
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -59,6 +62,22 @@ class ResolvedRegion:
     revision_changed: bool = False
     # Preserve authored anchor reference when collect replaces it with geometry.
     authored_anchor_shape: AnchorRadiusShape | None = None
+
+
+@dataclass(frozen=True)
+class LandcoverCollectContext:
+    """Domain collect scope (PC-11.6a declare-only; consumer signatures cut
+    over in PC-11.6b).
+
+    ``world`` is the existing domain recipe input (terrain/masks/seed), not a
+    snapshot API; the landcover owner reads only its own recipe fields.
+    ``tiles`` is scope/diagnostics, not a bound on world-level
+    autoresolve/seed selection. No pack writer/manifest/canvas/planning fields.
+    """
+    world: World
+    locations: tuple[NamedLocation, ...]
+    scale: LightGridScale
+    tiles: tuple[Point, ...]
 
 
 @dataclass(frozen=True)

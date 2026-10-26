@@ -8572,7 +8572,44 @@ Done: generator не зависит от pack bake context/adapters; все тр
   применяют один доменный контракт и тот же state snapshot.
 
 **PC-11.6a — перенос общих контрактов, геометрии и pure collection.**
-Статус: **OPEN**. Зависимости: принятые PC-11.1/11.5.
+Статус: **IMPLEMENTED / VERIFIED (2026-10-26), ожидает приёмки мастера.**
+Вариант мастера: A — generic MaskSourceCollector[CtxT, SpecT] (узкий
+source-протокол); MaskDomainMaterializer удовлетворяет ему структурно,
+callers не менялись.
+- dataModel/spatial/grid/lightGridScale.py (новый) — canonical owner
+  LightGridScale + light_span_for; worldMapCellsPerTile.py re-export того же
+  symbol (wire path сохранён), pack/bake/lightGrid/coords.py → re-export
+  LightGridScale + light_span_for + coordinate fns, __all__ зафиксирован.
+- generators/coordinates/light/grid.py + __init__.py (новый leaf) — canonical
+  owner пяти pure fine↔light↔macro fns (fine_to_light, light_to_macro_local,
+  light_cell_origin_fine, light_cell_center_fine, fine_to_macro_local); без
+  bake policy и pack-типов.
+- masks/collection/defaultCollect.py + __init__.py (новый leaf) — canonical
+  owner MaskSourceCollector[CtxT, SpecT] (load_declared/load_anchor_specs/
+  autoresolve_specs) и default_collect generic по ctx; без pack/bake типов.
+  runMaskDomain.py re-export default_collect; merge_declare_over_auto остался
+  в masks/mergeDeclare.py; run_mask_domain + MaskDomainMaterializer не
+  переносились (PC-11.6b — runner/footprint writer в pack maskDomains).
+- generators/terrain/landcover/types.py += LandcoverCollectContext (frozen
+  record: world/locations/scale/tiles) — declare-only, signatures consumers
+  не переключались; world — domain recipe input, tiles — scope/diagnostics.
+- Symbol identity проверена исполнением: old/new import paths дают
+  идентичные объекты (is) для LightGridScale, light_span_for, fine_to_light,
+  default_collect; callers не трогались (cutover — PC-11.6b).
+- Проверки `PYTHONPATH=.:tests .venv314/bin/python -m unittest`: discover
+  tests/planning/consumers — 76 OK; затронутые suites (mask_domain_materialize,
+  landcover_materializer/contributor, light_grid_compose, terrain_merge,
+  light_bake_cleanup, region_rasterizer, region_fact_consumers) — 80 OK;
+  regression (pack_bake_modes, detailed_bake_c11, wp13_entry_first,
+  parent_light_refine, wilderness_region_index, world_topology) — 63 OK.
+  compileall app — чисто.
+- pyright §6.27/valid0-negative — failed prerequisite: node_modules/.bin/
+  pyright и node/npx в окружении отсутствуют; не скачивались.
+- WARN folder-composition выдан в чат; итоговые counts в пределах карты
+  PC-11.1: dataModel/spatial/grid 5→6, coordinates 11→11 (+light/=2),
+  masks 13→13 (+collection/=2), landcover без новых файлов.
+  SQL/DAG/backend-start/коммитов нет. Baseline delta нет.
+Зависимости: принятые PC-11.1/11.5.
 Цель: подготовить нижележащие pack-free контракты без переключения всего
   L0/L2/outline caller chain в этом же diff.
 ТЗ: tz_map_light_bake §Координаты, §MaskDomain materialize и §L0/L2;
