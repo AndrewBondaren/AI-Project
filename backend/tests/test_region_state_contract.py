@@ -15,7 +15,7 @@ from app.application.worldData.generators.terrain.landcover.types import Anchore
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
-from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.bake.l0.wildernessRegionIndex import build_region_index
 from app.application.worldData.regions.regionStateMapping import state_from_row, state_to_row
 from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
@@ -249,7 +249,7 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(snapshot, entry.drain_persisted.call_args.kwargs["region_state_snapshot"])
         self.assertEqual(repo.get_by_world.await_count, 1)
         runner = FineChunkRunner(terrain)
-        with patch("app.application.worldData.pack.refine.fine.fineChunkRunner.prepare_fine_tile",
+        with patch("app.application.worldData.pack.refine.fine.chunk.fineChunkRunner.prepare_fine_tile",
                    side_effect=ComputeBoundary) as prep, self.assertRaises(ComputeBoundary):
             await runner.refine_rects(world, [], writer, mat_ctx, fine._surface_ctx(world),
                                      0, 0, [MagicMock()], [], region_state_snapshot=snapshot,

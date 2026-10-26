@@ -452,7 +452,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.pack.bake.detailed.detailedBakeScope import DetailedScopePlan
         from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
         from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-        from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
+        from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
         from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
         from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
         from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue

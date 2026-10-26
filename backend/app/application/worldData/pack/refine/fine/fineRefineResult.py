@@ -9,7 +9,7 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
 )
 from app.application.worldData.materialize.shared.persistResult import PersistResult
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.fine.prep.fineTileContext import VertexSlotSeam
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem

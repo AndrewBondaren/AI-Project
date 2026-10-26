@@ -33,14 +33,14 @@ class BoundaryTests(unittest.TestCase):
         self.assertIn(imports[0], tree.body)
 
     def test_lower_refine_persist_never_publishes_or_checkpoints(self):
-        module = APP / "application/worldData/pack/refine/fine/fineChunkPersist.py"
+        module = APP / "application/worldData/pack/refine/fine/chunk/fineChunkPersist.py"
         tree = ast.parse(module.read_text(encoding="utf-8"))
         calls = [node.func.attr for node in ast.walk(tree)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
         self.assertNotIn("save_manifest", calls)
         self.assertNotIn("maybe_checkpoint_manifest", calls)
         self.assertIn("recalc_manifest_counters", calls)
-        for relative in ("pack/refine/fine/fineChunkRunner.py", "pack/refine/chunks/chunkRefineWorker.py",
+        for relative in ("pack/refine/fine/chunk/fineChunkRunner.py", "pack/refine/chunks/chunkRefineWorker.py",
                          "pack/refine/entry/entryRefineOrchestrator.py", "pack/bake/detailed/packDetailedBakeOrchestrator.py"):
             source = (APP / "application/worldData" / relative).read_text(encoding="utf-8")
             self.assertNotIn("save_manifest(", source, relative)
@@ -124,8 +124,8 @@ class L2BoundaryTests(unittest.TestCase):
     def test_refine_transits_have_no_legacy_context_or_planning_entry(self):
         root = APP / "application/worldData"
         paths = ("pack/bake/detailed/packDetailedBakeOrchestrator.py", "pack/bake/detailed/detailedBakeRefine.py",
-            "pack/refine/fine/fineChunkRunner.py", "pack/refine/fine/fineTilePrep.py",
-            "pack/refine/fine/fineTileContext.py", "pack/refine/fine/fineChunkCompute.py",
+            "pack/refine/fine/chunk/fineChunkRunner.py", "pack/refine/fine/prep/fineTilePrep.py",
+            "pack/refine/fine/prep/fineTileContext.py", "pack/refine/fine/chunk/fineChunkCompute.py",
             "pack/refine/fine/fineTerrainRefineOrchestrator.py", "pack/refine/entry/entryRefineOrchestrator.py",
             "pack/refine/chunks/chunkRefineWorker.py", "generators/terrain/landcover/finePaint.py",
             "pack/climate/climatePackBakeOrchestrator.py", "materialize/terrain/terrainBatchOrchestrator.py")

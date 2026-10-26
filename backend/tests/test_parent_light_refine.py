@@ -26,7 +26,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect, Surfa
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.parentLightLoad import load_parent_light
-from app.application.worldData.pack.refine.fine import fineTilePrep
+from app.application.worldData.pack.refine.fine.prep import fineTilePrep
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

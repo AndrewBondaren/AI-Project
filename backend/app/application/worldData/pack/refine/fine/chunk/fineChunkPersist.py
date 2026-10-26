@@ -30,7 +30,7 @@ from app.application.worldData.pack.refine.entry.entryRingGeom import (
     wilderness_chunk_origin,
 )
 from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
-from app.application.worldData.pack.refine.fine.fineTileContext import (
+from app.application.worldData.pack.refine.fine.prep.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
     VertexSlotSeam,

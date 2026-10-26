@@ -6,8 +6,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.application.worldData.pack.refine.fine import fineChunkRunner, fineTilePrep
-from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.chunk import fineChunkRunner
+from app.application.worldData.pack.refine.fine.prep import fineTilePrep
+from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materialize.surface.materializationContext import MaterializationContext

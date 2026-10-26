@@ -1359,11 +1359,11 @@ class GradeFormationApplyTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fine.fineChunkCompute import (
+        from app.application.worldData.pack.refine.fine.chunk.fineChunkCompute import (
             compute_rect,
             rect_heightmap_from_overlay,
         )
-        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.prep.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_fill", tpl)
@@ -1457,8 +1457,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
-        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.chunk.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fine.prep.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_plan_miss", tpl)
@@ -1514,8 +1514,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
-        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.chunk.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fine.prep.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_mill_off", tpl)
@@ -1570,8 +1570,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
-        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.chunk.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fine.prep.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_paint_off", tpl)
@@ -1708,7 +1708,7 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
     def test_fine_tile_context_has_no_planned(self) -> None:
         from dataclasses import fields
 
-        from app.application.worldData.pack.refine.fine.fineTileContext import (
+        from app.application.worldData.pack.refine.fine.prep.fineTileContext import (
             FineTileContext,
         )
 

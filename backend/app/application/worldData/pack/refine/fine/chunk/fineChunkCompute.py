@@ -16,7 +16,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect, Surfa
 from app.application.worldData.pack.bake.packBakeLog import log_pack_wilderness_chunk_start
 from app.application.worldData.pack.refine.columnBounds import rect_contains
 from app.application.worldData.pack.refine.detailed.detailedGradeDiscover import discover_and_paint
-from app.application.worldData.pack.refine.fine.fineTileContext import (
+from app.application.worldData.pack.refine.fine.prep.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
     VertexSlotSeam,

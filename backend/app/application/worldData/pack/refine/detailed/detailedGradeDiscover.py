@@ -54,7 +54,7 @@ from app.application.worldData.pack.refine.detailed.detailedGradeFrontUid import
 from app.application.worldData.pack.refine.detailed.detailedGradeHalo import length_cap_for_context
 from app.application.worldData.pack.refine.detailed.detailedGradePaint import apply_grade_paint_spec
 from app.application.worldData.pack.refine.detailed.detailedGradeResult import DetailedGradeResult
-from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.fine.prep.fineTileContext import VertexSlotSeam
 from app.application.worldData.pack.refine.gradeRimRays import (
     rim_rays_from_front,
 )

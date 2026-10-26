@@ -30,7 +30,7 @@ from app.application.worldData.pack.refine.entry.entryRingGeom import (
     chunk_within_ring,
     scene_chunk_indices as geom_scene_chunk_indices,
 )
-from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.refine.pathCorridorSelect import (
@@ -43,7 +43,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
-from app.application.worldData.pack.refine.fine.fineChunkGeom import (
+from app.application.worldData.pack.refine.fine.chunk.fineChunkGeom import (
     fine_chunk_rect,
     rects_for_macro_tile,
 )

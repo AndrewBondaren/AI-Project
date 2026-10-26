@@ -14,7 +14,7 @@ from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import 
     build_tile_face_catalog,
 )
 from app.application.worldData.pack.refine.detailed.detailedGradeDiscover import discover_and_paint
-from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.fine.prep.fineTileContext import VertexSlotSeam
 from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
