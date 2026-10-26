@@ -1,0 +1,49 @@
+# Детерминированные uid / rng — только `app.application.worldData.ids`
+
+SoT: [`docs/project_data_storage_tz.md`](../../docs/project_data_storage_tz.md) § «Детерминированные uid и rng (DET-1)».
+
+Повторная генерация мира с тем же входом = те же uid и rng. Формула живёт в **одном** модуле; конвенция принуждается кодом, не памятью.
+
+## Где лежит
+
+`backend/app/application/worldData/ids/` — helper **домена worldData, вне всех генераторов**. Генераторы, ассемблеры, persist, pack — только импортируют.
+
+- ❌ `app/utils/` — не общая утилита, а контракт домена мира (`utils/deterministicIds.py` удалён)
+- ❌ `dataModel/` — формула = application-слой (`dataModel/worldPack/packJobUid.py` — wire-композитор job/site строк, uid не хэширует)
+- ❌ внутри `worldData/generators/**`, ассемблера, persist-сервиса
+
+## Три корня — разные функции одного helper'а
+
+| Корень | Функции | Для чего |
+|---|---|---|
+| `world_uid` | `entity_uid(world_uid, kind, **keys)`, `entity_rng(...)` | идентичность сущностей: NL, levels, transitions, connection nodes, district/area/building, grade uid; rng каскада |
+| `world_seed` | `seed_uid(world_seed, kind, **keys)`, `seed_rng(...)` | воспроизводимость bake: pack job-uid, grade catalog/interior uid, relief pick rng |
+| — | `library_uid(library: LibraryKind, system_name)` | глобальные библиотеки шаблонов — без мирового корня |
+
+«Что это» → `world_uid`. «Как сгенерировано» → `world_seed`. `world_seed` interim = `str(world_uid)` через `seed_root(world)`; числовой noise-seed — `seed_int(world)`. Смешивать — ошибка контракта.
+
+## Запрещено вне `deterministicIds.py`
+
+- `uuid.uuid5(...)`, `uuid.uuid4()` для generated-сущностей
+- `Random(f"...")`, `Random(some_string)`, `random.seed(...)`
+- ручная сборка seed-строки (`f"{world_uid}_{uid}_{param}"`) — даже перед передачей в helper
+- `kind` свободной строкой — только `UidKind` (закрытый `StrEnum`)
+
+```python
+# ❌ BAD
+Random(f"{world.world_uid}_{scope_uid}_dominant_material")
+_uuid5(building_uid, f"entry|{role.value}|{passage_uid}")
+def _make_seed(world_uid, building_uid) -> int: ...
+
+# ✅ GOOD
+entity_rng(world.world_uid, UidKind.CASCADE, scope=scope_uid, param="dominant_material")
+entity_uid(world_uid, UidKind.TRANSITION, parent=building_uid, a=a_xyz, b=b_xyz, type=t)
+```
+
+## Обёртки доменов
+
+Тонкие типизированные функции (`settlementOutdoorUids.level_uid(...)`, `transition_uid(...)`) **ок** — фиксируют обязательные ключи и зовут helper. Собирать строку сами не имеют права.
+
+## При ревью
+
+Новый uid / rng → source-gate `tests/test_deterministic_ids.py` (`SourceGateTests`) падает на `uuid5(`/`uuid4(`/`Random(`/`random.seed(`/`hashlib.*(`/`app.utils.deterministicIds` вне helper'а. Легитимное исключение — только с записью в `_EXEMPT` и причиной (content_hash, runtime ids вне worldData, dataModel authored fallback). Смена формулы — recreate SQL + пересборка pack + реимпорт библиотек.

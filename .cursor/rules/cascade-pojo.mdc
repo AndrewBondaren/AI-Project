@@ -1,0 +1,72 @@
+---
+description: Как писать каскадные POJO — рецепт Cascade/каналов/рёбер, FieldRef вне Annotated, одно ребро один раз, проверка typecheck:cascade + verifier
+globs: backend/app/dataModel/**,backend/app/application/cascade/**
+alwaysApply: false
+---
+
+# Каскадные POJO — рецепт
+
+Механика generic, **одна на все домены**: вокабуляр + verifier —
+`backend/app/dataModel/cascade/`; движок `extend()` —
+`backend/app/application/cascade/`. ТЗ: `docs/tz_cascade_context.md`
+§2–§5. Эталон: `ECONOMIC_TIER` (multi-level каналы `bundleNamedLocation.py`)
+и `WALL_MATERIAL` (`RepeatScope.EVERY_TAG`).
+
+## Три сущности — кто где живёт
+
+| Что | Где | Сколько раз |
+|---|---|---|
+| `Cascade` (параметр) | `dataModel/<домен>/context/cascadeParams.py` — объект-константа | **ровно 1**; каналы и поле контекста ссылаются по identity (`param is ECONOMIC_TIER`) — не по имени-строке |
+| `CascadeChannel` | в `Annotated` самого поля-источника | по одному на уровень, который поле кормит |
+| Поле на контексте | `Annotated[<тип>, PARAM]` на `LocationContext` | 1 — discovery по метаданным, не по таблице имён |
+
+## Рецепт: новый параметр
+
+1. `Cascade` в `cascadeParams` домена: `field` (wire-имя authored-поля),
+   `default` (`DefaultPolicy`), `axis` (свой `ScopeAxis`-enum; канал на
+   чужой оси — contract error). Опционально: `levels` (ограничение
+   уровней), `input_types` (BAND/RANGE → typed input),
+   `fold`/`materialize` — **имя** resolver'а, не callable;
+   `default_source` — `CascadeDefault(FieldRef)` на терминальный POJO.
+2. Поле на `LocationContext`: `Annotated[Тип | None, PARAM]` — тип
+   строгий (RegistryKey/StrEnum), см. `contract-creation`.
+3. Каналы на полях-источниках:
+   `Annotated[DefaultWhenMissing[Тип | None], CascadeChannel(PARAM, ScopeLevel.X, above=…, below=…)]`.
+4. Resolver-binding: имя из `fold`/`materialize` → callable в
+   `contextResolver._FOLDS` / `_MATERIALIZE`; доменная логика — в своём
+   модуле, в таблице только указатель.
+5. **Проверка до отчёта:** `npm run typecheck:cascade` из корня +
+   `python -m unittest tests.test_location_context_contract`. Новые
+   файлы деклараций → `pyrightconfig.cascade.json`.
+
+## Рёбра `above`/`below` — linked list, не enum order
+
+- Порядок scope определяется цепочкой `CascadeLink(ref, level)`, не
+  порядком членов оси-enum и не вложенностью локаций.
+- Каждое ребро объявляется **один раз** — на стороне, где модуль может
+  импортировать соседа без цикла (convention ORM `backref`). Обратное
+  направление материализует verifier; дублирование ребра с двух сторон =
+  два факта, которые могут молча разойтись.
+- `FieldRef(lambda: Model, lambda pojo: pojo.field)` — константой на
+  модуле, **вне** `Annotated`: Pyright не проверяет выражения внутри
+  metadata (см. settlementPayload `_DISTRICT_TEMPLATE_ENTRY_DENSITY`).
+- `RepeatScope.EVERY_TAG` — одно поле повторяется узлом на каждом теге
+  scope-path контекста; порядок scope не задаёт и с explicit-соседями
+  по тому же параметру несовместимо.
+
+## Что проверяет `verify_cascade_contract`
+
+Двусторонняя целостность рёбер, уникальность канала (param × level),
+axis-совместимость, материализация обратных ссылок. Гоняется в
+`test_location_context_contract` и `test_template_domain_models` —
+канал без зелёного verifier не сдан.
+
+## Запрещено
+
+- ❌ строковые таблицы field↔level, копии `cascadeGraph`/`extend` под
+  свой домен — домен добавляет декларации, не копию механизма
+- ❌ литерал default вместо `CascadeDefault(FieldRef)` — значения
+  живут в POJO-источнике, движок только читает поле
+- ❌ импорт доменного callable в `dataModel` — на `Cascade` только имя
+- ❌ обход движка: or-цепочки наследования, свой min/max/median/default,
+  повторный резолв в consumer (rng-дрейф, silent default)

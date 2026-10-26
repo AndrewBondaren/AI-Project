@@ -1,0 +1,38 @@
+# Шпаргалка: выбор модели в Devin
+
+Источник: `docs/models.mdx`, `fusion.mdx`, `adaptive.mdx` в Devin CLI docs.
+
+## Доступные модели
+
+- `swe` — собственная модель Cognition (быстрая и дешёвая, `swe-1-6-fast` и т.п.)
+- `opus`, `sonnet` — Anthropic
+- `gpt` / `codex` — OpenAI
+- `gemini` — Google
+- `deepseek`, `kimi`, `glm` — open-source
+- `fusion` — frontier lead + дешёвый sidekick (рекомендован по умолчанию)
+- `adaptive` — роутер, сам выбирает модель под задачу
+
+Короткие имена (`opus`, `swe`, `gpt`…) резолвятся в последнюю версию семейства.
+
+## По типам задач
+
+| Задача | Модель |
+|---|---|
+| Планирование и ТЗ | `opus` или `gpt` (deep reasoning) |
+| Написание кода | `swe` — прямолинейные правки/багфиксы; `gpt`/`sonnet` — сложнее шаблонного |
+| Рефакторинг многих файлов | `opus` или `gpt` (multi-file, architecture) |
+| POJO / механическая структурная работа | `swe` |
+| Сложный анализ / многоэтапные задачи | `opus`/`gpt` вручную, либо `adaptive` |
+
+## Управление
+
+- В сессии: `/model opus`, `/model adaptive`; `/fusion` — выбор lead+sidekick; `/model` без аргумента — селектор.
+- Thinking level у reasoning-моделей: `Alt+T`.
+- Флаг запуска: `devin --model opus -- <task>`.
+- Дефолт: `~/.config/devin/config.json` → `{"agent": {"model": "..."}}` (Windows: `%APPDATA%\devin\config.json`).
+
+## Замечания
+
+- Docs рекомендуют минимум попробовать `swe`, `gpt`, `opus` — покрывают большинство сценариев.
+- Не хочется переключать вручную → `adaptive` (автовыбор) или `fusion` (frontier-качество дешевле).
+- Выбор сильно зависит от стиля работы — стоит пробовать на своих типичных задачах.

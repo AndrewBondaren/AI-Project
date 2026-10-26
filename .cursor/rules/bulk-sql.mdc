@@ -1,0 +1,35 @@
+---
+description: Массовые SQL-записи — только app.db.bulkSql; не копировать executemany-цикл и не второй 5000
+alwaysApply: true
+---
+
+# Bulk SQL writes — `app.db.bulkSql`
+
+**Все массовые SQL-записи** (N строк, `executemany`, bake/persist каталога) идут через [`backend/app/db/bulkSql.py`](backend/app/db/bulkSql.py).
+
+| Нужно | Вызов |
+|---|---|
+| INSERT / upsert пачками | `await executemany_rows(conn, sql, rows)` |
+| Нарезка (heartbeat, `IN (?)`) | `iter_batches(items)` или `iter_batches(items, size=…)` |
+| Размер пачки | **только** `EXECUTEMANY_BATCH_SIZE` из этого модуля |
+
+Consumer **сам** собирает SQL (таблица, `INSERT OR REPLACE` / `OR IGNORE` / `ON CONFLICT`). Helper только `to_row` + пачки + `executemany`. Новый домен = новый consumer, не копия цикла.
+
+Тонкая обёртка с типом домена ок (`mapCellBulkSql.executemany_cells` → `executemany_rows`).
+
+```python
+# ❌ BAD — свой цикл / свой 5000 / conn.executemany в repo
+EXECUTEMANY_BATCH_SIZE = 5000
+for offset in range(0, len(rows), 5000):
+    await conn.executemany(sql, rows[offset:offset + 5000])
+
+# ✅ GOOD
+from app.db.bulkSql import executemany_rows, iter_batches
+await executemany_rows(conn, sql, rows)
+for batch in iter_batches(rows):
+    ...
+```
+
+**Не bulk** (не этот helper): поштучный `BaseRepository.upsert` / `execute` на **одну** строку (patch/DAG). Пустой список = no-op в helper.
+
+**Запрещено:** второй литерал пачки; копипаст цикла в `mapCellBulkSql` / relief / connections / persist.

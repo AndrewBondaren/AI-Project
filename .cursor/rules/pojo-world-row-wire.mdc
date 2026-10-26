@@ -1,0 +1,94 @@
+---
+description: POJO ↔ worlds row — wire projection, без дублирования имён полей; startup assert; каскадный контракт на полях POJO (CascadeChannel, dataModel/cascade)
+globs: backend/app/dataModel/**,backend/app/application/jsonValidation/**,backend/app/db/models/world.py,backend/app/core/app.py,backend/app/application/worldData/context/**
+alwaysApply: false
+---
+
+# POJO ↔ `worlds` row wire projection
+
+Когда scalar-поля (или будущие slice-POJO) мапятся на **несколько колонок** `worlds`, а не один JSON-ключ:
+
+## Source of truth
+
+| Что | Где |
+|-----|-----|
+| Имена полей + defaults + normalize | POJO в `dataModel/` (`WorldClimateScalars`, …) |
+| Колонки БД | `db/models/world.py` + `db/migrations/0001_initial.sql` |
+| Проекция row/dict → wire | **только** helpers на POJO-модуле |
+
+**Не дублировать** списки wire-ключей в `facade.py`, `worldRow.py`, generators.
+
+## Climate scalars (эталон)
+
+```python
+# dataModel/climate/worldClimateScalars.py
+CLIMATE_SCALAR_WIRE_KEYS = frozenset(WorldClimateScalars.model_fields.keys())
+climate_scalar_wire_from_mapping(source)  # dict | World row → wire slice
+validate_world_row_climate_columns(World)   # startup: POJO ⊆ World columns
+```
+
+Потребители:
+
+```python
+# ✅ jsonValidation/worldRow.py, facade.py
+wire = climate_scalar_wire_from_mapping(world_or_dict)
+resolve_model(WorldClimateScalars, wire, ...)
+
+# ❌ локальный frozenset {"climate_pole_mode", ...} или 8× getattr вручную
+```
+
+## Добавление поля (чеклист)
+
+1. Поле + policy в POJO (`OptionalOnWire` / `StrictOnWire`)
+2. Колонка в `World` dataclass + `0001_initial.sql` (recreate БД)
+3. `validate_world_row_climate_columns(World)` при старте поймает пропуск — **не отключать**
+4. `facade` / `worldRow` — только `climate_scalar_wire_from_mapping`, без нового списка имён
+
+## Runtime / import
+
+- **Import/CRUD:** `jsonValidation/facade.normalize_world()` → `resolve` (strict → 422)
+- **Runtime read:** `jsonValidation/worldRow.climate_scalars(world)` — warn-only resolve
+- Генераторы: предпочитать `climate_scalars(world)`, не `world.climate_pole_mode` напрямую
+
+## Расширение на другие slice
+
+Тот же паттерн для новых multi-column POJO:
+
+- `*_WIRE_KEYS` из `model_fields`
+- `*_wire_from_mapping(source)`
+- `validate_world_row_*_columns(World)` + вызов в `app.py` lifespan
+
+Single-key registries (`material_registry` → `WorldMaterialRegistry`) — ключ одна строка в facade, без отдельного frozenset.
+
+## Каскадный контракт на полях POJO (`CascadeChannel`)
+
+Рецепт добавления параметра — `cascade-pojo.mdc`. Кратко:
+
+Поле-источник каскадируемого параметра объявляет канал **в `Annotated`
+самого поля** (`CascadeChannel(param, level, above, below, kind)` рядом
+с wire-политикой) — не строковая таблица и не реестр типов. Рёбра
+`above`/`below` (`CascadeLink(ref, level)`) — типизированные
+ссылки на соседние узлы; каждое ребро объявляется один раз, на стороне
+без цикла импорта.
+
+При создании или изменении каскада (параметры, каналы, ссылки, defaults,
+source-POJO, контекст, verifier или движок) **обязательно** запустить
+из корня проекта `npm run typecheck:cascade` до отчёта о завершении.
+Ошибки исправить и повторить проверку; если запуск заблокирован,
+явно сообщить причину и не объявлять проверку пройденной.
+Новые файлы деклараций включать в `pyrightconfig.cascade.json`.
+`FieldRef` объявлять вне metadata `Annotated`: Pyright не проверяет
+выражения внутри metadata. Статическая проверка не заменяет runtime-verifier
+и соответствующие contract/runtime-тесты.
+
+| Что | Где |
+|-----|-----|
+| Механизм (generic, **один на все домены**) | `dataModel/cascade/` — `cascadeSpec`, `cascadeGraph`, `cascadeVerify` |
+| Движок | `application/cascade/` — `extend`, `Link`/`EmptyLink` |
+| Домен | ось `ScopeAxis`-enum, `Cascade`-параметры (`cascadeParams`), каналы на полях, контекст |
+
+- **Дублировать `cascadeGraph`/`cascadeVerify`/`extend` под новый домен запрещено** — домен добавляет декларации, не копию механизма.
+- Тип materialize-входа — `Cascade.input_types` (`RANGE` → `EconomicTierRange`), не хардкод доменного типа в generic-графе.
+- Новый параметр — `Cascade` в `cascadeParams` домена + каналы на полях; enum оси, граф и движок не трогаются.
+- **Обход движка запрещён.** Параметр, для которого объявлен `Cascade`, резолвится **только** через `extend()`/`ctx.<param>` — локальные `or`-цепочки, ручное наследование от parent, свой min/max/«ближайший к городу», свой median/default, повторный резолв внутри scope — всё это рукоблудие и баг (rng-дрейф, silent default, разные значения по фазам). Consumer читает готовое значение из контекста и не имеет доступа к цепочке/реестру/rng в обход. Нужна новая точка наследования — добавляется канал/звено, не код в консьюмере.
+- ТЗ: `docs/tz_cascade_context.md` §2–§4.

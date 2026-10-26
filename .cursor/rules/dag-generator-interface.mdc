@@ -1,0 +1,43 @@
+---
+description: DAG и bake — консьюмеры стабильных интерфейсов генераторов; Gate: DAG ≠ архитектура
+alwaysApply: true
+---
+
+# Callers ↔ generator: интерфейс vs gate
+
+## Архитектура (всегда)
+
+**DAG** (`application/engine/nodes/`) и **bake jobs** (`light` / `full` / `detailed`) — консьюмеры **стабильных интерфейсов** в `worldData`, не пакет assembler / не planner.
+
+- Решают **когда** вызвать какую операцию контракта.
+- **Могут** звать несколько методов / несколько доменов.
+- Не знают assembler, planner, `DistrictSlot`, uid-схему generate, внутренности FineChunk.
+- Смена генератора = новая реализация за тем же контрактом; caller не меняется.
+
+**`full_bake` / `detailed_bake`** — консьюмеры, не генераторы. Порядок шагов фиксирован:
+
+| Job | Шаг 1 | Шаг 2 |
+|---|---|---|
+| `full_bake` | L0 compose | C23 `plan_topology` |
+| `detailed_bake` `scope=location` | L2 terrain refine | C11 `materialize` **поверх** L2, если settlement-like |
+| `detailed_bake` `scope=wilderness` | L2 refine | нет |
+
+Правка L0/L2 generate или C11/C22 **не** меняет bake-оркестратор — только реализации за контрактом. HTTP `generate-settlement` — другой caller C11. Без шага 2 город после detailed неиграбелен. Интерьеры не входят.
+
+Очередь чужих доменов (surface → climate → …) — на DAG/debug handlers, не внутри generator (`layer-boundaries.mdc`).
+
+**Debug HTTP симулирует вызов как в DAG** (мастер, 2026-09-23): handler — тонкая обёртка; зовёт **тот же** интерфейс оркестратора, что позже вызовет нода. Не отдельная debug-семантика и не второй движок.
+
+**Атомарность — в caller/DAG** (мастер, 2026-09-23): единица materialization = **один вызов оркестратора** (C19: `.tmp` → SQL tx → `os.replace`) — caller триггерит целиком, не дробит internals на ноды/фазы. Атомарность хода — `pending_patches` → `PatchApplier.apply`; результат materialization в `pending_patches` **не** кладётся (bulk, не per-turn diff).
+
+## Gate (сейчас, не целевая схема)
+
+**Gate: DAG** — агент не правит `engine/nodes/` без мастера. Пока bake **не wired** в DAG.
+
+Это процесс, не «DAG никогда не консьюмер». Когда gate снимут, нода зовёт **тот же** интерфейс, что bake/debug.
+
+Дыра контракта generate чинится в интерфейсе, не «научить ноду / bake слотам». CITY-T-5b (lazy `generate_map_cells`) — **deferred**.
+
+`lazy_*` → `map_cells` — тестовый путь под переделку, не эталон; DAG в целом дорабатывается (мастер, 2026-09-23). Детали wiring отложены до имплементации DAG мастером; возможна переделка части функций — **не** проектировать оркестраторы под гипотетический контракт ноды заранее.
+
+См. `docs/tz_world_generation_dag.md` § Generator library + DAG callers; pack § Bake modes.

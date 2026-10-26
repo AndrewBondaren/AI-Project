@@ -1,0 +1,69 @@
+---
+description: Обзор проекта AI Project — архитектура, роли, соглашения, куда смотреть
+alwaysApply: true
+---
+
+# AI Project — контекст для агента
+
+**Платформа AI RPG** (не просто игра): пользователь задаёт правила мира, движок симулирует, LLM — мастер по этим правилам. Аналог Foundry VTT + AI-GM + процедурный мир.
+
+Доменные ТЗ — `docs/tz_*.md`. Хранение данных — `docs/project_data_storage_tz.md`. Планы имплементации агента — `.cursor/plans/`.
+
+## Две роли (важно)
+
+| Роль | Что делает | Порог |
+|------|------------|-------|
+| **Мастер мира** | Реестры, правила, terrain, статы, шаблоны зданий | JSON-импорт; позже — редактор миров (те же N+1-правила) |
+| **Игрок** | Загрузить/выбрать мир → создать/загрузить персонажа → играть | Минимальный; N+1 и реестры не видит |
+
+N+1 / `system_*` — инструмент **мастера**, не игрока. Не упрощать движок ради UX игрока.
+
+## Стек
+
+- Backend: Python, FastAPI, aiosqlite, SSE
+- Frontend: React 19, Vite, Electron или browser
+- LLM: Qwen (локально), OpenAI, Anthropic — `LLMRouter`
+
+## Слои backend
+
+`api/routes` → `application/chat` → `application/engine` → `application/worldData` → `db` → `core` (Container, config)
+
+## Движок
+
+`ChatService` → `LLMExecutionEngine` → passes → `patch_applier` → `ResponseResolver`.
+
+Фазы: **pre_llm** (gate/replan) → **llm** (repair) → **post_llm** (фиксация). Ноды: `@register_python` / `@register_llm` → `NODE_REGISTRY`.
+
+Repos в ноды через `context`. **Цель:** вся логика на нодах; engine — тонкий рантайм. Flow: `docs/tz_engine_flow.md`.
+
+## Мир
+
+Skeleton-first + lazy generation. LLM не получает данных, которых нет. Генераторы: `worldData/generators/`. Иерархия ассемблеров: `docs/tz_assembler_hierarchy.md`, правило `assembler-hierarchy.mdc`.
+
+Данные: `system_*` / `display_*` + N+1 — см. `data-storage-pattern.mdc`.
+
+## Frontend
+
+Feature-slices: `session`, `chat`, `settings`. Игрок: `/` → `/new` → `/chat/:id`. Редактор миров — отдельная фича для мастеров (settings/world — placeholder).
+
+## Продуктовые принципы
+
+- Игрок: world + character + chat — без exposure к реестрам
+- Мастер: один validator для JSON-импорта и будущего UI редактора
+- `scene_narration` / player narration turn — **осознанный блокер** (см. `docs/tz_project_snapshot.md` §5.5); агенту не предлагать interim narration / vertical slice по умолчанию
+
+## Практика при изменениях
+
+- **Границы слоёв:** генераторы — только generation; API — только HTTP; LLM payload / orchestration — DAG и chat (см. `layer-boundaries.mdc`)
+- Side effects → `pending_patches`, commit после passes
+- Автотестов почти нет — осторожно с engine/DAG
+- **Не стартовать backend** (`python start.py`, `uvicorn`, `npm run backend`) — сервер поднимает **мастер/пользователь**; агент только пишет код и подсказывает, что запустить для smoke через HTTP
+- **DAG-ноды (`application/engine/nodes/`)** — **не менять агенту**. Wiring и правки нод — **только совместно с мастером** и **только после** полного smoke/приёмки генераторов + persist (см. `docs/tz_world_generation_dag.md` § «Gate: DAG»). До gate: generators, orchestrators, `MapCellService`, debug HTTP (`map.py`).
+- Не коммитить без явной просьбы
+
+## Schema / migrations (мастер — до явной отмены)
+
+- **Все изменения SQL-schema** — только правка [`backend/app/db/migrations/0001_initial.sql`](backend/app/db/migrations/0001_initial.sql) + sync dataclass-моделей в `backend/app/db/models/`.
+- **Не создавать** отдельные файлы `0002_*.sql`, `0003_*.sql`, … пока мастер **явно** не снимет это правило. См. [`.cursor/plans/schema-migrations-policy.md`](.cursor/plans/schema-migrations-policy.md).
+- После правки 0001 локальная БД: **recreate** (drop + restart), не incremental ALTER-migration.
+- Model и SQL — **в одном PR**; иначе `validate_schema` упадёт при старте.

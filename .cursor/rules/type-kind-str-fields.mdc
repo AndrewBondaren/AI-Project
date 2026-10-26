@@ -1,0 +1,76 @@
+---
+description: Поле *_type/*_kind типа str на контракте/POJO — почти всегда дыра контракта; typed-ключи реестра или StrEnum
+alwaysApply: true
+---
+
+# `*_type` / `*_kind` на `str` = дыра контракта
+
+Если поле контракта/POJO называется `*_type` или `*_kind` и тип у него голый
+`str` — в 99% случаев это **дыра контракта**, а не осознанное решение. Голый
+`str` теряет принадлежность к реестру/закрытому набору и даёт silent mismatch
+на wire и в runtime.
+
+SoT-паттерн и карта существующих дыр:
+[`.cursor/plans/type-kind-str-fields-debt.md`](../plans/type-kind-str-fields-debt.md);
+`tz_json_validation.md` § RegistryKey.
+
+## Чем заменять
+
+| Что лежит в поле | Тип |
+|---|---|
+| Ссылка на запись реестра | `RegistryKey[<Registry>]` / существующий `*Key`-alias (`TerrainKey`, `ConnectionTypeKey`, `TransitionTypeKey`, `LocationTypeKey`…) |
+| **Собственный ключ записи реестра** | `RegistryKey[того же реестра]` — self-reference легален; цикл `entry ↔ registry` разрывается `TYPE_CHECKING`-импортом реестра (эталон `TerrainRegistryEntry.system_terrain`) |
+| Значение из фиксированного набора | `StrEnum` или закрытый `Literal[…]` — по существующим литералам, не выдумывать |
+| Новый alias/enum | только если его ещё нет; `XKey = RegistryKey[XRegistry]` по образцу существующих |
+
+```python
+# ❌ BAD — дыра: любая строка пройдёт, mismatch молчит
+library_kind: str
+connection_type: str | None = None
+
+# ✅ GOOD
+library_kind: LibraryKind
+connection_type: ConnectionTypeKey | None = None
+```
+
+На SQL/wire-границе — `.value` / существующий coerce-адаптер; само поле
+остаётся typed. Membership проверяется реестром на границе, не в поле.
+
+## Не дыра (исключения)
+
+- `db/models/*` — SQL-строки, `str` по определению слоя.
+- Параметры функций — lookup-граница реестра (`entry_for`, `require`,
+  `subtype_for`, planner/resolver-параметры): `str` допустим как вход.
+- `MaskDomainId` и contributor name-поля — StrEnum-совместимы.
+- `display_*` пара к `system_*` ключу (`display_type` в `LocationTypeEntry`)
+  — текст для UI/LLM по конвенции `system_`/`display_`, легитимный `str`;
+  исключение всё равно фиксируется в ТЗ (§ Contract hygiene).
+
+## N+1 поля — послабление с обязательным тестом
+
+Поля N+1 расширения (`system_*_1`, `display_*_1`, … — мастерские поля,
+`data-storage-pattern.mdc`) **могут** оставаться `str`: набор значений
+задаёт мастер мира, закрытого типа нет — RegistryKey/StrEnum не
+применимы.
+
+Это единственное послабление, которое требует **компенсирующего теста**:
+при расширении N+1 (новое поле/значение вне builtin-набора) слой не
+падает с ошибкой типа — отдельный тест на границе: import + round-trip
+расширенного значения проходит, неизвестный ключ не попадает под
+StrictOnWire-отказ. Поле в allowlist ссылается и на ТЗ, и на этот тест.
+
+## Паттерн имени — эвристика, не гарантия
+
+`*_type`/`*_kind` ловит большинство дыр, но не все: списки ключей под
+другими именами (`parent_types: list[str]`, `*_types`, `*_kinds`) — та же
+семья. При ревью смотреть на **семантику** поля (ссылка ли это на
+реестр/закрытый набор), не только на суффикс имени.
+
+## При правке / ревью
+
+Общий порядок создания контрактов — `contract-creation.mdc`: сначала
+инвентаризация `dataModel/` + `app/ids` на существующий enum/alias.
+Нашёл — использовать; нет — сначала завести тип (и строку в ТЗ при
+необходимости), потом поле. `str` допустим только как исключение с явной
+пометкой в ТЗ. Не добавлять новые `str` «временно» — это и есть
+механизм разрастания карты дыр.

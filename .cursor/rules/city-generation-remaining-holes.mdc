@@ -1,0 +1,14 @@
+---
+description: Оставшиеся дыры city generate после закрытия §9.3; не смешивать ранг/морфологию/улицы.
+alwaysApply: true
+---
+
+# City generate — память сессии
+
+Живой список: [`.cursor/plans/city-generation-remaining-holes.md`](../plans/city-generation-remaining-holes.md).
+
+**Закрыто:** §9.3 `PlacementCondition`; §9.5.1 `connections[].role` на `grid`; §9.4 pin `plot_template` = чертёж участка (leftover `building_template`); CONN-PACK-2 кластер `center`; `BuildingPurpose` дерево семей/листьев + like/strict + `purpose_packs`. Не reopen.
+
+**Не путать:** ранг = size (`small`/`medium`/`large`); морфология = subtype (`city`/`village`); generate в fine cells, не метры; DAG-ноды не трогать.
+
+**Очередь:** 1 leftover inherit `street_layout` в §9.2 (не код) → 2 CITY-T-1c стены → 3 footprint без subtype → 4 persist/library CITY-T-5a/2b → 5 deferred.

@@ -1,0 +1,18 @@
+---
+description: Дерево BuildingPurpose и паки мира не смешивать — пак не поле листа
+alwaysApply: true
+---
+
+# Purpose tree ≠ purpose pack
+
+SoT: [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) §2.1 «Антипаттерн: пак на листе дерева».
+
+Семья → лист (`BuildingPurposeFamily` / файлы `buildingPurpose/*.py`) — таксономия функции. Пак — маска, какие **уже известные** листья живы в мире. Не родитель в дереве.
+
+**Запрещено**
+
+- `(system_name, packs)` / `DEFAULT_PACKS` в файле семьи
+- поле пака на `BuildingPurpose` или JSON участка
+- выводить сеттинг из семьи (`temple` → fantasy, потому что culture)
+
+Файл семьи — только ключи `system_name`. Состав пака — `WorldPurposePackRegistry` (`PurposePackEntry.allowed` ссылается на enum семьи/листа), не `FAMILY_OF` и не `LEAVES` семьи.

@@ -1,0 +1,34 @@
+---
+description: jsonValidation POJO-first — слои, WorldSlice, без v0.1 normalize/validators
+globs: backend/app/application/jsonValidation/**,backend/app/dataModel/**
+alwaysApply: false
+---
+
+# jsonValidation — архитектура поверх POJO
+
+Полный контракт: [`docs/tz_json_validation.md`](../../docs/tz_json_validation.md)
+
+## Три слоя application
+
+1. **`dataModel/`** — POJO, `canonical_*`, `SCHEMA_ID`, `RegistryKey[R]` на N1-W identity/ref (не голый `str`; эталон size + PlacementCondition terrain/tier), wire helpers (`*_wire_from_mapping` для multi-column)
+2. **`jsonValidation/resolve`** — единый policy engine (`IMPORT` strict→422, `RUNTIME` warn)
+3. **`facade`** (write) / **`worldRow`** (read) — тонкие; логики defaults нет
+
+## Добавление POJO на `worlds`
+
+1. POJO + field policies
+2. `World` column(s) + `0001_initial.sql`
+3. Запись в **`WorldSlice` реестр** (целевой `worldSlices.py`) — не дублировать ключи в facade/worldRow
+4. Multi-column: `*_WIRE_KEYS` из `model_fields` + startup assert ⊆ `World`
+5. `SCHEMA_ID` константа на модуле POJO
+
+## Запрещено
+
+- `normalize/*.py` с literals параллельно POJO (паттерн v0.1)
+- Отдельные `validators/*` дублирующие `Field`/`StrictOnWire`
+- Generators читают POJO-поля с raw `world.*` (кроме transitional) — через `worldRow`
+- `world_seed` / math constants в POJO или jsonValidation
+
+## v0.1 — что не возвращать
+
+Orchestrator, gates, `WorldRegistryIndex` **как отдельная вселенная**. Index и REF-W — да, но поверх `resolve` + normalized POJO, не вместо них.

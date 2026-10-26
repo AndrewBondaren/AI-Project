@@ -1,0 +1,42 @@
+---
+description: Соглашения по нодам и execution engine
+globs: backend/app/application/engine/**/*
+alwaysApply: false
+---
+
+# Engine & Nodes
+
+## Добавление ноды
+
+1. Класс наследует `PythonNode` или `LLMNode`, поле `id` обязательно
+2. `@register_python(MyExecutor)` или `@register_llm()` — модуль должен импортироваться через `app.application.engine.nodes`
+3. LLM: `dsl`, `contract_json`, `validator`, `repair_dsl` по необходимости
+4. Python: executor в отдельном классе или `execute()` на ноде
+
+## Фазы и replan
+
+- **pre_llm** — единственное место для `requires_replan` / `next_task_type` из gate-логики
+- **post_llm** — пишет в DB через patches, не валидирует, не replan
+- Replan: `state.next_task_type` (Python) или intent из `intent_detection` (LLM)
+
+## Контекст между нодами
+
+- Сейчас: `state.shared_context["scene"]`, `["terrain"]` и т.д.
+- Целевое: типизированные поля на `ExecutionState` (`SceneContext`, `TerrainContext`) — см. `docs/tz_engine_node_context.md`
+- Downstream LLM-ноды: `context_fields` на ноде + gatherer-ноды
+
+## Repos в нодах
+
+Доступ через `context["scene_repo"]`, `location_repo`, `map_cell_repo`, `world_repo`, `player_repo`, `npc_repo`, `state_repo`. Wiring в `Container.llm_engine()` → `repositories={...}`.
+
+## Repair
+
+Живёт в `LLMAggregateExecutor`: validate → `RepairOrchestrator` пока conversation `messages` живы. Патчи накапливаются, не применяются до конца pass-цикла.
+
+## Output пользователю
+
+`ResponseResolver._OUTPUT_NODE` мапит `TaskType` → node_id. При добавлении user-facing task_type — обновить маппинг.
+
+## Принцип симуляции
+
+LLM — рендерер фактов из БД/геометрии, не источник истины. Perception-ноды (зрение/слух/магия) фильтруют одну геометрию — см. `docs/tz_perception.md`.

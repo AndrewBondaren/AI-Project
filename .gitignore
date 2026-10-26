@@ -15,7 +15,8 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-# .cursor/ — moved to .git/info/exclude (local-only ignore)
+# Track shared Cursor configuration, including when locally excluded.
+!.cursor/
 .idea
 .DS_Store
 *.suo

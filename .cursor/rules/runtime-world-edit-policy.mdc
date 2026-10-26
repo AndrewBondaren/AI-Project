@@ -1,0 +1,23 @@
+---
+description: Базовая runtime/worldEdit политика для новых и пересматриваемых планов мира
+globs: .cursor/plans/*.md,docs/tz_*.md
+alwaysApply: false
+---
+
+# Базовая политика runtime/worldEdit
+
+SoT: [docs/tz_runtime_world_edit_policy.md](../../docs/tz_runtime_world_edit_policy.md).
+Общий архитектурный этап: [runtime-world-edit-policy.md](../plans/runtime-world-edit-policy.md).
+
+- При подготовке/пересмотре планов resolve, world generation и world editing добавлять в начале раздел «Базовая политика runtime/worldEdit» со ссылкой на SoT.
+- Один доменный resolver для двух режимов; не создавать wilderness-only или иной локальный policy engine.
+- Контекст выбирает frontend: обычный импорт без дополнительной policy; валидация — тот же import API с необязательным флагом. Разрешать policy один раз в общий typed context и наследовать его всеми handlers; не сохранять в мире и не выводить из операции import/create/load.
+- Общий resolver автоматически использует индивидуальные typed field/model contracts из dataModel: ограничения, missing/null/empty, refs и reason/action. Не создавать параллельный field registry или локальные if validate/IMPORT/RUNTIME для выбора fallback/reject/log. Доменные проверки возвращают диагностику в тот же механизм.
+- Не вводить отдельный backend worldEdit-mode/endpoint/pipeline. `validate_only=true` — тот же pipeline без DB/Pack writes и изменяющих мир задач; не write с rollback. Без флага/false — обычный импорт с прежней transaction/rollback; frontend после проверки вызывает его отдельно, с повторной проверкой актуальных данных.
+- Штатное авторазрешение детерминировано и ограничено доменным контрактом.
+- Неразрешимый runtime результат: WarningError через существующий доменный log sink, без подстановок default вместо ошибки и без ложного успеха зависимой операции.
+- Schema default при штатном отсутствии optional-поля отличается от error fallback.
+- WorldEdit получает ту же диагностику; не исправлять авторские данные молча. Draft/apply/publish и границы транзакций фиксируются планом.
+- До доменной реализации использовать общий typed result/diagnostic API; если отсутствует — первым этапом указать общую основу/зависимость на её план.
+- Явно описывать consumers, unresolved-результат, reason/action, log sink и проверки двух режимов; обоснованно неприменимые пункты отмечать кратко.
+- Старые error defaults требуют аудита/миграции, не являются основанием добавить новые. Не объявлять существующий код исправленным после правки документа.

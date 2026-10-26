@@ -1,0 +1,62 @@
+---
+description: Границы слоёв — генераторы и API только своё; LLM/orchestration — не их зона
+alwaysApply: true
+---
+
+# Границы ответственности слоёв
+
+**Принцип:** каждый модуль делает **одно** — свою зону. Выход за рамки (LLM payload, chat context, склейка чужих доменов) — **антипаттерн**.
+
+## Генераторы (`application/worldData/generators/`)
+
+- Только **materialize** своего домена: terrain, climate, settlement layout, structure, connections…
+- На выходе: typed layout / cells / graph — **данные**, не «что сказать LLM».
+- ✅ `SettlementLayout.dominant_material` после assemble
+- ❌ сбор LLM prompt, `display_name` для narration, выбор что игрок «видит» в чате
+- ❌ вызов LLM, orchestration других генераторов «заодно» (кроме явного assembler в своей иерархии)
+
+Persist — **не** в генераторе; `MapCellService` / `SettlementPersistService` / `ConnectionPersistService` (см. TZ § persist cycle).
+
+## API (`api/routes/`)
+
+- Только HTTP: validate → service/repo → response DTO.
+- ❌ генерация мира, сбор LLM context, engine passes, дублирование логики из `application/`.
+
+Debug routes — тоже тонкая оболочка над сервисом, не второй движок.
+
+## Boundary-адаптеры: только граница, не домен
+
+Адаптер между механизмом и доменом (planning provider, route, wiring factory) владеет **только обвязкой**: require/validate входов, проверка refs, делегирование доменному API. Он не содержит доменных операций и не импортирует внутренние структуры алгоритмов.
+
+```text
+❌ PC-8 до разделения (hydrologyPlanProvider, 323 строки):
+   Provider.build — пять доменных операций (BasinSpec selection,
+   water bodies, coarse/fine routing, sampling, paint); импорты
+   PreparedRiver / FineRiverSampling / AssembledWater; severity
+   угадывался по code; helpers-сироты _paint/_final_roles без владельца.
+✅ Provider: require deps → ref checks → assembler.assemble();
+   доменные операции — owner classes по карте классов
+   (.cursor/plans/geo-1-pc8-responsibility-refactor-done.md).
+```
+
+Признаки монстра-адаптера (не ждать 300 строк):
+
+- Импортирует kernel-структуры домена (внутренние buffers/jobs/samplers)
+- Делает >1 доменной операции (selection + routing + projection)
+- Свободные helpers-сироты рядом, чей домен — чужой модуль
+- Восстанавливает доменные решения по `code`/строке вместо typed результата
+
+Severity/disposition — решение **producer'а** в ветке доменного решения, наружу идёт готовый typed diagnostic; угадывание по code запрещено.
+
+## Куда класть cross-cutting
+
+| Задача | Слой |
+|--------|------|
+| LLM payload, scene context | **DAG** / `application/engine` nodes |
+| Chat turn, patches, resolver | `application/chat` |
+| Оркестрация фаз мира | DAG (не generator facade) |
+| Terrain/climate persist scopes | `MapCellService` — `tz_terrain_generation.md` § Persist cycle |
+| Settlement/connections persist | `SettlementPersistService`, `ConnectionPersistService` — `tz_city_generation.md` §11.5 |
+| CRUD мира, settings | routes → services → repos |
+
+При изменениях: если задача «прокинуть в LLM» или «собрать UX для игрока» — **не** в генератор и **не** в route.

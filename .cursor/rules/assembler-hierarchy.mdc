@@ -1,0 +1,70 @@
+---
+description: Иерархия ассемблеров — генерация поселений и зданий
+globs: backend/app/application/worldData/generators/**/*
+alwaysApply: false
+---
+
+# Иерархия ассемблеров
+
+Полное ТЗ: `docs/tz_assembler_hierarchy.md`. Связано: `tz_city_generation.md`, `tz_building_generator.md`.
+
+## Дерево слоёв
+
+```
+SettlementAssembler
+  └── DistrictAssembler
+        └── StructureAreaAssembler
+              └── StructureAssembler
+                    └── StructureGenerator (BuildingGeneratorService)
+                          └── StructureInteriorAssembler (нет ТЗ; после системы предметов)
+```
+
+Каждый слой самодостаточен — вход на нужном уровне. Нижние слои **не знают** о верхних.
+
+## Semantic-first
+
+`economic_tier` — семантика намерения («бедный квартал»), не конфиг деталей. Материалы, освещение, шаблоны — резолв через реестры по тиру/стилю. Не хардкодить детали в ассемблерах.
+
+## Контракты (*Slot / *Layout / CitySkeleton)
+
+- `*Slot` — вход получателя (живёт у получателя)
+- `*Layout` — выход того же слоя
+- `CitySkeleton` — cross-cutting, течёт сверху вниз без изменений (поля `NamedLocation` поселения)
+
+`StructureContext` выводит **только** `StructureAreaAssembler` (`_derive_context`). Шаблон описывает interior, не foundation/roof.
+
+## Точки входа
+
+| Сценарий | Вход |
+|----------|------|
+| Полный город | `SettlementAssembler` |
+| Квартал | `DistrictAssembler` |
+| Здание на участке / редактор | `StructureAreaAssembler` |
+| Корабль, данж, mobile | `StructureAssembler` |
+| Срез мегаздания | `StructureGenerator` |
+| Мебель/декор | `StructureInteriorAssembler` |
+
+## generate-first, place-second
+
+`DistrictAssembler`: сначала генерирует здания в cache по `template["system_name"]`, bin-packing по реальному bbox из `StructureLayout.occupied_cells`. `StructureAreaAssembler` получает layout из кэша — не генерирует повagain.
+
+Кэш живёт на уровне одной сборки поселения (`SettlementAssembler` создаёт и передаёт вниз).
+
+## ground_z
+
+`ground_z = context.ground_z ?? building.map_z`. `z_offset` в шаблоне — относителен; `level.z` — абсолютный, сравнивать с `ground_z`. `terrain_surface[x,y]` — для `FoundationBuilder`.
+
+## Реализация (код)
+
+Путь: `generators/assemblers/`. Скелеты есть: settlement, district, area, structure (+ registry: building, ruins, resourceExtraction, vastHull).
+
+## Открыто / не реализовано
+
+- `_derive_context`, `_place_building`, `_build_barrier` — скелеты (NotImplementedError)
+- Малые постройки, yard, barrier cells
+- `StructureInteriorAssembler`, размещение NPC — отдельный слой
+- Roof v2: auto, hip, stilts foundation
+
+## Warning-политика
+
+Невозможность разместить здание → `logger.warning`, не exception.

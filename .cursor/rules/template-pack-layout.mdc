@@ -1,0 +1,75 @@
+---
+description: Template library packs — domain root + pack folder + {system_name}.json; no cross-domain mix
+alwaysApply: true
+---
+
+# Template packs (library layout)
+
+**Конвенция** для глобальных библиотек шаблонов (buildings / relief / later peers):
+offline files/zip → явный import в global SQL; использование пользовательского
+пака — только после явного подключения ко всему миру. Defaults перечисляются
+отдельными доверенными spec. Целевой контракт (ещё требует реализации):
+[`tz_template_library_packs.md`](docs/tz_template_library_packs.md).
+
+## Domain roots — не смешивать
+
+Каждый **домен библиотеки** — свой корневой каталог. Пакеты и файлы **разных** доменов в одной папке запрещены.
+
+| Домен | Корень FS (конвенция) | SQL library (типично) | Статус |
+|---|---|---|---|
+| Дочерние structures | `structures_templates/` | `structure_templates` | родительский участок хранится отдельно в `building_templates` |
+| Relief grade | `relief_templates/` | `relief_templates` | ✅ SoT [`tz_terrain_relief.md`](docs/tz_terrain_relief.md) R29 |
+| Later (barriers-as-library, …) | свой корень `*_templates/` | своя таблица | не класть в чужой корень |
+
+## Layout внутри домена
+
+```text
+{domain_root}/                      # e.g. relief_templates/
+  {pack_name}/                      # имя папки = имя пакета
+    pack.manifest.json              # целевой metadata manifest, не тело шаблона
+    {system_name_a}.json            # stem == system_name в JSON
+    {system_name_b}.json
+```
+
+Zip: внутри архива путь начинается с `{domain_root}/` **или** (если zip = один домен) с `{pack_name}/` при upload API, явно привязанном к домену — не плоский микс json из buildings+relief.
+
+## Правила
+
+| Правило | При нарушении |
+|---|---|
+| Файл relief не под `structures_templates/` (и наоборот) | **reject** |
+| Имя папки пакета = `pack_name` | **reject** |
+| stem файла == `system_name` | **reject** |
+| Один файл = один outline | — |
+| Файл в корне domain root вне пак-папки (lone file) | **reject** — импорт только через пак с manifest |
+| После import | плоский ряд в global SQL; `source_file` = path под domain root |
+
+Целевой manifest хранит глобальный system_name/UID пака, локальный pack_name,
+members с local_uid/template_uid/library_kind и dependencies. UID — только
+центральный `worldData/ids`, владелец единственный. Один логический пак может
+включать разные домены через отдельные domain roots; тела не смешиваются.
+Manifest не сканируется как outline. SQL-каталог сохраняет состав/владение,
+а `source_file` остаётся диагностикой. Пак вне defaults не автоимпортируется;
+наличие в SQL не является подключением к миру. Ссылки в телах — только UID
+шаблона, принадлежность/доступность разрешает движок.
+
+## Не путать
+
+- **Архив `.wpack` — отдельный UID-layout** (решение 2026-10-12,
+  ТЗ §4.2): `library/{domain_root}/{pack_uid}/{template_uid}.json` для
+  world archive; без `library/` для standalone library archive.
+  `pack.manifest.json` лежит в той же UID-папке; multi-domain пак
+  повторяет полный manifest в каждом domain root. Имена — metadata,
+  `source_file` — диагностика, пути в архиве из них не строятся.
+  Правила авторского FS-импорта выше не применяются к архивам копий.
+
+- ❌ World **map** pack (`tz_world_pack_storage`) — другой «pack»
+- ❌ Класть building JSON в `relief_templates/` «для удобства»
+- ❌ Один zip с и buildings, и relief без раздельных domain roots
+
+## Scope
+
+- FS layout используется structures/relief; явный SQL-каталог паков/членства/
+  владения — целевое расширение по `tz_template_library_packs.md`, не
+  существующая реализация.
+- Instance-каталоги resource/crops/livestock этим механизмом не меняются.

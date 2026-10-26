@@ -1,0 +1,82 @@
+---
+description: Хардкод при наличии POJO в dataModel — критический баг во всех слоях; читать поля модели
+alwaysApply: true
+---
+
+# dataModel: не дублировать POJO хардкодом
+
+## Зачем
+
+Pydantic в `dataModel` — **не декорация и не «документация на будущее»**. Это единственный контракт: поля, типы, defaults, normalize, `canonical_*`.
+
+Параллельный литерал в генераторе, DAG, `db/` или route **обесценивает Pydantic**: модель перестаёт быть source of truth, расходятся wire/import/runtime, validate_schema и JV перестают гарантировать поведение. Если значение живёт в POJO — **все слои читают POJO**; иначе зачем модель.
+
+**Критический баг:** в **любом** слое backend **дублировать** значения, wire-ключи или fallback'и, которые уже описаны Pydantic-моделью в `backend/app/dataModel/`.
+
+Затрагивает не только генераторы:
+
+| Слой | Примеры |
+|------|---------|
+| `application/worldData/generators/` | resolve, assemblers, masterData shims |
+| `application/engine/` (DAG, nodes) | payload defaults, patch values, scene context |
+| `application/chat/` | resolver, patch_applier side defaults |
+| `db/` | dataclass defaults, seed/migration literals, repo fallbacks |
+| `jsonValidation/` | normalize без POJO, параллельные default-таблицы |
+| `api/routes/` | DTO defaults, response fallbacks |
+
+`dataModel` — единственный источник builtin-полей, defaults и wire-контракта. Resolve (world + fallback + merge) — поверх модели, **не** параллельный словарь литералов.
+
+## Запрещено
+
+- Литералы, совпадающие с `Field(default=…)` или `canonical_defaults()` POJO
+- `dict.get("connection_type")`, `entry.get("road_tier_bonus")` вместо typed `entry.connection_type`, `entry.road_tier_bonus`
+- Локальные `_DEFAULT_*` / `return 1.0`, если то же уже на `Model.fallback()` или field default
+- Повтор wire-ключей строками, когда есть модель с именами полей → см. `pojo-world-row-wire.mdc`
+- SQL/seed с builtin-значениями, расходящимися с `dataModel` и `0001_initial.sql` без sync моделей
+
+## Обязательно
+
+1. Найти POJO в `dataModel/` (или rich enum с builtin data).
+2. Читать через typed API: `entry_for()`, `canonical_defaults()`, `fallback()`, поля модели.
+3. Потребительский слой — тонкий shim; новые builtin-значения добавлять в `dataModel` (+ sync `db/models/` при schema-полях), не копировать литералом. **Не превращать POJO в мёртвый код.**
+
+## Примеры
+
+```python
+# ❌ BAD — дублирует EconomyTierEntry.road_tier_bonus
+val = tier_row.get("road_tier_bonus")
+if val is not None:
+    return float(val)
+return 1.0
+
+# ✅ GOOD
+entry = economic_tiers(world).entry_for(tier) or engine.entry_for(tier) or EconomyTierEntry.fallback()
+return float(entry.road_tier_bonus)
+```
+
+```python
+# ❌ BAD — дублирует DistrictConnection + DEFAULT_CONNECTION_TYPE
+ct = primary.get("connection_type") or "road"
+
+# ✅ GOOD
+conn = primary_or_default(template)
+ct = connection_type or conn.connection_type
+```
+
+```python
+# ❌ BAD — default в DAG-ноде / db model, хотя есть POJO
+DEFAULT_CLIMATE_ZONE = "temperate"  # в node или db/models
+
+# ✅ GOOD
+from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
+zone = WorldClimateScalars.canonical_defaults().default_climate_zone
+```
+
+## Исключения (не баг)
+
+- Чисто алгоритмические константы без POJO (grid neighbors, epsilon blend, corridor min length).
+- Временный interim в `masterData/worldMasterData.py` с TODO → `jsonValidation` (не добавлять новые дубли).
+
+## При ревью / миграции
+
+Перед добавлением литерала или `_DEFAULT_*` — **grep по `dataModel/`**. Если поле или default уже есть — использовать модель; отсутствует — сначала расширить POJO (и dataclass/SQL при необходимости), потом тонкий слой-потребитель.

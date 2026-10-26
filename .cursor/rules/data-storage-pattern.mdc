@@ -1,0 +1,71 @@
+---
+description: Паттерн system_/display_ и N+1 — для мастеров мира, реестры, импорт, редактор
+globs: backend/app/**/*,fixtures/**/*
+alwaysApply: false
+---
+
+# system_ / display_ и N+1
+
+Источник: `docs/project_data_storage_tz.md`.
+
+**Аудитория N+1 — мастер мира**, не игрок. Игрок загружает готовый мир и персонажа; реестры и JSON — зона мастера.
+
+## Базовая пара
+
+| Префикс | Назначение |
+|---------|------------|
+| `system_*` | Ключ движка: refs, формулы, валидация. Стабильный snake_case |
+| `display_*` | UI и LLM-нарратив |
+
+Движок сравнивает `system_*`. LLM получает `display_*` и lore, не угадывает ключи.
+
+## N+1 — два вида (не путать в UI редактора)
+
+**1. Реестры мира** — новый *тип* в мире (`worlds.*_registry`):
+
+```json
+"location_type_registry": { "city": { "display_name": "Город" } },
+"city_size_registry": [
+  { "system_size": "hamlet", "display_size": "Хутор", "radius": 0 }
+],
+"terrain_registry": [
+  { "system_terrain": "plains", "glossary_ref": "terrain_plains", "travel_modifier": 1.5 }
+]
+```
+
+**2. Поля на сущности** — расширение *экземпляра* суффиксом `_1`, `_2`:
+
+```json
+"system_hair_1": "...", "display_hair_1": "..."
+```
+
+Базовые поля — движок; N+1 — без миграции схемы.
+
+## Редактор миров (будущая фича)
+
+Отдельно от игрового UI. Те же правила, что JSON-импорт:
+
+```
+UI form → validate(N+1 rules) → upsert worlds.*_registry → движок без изменений
+```
+
+Один validator, два входа (file / UI). MVP редактора: 2–3 реестра (`stat_schema`, `terrain_registry`, `location_type_registry`).
+
+## Правила в коде
+
+- Refs между сущностями — только `system_*`; display резолвить из реестра
+- Display-строки не хардкодить в engine
+- Удаление из реестра → orphan OK; движок игнорирует при сборке контекста
+- Engine-only поля (`system_alive`, `system_traits`) — без display-пары
+- User object-типы: один уровень вложенности
+
+## Refs (примеры)
+
+- `NamedLocation.system_location_type` → `location_type_registry`
+- `MapCell.system_terrain` → `terrain_registry`
+- `system_city_size` → `city_size_registry`
+- `connection_type` → `connection_type_registry`
+
+## Импорт
+
+`/api/worlds/import`, `/api/seed/import`, `/api/characters/import`. Fixture-примеры: `fixtures/world_test_gen.json`, `fixtures/seed.json`.
