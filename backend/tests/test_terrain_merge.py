@@ -12,6 +12,10 @@ from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompo
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.contributors.landcover import LandcoverContributor
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import (
     paint_system_terrain, paint_system_terrain_cell,
 )
@@ -75,6 +79,9 @@ class TerrainMergeTests(unittest.TestCase):
         ctx = LightGridBakeContext(
             world=world, locations=[], locations_index=LocationsIndexWire(locations=[]),
             tiles=list(self.tiles), scale=self.scale, terrain_system_keys={self.custom_key},
+            topology=WorldTopology(mode=WorldTopologyMode.PLANAR,
+                bounds=WorldBounds(x_min=0, x_max=0, y_min=0, y_max=0)),
+            grid=SurfaceGridSettings(fine_span=self.scale.tile_macro, light_side=self.scale.side),
         )
         compose = LightGridCompose(self.scale)
         ref = self.ref

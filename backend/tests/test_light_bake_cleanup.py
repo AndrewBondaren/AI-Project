@@ -10,6 +10,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.coarseOpenWater import (
     apply_coarse_open_water,
@@ -277,6 +281,9 @@ class TestSettlementContributorPins(unittest.TestCase):
             ),
             tiles=[(0, 0)],
             scale=scale,
+            topology=WorldTopology(mode=WorldTopologyMode.PLANAR,
+                bounds=WorldBounds(x_min=0, x_max=0, y_min=0, y_max=0)),
+            grid=SurfaceGridSettings(fine_span=scale.tile_macro, light_side=scale.side),
         )
         SettlementContributor().apply(compose, ctx)
         wires = compose.to_wire_tile(0, 0)

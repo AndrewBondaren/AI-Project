@@ -6,12 +6,16 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 
 def contribute(context: FactConsumerContext) -> HydroFacts | None:
-    hydro, surface_z = context.hydro, context.surface_z
-    if context.surface is not None:
-        if hydro is None:
-            hydro = context.surface.coarse_hydro
-        if surface_z is None:
-            surface_z = context.surface.coarse_surface_z
+    if context.hydrology is not None:
+        hydro = context.hydrology.coarse_hydro
+        surface_z = context.hydrology.coarse_surface_z
+    else:
+        hydro, surface_z = context.hydro, context.surface_z
+        if context.surface is not None:
+            if hydro is None:
+                hydro = context.surface.coarse_hydro
+            if surface_z is None:
+                surface_z = context.surface.coarse_surface_z
     if not context.cells or not hydro or surface_z is None:
         return None
     cells = set(context.cells)

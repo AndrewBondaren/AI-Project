@@ -8412,6 +8412,68 @@ Done: одна зона L2 в TerrainBatch; bootstrap у preview facade без p
   в неиспользуемый context; z-slice удалён, живых callers не осталось.
 
 **PC-11.5 — domain-owned факты; contributor adapter только передаёт inputs.**
+**IMPLEMENTED / VERIFIED (2026-10-26), ожидает приёмки мастера.**
+Варианты решения мастера: 1-A (topology/grid — поля LightGridBakeContext,
+заполняются один раз owner'ом при построении ctx, adapter — pure transit) +
+2-A (legacy surface/profile_for ветка помечена migration-only и остаётся до
+PC-11.7).
+- FactConsumerContext получил typed refs climate/terrain/hydrology
+  (ClimateWorkingFields/TerrainWorkingFields/HydrologyWorkingFields) как
+  dual migration-only канал: инстанс несёт либо их, либо legacy
+  surface/climate_profiles поля, без смешивания; legacy поля удаляются
+  атомарно в PC-11.7.
+- Consumers переведены на domain-owned views: climate.contribute →
+  working.climate.local_field.nearest + profile_for_key(zone) лениво на
+  клетку (мировая dict-проекция profiles убрана из working path);
+  relief.contribute → working.terrain.relief_z; hydrology.contribute →
+  working.hydrology.coarse_hydro/coarse_surface_z. Legacy fallback ветки
+  сохранены до PC-11.7.
+- Новый regions/inputs/landcoverInputs.py — canonical domain prepare:
+  prepare_landcover_inputs(topology, grid, working, state_snapshot,
+  anchor_specs) → LandcoverInputs; closure fine→macro + collect_facts
+  собирается один раз на request из готовых refs (не world-scoped resolve
+  на каждый tile). prepare_landcover_inputs_legacy — migration-only
+  surface канал, удаляется в PC-11.7.
+- LightGridBakeContext += topology: WorldTopology и
+  grid: SurfaceGridSettings; заполнены один раз operation owners при
+  построении ctx: worldMapBakeOrchestrator.bake_tiles/bake_tile,
+  landcover/finePaint.py bake ctx, wildernessRegionReadService outline ctx
+  (через manifest fine_cells_per_map_cell/world_map_cells_per_tile).
+- surface_world_topology(world, locations) добавлен в
+  planning/composition/surfacePlanningEntry.py: один world-scoped topology
+  resolve на request (bounds=None → ValueError), callers передают готовый
+  результат.
+- Pack adapter contributors/landcoverInputs.py — thin transit: require
+  ctx.topology/ctx.grid + state snapshot → domain fn; без
+  world_bounds_from_world, topology policy/bounds resolve и мировых
+  dict-проекций в working path. Legacy-ветка (surface_planning +
+  profile_for dict) помечена migration-only для outline caller, у которого
+  нет working views; surface_bundle без working → осмысленный ValueError.
+- Фикстуры обновлены: tests/planning/consumers/test_l0_l2.py (context(),
+  parents(), facts-site, bind_frozen_context re-resolve после rebuild
+  ctx.world), test_landcover_{contributor,materializer}, test_terrain_merge,
+  test_light_bake_cleanup, test_light_grid_compose,
+  test_mask_domain_materialize — готовые topology/grid (synthetic
+  SimpleNamespace worlds получают WorldTopology напрямую, без world resolve).
+- Проверки `PYTHONPATH=.:tests .venv314/bin/python -m unittest`: discover
+  tests/planning/consumers — 75 OK; затронутые suites
+  (landcover_materializer/contributor, mask_domain_materialize,
+  light_grid_compose, terrain_merge, light_bake_cleanup) — 57 OK;
+  regression (pack_bake_modes, wp13_entry_first, parent_light_refine,
+  fine_terrain_refine_parallel, detailed_bake_c11) — 48 OK; regions
+  (fact_consumers, coverage_resolver, coverage_contract, state_change,
+  state_contract, state_overlay, wilderness_region_index) — 69 OK.
+  compileall app+scripts — чисто.
+- Pre-existing на base (воспроизведены через git stash до diff):
+  test_container_repository_wiring_and_caller_rollback (не хватает
+  [planning.*] конфига окружения) и
+  RegionGeometryTests.test_polygon_concave_both_windings_and_explicit_closure
+  (tuple vs list в shape.vertices, к diff отношения не имеет).
+- pyright §6.27 — failed prerequisite: node_modules/.bin/pyright и node/npx
+  в окружении отсутствуют; зависимости автоматически не скачивались.
+- WARN folder-composition выдан в чат по затронутым папкам >5 файлов;
+  новых файлов в папки >10 не добавлено (regions/inputs — 2 файла).
+  SQL/DAG/backend-start/коммитов нет. Baseline delta нет.
 Зависимости: PC-11.1/11.2.
 Цель: убрать climate/relief/hydro подготовку из pack contributor helper и
   повторный world-scoped resolve на каждом L2 tile.

@@ -2,12 +2,16 @@
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+from app.application.worldData.planning.composition.surfacePlanningEntry import (
+    surface_world_topology,
+)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import require_surface_terrain_context
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.render.regions.regionOutline import render_region_outline
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.worldPack.meta.wildernessRegionDebug import WildernessRegionSnapshot, WildernessRegionOutline
 from app.db.models.world import World
 from app.db.models.namedLocation import NamedLocation
@@ -39,7 +43,10 @@ class WildernessRegionReadService:
             planning=self._planning, capture=self._capture, wait=wait)
         ctx = LightGridBakeContext(world, locations, build_locations_index(locations,world), [],
             LightGridScale.from_tile(manifest.fine_cells_per_map_cell,manifest.world_map_cells_per_tile),
-            surface_planning=surface)
+            surface_planning=surface,
+            topology=surface_world_topology(world, locations),
+            grid=SurfaceGridSettings(fine_span=manifest.fine_cells_per_map_cell,
+                light_side=manifest.world_map_cells_per_tile))
         outline = render_region_outline(ctx,region_uid)
         if outline is None:
             raise RegionOutlineStaleError("region snapshot has no matching region in current world data; re-bake the index")

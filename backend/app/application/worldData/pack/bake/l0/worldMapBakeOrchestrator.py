@@ -7,6 +7,9 @@ import time
 from collections import Counter
 from collections.abc import Mapping
 from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningEntry import (
+    surface_world_topology,
+)
 from app.application.worldData.planning.composition.surfacePlanningAssembler import (
     to_legacy_context,
 )
@@ -37,6 +40,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.bake.l0.worldMapHydrology import world_map_hydro_role_from_cell
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
@@ -136,11 +140,13 @@ class WorldMapBakeOrchestrator:
             edges=graph_edges,
             surface_planning=surface_ctx,
             surface_bundle=surface_bundle,
+            working=working,
+            topology=surface_world_topology(world, locations),
+            grid=SurfaceGridSettings(fine_span=scale.tile_macro, light_side=scale.side),
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
             region_state_snapshot=region_state_snapshot,
-            working=working,
         )
         compose = compose_light_grid(bake_ctx)
         replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
@@ -230,10 +236,12 @@ class WorldMapBakeOrchestrator:
             scale=LightGridScale.from_tile(tile_macro, side),
             surface_planning=surface_ctx,
             surface_bundle=surface_bundle,
+            working=working,
+            topology=surface_world_topology(world, locs),
+            grid=SurfaceGridSettings(fine_span=tile_macro, light_side=side),
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             region_state_snapshot=region_state_snapshot,
-            working=working,
         )
         compose = compose_light_grid(bake_ctx)
         replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)

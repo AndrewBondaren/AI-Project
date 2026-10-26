@@ -10,6 +10,8 @@ from unittest.mock import Mock, patch
 
 from tests.planning.consumers.test_wiring import Composition, Wait, capture, world
 from app.application.worldData.planning.composition.surfacePlanningAssembler import to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningEntry import surface_world_topology
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.application.worldData.pack.bake.lightGrid.bake import compose_light_grid
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
@@ -39,7 +41,9 @@ def context(source, bundle, tiles=None):
     scale = LightGridScale.from_tile(1000, source.world_map_cells_per_tile)
     return LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(locations=[]),
         tiles=tiles if tiles is not None else [(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
-        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, surface_planning=to_legacy_context(bundle, working=working_fixture(source, bundle)), working=working_fixture(source, bundle))
+        scale=scale, terrain_system_keys=terrain_system_keys(source), surface_bundle=bundle, surface_planning=to_legacy_context(bundle, working=working_fixture(source, bundle)), working=working_fixture(source, bundle),
+        topology=surface_world_topology(source, []),
+        grid=SurfaceGridSettings(fine_span=scale.tile_macro, light_side=scale.side))
 
 
 def bind_frozen_context(test, ctx):
@@ -57,6 +61,8 @@ def bind_frozen_context(test, ctx):
             y_min=min(y for _, y in ctx.tiles), y_max=max(y for _, y in ctx.tiles))
     ctx.world = World(**values)
     ctx.world.map_settings = {"global_cell_size_m": ctx.scale.tile_macro}
+    ctx.topology = surface_world_topology(ctx.world, ctx.locations)
+    ctx.grid = SurfaceGridSettings(fine_span=ctx.scale.tile_macro, light_side=ctx.scale.side)
     composition = Composition()
     test.addCleanup(composition.service.shutdown)
     ctx.surface_bundle = composition.prepare(capture(ctx.world, locations=ctx.locations,
@@ -278,7 +284,9 @@ class L2Tests(unittest.TestCase):
         from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
         ctx = LightGridBakeContext(world=self.source, locations=[], locations_index=LocationsIndexWire(),
             tiles=[(c.gx, c.gy) for c, _ in bundle.terrain_base.payload.surface_z],
-            scale=LightGridScale.from_tile(8, 2), surface_bundle=bundle, working=working_fixture(self.source, bundle))
+            scale=LightGridScale.from_tile(8, 2), surface_bundle=bundle, working=working_fixture(self.source, bundle),
+            topology=surface_world_topology(self.source, []),
+            grid=SurfaceGridSettings(fine_span=8, light_side=2))
         compose = compose_light_grid(ctx, contributors=PIPELINE)
         return {tile: ParentLightTile.from_cells(world_uid=self.source.world_uid, gx=tile[0], gy=tile[1],
             side=2, tile_macro=8, cells=compose.to_wire_tile(*tile)) for tile in ctx.tiles}
@@ -335,7 +343,9 @@ class L2Tests(unittest.TestCase):
         profiles = {str(a.system_climate_zone): profile_for(source, a.system_climate_zone)
                     for a in legacy.local_field.anchors}
         ctx = LightGridBakeContext(world=source, locations=[], locations_index=LocationsIndexWire(),
-            tiles=[(0, 0)], scale=LightGridScale.from_tile(1000, 4), surface_bundle=bundle, working=working_fixture(source, bundle))
+            tiles=[(0, 0)], scale=LightGridScale.from_tile(1000, 4), surface_bundle=bundle, working=working_fixture(source, bundle),
+            topology=surface_world_topology(source, []),
+            grid=SurfaceGridSettings(fine_span=1000, light_side=4))
         inputs = prepare_landcover_inputs(ctx)
         for coord, _ in bundle.terrain_base.payload.surface_z:
             expected = collect_facts(FactConsumerContext(legacy, ((coord.gx, coord.gy),), profiles))

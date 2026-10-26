@@ -4,6 +4,8 @@ from collections.abc import Sequence
 from functools import partial
 
 from app.application.jsonValidation.resolve import ResolveContext
+from app.application.jsonValidation import terrain_scalars
+from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
 from app.application.worldData.generators.climate.registry import profile_for
@@ -19,9 +21,18 @@ from app.application.worldData.planning.contracts.surfacePlanningView import (
 )
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+
+def surface_world_topology(world: World, locations: Sequence[NamedLocation]) -> WorldTopology:
+    """One world-scoped topology resolve per request; callers pass the result."""
+    bounds = world_bounds_from_world(world, locations)
+    if bounds is None:
+        raise ValueError("surface topology requires world bounds independent of request scope")
+    return WorldTopology(mode=terrain_scalars(world).world_topology_mode, bounds=bounds)
 
 
 class SurfacePlanningEntry:

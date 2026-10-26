@@ -32,6 +32,7 @@ from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.ids import seed_root
@@ -52,7 +53,10 @@ class LandcoverMaterializerTests(unittest.TestCase):
                                      hydrology={"enabled": False})
         self.inputs = LandcoverInputs(self.topology, self.facts_at, {})
         self.ctx = LightGridBakeContext(self.world, [], LocationsIndexWire(),
-                                        [(0, 0), (0, 1), (1, 0), (1, 1)], self.scale)
+                                        [(0, 0), (0, 1), (1, 0), (1, 1)], self.scale,
+                                        topology=self.topology,
+                                        grid=SurfaceGridSettings(fine_span=self.scale.tile_macro,
+                                                                 light_side=self.scale.side))
 
     @staticmethod
     def facts_at(coord):

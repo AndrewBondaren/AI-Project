@@ -9,6 +9,10 @@ import unittest
 from unittest.mock import patch
 
 from app.application.worldData.generators.climate.climateAnchor import ClimateAnchorPoint, AnchorSource
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.application.worldData.masks.applyFootprint import apply_terrain_footprint
@@ -61,6 +65,9 @@ class LandcoverContributorTests(unittest.TestCase):
             self.world, [], LocationsIndexWire(), [(0, 0), (1, 0)],
             LightGridScale.from_tile(32, 32), surface_planning=surface,
             terrain_system_keys={entry.system_terrain for entry in self.registry.root},
+            topology=WorldTopology(mode=WorldTopologyMode.PLANAR,
+                bounds=WorldBounds(x_min=0, x_max=1, y_min=0, y_max=0)),
+            grid=SurfaceGridSettings(fine_span=32, light_side=32),
         )
         self.declare()
 

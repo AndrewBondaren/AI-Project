@@ -21,6 +21,9 @@ from app.application.jsonValidation import terrain, terrain_masks, terrain_syste
 from app.application.worldData.generators.terrain.landcover.materializer import (
     LandcoverMaterializer,
 )
+from app.application.worldData.planning.composition.surfacePlanningEntry import (
+    surface_world_topology,
+)
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.masks.regionPrecedence import (
     RegionCandidate,
@@ -45,6 +48,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs 
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.spatial.regionShape import Bounds
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
@@ -96,6 +100,8 @@ def paint_regions_fine(
         surface_bundle=bundle,
         region_state_snapshot=region_state_snapshot,
         working=working,
+        topology=surface_world_topology(world, locations),
+        grid=SurfaceGridSettings(fine_span=scale.tile_macro, light_side=scale.side),
     )
     materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))
     materializer.begin_pass()

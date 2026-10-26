@@ -1,17 +1,23 @@
-"""Prepare world-scoped facts and a state read boundary for LANDCOVER."""
+"""Transit: hand ready bake-context inputs to the domain landcover composer.
+
+The adapter holds no domain resolve of its own: topology/grid arrive resolved
+on the context, domain observations live on ``working`` views, and the region
+state ref is read once by the async owner upstream. Only the migration-only
+surface channel below still touches world data, and it goes away in PC-11.7.
+"""
 
 from collections.abc import Mapping
-from dataclasses import replace
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 
-from app.application.jsonValidation import terrain_scalars
 from app.application.worldData.generators.climate.registry import profile_for
-from app.application.worldData.generators.terrain.landcover.types import LandcoverInputs, StateSnapshotEntry
-from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
+from app.application.worldData.generators.terrain.landcover.types import (
+    LandcoverInputs,
+    StateSnapshotEntry,
+)
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
-from app.application.worldData.regions.factConsumers import collect_facts
-from app.application.worldData.regions.factConsumers.context import FactConsumerContext
-from app.dataModel.topology.worldTopology import WorldTopology
+from app.application.worldData.regions.inputs.landcoverInputs import (
+    prepare_landcover_inputs as _compose_landcover_inputs,
+    prepare_landcover_inputs_legacy,
+)
 
 
 def read_region_state_snapshot(ctx: LightGridBakeContext) -> Mapping[str, StateSnapshotEntry]:
@@ -20,32 +26,17 @@ def read_region_state_snapshot(ctx: LightGridBakeContext) -> Mapping[str, StateS
 
 
 def prepare_landcover_inputs(ctx: LightGridBakeContext) -> LandcoverInputs:
-    bounds = world_bounds_from_world(ctx.world, ctx.locations)
-    if bounds is None:
-        raise ValueError("LANDCOVER requires world bounds independent of bake scope")
-    topology = WorldTopology(mode=terrain_scalars(ctx.world).world_topology_mode, bounds=bounds)
-    bundle = ctx.surface_bundle
+    if ctx.topology is None or ctx.grid is None:
+        raise ValueError("landcover inputs require topology/grid resolved by the operation owner")
     if ctx.working is not None:
-        working = ctx.working
-        local = working.climate.local_field
-        profiles = {str(anchor.system_climate_zone): working.climate.profile_for_key(anchor.system_climate_zone)
-                    for anchor in local.anchors}
-        # coarse_relief_z historically means the pre-relief terrain base.
-        observation = FactConsumerContext(None, (), profiles, local_field=local,
-            relief_z=working.terrain.relief_z,
-            hydro=working.hydrology.coarse_hydro,
-            surface_z=working.hydrology.coarse_surface_z)
-    elif bundle is not None:
+        return _compose_landcover_inputs(
+            ctx.topology, ctx.grid, ctx.working, read_region_state_snapshot(ctx))
+    if ctx.surface_bundle is not None:
         raise ValueError("frozen landcover inputs require request working views")
-    else:
-        surface = ctx.surface_planning
-        profiles = ({str(anchor.system_climate_zone): profile_for(ctx.world, anchor.system_climate_zone)
-                     for anchor in surface.local_field.anchors} if surface is not None else None)
-        observation = FactConsumerContext(surface, (), profiles)
-
-    def facts_at(point):
-        # Region coordinates are fine cells; fact consumers observe macro cells.
-        macro = (point[0] // ctx.scale.tile_macro, point[1] // ctx.scale.tile_macro)
-        return collect_facts(replace(observation, cells=(macro,)))
-
-    return LandcoverInputs(topology, facts_at, read_region_state_snapshot(ctx))
+    surface = ctx.surface_planning
+    # Migration-only legacy channel until PC-11.7; profile resolution stays a
+    # climate domain registry call, the adapter only forwards its result.
+    profiles = ({str(anchor.system_climate_zone): profile_for(ctx.world, anchor.system_climate_zone)
+                 for anchor in surface.local_field.anchors} if surface is not None else None)
+    return prepare_landcover_inputs_legacy(
+        ctx.topology, ctx.grid, surface, profiles, read_region_state_snapshot(ctx))

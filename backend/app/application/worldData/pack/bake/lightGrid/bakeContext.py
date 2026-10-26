@@ -14,6 +14,8 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     SurfaceTerrainContext,
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -36,6 +38,10 @@ class LightGridBakeContext:
     surface_planning: SurfaceTerrainContext | None = None
     surface_bundle: SurfacePlanBundle | None = None
     working: SurfaceWorkingMaps | None = None
+    # Resolved once by the operation owner at ctx construction; landcover inputs
+    # consume them instead of running their own world-scoped resolve per tile.
+    topology: WorldTopology | None = None
+    grid: SurfaceGridSettings | None = None
     pole_field: ClimatePoleField | None = None
     terrain_system_keys: set[str] = field(default_factory=set)
     wilderness_region_entries: list[WildernessRegionEntry] = field(default_factory=list)
