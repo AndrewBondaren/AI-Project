@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -90,7 +90,7 @@ class PackMaterializationOrchestrator:
     ) -> None:
         self._planning, self._capture, self._publication_guard = planning, capture, publication_guard
         self._terrain = terrain
-        self._world_map = world_map or WorldMapBakeOrchestrator(planning=planning, capture=capture)
+        self._world_map = world_map or WorldMapBakeOrchestrator()
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
         if world_repository is not None and db is None:
@@ -115,7 +115,6 @@ class PackMaterializationOrchestrator:
                 climate_bake=climate_bake,
                 relief_loader=relief_loader,
                 relief_grade_repo=relief_grade_repo,
-                region_state_repo=region_state_repo,
             )
 
     @property
@@ -229,9 +228,9 @@ class PackMaterializationOrchestrator:
         if prepared is None:
             raise ValueError("surface terrain context unavailable")
         surface_bundle, working = prepared
-        surface_ctx = to_legacy_context(surface_bundle, working=working)
+        region_states = await load_region_state_snapshot(self._region_state_repo, world_uid)
         plan = self._planner.plan(
-            world, locations, surface_ctx, scope=scope, max_tiles=max_tiles,
+            world, locations, scope=scope, max_tiles=max_tiles,
         )
         tiles = plan.tile_tuples()
         bake_mode: PackBakeMode = "full" if scope == "full" else "light"
@@ -249,6 +248,7 @@ class PackMaterializationOrchestrator:
             await self._entry.drain_persisted(
                 world_uid, world, locations, writer, mat_ctx, surface_bundle,
                 max_jobs=drain,
+                region_state_snapshot=region_states,
                 working=working,
             )
 
@@ -263,12 +263,10 @@ class PackMaterializationOrchestrator:
         locations_index = build_locations_index(locations, world)
         writer.write_locations_index(locations_index)
 
-        region_states = await load_region_state_snapshot(self._region_state_repo, world_uid)
-
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
-            surface_ctx=surface_ctx, surface_bundle=surface_bundle,
+            surface_bundle=surface_bundle,
             locations_index=locations_index,
             nodes=nodes, edges=edges, wait=wait,
             bake_mode=bake_mode,
@@ -385,7 +383,6 @@ def _default_entry_stack(
     climate_bake: ClimatePackBakeOrchestrator | None,
     relief_loader: TemplateSnapshotLoader | None,
     relief_grade_repo: IReliefGradeRepository | None,
-    region_state_repo: IRegionStateRepository | None,
 ) -> tuple[EntryRefineOrchestrator, ClimatePackBakeOrchestrator]:
     """Default refine stack wiring when ``entry`` is not injected."""
     climate = climate_bake or ClimatePackBakeOrchestrator(
@@ -396,7 +393,6 @@ def _default_entry_stack(
         terrain,
         relief_loader=relief_loader,
         relief_grade_repo=relief_grade_repo,
-        region_state_repo=region_state_repo,
     )
     return EntryRefineOrchestrator(
         fine,

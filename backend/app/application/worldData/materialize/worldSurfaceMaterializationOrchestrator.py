@@ -12,9 +12,11 @@ from app.application.worldData.planning.composition.surfacePlanningAssembler imp
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    require_surface_terrain_context,
+from app.application.worldData.planning.contracts.surfacePlanningView import (
+    SurfacePlanningViewKind,
 )
+from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
@@ -67,9 +69,11 @@ class WorldSurfaceMaterializationOrchestrator:
         capture: SurfacePlanningCapture | None = None,
         db: Database | None = None,
         publication_guard: SourcePublicationGuard | None = None,
+        region_state_repo: IRegionStateRepository | None = None,
     ) -> None:
         self._planning, self._capture = planning, capture
         self._db, self._publication_guard = db, publication_guard
+        self._region_state_repo = region_state_repo
         self._pack = pack
         self._detailed = detailed or PackDetailedBakeOrchestrator(
             pack.terrain,
@@ -171,20 +175,17 @@ class WorldSurfaceMaterializationOrchestrator:
         *,
         scope: PackTilePlanScope = "light",
         max_tiles: int | None = None,
-        nodes: list[ConnectionNode] | None = None,
-        edges: list[ConnectionEdge] | None = None,
-        wait: PlanWaitControl,
-        resolve_ctx: ResolveContext | None = None,
     ):
-        """Preview L0 tile set — application owns surface_ctx + planner."""
+        """Preview L0 tile set — extent probe only (R2); no plan prepare."""
         if self._planning is None or self._capture is None:
             raise ValueError("surface planning dependencies required")
-        surface_ctx = require_surface_terrain_context(
-            world, locations, nodes=nodes, edges=edges,
-            planning=self._planning, capture=self._capture, wait=wait, resolve_ctx=resolve_ctx,
-        )
+        entry = SurfacePlanningEntry(self._planning, self._capture)
+        view = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
+            mountain_templates=(), resolve_ctx=ResolveContext())
+        if entry.extent_status(view) == SurfacePlanningViewKind.NO_EXTENT:
+            raise ValueError("surface terrain context unavailable")
         return self._pack.tile_planner.plan(
-            world, locations, surface_ctx,
+            world, locations,
             scope=scope,
             max_tiles=max_tiles if scope == "light" else None,
         )
@@ -265,8 +266,10 @@ class WorldSurfaceMaterializationOrchestrator:
         if prepared is None:
             raise ValueError("surface terrain context unavailable")
         surface_bundle, working = prepared
+        region_states = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
         detailed = await self._detailed.bake(
             world, locations, pack_writer, ctx, surface_bundle, request,
+            region_state_snapshot=region_states,
             working=working,
         )
         async with self._db.transaction_if_needed():

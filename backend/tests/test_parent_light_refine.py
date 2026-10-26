@@ -166,6 +166,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         with self.assertRaises(TypeError):
             terrain.build_tile_surface_state(
                 MagicMock(), [], MagicMock(), 0, 0,
+                region_state_snapshot={},
                 working=working_fixture(MagicMock(), MagicMock()),
             )
 
@@ -181,6 +182,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            region_state_snapshot={},
             working=working_fixture(w, ctx),
         )
         self.assertTrue(state.heightmap.surface_z)
@@ -272,6 +274,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            region_state_snapshot={},
             working=working_fixture(w, ctx),
         )
         assert state.surface_terrain is not None
@@ -326,6 +329,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
                     volumes=[],
                     refine_role="scene",
                     phase="scene",
+                    region_state_snapshot={},
                     working=MagicMock(),
                 )
 

@@ -23,8 +23,8 @@ from app.api.deps import get_container
 from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    require_surface_plan_inputs,
+from app.application.worldData.regions.regionStateSnapshot import (
+    load_region_state_snapshot,
 )
 from app.application.worldData.pack.refine.entry.entryAnchorTracker import ANCHOR_KINDS, parse_anchor_kind
 from app.application.worldData.materialize.materializationContext import resolve_materialization_context
@@ -53,7 +53,7 @@ async def get_loading_progress(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.get_all(world_uid)
-    return facade.pack.loading.get_loading_progress(world, locations=locations, wait=RequestPlanWait.unbounded()).to_dict()
+    return facade.pack.loading.get_loading_progress(world, locations=locations).to_dict()
 
 
 @router.get("/worlds/{world_uid}/map/bootstrap-tiles")
@@ -71,22 +71,17 @@ async def list_bootstrap_tiles(
     stack = container.surface_materialization_orchestrator()
     world_svc = container.world_service()
     location_svc = container.location_service()
-    conn_svc = container.connection_graph_service()
 
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
     locations = await location_svc.get_all(world_uid)
-    nodes = await conn_svc.get_nodes(world_uid)
-    edges = await conn_svc.get_edges(world_uid)
     try:
         plan = stack.plan_bootstrap_tiles(
             world, locations,
             scope=scope,
             max_tiles=max_tiles,
-            nodes=nodes, edges=edges,
-            wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -185,7 +180,7 @@ async def bake_world_pack(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     progress = container.map_cell_read_service(world_uid).pack.loading.get_loading_progress(
-        world, locations=locations, wait=RequestPlanWait.unbounded(),
+        world, locations=locations,
     )
     result.loading_progress = progress.to_dict()
     status_code = 207 if result.is_partial() else 200
@@ -495,21 +490,20 @@ async def refine_from_entry_route(
     """Debug — WP-13 blocking entry refine; optional schedule_chunk_refine (no DAG)."""
     world_svc = container.world_service()
     location_svc = container.location_service()
-    conn_svc = container.connection_graph_service()
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.list_insert_order(world_uid)
-    nodes = await conn_svc.get_nodes(world_uid)
-    edges = await conn_svc.get_edges(world_uid)
     try:
-        surface_bundle, working = require_surface_plan_inputs(
-            world, locations, nodes=nodes, edges=edges,
-            planning=container.surface_planning(), capture=container.surface_planning_capture(),
+        surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
+            world, locations,
             wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    region_state_snapshot = await load_region_state_snapshot(
+        container.region_state_repository(), world_uid,
+    )
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
@@ -529,6 +523,7 @@ async def refine_from_entry_route(
                 location_uid=location_uid,
                 heading_dx=heading_dx,
                 heading_dy=heading_dy,
+                region_state_snapshot=region_state_snapshot,
                 working=working,
             )
             scheduled = None
@@ -540,6 +535,7 @@ async def refine_from_entry_route(
                     tile_gx=entry.tile_gx,
                     tile_gy=entry.tile_gy,
                     heading=entry.heading,
+                    region_state_snapshot=region_state_snapshot,
                     working=working,
                 )
             await finalize_pack_on_world(
@@ -598,21 +594,20 @@ async def refine_chunk_route(
     """Debug — re-refine one wilderness chunk (same FineChunkRunner). Mill/paint opt-in."""
     world_svc = container.world_service()
     location_svc = container.location_service()
-    conn_svc = container.connection_graph_service()
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.list_insert_order(world_uid)
-    nodes = await conn_svc.get_nodes(world_uid)
-    edges = await conn_svc.get_edges(world_uid)
     try:
-        surface_bundle, working = require_surface_plan_inputs(
-            world, locations, nodes=nodes, edges=edges,
-            planning=container.surface_planning(), capture=container.surface_planning_capture(),
+        surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
+            world, locations,
             wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    region_state_snapshot = await load_region_state_snapshot(
+        container.region_state_repository(), world_uid,
+    )
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
@@ -624,7 +619,9 @@ async def refine_chunk_route(
             result = await entry_orch.fine_terrain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_bundle,
                 gx, gy, cx, cy,
-                stages=stages, working=working,
+                stages=stages,
+                region_state_snapshot=region_state_snapshot,
+                working=working,
             )
             await finalize_pack_on_world(
                 container.world_repository(),
@@ -668,21 +665,20 @@ async def schedule_chunk_refine_route(
     """Debug — WP-13 background rings + path-ahead only (no blocking scene)."""
     world_svc = container.world_service()
     location_svc = container.location_service()
-    conn_svc = container.connection_graph_service()
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.list_insert_order(world_uid)
-    nodes = await conn_svc.get_nodes(world_uid)
-    edges = await conn_svc.get_edges(world_uid)
     try:
-        surface_bundle, working = require_surface_plan_inputs(
-            world, locations, nodes=nodes, edges=edges,
-            planning=container.surface_planning(), capture=container.surface_planning_capture(),
+        surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
+            world, locations,
             wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    region_state_snapshot = await load_region_state_snapshot(
+        container.region_state_repository(), world_uid,
+    )
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
@@ -697,6 +693,7 @@ async def schedule_chunk_refine_route(
             tile_gy=tile_gy,
             heading_dx=heading_dx,
             heading_dy=heading_dy,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         await finalize_pack_on_world(

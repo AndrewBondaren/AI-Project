@@ -97,6 +97,7 @@ class FineRegionPaintTests(unittest.TestCase):
         self.uid = region_uid(self.world.world_uid, name="woods")
         self.state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             self.world, [], _surface_ctx(self.world), 0, 0, parent_light=_parent(),
+            region_state_snapshot={},
             working=working_fixture(self.world, _surface_ctx(self.world)),
         )
 
@@ -150,6 +151,7 @@ class FineRegionPaintTests(unittest.TestCase):
             update={"enabled": False})).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
+            region_state_snapshot={},
             working=working_fixture(world, _surface_ctx(world)),
         )
         assert state.surface_terrain is not None
@@ -162,6 +164,7 @@ class FineRegionPaintTests(unittest.TestCase):
         world = _world()  # enabled policy, no declared regions, no autoresolve
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
+            region_state_snapshot={},
             working=working_fixture(world, _surface_ctx(world)),
         )
         terrain = state.surface_terrain
@@ -177,7 +180,9 @@ class FineRegionPaintTests(unittest.TestCase):
             declared_regions=[self.spec],
         ).model_dump(mode="json")
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
-            world, [], _surface_ctx(world), 0, 0, parent_light=_parent(), working=working_fixture(world, _surface_ctx(world)))
+            world, [], _surface_ctx(world), 0, 0, parent_light=_parent(),
+            region_state_snapshot={},
+            working=working_fixture(world, _surface_ctx(world)))
         self.assertIn(self.uid, state.surface_region_uid.values())
 
 

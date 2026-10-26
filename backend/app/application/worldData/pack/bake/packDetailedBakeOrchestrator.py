@@ -9,7 +9,10 @@ from __future__ import annotations
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.relief.discover.timings import (
@@ -96,6 +99,7 @@ class PackDetailedBakeOrchestrator:
         surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
         *,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         with generation_world_log(world.world_uid, mode="detailed"):
@@ -107,6 +111,7 @@ class PackDetailedBakeOrchestrator:
             )
             return await self._bake_in_log_scope(
                 world, locations, writer, mat_ctx, surface_bundle, request,
+                region_state_snapshot=region_state_snapshot,
                 working=working,
             )
 
@@ -119,6 +124,7 @@ class PackDetailedBakeOrchestrator:
         surface_bundle: SurfacePlanBundle,
         request: DetailedBakeRequest,
         *,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         relief_templates: dict[str, ReliefTemplate] = {}
@@ -134,11 +140,13 @@ class PackDetailedBakeOrchestrator:
             return await self._bake_location_scope(
                 world, locations, writer, mat_ctx, surface_bundle, request,
                 relief_templates=relief_templates,
+                region_state_snapshot=region_state_snapshot,
                 working=working,
             )
         return await self._bake_wilderness_scope(
             world, locations, writer, mat_ctx, surface_bundle, request,
             relief_templates=relief_templates,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
 
@@ -152,6 +160,7 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
         *,
         relief_templates: dict[str, ReliefTemplate],
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         plan = resolve_detailed_scope(world, locations, writer, request)
@@ -160,6 +169,7 @@ class PackDetailedBakeOrchestrator:
         return await self._run(
             world, locations, writer, mat_ctx, surface_bundle, request, plan,
             relief_templates=relief_templates,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
 
@@ -173,6 +183,7 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
         *,
         relief_templates: dict[str, ReliefTemplate],
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         plan = resolve_detailed_scope(world, locations, writer, request)
@@ -180,6 +191,7 @@ class PackDetailedBakeOrchestrator:
         return await self._run(
             world, locations, writer, mat_ctx, surface_bundle, request, plan,
             relief_templates=relief_templates,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
 
@@ -224,6 +236,7 @@ class PackDetailedBakeOrchestrator:
         plan: DetailedScopePlan,
         *,
         relief_templates: dict[str, ReliefTemplate],
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> PackDetailedBakeResult:
         l2_t0 = time.perf_counter()
@@ -231,6 +244,7 @@ class PackDetailedBakeOrchestrator:
             world, locations, writer, mat_ctx, surface_bundle, plan,
             relief_templates_by_uid=relief_templates,
             stages=request.stages,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         l2_s = time.perf_counter() - l2_t0
@@ -289,6 +303,7 @@ class PackDetailedBakeOrchestrator:
         phase: str = "detailed",
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         stages: GradePipelineStages | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> DetailedRefineAggregate:
         return await refine_detailed_tiles(
@@ -297,5 +312,6 @@ class PackDetailedBakeOrchestrator:
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )

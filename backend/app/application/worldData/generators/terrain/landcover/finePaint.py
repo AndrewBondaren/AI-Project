@@ -75,7 +75,7 @@ def paint_regions_fine(
     fine_terrain: dict[Coord, str],
     l0_hydro: dict[Coord, MapCellHydrology],
     tile_bbox: Bounds,
-    region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+    region_state_snapshot: Mapping[str, StateSnapshotEntry],
     working: SurfaceWorkingMaps,
 ) -> dict[Coord, str]:
     """Paint region winners onto ``fine_terrain`` in place; return uid map."""
@@ -94,7 +94,7 @@ def paint_regions_fine(
         tiles=[(parent_light.gx, parent_light.gy)],
         scale=scale,
         surface_bundle=bundle,
-        region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
+        region_state_snapshot=region_state_snapshot,
         working=working,
     )
     materializer = LandcoverMaterializer(prepare_landcover_inputs(bake_ctx))

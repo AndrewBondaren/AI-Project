@@ -83,7 +83,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
-            working=working_fixture(w, ctx),
+            region_state_snapshot={}, working=working_fixture(w, ctx),
         )
         self.assertIsNone(state.surface_grade_uid)
 

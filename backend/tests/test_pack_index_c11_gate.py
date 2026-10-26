@@ -221,6 +221,7 @@ class LocationL2PackIndexGateTests(IsolatedAsyncioTestCase):
                     location_uid=amber.location_uid,
                 ),
                 relief_templates={},
+                region_state_snapshot={}, working=MagicMock(),
             )
             self.assertEqual(result.tiles_refined, 0)
             self.assertEqual(result.wilderness_chunks, 0)
@@ -250,5 +251,6 @@ class LocationL2PackIndexGateTests(IsolatedAsyncioTestCase):
                         location_uid=iron.location_uid,
                     ),
                     relief_templates={},
+                    region_state_snapshot={}, working=MagicMock(),
                 )
             orch._refine_tiles.assert_awaited()

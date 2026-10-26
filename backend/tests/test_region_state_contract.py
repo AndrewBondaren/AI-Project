@@ -215,11 +215,13 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
                    return_value=(fine._surface_ctx(world), working_fixture(world, fine._surface_ctx(world)))), self.assertRaises(ComputeBoundary):
             await owner.materialize_light_pack(world.world_uid, world, [], writer, mat_ctx, wait=RequestPlanWait.unbounded())
         self.assertEqual(world_map.bake_tiles.call_args.kwargs["region_state_snapshot"]["r"].current_type, "plains")
-        runner = FineChunkRunner(terrain, region_state_repo=repo)
+        runner = FineChunkRunner(terrain)
+        snapshot = await load_region_state_snapshot(repo, world.world_uid)
         with patch("app.application.worldData.pack.refine.fine.fineChunkRunner.prepare_fine_tile",
                    side_effect=ComputeBoundary) as prep, self.assertRaises(ComputeBoundary):
             await runner.refine_rects(world, [], writer, mat_ctx, fine._surface_ctx(world),
-                                     0, 0, [MagicMock()], [], working=working_fixture(world, fine._surface_ctx(world)))
+                                     0, 0, [MagicMock()], [], region_state_snapshot=snapshot,
+                                     working=working_fixture(world, fine._surface_ctx(world)))
         self.assertEqual(prep.call_args.kwargs["region_state_snapshot"]["r"].spec_fingerprint, "old")
         self.assertEqual(repo.get_by_world.await_count, 2)
         repo.upsert.assert_not_called()

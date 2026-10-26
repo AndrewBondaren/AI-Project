@@ -97,7 +97,7 @@ class TerrainBatchOrchestrator:
         if ctx is None:
             return []
         plan = PackTilePlanner().plan(
-            world, locations, ctx, scope="light", max_tiles=max_tiles,
+            world, locations, scope="light", max_tiles=max_tiles,
         )
         return plan.tile_tuples()
 
@@ -126,7 +126,7 @@ class TerrainBatchOrchestrator:
         *,
         parent_light: ParentLightTile,
         refine_policy: ParentLightRefinePolicy | None = None,
-        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> TileSurfaceState:
         """L2 surface: upsample + terrain carry + hills + hydro + gap (before chunk pool)."""
@@ -225,12 +225,14 @@ class TerrainBatchOrchestrator:
         *,
         surface_state: TileSurfaceState | None = None,
         parent_light: ParentLightTile | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
         working: SurfaceWorkingMaps,
     ) -> list[MapCell]:
         return self.generate_chunk_cells_sync(
             world, locations, bundle, tile_gx, tile_gy, rect,
             surface_state=surface_state,
             parent_light=parent_light,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
 
@@ -245,15 +247,17 @@ class TerrainBatchOrchestrator:
         *,
         surface_state: TileSurfaceState | None = None,
         parent_light: ParentLightTile | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
         working: SurfaceWorkingMaps,
     ) -> list[MapCell]:
         if surface_state is None:
-            if parent_light is None:
+            if parent_light is None or region_state_snapshot is None:
                 raise ValueError(
-                    "parent_light or surface_state required for L2 generate (WP-PERF-22)",
+                    "parent_light and region_state_snapshot required for L2 generate (WP-PERF-22)",
                 )
             surface_state = self.build_tile_surface_state(
                 world, locations, bundle, tile_gx, tile_gy, parent_light=parent_light,
+                region_state_snapshot=region_state_snapshot,
                 working=working,
             )
         return self._generator.generate_surface_chunk(

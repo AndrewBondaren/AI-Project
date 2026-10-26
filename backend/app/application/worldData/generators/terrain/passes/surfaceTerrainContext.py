@@ -1,13 +1,15 @@
-"""Compatibility entry: capture once, then delegate to surface planning."""
+"""Compatibility entry: capture once, then delegate to surface planning.
 
-from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
-from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+Transitional legacy-context producer only (region outline + L2 bootstrap until
+PC-11.6b/PC-11.4). The plan-bundle request boundary lives on
+``SurfacePlanningEntry`` in planning/composition.
+"""
+
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.planning.composition.surfacePlanningAssembler import (
-    SurfacePlanningAssembler, prepare_captured_context, prepare_captured_bundle,
+    SurfacePlanningAssembler, prepare_captured_context,
 )
-from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.legacy.surfaceTerrainContext import SurfaceTerrainContext as SurfaceTerrainContext
 from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
@@ -45,33 +47,3 @@ def require_surface_terrain_context(
         raise ValueError("surface terrain context unavailable")
     return result
 
-
-def require_surface_plan_inputs(
-    world: World, locations: list[NamedLocation], *,
-    planning: SurfacePlanningAssembler, capture: SurfacePlanningCapture, wait: PlanWaitControl,
-    nodes: list[ConnectionNode] | None = None, edges: list[ConnectionEdge] | None = None,
-    resolve_ctx: ResolveContext | None = None,
-    mountain_templates: tuple[MountainTemplateInput, ...] = (),
-) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps]:
-    """Standalone entry boundary; downstream refine reuses this single capture."""
-    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext()
-    mode = ResolutionMode.VALIDATE_ONLY if ctx.validate_only else ResolutionMode.RUNTIME
-    view = capture.capture(world, locations, mode=mode,
-        mountain_templates=mountain_templates, resolve_ctx=ctx)
-    result = SurfacePlanningEntry(planning, capture).prepare_captured(
-        view, world=world, wait=wait, resolve_ctx=ctx)
-    if result is None:
-        raise ValueError("surface terrain context unavailable")
-    return result
-
-
-def require_surface_plan_bundle(
-    world: World, locations: list[NamedLocation], *,
-    planning: SurfacePlanningAssembler, capture: SurfacePlanningCapture, wait: PlanWaitControl,
-    nodes: list[ConnectionNode] | None = None, edges: list[ConnectionEdge] | None = None,
-    resolve_ctx: ResolveContext | None = None,
-    mountain_templates: tuple[MountainTemplateInput, ...] = (),
-) -> SurfacePlanBundle:
-    return require_surface_plan_inputs(world, locations, planning=planning, capture=capture,
-        wait=wait, nodes=nodes, edges=edges, resolve_ctx=resolve_ctx,
-        mountain_templates=mountain_templates)[0]

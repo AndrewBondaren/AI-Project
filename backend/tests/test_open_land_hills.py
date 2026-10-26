@@ -266,6 +266,7 @@ class TestHillsInTilePrep(unittest.TestCase):
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
             refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0),
+            region_state_snapshot={},
             working=working_fixture(w, ctx),
         )
         zs = list(state.heightmap.surface_z.values())

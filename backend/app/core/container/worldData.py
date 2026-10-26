@@ -5,6 +5,7 @@ from threading import RLock
 
 from app.application.worldData.planning.composition.planProviders import WorldPlanProviders, register_world_plan_providers
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 
@@ -137,6 +138,12 @@ class WorldDataWiring:
                 self._surface_capture = SurfacePlanningCapture()
             return self._surface_capture
 
+    def surface_planning_entry(self) -> SurfacePlanningEntry:
+        return SurfacePlanningEntry(self.surface_planning(), self.surface_planning_capture())
+
+    def region_state_repository(self) -> SqliteRegionStateRepository:
+        return SqliteRegionStateRepository(self._db)
+
     def source_publication_guard(self) -> SourcePublicationGuard:
         with self._planning_cache_lock:
             if self._source_publication is None:
@@ -241,6 +248,7 @@ class WorldDataWiring:
                 pack=self.pack_materialization_orchestrator(),
                 planning=self.surface_planning(), capture=self.surface_planning_capture(),
                 db=self._db, publication_guard=self.source_publication_guard(),
+                region_state_repo=self.region_state_repository(),
                 outdoor=self.settlement_outdoor_orchestrator(),
             )
         return self._surface_materialization_orchestrator
@@ -303,7 +311,6 @@ class WorldDataWiring:
             self._entry_refine_orchestrator = EntryRefineOrchestrator(
                 FineTerrainRefineOrchestrator(
                     terrain,
-                    region_state_repo=SqliteRegionStateRepository(self._db),
                     relief_loader=self.template_snapshot_loader(),
                     relief_grade_repo=self.relief_grade_repository(),
                 ),
@@ -319,7 +326,7 @@ class WorldDataWiring:
                 self.terrain_batch_orchestrator(),
                 planning=self.surface_planning(), capture=self.surface_planning_capture(),
                 publication_guard=self.source_publication_guard(),
-                region_state_repo=SqliteRegionStateRepository(self._db),
+                region_state_repo=self.region_state_repository(),
                 entry=entry,
                 climate_bake=entry.climate_bake,
                 job_repo=self.chunk_refine_job_repository(),

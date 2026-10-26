@@ -8,6 +8,9 @@ corridor select to ``pathCorridorSelect``. Public method names stable for
 from __future__ import annotations
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
+from collections.abc import Mapping
+
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
@@ -53,7 +56,6 @@ from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
-from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 
 
 class FineTerrainRefineOrchestrator:
@@ -64,10 +66,9 @@ class FineTerrainRefineOrchestrator:
         runner: FineChunkRunner | None = None,
         relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
-        region_state_repo: IRegionStateRepository | None = None,
     ) -> None:
         self._terrain = terrain
-        self._runner = runner or FineChunkRunner(terrain, region_state_repo=region_state_repo)
+        self._runner = runner or FineChunkRunner(terrain)
         self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
 
@@ -85,6 +86,7 @@ class FineTerrainRefineOrchestrator:
         tile_gy: int,
         xy_radius: int,
         location_volumes: list[TerritoryVolume] | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> tuple[PersistResult, int, int]:
         loc_volumes = location_volumes or [
@@ -112,6 +114,7 @@ class FineTerrainRefineOrchestrator:
             role="scene",
             phase="scene",
             started_at=phase_t0,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         return result.persist, result.wilderness_chunks_written, result.rect_count
@@ -122,11 +125,13 @@ class FineTerrainRefineOrchestrator:
         tile_gx: int, tile_gy: int, rect: ColumnRect,
         location_volumes: list[TerritoryVolume] | None = None, *,
         refine_role: ChunkRefineRole = "background", stages: GradePipelineStages | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         """Standalone single-rect operation; nested queued work does not publish."""
         result = await self._refine_rect(world, locations, writer, mat_ctx, surface_bundle,
-            tile_gx, tile_gy, rect, location_volumes, refine_role=refine_role, stages=stages, working=working)
+            tile_gx, tile_gy, rect, location_volumes, refine_role=refine_role, stages=stages,
+            region_state_snapshot=region_state_snapshot, working=working)
         writer.save_manifest()
         return result
 
@@ -144,6 +149,7 @@ class FineTerrainRefineOrchestrator:
         *,
         refine_role: ChunkRefineRole = "background",
         stages: GradePipelineStages | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         loc_volumes = location_volumes or [
@@ -158,6 +164,7 @@ class FineTerrainRefineOrchestrator:
             phase=refine_role,
             relief_templates_by_uid=templates,
             stages=resolved,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         await _persist_grade_instances(self._relief_grade_repo, world, result)
@@ -233,6 +240,7 @@ class FineTerrainRefineOrchestrator:
         cy: int,
         *,
         stages: GradePipelineStages | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         rect = fine_chunk_rect(world, tile_gx, tile_gy, cx, cy)
@@ -241,6 +249,7 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, rect,
             refine_role="background",
             stages=stages,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
 
@@ -258,6 +267,7 @@ class FineTerrainRefineOrchestrator:
         *,
         heading: PathHeading | None = None,
         depth_tiles: int | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> int:
         """Refine coarse corridor ahead of anchor — PLAYER_PATH layer (MERGE-5 / DEBT-7)."""
@@ -287,6 +297,7 @@ class FineTerrainRefineOrchestrator:
             role="path",
             phase="path",
             started_at=phase_t0,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         return result.wilderness_chunks_written
@@ -345,6 +356,7 @@ async def _run_refine_phase(
     role: ChunkRefineRole,
     phase: str,
     started_at: float,
+    region_state_snapshot: Mapping[str, StateSnapshotEntry],
     working: SurfaceWorkingMaps,
 ) -> FineRefineResult:
     """One refine pass + grade persist + phase-done log (scene/path share it)."""
@@ -354,6 +366,7 @@ async def _run_refine_phase(
         refine_role=role,
         phase=phase,
         stages=GradePipelineStages.off(),
+        region_state_snapshot=region_state_snapshot,
         working=working,
     )
     await _persist_grade_instances(relief_grade_repo, world, result)

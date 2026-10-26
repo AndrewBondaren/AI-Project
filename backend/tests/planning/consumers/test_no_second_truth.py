@@ -139,9 +139,11 @@ class L2BoundaryTests(unittest.TestCase):
                 if "fineChunkCompute" not in path:
                     self.assertIn("SurfacePlanBundle", text)
         route = (APP / "api/routes/map.py").read_text(encoding="utf-8")
-        self.assertEqual(route.count("= require_surface_plan_inputs("), 3)
+        self.assertEqual(route.count("require_plan_inputs("), 3)
         for call in ast.walk(ast.parse(route)):
             if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr in {
                     "refine_from_entry", "schedule_chunk_refine", "refine_queued_chunk", "drain_persisted"}:
-                self.assertIn("working", {keyword.arg for keyword in call.keywords})
+                keywords = {keyword.arg for keyword in call.keywords}
+                self.assertIn("working", keywords)
+                self.assertIn("region_state_snapshot", keywords)
         self.assertNotIn("require_surface_terrain_context", route)

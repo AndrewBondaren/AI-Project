@@ -9,7 +9,10 @@ from __future__ import annotations
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
@@ -58,6 +61,7 @@ async def refine_detailed_tiles(
     phase: str = "detailed",
     relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     stages: GradePipelineStages | None = None,
+    region_state_snapshot: Mapping[str, StateSnapshotEntry],
     working: SurfaceWorkingMaps,
 ) -> DetailedRefineAggregate:
     """Require L0 parent light per tile, then refine every rect of the plan."""
@@ -82,6 +86,7 @@ async def refine_detailed_tiles(
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages or GradePipelineStages.off(),
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         for key, z in refined.fine_surface_z.items():

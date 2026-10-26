@@ -5,9 +5,6 @@ docs/tz_world_pack_storage.md § Bake modes (master contract 2026-07-19).
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
 from app.application.worldData.pack.bake.packTileCollect import (
     light_l0_tiles,
     world_bounds_l0_tiles,
@@ -35,13 +32,11 @@ class PackTilePlanner:
         self,
         world: World,
         locations: list[NamedLocation],
-        surface_ctx: SurfaceTerrainContext | None = None,
         *,
         scope: PackTilePlanScope,
         max_tiles: int | None = None,
     ) -> PackTilePlan:
-        """``surface_ctx`` unused for tile-set resolve; optional for caller compatibility."""
-        del surface_ctx
+        """Pure tile-set resolve — no surface planning inputs needed."""
         if scope == "full":
             tiles = world_bounds_l0_tiles(world, locations)
             return PackTilePlan(

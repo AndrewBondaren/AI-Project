@@ -8,7 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.application.worldData.generators.terrain.passes import bbox
-from app.application.worldData.pack.bake import packCompletenessClassifier, packTileCollect, packTilePlanner
+from app.application.worldData.pack.bake import packCompletenessClassifier
+from app.application.worldData.pack.bake import packTileCollect, packTilePlanner
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningViewKind
 from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.bake.packBakeDefaults import (
     PackBakeDefaults,
@@ -167,7 +169,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
             return_value=2,
         ):
             planner = PackTilePlanner()
-            light = planner.plan(world, locations, None, scope="light")
+            light = planner.plan(world, locations, scope="light")
             full = planner.plan(world, locations, scope="full")
 
         self.assertEqual(light.scope, "light")
@@ -224,7 +226,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         snap = PackCompletenessClassifier().classify(
-            world, [], manifest=None, wait=RequestPlanWait.unbounded(),
+            world, [], manifest=None, extent_status=None,
         )
         self.assertEqual(snap.completeness, "absent")
 
@@ -254,19 +256,14 @@ class TestPackCompletenessClassifier(unittest.TestCase):
                 TileManifestEntry(gx=0, gy=0, world_map_path="tiles/r.0.0.world_map.zst"),
             ],
         )
-        with patch(
-            packCompletenessClassifier.__name__ + ".prepare_surface_terrain_context",
-            return_value=MagicMock(),
-        ):
-            snap = PackCompletenessClassifier(planner).classify(
-                world, [], manifest=manifest, locations_index=None, surface_ctx=MagicMock(), wait=RequestPlanWait.unbounded(),
-            )
+        snap = PackCompletenessClassifier(planner).classify(
+            world, [], manifest=manifest, locations_index=None,
+            extent_status=SurfacePlanningViewKind.READY,
+        )
         self.assertEqual(snap.completeness, "light_complete")
         self.assertEqual(snap.expected_l0_full, 2)
         self.assertEqual(len(snap.missing_l0_full), 1)
         self.assertIsNone(snap.light_cap)
-        # plan called with surface_ctx=None
-        self.assertIsNone(planner.plan.call_args_list[0].args[2])
 
 
 if __name__ == "__main__":

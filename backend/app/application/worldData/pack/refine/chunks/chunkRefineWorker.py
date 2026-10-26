@@ -3,6 +3,9 @@
 from __future__ import annotations
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
+from collections.abc import Mapping
+
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.ids import runtime_uid
 from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
@@ -97,6 +100,7 @@ class ChunkRefineWorker:
         queue: ChunkRefineQueue,
         *,
         max_jobs: int = 0,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> tuple[int, int]:
         drain_t0 = log_pack_drain_queue_start(world_uid, max_jobs=max_jobs, pending=len(queue))
@@ -112,6 +116,7 @@ class ChunkRefineWorker:
                 world, locations, writer, mat_ctx, surface_bundle,
                 gx, gy, cx, cy,
                 stages=GradePipelineStages.off(),
+                region_state_snapshot=region_state_snapshot,
                 working=working,
             )
             processed += 1
@@ -138,6 +143,7 @@ class ChunkRefineWorker:
         surface_bundle: SurfacePlanBundle,
         *,
         max_jobs: int = 1,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> int:
         if self._jobs is None or max_jobs <= 0:
@@ -152,6 +158,7 @@ class ChunkRefineWorker:
                 world, locations, writer, mat_ctx, surface_bundle,
                 job.gx, job.gy, job.cx, job.cy,
                 stages=GradePipelineStages.off(),
+                region_state_snapshot=region_state_snapshot,
                 working=working,
             )
             await self._jobs.mark_complete(job.job_uid)

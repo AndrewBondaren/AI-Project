@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 
-from app.application.planning.service.planningService import PlanWaitControl
+from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+from app.application.worldData.planning.composition.surfacePlanningEntry import (
+    SurfacePlanningEntry,
+)
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 
 from app.application.worldData.materialize.loadingProgress import (
@@ -70,13 +74,17 @@ class PackLoadingProgressFacade:
     def __init__(self, context: PackReadContext, *, planning: SurfacePlanningAssembler | None = None,
                  capture: SurfacePlanningCapture | None = None) -> None:
         self._ctx = context
-        self._classifier = PackCompletenessClassifier(planning=planning, capture=capture)
+        self._entry = (
+            SurfacePlanningEntry(planning, capture)
+            if planning is not None and capture is not None
+            else None
+        )
+        self._classifier = PackCompletenessClassifier()
 
     def get_loading_progress(
         self,
         world: World,
         *,
-        wait: PlanWaitControl,
         locations: list[NamedLocation] | None = None,
     ) -> LoadingProgressSnapshot:
         if not self._ctx.has_pack_for(world):
@@ -110,10 +118,19 @@ class PackLoadingProgressFacade:
         pack_completeness = None
         if locations is not None:
             index = PackCompletenessClassifier.load_locations_index(reader)
+            extent_status = None
+            if manifest.tiles:
+                if self._entry is None:
+                    raise ValueError("surface planning dependencies required")
+                view = self._entry.capture_view(world, locations,
+                    mode=ResolutionMode.RUNTIME, mountain_templates=(),
+                    resolve_ctx=ResolveContext())
+                extent_status = self._entry.extent_status(view)
             snap = self._classifier.classify(
                 world,
                 locations,
-                manifest=manifest, wait=wait,
+                manifest=manifest,
+                extent_status=extent_status,
                 locations_index=index,
             )
             pack_completeness = snap.to_dict()

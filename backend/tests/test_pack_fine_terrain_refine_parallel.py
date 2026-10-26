@@ -78,6 +78,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+                region_state_snapshot={},
                 working=MagicMock(),
             )
             result, written, total = (
@@ -119,6 +120,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+                region_state_snapshot={},
                 working=MagicMock(),
             )
             result, written, total = (
@@ -139,9 +141,10 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         runner = MagicMock()
         runner.refine_rects = AsyncMock(return_value=FineRefineResult.empty())
         facade = FineTerrainRefineOrchestrator(terrain, runner=runner)
-        await facade.refine_queued_chunk(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, 0, 0, working=MagicMock())
+        await facade.refine_queued_chunk(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, 0, 0, region_state_snapshot={}, working=MagicMock())
         writer.save_manifest.assert_not_called()
-        await facade.refine_rect(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, rects[0], working=MagicMock())
+        region_state_snapshot={},
+        await facade.refine_rect(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, rects[0], region_state_snapshot={}, working=MagicMock())
         writer.save_manifest.assert_called_once_with()
 
     async def test_facade_delegates_refine_rects(self) -> None:
@@ -163,6 +166,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+                region_state_snapshot={},
                 working=MagicMock(),
             )
             result, written, total = (

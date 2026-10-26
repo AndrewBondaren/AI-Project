@@ -8,8 +8,11 @@ from __future__ import annotations
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
+from collections.abc import Mapping
 from dataclasses import replace
 from functools import partial
+
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 from app.application.worldData.materialize.chunkComputePool import ChunkComputePool
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
@@ -30,17 +33,17 @@ from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.db.repositories.iRegionStateRepository import IRegionStateRepository
-from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
 
 
 class FineChunkRunner:
-    """Parent light → surface → chunk generate → pack persist."""
+    """Parent light → surface → chunk generate → pack persist.
 
-    def __init__(self, terrain: TerrainBatchOrchestrator, *,
-                 region_state_repo: IRegionStateRepository | None = None) -> None:
+    The request-scope ``region_state_snapshot`` arrives per call — the runner
+    holds no repository and never reloads state itself.
+    """
+
+    def __init__(self, terrain: TerrainBatchOrchestrator) -> None:
         self._terrain = terrain
-        self._region_state_repo = region_state_repo
 
     async def refine_rects(
         self,
@@ -58,6 +61,7 @@ class FineChunkRunner:
         phase: str | None = None,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         stages: GradePipelineStages | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry],
         working: SurfaceWorkingMaps,
     ) -> FineRefineResult:
         """Generate + persist fine chunks; ``fine_surface_z`` for climate ladder."""
@@ -65,7 +69,6 @@ class FineChunkRunner:
             return FineRefineResult.empty()
 
         l2_t0 = time.perf_counter()
-        region_states = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
         ctx = prepare_fine_tile(
             self._terrain,
             world,
@@ -81,7 +84,7 @@ class FineChunkRunner:
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
             stages=stages or GradePipelineStages.off(),
-            region_state_snapshot=region_states,
+            region_state_snapshot=region_state_snapshot,
             working=working,
         )
         persist = FineChunkPersist(ctx, writer)

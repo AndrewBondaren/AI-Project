@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from app.application.planning.service.planningService import PlanWaitControl
-from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
-from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-    prepare_surface_terrain_context,
-)
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+from app.application.worldData.planning.contracts.surfacePlanningView import (
+    SurfacePlanningViewKind,
+)
 from app.application.worldData.pack.read.locationsIndexRead import (
     load_locations_index as load_locations_index_from_paths,
 )
@@ -31,9 +27,13 @@ def _locations_expected_from_index(index: LocationsIndexWire | None) -> list[str
 
 
 class PackCompletenessClassifier:
-    def __init__(self, planner: PackTilePlanner | None = None, *, planning: SurfacePlanningAssembler | None = None,
-                 capture: SurfacePlanningCapture | None = None) -> None:
-        self._planning, self._capture = planning, capture
+    """Expected vs baked tiles; extent status arrives from the request boundary.
+
+    Never captures or prepares planning itself (single boundary =
+    ``SurfacePlanningEntry``); the facade probes once per request.
+    """
+
+    def __init__(self, planner: PackTilePlanner | None = None) -> None:
         self._planner = planner or PackTilePlanner()
 
     def classify(
@@ -41,29 +41,24 @@ class PackCompletenessClassifier:
         world: World,
         locations: list[NamedLocation],
         *,
-        wait: PlanWaitControl,
         manifest: WorldPackManifest | None,
-        surface_ctx: SurfaceTerrainContext | None = None,
+        extent_status: SurfacePlanningViewKind | None,
         locations_index: LocationsIndexWire | None = None,
         max_missing_list: int = 64,
     ) -> PackCompletenessSnapshot:
         if manifest is None or not manifest.tiles:
             return PackCompletenessSnapshot(completeness="absent")
 
-        ctx = surface_ctx
-        if ctx is None:
-            if self._planning is None or self._capture is None:
-                raise ValueError("surface planning dependencies required")
-            ctx = prepare_surface_terrain_context(world, locations,
-                planning=self._planning, capture=self._capture, wait=wait)
-        if ctx is None:
+        if extent_status is None:
+            raise ValueError("extent_status required for non-empty manifest")
+        if extent_status == SurfacePlanningViewKind.NO_EXTENT:
             return PackCompletenessSnapshot(completeness="partial")
 
         light_plan = self._planner.plan(
-            world, locations, None, scope="light", max_tiles=None,
+            world, locations, scope="light", max_tiles=None,
         )
         full_plan = self._planner.plan(
-            world, locations, None, scope="full",
+            world, locations, scope="full",
         )
         baked = {
             (t.gx, t.gy)

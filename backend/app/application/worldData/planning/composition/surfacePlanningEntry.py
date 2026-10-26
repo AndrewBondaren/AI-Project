@@ -53,3 +53,28 @@ class SurfacePlanningEntry:
             terrain=TerrainWorkingFields.from_plan(bundle.terrain_base.payload),
             hydrology=HydrologyWorkingFields.from_plan(bundle.hydrology.payload, view.terrain_base.grid))
         return bundle, working
+
+    def require_plan_inputs(
+        self, world: World, locations: Sequence[NamedLocation], *,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
+        mountain_templates: tuple[MountainTemplateInput, ...] = (),
+    ) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps]:
+        """Application request boundary: one capture + one prepare per request."""
+        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext()
+        mode = ResolutionMode.VALIDATE_ONLY if ctx.validate_only else ResolutionMode.RUNTIME
+        view = self.capture_view(world, locations, mode=mode,
+            mountain_templates=mountain_templates, resolve_ctx=ctx)
+        result = self.prepare_captured(view, world=world, wait=wait, resolve_ctx=ctx)
+        if result is None:
+            raise ValueError("surface terrain context unavailable")
+        return result
+
+    def require_plan_bundle(
+        self, world: World, locations: Sequence[NamedLocation], *,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
+        mountain_templates: tuple[MountainTemplateInput, ...] = (),
+    ) -> SurfacePlanBundle:
+        return self.require_plan_inputs(world, locations, wait=wait,
+            resolve_ctx=resolve_ctx, mountain_templates=mountain_templates)[0]

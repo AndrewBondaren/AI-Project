@@ -59,7 +59,7 @@ class TestMapCellQueryFacade(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cells[0].system_terrain, "plains")
 
     def test_loading_progress(self):
-        snap = self.loading.get_loading_progress(_world(), wait=RequestPlanWait.unbounded())
+        snap = self.loading.get_loading_progress(_world())
         self.assertEqual(snap.world_map.tiles_ready, 1)
         self.assertEqual(snap.world_map.tiles_pct, 100.0)
         self.assertEqual(snap.world_map.locations_pct, 100.0)

@@ -109,7 +109,7 @@ class RegistryCutoverTests(unittest.TestCase):
         with patch.object(finePaint, "prepare_landcover_inputs", side_effect=with_state):
             state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
                 world, [], frozen_surface_fixture(world, parent), 0, 0, parent_light=parent,
-                refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0), working=working_fixture(world, frozen_surface_fixture(world, parent)))
+                refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0), region_state_snapshot={uid: StateSnapshotEntry("steppe")}, working=working_fixture(world, frozen_surface_fixture(world, parent)))
         self.assertEqual(set(state.surface_terrain.values()), {"steppe"})
         self.assertEqual(set(state.surface_region_uid.values()), {uid})
         self.assertGreater(max(state.heightmap.surface_z.values()), 3)

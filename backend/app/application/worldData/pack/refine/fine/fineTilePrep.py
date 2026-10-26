@@ -57,7 +57,7 @@ def prepare_fine_tile(
     phase: str | None = None,
     relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     stages: GradePipelineStages | None = None,
-    region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+    region_state_snapshot: Mapping[str, StateSnapshotEntry],
     working: SurfaceWorkingMaps,
 ) -> FineTileContext:
     """Prep before the pool: parent light, upsample + hills + hydro, halo, catalog."""

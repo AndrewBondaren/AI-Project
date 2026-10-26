@@ -62,6 +62,7 @@ def bind_frozen_context(test, ctx):
     ctx.surface_bundle = composition.prepare(capture(ctx.world, locations=ctx.locations,
         templates=mountain_template_inputs(ctx.relief_templates_by_uid)))
     ctx.surface_planning = to_legacy_context(ctx.surface_bundle, working=working_fixture(world(), ctx.surface_bundle))
+    ctx.working = working_fixture(ctx.world, ctx.surface_bundle)
     return ctx
 
 
@@ -156,12 +157,14 @@ class L0Tests(unittest.TestCase):
         writer.write_world_map_tile.return_value = "content-hash"
         for mode in ("light", "full"):
             count = WorldMapBakeOrchestrator().bake_tiles(source, [], writer, ctx.tiles,
-                surface_bundle=bundle, wait=Wait(), bake_mode=mode, working=working_fixture(source, bundle))
+                surface_bundle=bundle, region_state_snapshot={}, wait=Wait(),
+                bake_mode=mode, working=working_fixture(source, bundle))
             self.assertEqual(count, len(ctx.tiles) * ctx.scale.side ** 2)
         self.assertEqual(writer.write_world_map_tile.call_count, 2 * len(ctx.tiles))
         expected = compose_light_grid(ctx).to_wire_tile(0, 0)
-        cells, _ = WorldMapBakeOrchestrator().bake_tile(source, to_legacy_context(bundle, working=working_fixture(source, bundle)), 0, 0,
-            writer, wait=Wait(), surface_bundle=bundle, working=working_fixture(source, bundle))
+        cells, _ = WorldMapBakeOrchestrator().bake_tile(source, 0, 0,
+            writer, wait=Wait(), surface_bundle=bundle, region_state_snapshot={},
+            working=working_fixture(source, bundle))
         self.assertEqual(cells, expected)
 
     def test_missing_foreign_bundle_and_wrong_scale_fail_before_writes(self):
@@ -223,15 +226,14 @@ class L0Tests(unittest.TestCase):
         source = mountain_source()
         writer = Mock()
         writer.write_world_map_tile.return_value = "hash"
-        orchestrator = WorldMapBakeOrchestrator(planning=self.c.assembler, capture=SurfacePlanningCapture())
-        orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait(), working=working_fixture(source, frozen_surface_fixture(source)))
+        orchestrator = WorldMapBakeOrchestrator()
+        bundle = frozen_surface_fixture(source)
+        orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait(), surface_bundle=bundle,
+            region_state_snapshot={}, working=working_fixture(source, bundle))
         first = writer.write_world_map_tile.call_args.args[2]
-        with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
-            orchestrator.bake_tiles(source, [], writer, [(0, 0)], wait=Wait(), working=working_fixture(source, frozen_surface_fixture(source)))
-        builds.assert_not_called()
-        self.assertEqual(first, writer.write_world_map_tile.call_args.args[2])
-        bundle = self.c.prepare(capture(source))
-        cells, _ = orchestrator.bake_tile(source, to_legacy_context(bundle, working=working_fixture(source, bundle)), 0, 0, writer, wait=Wait(), working=working_fixture(source, frozen_surface_fixture(source)))
+        cells, _ = orchestrator.bake_tile(source, 0, 0, writer, wait=Wait(),
+            surface_bundle=bundle, region_state_snapshot={},
+            working=working_fixture(source, frozen_surface_fixture(source)))
         self.assertEqual(cells, first)
 
 
@@ -284,7 +286,7 @@ class L2Tests(unittest.TestCase):
     def states(self, bundle, parents, tiles=None):
         working = working_fixture(self.source, bundle)
         return {tile: self.terrain.build_tile_surface_state(self.source, [], bundle, *tile,
-            parent_light=parents[tile], working=working) for tile in (tiles if tiles is not None else parents)}
+            parent_light=parents[tile], region_state_snapshot={}, working=working) for tile in (tiles if tiles is not None else parents)}
 
     def test_l2_cache_hit_clear_restart_and_reverse_tiles_are_equal(self):
         view = capture(self.source)
@@ -314,12 +316,12 @@ class L2Tests(unittest.TestCase):
         with patch.object(self.c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
                 "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
                 side_effect=AssertionError("legacy view")):
-            state = self.terrain.build_tile_surface_state(self.source, [], bundle, 0, 0, parent_light=changed, working=working_fixture(self.source, bundle))
+            state = self.terrain.build_tile_surface_state(self.source, [], bundle, 0, 0, parent_light=changed, region_state_snapshot={}, working=working_fixture(self.source, bundle))
         self.assertTrue(all(8 <= z <= 10 for z in state.heightmap.surface_z.values()))
         self.assertEqual(bundle, before)
         with self.assertRaisesRegex(ValueError, "another world"):
             self.terrain.build_tile_surface_state(replace(self.source, world_uid="foreign"), [], bundle,
-                                                  0, 0, parent_light=parent, working=working_fixture(replace(self.source, world_uid="foreign"), bundle))
+                                                  0, 0, parent_light=parent, region_state_snapshot={}, working=working_fixture(replace(self.source, world_uid="foreign"), bundle))
 
     def test_landcover_facts_use_typed_terrain_base_final_hydro_and_local_anchors(self):
         from app.application.worldData.pack.bake.lightGrid.contributors.landcoverInputs import prepare_landcover_inputs
@@ -360,7 +362,7 @@ class L2Tests(unittest.TestCase):
         overrides = dict(hydro.fine_z_overrides)
         for tile, parent in parents.items():
             state = self.terrain.build_tile_surface_state(self.source, [], bundle, *tile,
-                parent_light=parent, refine_policy=policy, working=working_fixture(self.source, bundle))
+                parent_light=parent, refine_policy=policy, region_state_snapshot={}, working=working_fixture(self.source, bundle))
             base = upsample_from_parent_light(parent, self.source, policy=policy)
             for xy, z in state.heightmap.surface_z.items():
                 target = overrides.get(xy, base[xy])
@@ -416,13 +418,14 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 writer = WorldPackWriter(WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid))
                 tiles = [(0, 0), (1, 0), (2, 0)]
                 WorldMapBakeOrchestrator().bake_tiles(source, [], writer, tiles,
-                    surface_bundle=bundle, working=working, wait=Wait())
+                    surface_bundle=bundle, region_state_snapshot={},
+                    working=working, wait=Wait())
                 terrain = TerrainBatchOrchestrator(Mock())
                 climate = ClimatePackBakeOrchestrator()
                 for gx, gy in reversed(tiles):
                     parent = require_parent_light(source.world_uid, gx, gy, reader=WorldPackReader(writer.paths),
                         cache=writer.parent_light_cache, tile_macro=2)
-                    terrain.build_tile_surface_state(source, [], bundle, gx, gy, parent_light=parent, working=working)
+                    terrain.build_tile_surface_state(source, [], bundle, gx, gy, parent_light=parent, region_state_snapshot={}, working=working)
                     wires = []
                     for workers in (1, 4):
                         output = Mock()
@@ -471,13 +474,13 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
             paths = WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid)
             writer = WorldPackWriter(paths)
             WorldMapBakeOrchestrator().bake_tiles(source, [], writer, [(0, 0)],
-                surface_bundle=bundle, wait=Wait(), working=working)
+                surface_bundle=bundle, wait=Wait(), region_state_snapshot={}, working=working)
             with patch.object(c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
                     "app.application.worldData.planning.composition.surfacePlanningCapture.SurfacePlanningCapture.capture",
                     side_effect=AssertionError("second capture")), patch(
                     "app.application.worldData.planning.composition.surfacePlanningAssembler.to_legacy_context",
                     side_effect=AssertionError("legacy L2 view")):
-                detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan, working=working)
+                detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan, region_state_snapshot={}, working=working)
                 # Compare the decoded wire: the writer may choose a codec filename per layout.
                 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
                 reader = WorldPackReader(paths)
@@ -485,16 +488,17 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(expected.columns)
                 # Cold writer forces parent decode from the baked blob.
                 cold = WorldPackWriter(paths)
-                result = await fine.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, working=working)
+                result = await fine.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, region_state_snapshot={}, working=working)
                 self.assertEqual(result.fine_surface_z, detailed.fine_surface_z)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 await entry.refine_from_entry(source.world_uid, source, [], cold, mat, bundle,
-                    kind="session_start", anchor_x=0, anchor_y=0, working=working)
+                    kind="session_start", anchor_x=0, anchor_y=0,
+                    region_state_snapshot={}, working=working)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 queue = ChunkRefineQueue()
                 queue.enqueue_chunk(0, 0, 0, 0, anchor_x=0, anchor_y=0, chunk_columns=2, tile_macro=2)
                 worker = ChunkRefineWorker(fine)
-                self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue, working=working), (1, 0))
+                self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue, region_state_snapshot={}, working=working), (1, 0))
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 from types import SimpleNamespace
                 from unittest.mock import AsyncMock
@@ -504,7 +508,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 jobs.mark_complete = AsyncMock()
                 persisted = ChunkRefineWorker(fine, job_repo=jobs)
                 self.assertEqual(await persisted.drain_persisted(source.world_uid, source, [], cold,
-                    mat, bundle, max_jobs=1, working=working), 1)
+                    mat, bundle, region_state_snapshot={}, max_jobs=1, working=working), 1)
                 jobs.mark_complete.assert_awaited_once_with("persisted-job")
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
 

@@ -76,6 +76,7 @@ class TestRefineQueuedChunkIndex(unittest.IsolatedAsyncioTestCase):
             await orch.refine_queued_chunk(
                 world, [], MagicMock(), MagicMock(), MagicMock(),
                 0, 0, 999, 999,
+                region_state_snapshot={},
                 working=MagicMock(),
             )
 
