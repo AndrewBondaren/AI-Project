@@ -15,6 +15,7 @@ from app.application.jsonValidation.worldColumnResolve import resolve_world_colu
 from app.application.worldData.errors import WorldDataNotFoundError, WorldDataValidationError
 from app.application.worldData.pack.bake.finalize import packBakeFinalize
 from app.application.worldData.pack.bake.finalize.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.bake.finalize.packBakePublisher import PackBakePublisher
 from app.application.worldData.pack.io import packManifestStore
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
@@ -28,6 +29,14 @@ from app.dataModel.worldPack.meta.worldMapResolutionSettings import (
 from app.dataModel.worldPack.meta.worldPackMetadata import WorldPackMetadata, validate_world_row_pack_metadata_columns
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
+
+
+class PackPublisherConfigurationTests(unittest.TestCase):
+    def test_incomplete_publication_dependencies_fail_at_construction(self):
+        dependencies = dict(db=MagicMock(), world_repository=MagicMock(), publication_guard=MagicMock())
+        for missing in dependencies:
+            with self.subTest(missing=missing), self.assertRaisesRegex(ValueError, "pack publication requires"):
+                PackBakePublisher(**(dependencies | {missing: None}))
 
 
 class PackWorldWireTests(unittest.TestCase):
@@ -201,11 +210,28 @@ class PackFinalizeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PackFinalizeSqlTests(_ServiceCase):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        from tests.cache.test_admission import configured
+        settings = patch.object(app_settings, "planning", configured())
+        settings.start()
+        self.addCleanup(settings.stop)
+        self.addCleanup(self.container.shutdown_planning)
+
     async def test_container_repository_wiring_and_caller_rollback(self):
         world = await self._world("w1")
         orchestrator = self.container.pack_materialization_orchestrator()
-        self.assertIs(orchestrator._world_repository, self.container.world_repository())
-        self.assertIs(orchestrator._db, self.db)
+        publisher = self.container.pack_bake_publisher()
+        self.assertIs(orchestrator._publisher, publisher)
+        self.assertIs(publisher._world_repository, self.container.world_repository())
+        self.assertIs(publisher._db, self.db)
+        self.assertIs(orchestrator._entry, self.container.entry_refine_orchestrator())
+        self.assertIs(orchestrator._climate, self.container.entry_refine_orchestrator().climate_bake)
+        surface = self.container.surface_materialization_orchestrator()
+        self.assertIs(surface._pack, orchestrator)
+        self.assertIs(surface._relief_loader, self.container.template_snapshot_loader())
+        self.assertIs(surface._detailed._relief_loader, surface._relief_loader)
+        self.assertIs(surface._detailed._relief_grade_repo, self.container.relief_grade_repository())
         writer = WorldPackWriter(WorldPackPaths.from_db_parent(self.db.path, "w1"))
         with self.assertRaisesRegex(ValueError, "caller failed"):
             async with self.db.transaction():

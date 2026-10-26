@@ -238,7 +238,7 @@ class RegionStateReadTests(unittest.IsolatedAsyncioTestCase):
         planner.plan.return_value.tile_tuples.return_value = [(0, 0)]
         planner.plan.return_value.cap_applied = None
         world_map.bake_tiles.side_effect = ComputeBoundary
-        owner = PackMaterializationOrchestrator(terrain, world_map=world_map,
+        owner = PackMaterializationOrchestrator(world_map=world_map, publisher=None,
             bake_defaults=PackBakeDefaults(background_drain_per_request=1),
             entry=entry, climate_bake=climate, tile_planner=planner, region_state_repo=repo, planning=MagicMock(), capture=MagicMock())
         with patch("app.application.worldData.planning.composition.surfacePlanningEntry.SurfacePlanningEntry.prepare_captured",

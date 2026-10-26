@@ -54,6 +54,7 @@ from app.db.models.world import World
 from app.db.database import Database
 from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.templateLibrary.loadReliefTemplatesForWorld import load_relief_templates_for_world
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 
 
 class WorldSurfaceMaterializationOrchestrator:
@@ -63,7 +64,8 @@ class WorldSurfaceMaterializationOrchestrator:
         self,
         pack: PackMaterializationOrchestrator,
         *,
-        detailed: PackDetailedBakeOrchestrator | None = None,
+        detailed: PackDetailedBakeOrchestrator,
+        relief_loader: TemplateSnapshotLoader | None = None,
         outdoor: SettlementOutdoorOrchestrator | None = None,
         planning: SurfacePlanningAssembler | None = None,
         capture: SurfacePlanningCapture | None = None,
@@ -75,11 +77,8 @@ class WorldSurfaceMaterializationOrchestrator:
         self._db, self._publication_guard = db, publication_guard
         self._region_state_repo = region_state_repo
         self._pack = pack
-        self._detailed = detailed or PackDetailedBakeOrchestrator(
-            pack.terrain,
-            relief_loader=pack.relief_loader,
-            relief_grade_repo=pack.relief_grade_repo,
-        )
+        self._detailed = detailed
+        self._relief_loader = relief_loader
         self._outdoor = outdoor
 
     async def bake_pack(
@@ -256,8 +255,8 @@ class WorldSurfaceMaterializationOrchestrator:
         request_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext()
         if request_ctx.validate_only:
             raise ValueError("validation cannot materialize a pack")
-        relief_templates = (await load_relief_templates_for_world(self._pack.relief_loader, world)
-            if self._pack.relief_loader is not None else {})
+        relief_templates = (await load_relief_templates_for_world(self._relief_loader, world)
+            if self._relief_loader is not None else {})
         templates = mountain_template_inputs(relief_templates)
         entry = SurfacePlanningEntry(self._planning, self._capture)
         captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,

@@ -52,6 +52,8 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 from app.application.worldData.registries.stateService import StateService
 from app.application.worldData.registries.seedService import SeedService
 from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import PackDetailedBakeOrchestrator
+from app.application.worldData.pack.bake.finalize.packBakePublisher import PackBakePublisher
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fine.fineScenePathRefine import FineScenePathRefine
@@ -80,6 +82,7 @@ class WorldDataWiring:
         self._seed_service: SeedService | None = None
         self._patch_store_service: PatchStoreService | None = None
         self._pack_materialization_orchestrator = None
+        self._pack_bake_publisher: PackBakePublisher | None = None
         self._entry_refine_orchestrator = None
         self._planning_resources: PlanningRuntimeSettings | None = None
         self._planning_memory_cache: MemoryCache | None = None
@@ -245,6 +248,12 @@ class WorldDataWiring:
         if self._surface_materialization_orchestrator is None:
             self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
                 pack=self.pack_materialization_orchestrator(),
+                detailed=PackDetailedBakeOrchestrator(
+                    self.terrain_batch_orchestrator(),
+                    relief_loader=self.template_snapshot_loader(),
+                    relief_grade_repo=self.relief_grade_repository(),
+                ),
+                relief_loader=self.template_snapshot_loader(),
                 planning=self.surface_planning(), capture=self.surface_planning_capture(),
                 db=self._db, publication_guard=self.source_publication_guard(),
                 region_state_repo=self.region_state_repository(),
@@ -325,20 +334,25 @@ class WorldDataWiring:
             )
         return self._entry_refine_orchestrator
 
+    def pack_bake_publisher(self) -> PackBakePublisher:
+        if self._pack_bake_publisher is None:
+            self._pack_bake_publisher = PackBakePublisher(
+                db=self._db,
+                world_repository=self.world_repository(),
+                publication_guard=self.source_publication_guard(),
+                read_context_for=lambda uid: self.pack_read_services(uid).context,
+            )
+        return self._pack_bake_publisher
+
     def pack_materialization_orchestrator(self) -> PackMaterializationOrchestrator:
         if self._pack_materialization_orchestrator is None:
             entry = self.entry_refine_orchestrator()
             self._pack_materialization_orchestrator = PackMaterializationOrchestrator(
-                self.terrain_batch_orchestrator(),
                 planning=self.surface_planning(), capture=self.surface_planning_capture(),
-                publication_guard=self.source_publication_guard(),
+                publisher=self.pack_bake_publisher(),
                 region_state_repo=self.region_state_repository(),
                 entry=entry,
                 climate_bake=entry.climate_bake,
-                job_repo=self.chunk_refine_job_repository(),
-                world_repository=self.world_repository(),
-                db=self._db,
-                read_context_for=lambda uid: self.pack_read_services(uid).context,
                 relief_loader=self.template_snapshot_loader(),
                 relief_grade_repo=self.relief_grade_repository(),
             )

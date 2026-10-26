@@ -55,7 +55,6 @@ def _orch(*, outdoor=None, bake_result=None):
     detailed = MagicMock()
     detailed.bake = AsyncMock(return_value=bake_result or _l2())
     pack = MagicMock()
-    pack.relief_loader = None
     db = MagicMock()
     db.transaction_if_needed.return_value.__aenter__ = AsyncMock()
     db.transaction_if_needed.return_value.__aexit__ = AsyncMock(return_value=False)

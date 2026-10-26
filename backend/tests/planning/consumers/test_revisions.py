@@ -218,12 +218,14 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         self.sql = []
         await self.db.main_conn.set_trace_callback(self.sql.append)
 
-    async def operation(self, kind, *, stale=False, validation=False, missing_state_source=False):
+    async def operation(self, kind, *, stale=False, validation=False, missing_state_source=False,
+                        read_context_for=None):
         from unittest.mock import AsyncMock, MagicMock
         from app.application.cancellation.requestPlanWait import RequestPlanWait
         from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
         from app.application.worldData.materialize.shared.persistResult import PersistResult
         from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
+        from app.application.worldData.pack.bake.finalize.packBakePublisher import PackBakePublisher
         from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import WorldSurfaceMaterializationOrchestrator
         from app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator import PackDetailedBakeResult
         from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
@@ -245,10 +247,12 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
         world_map = MagicMock()
         world_map.bake_tiles.return_value = 0
         world_map.last_relief_grade_instances = []
-        pack = PackMaterializationOrchestrator(MagicMock(), world_map=world_map,
+        publisher = PackBakePublisher(db=self.db, world_repository=self.worlds,
+            publication_guard=self.guard, read_context_for=read_context_for)
+        pack = PackMaterializationOrchestrator(world_map=world_map,
             entry=entry, climate_bake=climate, tile_planner=planner,
-            world_repository=self.worlds, db=self.db, planning=self.c.assembler,
-            capture=self.capture, publication_guard=self.guard, region_state_repo=repo)
+            publisher=publisher, planning=self.c.assembler,
+            capture=self.capture, region_state_repo=repo)
         if kind == "l0":
             return await pack.materialize_light_pack(self.source.world_uid, self.source, [], self.writer,
                 MaterializationContext(1), wait=RequestPlanWait.unbounded(),
@@ -283,6 +287,22 @@ class PublicationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_fresh_l0_checks_and_publishes_in_the_same_uow(self):
         await self.fresh("l0")
+
+    async def test_l0_sql_failure_invalidates_published_root_and_rolls_back_world(self):
+        from unittest.mock import Mock
+        from app.application.worldData.pack.read.packReadContext import PackReadContext
+        context = PackReadContext(self.source.world_uid, db_path=self.db.path)
+        context_for = Mock(return_value=context)
+        with patch.object(self.worlds, "update", side_effect=OSError("SQL failed")), patch.object(
+                context, "invalidate_pack_root", wraps=context.invalidate_pack_root) as invalidate:
+            with self.assertRaisesRegex(OSError, "SQL failed"):
+                await self.operation("l0", read_context_for=context_for)
+        context_for.assert_called_once_with(self.source.world_uid)
+        invalidate.assert_called_once_with(self.writer.paths.root)
+        self.assertTrue(self.writer.paths.manifest_path().is_file())
+        self.assertIsNone((await self.worlds.get_by_id(self.source.world_uid)).terrain_pack_hash)
+        self.assertIn("ROLLBACK", self.sql)
+        self.assertFalse(self.db.main_conn.in_transaction)
 
     async def test_fresh_detailed_checks_and_publishes_in_the_same_uow(self):
         await self.fresh("detailed")

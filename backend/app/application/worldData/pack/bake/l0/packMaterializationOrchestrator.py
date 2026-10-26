@@ -9,13 +9,11 @@ from app.application.worldData.planning.composition.surfacePlanningEntry import 
 
 import logging
 import time
-from collections.abc import Callable
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
-from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 from app.application.worldData.materialize.shared.persistResult import PersistResult
@@ -31,13 +29,9 @@ from app.application.worldData.persist.persistReliefGrades import persist_relief
 from app.application.worldData.pack.bake.l0.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
-from app.application.worldData.pack.refine.fine.chunk.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.refine.fine.fineScenePathRefine import FineScenePathRefine
-from app.application.worldData.pack.refine.fine.fineRectDrain import FineRectDrain
 from app.application.worldData.pack.bake.l0.locationsIndexBake import build_locations_index
-from app.application.worldData.pack.bake.finalize.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.bake.finalize.packBakePublisher import PackBakePublisher
 from app.application.worldData.pack.bake.plan.packTilePlanner import PackTilePlanner
-from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.materialize.shared.parallelPolicy import (
     resolve_climate_workers,
@@ -49,16 +43,12 @@ from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
-from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.db.database import Database
-from app.db.repositories.iWorldRepository import IWorldRepository
 from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_bake_done,
     log_pack_bake_start,
@@ -70,72 +60,29 @@ class PackMaterializationOrchestrator:
 
     def __init__(
         self,
-        terrain: TerrainBatchOrchestrator,
         *,
+        entry: EntryRefineOrchestrator,
+        climate_bake: ClimatePackBakeOrchestrator,
+        publisher: PackBakePublisher | None,
         world_map: WorldMapBakeOrchestrator | None = None,
-        scene_path: FineScenePathRefine | None = None,
-        rect_drain: FineRectDrain | None = None,
-        entry: EntryRefineOrchestrator | None = None,
-        job_repo: IChunkRefineJobRepository | None = None,
-        world_repository: IWorldRepository | None = None,
-        db: Database | None = None,
         bake_defaults: PackBakeDefaults | None = None,
-        read_context: PackReadContext | None = None,
-        read_context_for: Callable[[str], PackReadContext] | None = None,
-        climate_bake: ClimatePackBakeOrchestrator | None = None,
         tile_planner: PackTilePlanner | None = None,
         relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
         region_state_repo: IRegionStateRepository | None = None,
         planning: SurfacePlanningAssembler | None = None,
         capture: SurfacePlanningCapture | None = None,
-        publication_guard: SourcePublicationGuard | None = None,
     ) -> None:
-        self._planning, self._capture, self._publication_guard = planning, capture, publication_guard
-        self._terrain = terrain
+        self._planning, self._capture = planning, capture
+        self._entry = entry
+        self._climate = climate_bake
+        self._publisher = publisher
         self._world_map = world_map or WorldMapBakeOrchestrator()
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
-        if world_repository is not None and db is None:
-            raise ValueError("pack finalization requires caller database")
-        self._world_repository = world_repository
-        self._db = db
-        self._read_context = read_context
-        self._read_context_for = read_context_for
         self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
         self._region_state_repo = region_state_repo
-        if entry is not None:
-            self._entry = entry
-            self._climate = climate_bake or entry.climate_bake
-        else:
-            self._entry, self._climate = _default_entry_stack(
-                terrain,
-                scene_path=scene_path,
-                rect_drain=rect_drain,
-                job_repo=job_repo,
-                read_context=read_context,
-                bake_defaults=self._defaults,
-                climate_bake=climate_bake,
-                relief_loader=relief_loader,
-                relief_grade_repo=relief_grade_repo,
-            )
-
-    @property
-    def terrain(self) -> TerrainBatchOrchestrator:
-        return self._terrain
-
-    @property
-    def relief_loader(self) -> TemplateSnapshotLoader | None:
-        return self._relief_loader
-
-    @property
-    def relief_grade_repo(self) -> IReliefGradeRepository | None:
-        return self._relief_grade_repo
-
-    @property
-    def entry(self) -> EntryRefineOrchestrator:
-        return self._entry
 
     @property
     def tile_planner(self) -> PackTilePlanner:
@@ -303,21 +250,10 @@ class PackMaterializationOrchestrator:
         elif climate_fine_tiles:
             climate_result = PersistResult.from_counts(climate_fine_tiles, climate_fine_tiles)
 
-        if self._world_repository is not None:
-            read_ctx = self._read_context
-            if read_ctx is None and self._read_context_for is not None:
-                read_ctx = self._read_context_for(world_uid)
-            assert self._db is not None
-            if self._publication_guard is None:
-                raise ValueError("source publication guard required")
-            async with self._db.transaction_if_needed():
-                current = await self._publication_guard.require_fresh(captured, mode=ResolutionMode.RUNTIME,
-                    mountain_templates=templates, resolve_ctx=request_ctx)
-                writer.recalc_manifest_counters()
-                await finalize_pack_on_world(
-                    self._world_repository, current, writer,
-                    db_path=self._db.path, read_context=read_ctx,
-                )
+        if self._publisher is not None:
+            await self._publisher.publish(
+                captured, writer, mountain_templates=templates, resolve_ctx=request_ctx,
+            )
 
         workers = resolve_terrain_workers(mat_ctx, world)
         elapsed_s = time.perf_counter() - bake_t0
@@ -378,42 +314,3 @@ async def _persist_bake_relief_grades(
         world.world_uid,
         n_grades,
     )
-
-
-def _default_entry_stack(
-    terrain: TerrainBatchOrchestrator,
-    *,
-    scene_path: FineScenePathRefine | None,
-    rect_drain: FineRectDrain | None,
-    job_repo: IChunkRefineJobRepository | None,
-    read_context: PackReadContext | None,
-    bake_defaults: PackBakeDefaults,
-    climate_bake: ClimatePackBakeOrchestrator | None,
-    relief_loader: TemplateSnapshotLoader | None,
-    relief_grade_repo: IReliefGradeRepository | None,
-) -> tuple[EntryRefineOrchestrator, ClimatePackBakeOrchestrator]:
-    """Default refine stack wiring when ``entry`` is not injected."""
-    climate = climate_bake or ClimatePackBakeOrchestrator(
-        read_context=read_context,
-        bake_defaults=bake_defaults,
-    )
-    runner = FineChunkRunner(terrain)
-    scene = scene_path or FineScenePathRefine(
-        terrain,
-        runner=runner,
-        relief_grade_repo=relief_grade_repo,
-    )
-    drain = rect_drain or FineRectDrain(
-        terrain,
-        runner=runner,
-        relief_loader=relief_loader,
-        relief_grade_repo=relief_grade_repo,
-    )
-    return EntryRefineOrchestrator(
-        scene,
-        drain,
-        job_repo=job_repo,
-        bake_defaults=bake_defaults,
-        climate_bake=climate,
-        read_context=read_context,
-    ), climate
