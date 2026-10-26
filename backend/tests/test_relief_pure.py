@@ -30,7 +30,6 @@ from app.dataModel.terrain.relief import (
     ReliefTemplate,
     ReliefTerrainCondition,
     WorldReliefPickPolicy,
-    WorldReliefTemplateRegistry,
 )
 from app.dataModel.terrain.relief.enums import (
     ReliefContext,
@@ -76,17 +75,12 @@ class ReliefPureTest(unittest.TestCase):
         self.assertEqual(a, b)
 
     def test_pick_fixed(self) -> None:
-        reg = WorldReliefTemplateRegistry.model_validate([
-            {
-                "system_template_uid": "uid-a",
-                "context": "mountain",
-                "display_template_name": "A",
-            },
-            {
-                "system_template_uid": "uid-b",
-                "context": "mountain",
-            },
-        ])
+        templates = {
+            uid: ReliefTemplate.model_validate(
+                {"system_name": uid, "display_name": uid, "context": "mountain"},
+            )
+            for uid in ("uid-a", "uid-b")
+        }
         policy = WorldReliefPickPolicy(
             mountain=ReliefContextPickPolicy(
                 mode=ReliefPickMode.FIXED,
@@ -95,7 +89,7 @@ class ReliefPureTest(unittest.TestCase):
         )
         result = pick_template(
             context="mountain",
-            registry=reg,
+            templates=templates,
             world_policy=policy,
             world_seed="seed",
             site_id="m1",
@@ -104,12 +98,12 @@ class ReliefPureTest(unittest.TestCase):
         self.assertEqual(result.policy_level, "world")
 
     def test_ravine_world_pick_fixed(self) -> None:
-        reg = WorldReliefTemplateRegistry.model_validate([
-            {
-                "system_template_uid": "uid-ravine",
-                "context": ReliefContext.RAVINE,
-            },
-        ])
+        templates = {
+            "uid-ravine": ReliefTemplate.model_validate(
+                {"system_name": "uid-ravine", "display_name": "R",
+                 "context": ReliefContext.RAVINE},
+            ),
+        }
         policy = WorldReliefPickPolicy(
             ravine=ReliefContextPickPolicy(
                 mode=ReliefPickMode.FIXED,
@@ -118,7 +112,7 @@ class ReliefPureTest(unittest.TestCase):
         )
         result = pick_template(
             context=ReliefContext.RAVINE,
-            registry=reg,
+            templates=templates,
             world_policy=policy,
             world_seed="seed",
             site_id="rv1",

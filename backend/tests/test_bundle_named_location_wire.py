@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import unittest
 
+from pydantic import ValidationError
+
 from app.dataModel.locations.namedLocation import BundleNamedLocation
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 
 
 class BundleNamedLocationWireTests(unittest.TestCase):
-    def test_description_maps_to_system_description(self) -> None:
+    def test_removed_description_key_is_not_mapped(self) -> None:
         wire = BundleNamedLocation.model_validate({
             "location_uid": "loc-test",
             "display_name": "Test Peak",
@@ -19,7 +21,7 @@ class BundleNamedLocationWireTests(unittest.TestCase):
             "description": "Declared peak anchor.",
         })
         fields = wire.to_db_fields()
-        self.assertEqual(fields["system_description"], "Declared peak anchor.")
+        self.assertIsNone(fields.get("system_description"))
         self.assertNotIn("description", fields)
 
     def test_explicit_system_description_wins(self) -> None:
@@ -41,7 +43,7 @@ class BundleNamedLocationWireTests(unittest.TestCase):
         })
         self.assertEqual(wire.to_db_fields()["display_description"], "Narrative for LLM.")
 
-    def test_settlement_skeleton_overlay_reaches_db_fields(self) -> None:
+    def test_settlement_fields_reach_payload_storage(self) -> None:
         density = DistrictDensity.MEDIUM.wire_value
         barrier = PerimeterBarrier(template="stone_fence", probability=1.0)
         wire = BundleNamedLocation.model_validate({
@@ -56,6 +58,9 @@ class BundleNamedLocationWireTests(unittest.TestCase):
             "plot_priority": {"inn_small": 1},
         })
         fields = wire.to_db_fields()
+        self.assertNotIn("settlement_density", fields)
+        self.assertNotIn("plot_counts", fields)
+        fields = fields["location_payload"]
         self.assertEqual(fields["settlement_density"], density)
         self.assertEqual(fields["architectural_style"], "gothic")
         self.assertEqual(
@@ -69,19 +74,15 @@ class BundleNamedLocationWireTests(unittest.TestCase):
         self.assertEqual(fields["plot_counts"]["inn_small"], 2)
         self.assertEqual(fields["plot_priority"]["inn_small"], 1)
 
-    def test_legacy_structure_counts_alias(self) -> None:
-        wire = BundleNamedLocation.model_validate({
-            "location_uid": "loc-city",
-            "display_name": "Ironhold",
-            "system_location_type": "settlement",
-            "structure_counts": {"inn_small": 2},
-            "structure_priority": {"inn_small": 1},
-        })
-        self.assertEqual(wire.plot_counts["inn_small"], 2)
-        self.assertEqual(wire.plot_priority["inn_small"], 1)
-        fields = wire.to_db_fields()
-        self.assertEqual(fields["plot_counts"]["inn_small"], 2)
-        self.assertNotIn("structure_counts", fields)
+    def test_removed_structure_counts_keys_are_rejected(self) -> None:
+        for old in ("structure_counts", "structure_priority"):
+            with self.subTest(key=old), self.assertRaisesRegex(ValidationError, "was removed"):
+                BundleNamedLocation.model_validate({
+                    "location_uid": "loc-city",
+                    "display_name": "Ironhold",
+                    "system_location_type": "settlement",
+                    old: {"inn_small": 2},
+                })
 
 
 if __name__ == "__main__":

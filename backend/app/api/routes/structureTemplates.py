@@ -6,14 +6,16 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from app.api.deps import get_container
-from app.application.worldData.structureTemplateErrors import (
+from app.api.libraryWrite import WriteNegotiation, parse_negotiation
+from app.application.templateLibrary.packs.errors import require_no_policy
+from app.ids import LibraryKind
+from app.application.templateLibrary.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
 )
-from app.application.worldData.structureTemplateLibraryService import (
+from app.application.templateLibrary.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
 from app.db.models.structureTemplate import StructureTemplateRow
@@ -21,7 +23,7 @@ from app.db.models.structureTemplate import StructureTemplateRow
 router = APIRouter()
 
 
-class _ImportPath(BaseModel):
+class _ImportPath(WriteNegotiation):
     path: str
 
 
@@ -64,9 +66,16 @@ async def get_structure_template(
 async def upsert_structure_template(
     data: dict[str, Any],
     container=Depends(get_container),
+    pack_uid: str | None = None,
+    local_uid: str | None = None,
+    negotiation=Depends(parse_negotiation),
 ) -> dict:
     try:
-        row = await container.structure_template_library_service().upsert_from_dict(data)
+        result = require_no_policy(await container.library_pack_service().write_authored_bodies(
+            LibraryKind.STRUCTURE_TEMPLATES, pack_uid, [data], local_uid=local_uid,
+            decisions=negotiation.decisions, preview_token=negotiation.preview_token))
+        uid = result.plan.items[0].members[0].value.member.template_uid
+        row = await container.structure_template_library_service().get_by_uid(uid)
     except (StructureTemplateNotFoundError, StructureTemplateValidationError) as exc:
         raise _http_from_structure(exc) from exc
     return StructureTemplateLibraryService.row_as_dict(row)
@@ -80,7 +89,8 @@ async def import_structure_templates(
     """Import a JSON file or pack directory resolved under structures_templates/."""
     svc = container.structure_template_library_service()
     try:
-        rows = await svc.import_path(body.path)
+        rows = require_no_policy(await svc.import_path(body.path,
+            decisions=body.decisions, preview_token=body.preview_token))
     except (StructureTemplateNotFoundError, StructureTemplateValidationError) as exc:
         raise _http_from_structure(exc) from exc
     return JSONResponse(

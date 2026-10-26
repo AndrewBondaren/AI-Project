@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.render.locationGridRenderer import LocationGridRenderer
+from app.application.worldData.render.pack.locationGridRenderer import LocationGridRenderer
 from app.db.models.mapCell import MapCell
 
 
@@ -53,7 +53,7 @@ class TestLocationGridRenderer(unittest.TestCase):
         levels = LocationGridRenderer(cells, "loc-a").render_all_levels()
         self.assertEqual(set(levels.keys()), {0, 1})
 
-    def test_outdoor_includes_fine_meter_cells(self):
+    def test_outdoor_includes_fine_cells(self):
         cells = [
             MapCell(
                 world_uid="w",
@@ -68,7 +68,7 @@ class TestLocationGridRenderer(unittest.TestCase):
                 system_terrain="urban",
             ),
         ]
-        out = LocationGridRenderer(cells, "loc-port", map_cell_fine_span=3000).render_level(0)
+        out = LocationGridRenderer(cells, "loc-port", fine_span=3000).render_level(0)
         self.assertIn("location=loc-port", out)
         self.assertIn("u", out)
 

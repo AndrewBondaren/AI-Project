@@ -1,4 +1,24 @@
-﻿pip install fastapi uvicorn httpx pydantic
+﻿# AI-Project
+
+## Philosophy
+
+An interesting game in this project is the combination of three independent components:
+
+**Game = Engine × World × LLM**
+
+- **Engine** provides persistent state, rules, causality, simulation, physical space, actions, time, memory, and constraints. The world exists independently of the language model.
+- **World** provides authored meaning: history, characters, conflicts, creatures, cities, mechanics, and narrative hooks. Interesting content is subjective, so the engine is intended to support author-created worlds instead of enforcing one universal setting.
+- **LLM** provides interpretation, variability, character decisions, free-form interaction, and narration where deterministic code is not enough. The engine does not try to make an LLM smarter; it controls the environment in which the model operates: what it can know, its role, model-specific DSL/instructions, input/output contracts, available tools, validation, mutation authority, model assignment, and when an LLM call is needed.
+
+The core principle is:
+
+> **The goal is not to build a good LLM. The goal is to build a good environment for any sufficiently capable LLM.**
+
+The engine maintains a consistent reality and its consequences. The world author decides what makes that reality interesting. The LLM gets relative freedom to act and create narrative inside those boundaries without replacing the world or its rules.
+
+---
+
+pip install fastapi uvicorn httpx pydantic
 
 # Install project for dev
 1. python -m venv .venv
@@ -61,14 +81,12 @@ curl.exe "http://localhost:8000/api/worlds/world-test-003/map/bootstrap-tiles?sc
 curl.exe "http://localhost:8000/api/worlds/world-test-003/map/loading-progress"
 
 # 2. Инициализация города (C11/C24 packing)
-# generate-settlement = packing поселения поверх готового pack (light/full).
-# Требует C23 topology (делает full_bake). Без якоря — очередь всех
-# незапакованных районов до complete; уже упакованные районы пропускаются
-# (packed_district_uids в manifest). Якорь = ровно один район:
-#   district_uid — канонический uid района (named_locations)
-#   at_x + at_y  — world-fine координаты, резолвер мапит на район (spawn-кейс)
-# Оба якоря сразу → 422. Нет topology → 409. Результат дозаписывается
-# кадрами в тот же locations/l.{uid}.settlement.zst.
+generate-settlement = packing поселения поверх готового pack (light/full).
+Требует C23 topology (делает full_bake). Без якоря — очередь всех незапакованных районов до complete; уже упакованные районы пропускаются
+(packed_district_uids в manifest). Якорь = ровно один район:
+district_uid — канонический uid района (named_locations)
+at_x + at_y  — world-fine координаты, резолвер мапит на район (spawn-кейс)
+Оба якоря сразу → 422. Нет topology → 409. Результат дозаписывается кадрами в тот же locations/l.{uid}.settlement.zst.
 
 # список локаций — взять location_uid
 curl.exe "http://localhost:8000/api/worlds/world-test-003/locations"
@@ -97,5 +115,23 @@ curl.exe "http://localhost:8000/api/worlds/world-test-003/map/render-location-gr
 curl.exe "http://localhost:8000/api/worlds/world-test-003/map/render-wilderness-tile-grid?gx=-2&gy=-2"
 curl.exe "http://localhost:8000/api/worlds/world-test-003/locations/{location_uid}/render-grid"
 
+# 4. Relief templates (library packs)
 
+# список engine-библиотеки relief (глобальный SQL-каталог)
+curl.exe "http://localhost:8000/api/relief-templates"
+curl.exe "http://localhost:8000/api/relief-templates/{template_uid}"
+
+# импорт в engine-библиотеку: JSON-объект/массив ИЛИ FS-пак (relief_templates/{pack_name}/)
+curl.exe -X POST http://localhost:8000/api/relief-templates/import -F "path=e:/AI Project/relief_templates/{pack_name}"
+
+# подключить к миру: template_uid = member engine-пака → instantiate ВСЕГО пака
+# (частичных инстансов нет; повторный вызов — created:false, обновление членов — re-instantiate)
+curl.exe -X POST "http://localhost:8000/api/worlds/{world_uid}/relief-templates/import?template_uid={template_uid}"
+# → {"pack_uid","created","imported","uids","missing_dependencies"}
+# ошибки: 404 member не найден · 409 local_uid коллизия · 422 world-owned/default пак, невалидное тело
+
+# авторские outline-тела в мир (world-owned legacy-пак + registry pointer + R34 terrain upsert)
+curl.exe -X POST "http://localhost:8000/api/worlds/{world_uid}/relief-templates/import" \
+  -H "Content-Type: application/json" \
+  -d "{...outline...}"  # или массив [outline, ...]
 

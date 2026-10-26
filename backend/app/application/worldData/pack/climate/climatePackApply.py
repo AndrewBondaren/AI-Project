@@ -8,7 +8,7 @@ from app.application.worldData.generators.coordinates import (
     fine_to_grid_y,
 )
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.dataModel.worldPack.mergeMapCells import MergedCellView
+from app.dataModel.worldPack.wire.mergeMapCells import MergedCellView
 from app.db.models.world import World
 
 
@@ -19,13 +19,13 @@ def apply_climate_to_view(
 ) -> MergedCellView:
     if view.temperature_base is not None and view.rainfall is not None:
         return view
-    cell_m = map_cell_fine_span(world)
-    gx = int(fine_to_grid_x(view.x, cell_m))
-    gy = int(fine_to_grid_y(view.y, cell_m))
+    tile_macro = map_cell_fine_span(world)
+    gx = int(fine_to_grid_x(view.x, tile_macro))
+    gy = int(fine_to_grid_y(view.y, tile_macro))
     samples = []
     field_fine = ctx.climate_tile_field(world, gx, gy)
     if field_fine is not None:
-        sample_fine = field_fine.sample_meters(view.x, view.y)
+        sample_fine = field_fine.sample_fine(view.x, view.y)
         if sample_fine is not None:
             samples.append(sample_fine)
     field_coarse = ctx.climate_field(world)

@@ -29,7 +29,9 @@ def step_turn_ok(
 ) -> bool:
     if len(path) < 2:
         return True
-    return turn_angle_deg(path[-2], path[-1], candidate) <= max_turn_deg
+    angle = turn_angle_deg(path[-2], path[-1], candidate)
+    # acos may put an exact diagonal turn a few ulps above its limit.
+    return angle <= max_turn_deg or math.isclose(angle, max_turn_deg)
 
 
 def smooth_polyline_cells(

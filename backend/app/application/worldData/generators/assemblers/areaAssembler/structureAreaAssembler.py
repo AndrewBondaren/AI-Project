@@ -12,7 +12,8 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import AreaThresholdKind
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
     plan_area_barrier_cells,
-    should_build_area_barrier,
+    area_gate_cells,
+    area_gate_transitions,
 )
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaPaths import (
     build_area_paths,
@@ -33,34 +34,43 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     ApproachForm,
     StreetApproach,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.buildingAssembler.buildingAssembler import (
     BuildingAssembler,
 )
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
+from app.application.cascade.locationScope import (
+    area_context,
+    building_context,
+    empty_location_chain,
+)
+from app.ids import UidKind, entity_rng
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    area_uid as _area_uid,
+    building_location_uid as _building_location_uid,
+)
 from app.application.worldData.generators.coordinates.approachZ import clamp_near_z_to_45
 from app.application.worldData.generators.coordinates.columnSurface import (
     column_surface,
     median_surface_z,
 )
-from app.application.worldData.generators.structure.layoutTranslate import translate_layout
-from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
-    rebind_layout_to_building,
-)
+from app.application.worldData.generators.structure.layout.layoutTranslate import translate_layout
+from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
     StructureLayout,
 )
-from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
-from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_has_building,
 )
-from app.dataModel.structure.enums.passageType import PassageType
-from app.application.worldData.generators.structure.cellFactory import _floor_cell
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -71,16 +81,25 @@ Coord = tuple[int, int]
 
 
 def derive_structure_context(
+    world:         World,
     template:      PlotLayoutTemplate,
-    city_skeleton: CitySkeleton,
+    city_skeleton: SettlementSkeleton,
     slot:          AreaSlot,
     terrain_cells: list[MapCell] | None,
     *,
     ground_z:      int,
+    district_ctx:  LocationContext,
+    area_uid:      str,
+    building:      NamedLocation,
 ) -> StructureContext:
     """
-    v1: тело участка (main_building) + facing участка.
-    ground_z = building.map_z после clamp. terrain_cells читает envelope на place.
+    v1: тело участка (main_building), геометрия в авторском фрейме.
+    ground_z = building.map_z на посадке. terrain_cells читает envelope.
+
+    ``district_ctx`` — resolved district-scope cascade ctx; ``building``
+    — NL-звено building-уровня (persisted row при перегенерации, иначе
+    свежий in-memory NL из ``_place_building``). Effective tier всех
+    structure-фаз — ``context.location_ctx.economic_tier`` (§4).
     """
     _ = city_skeleton
     if terrain_cells:
@@ -89,6 +108,9 @@ def derive_structure_context(
             len(terrain_cells),
             ground_z,
         )
+    area_ctx = area_context(
+        world, district_ctx, template, area_uid=area_uid,
+    )
     body = template.main_building
     defaults = BuildingBodyTemplate.model_fields
     return StructureContext(
@@ -98,14 +120,14 @@ def derive_structure_context(
             else defaults["foundation_type"].default
         ),
         roof_type=body.roof_type if body is not None else defaults["roof_type"].default,
-        facing=slot.facing,
+        facing=None,
         foundation_depth=(
             body.foundation_depth
             if body is not None
             else defaults["foundation_depth"].default
         ),
         ground_z=ground_z,
-        building_band=template.economic_tier_band,
+        location_ctx=building_context(world, area_ctx, building),
         foundation_material=(
             body.foundation_material
             if body is not None
@@ -131,10 +153,7 @@ def derive_structure_context(
 
 def _runtime_footprint(
     template: PlotLayoutTemplate,
-    cached_layout: StructureLayout | None,
 ) -> OccupiedFootprint | None:
-    if cached_layout is not None and cached_layout.occupied_footprint is not None:
-        return cached_layout.occupied_footprint
     spec = template.occupied_footprint
     if spec is None:
         return None
@@ -143,39 +162,6 @@ def _runtime_footprint(
         min_y=spec.min_y,
         width=spec.width,
         depth=spec.depth,
-    )
-
-
-def _cache_has_rooms(cached_layout: StructureLayout | None) -> bool:
-    return cached_layout is not None and bool(cached_layout.rooms)
-
-
-def _shell_layout(
-    fp: OccupiedFootprint,
-    bx: int,
-    by: int,
-    map_z: int,
-    world: World,
-    building: NamedLocation,
-) -> StructureLayout:
-    """Floor cells for the declared building bbox. Not rooms / small outbuildings."""
-    material = building.parent_floor_material or DEFAULT_FLOOR_MATERIAL
-    x0 = bx + fp.min_x
-    y0 = by + fp.min_y
-    cells = [
-        _floor_cell(
-            x0 + dx, y0 + dy, map_z,
-            world.world_uid, building.location_uid, material,
-        )
-        for dx in range(fp.width)
-        for dy in range(fp.depth)
-    ]
-    return StructureLayout(
-        cells=cells,
-        levels=[],
-        passages=[],
-        rooms=[],
-        occupied_footprint=fp,
     )
 
 
@@ -190,18 +176,15 @@ def _footprint_cells(fp: OccupiedFootprint, bx: int, by: int) -> list[Coord]:
 
 
 def _entry_xy_world(
-    cached_layout: StructureLayout | None,
-    bx: int,
-    by: int,
+    layout: StructureLayout | None,
 ) -> Coord | None:
-    if cached_layout is None:
+    if layout is None:
         return None
-    for passage in cached_layout.passages:
-        if passage.from_level_uid is not None:
+    for passage in layout.transitions:
+        if passage.source.level_uid is not None:
             continue
-        pt = PassageType.from_wire(passage.system_passage_type)
-        if pt == PassageType.MAIN_ENTRANCE:
-            return (passage.to_x + bx, passage.to_y + by)
+        if passage.system_transition_type == TransitionType.MAIN_ENTRANCE:
+            return (passage.destination.x, passage.destination.y)
     return None
 
 
@@ -223,13 +206,17 @@ class StructureAreaAssembler:
         world:          World,
         slot:           AreaSlot,
         template:       PlotLayoutTemplate,
-        city_skeleton:  CitySkeleton,
+        city_skeleton:  SettlementSkeleton,
         terrain_cells:  list[MapCell] | None = None,
         *,
+        structure_catalog: StructureCatalog,
         street_xy:      Set[Coord] = frozenset(),
-        cached_layout:  StructureLayout | None = None,
         building_x:     int | None = None,
         building_y:     int | None = None,
+        district_ctx:   LocationContext | None = None,
+        district_uid:   str | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
+        template_uid:   str | None = None,
     ) -> AreaLayout:
         bx = building_x if building_x is not None else (
             min(c[0] for c in slot.cells) if slot.cells else 0
@@ -239,11 +226,10 @@ class StructureAreaAssembler:
         )
 
         logger.info(
-            "StructureAreaAssembler | template=%s facing=%s slot_cells=%d cached=%s origin=(%d,%d)",
+            "StructureAreaAssembler | template=%s facing=%s slot_cells=%d origin=(%d,%d)",
             template.system_name,
             slot.facing,
             len(slot.cells),
-            cached_layout is not None,
             bx,
             by,
         )
@@ -252,22 +238,13 @@ class StructureAreaAssembler:
         fallback_z = slot.ground_z
         want_building = plot_has_building(template)
 
-        rng = random.Random(f"{world.world_uid}_{bx}_{by}_barrier")
-        has_barrier = should_build_area_barrier(template, rng)
-        entry_xy = _entry_xy_world(cached_layout, bx, by) if want_building else None
-
-        fp = _runtime_footprint(template, cached_layout)
+        rng = entity_rng(
+            world.world_uid, UidKind.BARRIER,
+            x=bx, y=by,
+            **({"district": district_uid} if district_uid is not None else {}),
+        )
+        fp = _runtime_footprint(template)
         fp_cells: list[Coord] = _footprint_cells(fp, bx, by) if fp is not None else []
-        threshold = resolve_threshold(
-            slot,
-            has_barrier=has_barrier,
-            entry_xy=entry_xy,
-            house_cells=fp_cells if want_building else None,
-        )
-        threshold = replace(
-            threshold,
-            z=median_surface_z(threshold.cells, surface, fallback_z),
-        )
 
         yard_xy = list(slot.cells)
         if fp_cells:
@@ -278,10 +255,81 @@ class StructureAreaAssembler:
         slot.ground_z = median_surface_z(yard_xy, surface, fallback_z)
 
         building = None
+        building_layout: StructureLayout | None = None
+        context: StructureContext | None = None
         if want_building:
+            slot_cells = list(slot.cells) or [(0, 0)]
+            area_uid = (
+                _area_uid(
+                    world.world_uid, district_uid,
+                    min(c[0] for c in slot_cells),
+                    min(c[1] for c in slot_cells),
+                    slot.facing,
+                )
+                if district_uid is not None
+                else None
+            )
             building = self._place_building(
                 world, slot, template, bx, by, fp_cells, surface,
+                area_uid=area_uid,
+                template_uid=template_uid,
             )
+            if area_uid is None:
+                area_uid = f"{building.location_uid}#area"
+            body = template.main_building
+            structure = structure_catalog.resolve(body.structure)
+            if structure is None:
+                raise GenerationError(
+                    f"Plot '{template.system_name}': structure '{body.structure}' not found"
+                )
+            link = building
+            if existing_buildings:
+                link = (
+                    existing_buildings.get(building.location_uid) or building
+                )
+            context = derive_structure_context(
+                world, template, city_skeleton, slot, terrain_cells,
+                ground_z=int(building.map_z),
+                district_ctx=(
+                    district_ctx
+                    if district_ctx is not None
+                    else empty_location_chain(world, ScopeLevel.DISTRICT)
+                ),
+                area_uid=area_uid,
+                building=link,
+            )
+            # §8.4 / M5: every new NL in the chain carries its effective
+            # tier; a persisted authored stamp surfaces unchanged (the
+            # persisted link wins the building scope). M9: the resolved
+            # parent materials stamp the same way — the NL columns hold
+            # the effective material for the assembler and LLM context.
+            building = replace(
+                building,
+                system_economic_tier=context.location_ctx.economic_tier,
+                parent_wall_material=context.location_ctx.wall_material,
+                parent_floor_material=context.location_ctx.floor_material,
+            )
+            building_layout = BuildingAssembler().assemble(
+                world, building, body, structure, context, terrain_cells,
+            )
+
+        barrier_cells = self._build_barrier(
+            world, slot, template, building, city_skeleton, rng,
+        )
+        gates = area_gate_cells(barrier_cells)
+        entry_xy = _entry_xy_world(building_layout)
+        threshold = resolve_threshold(
+            slot,
+            has_barrier=bool(barrier_cells),
+            gate_cells=[(cell.x, cell.y) for cell in gates],
+            entry_xy=entry_xy,
+            house_cells=fp_cells if want_building else None,
+        )
+        threshold = replace(
+            threshold,
+            z=gates[0].z if gates and threshold.kind == AreaThresholdKind.GATE
+                else median_surface_z(threshold.cells, surface, fallback_z),
+        )
 
         origin = threshold.cells[0] if threshold.cells else (bx, by)
         z_near = int(building.map_z) if building is not None else threshold.z
@@ -303,7 +351,9 @@ class StructureAreaAssembler:
                 z_near, approach.z_far, approach.length,
             )
             if building is not None:
+                building_layout = translate_layout(building_layout, 0, 0, clamped - z_near)
                 building.map_z = clamped
+                context = replace(context, ground_z=clamped)
             else:
                 threshold = replace(threshold, z=clamped)
             z_near = clamped
@@ -311,30 +361,6 @@ class StructureAreaAssembler:
                 origin, slot.facing, z_near, street_xy, surface,
                 max_k=DEFAULT_APPROACH_MAX_K,
             )
-
-        building_layout: StructureLayout | None = None
-        context: StructureContext | None = None
-        if building is not None:
-            context = derive_structure_context(
-                template, city_skeleton, slot, terrain_cells,
-                ground_z=int(building.map_z),
-            )
-            if _cache_has_rooms(cached_layout):
-                building_layout = translate_layout(
-                    cached_layout, bx, by, int(building.map_z),
-                )
-            elif fp is not None:
-                building_layout = _shell_layout(
-                    fp, bx, by, int(building.map_z), world, building,
-                )
-            else:
-                building_layout = StructureLayout(
-                    cells=[], levels=[], passages=[], rooms=[],
-                )
-            building_layout = BuildingAssembler.attach_envelope(
-                world, building, building_layout, context, terrain_cells,
-            )
-            building_layout = rebind_layout_to_building(building_layout, building)
 
         door_xy = entry_xy
         yard_approach = None
@@ -379,9 +405,12 @@ class StructureAreaAssembler:
             yard_approach=yard_approach,
         )
 
-        barrier_cells = self._build_barrier(
-            world, slot, template, building, city_skeleton, rng,
-        )
+        # The existing approach clamp can move a buildingless threshold in z.
+        # Keep the physical opening at the finalized graph threshold elevation.
+        if gates and threshold.kind == AreaThresholdKind.GATE:
+            gate_xy = set(threshold.cells)
+            barrier_cells = [replace(cell, z=threshold.z) if (cell.x, cell.y) in gate_xy else cell
+                             for cell in barrier_cells]
 
         levels = building_layout.levels if building_layout is not None else ()
         slot.height = height_from_levels(slot.ground_z, levels)
@@ -397,6 +426,7 @@ class StructureAreaAssembler:
             yard_cells=yard_cells,
             connection_nodes=connection_nodes,
             connection_edges=connection_edges,
+            transitions=area_gate_transitions(world, slot, barrier_cells),
         )
 
     def _place_building(
@@ -408,11 +438,27 @@ class StructureAreaAssembler:
         map_y:     int,
         fp_cells:  list[Coord],
         surface:   dict[Coord, int],
+        *,
+        area_uid:  str | None = None,
+        template_uid: str | None = None,
     ) -> NamedLocation:
-        template_name = template.system_name
+        # Member uid is the persisted identity (TZ §5); the readable name is
+        # only a local fallback for the det-id of standalone/debug layouts.
+        identity = template_uid or template.system_name
         map_z = median_surface_z(fp_cells, surface, slot.ground_z)
+        # Single minting point of the building uid (DET-1 D4): the
+        # canonical det-id when the district chain is known; the readable
+        # fallback only stands in debug/standalone layouts.
+        location_uid = (
+            _building_location_uid(
+                world.world_uid, area_uid, identity, map_x, map_y,
+            )
+            if area_uid is not None
+            else f"{world.world_uid}-{identity}-{map_x}-{map_y}"
+        )
+        body = template.main_building
         return NamedLocation(
-            location_uid=f"{world.world_uid}-{template_name}-{map_x}-{map_y}",
+            location_uid=location_uid,
             world_uid=world.world_uid,
             display_name=template.display_name,
             system_location_type="building",
@@ -420,9 +466,10 @@ class StructureAreaAssembler:
             map_x=map_x,
             map_y=map_y,
             map_z=map_z,
-            system_template_uid=template_name,
-            parent_wall_material=DEFAULT_WALL_MATERIAL,
-            parent_floor_material=DEFAULT_FLOOR_MATERIAL,
+            system_template_uid=template_uid,
+            system_structure_template_uid=(
+                str(body.structure) if body is not None else None
+            ),
         )
 
     def _build_barrier(
@@ -431,7 +478,7 @@ class StructureAreaAssembler:
         slot:          AreaSlot,
         template:      PlotLayoutTemplate,
         building:      NamedLocation | None,
-        city_skeleton: CitySkeleton,
+        city_skeleton: SettlementSkeleton,
         rng:           random.Random,
     ) -> list[MapCell]:
         return plan_area_barrier_cells(

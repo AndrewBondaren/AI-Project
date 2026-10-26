@@ -21,21 +21,22 @@ from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_FINE_TERRAIN,
     TileCodec,
 )
-from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths, pack_storage_reference
 from app.application.worldData.pack.io.settlementStructureTmp import SettlementStructureTmpRef
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.wildernessRefineStatus import (
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.bake.wildernessRefineStatus import (
     wilderness_refine_status_for_counts,
     wilderness_refine_status_without_expected,
 )
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
-from app.dataModel.worldPack.worldPackManifest import (
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
+from app.dataModel.worldPack.meta.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
     SettlementStructureEntry,
@@ -92,16 +93,6 @@ class WorldPackWriter:
     def bake_defaults(self) -> PackBakeDefaults:
         return self._bake_defaults
 
-    def maybe_checkpoint_manifest(self, wilderness_chunks_written: int) -> None:
-        """Periodic save so debug clients see online progress (detailed bake)."""
-        every = int(self._bake_defaults.detailed_manifest_save_every_chunks)
-        if every <= 0 or wilderness_chunks_written <= 0:
-            return
-        if wilderness_chunks_written % every != 0:
-            return
-        self.recalc_manifest_counters()
-        self.save_manifest()
-
     def sync_world_metadata(self, world: World, *, cells_per_side: int) -> None:
         self._manifest.fine_cells_per_map_cell = world.fine_cells_per_map_cell
         self._manifest.world_map_cells_per_tile = cells_per_side
@@ -155,16 +146,16 @@ class WorldPackWriter:
         if self._manifest.fine_cells_per_map_cell is None or int(self._manifest.fine_cells_per_map_cell) < 1:
             raise ValueError(
                 "manifest.fine_cells_per_map_cell required before write_world_map_tile "
-                "(cannot cache parent light with tile_m fallback)",
+                "(cannot cache parent light with tile_macro fallback)",
             )
-        tile_m = int(self._manifest.fine_cells_per_map_cell)
+        tile_macro = int(self._manifest.fine_cells_per_map_cell)
         self._parent_light_cache.put(
             ParentLightTile.from_cells(
                 world_uid=self._paths.world_uid,
                 gx=gx,
                 gy=gy,
                 side=cells_per_side,
-                tile_m=tile_m,
+                tile_macro=tile_macro,
                 cells=cells,
             ),
         )
@@ -214,7 +205,7 @@ class WorldPackWriter:
         *,
         territory_volume,
     ) -> str:
-        from app.dataModel.worldPack.worldPackManifest import LocationTerrainEntry
+        from app.dataModel.worldPack.meta.worldPackManifest import LocationTerrainEntry
 
         blob = self._codec.encode(PAYLOAD_KIND_FINE_TERRAIN, fine_terrain_chunk_payload(columns))
         path = self._paths.location_terrain_path(location_uid)
@@ -245,11 +236,12 @@ class WorldPackWriter:
         self,
         location_uid: str,
         wire: SettlementStructureWire,
+        *, registry: WorldTransitionTypeRegistry | None = None,
     ) -> SettlementStructureTmpRef:
         published = self._paths.settlement_structure_path(location_uid)
         existing = published.read_bytes() if published.is_file() else None
         blob = write_settlement_structure_blob(
-            wire, existing=existing, codec=self._codec,
+            wire, existing=existing, codec=self._codec, registry=registry,
         )
         target = published
         tmp = target.with_suffix(target.suffix + ".tmp")
@@ -281,8 +273,15 @@ class WorldPackWriter:
     ) -> str:
         target = self._paths.settlement_structure_path(tmp.settlement_uid)
         if not tmp.tmp_path.is_file():
-            raise FileNotFoundError(f"settlement structure tmp missing: {tmp.tmp_path}")
-        os.replace(tmp.tmp_path, target)
+            # Retry after os.replace succeeded but manifest save was interrupted.
+            # Only the exact payload from the caller's committed receipt is eligible.
+            if not target.is_file():
+                raise FileNotFoundError(f"settlement structure tmp missing: {tmp.tmp_path}")
+            published = target.read_bytes()
+            if len(published) != tmp.nbytes or self._codec.content_hash(published) != tmp.content_hash:
+                raise ValueError("published settlement blob differs from committed tmp receipt")
+        else:
+            os.replace(tmp.tmp_path, target)
         rel = target.relative_to(self._paths.root).as_posix()
         prev = self._manifest.settlement_structure_entry(tmp.settlement_uid)
         packed = packed_district_uids
@@ -451,8 +450,10 @@ class WorldPackWriter:
             wilderness_chunks=self._manifest.wilderness_chunks_baked,
         )
 
-    def pack_storage_path(self) -> str:
-        return f"worlds/{self._paths.world_uid}/pack"
+    def pack_storage_path(self, *, db_path: str | None = None, existing: str | None = None) -> str:
+        if db_path is None:
+            return self._paths.root.as_posix()
+        return pack_storage_reference(self._paths, db_path=db_path, existing=existing)
 
     def _replace_tile(self, entry: TileManifestEntry) -> None:
         self._manifest.tiles = [

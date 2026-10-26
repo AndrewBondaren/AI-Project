@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
-from app.application.worldData.patchStoreService import PatchStoreService
-from app.application.worldData.render.packMapGridRender import PackMapGridRender
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
+from app.application.worldData.render.pack.packMapGridRender import PackMapGridRender
 from app.application.worldData.render.renderPayloads import LEVEL_SURFACE, city_level_key
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack import (
@@ -23,7 +23,7 @@ from app.dataModel.worldPack import (
     TerritoryVolume,
     WorldMapCellWire,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 def _world(uid: str = "w-render-read", **kwargs):
@@ -71,7 +71,7 @@ class TestPackRenderReadFacade(unittest.TestCase):
         self.assertEqual(len(src.tiles), 1)
         self.assertEqual(src.tiles[0].gx, 0)
         self.assertEqual(len(src.pins.locations), 1)
-        self.assertEqual(src.tile_size_m, 3000)
+        self.assertEqual(src.tile_macro, 3000)
 
     def test_has_and_try_location_terrain(self) -> None:
         chunk = FineTerrainChunkWire(

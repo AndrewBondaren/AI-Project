@@ -1,21 +1,22 @@
-"""Tests for R36u detailed grade generate on meter grid."""
+"""Tests for R36u detailed grade generate on fine grid."""
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import unittest
 from unittest.mock import MagicMock
 
-from app.application.worldData.pack.refine.detailedGradeGenerate import generate_detailed_grade
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
-from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.pack.refine.detailed.detailedGradeGenerate import generate_detailed_grade
+from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
+from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
-_PLAINS = _MASKS.default_plains.system_terrain
+_PLAINS = _MASKS.default_landcover.fallback_terrain
 _RAVINE = _MASKS.default_ravines.system_terrain
 
 
@@ -51,9 +52,9 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         self.assertEqual(result.grade_instances, ())
 
     def test_build_tile_surface_state_no_grade_from_parent(self) -> None:
-        from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
-        from app.dataModel.worldPack.parentLightTile import ParentLightTile
-        from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+        from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
         cells = [
             WorldMapCellWire(
@@ -62,32 +63,33 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             ),
         ]
         parent = ParentLightTile.from_cells(
-            world_uid="w", gx=0, gy=0, side=1, tile_m=4, cells=cells,
+            world_uid="w", gx=0, gy=0, side=1, tile_macro=4, cells=cells,
         )
         terrain = TerrainBatchOrchestrator(MagicMock())
         w = MagicMock()
         w.world_uid = "w"
         w.fine_cells_per_map_cell = 4
+        w.world_topology_mode = "planar"
         w.seed = 1
         w.z_min = -2
         w.z_max = 20
         w.map_subsurface_depth = 0
         w.terrain_registry = None
-        w.terrain_masks = None
+        w.terrain_masks = {"default_landcover": {"seed_spacing": 1000, "enabled": False}}
         w.terrain_scalars = None
         w.closed_planet_grid = False
         w.magma_band_thickness = None
-        ctx = MagicMock()
-        ctx.meter_z_overrides = {}
-        ctx.sparse_meter_hydro = {}
+        from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
+        ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            working=working_fixture(w, ctx),
         )
         self.assertIsNone(state.surface_grade_uid)
 
     def test_generate_stamps_with_templates(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -109,11 +111,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_d1",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -145,10 +142,10 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         self.assertNotIn((5, 5), stamped)
         self.assertNotIn((5, 6), stamped)
         self.assertTrue(all(inst.owner_uid is None for inst in result.grade_instances))
-        from app.application.worldData.pack.refine.detailedJobUid import (
+        from app.application.worldData.pack.refine.detailed.detailedJobUid import (
             front_grade_site,
         )
-        from app.dataModel.worldPack.packJobUid import PackJobUid
+        from app.dataModel.worldPack.bake.packJobUid import PackJobUid
         wire = PackJobUid.canonical_defaults()
         for inst in result.grade_instances:
             self.assertIsNotNone(inst.site_id)
@@ -163,7 +160,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
     def test_generate_stamps_ravine_mask(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -185,11 +182,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_ravine",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": ReliefContext.RAVINE,
-                "display_template_name": "Ravine",
-            }],
             relief_pick_policy={
                 ReliefContext.RAVINE.value: {
                     "mode": "fixed", "default_template_uid": uid,
@@ -236,7 +228,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -258,11 +250,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_stitch",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -307,7 +294,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -329,11 +316,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_late",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -383,7 +365,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         beyond is not a C18 obstacle.
         """
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -405,11 +387,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_seam",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -465,11 +442,11 @@ class DetailedGradeGenerateTest(unittest.TestCase):
     def test_across_seam_halo_reads_neighbor_z(self) -> None:
         """Δz only across the grid seam: halo overlay binds the shared rim uid."""
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             FaceKey,
             build_tile_face_catalog,
         )
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.db.models.world import World
 
@@ -491,11 +468,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_halo",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -549,7 +521,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
     def test_two_tile_road_shoulder_along_seam_one_uid(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
-        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
         from app.dataModel.terrain.relief import ReliefTemplate
         from app.dataModel.terrain.relief.enums import ReliefContext
         from app.db.models.world import World
@@ -572,11 +544,6 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world_uid="w_road_seam",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": ReliefContext.ROAD_SHOULDER.value,
-                "display_template_name": "Shoulder",
-            }],
             relief_pick_policy={
                 ReliefContext.ROAD_SHOULDER.value: {
                     "mode": "fixed", "default_template_uid": uid,
@@ -638,7 +605,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
 
 class DetailedGradeCatalogTest(unittest.TestCase):
     def test_shared_face_uid_agrees_both_chunks(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             FaceKey,
             build_tile_face_catalog,
         )
@@ -658,7 +625,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         self.assertIn(FaceKey("V", 0, 0), cat.faces_for_cell(2, 0))
 
     def test_inter_tile_west_face_uses_owner_tile(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             FaceKey,
             build_tile_face_catalog,
         )
@@ -681,7 +648,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         )
 
     def test_uid_for_faces_prefers_tile_rim(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             FaceKey,
             build_tile_face_catalog,
         )
@@ -701,7 +668,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         )
 
     def test_uid_for_faces_axis_keeps_internal_stitch(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             FaceKey,
             build_tile_face_catalog,
         )
@@ -719,7 +686,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         )
 
     def test_chunk_parent_count_rim_vs_internal(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             FaceKey,
             build_tile_face_catalog,
         )
@@ -740,14 +707,14 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         self.assertFalse(cat.is_open_rim_step((1, 1), (1, 0)))
 
     def test_job_uids_tile_is_l0_chunk_is_suffix(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             build_tile_face_catalog,
         )
-        from app.application.worldData.pack.refine.detailedJobUid import (
+        from app.application.worldData.pack.refine.detailed.detailedJobUid import (
             tile_edge_job_uid,
         )
         from app.dataModel.spatial.facing import COMPACT_LETTER, Facing
-        from app.dataModel.worldPack.packJobUid import PackJobUid
+        from app.dataModel.worldPack.bake.packJobUid import PackJobUid
 
         wire = PackJobUid.canonical_defaults()
         cat = build_tile_face_catalog(
@@ -782,7 +749,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
 
 
     def test_faces_share_vertex_adjacent_rims(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCatalog import FaceKey
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import FaceKey
 
         north = FaceKey("V", 1, 1)
         south = FaceKey("V", 1, 0)
@@ -800,7 +767,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
         from app.dataModel.terrain.relief import ReliefTemplate
@@ -824,11 +791,6 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             world_uid="w_stitch",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": tuid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": tuid},
             },
@@ -871,7 +833,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             GridBBox,
             SurfaceHeightmap,
         )
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
         from app.dataModel.terrain.relief import ReliefTemplate
@@ -895,11 +857,6 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             world_uid="w_corner",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": tuid,
-                "context": "open_land",
-                "display_template_name": "Open",
-            }],
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": tuid},
             },
@@ -930,7 +887,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
 
 class DetailedGradeMaterializeTest(unittest.TestCase):
     def test_r36t_corridor_excludes_ref_cells(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCorridor import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCorridor import (
             r36t_corridor_cells,
         )
 
@@ -939,10 +896,10 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         self.assertEqual(r36t_corridor_cells(wrote, refs), ((2, 0), (3, 0)))
 
     def test_r36t_cut_end_may_include_ref(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeCanalCut import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCanalCut import (
             r36t_include_cut_end,
         )
-        from app.application.worldData.pack.refine.detailedGradeCorridor import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCorridor import (
             r36t_corridor_cells,
         )
         from app.dataModel.terrain.relief.canal import EarthenCanal
@@ -973,7 +930,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
             RibbonColumnPlan,
             RibbonVolumePlan,
         )
-        from app.application.worldData.pack.refine.detailedGradeCorridor import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCorridor import (
             SeedCorridor,
             columns_for_plan,
         )
@@ -1010,8 +967,8 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
 
     def test_write_set_reconcile_merge_and_clip(self) -> None:
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.gradeInstanceMerge import merge_grade_instances
-        from app.application.worldData.pack.refine.detailedGradeResult import (
+        from app.application.worldData.relief.gradeInstanceMerge import merge_grade_instances
+        from app.application.worldData.pack.refine.detailed.detailedGradeResult import (
             DetailedGradeResult,
         )
         from app.dataModel.terrain.relief.enums import ReliefSideKind
@@ -1121,15 +1078,15 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         self.assertEqual(merged_inst[0].height_cells, 2)
         self.assertEqual(list(merged_inst[0].cell_refs), [(1, 0), (2, 0)])
 
-    def test_meter_grade_cell_blocked_so_t(self) -> None:
-        from app.application.worldData.pack.refine.meterGradeSurface import (
-            meter_grade_cell_blocked,
+    def test_fine_grade_cell_blocked_so_t(self) -> None:
+        from app.application.worldData.pack.refine.fineGradeSurface import (
+            fine_grade_cell_blocked,
         )
         from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
         barriers = WorldTerrainRegistry.canonical_barrier_terrain_keys()
         wall = next(iter(barriers))
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z={(0, 0): 5, (1, 0): 5, (2, 0): 5, (3, 0): 5},
             surface_terrain={
                 (0, 0): "plains",
@@ -1143,7 +1100,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
             surface_facing=None,
             grade_uid={(0, 0): "g1"},
         )
-        blocked = lambda xy: meter_grade_cell_blocked(
+        blocked = lambda xy: fine_grade_cell_blocked(
             surface, xy, road_key="road", barrier_keys=barriers,
         )
         self.assertTrue(blocked((9, 9)))  # missing z
@@ -1151,25 +1108,25 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         self.assertTrue(blocked((1, 0)))  # road
         self.assertTrue(blocked((2, 0)))  # open water
         self.assertTrue(blocked((3, 0)))  # barrier
-        surface2 = MeterGradeSurface(
+        surface2 = FineGradeSurface(
             surface_z={(4, 0): 3},
             surface_terrain={(4, 0): "plains"},
             hydrology=None,
             surface_facing=None,
         )
         self.assertFalse(
-            meter_grade_cell_blocked(
+            fine_grade_cell_blocked(
                 surface2, (4, 0), road_key="road", barrier_keys=barriers,
             ),
         )
-        river = MeterGradeSurface(
+        river = FineGradeSurface(
             surface_z={(5, 0): 2},
             surface_terrain={(5, 0): "plains"},
             hydrology={(5, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED)},
             surface_facing=None,
         )
         self.assertTrue(
-            meter_grade_cell_blocked(
+            fine_grade_cell_blocked(
                 river, (5, 0), road_key="road", barrier_keys=barriers,
             ),
         )
@@ -1177,7 +1134,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         self.assertFalse(HydrologyCellRole.SHORE.blocks_grade_seed())
 
     def test_inherit_uid_requires_unique_neighbor(self) -> None:
-        from app.application.worldData.pack.refine.detailedGradeMaterialize import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeMaterialize import (
             inherit_segment_uid,
         )
 
@@ -1196,7 +1153,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         )
 
     def test_merge_cell_refs_unions_sql_and_tuples(self) -> None:
-        from app.application.worldData.gradeInstanceMerge import (
+        from app.application.worldData.relief.gradeInstanceMerge import (
             apply_prior_cell_refs,
             merge_cell_refs,
         )
@@ -1271,7 +1228,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         })
 
     def _world(self, uid: str, tpl, *, canal_policy=None):
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
         from app.db.models.world import World
@@ -1288,11 +1245,6 @@ class GradeFormationApplyTest(unittest.TestCase):
             world_uid=uid,
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": tuid,
-                "context": ReliefContext.RAVINE,
-                "display_template_name": "Ravine ramp",
-            }],
             relief_pick_policy=pick,
         ), tuid
 
@@ -1321,7 +1273,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         )
 
     def test_ramp_z_not_parent_cliff(self) -> None:
-        from app.application.worldData.reliefTemplateLibraryService import (
+        from app.application.templateLibrary.reliefTemplateLibraryService import (
             relief_template_uid,
         )
 
@@ -1401,17 +1353,17 @@ class GradeFormationApplyTest(unittest.TestCase):
             run_column_fill,
         )
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             catalog_for_surface,
         )
-        from app.application.worldData.pack.refine.detailedGradeHalo import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fineChunkCompute import (
+        from app.application.worldData.pack.refine.fine.fineChunkCompute import (
             compute_rect,
             rect_heightmap_from_overlay,
         )
-        from app.application.worldData.pack.refine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_fill", tpl)
@@ -1432,6 +1384,7 @@ class GradeFormationApplyTest(unittest.TestCase):
 
         w = MagicMock()
         w.world_uid = "w_fill"
+        w.world_topology_mode = "planar"
         w.terrain_registry = None
         w.terrain_masks = None
         w.terrain_scalars = None
@@ -1467,7 +1420,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1497,14 +1451,14 @@ class GradeFormationApplyTest(unittest.TestCase):
 
     def test_compute_rect_discovers_without_planned(self) -> None:
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             catalog_for_surface,
         )
-        from app.application.worldData.pack.refine.detailedGradeHalo import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
-        from app.application.worldData.pack.refine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_plan_miss", tpl)
@@ -1525,7 +1479,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1553,14 +1508,14 @@ class GradeFormationApplyTest(unittest.TestCase):
 
     def test_compute_rect_skips_mill_when_flag_off(self) -> None:
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             catalog_for_surface,
         )
-        from app.application.worldData.pack.refine.detailedGradeHalo import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
-        from app.application.worldData.pack.refine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_mill_off", tpl)
@@ -1581,7 +1536,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1608,14 +1564,14 @@ class GradeFormationApplyTest(unittest.TestCase):
 
     def test_compute_rect_mill_without_paint_has_no_overlay(self) -> None:
         from app.application.worldData.generators.terrain.types import ColumnRect
-        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
             catalog_for_surface,
         )
-        from app.application.worldData.pack.refine.detailedGradeHalo import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeHalo import (
             grade_halo_cells,
         )
-        from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
-        from app.application.worldData.pack.refine.fineTileContext import FineTileContext
+        from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fine.fineTileContext import FineTileContext
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_paint_off", tpl)
@@ -1636,7 +1592,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=rect,
@@ -1666,8 +1623,8 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
     def test_discover_and_paint_is_orchestrator_not_god(self) -> None:
         import inspect
 
-        from app.application.worldData.pack.refine import detailedGradeDiscover as m
-        from app.application.worldData.pack.refine.detailedGradePaint import (
+        from app.application.worldData.pack.refine.detailed import detailedGradeDiscover as m
+        from app.application.worldData.pack.refine.detailed.detailedGradePaint import (
             apply_grade_paint_spec,
         )
 
@@ -1687,15 +1644,15 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
         from app.application.worldData.generators.terrain.relief.discover.types import (
             FrontGeometry,
         )
-        from app.application.worldData.pack.refine.detailedGradeFrontIdentity import (
+        from app.application.worldData.pack.refine.detailed.detailedGradeFrontIdentity import (
             discovered_front_from,
             front_bake_identity,
         )
-        from app.application.worldData.pack.refine.detailedJobUid import (
+        from app.application.worldData.pack.refine.detailed.detailedJobUid import (
             front_grade_site,
         )
-        from app.application.worldData.pack.refine.meterGradeSurface import (
-            MeterGradeSurface,
+        from app.application.worldData.pack.refine.fineGradeSurface import (
+            FineGradeSurface,
         )
         from app.dataModel.spatial.facing import Facing
         from app.application.worldData.generators.terrain.relief.pick.gradePass import (
@@ -1716,7 +1673,7 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
             anchor_bottom=(6, 5),
             hit_seam=False,
         )
-        surface = MeterGradeSurface(
+        surface = FineGradeSurface(
             surface_z={(5, 5): 8, (6, 5): 6},
             surface_terrain={(5, 5): _PLAINS, (6, 5): _PLAINS},
             hydrology=None,
@@ -1751,7 +1708,7 @@ class DiscoverAndPaintPolishTest(unittest.TestCase):
     def test_fine_tile_context_has_no_planned(self) -> None:
         from dataclasses import fields
 
-        from app.application.worldData.pack.refine.fineTileContext import (
+        from app.application.worldData.pack.refine.fine.fineTileContext import (
             FineTileContext,
         )
 

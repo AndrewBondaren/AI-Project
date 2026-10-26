@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.dataModel.spatial.facing import Facing, coerce_facing_wire
-from app.dataModel.structure.enums.buildingElement import (
+from app.dataModel.locations.structure.enums.buildingElement import (
     STAIR_DIRECTIONAL_ELEMENTS,
     StructureElement,
 )

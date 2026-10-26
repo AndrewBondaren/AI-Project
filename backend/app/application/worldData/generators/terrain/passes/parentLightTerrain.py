@@ -15,9 +15,9 @@ from app.application.worldData.generators.terrain.resolveWorldMapTerrain import 
     resolve_world_map_terrain,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
 
 T = TypeVar("T")
@@ -39,12 +39,12 @@ def _upsample_optional(
     """Nearest light→meter for optional categorical attrs (omit unset)."""
     pol = policy or ParentLightRefinePolicy.canonical_defaults()
     _require_categorical_nearest(pol)
-    tile_m = parent.tile_m
+    tile_macro = parent.tile_macro
     out: dict[tuple[int, int], T] = {}
-    for ly in range(tile_m):
-        for lx in range(tile_m):
-            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
-            tx, ty = parent.meters_to_tx_ty(xm, ym)
+    for ly in range(tile_macro):
+        for lx in range(tile_macro):
+            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_macro)
+            tx, ty = parent.fine_to_tx_ty(xm, ym)
             cell = parent.cell_at(tx, ty)
             if cell is None:
                 continue
@@ -63,12 +63,12 @@ def upsample_terrain_from_parent_light(
     """Resample L0 ``system_terrain`` to meter grid — nearest light cell only."""
     pol = policy or ParentLightRefinePolicy.canonical_defaults()
     _require_categorical_nearest(pol)
-    tile_m = parent.tile_m
+    tile_macro = parent.tile_macro
     out: dict[tuple[int, int], str] = {}
-    for ly in range(tile_m):
-        for lx in range(tile_m):
-            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
-            tx, ty = parent.meters_to_tx_ty(xm, ym)
+    for ly in range(tile_macro):
+        for lx in range(tile_macro):
+            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_macro)
+            tx, ty = parent.fine_to_tx_ty(xm, ym)
             cell = parent.cell_at(tx, ty)
             out[(xm, ym)] = resolve_world_map_terrain(world, cell)
     return out

@@ -8,25 +8,25 @@ from __future__ import annotations
 
 import logging
 
-from app.application.jsonValidation import terrain_masks
-from app.application.worldData.parseObjectReliefPickPolicy import (
+from app.application.jsonValidation import terrain, terrain_masks
+from app.application.worldData.relief.parseObjectReliefPickPolicy import (
     parse_object_relief_pick_policy,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
     dilate,
-    light_polyline_from_meters,
+    light_polyline_from_fine,
 )
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
-from app.dataModel.worldPack.paintedRoadEdge import PaintedRoadEdge
+from app.dataModel.worldPack.wire.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.db.models.namedLocation import NamedLocation
 
 logger = logging.getLogger(__name__)
 
 
-def _node_meters(
+def _node_fine(
     node_uid: str,
     nodes_by_uid: dict,
     locations_by_uid: dict[str, NamedLocation],
@@ -69,17 +69,18 @@ class RoadContributor:
         level_set = set(policy.graph_levels)
         painted = 0
         edges_used = 0
+        registry = terrain(ctx.world)
 
         for edge in ctx.edges:
             if edge.connection_type not in type_set:
                 continue
             if edge.graph_level not in level_set:
                 continue
-            a = _node_meters(edge.from_node_uid, nodes_by_uid, locations_by_uid)
-            b = _node_meters(edge.to_node_uid, nodes_by_uid, locations_by_uid)
+            a = _node_fine(edge.from_node_uid, nodes_by_uid, locations_by_uid)
+            b = _node_fine(edge.to_node_uid, nodes_by_uid, locations_by_uid)
             if a is None or b is None:
                 continue
-            ordered = light_polyline_from_meters([a, b], scale)
+            ordered = light_polyline_from_fine([a, b], scale)
             light_cells = set(ordered)
             if policy.dilate_radius_light > 0:
                 light_cells = dilate(light_cells, int(policy.dilate_radius_light))
@@ -87,7 +88,7 @@ class RoadContributor:
                 compose,
                 light_cells,
                 policy.system_terrain,
-                masks=masks,
+                registry=registry,
                 tile_set=tile_set,
                 preserve_hydro=True,
             )

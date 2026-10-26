@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.application.worldData.mapCellService import MapCellService
-from app.application.worldData.render.locationGridRenderer import LocationGridRenderer
+from app.application.worldData.mapCells.mapCellService import MapCellService
+from app.application.worldData.render.pack.locationGridRenderer import LocationGridRenderer
 from app.application.worldData.render.renderPayloads import (
     LocationEntryPayload,
     LocationGridPayload,
@@ -12,8 +12,8 @@ from app.application.worldData.render.renderPayloads import (
     WorldTileEntryPayload,
     WorldTileGridsPayload,
 )
-from app.application.worldData.render.worldGridRenderer import WorldGridRenderer
-from app.application.worldData.render.worldTileGridRenderer import WorldTileGridRenderer
+from app.application.worldData.render.worldMap.worldGridRenderer import WorldGridRenderer
+from app.application.worldData.render.worldMap.worldTileGridRenderer import WorldTileGridRenderer
 from app.db.models.world import World
 
 

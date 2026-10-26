@@ -1,7 +1,7 @@
 # dataModel — типизация city POJO (`str` → RegistryKey / ENUM-E)
 
 **Тип:** инженерное ТЗ / living registry. Не алгоритм generate.  
-**Scope:** POJO города в `backend/app/dataModel/settlement/` + зеркала (`CitySkeleton`, `BundleNamedLocation` overlay, `EconomicTierRange`, layout `economic_tier`).  
+**Scope:** POJO города в `backend/app/dataModel/locations/settlement/` + зеркала (`CitySkeleton`, `BundleNamedLocation` overlay, `EconomicTierRange`, layout `economic_tier`).
 **Не это ТЗ:** дубли литералов SoT — [`tz_datamodel_pojo_discrepancies.md`](./tz_datamodel_pojo_discrepancies.md) (`POJO-D-*`); nested generate `list[dict]` — **POJO-D-16**.  
 **Словарь wire:** [`tz_json_validation.md`](./tz_json_validation.md) §0 `RegistryKey[R]` / ENUM-E / REF-W.  
 **Продукт города:** [`tz_city_generation.md`](./tz_city_generation.md).  
@@ -165,7 +165,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | `required_structures[].plot_template` | тот же `DrawingKey` | pin чертежа участка (`by_system_name`); `count` на строке **главнее** `plot_counts`. Leftover `building_template` |
 | `required_structures[].structure_type` | leftover optional purpose | дубль ключа рецепта поселения, не pin, не ключ map |
 
-`DrawingKey` — `RegistryKey[BuildingLayoutTemplate]` (identity чертежа generate, не uid `WorldBuildingTemplateRegistry`). Не ткань района. Не `PlotType` / `StructureType`.
+`DrawingKey` — `RegistryKey[BuildingLayoutTemplate]` (identity чертежа generate, не uid библиотечного member). Не ткань района. Не `PlotType` / `StructureType`.
 
 Резолв N ([`tz_structure_connections.md`](./tz_structure_connections.md) §5.1.3): `required.count` → `plot_counts` района → `plot_counts` города → **1**.
 

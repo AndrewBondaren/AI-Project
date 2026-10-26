@@ -864,13 +864,28 @@ PRAGMA incremental_vacuum;         -- запускать после массов
   3. Отменить
 - Если валидных снапшотов в таймлайне нет → только варианты 2 и 3
 
-**Что входит в слепок:** схема мира на момент хода, состояние всех NPC, состояние игрока, состояние сессии.
+**Что входит в слепок:** схема мира на момент хода, состояние всех NPC, состояние сессии, patch set хода (дельта — [`tz_patch_system.md`](./tz_patch_system.md)). **Состояние игрока — в отдельной цепочке** `player_snapshots` (export/import, time travel):
+
+```
+player_snapshots
+  player_snapshot_id
+  player_uid
+  session_id             — к какой игровой сессии привязан
+  turn_id                — синхронизация с world_snapshots того же хода
+  created_at
+  parent_snapshot_id     — та же древовидная семантика, что world_snapshots
+  snapshot_data          — сжатый blob: memory (история, origin_timeline) + intrinsic (статы, инвентарь)
+                           placement НЕ входит — свойство session-binding, живёт в world blob
+  snapshot_checksum      — SHA256(snapshot_data)
+```
+
+Односторонняя зависимость: player может ссылаться на world-факты (memory); world никогда не ссылается на player. `attach` игрока к раннему world snapshot — reconcile-операция (player-патч), см. [`tz_patch_system.md`](./tz_patch_system.md).
 
 **Time travel назад** → загружаем snapshot → продолжаем → новый `timeline_id`, первый снапшот новой ветки ссылается на точку ответвления через `parent_snapshot_id`. Будущее не перезаписывается.
 
 **Time travel вперёд** → переход на любой snapshot любого существующего timeline.
 
-**Синхронизация событий между таймлайнами** — открытая проблема, реализуется в последнюю очередь.
+**Синхронизация событий между таймлайнами** — решено (2026-10): cross-timeline sync **не нужен**. Между ветками перемещается только игрок через `player_snapshots`; заброшенная ветка заморожена; продвигается только таймлайн, где находится игрок. См. [`tz_patch_system.md`](./tz_patch_system.md) § Timelines.
 
 ---
 
@@ -1260,6 +1275,138 @@ Lookup: `alias → { category, system_name, current_value }`.
 - Alias уникален в пределах мира — конфликт alias при загрузке = ошибка валидации
 - **Валидация при записи** — перед сохранением нового стата/скилла/резиста alias проверяется против текущего AliasRegistry; коллизия блокирует сохранение с явной ошибкой: `Alias "Fr" уже используется: стат "Fire"`
 - **Обновление в памяти** — после любого изменения схемы (добавить/переименовать/удалить стат/скилл/резист) AliasRegistry обновляется немедленно; коллизия никогда не попадает в БД
+
+### Identity водных систем (HY-12/4, 2026-10-21)
+
+Общие теги `UidKind.WATER_SYSTEM` и `UidKind.LIFECYCLE_CHANGE` живут в `app/ids/uidKind.py`; adapter формулы — `app/ids/waterSystemIdentity.py`. UID системы: `entity_uid(world_uid, WATER_SYSTEM, change_uid=operation_uid, members=state_fingerprint(tuple(sorted(unique_member_uids))), system_kind=WaterSystemKind)`. Вид `PHYSICAL_MERGE` отделён от `CONNECTED`; UID участников не меняются. Перестановка состава/retry не меняют результат, новая операция восстановления после засухи даёт новый UID даже при прежнем составе. Нельзя выводить historical identity только из состава или уровня воды.
+
+`initial_water_change_uid(world_uid)` использует `entity_uid(world_uid, LIFECYCLE_CHANGE, scope="hydrology", origin="bootstrap")` только для чистого первого bake/preview. Stateful caller передаёт identity своей операции и переиспользует её при retry; bootstrap-default не является identity нового runtime-события. Журнал/change persist и историзация остаются L/W-доменам.
+
+### Детерминированные uid и rng (**DET-1**, cross-cutting)
+
+**A0, 2026-10-14:** единственное актуальное место UID helper — `app/ids/`
+(переезд выполнен; worldData/ids в историческом тексте ниже — старый путь).
+Template identity/persist refs — [доменные библиотеки §1/3/5/6](tz_domain_template_libraries.md).
+Любая библиотечная ссылка хранит member UID, никогда system_name/local_uid.
+Обычный authored/canonical identity — library_uid с owner pack;
+member-copy — назначенный runtime_uid; полный pack remap — существующее
+правило target pack + source template UID. Назначенные UID не пересчитываются.
+Отдельного split helper для каждого вложенного building не требуется:
+вложенность не создаёт member. При смене domain kind explicit uid_map
+записывает старую identity → новую по центральному UID-контракту;
+если исходник не содержит достаточной identity, импорт диагностирует это,
+а не угадывает pack по имени/source_file. Не вводить локальную hash-формулу.
+
+Повторная генерация мира с тем же входом даёт **те же** uid сущностей и те
+же rng-потоки — ссылки между SQL, pack-файлами и якорями сцены переживают
+regenerate. Это достигается **одной** конвенцией формулы, принуждённой
+кодом, а не договорённостью.
+
+**Единственное место формулы:** `app/application/worldData/ids/` — helper
+домена **worldData**, **вне всех генераторов** (`worldData/generators/**`
+только импортируют его). Не `app/utils/` (это не общая утилита, а контракт
+домена мира), не `dataModel/` (формула — application-слой;
+`dataModel/worldPack/packJobUid.py` остаётся **wire-композитором** job/site
+строк — он не хэширует uid), не внутри генератора/ассемблера/persist-сервиса.
+Вне helper'а `uuid.uuid5(...)`, `uuid4()` для generated-сущностей,
+`Random(f"...")`, `random.seed(...)`, `hashlib.*` для uid/seed —
+**запрещены** (правило `.cursor/rules/deterministic-ids.mdc`; source-gate в
+`tests/test_deterministic_ids.py` сканирует `app/**`, исключения — `_EXEMPT`).
+Legacy `app/utils/deterministicIds.py` — **удалён** (миграция выполнена,
+`.cursor/plans/deterministic-ids-done.md`).
+
+**Три корня — разные функции одного helper'а, не три конвенции:**
+
+| Корень | Функции | Что выводится | Правило |
+|---|---|---|---|
+| `world_uid` | `entity_uid(world_uid, kind, **keys)`, `entity_rng(world_uid, kind, **keys)` | **идентичность сущностей**: `named_locations`, `location_levels`, `transitions`, `connection_nodes/edges`, district/area/building uid, relief grade/grade-system uid; rng каскада (fold, materialize) | «**что это**» — пересев мира не меняет идентичность локаций |
+| `world_seed` | `seed_uid(world_seed, kind, **keys)`, `seed_rng(world_seed, kind, **keys)` | **воспроизводимость bake**: pack job-uid (tile/chunk/edge), grade catalog face/interior uid, relief pick/kind-roll rng | «**как сгенерировано**» — другой seed = другой рельеф при тех же локациях |
+| — | `library_uid(library: LibraryKind, system_name)` | **глобальные библиотеки шаблонов** (`building_templates`, `relief_templates`) — без мирового корня | один шаблон = один uid на всю инсталляцию |
+
+`world_seed` пока = `seed_root(world)` = `str(world.world_uid)` (interim до
+колонки `World.seed` — `tz_terrain_relief.md` §334); числовой noise-seed —
+`seed_int(world)` (наследует legacy md5-вывод, bit-compat). Relief grade
+instance uid — корень `world_uid` (D5: grade — сущность мира); grade
+catalog/interior — `seed_uid` (R36w bake-репродукция).
+
+Uid сущности от `world_seed` или bake-rng от `world_uid` — ошибка контракта.
+
+Типизированные обёртки над `seed_rng` — **часть этого модуля** (target
+2026-10-17; сейчас в `generators/terrain/relief/geom/seededHash.py`, перенос —
+план wilderness шаг 0): `seeded_u01(world_seed, kind, **keys) -> float` в
+`[0, 1)`, `seeded_index(world_seed, kind, n, **keys) -> int` в `[0, n)`.
+Отдельный `bake_seed(world)` с тихим fallback `"world"` **снимается** — только
+`seed_root(world)` (объект без `world_uid` = ошибка вызова, не дефолтный seed).
+Несколько потоков под одним `kind` различаются именованным ключом
+(например `channel="edge"` / `"density"` у `UidKind.REGION`): одинаковые
+root/kind/keys дают один и тот же `Random`.
+
+Каналы регионов задаются `RegionRngChannel(StrEnum)` из `app.ids`:
+`SEED="seed"`, `CLAIM="claim"`, `EDGE="edge"`, `DENSITY="density"`.
+Передача enum в `channel` сохраняет каноническую строку и RNG: общий
+нормализатор ключей использует `.value`. Это именованные значения каналов,
+не отдельная проверка произвольных `**keys` в det-функциях.
+
+**Контракт функций:**
+
+- `kind: UidKind` — **закрытый** `StrEnum` тегов доменов (`district`, `area`,
+  `building`, `level`, `transition`, `city_node`, `tile`, `chunk`, …). Свободная
+  строка запрещена — защита от коллизий одинаковых тегов в разных доменах.
+- `**keys` — именованные параметры; сериализация `k=v` в **отсортированном**
+  порядке ключей → порядок передачи не влияет на uid. Строка читаема в логе:
+  `"<world_uid>|transition|a=12,4,0|b=12,4,-1|type=hatch"`.
+- Нормализация значений: `StrEnum` → `.value`, `int` → `str`, кортеж → через
+  запятую; `None` — **ошибка**, не `"None"`.
+- Иерархия — через ключ `parent=<uid>` (building от area, level от building):
+  цепочка всё равно упирается в корень.
+- Тонкие типизированные обёртки per домен (`entry_uid(...)`, `level_uid(...)`,
+  `transition_uid(...)`) **остаются** — они фиксируют *какие* ключи обязательны;
+  ядро фиксирует *формат*. Обёртка не имеет права собирать строку сама.
+- `origin='runtime'`-сущности (созданы игровым действием) — `uuid4`, через
+  `runtime_uid()` того же helper'а; генерацией не воспроизводятся.
+- Независимая авторская копия библиотечного члена
+  (`creation_kind=member_copy`) также получает UID через существующий
+  **`app.ids.runtime_uid()`**, с проверкой уникальности и повтором при
+  занятости (решение 2026-10-11; `tz_template_library_packs.md` §0.1–3).
+  UID сохраняется один раз; чтение, правка и импорт существующей копии
+  не пересчитывают его по `library_uid`. Это не изменение формулы
+  детерминированных UID обычного создания/FS-импорта через `library_uid()`.
+  Полный remap пака использует правило ниже. Локальный UUID API в consumers запрещён.
+
+**Смена формулы = смена всех uid.** Миграция выполнена атомарно по доменам
+(`.cursor/plans/deterministic-ids-done.md`); при следующей смене формулы —
+снова recreate SQL (schema-policy) + пересборка pack (`l.{uid}.*.zst`, tiles)
++ реимпорт библиотек (`library_uid` сменил namespace URL → DNS).
+
+**Целевое расширение pack-owned библиотек (2026-10-08):**
+[tz_template_library_packs.md §2–4](./tz_template_library_packs.md).
+Единственная точка UID после переноса пакета — `app.ids`; существующий
+`library_uid` расширяется keyword `pack_uid`, без новых builtin/pack UID-функций
+и без локальных формул/конкатенаций в consumers. Pack UID получается тем же
+`library_uid` в типизированном namespace `LIBRARY_PACKS`. Template UID зависит
+при обычном создании/FS-импорте от домена, UID владельца и локального
+ключа, но не от мира/seed. Для полного remap (`instantiate_pack`,
+`copy_pack`/publish) центральный API `app.ids` расширяется:
+**целевой pack_uid + исходный template_uid**, с namespace домена
+(решение 2026-10-11). Читаемые имена не участвуют; одинаковые входы
+дают тот же UID, разные исходные UID не объединяются из-за одинаковых
+имён. Существующие связанные члены при re-instantiate сохраняют UID;
+новая формула используется для новых строк. Отдельное исключение —
+случайный назначенный UID независимой `member_copy` по правилу выше.
+Legacy-формула без владельца относится только к ещё не мигрированным доменам.
+Structures с UUID из JSON и прежние building/relief UID требуют отдельной карты
+миграции всех refs, manifests и fixtures; default-пакам не выделяется своя формула.
+
+Целевой SQL-каталог: `library_packs`, `library_pack_members`,
+`library_pack_dependencies`, `world_library_packs` по §3 указанного ТЗ.
+Глобальное владение и подключение ко всему миру различны; `source_file` —
+диагностика, не связь. Одно template UID — один владелец. Локальный
+`system_name` building/relief уникален внутри владельца/домена, не глобально.
+Смена схемы — правка `0001_initial.sql` + sync dataclass, без `0002_*`;
+recreate SQL/реимпорт/пересборка pack после миграции UID.
+
+Потребители-SoT: `tz_location_transitions.md` инв. 10, `tz_settlement_outdoor`
+extract uids, `tz_world_pack_storage` job-uid, `tz_cascade_context` §4 rng.
 
 ---
 
@@ -1890,6 +2037,15 @@ INDEX (world_id, x, y)
 ```
 
 **Уровень 2 — `named_locations`** — агрегат ячеек с именем:
+
+**Библиотечные refs A0:** system_template_uid — UID реально применённого
+member, kind проверяется consumer-контрактом; system_structure_template_uid
+— сохраняемый UID фактически применённого StructureTemplate здания.
+Обе ссылки входят в export/import/world-copy remap и usage/deletion.
+Structure ref не пересчитывается при чтении из изменившегося building
+template; regeneration обновляет его. None разрешён для объектов без
+structure и unknown provenance; фиктивный member не создаётся.
+SQL/model/DTO синхронизируются в кодовом B4; это не snapshot версии тела.
 ```sql
 named_locations (
   location_uid,

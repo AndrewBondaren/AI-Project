@@ -17,7 +17,7 @@ class SceneVolumePolicy(BaseModel):
     scene_xy_radius: int = Field(default=20, ge=0)
     scene_z_above: int = Field(default=6, ge=0)
     # WP-13 / WP-PERF-10: background enqueue within this distance of entry (not whole tile).
-    background_expand_radius_m: int = Field(default=60, ge=0)
+    background_expand_radius_fine: int = Field(default=60, ge=0)
 
     @classmethod
     def canonical_defaults(cls) -> SceneVolumePolicy:

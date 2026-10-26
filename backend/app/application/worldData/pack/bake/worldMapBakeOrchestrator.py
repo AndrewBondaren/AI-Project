@@ -1,22 +1,30 @@
 """World map light bake — thin compose → writer (tz_map_light_bake / WP-15)."""
 
 from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 
 import time
 from collections import Counter
+from collections.abc import Mapping
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
+from app.application.worldData.planning.composition.surfacePlanningAssembler import (
+    SurfacePlanningAssembler, prepare_captured_bundle, to_legacy_context,
+)
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.jsonValidation.resolve import ResolveContext
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
 from app.application.jsonValidation import terrain_system_keys
-from app.dataModel.worldPack.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
+from app.application.worldData.pack.io.wildernessRegionIndexWriter import replace_region_index
+from app.dataModel.worldPack.bake.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
 from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
-    prepare_surface_terrain_context,
 )
 from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
 from app.application.worldData.pack.bake.lightGrid.bake import compose_light_grid
@@ -35,9 +43,9 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.connectionEdge import ConnectionEdge
@@ -50,7 +58,7 @@ def _coarse_hydro_role_name(cell_hydro: object | None) -> str:
     return world_map_hydro_role_from_cell(cell_hydro).name
 
 
-def _coarse_hydro_hist(coarse_hydro: dict[tuple[int, int], object]) -> dict[str, int]:
+def _coarse_hydro_hist(coarse_hydro: Mapping[tuple[int, int], MapCellHydrology]) -> dict[str, int]:
     return dict(Counter(_coarse_hydro_role_name(v) for v in coarse_hydro.values()))
 
 
@@ -75,7 +83,9 @@ def _hydro_cell_role_label(cell_hydro: object | None) -> str | None:
 class WorldMapBakeOrchestrator:
     """Persist L0 tiles from LightGridCompose — no per-field sampling here."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, planning: SurfacePlanningAssembler | None = None,
+                 capture: SurfacePlanningCapture | None = None) -> None:
+        self._planning, self._capture = planning, capture
         self.last_relief_grade_instances: list[ReliefGradeInstance] = []
 
     def bake_tiles(
@@ -85,47 +95,52 @@ class WorldMapBakeOrchestrator:
         writer: WorldPackWriter,
         tiles: list[tuple[int, int]],
         *,
-        surface_ctx: SurfaceTerrainContext | None = None,
+        wait: PlanWaitControl,
+        surface_ctx: SurfaceTerrainContext | None = None,  # Transitional: ignored; derived from bundle.
+        surface_bundle: SurfacePlanBundle | None = None,
         locations_index: LocationsIndexWire | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
         bake_mode: PackBakeMode = PACK_BAKE_LIGHT,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+        working: SurfaceWorkingMaps,
     ) -> int:
+        wait.raise_if_cancelled()
         world_uid = world.world_uid
         ctx_t0 = time.perf_counter()
         graph_nodes = list(nodes or [])
         graph_edges = list(edges or [])
-        if surface_ctx is None:
-            surface_ctx = prepare_surface_terrain_context(
-                world,
-                locations,
-                nodes=graph_nodes,
-                edges=graph_edges,
-                hydrology_generator=hydrology_generator,
-            )
-        if surface_ctx is None:
+        if surface_bundle is None:
+            if self._planning is None or self._capture is None:
+                raise ValueError("surface planning dependencies required")
+            request_ctx = ResolveContext()
+            view = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+                mountain_templates=mountain_template_inputs(relief_templates_by_uid or {}),
+                resolve_ctx=request_ctx)
+            surface_bundle = prepare_captured_bundle(view, planning=self._planning,
+                wait=wait, resolve_ctx=request_ctx)
+        if surface_bundle is None:
             log_pack_surface_context(world_uid, ok=False, started_at=ctx_t0)
-            raise ValueError(
-                f"surface terrain context unavailable for world_map bake ({world_uid})",
-            )
+            raise ValueError(f"surface terrain context unavailable for world_map bake ({world_uid})")
+        # The working copy and frozen refs always originate from this same bundle.
+        surface_ctx = to_legacy_context(surface_bundle, working=working)
         log_pack_surface_context(
             world_uid,
             ok=True,
             started_at=ctx_t0,
             coarse_surface_z_n=len(surface_ctx.coarse_surface_z),
             coarse_hydro_n=len(surface_ctx.coarse_hydro),
-            sparse_meter_hydro_n=len(surface_ctx.sparse_meter_hydro),
-            meter_z_overrides_n=len(surface_ctx.meter_z_overrides),
+            sparse_fine_hydro_n=len(surface_ctx.sparse_fine_hydro),
+            fine_z_overrides_n=len(surface_ctx.fine_z_overrides),
             hydrology_enabled=is_hydrology_enabled(world),
             hydro_role_hist=_coarse_hydro_hist(surface_ctx.coarse_hydro),
             surface_z_hist=_surface_z_hist(surface_ctx.coarse_surface_z),
         )
 
-        tile_m = map_cell_fine_span(world)
-        side = resolve_world_map_cells_per_tile(tile_m, world.world_map_cells_per_tile)
-        scale = LightGridScale.from_tile(tile_m, side)
+        tile_macro = map_cell_fine_span(world)
+        side = resolve_world_map_cells_per_tile(tile_macro, world.world_map_cells_per_tile)
+        scale = LightGridScale.from_tile(tile_macro, side)
         index = locations_index or build_locations_index(locations, world)
 
         bake_ctx = LightGridBakeContext(
@@ -137,11 +152,15 @@ class WorldMapBakeOrchestrator:
             nodes=graph_nodes,
             edges=graph_edges,
             surface_planning=surface_ctx,
+            surface_bundle=surface_bundle,
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
+            region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
+            working=working,
         )
         compose = compose_light_grid(bake_ctx)
+        replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
         if bake_mode == PACK_BAKE_FULL:
             bounds = world_bounds_from_world(world, locations)
             if bounds is not None:
@@ -184,8 +203,6 @@ class WorldMapBakeOrchestrator:
                 ),
             )
         writer.manifest.bake_mode = bake_mode
-        writer.recalc_manifest_counters()
-        writer.save_manifest()
         log_pack_world_map_bake_done(
             world_uid,
             total_cells=total,
@@ -199,20 +216,37 @@ class WorldMapBakeOrchestrator:
     def bake_tile(
         self,
         world: World,
-        surface_ctx: SurfaceTerrainContext,
+        surface_ctx: SurfaceTerrainContext,  # Transitional positional argument; ignored.
         gx: int,
         gy: int,
         writer: WorldPackWriter,
         *,
+        wait: PlanWaitControl,
+        surface_bundle: SurfacePlanBundle | None = None,
         cells_per_side: int | None = None,
         locations: list[NamedLocation] | None = None,
         locations_index: LocationsIndexWire | None = None,
+        relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+        region_state_snapshot: Mapping[str, StateSnapshotEntry] | None = None,
+        working: SurfaceWorkingMaps,
     ) -> tuple[list[WorldMapCellWire], str]:
         """Single-tile convenience wrapper around compose pipeline."""
+        wait.raise_if_cancelled()
         locs = locations or []
-        tile_m = map_cell_fine_span(world)
+        if surface_bundle is None:
+            if self._planning is None or self._capture is None:
+                raise ValueError("surface planning dependencies required")
+            request_ctx = ResolveContext()
+            view = self._capture.capture(world, locs, mode=ResolutionMode.RUNTIME,
+                mountain_templates=mountain_template_inputs(relief_templates_by_uid or {}), resolve_ctx=request_ctx)
+            surface_bundle = prepare_captured_bundle(view, planning=self._planning,
+                wait=wait, resolve_ctx=request_ctx)
+        if surface_bundle is None:
+            raise ValueError("surface terrain context unavailable")
+        surface_ctx = to_legacy_context(surface_bundle, working=working)
+        tile_macro = map_cell_fine_span(world)
         side = cells_per_side or resolve_world_map_cells_per_tile(
-            tile_m,
+            tile_macro,
             world.world_map_cells_per_tile,
         )
         index = locations_index or build_locations_index(locs, world)
@@ -221,12 +255,16 @@ class WorldMapBakeOrchestrator:
             locations=locs,
             locations_index=index,
             tiles=[(gx, gy)],
-            scale=LightGridScale.from_tile(tile_m, side),
+            scale=LightGridScale.from_tile(tile_macro, side),
             surface_planning=surface_ctx,
+            surface_bundle=surface_bundle,
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
+            region_state_snapshot=region_state_snapshot if region_state_snapshot is not None else {},
+            working=working,
         )
         compose = compose_light_grid(bake_ctx)
+        replace_region_index(writer.manifest, bake_ctx.wilderness_region_entries)
         cells = compose.to_wire_tile(gx, gy)
         content_hash = writer.write_world_map_tile(gx, gy, cells, cells_per_side=side)
         return cells, content_hash

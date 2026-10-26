@@ -10,6 +10,8 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+
 from app.application.worldData.generators.terrain.relief.discover.fronts import FrontStage
 from app.application.worldData.generators.terrain.relief.discover.millBuckets import (
     BucketRef,
@@ -82,6 +84,7 @@ def discover_fronts(
     existing_uids: dict[Coord, str] | None = None,
     cap_front: CapFront | None = None,
     envelopes: ReliefOntologyEnvelopes | None = None,
+    terrain_registry: WorldTerrainRegistry | None = None,
 ) -> DiscoverResult:
     """One leftover walk; mill schedule; SHEER traces; C41; C38."""
     t0 = time.perf_counter()
@@ -104,7 +107,7 @@ def discover_fronts(
         )
 
     rim = RimStage(surface, vertices, plugins)
-    front = FrontStage(surface, vertices, cell_blocked, cap_front, envelopes)
+    front = FrontStage(surface, vertices, cell_blocked, cap_front, envelopes, terrain_registry)
     seam = SeamStage(vertices, surface)
     fronts: list[FrontGeometry] = []
     buckets = MillBuckets()

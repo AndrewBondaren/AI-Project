@@ -13,20 +13,80 @@ metadata:
 > **Relief R35:** [`tz_terrain_relief.md`](./tz_terrain_relief.md).  
 > **Building templates:** [`tz_building_generator.md`](./tz_building_generator.md) §5–6.  
 > **Smell:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § BUNDLE-2.  
-> **План имплементации (после утверждения):** [`.cursor/plans/bundle-2-section-handlers.md`](../.cursor/plans/bundle-2-section-handlers.md).
+> **План имплементации (после утверждения):** [`.cursor/plans/bundle-2-section-handlers-done.md`](../.cursor/plans/bundle-2-section-handlers-done.md).
 
 ## Назначение
+
+**A0, 2026-10-14:** [доменные библиотеки](tz_domain_template_libraries.md).
+Modern world archive переносит world-owned packs/members/bodies целиком
+с domain kinds plot/building/structure; plot содержит building templates,
+явные refs внутри тел — UID. Flat sections/pointers сняты (2026-10-18):
+compatibility importer и world-owned `legacy` pack удалены, импорт
+отвергает старые секции ошибкой.
+Archive root для plot — plot_templates; для structure — structures_templates.
+Modern library_packs всегда адресует members по UID и определяет body domain
+через library_kind. validate_only выполняет ту же подготовку без записи.
+Entity DTO переносит system_template_uid и system_structure_template_uid;
+world copy remap обеих ссылок согласован с library uid_map. Engine defaults
+обеспечиваются доверенными spec, не публикуются world import'ом.
+Один common writer/token/UOW, порядок world → libraries → entities;
+policy/stale/ошибка откатывают всё. Стандартные plots/buildings — default
+members, POJO-defaults полей не являются отдельной экспортируемой библиотекой.
 
 Целевая **оркестрация** world JSON bundle (не Pack):
 
 - один HTTP facade;
 - тонкий `WorldBundleService` (validate → normalize → remap → transaction → порядок);
 - секции = handlers двух родов (entity / library-template);
-- **self-contained skeleton** возит pointers в `world` + **тела** всех library-backed шаблонов top-level секциями.
+- **self-contained skeleton** возит world-owned manifests/members/bodies
+  в library subtree; pins/refs в world — UID. Flat body/pointer
+  sections сняты (2026-10-18): импорт их отвергает.
 
 **Не slice:** не проектируем «сначала только то, что уже в коде». Каркас handlers и allowlist описывают **полный** целевой skeleton; имплементация идёт **слоями архитектуры** (errors → protocol → kinds → все handlers), не «v1 без building_templates».
 
 **Вне scope:** Pack zip/bake; PC/NPC/starter_characters; RELIEF-BAR-1 materialize cells; DAG; interior map blobs.
+
+### Паки библиотек (4d/L-5 выполнены; A0 split — следующий этап)
+
+Контракт — [tz_template_library_packs.md §4](./tz_template_library_packs.md).
+Добавляются `library_packs` (world-owned manifests/состав/зависимости) и
+`structure_templates` (тела дочерней геометрии). Секции `library_pack_bindings`
+нет: доступность следует из владения паком импортируемым миром (§1.1 и §4
+связанного ТЗ). Инстанс подключается ко всему миру. Defaults доступны через
+отдельные доверенные spec, не назначаются флагом пользовательского manifest.
+
+Валидация всех manifests/UID/body предшествует persist. В одной существующей
+bundle-транзакции: world → manifests → bodies/membership → диагностика
+зависимостей. Body-секции не создают скрытые подключения. Неразрешимые template refs/
+зависимости дают default + warning в runtime-политике; невалидный wire или
+владение отвергаются resolver. Будущий master-mode — строгая диагностика refs.
+Remap мира не меняет engine pack/template UID; при copy world-owned UID
+перевычисляются от нового владельца по §4.2. Self-contained export
+сохраняет состав world-owned паков, тела, зависимости и provenance;
+зависимость не означает автоматического подключения. Рефы в самих телах
+остаются только UID шаблонов. Текущие allowlists/order/handlers ниже требуют
+расширения отдельным этапом, до него новый формат не считается реализованным.
+
+**Уточнение пользователя 2026-10-13:** импорт целого мира по умолчанию создаёт
+независимую копию; обновления существующего мира идут через библиотеки
+и действующую политику патчей. Отдельный world-conflict update/copy не требуется.
+Общая библиотечная policy сохраняется. Мир записывается перед библиотеками
+в одной UOW; policy/stale/ошибка откатывают и временную world row до ответа.
+Fallback из manifest пака отложен в
+[отдельное расширение](tz_library_contextual_fallback.md), не блокирующее 4d/L-5.
+
+Транспортный формат — zip-архив `.wpack` с файловой структурой
+(`bundle.manifest.json` + `skeleton/` + `library/` + `pack/`):
+[tz_template_library_packs.md §4.2](./tz_template_library_packs.md).
+Секции bundle становятся файлами архива; модель `dict {key: payload}` и
+handlers не меняются. World archive несёт только world-owned manifests —
+engine-библиотеки идут отдельным архивом `kind:"library_pack"`.
+Первая версия конверта — `format_version: 1`; индекс секций, согласованность
+`source` и правила воспроизводимости заданы в §4.2 связанного ТЗ.
+`download=false` сохраняет inline JSON-preview sections dict; файловый экспорт
+пишет `.wpack`; legacy flat JSON импортом отвергается (2026-10-18).
+Проверка ZIP-конверта
+предшествует JSON resolver; дальнейший pipeline handlers остаётся общим.
 
 ---
 
@@ -78,6 +138,16 @@ metadata:
 
 ### B. Library-template секции (G4-паттерн)
 
+**Уточнение B7 (2026-10-15), дополнено 2026-10-18:** для пак-доменов
+(plot/building/structure/relief) G4-паттерн отменён. Flat-ключи
+`building_templates` / `relief_templates` / `plot_templates` /
+`structure_templates` — ошибка импорта: compatibility input
+`import_libraries` → world-owned `legacy` pack снят целиком (2026-10-18);
+экспорт тел идёт `library/`-subtree архива, а не секциями. World
+pointer-реестры `building_template_registry` / `relief_template_registry`
+удалены из schema и `World`-модели: availability = membership, явный выбор =
+`library_pins`. Таблица ниже действует для race/perk — не pack-домены.
+
 Тела **не** в `world.*_registry` и **не** как world-scoped full rows.  
 Registry на world = pointers; top-level секция = полные тела → upsert **глобальной** SQL library + sync pointers.
 
@@ -85,8 +155,8 @@ Registry на world = pointers; top-level секция = полные тела �
 
 | # | Ключ (цель) | Library SQL (цель) | World pointer registry | Product SoT / gap |
 |---|---|---|---|---|
-| 6 | `relief_templates` | `relief_templates` | `relief_template_registry` | R35 ✅ wire уже есть |
-| 7 | `building_templates` | `building_templates` | `building_template_registry` | [`tz_building_generator.md`](./tz_building_generator.md) §5–6; bundle section ⬜ |
+| 6 | `relief_templates` | `relief_templates` | ~~`relief_template_registry`~~ удалён (B7); flat-секция отвергается (2026-10-18) | R35 ✅ wire уже есть |
+| 7 | `building_templates` | `building_templates` | ~~`building_template_registry`~~ удалён (B7); flat-секция отвергается (2026-10-18) | [`tz_building_generator.md`](./tz_building_generator.md) §5–6 |
 | 8 | `race_templates` | global race library (**без** `world_uid` на теле) | `race_template_registry` | [`tz_races.md`](./tz_races.md): сегодня world-scoped `races` + `races[]` — **мигрировать** |
 | 9 | `perk_templates` | global perk library | `perk_template_registry` | сегодня world-scoped perks + section `perks` — **мигрировать** (WB-14); удобный import между мирами |
 
@@ -95,21 +165,29 @@ Registry на world = pointers; top-level секция = полные тела �
 world:
   race_template_registry:     [ { system_template_uid, display_… } ]
   perk_template_registry:     [ … ]
-  building_template_registry: [ … ]
-  relief_template_registry:   [ … ]
+  library_pins:               [ { library_kind, template_uid }, … ]
 race_templates:     [ { full contract… }, … ]
 perk_templates:     [ { full perk… }, … ]
-building_templates: [ … ]
-relief_templates:   [ … ]
+building_templates: [ … ]   # ❌ flat-секция отвергается импортом (снято 2026-10-18)
+relief_templates:   [ … ]   # ❌ flat-секция отвергается импортом (снято 2026-10-18)
 
 # ❌ world-scoped full rows races/perks как «entity секции»
 # ❌ тела внутри world registry JSON
 # ❌ в bundle одни pointers без секции bodies
+# ❌ world.building_template_registry / relief_template_registry (удалены, B7)
 ```
 
-**Wire rename (канон):** `race_templates`, `perk_templates` (симметрия с `building_templates` / `relief_templates`). Legacy `races` / `perks` — только optional transitional alias; в чистой архитектуре один канон.
+**Wire rename (канон):** `race_templates`, `perk_templates` (симметрия с `building_templates` / `relief_templates`). Transitional-алиасы `races` / `perks` сняты (2026-10-18) — один канон.
 
 ### C. Пока не library-секции
+
+**Opt-out canonical autoattach race/perk (library-packs, шаг 7, 2026-10-16):**
+источник SQL bodies — явный import/create (`RaceTemplateOutline` /
+`PerkTemplateOutline`), identity — `template_uid`; мир допускает только UID
+из `race_template_registry` / `perk_template_registry`. Объявленных default
+bodies/FS-паков и global `CanonicalLibrarySpec` нет. POJO defaults полей
+не являются источником новых SQL rows. Эти две библиотеки остаются на WB-13/14;
+перевод в pack membership — отдельная deferred per-domain миграция.
 
 | Данные | Почему |
 |---|---|
@@ -329,8 +407,8 @@ Facade **не** держит 8–10 domain services для inline `if section` �
 | | Сейчас | Цель |
 |---|---|---|
 | Orchestration | inline if/dict + HTTP | handlers loop, no HTTP |
-| `relief_templates` | section + functions ✅ | library handler instance |
-| `building_templates` | SQL library + world registry; bundle section ⬜ | skeleton key + library handler |
+| `relief_templates` | compat flat input снят (2026-10-18) | library/-subtree архива |
+| `building_templates` | compat flat input снят (2026-10-18) | library/-subtree архива |
 | `races` / `perks` | world-scoped full rows | `race_templates` / `perk_templates` + pointer registries |
 | `locations` | entity ✅ | остаётся entity (WB-15) |
 | Barriers | inline на world | без изменений (C) |

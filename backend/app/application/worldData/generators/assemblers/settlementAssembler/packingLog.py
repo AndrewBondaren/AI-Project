@@ -30,6 +30,7 @@ class PackingStep(StrEnum):
     ALLEY = "alley"
     GRAPH = "graph"
     AREA = "area"
+    AREA_SLOTS = "area_slots"
     FRONTAGE = "frontage"
 
 
@@ -65,10 +66,17 @@ class PackingReason(StrEnum):
     STUB_NO_SHELL = "stub_no_shell"
     Z_COLLISION = "z_collision"
     PLOT_TYPE_DEFAULTED = "plot_type_defaulted"
+    MISSING_TEMPLATE = "missing_template"
 
 
 class PackingHost(StrEnum):
     SETTLEMENT = "settlement"
+
+
+class PackingScope(StrEnum):
+    """Non-district contexts of boundary diagnostics (not a district name)."""
+    SNAPSHOT = "snapshot"
+    CACHE = "cache"
 
 
 def _wire(value: Any) -> Any:

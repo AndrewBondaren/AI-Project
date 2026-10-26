@@ -8,7 +8,7 @@ from app.dataModel.perks.perkTemplateOutline import PerkTemplateOutline
 
 
 def normalize_perk_template_body(raw: dict[str, Any]) -> dict[str, Any]:
-    """Validate + canonicalize wire (incl. legacy ``perk_uid``) → dict for ``WorldPerk``."""
+    """Validate + canonicalize wire → dict for ``WorldPerk``."""
     outline = PerkTemplateOutline.model_validate(raw)
     if not outline.template_uid or not outline.system_name or not outline.display_name:
         raise ValueError("PerkTemplateOutline identity incomplete after validate")

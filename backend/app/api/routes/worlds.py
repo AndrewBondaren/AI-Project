@@ -1,17 +1,37 @@
 from dataclasses import asdict
+from pathlib import Path
+import tempfile
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.background import BackgroundTask
 
 from app.api.deps import get_container
-from app.api.utils.jsonResolver import JsonResolver
-from app.api.utils.responseHelpers import json_or_download
-from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
-from app.application.worldData.bundle.errors import BundleValidationError
-from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.api.utils.bundleSource import resolve_bundle_source
+from app.api.libraryWrite import parse_negotiation
+from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, import_validation_http_detail
+from app.application.worldBundle.errors import BundleValidationError
+from app.application.templateLibrary.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.dataModel.terrainMasks.regions.edit import DeclaredRegionEdit
 
 router = APIRouter()
+
+
+@router.post("/worlds/{world_uid}/regions")
+async def edit_declared_region(world_uid: str, operation: DeclaredRegionEdit,
+                              validate_only: bool = Query(default=False),
+                              container=Depends(get_container)) -> JSONResponse:
+    try:
+        world = await container.world_service().edit_region(
+            world_uid, operation, validate_only=validate_only)
+    except ImportValidationError as exc:
+        if validate_only:
+            return JSONResponse(content=ImportValidationReport(issues=exc.errors).to_dict())
+        raise HTTPException(status_code=422, detail=import_validation_http_detail(exc)) from exc
+    if validate_only:
+        return JSONResponse(content=ImportValidationReport().to_dict())
+    return JSONResponse(content=asdict(world))
 
 
 @router.get("/worlds")
@@ -26,9 +46,23 @@ async def export_world(
     download: bool = False,
     level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
     container=Depends(get_container),
-) -> JSONResponse:
-    bundle = await container.world_bundle_service().export(world_uid, level=level)  # type: ignore[arg-type]
-    return json_or_download(bundle, download, f"world_{world_uid}.json")
+) -> Response:
+    service = container.world_bundle_service()
+    bundle = await service.export(world_uid, level=level)  # type: ignore[arg-type]
+    if not download:
+        return JSONResponse(content=bundle)
+    temporary = tempfile.TemporaryDirectory(prefix="world-export-")
+    try:
+        archive_path = service.write_archive(bundle, path=Path(temporary.name) / "world.wpack")
+        return FileResponse(
+            archive_path,
+            media_type="application/zip",
+            filename=f"world_{world_uid}.wpack",
+            background=BackgroundTask(temporary.cleanup),
+        )
+    except Exception:
+        temporary.cleanup()
+        raise
 
 
 @router.get("/worlds/{world_uid}")
@@ -78,15 +112,21 @@ async def delete_world(world_uid: str, container=Depends(get_container)) -> None
 async def import_world(
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
+    decisions: str | None = Form(default=None),
+    preview_token: str | None = Form(default=None),
     level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
+    validate_only: bool = Query(default=False),
     container=Depends(get_container),
 ) -> JSONResponse:
-    data = await JsonResolver.resolve(file=file, path=path)
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
     try:
-        results, rolled_back = await container.world_bundle_service().import_bundle(
+        service = container.world_bundle_service()
+        data = await resolve_bundle_source(file=file, path=path, read_archive=service.read_archive)
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
+        result = await service.import_bundle(
             data, level=level,  # type: ignore[arg-type]
+            validate_only=validate_only,
+            **parse_negotiation(decisions, preview_token).model_dump(),
         )
     except BundleValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
@@ -96,6 +136,9 @@ async def import_world(
         ) from exc
     except (ReliefValidationError, ReliefNotFoundError) as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
+    if isinstance(result, ImportValidationReport):
+        return JSONResponse(status_code=200, content=result.to_dict())
+    results, rolled_back = result
     content = {k: v.to_dict() for k, v in results.items()}
     if rolled_back:
         failed_sections = [k for k, v in results.items() if v.failed > 0]

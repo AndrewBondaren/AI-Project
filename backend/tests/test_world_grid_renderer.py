@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.render.worldGridRenderer import WorldGridRenderer
+from app.application.worldData.render.worldMap.worldGridRenderer import WorldGridRenderer
 from app.db.models.mapCell import MapCell
 
 

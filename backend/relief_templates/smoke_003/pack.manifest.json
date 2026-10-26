@@ -1,0 +1,34 @@
+{
+  "pack_uid": "4bddeec4-c80f-5106-a854-22724a46cf92",
+  "system_name": "user.relief.smoke_003",
+  "pack_name": "smoke_003",
+  "display_name": "Smoke 003 relief templates",
+  "version": "1.0",
+  "dependencies": [],
+  "members": [
+    {
+      "library_kind": "relief_templates",
+      "local_uid": "open_land_soft",
+      "template_uid": "de597010-1f2d-5eee-83d3-b1e9ea3aed73",
+      "source_file": "smoke_003/open_land_soft.json"
+    },
+    {
+      "library_kind": "relief_templates",
+      "local_uid": "ravine_soft",
+      "template_uid": "82b3ad82-9417-51f8-9565-73eef2ef9fa7",
+      "source_file": "smoke_003/ravine_soft.json"
+    },
+    {
+      "library_kind": "relief_templates",
+      "local_uid": "road_shoulder_soft",
+      "template_uid": "dc93816e-e8a2-5213-beb6-5ecb0737bee2",
+      "source_file": "smoke_003/road_shoulder_soft.json"
+    },
+    {
+      "library_kind": "relief_templates",
+      "local_uid": "shore_soft",
+      "template_uid": "1e912e25-6ca7-5d0f-b748-53fce1ef1c0f",
+      "source_file": "smoke_003/shore_soft.json"
+    }
+  ]
+}

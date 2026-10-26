@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import random
 import unittest
+from pathlib import Path
 
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
     plan_district_slots,
 )
@@ -17,11 +16,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_city_street_grid,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import (
+    SettlementTopologyPlan, settlement_gate_transitions,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
 from app.application.worldData.generators.coordinates import map_cell_fine_span, settlement_origin_fine
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_topology,
 )
@@ -41,12 +43,17 @@ from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from tests.canonicalCatalog import canonical_building_catalog
+
+
+def _catalog(world):
+    return canonical_building_catalog()
 
 
 def _world(**kwargs) -> World:
@@ -71,13 +78,15 @@ def _settlement() -> NamedLocation:
         system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         created_at="2026-01-01T00:00:00",
         system_location_subtype="city",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+            'settlement_density': DistrictDensity.MEDIUM.wire_value,
+            'architectural_style': "gothic",
+            'perimeter_barrier': PerimeterBarrier(
+                template="stone_fence", probability=1.0,
+            ).model_dump(mode="json"),
+        },
         system_economic_tier="standard",
-        settlement_density=DistrictDensity.MEDIUM.wire_value,
-        architectural_style="gothic",
-        perimeter_barrier=PerimeterBarrier(
-            template="stone_fence", probability=1.0,
-        ).model_dump(mode="json"),
         map_x=0,
         map_y=0,
         map_z=0,
@@ -85,9 +94,11 @@ def _settlement() -> NamedLocation:
 
 
 def _skeleton(world: World, settlement: NamedLocation):
-    return city_skeleton_from_settlement(
+    ctx = settlement_context(world, settlement)
+    return resolved_settlement_skeleton(
         settlement,
-        economic_tier=TierResolver.resolve(world=world, city=settlement),
+        economic_tier=ctx.economic_tier,
+        settlement_density=ctx.settlement_density,
     )
 
 
@@ -104,7 +115,7 @@ def _plan_city(world: World, settlement: NamedLocation, slots):
     )
 
 
-class CitySkeletonImportTest(unittest.TestCase):
+class SettlementSkeletonImportTest(unittest.TestCase):
     def test_density_and_barrier_from_named_location_fields(self) -> None:
         world = _world()
         settlement = _settlement()
@@ -123,24 +134,26 @@ class TopologyExtractTest(unittest.TestCase):
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         self.assertTrue(slots)
         nodes, edges = _plan_city(world, settlement, slots)
-        extracted = extract_topology(settlement, slots, nodes, edges)
+        extracted = extract_topology(settlement, SettlementTopologyPlan(
+            slots, nodes, edges, settlement_gate_transitions(settlement, nodes)))
         self.assertEqual(len(extracted.districts), len(slots))
         district_type = district_type_entry().system_type
         self.assertTrue(
             all(row.system_location_type == district_type for row in extracted.districts),
         )
-        self.assertTrue(all(row.district_topology for row in extracted.districts))
+        self.assertTrue(all(row.location_payload["district_topology"] for row in extracted.districts))
         self.assertTrue(
             all(row.system_template_uid is None for row in extracted.districts),
         )
         first_topo = DistrictTopologySlot.model_validate(
-            extracted.districts[0].district_topology,
+            extracted.districts[0].location_payload["district_topology"],
         )
         self.assertEqual(
             first_topo.template_system_name,
             slots[0].district_template.system_name,
         )
         expected_uid = district_location_uid(
+            world.world_uid,
             settlement.location_uid,
             slots[0].district_template.system_name,
             0,
@@ -182,7 +195,8 @@ class TopologyReuseTest(unittest.TestCase):
         skeleton = _skeleton(world, settlement)
         slots = plan_district_slots(world, settlement, skeleton, None)
         nodes, edges = _plan_city(world, settlement, slots)
-        extracted = extract_topology(settlement, slots, nodes, edges)
+        extracted = extract_topology(settlement, SettlementTopologyPlan(
+            slots, nodes, edges, settlement_gate_transitions(settlement, nodes)))
         loaded = load_topology_slots(
             world, settlement, skeleton, extracted.districts,
         )
@@ -203,7 +217,7 @@ class TopologyReuseTest(unittest.TestCase):
         )
         service = SettlementGeneratorService()
         packed = service.generate_layout(
-            world, settlement, catalog=None,
+            world, settlement, catalog=_catalog(world),
             district_slots=loaded,
             city_graph=(nodes, edges),
         )
@@ -221,10 +235,11 @@ class TopologyReuseTest(unittest.TestCase):
         world = _world()
         settlement = _settlement()
         service = SettlementGeneratorService()
-        slots, nodes, edges = service.plan_slots_and_city_graph(
+        topology = service.plan_slots_and_city_graph(
             world, settlement, None,
         )
-        layout = service.generate_layout(world, settlement, catalog=None)
+        slots, nodes, edges = topology.slots, topology.nodes, topology.edges
+        layout = service.generate_layout(world, settlement, catalog=_catalog(world))
         planned_keys = [
             (slot.cell_x, slot.cell_y, slot.district_template.system_name)
             for slot in slots
@@ -279,7 +294,9 @@ class TopologySkipTest(unittest.TestCase):
             display_name="Core",
             system_location_type=district_type,
             created_at="2026-01-01T00:00:00",
-            district_topology=freeze.model_dump(mode="json"),
+            location_payload={
+                'district_topology': freeze.model_dump(mode="json"),
+            },
         )
         incomplete = NamedLocation(
             location_uid="d-bad",
@@ -287,7 +304,9 @@ class TopologySkipTest(unittest.TestCase):
             display_name="Core",
             system_location_type=district_type,
             created_at="2026-01-01T00:00:00",
-            district_topology={"cell_x": 0},
+            location_payload={
+                'district_topology': {"cell_x": 0},
+            },
         )
         gate = ConnectionNode(
             node_uid="g1",
@@ -299,7 +318,11 @@ class TopologySkipTest(unittest.TestCase):
         )
         self.assertTrue(should_skip_topology([district], [gate]))
         self.assertFalse(should_skip_topology([district], []))
-        self.assertFalse(should_skip_topology([incomplete], [gate]))
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        # A corrupt authored freeze must not be treated as absent topology and
+        # regenerated. Valid absence remains a separate ordinary case.
+        with self.assertRaises(UnresolvedModelError):
+            should_skip_topology([incomplete], [gate])
 
 
 if __name__ == "__main__":

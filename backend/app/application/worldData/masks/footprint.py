@@ -5,16 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 
-
-@dataclass(frozen=True, slots=True)
-class LightCellRef:
-    gx: int
-    gy: int
-    tx: int
-    ty: int
-
-    def as_absolute(self, side: int) -> tuple[int, int]:
-        return self.gx * side + self.tx, self.gy * side + self.ty
+from app.dataModel.spatial.grid.coordinateTypes import LightCellRef as LightCellRef
 
 
 @dataclass(frozen=True, slots=True)

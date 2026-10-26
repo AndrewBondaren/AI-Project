@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.flora.enums.cropKind import CropKind
 
 
@@ -15,5 +15,5 @@ class CropsTypeEntry(BaseModel):
 
     system_crop: StrictOnWire[str]
     crop_kind: StrictEnumOnWire[CropKind]
-    display_name: DefaultOnWire[str | None] = None
-    glossary_ref: DefaultOnWire[str | None] = None
+    display_name: DefaultWhenMissing[str | None] = None
+    glossary_ref: DefaultWhenMissing[str | None] = None

@@ -6,7 +6,7 @@ import random
 import unittest
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -15,7 +15,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.c
     frame_blocked_rects,
     reservation_modules,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import (
+from app.application.worldData.generators.assemblers.districtAssembler.planner.alleys import (
     add_alleys,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.lattice import (
@@ -40,21 +40,22 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
 )
 from app.application.worldData.generators.road.connectionPolicy import paint_for_connection
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
     street_classes_for,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import POSITION_CENTER
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from tests.canonicalCatalog import canonical_plot_uid
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
 
 
 _STEP = 80
@@ -99,7 +100,7 @@ def _token(
     name = system_name or uid.split("#", 1)[0]
     return PackingToken(
         uid=uid,
-        system_name=name,
+        template_uid=name,
         w=w,
         h=h,
         priority=priority,
@@ -129,8 +130,8 @@ def _four_adjacent(left: Reservation, right: Reservation) -> bool:
     return False
 
 
-def _skeleton() -> CitySkeleton:
-    return CitySkeleton(
+def _skeleton() -> SettlementSkeleton:
+    return SettlementSkeleton(
         economic_tier=None,
         architectural_style=None,
         dominant_material=None,
@@ -179,10 +180,11 @@ def _placement(
     )
     return AreaPlacement(
         area_slot=AreaSlot(cells=[(x, y)], ground_z=0, facing=Facing.SOUTH),
-        template=_layout(token.system_name, purpose),
+        template=_layout(token.template_uid, purpose),
         building_x=x,
         building_y=y,
         reservation=reservation,
+        template_uid=token.template_uid,
     )
 
 
@@ -256,7 +258,10 @@ class CenterClusterPass1Test(unittest.TestCase):
         )
         assert civic is not None
         self.assertEqual(len(civic.required_structures or []), 1)
-        self.assertEqual(civic.required_structures[0].plot_template, "town_hall")
+        self.assertEqual(
+            civic.required_structures[0].plot_template,
+            canonical_plot_uid("town_hall"),
+        )
         self.assertEqual(civic.required_structures[0].position, POSITION_CENTER)
         inner = _inner(3)
         lattice = make_lattice(inner, _STEP)
@@ -319,14 +324,14 @@ class CenterClusterPass1Test(unittest.TestCase):
         ]
         placed, leftover, _occupied = run_pass1(_slot(), inner, lattice, with_plaza, ())
         self.assertEqual(leftover, [])
-        self.assertEqual({row.token.system_name for row in placed}, {"town_hall", "plaza_1"})
+        self.assertEqual({row.token.template_uid for row in placed}, {"town_hall", "plaza_1"})
         self.assertTrue(all(row.cluster_id == _CLUSTER_ID for row in placed))
         halls_only = [_token("town_hall#0"), _token("cathedral#0", system_name="cathedral")]
         placed_halls, leftover_halls, _occ = run_pass1(
             _slot(), inner, lattice, halls_only, (),
         )
         self.assertEqual(leftover_halls, [])
-        self.assertNotIn("plaza_1", {row.token.system_name for row in placed_halls})
+        self.assertNotIn("plaza_1", {row.token.template_uid for row in placed_halls})
         plaza = _layout("plaza_1", BuildingPurpose.PLAZA.value)
         self.assertIn(
             BuildingPurpose.PLAZA,
@@ -458,6 +463,71 @@ class CenterClusterFrameAlleyTest(unittest.TestCase):
         self.assertEqual(len(edges), 1)
         self.assertEqual(edges[0].connection_type, "alley")
         self.assertEqual(roles[edges[0].edge_uid], DistrictStreetRole.BACK_ALLEY)
+
+
+class AlleyGeometryTest(unittest.TestCase):
+    def _run(
+        self,
+        second: tuple[int, int],
+        *,
+        surface: dict[tuple[int, int], int] | None = None,
+        ground_z: int = 0,
+        world_uid: str = "w",
+    ) -> tuple[list, list]:
+        slot = _slot(
+            DistrictConnection(connection_type="road", role="main_street"),
+            DistrictConnection(connection_type="alley", role="back_alley"),
+        )
+        slot.ground_z = ground_z
+        nodes: list = []
+        edges: list = []
+        add_alleys(
+            slot,
+            [
+                _placement(_token("town_hall#0"), col=1, row=1, x=80, y=80, cluster=True),
+                _placement(
+                    _token("cathedral#0", system_name="cathedral"),
+                    col=2, row=1, x=second[0], y=second[1], cluster=True,
+                ),
+            ],
+            nodes,
+            edges,
+            world_uid,
+            surface=surface,
+        )
+        return nodes, edges
+
+    def _endpoints(self, nodes: list, edges: list) -> tuple:
+        self.assertEqual(len(edges), 1)
+        by_uid = {n.node_uid: n for n in nodes}
+        return by_uid[edges[0].from_node_uid], by_uid[edges[0].to_node_uid]
+
+    def test_side_by_side_plots_get_vertical_alley_in_gap(self) -> None:
+        a, b = self._endpoints(*self._run((160, 80)))
+        self.assertNotEqual(a.node_uid, b.node_uid)
+        self.assertEqual((a.x, a.y), (120, 80))
+        self.assertEqual((b.x, b.y), (120, 160))
+
+    def test_stacked_plots_get_horizontal_alley_in_gap(self) -> None:
+        a, b = self._endpoints(*self._run((80, 160)))
+        self.assertNotEqual(a.node_uid, b.node_uid)
+        self.assertEqual((a.x, a.y), (80, 120))
+        self.assertEqual((b.x, b.y), (160, 120))
+
+    def test_alley_node_z_from_surface_else_ground_z(self) -> None:
+        a, b = self._endpoints(
+            *self._run((160, 80), surface={(120, 80): 7}, ground_z=3),
+        )
+        self.assertEqual(a.z, 7)
+        self.assertEqual(b.z, 3)
+
+    def test_alley_node_uid_deterministic_per_world(self) -> None:
+        first, _ = self._run((160, 80))
+        again, _ = self._run((160, 80))
+        other, _ = self._run((160, 80), world_uid="w2")
+        uids = sorted(n.node_uid for n in first)
+        self.assertEqual(uids, sorted(n.node_uid for n in again))
+        self.assertTrue(set(uids).isdisjoint(n.node_uid for n in other))
 
 
 if __name__ == "__main__":

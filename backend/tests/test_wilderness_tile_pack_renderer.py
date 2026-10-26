@@ -20,11 +20,11 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE_Z,
 )
 from app.application.worldData.render.gradeRayDump import GradeRayIndex
-from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
+from app.application.worldData.render.pack.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
-from app.dataModel.worldPack.fineTerrainChunkWire import (
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import (
     FineTerrainChunkWire,
     FineTerrainColumnWire,
     FineTerrainZRun,
@@ -68,7 +68,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
             chunks,
             tile_gx=-2,
             tile_gy=-2,
-            tile_size_m=1000,
+            tile_macro=1000,
         )
         self.assertEqual(renderer.column_count, 3)
         surface = renderer.render_surface_top()
@@ -140,7 +140,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         self.assertIn("thin_steep_gap_suspect=1", summary)
 
         renderer = WildernessTilePackRenderer(
-            chunks, tile_gx=0, tile_gy=0, tile_size_m=1000,
+            chunks, tile_gx=0, tile_gy=0, tile_macro=1000,
         )
         levels = renderer.render_all_levels(
             include_z_slices=True,
@@ -204,7 +204,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
             ),
         ]
         renderer = WildernessTilePackRenderer(
-            chunks, tile_gx=1, tile_gy=2, tile_size_m=1000,
+            chunks, tile_gx=1, tile_gy=2, tile_macro=1000,
             ray_index=GradeRayIndex((
                 GradeRimRay(
                     x=1000, y=2000, facing=Facing.EAST, kind=ReliefSideKind.SLOPE,
@@ -255,7 +255,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
             FineTerrainChunkWire(cx=0, cy=0, chunk_columns=8, columns=columns),
         ]
         renderer = WildernessTilePackRenderer(
-            chunks, tile_gx=0, tile_gy=0, tile_size_m=1000,
+            chunks, tile_gx=0, tile_gy=0, tile_macro=1000,
         )
         mosaic = renderer.render_grade_at_z(5)
         cropped = renderer.render_grade_at_z(5, crop_empty=True)

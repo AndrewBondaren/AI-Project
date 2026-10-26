@@ -6,9 +6,12 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
+from app.dataModel.locations.locationType import locationTypeEntry as _location_type_entry_mod
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.payloadKind import PayloadKind
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
 
@@ -16,133 +19,13 @@ _SIZE = WorldSettlementSizeRegistry.canonical_defaults()
 _SMALL = _SIZE.root[0].system_size
 _MEDIUM = _SIZE.root[1].system_size
 _LARGE = _SIZE.root[-1].system_size
+_SYSTEM_TYPE_ROOM = "room"
 
 # tz_locations.md § Размер поселения (LOC-T-2) — metres on settlement subtypes only.
 _FOOTPRINT_VILLAGE: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 0.75}
 _FOOTPRINT_CITY: dict[str, float] = {_SMALL: 1.00, _MEDIUM: 2.00, _LARGE: 4.00}
-_FOOTPRINT_DUNGEON: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 1.00}
+_FOOTPRINT_COMPLEX: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 1.00}
 _FOOTPRINT_UNDERGROUND_CITY: dict[str, float] = dict(_FOOTPRINT_CITY)
-
-# tz_locations.md § location_type_registry — full hierarchy + subtypes (engine SoT).
-_ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
-    LocationTypeEntry(
-        system_type="region",
-        display_type="Регион",
-        parent_types=[None],
-        is_outdoor=True,
-    ),
-    LocationTypeEntry(
-        system_type="territory",
-        display_type="Территория",
-        parent_types=["region"],
-        is_outdoor=True,
-        subtypes=[
-            LocationTypeSubtypeEntry(system_subtype="island", border_category="liquid"),
-            LocationTypeSubtypeEntry(system_subtype="mountain"),
-            LocationTypeSubtypeEntry(system_subtype="underground"),
-        ],
-    ),
-    LocationTypeEntry(
-        system_type="settlement",
-        display_type="Поселение",
-        parent_types=["territory"],
-        is_outdoor=True,
-        subtypes=[
-            LocationTypeSubtypeEntry(
-                system_subtype="city",
-                l0_map_symbol="u",
-                typical_district_types=[
-                    "civic", "commercial", "residential", "industrial", "port",
-                ],
-                required_structure_types=["town_hall"],
-                footprint_by_size=dict(_FOOTPRINT_CITY),
-            ),
-            LocationTypeSubtypeEntry(
-                system_subtype="village",
-                l0_map_symbol="n",
-                typical_district_types=["civic", "residential"],
-                footprint_by_size=dict(_FOOTPRINT_VILLAGE),
-            ),
-            LocationTypeSubtypeEntry(
-                system_subtype="dungeon",
-                l0_map_symbol="d",
-                footprint_by_size=dict(_FOOTPRINT_DUNGEON),
-            ),
-            LocationTypeSubtypeEntry(
-                system_subtype="underground_city",
-                l0_map_symbol="g",
-                typical_district_types=["civic", "residential"],
-                footprint_by_size=dict(_FOOTPRINT_UNDERGROUND_CITY),
-            ),
-        ],
-    ),
-    LocationTypeEntry(
-        system_type="district",
-        display_type="Район",
-        parent_types=["settlement"],
-        is_outdoor=True,
-        subtypes=[
-            LocationTypeSubtypeEntry(system_subtype="extract"),
-            LocationTypeSubtypeEntry(system_subtype="process"),
-            LocationTypeSubtypeEntry(system_subtype="manufacture"),
-            LocationTypeSubtypeEntry(system_subtype="culture"),
-            LocationTypeSubtypeEntry(system_subtype="farm"),
-            LocationTypeSubtypeEntry(system_subtype="livestock"),
-        ],
-    ),
-    LocationTypeEntry(
-        system_type="building",
-        display_type="Строение",
-        parent_types=["settlement", "district"],
-        is_outdoor=False,
-        subtypes=[
-            LocationTypeSubtypeEntry(system_subtype="residential"),
-            LocationTypeSubtypeEntry(system_subtype="commercial"),
-            LocationTypeSubtypeEntry(system_subtype="military"),
-            LocationTypeSubtypeEntry(system_subtype="religious"),
-        ],
-    ),
-    LocationTypeEntry(
-        system_type="room",
-        display_type="Помещение",
-        parent_types=["building"],
-        is_outdoor=False,
-        subtypes=[
-            LocationTypeSubtypeEntry(system_subtype="porch"),
-            LocationTypeSubtypeEntry(system_subtype="entrance_steps"),
-        ],
-    ),
-    LocationTypeEntry(
-        system_type="geographic",
-        display_type="География",
-        parent_types=["region", "territory", None],
-        is_outdoor=True,
-        subtypes=[
-            LocationTypeSubtypeEntry(system_subtype="mountain"),
-            LocationTypeSubtypeEntry(system_subtype="peak"),
-            LocationTypeSubtypeEntry(system_subtype="plain"),
-            LocationTypeSubtypeEntry(system_subtype="hill"),
-            LocationTypeSubtypeEntry(system_subtype="lake", border_category="liquid"),
-            LocationTypeSubtypeEntry(system_subtype="sea", border_category="liquid"),
-            LocationTypeSubtypeEntry(system_subtype="ocean", border_category="liquid"),
-            LocationTypeSubtypeEntry(system_subtype="inland_sea", border_category="liquid"),
-            LocationTypeSubtypeEntry(system_subtype="island", border_category="liquid"),
-            LocationTypeSubtypeEntry(system_subtype="coast"),
-            LocationTypeSubtypeEntry(system_subtype="river"),
-        ],
-    ),
-    LocationTypeEntry(
-        system_type="climate_pole",
-        display_type="Климатический полюс",
-        parent_types=[None],
-        is_outdoor=True,
-    ),
-)
-
-_CANONICAL_ENTRIES: tuple[LocationTypeEntry, ...] = tuple(
-    entry.fixture_identity() for entry in _ENGINE_ENTRIES
-)
-
 
 class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
     """Root POJO for `worlds.location_type_registry`. Wire shape: JSON array (map normalized on import)."""
@@ -151,6 +34,7 @@ class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
     SYSTEM_TYPE_SETTLEMENT: ClassVar[str] = "settlement"
     SYSTEM_TYPE_DISTRICT: ClassVar[str] = "district"
     SYSTEM_TYPE_BUILDING: ClassVar[str] = "building"
+    SYSTEM_TYPE_ROOM: ClassVar[str] = _SYSTEM_TYPE_ROOM
 
     root: list[LocationTypeEntry]
 
@@ -204,6 +88,164 @@ class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
         return WorldLocationTypeRegistry(merged)
 
 
+type LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]
+
+_location_type_entry_mod.WorldLocationTypeRegistry = WorldLocationTypeRegistry
+LocationTypeEntry.model_rebuild()
+
+# tz_locations.md § location_type_registry — full hierarchy + subtypes (engine SoT).
+_ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
+    LocationTypeEntry(
+        system_type="region",
+        display_type="Регион",
+        parent_types=[None],
+        is_outdoor=True,
+    ),
+    LocationTypeEntry(
+        system_type="territory",
+        display_type="Территория",
+        parent_types=["region"],
+        is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(system_subtype="island", border_category="liquid"),
+            LocationTypeSubtypeEntry(system_subtype="mountain"),
+            LocationTypeSubtypeEntry(system_subtype="underground"),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type="settlement",
+        display_type="Поселение",
+        is_inhabited=True,
+        payload_kind=PayloadKind.SETTLEMENT,
+        parent_types=[None, "territory", "region"],
+        is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(
+                system_subtype="city",
+                l0_map_symbol="u",
+                typical_district_types=[
+                    "civic", "commercial", "residential", "industrial", "port",
+                ],
+                required_structure_types=["town_hall"],
+                footprint_by_size=dict(_FOOTPRINT_CITY),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="village",
+                l0_map_symbol="n",
+                typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_VILLAGE),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="underground_city",
+                l0_map_symbol="g",
+                typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_UNDERGROUND_CITY),
+            ),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type="location_complex",
+        display_type="Комплекс",
+        payload_kind=PayloadKind.SETTLEMENT,
+        parent_types=["territory", "geographic", "settlement", None],
+        is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(
+                system_subtype="crypt", l0_map_symbol="c",
+                typical_district_types=["civic"],
+                footprint_by_size=dict(_FOOTPRINT_COMPLEX),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="mine", l0_map_symbol="m",
+                typical_district_types=["industrial"],
+                footprint_by_size=dict(_FOOTPRINT_COMPLEX),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="ruins", l0_map_symbol="r",
+                typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_CITY),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="fortress", l0_map_symbol="f",
+                typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_VILLAGE),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="lair", l0_map_symbol="l",
+                typical_district_types=["residential"],
+                footprint_by_size=dict(_FOOTPRINT_COMPLEX),
+            ),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type="district",
+        display_type="Район",
+        payload_kind=PayloadKind.DISTRICT,
+        parent_types=["settlement", "location_complex"],
+        is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(system_subtype="extract"),
+            LocationTypeSubtypeEntry(system_subtype="process"),
+            LocationTypeSubtypeEntry(system_subtype="manufacture"),
+            LocationTypeSubtypeEntry(system_subtype="culture"),
+            LocationTypeSubtypeEntry(system_subtype="farm"),
+            LocationTypeSubtypeEntry(system_subtype="livestock"),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type="building",
+        display_type="Строение",
+        parent_types=["settlement", "location_complex", "district"],
+        is_outdoor=False,
+        subtypes=[
+            LocationTypeSubtypeEntry(system_subtype="residential"),
+            LocationTypeSubtypeEntry(system_subtype="commercial"),
+            LocationTypeSubtypeEntry(system_subtype="military"),
+            LocationTypeSubtypeEntry(system_subtype="religious"),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type=_SYSTEM_TYPE_ROOM,
+        display_type="Помещение",
+        parent_types=["building"],
+        is_outdoor=False,
+        subtypes=[
+            LocationTypeSubtypeEntry(system_subtype="porch"),
+            LocationTypeSubtypeEntry(system_subtype="entrance_steps"),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type="geographic",
+        display_type="География",
+        parent_types=["region", "territory", None],
+        is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(system_subtype="mountain"),
+            LocationTypeSubtypeEntry(system_subtype="peak"),
+            LocationTypeSubtypeEntry(system_subtype="plain"),
+            LocationTypeSubtypeEntry(system_subtype="hill"),
+            LocationTypeSubtypeEntry(system_subtype="lake", border_category="liquid"),
+            LocationTypeSubtypeEntry(system_subtype="sea", border_category="liquid"),
+            LocationTypeSubtypeEntry(system_subtype="ocean", border_category="liquid"),
+            LocationTypeSubtypeEntry(system_subtype="inland_sea", border_category="liquid"),
+            LocationTypeSubtypeEntry(system_subtype="island", border_category="liquid"),
+            LocationTypeSubtypeEntry(system_subtype="coast"),
+            LocationTypeSubtypeEntry(system_subtype="river"),
+        ],
+    ),
+    LocationTypeEntry(
+        system_type="climate_pole",
+        display_type="Климатический полюс",
+        parent_types=[None],
+        is_outdoor=True,
+    ),
+)
+
+_CANONICAL_ENTRIES: tuple[LocationTypeEntry, ...] = tuple(
+    entry.fixture_identity() for entry in _ENGINE_ENTRIES
+)
+
+
 def _overlay_location_type(
     engine: LocationTypeEntry,
     world: LocationTypeEntry,
@@ -224,6 +266,10 @@ def _overlay_location_type(
         display_type=world.display_type,
         parent_types=list(parent_types),
         is_outdoor=is_outdoor,
+        payload_kind=(world.payload_kind if "payload_kind" in world.model_fields_set
+                      else engine.payload_kind),
+        is_inhabited=(world.is_inhabited if "is_inhabited" in world.model_fields_set
+                      else engine.is_inhabited),
         subtypes=subtypes,
     )
 
@@ -248,7 +294,15 @@ def _overlay_subtype(
         l0_map_symbol=(
             world.l0_map_symbol if world.l0_map_symbol is not None else engine.l0_map_symbol
         ),
-        typical_district_types=list(world.typical_district_types),
-        required_structure_types=list(world.required_structure_types),
+        typical_district_types=list(
+            world.typical_district_types if "typical_district_types" in world.model_fields_set
+            else engine.typical_district_types
+        ),
+        required_structure_types=list(
+            world.required_structure_types if "required_structure_types" in world.model_fields_set
+            else engine.required_structure_types
+        ),
         footprint_by_size=merged_footprint,
+        is_inhabited=(world.is_inhabited if "is_inhabited" in world.model_fields_set
+                      else engine.is_inhabited),
     )

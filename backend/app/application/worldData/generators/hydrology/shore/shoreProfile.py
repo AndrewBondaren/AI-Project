@@ -11,6 +11,7 @@ from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.shore import HydrologyShoreDefaults
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
+from app.dataModel.topology.topologyGeometry import neighbors4_unrolled
 
 _INFER_BFS_LIMIT = 256
 
@@ -70,7 +71,7 @@ def infer_shore_kind(
     while queue and steps < _INFER_BFS_LIMIT:
         cx, cy = queue.popleft()
         steps += 1
-        for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+        for nx, ny in neighbors4_unrolled((cx, cy)):
             nb = (nx, ny)
             if nb in seen:
                 continue

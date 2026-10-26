@@ -1,0 +1,137 @@
+"""Duplicate-import UID remapping for world bundles — BUNDLE-1.
+
+Library template sections (relief/building/race/perk) keep stable UIDs — global
+library rows are shared; only entity sections remap.
+"""
+
+from __future__ import annotations
+
+import copy
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+from app.ids import runtime_uid
+from app.dataModel.worldBundle.bundleSections import BundleSection
+
+
+@dataclass(frozen=True)
+class UidCollectSpec:
+    section_key: str
+    pk_field: str
+    extra_uid_fields: tuple[str, ...] = ()
+
+
+UID_COLLECT_REGISTRY: tuple[UidCollectSpec, ...] = (
+    UidCollectSpec(BundleSection.LOCATIONS, "location_uid"),
+    UidCollectSpec(BundleSection.STATES, "state_uid"),
+    UidCollectSpec(BundleSection.CONNECTION_NODES, "node_uid"),
+    UidCollectSpec(
+        BundleSection.CONNECTION_EDGES, "edge_uid", ("from_node_uid", "to_node_uid"),
+    ),
+)
+
+ApplyItemFn = Callable[[dict[str, Any], dict[str, str], str], None]
+
+
+def _remap_ref(item: dict[str, Any], uid_map: dict[str, str], field: str) -> None:
+    ref = item.get(field)
+    if ref in uid_map:
+        item[field] = uid_map[ref]
+
+
+def _apply_pk_world(
+    item: dict[str, Any], uid_map: dict[str, str], new_world_uid: str, pk: str,
+) -> None:
+    item[pk] = uid_map[item[pk]]
+    item["world_uid"] = new_world_uid
+
+
+def _apply_location(
+    item: dict[str, Any], uid_map: dict[str, str], new_world_uid: str,
+) -> None:
+    _apply_pk_world(item, uid_map, new_world_uid, "location_uid")
+    _remap_ref(item, uid_map, "parent_location_uid")
+    _remap_ref(item, uid_map, "state_uid")
+
+
+def _apply_connection_node(
+    item: dict[str, Any], uid_map: dict[str, str], new_world_uid: str,
+) -> None:
+    _apply_pk_world(item, uid_map, new_world_uid, "node_uid")
+    _remap_ref(item, uid_map, "location_uid")
+
+
+def _apply_connection_edge(
+    item: dict[str, Any], uid_map: dict[str, str], new_world_uid: str,
+) -> None:
+    item["edge_uid"] = uid_map[item["edge_uid"]]
+    item["from_node_uid"] = uid_map[item["from_node_uid"]]
+    item["to_node_uid"] = uid_map[item["to_node_uid"]]
+    item["world_uid"] = new_world_uid
+    item.pop("location_uid", None)
+
+
+def _apply_map_cell(
+    item: dict[str, Any], uid_map: dict[str, str], new_world_uid: str,
+) -> None:
+    item["world_uid"] = new_world_uid
+    _remap_ref(item, uid_map, "location_uid")
+
+
+APPLY_ITEM_REGISTRY: dict[str, ApplyItemFn] = {
+    BundleSection.LOCATIONS: _apply_location,
+    BundleSection.STATES: lambda i, m, w: _apply_pk_world(i, m, w, "state_uid"),
+    BundleSection.CONNECTION_NODES: _apply_connection_node,
+    BundleSection.CONNECTION_EDGES: _apply_connection_edge,
+}
+
+
+def remap_bundle(
+    data: dict[str, Any],
+    version_n: int,
+    strip_suffix: Callable[[str], str],
+    *,
+    uid_map: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return a deep copy of the bundle with entity UIDs replaced and name versioned."""
+    uid_map = uid_map if uid_map is not None else _build_uid_map(data)
+    result = copy.deepcopy(data)
+    new_world_uid = uid_map[data[BundleSection.WORLD]["world_uid"]]
+
+    world = result[BundleSection.WORLD]
+    world["world_uid"] = new_world_uid
+    world["name"] = f"{strip_suffix(world.get('name', ''))} v{version_n}"
+
+    for spec in UID_COLLECT_REGISTRY:
+        apply_fn = APPLY_ITEM_REGISTRY[spec.section_key]
+        for item in result.get(spec.section_key, []):
+            apply_fn(item, uid_map, new_world_uid)
+
+    for cell in result.get(BundleSection.MAP_CELLS, []):
+        _apply_map_cell(cell, uid_map, new_world_uid)
+
+    return result
+
+
+def _build_uid_map(data: dict[str, Any]) -> dict[str, str]:
+    uid_map: dict[str, str] = {}
+
+    def register(old: str) -> str:
+        if old not in uid_map:
+            uid_map[old] = runtime_uid()
+        return uid_map[old]
+
+    register(data[BundleSection.WORLD]["world_uid"])
+    for spec in UID_COLLECT_REGISTRY:
+        for item in data.get(spec.section_key, []):
+            register(item[spec.pk_field])
+            for field in spec.extra_uid_fields:
+                if field in item and item[field]:
+                    register(item[field])
+
+    return uid_map
+
+
+# The world-copy orchestrator retains this allocation in its signed continuation.
+build_bundle_uid_map = _build_uid_map

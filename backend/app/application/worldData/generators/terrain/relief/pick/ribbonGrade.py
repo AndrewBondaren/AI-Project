@@ -8,12 +8,10 @@ Barrier stamp (RELIEF-BAR-1) was L0 bake; outdoor ribbon removed (R36u-T-8).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
-from app.application.jsonValidation.worldRow import (
-    relief_pick_policy,
-    relief_template_registry,
-)
+from app.application.jsonValidation.worldRow import relief_pick_policy
 from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import (
     grade_constrained,
 )
@@ -22,8 +20,6 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
 )
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RIBBON_GRADE_APPLY,
-    EVENT_RIBBON_SKIP_GRADE,
-    WHY_NO_TEMPLATE_BODY,
 )
 from app.application.worldData.generators.terrain.relief.log.log import relief_info
 from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
@@ -49,7 +45,7 @@ __all__ = [
 class RibbonGradeResult:
     segment: RibbonSegment
     decision: RibbonGradeDecision
-    template_uid: str | None
+    template_uid: str
 
 
 def grade_ribbon_segments(
@@ -57,20 +53,19 @@ def grade_ribbon_segments(
     world: World,
     world_seed: str,
     segments: list[RibbonSegment],
-    templates_by_uid: dict[str, ReliefTemplate],
+    templates_by_uid: Mapping[str, ReliefTemplate],
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
     context: ReliefContext = ReliefContext.ROAD_SHOULDER,
 ) -> list[RibbonGradeResult]:
     """Grade ribbon segments for ``context`` (road_shoulder / open_land / shore / ravine)."""
-    registry = relief_template_registry(world)
     world_policy = relief_pick_policy(world)
     results: list[RibbonGradeResult] = []
     seq = occurrence_start
     for segment in segments:
         pick = pick_template(
             context=context,
-            registry=registry,
+            templates=templates_by_uid,
             world_policy=world_policy,
             world_seed=world_seed,
             site_id=segment.site_id,
@@ -79,18 +74,9 @@ def grade_ribbon_segments(
         )
         seq += 1
         template = resolve_picked_template(pick, templates_by_uid)
-        if template is None:
-            relief_info(
-                EVENT_RIBBON_SKIP_GRADE,
-                context=context.value,
-                site_id=segment.site_id,
-                why=WHY_NO_TEMPLATE_BODY,
-                template_uid=pick.template_uid,
-            )
-            continue
         decision = grade_constrained(
             template=template,
-            template_uid=pick.template_uid or template.system_name,
+            template_uid=pick.template_uid,
             terrain_key=segment.terrain_key,
             dz=segment.dz,
             world_seed=world_seed,

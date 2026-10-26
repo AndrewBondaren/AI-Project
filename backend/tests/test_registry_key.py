@@ -5,8 +5,9 @@ from __future__ import annotations
 import unittest
 from typing import get_origin
 
+from app.application.jsonValidation import resolve as resolve_module
 from app.dataModel.annotationPolicy import (
-    DefaultOnWire,
+    DefaultWhenMissing,
     StrictOnWire,
     WireFieldPolicy,
     field_policy,
@@ -16,8 +17,9 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.registryKey import RegistryKey, registry_key_target
-from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
+from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     SettlementSizeKey,
     WorldSettlementSizeRegistry,
 )
@@ -26,7 +28,7 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
     EconomyTierKey,
     WorldEconomyTierRegistry,
 )
-from app.dataModel.settlement.district.placementCondition import PlacementCondition
+from app.dataModel.locations.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey, WorldTerrainRegistry
 
@@ -61,7 +63,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIs(get_origin(inner), RegistryKey)
         self.assertIs(registry_key_target(SettlementSizeKey), WorldSettlementSizeRegistry)
         self.assertIs(
-            registry_key_target(DefaultOnWire[SettlementSizeKey | None]),
+            registry_key_target(DefaultWhenMissing[SettlementSizeKey | None]),
             WorldSettlementSizeRegistry,
         )
 
@@ -106,7 +108,7 @@ class TestRegistryKey(unittest.TestCase):
 
     def test_list_of_keys_peels_to_registry(self) -> None:
         self.assertIs(
-            registry_key_target(DefaultOnWire[list[TerrainKey] | None]),
+            registry_key_target(DefaultWhenMissing[list[TerrainKey] | None]),
             WorldTerrainRegistry,
         )
         self.assertIs(
@@ -131,11 +133,11 @@ class TestRegistryKey(unittest.TestCase):
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
         )
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
         from app.dataModel.shared.ranges import EconomicTierRange
-        from app.dataModel.structure.building.plotLayoutTemplate import (
+        from app.dataModel.locations.structure.building.plotLayoutTemplate import (
             PlotLayoutTemplate,
         )
 
@@ -188,8 +190,8 @@ class TestRegistryKey(unittest.TestCase):
             MaterialKey,
             WorldMaterialRegistry,
         )
-        from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
 
@@ -221,16 +223,6 @@ class TestRegistryKey(unittest.TestCase):
             SettlementSkeleton(dominant_material="")
         with self.assertRaises(Exception):
             SettlementSkeleton(settlement_density="huge")
-
-        overlay = set(SettlementSkeleton.NAMED_LOCATION_OVERLAY_FIELDS)
-        aliases = set(SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES)
-        fields = set(SettlementSkeleton.model_fields)
-        self.assertTrue(overlay <= fields)
-        self.assertTrue(aliases <= fields)
-        self.assertEqual(
-            SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES["economic_tier"],
-            "system_economic_tier",
-        )
 
     def test_nl_parent_materials_are_branded(self) -> None:
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
@@ -287,9 +279,7 @@ class TestRegistryKey(unittest.TestCase):
             )
 
     def test_city_skeleton_resolved_tier_overrides_nl_and_keeps_size_brand(self) -> None:
-        from app.application.worldData.generators.assemblers.citySkeleton import (
-            city_skeleton_from_settlement,
-        )
+        from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
         from app.db.models.namedLocation import NamedLocation
 
         loc = NamedLocation(
@@ -298,12 +288,16 @@ class TestRegistryKey(unittest.TestCase):
             display_name="Hold",
             system_location_type="settlement",
             created_at="2026-01-01T00:00:00",
-            system_city_size="small",
+            location_payload={
+                'system_city_size': "small",
+                'dominant_material': "stone",
+            },
             system_economic_tier="poor",
-            dominant_material="stone",
             system_location_mood="prosperous",
         )
-        skeleton = city_skeleton_from_settlement(loc, economic_tier="quality")
+        skeleton = resolved_settlement_skeleton(
+            loc, economic_tier="quality", settlement_density=None,
+        )
         self.assertIsInstance(skeleton.economic_tier, RegistryKey)
         self.assertEqual(skeleton.economic_tier, "quality")
         self.assertIsNone(skeleton.dominant_material)
@@ -311,15 +305,17 @@ class TestRegistryKey(unittest.TestCase):
         self.assertEqual(skeleton.system_city_size, "small")
         self.assertIsInstance(skeleton.system_location_mood, RegistryKey)
         self.assertEqual(skeleton.system_location_mood, "prosperous")
-        cleared = city_skeleton_from_settlement(loc, economic_tier=None)
+        cleared = resolved_settlement_skeleton(
+            loc, economic_tier=None, settlement_density=None,
+        )
         self.assertIsNone(cleared.economic_tier)
 
     def test_drawing_key_is_layout_identity(self) -> None:
-        from app.dataModel.settlement.district.districtTemplateEntry import (
+        from app.dataModel.locations.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,
         )
-        from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-        from app.dataModel.structure.building.plotLayoutTemplate import (
+        from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+        from app.dataModel.locations.structure.building.plotLayoutTemplate import (
             DrawingKey,
             PlotLayoutTemplate,
         )
@@ -353,13 +349,13 @@ class TestRegistryKey(unittest.TestCase):
         key = next(iter(district.plot_counts or {}))
         self.assertIsInstance(key, RegistryKey)
         self.assertEqual(district.plot_counts["inn_small"], 3)
-        aliased = DistrictTemplateEntry(
-            system_name="inn_row",
-            display_name="Inns",
-            district_type="commercial",
-            structure_counts={"inn_small": 2},
-        )
-        self.assertEqual(aliased.plot_counts["inn_small"], 2)
+        with self.assertRaises(Exception):
+            DistrictTemplateEntry(
+                system_name="inn_row",
+                display_name="Inns",
+                district_type="commercial",
+                structure_counts={"inn_small": 2},
+            )
         with self.assertRaises(Exception):
             RequiredStructure(plot_template="")
 
@@ -374,21 +370,21 @@ class TestRegistryKey(unittest.TestCase):
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
         )
-        from app.dataModel.settlement.district.districtConnection import (
+        from app.dataModel.locations.settlement.district.districtConnection import (
             DEFAULT_CONNECTION_TYPE,
             DistrictConnection,
         )
-        from app.dataModel.settlement.district.districtTemplateEntry import (
+        from app.dataModel.locations.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,
         )
-        from app.dataModel.settlement.district.districtTopologySlot import (
+        from app.dataModel.locations.settlement.district.districtTopologySlot import (
             DistrictTopologyEntry,
         )
-        from app.dataModel.settlement.district.frontageTypeOrder import (
+        from app.dataModel.locations.settlement.district.frontageTypeOrder import (
             FrontageTypeOrder,
         )
-        from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
         from app.dataModel.spatial.facing import Facing
@@ -473,7 +469,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertIs(
             registry_key_target(
-                BundleNamedLocation.model_fields["frontage_type_order"].annotation,
+                SettlementPayload.model_fields["frontage_type_order"].annotation,
             ),
             WorldConnectionTypeRegistry,
         )
@@ -487,8 +483,8 @@ class TestRegistryKey(unittest.TestCase):
             system_location_type="settlement",
             frontage_type_order=["highway"],
         )
-        assert loc.frontage_type_order is not None
-        self.assertIsInstance(loc.frontage_type_order[0], RegistryKey)
+        self.assertIsInstance(loc.location_payload, SettlementPayload)
+        self.assertIsInstance(loc.location_payload.frontage_type_order[0], RegistryKey)
         district = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
@@ -504,13 +500,13 @@ class TestRegistryKey(unittest.TestCase):
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
         )
-        from app.dataModel.settlement.settlement.locationMoodEntry import (
+        from app.dataModel.locations.settlement.settlement.locationMoodEntry import (
             LocationMoodEntry,
         )
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
-        from app.dataModel.settlement.settlement.worldLocationMoodRegistry import (
+        from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import (
             LocationMoodKey,
             WorldLocationMoodRegistry,
         )
@@ -559,13 +555,13 @@ class TestRegistryKey(unittest.TestCase):
             SettlementSkeleton(system_location_mood="")
 
     def test_specialization_identity_and_bind_are_branded(self) -> None:
-        from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+        from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
             SettlementSpecializationBind,
         )
-        from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+        from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
             SettlementSpecializationEntry,
         )
-        from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+        from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
             SettlementSpecializationKey,
             WorldSettlementSpecializationRegistry,
         )
@@ -614,20 +610,20 @@ class TestRegistryKey(unittest.TestCase):
 
     def test_district_template_identity_and_refs_are_branded(self) -> None:
         from app.application.jsonValidation.resolve import resolve_model
-        from app.dataModel.settlement.district.districtTemplateEntry import (
+        from app.dataModel.locations.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,
         )
-        from app.dataModel.settlement.district.districtTopologySlot import (
+        from app.dataModel.locations.settlement.district.districtTopologySlot import (
             DistrictTopologySlot,
         )
-        from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+        from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
             DistrictTemplateKey,
             WorldDistrictTemplateRegistry,
         )
-        from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+        from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
             SettlementSpecializationEntry,
         )
-        from app.dataModel.settlement.settlement.typicalDistrictRef import (
+        from app.dataModel.locations.settlement.settlement.typicalDistrictRef import (
             TypicalDistrictRef,
         )
 
@@ -672,7 +668,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertEqual(
             field_policy(TypicalDistrictRef.model_fields["system_name"].annotation),
-            WireFieldPolicy.DEFAULT,
+            WireFieldPolicy.DEFAULT_WHEN_MISSING,
         )
         self.assertIs(
             registry_key_target(
@@ -691,18 +687,11 @@ class TestRegistryKey(unittest.TestCase):
         whitespace = TypicalDistrictRef(district_type="civic", system_name="   ")
         self.assertIsNone(whitespace.system_name)
 
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
-            resolved = resolve_model(
-                TypicalDistrictRef,
-                {"district_type": "industrial", "system_name": ""},
-            )
+        # Blank pin is an explicitly supported domain sentinel, not an error.
+        with self.assertNoLogs(resolve_module.__name__, "WARNING"):
+            resolved = resolve_model(TypicalDistrictRef, {"district_type": "industrial", "system_name": ""})
         self.assertIsNone(resolved.system_name)
         self.assertEqual(resolved.district_type, "industrial")
-        text = "\n".join(captured.output)
-        self.assertIn("system_name", text)
-        self.assertIn("invalid", text)
-        self.assertIn("using field default", text)
 
         nested = resolve_model(
             SettlementSpecializationEntry,
@@ -756,11 +745,11 @@ class TestRegistryKey(unittest.TestCase):
 
     def test_barrier_template_identity_and_perimeter_ref_are_branded(self) -> None:
         from app.application.jsonValidation.resolve import resolve_model
-        from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-        from app.dataModel.structure.barrier.barrierTemplateEntry import (
+        from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+        from app.dataModel.locations.structure.barrier.barrierTemplateEntry import (
             BarrierTemplateEntry,
         )
-        from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+        from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
             BarrierTemplateKey,
             WorldBarrierTemplateRegistry,
         )
@@ -792,7 +781,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIsNone(omitted.template)
         self.assertEqual(
             field_policy(PerimeterBarrier.model_fields["template"].annotation),
-            WireFieldPolicy.DEFAULT,
+            WireFieldPolicy.DEFAULT_WHEN_MISSING,
         )
         self.assertIs(
             registry_key_target(
@@ -808,14 +797,10 @@ class TestRegistryKey(unittest.TestCase):
         whitespace = PerimeterBarrier(template="   ")
         self.assertIsNone(whitespace.template)
 
-        log = "app.application.jsonValidation.resolve"
-        with self.assertLogs(log, level="WARNING") as captured:
+        with self.assertNoLogs(resolve_module.__name__, "WARNING"):
             resolved = resolve_model(PerimeterBarrier, {"template": ""})
         self.assertIsNone(resolved.template)
-        text = "\n".join(captured.output)
-        self.assertIn("template", text)
-        self.assertIn("invalid", text)
-        self.assertIn("using field default", text)
+
 
 
 if __name__ == "__main__":

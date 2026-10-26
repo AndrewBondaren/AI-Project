@@ -1,6 +1,7 @@
 """Pack climate row-batch pool vs serial fallback (CL-PAR)."""
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import logging
 import unittest
@@ -12,11 +13,13 @@ from app.application.worldData.generators.climate.climatePoleField import (
     ClimatePoleField,
     GridBBox,
 )
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.pack.bake import packBakeLog
+from app.application.worldData.pack.climate import climateCoarseBake, climatePackBakeOrchestrator
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )
-from app.dataModel.worldPack.climateFieldWire import ClimateSampleWire
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateSampleWire
 
 
 def _world(**kwargs) -> SimpleNamespace:
@@ -32,13 +35,9 @@ def _world(**kwargs) -> SimpleNamespace:
 
 def _surface_ctx(*, y_max: int = 7) -> MagicMock:
     bbox = GridBBox(x_min=0, x_max=1, y_min=0, y_max=y_max)
-    ctx = MagicMock()
-    ctx.coarse_hm.bbox = bbox
-    ctx.pole_field = ClimatePoleField(poles=(), bbox=bbox)
-    ctx.local_field = ClimateAnchorField(())
-    ctx.coarse_surface_z = {}
-    ctx.meter_z_overrides = {}
-    return ctx
+    from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
+    return frozen_surface_fixture(_world(), bbox=bbox)
+
 
 
 def _dummy_sample(*_args, **_kwargs) -> ClimateSampleWire:
@@ -59,14 +58,15 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
         pool_instance.map_sync = AsyncMock(side_effect=fake_map)
 
         with patch(
-            "app.application.worldData.pack.climate.climatePackBakeOrchestrator.ChunkComputePool",
+            climatePackBakeOrchestrator.__name__ + ".ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls, patch(
-            "app.application.worldData.pack.climate.climateCoarseBake.sample_pack_climate_at_macro",
+            climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
             side_effect=_dummy_sample,
         ):
             result, n = await orch.bake_coarse(
                 _world(), _surface_ctx(), writer, mat_ctx,
+                working=working_fixture(_world(), _surface_ctx()),
             )
 
         pool_cls.assert_called_once_with(
@@ -85,13 +85,14 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
         mat_ctx = MaterializationContext(free_cores=4, parallel_workers_override=1)
 
         with patch(
-            "app.application.worldData.pack.climate.climatePackBakeOrchestrator.ChunkComputePool",
+            climatePackBakeOrchestrator.__name__ + ".ChunkComputePool",
         ) as pool_cls, patch(
-            "app.application.worldData.pack.climate.climateCoarseBake.sample_pack_climate_at_macro",
+            climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
             side_effect=_dummy_sample,
         ):
             result, n = await orch.bake_coarse(
                 _world(), _surface_ctx(), writer, mat_ctx,
+                working=working_fixture(_world(), _surface_ctx()),
             )
 
         pool_cls.assert_not_called()
@@ -109,17 +110,17 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
             def emit(self, record: logging.LogRecord) -> None:
                 records.append(record)
 
-        log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+        log = logging.getLogger(packBakeLog.__name__)
         handler = _Capture()
         log.addHandler(handler)
         prev = log.level
         log.setLevel(logging.DEBUG)
         try:
             with patch(
-                "app.application.worldData.pack.climate.climateCoarseBake.sample_pack_climate_at_macro",
+                climateCoarseBake.__name__ + ".sample_pack_climate_at_macro",
                 side_effect=_dummy_sample,
             ):
-                await orch.bake_coarse(_world(), _surface_ctx(), writer, mat_ctx)
+                await orch.bake_coarse(_world(), _surface_ctx(), writer, mat_ctx, working=working_fixture(_world(), _surface_ctx()))
         finally:
             log.removeHandler(handler)
             log.setLevel(prev)

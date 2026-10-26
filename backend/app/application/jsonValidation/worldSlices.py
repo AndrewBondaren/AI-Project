@@ -5,11 +5,23 @@ Catalog + runtime ``resolve_*_world``. Import merge → ``worldSliceMerge`` (T-2
 
 from __future__ import annotations
 
+from app.dataModel.races.worldRaceTemplateRegistry import WorldRaceTemplateRegistry
+from app.dataModel.perks.worldPerkTemplateRegistry import WorldPerkTemplateRegistry
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
+from pydantic import BaseModel
+from dataclasses import asdict
 
+from app.application.canonicalLibrary import (
+    CanonicalAttachPolicy,
+    CanonicalLibrarySpec,
+    CanonicalScope,
+    canonical_merge,
+)
 from app.application.jsonValidation.resolve import (
+    ResolveContext,
     resolve_model,
     resolve_root_dict,
     resolve_root_list,
@@ -23,6 +35,17 @@ from app.dataModel.terrain.worldTerrainScalars import (
     TERRAIN_SCALAR_WIRE_KEYS,
     WorldTerrainScalars,
     terrain_scalar_wire_from_mapping,
+)
+from app.dataModel.worldPack.meta.worldGridSettings import (
+    GRID_SETTINGS_WIRE_KEYS,
+    WorldGridSettings,
+    grid_settings_wire_from_mapping,
+)
+from app.dataModel.worldPack.meta.worldPackMetadata import (
+    PACK_METADATA_WIRE_KEYS, WorldPackMetadata, pack_metadata_wire_from_mapping,
+)
+from app.dataModel.worldPack.meta.worldMapResolutionSettings import (
+    MAP_RESOLUTION_WIRE_KEYS, WorldMapResolutionSettings, map_resolution_wire_from_mapping,
 )
 from app.dataModel import (
     WorldClimateZoneRegistry,
@@ -42,30 +65,28 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.roads.worldRoadSettings import WorldRoadSettings
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.district.worldDistrictZonePreference import (
+from app.dataModel.locations.settlement.district.worldDistrictZonePreference import (
     WorldDistrictZonePreference,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-from app.dataModel.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
-    WorldBuildingTemplateRegistry,
-)
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     WorldPurposePackRegistry,
     WorldPurposePacks,
 )
-from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.locations.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     RELIEF_OBSTACLE_SCALAR_WIRE_KEYS,
     WorldReliefGradeObstacleScalars,
@@ -75,53 +96,48 @@ from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (
     WorldCanalTemplateRegistry,
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry
 
 WireKind = Literal["multi_column", "registry_list", "registry_dict", "json_blob"]
 
 
-def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
-    """Normalize ``climate_zone_registry`` wire (array or legacy dict map).
+def world_wire_from_row(world: Any) -> dict[str, Any]:
+    """Persisted SQL NULL scalar columns represent absence, unlike JSON null."""
+    out = asdict(world)
+    for item in WORLD_SLICES:
+        if item.wire_kind == "multi_column":
+            if item.wire_from_mapping is None:
+                raise RuntimeError(f"multi_column WorldSlice for {item.schema_id} missing wire_from_mapping")
+            for key in item.world_keys:
+                out.pop(key, None)
+            out.update(item.wire_from_mapping(world))
+    return out
+
+
+def climate_zone_wire_from_raw(raw: Any) -> Any:
+    """``climate_zone_registry`` wire: canonical list only — dict-map removed.
 
     ``None`` → absent (caller may skip or use empty_factory).
-    Empty list / empty dict → ``[]`` so import merge materializes canonical
-    via ``resolve_root_list`` (same as other registry_list slices).
     """
-    if raw is None:
-        return None
-    if isinstance(raw, list):
-        return [entry for entry in raw if isinstance(entry, dict)]
+    if raw is None or isinstance(raw, list):
+        return raw
     if isinstance(raw, dict):
-        if not raw:
-            return []
-        values = list(raw.values())
-        if values and all(isinstance(value, dict) for value in values):
-            return values
-        return [raw]
-    return None
+        raise ValueError(
+            "climate_zone_registry expects a list; the dict-map form was removed")
+    return raw
 
 
-def registry_map_to_list(raw: Any, *, id_field: str) -> list[dict] | None:
-    """Normalize legacy registry wire map ``{id: row}`` → list with ``id_field`` injected."""
-    if not raw:
-        return None
-    if isinstance(raw, list):
-        return [entry for entry in raw if isinstance(entry, dict)]
+def registry_map_to_list(raw: Any, *, id_field: str) -> Any:
+    """``*_registry`` wire: canonical list only — the dict-map form was removed."""
+    if raw is None or isinstance(raw, list):
+        return raw
     if isinstance(raw, dict):
-        rows: list[dict] = []
-        for key, value in raw.items():
-            if isinstance(value, dict):
-                row = dict(value)
-                row.setdefault(id_field, key)
-                rows.append(row)
-        return rows
-    return None
+        raise ValueError(
+            f"{id_field} registry expects a list; the dict-map form was removed")
+    return raw
 
 
-def location_type_wire_from_raw(raw: Any) -> list[dict] | None:
+def location_type_wire_from_raw(raw: Any) -> Any:
     return registry_map_to_list(raw, id_field="system_type")
 
 
@@ -138,6 +154,8 @@ class WorldSlice:
     dump_by_alias: bool = False
     # Runtime: canonical_defaults ⊕ world rows keyed by entry attribute (T-29).
     runtime_merge_id_field: str | None = None
+    # Import + runtime: inherit canonical fields before validating world rows.
+    canonical_overlay_id_field: str | None = None
 
 
 def _registry_slice(
@@ -149,6 +167,7 @@ def _registry_slice(
     dump_by_alias: bool = False,
 ) -> WorldSlice:
     merge_id = getattr(pojo_cls, "RUNTIME_MERGE_ID_FIELD", None)
+    overlay_id = getattr(pojo_cls, "CANONICAL_OVERLAY_ID_FIELD", None)
     return WorldSlice(
         schema_id=pojo_cls.SCHEMA_ID,
         pojo_cls=pojo_cls,
@@ -159,7 +178,44 @@ def _registry_slice(
         facade=facade,
         dump_by_alias=dump_by_alias,
         runtime_merge_id_field=merge_id if isinstance(merge_id, str) else None,
+        canonical_overlay_id_field=overlay_id if isinstance(overlay_id, str) else None,
     )
+
+
+_WORLD_OVERLAY_SPECS: dict[str, CanonicalLibrarySpec] = {}
+
+
+def _overlay_spec(world_slice: WorldSlice) -> CanonicalLibrarySpec | None:
+    """World-scope spec — identity/canonical source stay on the POJO declaration."""
+    id_field = world_slice.canonical_overlay_id_field
+    if not id_field or world_slice.empty_factory is None:
+        return None
+    spec = _WORLD_OVERLAY_SPECS.get(world_slice.schema_id)
+    if spec is None:
+        factory = world_slice.empty_factory
+        spec = CanonicalLibrarySpec(
+            name=world_slice.schema_id,
+            scope=CanonicalScope.WORLD,
+            attach_policy=CanonicalAttachPolicy.WORLD_WIRE_OVERLAY,
+            identity_field=id_field,
+            world_canonical_rows=lambda: (
+                entry.model_dump(mode="json") for entry in factory().root
+            ),
+        )
+        _WORLD_OVERLAY_SPECS[world_slice.schema_id] = spec
+    return spec
+
+
+def canonical_registry_wire(world_slice: WorldSlice, raw: Any) -> Any:
+    """Complete declared libraries before policy resolve, on import and read.
+
+    Keep world rows first so validation errors retain their input row indices.
+    Invalid shapes/identities go through the ordinary resolver unchanged.
+    """
+    spec = _overlay_spec(world_slice)
+    if spec is None:
+        return raw
+    return canonical_merge(spec, raw)
 
 
 def _registry_dict_slice(
@@ -179,6 +235,30 @@ def _registry_dict_slice(
 
 
 WORLD_SLICES: tuple[WorldSlice, ...] = (
+    WorldSlice(
+        schema_id=WorldPackMetadata.SCHEMA_ID,
+        pojo_cls=WorldPackMetadata,
+        wire_kind="multi_column",
+        world_keys=tuple(PACK_METADATA_WIRE_KEYS),
+        wire_from_mapping=pack_metadata_wire_from_mapping,
+        facade=True,
+    ),
+    WorldSlice(
+        schema_id=WorldMapResolutionSettings.SCHEMA_ID,
+        pojo_cls=WorldMapResolutionSettings,
+        wire_kind="multi_column",
+        world_keys=tuple(MAP_RESOLUTION_WIRE_KEYS),
+        wire_from_mapping=map_resolution_wire_from_mapping,
+        facade=True,
+    ),
+    WorldSlice(
+        schema_id=WorldGridSettings.SCHEMA_ID,
+        pojo_cls=WorldGridSettings,
+        wire_kind="multi_column",
+        world_keys=tuple(GRID_SETTINGS_WIRE_KEYS),
+        wire_from_mapping=grid_settings_wire_from_mapping,
+        facade=True,
+    ),
     WorldSlice(
         schema_id=WorldClimateScalars.SCHEMA_ID,
         pojo_cls=WorldClimateScalars,
@@ -295,6 +375,11 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         facade=True,
     ),
     _registry_slice(
+        pojo_cls=WorldTransitionTypeRegistry,
+        world_key="transition_type_registry",
+        facade=True,
+    ),
+    _registry_slice(
         pojo_cls=WorldLocationTypeRegistry,
         world_key="location_type_registry",
         facade=True,
@@ -325,11 +410,8 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         world_key="location_mood_registry",
         facade=True,
     ),
-    _registry_slice(
-        pojo_cls=WorldBuildingTemplateRegistry,
-        world_key="building_template_registry",
-        facade=True,
-    ),
+    _registry_slice(pojo_cls=WorldRaceTemplateRegistry, world_key="race_template_registry", facade=True),
+    _registry_slice(pojo_cls=WorldPerkTemplateRegistry, world_key="perk_template_registry", facade=True),
     _registry_slice(
         pojo_cls=WorldPurposePackRegistry,
         world_key="purpose_pack_registry",
@@ -338,11 +420,6 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldPurposePacks,
         world_key="purpose_packs",
-        facade=True,
-    ),
-    _registry_slice(
-        pojo_cls=WorldReliefTemplateRegistry,
-        world_key="relief_template_registry",
         facade=True,
     ),
     _registry_slice(
@@ -396,6 +473,28 @@ def slice_column_key(pojo_cls: type) -> str:
     return world_slice.world_keys[0]
 
 
+def resolve_world_slice[M: BaseModel](world: object, model: type[M], *, ctx: ResolveContext) -> M:
+    """Typed slice normalization with the caller's diagnostic/report policy."""
+    source = slice_for_pojo(model)
+    if source is None:
+        raise ValueError("source has no registered WorldSlice")
+    if source.wire_from_mapping is not None:
+        raw = source.wire_from_mapping(world)
+    else:
+        raw = getattr(world, source.world_keys[0])
+        if source.wire_adapter is not None:
+            raw = source.wire_adapter(raw)
+        if source.wire_kind == "registry_list":
+            raw = canonical_registry_wire(source, raw)
+        if raw is None or (source.wire_kind == "registry_list" and raw == []):
+            if source.empty_factory is None:
+                raise ValueError("missing source without declared defaults")
+            return model.model_validate(source.empty_factory())
+    active_ctx = ctx if source.wire_from_mapping is not None else ctx.child(source.world_keys[0])
+    resolved = resolve_model(model, raw, ctx=active_ctx)
+    return model.model_validate(_apply_runtime_canonical_merge(source, resolved))
+
+
 def resolve_multi_column_world(
     world: Any,
     pojo_cls: type,
@@ -441,6 +540,7 @@ def resolve_registry_list_world(
     raw: Any = getattr(world, key, None)
     if world_slice.wire_adapter is not None:
         raw = world_slice.wire_adapter(raw)
+    raw = canonical_registry_wire(world_slice, raw)
     if world_slice.wire_adapter is not None and raw is None:
         resolved = world_slice.empty_factory()
     else:
@@ -500,7 +600,7 @@ def resolve_json_blob_world(
     world_slice = _require_slice(pojo_cls, "json_blob")
     key = world_slice.world_keys[0]
     raw = getattr(world, key, None)
-    if not raw:
+    if raw is None:
         if world_slice.empty_factory is None:
             raise RuntimeError(
                 f"empty json_blob {pojo_cls.__name__} without empty_factory",

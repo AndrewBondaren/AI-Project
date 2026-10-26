@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 
@@ -36,5 +36,5 @@ class EconomicTierRange(BaseModel):
 class SizePct(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    width: DefaultOnWire[PctRange | None] = None
-    depth: DefaultOnWire[PctRange | None] = None
+    width: DefaultWhenMissing[PctRange | None] = None
+    depth: DefaultWhenMissing[PctRange | None] = None

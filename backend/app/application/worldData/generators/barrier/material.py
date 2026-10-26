@@ -6,7 +6,7 @@ from random import Random
 
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.db.models.world import World
 
 

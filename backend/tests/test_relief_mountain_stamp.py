@@ -7,7 +7,7 @@ import unittest
 from app.application.worldData.generators.terrain.mountains.reliefSidesStamp import (
     stamp_mountain_sides_from_relief,
 )
-from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
 from app.dataModel.terrain.relief import ReliefSideKind, ReliefSideSpec, ReliefTemplate
 from app.dataModel.terrainMasks.mountain.specs import MountainFormBySides, MountainSpec
 from app.db.models.world import World
@@ -26,10 +26,6 @@ class MountainReliefStampTest(unittest.TestCase):
             world_uid="w1",
             name="W",
             created_at="2026-01-01T00:00:00Z",
-            relief_template_registry=[{
-                "system_template_uid": uid,
-                "context": "mountain",
-            }],
             relief_pick_policy={
                 "mountain": {"mode": "fixed", "default_template_uid": uid},
             },
@@ -68,8 +64,8 @@ class MountainReliefStampTest(unittest.TestCase):
         )
         self.assertTrue(all(s.kind.value == "sheer" for s in stamped.sides))
 
-    def test_r21_missing_template_all_slope(self) -> None:
-        """RELIEF-T-2: empty registry → R21 all-SLOPE, not Mode D 50/50."""
+    def test_r21_missing_template_rejects(self) -> None:
+        """E6-R21: empty registry cannot manufacture all-SLOPE sides."""
         world = World(world_uid="w1", name="W", created_at="2026-01-01T00:00:00Z")
         spec = MountainSpec(
             origin_x_m=0,
@@ -78,11 +74,10 @@ class MountainReliefStampTest(unittest.TestCase):
             form=MountainFormBySides(side_count=4),
             sides=[],
         )
-        stamped = stamp_mountain_sides_from_relief(
-            spec, world=world, world_seed="w1", templates_by_uid={},
-        )
-        self.assertEqual(len(stamped.sides), 4)
-        self.assertTrue(all(s.kind == ReliefSideKind.SLOPE for s in stamped.sides))
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        with self.assertRaises(UnresolvedModelError):
+            stamp_mountain_sides_from_relief(spec, world=world, world_seed="w1", templates_by_uid={})
+        self.assertEqual(spec.sides, ())
 
 
 if __name__ == "__main__":

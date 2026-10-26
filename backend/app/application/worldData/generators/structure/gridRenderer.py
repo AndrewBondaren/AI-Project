@@ -5,7 +5,7 @@ ASCII-визуализация уровня здания.
 from app.application.worldData.render.structureAsciiSymbols import (
     symbol_for_building_element,
 )
-from app.dataModel.structure.enums.buildingElement import STAIR_DIRECTIONAL_ELEMENTS
+from app.dataModel.locations.structure.enums.buildingElement import STAIR_DIRECTIONAL_ELEMENTS
 from app.db.models.mapCell import MapCell
 
 

@@ -1,6 +1,10 @@
+from app.dataModel.climate.planning.inputs.climateLocalInput import (
+    ClimateFeaturePolicy, ProminenceScale as ProminenceScale, ProminenceThresholds as ProminenceThresholds,
+)
+
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Literal
+from collections.abc import Mapping
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.db.models.mapCell import MapCell
@@ -8,17 +12,10 @@ from app.db.models.mapCell import MapCell
 TerrainFeatureKind = Literal["peak", "basin", "water"]
 
 # Relative to 8-neighbor ring (meters). Positions only — climate comes from world/coarse field.
-MIN_PEAK_PROMINENCE_M = 50
-MIN_BASIN_PROMINENCE_M = 25
-MIN_LIQUID_PROMINENCE_M = 10
-MAX_AUTO_FEATURES = 32
-
-
-class ProminenceScale(StrEnum):
-    """Caller must choose — no silent metric default."""
-
-    METRIC = "metric"  # absolute MIN_*_PROMINENCE_M (detailed / climate)
-    GRID = "grid"      # scale to heightmap z span (coarse / light hydro)
+MIN_PEAK_PROMINENCE_M = ClimateFeaturePolicy.peak_min
+MIN_BASIN_PROMINENCE_M = ClimateFeaturePolicy.basin_min
+MIN_LIQUID_PROMINENCE_M = ClimateFeaturePolicy.liquid_min
+MAX_AUTO_FEATURES = ClimateFeaturePolicy.max_features
 
 
 @dataclass(frozen=True)
@@ -29,15 +26,6 @@ class TerrainFeaturePoint:
     gy:       int
     kind:     TerrainFeatureKind
     prominence: int
-
-
-@dataclass(frozen=True)
-class ProminenceThresholds:
-    """Min prominence for peak / basin / liquid-body detect."""
-
-    peak: int
-    basin: int
-    liquid: int
 
 
 def metric_prominence_thresholds() -> ProminenceThresholds:
@@ -117,35 +105,48 @@ def detect_terrain_features(
 
     ``scale`` is required (METRIC vs GRID). Optional ``thresholds`` overrides derived floors.
     """
-    if not cells:
-        return []
-
     thr = thresholds or prominence_thresholds_for_cells(cells, scale=scale)
+    index = _surface_index(cells)
+    candidates = terrain_feature_candidates(
+        {xy: cell.z for xy, cell in index.items()},
+        frozenset(xy for xy, cell in index.items() if cell.system_terrain == "liquid_body"), thr)
+    if world_uid and len(candidates) > MAX_AUTO_FEATURES:
+        warn_once(world_uid, "auto_features_capped",
+                  "climate anchor | world=%s terrain features capped at %d (candidates=%d)",
+                  MAX_AUTO_FEATURES, len(candidates))
+    return select_terrain_features(candidates, MAX_AUTO_FEATURES)
+
+
+def terrain_feature_candidates(
+    surface_z: Mapping[tuple[int, int], int], water_cells: frozenset[tuple[int, int]],
+    thresholds: ProminenceThresholds,
+) -> list[tuple[int, TerrainFeaturePoint]]:
+    """Shared extrema kernel; insertion order breaks equal-prominence ties."""
+    thr = thresholds
     peak_min = int(thr.peak)
     basin_min = int(thr.basin)
     liquid_min = int(thr.liquid)
 
-    index = _surface_index(cells)
     candidates: list[tuple[int, TerrainFeaturePoint]] = []
 
-    for (gx, gy), cell in index.items():
-        neighbor_z = [index[n].z for n in _neighbors8(gx, gy) if n in index]
+    for (gx, gy), z in surface_z.items():
+        neighbor_z = [surface_z[n] for n in _neighbors8(gx, gy) if n in surface_z]
         if not neighbor_z:
             continue
 
         max_n = max(neighbor_z)
         min_n = min(neighbor_z)
 
-        if cell.z > max_n:
-            prominence = cell.z - max_n
+        if z > max_n:
+            prominence = z - max_n
             if prominence >= peak_min:
                 candidates.append((prominence, TerrainFeaturePoint(
                     gx=gx, gy=gy, kind="peak", prominence=prominence,
                 )))
 
-        if cell.z < min_n:
-            prominence = min_n - cell.z
-            if cell.system_terrain == "liquid_body":
+        if z < min_n:
+            prominence = min_n - z
+            if (gx, gy) in water_cells:
                 if prominence >= liquid_min:
                     candidates.append((prominence, TerrainFeaturePoint(
                         gx=gx, gy=gy, kind="water", prominence=prominence,
@@ -156,14 +157,11 @@ def detect_terrain_features(
                 )))
 
     candidates.sort(key=lambda item: item[0], reverse=True)
-    if world_uid and len(candidates) > MAX_AUTO_FEATURES:
-        warn_once(
-            world_uid,
-            "auto_features_capped",
-            "climate anchor | world=%s terrain features capped at %d (candidates=%d)",
-            MAX_AUTO_FEATURES,
-            len(candidates),
-        )
+    return candidates
+
+
+def select_terrain_features(candidates: list[tuple[int, TerrainFeaturePoint]],
+                            limit: int) -> list[TerrainFeaturePoint]:
     seen: set[tuple[int, int]] = set()
     result: list[TerrainFeaturePoint] = []
     for _, feature in candidates:
@@ -172,6 +170,6 @@ def detect_terrain_features(
             continue
         seen.add(key)
         result.append(feature)
-        if len(result) >= MAX_AUTO_FEATURES:
+        if len(result) >= limit:
             break
     return result

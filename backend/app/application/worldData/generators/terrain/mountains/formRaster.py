@@ -8,8 +8,8 @@ from app.application.worldData.generators.terrain.mountains.formGeometry import 
 from app.application.worldData.masks.footprint import LightCellRef
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
-    light_cell_center_m,
-    meters_to_light,
+    light_cell_center_fine,
+    fine_to_light,
 )
 
 
@@ -55,15 +55,15 @@ def raster_form_footprint(
     ys = [v[1] for v in geometry.vertices_m]
     min_x, max_x = min(xs), max(xs)
     min_y, max_y = min(ys), max(ys)
-    lx0, ly0 = meters_to_light(int(min_x), int(min_y), scale)
-    lx1, ly1 = meters_to_light(int(max_x), int(max_y), scale)
+    lx0, ly0 = fine_to_light(int(min_x), int(min_y), scale)
+    lx1, ly1 = fine_to_light(int(max_x), int(max_y), scale)
     side = scale.side
     cells: set[LightCellRef] = set()
     for ly in range(ly0, ly1 + 1):
         for lx in range(lx0, lx1 + 1):
             gx, gy = lx // side, ly // side
             tx, ty = lx % side, ly % side
-            cx, cy = light_cell_center_m(gx, gy, tx, ty, scale)
+            cx, cy = light_cell_center_fine(gx, gy, tx, ty, scale)
             if point_in_form(float(cx), float(cy), geometry, concave=concave):
                 cells.add(LightCellRef(gx, gy, tx, ty))
     return frozenset(cells)

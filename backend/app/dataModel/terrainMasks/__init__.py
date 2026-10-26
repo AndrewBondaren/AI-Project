@@ -19,19 +19,18 @@ from app.dataModel.terrainMasks.mountain import (
 )
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrainMasks.hillShape import HillShape
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
 from app.dataModel.terrainMasks.worldTerrainMasks import (
-    ForestsCategoryPolicy,
     MountainsCategoryPolicy,
-    PlainsCategoryPolicy,
     RavinesCategoryPolicy,
     RoadsCategoryPolicy,
     WorldTerrainMasks,
 )
 
 __all__ = [
-    "ForestsCategoryPolicy",
     "HillPolicy",
     "HillShape",
+    "LandcoverRegionsCategoryPolicy",
     "MountainDeclareEntry",
     "MountainForm",
     "MountainFormBySides",
@@ -45,7 +44,6 @@ __all__ = [
     "MountainSpec",
     "MountainsCategoryPolicy",
     "PeakForm",
-    "PlainsCategoryPolicy",
     "PlateauForm",
     "RavinesCategoryPolicy",
     "RoadsCategoryPolicy",

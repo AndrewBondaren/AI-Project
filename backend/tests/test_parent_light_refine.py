@@ -1,6 +1,7 @@
 """WP-PERF-22 — parent light cache, upsample z-band, hard hydro corridor."""
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import tempfile
 import unittest
@@ -19,25 +20,32 @@ from app.application.worldData.generators.terrain.passes.parentLightUpsample imp
     upsample_from_parent_light,
 )
 from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.parentLightLoad import load_parent_light
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.pack.refine.fine import fineTilePrep
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
-def _parent_mixed_terrain(*, side: int = 2, tile_m: int = 8) -> ParentLightTile:
+def _world_stub() -> MagicMock:
+    return MagicMock(
+        world_topology_mode=WorldTerrainScalars.canonical_defaults().world_topology_mode,
+        world_bounds={"x_min": 0, "x_max": 0, "y_min": 0, "y_max": 0},
+        hydrology={"enabled": False},
+    )
+
+
+def _parent_mixed_terrain(*, side: int = 2, tile_macro: int = 8) -> ParentLightTile:
     """Left light cells mountain, right plains."""
     cells = [
         WorldMapCellWire(tx=0, ty=0, surface_z=5, system_terrain="mountain"),
@@ -50,12 +58,12 @@ def _parent_mixed_terrain(*, side: int = 2, tile_m: int = 8) -> ParentLightTile:
         gx=0,
         gy=0,
         side=side,
-        tile_m=tile_m,
+        tile_macro=tile_macro,
         cells=cells,
     )
 
 
-def _parent_with_river(*, side: int = 4, tile_m: int = 32) -> ParentLightTile:
+def _parent_with_river(*, side: int = 4, tile_macro: int = 32) -> ParentLightTile:
     cells: list[WorldMapCellWire] = []
     for ty in range(side):
         for tx in range(side):
@@ -75,7 +83,7 @@ def _parent_with_river(*, side: int = 4, tile_m: int = 32) -> ParentLightTile:
         gx=0,
         gy=0,
         side=side,
-        tile_m=tile_m,
+        tile_macro=tile_macro,
         cells=cells,
     )
 
@@ -108,7 +116,7 @@ class TestParentLightCache(unittest.TestCase):
             writer.parent_light_cache.clear()
             reader = WorldPackReader(paths)
             loaded = load_parent_light(
-                uid, 0, 0, reader=reader, cache=writer.parent_light_cache, tile_m=32,
+                uid, 0, 0, reader=reader, cache=writer.parent_light_cache, tile_macro=32,
             )
             self.assertIsNotNone(loaded)
             assert loaded is not None
@@ -118,9 +126,9 @@ class TestParentLightCache(unittest.TestCase):
 
 class TestUpsampleAndCorridor(unittest.TestCase):
     def test_z_band_respected(self) -> None:
-        parent = _parent_with_river(side=4, tile_m=16)
+        parent = _parent_with_river(side=4, tile_macro=16)
         policy = ParentLightRefinePolicy(z_band=1, detail_noise_amplitude=1)
-        w = MagicMock()
+        w = _world_stub()
         w.world_uid = "w-parent"
         w.fine_cells_per_map_cell = 16
         w.seed = 7
@@ -139,7 +147,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             self.assertLessEqual(z, hi)
 
     def test_hard_corridor_keeps_river_only_in_mask(self) -> None:
-        parent = _parent_with_river(side=4, tile_m=16)
+        parent = _parent_with_river(side=4, tile_macro=16)
         mask = hydro_mask_from_parent(parent)
         self.assertTrue(mask)
         for (_xm, _ym), entry in mask.items():
@@ -158,10 +166,11 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         with self.assertRaises(TypeError):
             terrain.build_tile_surface_state(
                 MagicMock(), [], MagicMock(), 0, 0,
+                working=working_fixture(MagicMock(), MagicMock()),
             )
 
-        parent = _parent_with_river(side=2, tile_m=8)
-        w = MagicMock()
+        parent = _parent_with_river(side=2, tile_macro=8)
+        w = _world_stub()
         w.world_uid = "w-parent"
         w.fine_cells_per_map_cell = 8
         w.seed = 1
@@ -169,18 +178,10 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         w.z_max = 8
         w.terrain_masks = None
         w.terrain_scalars = None
-        ctx = SurfaceTerrainContext(
-            pole_field=MagicMock(),
-            local_field=ClimateAnchorField(()),
-            coarse_hm=MagicMock(),
-            coarse_hydro={},
-            sparse_meter_hydro={},
-            meter_z_overrides={},
-            coarse_relief_z={},
-            coarse_surface_z={},
-        )
+        ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            working=working_fixture(w, ctx),
         )
         self.assertTrue(state.heightmap.surface_z)
         self.assertTrue(state.hydrology)
@@ -195,7 +196,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             gx=0,
             gy=0,
             side=2,
-            tile_m=8,
+            tile_macro=8,
             cells=[],
         )
         with self.assertRaises(LookupError):
@@ -204,13 +205,13 @@ class TestUpsampleAndCorridor(unittest.TestCase):
 
 class TestTerrainMaskCarry(unittest.TestCase):
     def test_upsample_terrain_nearest_preserves_l0_mask(self) -> None:
-        parent = _parent_mixed_terrain(side=2, tile_m=8)
-        w = MagicMock()
+        parent = _parent_mixed_terrain(side=2, tile_macro=8)
+        w = _world_stub()
         w.world_uid = "w-mask"
         w.terrain_registry = None
         fine = upsample_terrain_from_parent_light(parent, w)
         self.assertEqual(len(fine), 8 * 8)
-        # World meters for tile (0,0): lx in left half → mountain
+        # World fine cells for tile (0,0): lx in left half → mountain
         left = {(xm, ym) for (xm, ym), t in fine.items() if t == "mountain"}
         right = {(xm, ym) for (xm, ym), t in fine.items() if t == "plains"}
         self.assertTrue(left)
@@ -222,8 +223,8 @@ class TestTerrainMaskCarry(unittest.TestCase):
             self.assertGreaterEqual(xm % 8, 4)
 
     def test_column_fill_uses_surface_terrain_not_default_forest(self) -> None:
-        parent = _parent_mixed_terrain(side=2, tile_m=4)
-        w = MagicMock()
+        parent = _parent_mixed_terrain(side=2, tile_macro=4)
+        w = _world_stub()
         w.world_uid = "w-mask"
         w.terrain_registry = None
         w.terrain_masks = None
@@ -258,8 +259,8 @@ class TestTerrainMaskCarry(unittest.TestCase):
 
     def test_build_tile_surface_state_carries_mixed_mask(self) -> None:
         terrain = TerrainBatchOrchestrator(MagicMock())
-        parent = _parent_mixed_terrain(side=2, tile_m=8)
-        w = MagicMock()
+        parent = _parent_mixed_terrain(side=2, tile_macro=8)
+        w = _world_stub()
         w.world_uid = "w-mask"
         w.fine_cells_per_map_cell = 8
         w.seed = 1
@@ -268,18 +269,10 @@ class TestTerrainMaskCarry(unittest.TestCase):
         w.terrain_registry = None
         w.terrain_scalars = None
         w.terrain_masks = None
-        ctx = SurfaceTerrainContext(
-            pole_field=MagicMock(),
-            local_field=ClimateAnchorField(()),
-            coarse_hm=MagicMock(),
-            coarse_hydro={},
-            sparse_meter_hydro={},
-            meter_z_overrides={},
-            coarse_relief_z={},
-            coarse_surface_z={},
-        )
+        ctx = frozen_surface_fixture(w, parent)
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
+            working=working_fixture(w, ctx),
         )
         assert state.surface_terrain is not None
         self.assertIn("mountain", set(state.surface_terrain.values()))
@@ -290,7 +283,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
             gx=0,
             gy=0,
             side=2,
-            tile_m=8,
+            tile_macro=8,
             cells=[],
         )
         with self.assertRaises(LookupError):
@@ -299,11 +292,11 @@ class TestTerrainMaskCarry(unittest.TestCase):
 
 class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
     async def test_refine_rects_missing_parent_raises(self) -> None:
-        from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import (
+        from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import (
             FineTerrainRefineOrchestrator,
         )
         from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
-        from app.application.worldData.materializationContext import MaterializationContext
+        from app.application.worldData.materialize.materializationContext import MaterializationContext
 
         terrain = MagicMock()
         writer = MagicMock()
@@ -317,7 +310,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
             terrain_parallel_workers=None,
         )
         with patch(
-            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             side_effect=MissingParentLightError("w-miss", 0, 0),
         ):
             with self.assertRaises(MissingParentLightError):
@@ -326,13 +319,14 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
                     [],
                     writer,
                     MaterializationContext(free_cores=1),
-                    surface_ctx=MagicMock(),
+                    surface_bundle=MagicMock(),
                     tile_gx=0,
                     tile_gy=0,
                     rects=[ColumnRect(x_min=0, x_max=1, y_min=0, y_max=1)],
                     volumes=[],
                     refine_role="scene",
                     phase="scene",
+                    working=MagicMock(),
                 )
 
 

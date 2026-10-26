@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-city-
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/city-t-4-planner-debt.md`](../plans/city-t-4-planner-debt.md) — **архитектура и порядок слоёв** (не отклоняться).
+1. [`.cursor/plans/city-t-4-planner-debt-done.md`](../plans/city-t-4-planner-debt-done.md) — **архитектура и порядок слоёв** (не отклоняться).
 2. CITY-T-4 в [`docs/tz_generator_technical_debt.md`](../../docs/tz_generator_technical_debt.md) (4a–4g).
 3. [`docs/tz_city_generation.md`](../../docs/tz_city_generation.md) §1.2, §9.2–§9.3, §9.6 — продукт не менять.
 4. Рецепт 2d уже в коде — не откатывать [settlement-specialization-districts](../plans/settlement-specialization-districts.md).

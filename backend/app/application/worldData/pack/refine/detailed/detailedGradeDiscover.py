@@ -1,0 +1,250 @@
+"""Worker facade: discover fronts + L2 paint — R41 schedule A.
+
+Orchestrator (R41-T-9): (1) discover_fronts (2) pick+constrain (3) uid
+(4) apply_grade_paint_spec. Identity is one builder (T-10).
+Catalog ``face_key`` is identity, not a seed graph. No pre-pool occupancy.
+``fronts.py`` stays without pick (T-3). T-3c fingerprint is beside the write-set.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from collections.abc import Mapping
+from dataclasses import replace
+import time
+
+from app.application.jsonValidation import terrain
+from app.application.jsonValidation import (
+    relief_pick_policy,
+    terrain_masks,
+)
+from app.application.worldData.generators.terrain.relief.discover.core import (
+    discover_fronts,
+)
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
+from app.application.worldData.generators.terrain.relief.discover.plugins import (
+    plugins_for_keys,
+)
+from app.application.worldData.generators.terrain.relief.discover.types import (
+    Coord,
+    ReliefVertices,
+)
+from app.ids import seed_root
+from app.application.worldData.generators.terrain.relief.log.log import relief_debug
+from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
+    open_land_terrain_keys,
+)
+from app.application.worldData.generators.terrain.relief.sample.ravineTerrain import (
+    ravine_terrain_key,
+)
+from app.application.worldData.pack.refine.columnBounds import (
+    ColumnBounds,
+    expand_rect,
+    rect_contains,
+)
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontIdentity import (
+    discovered_front_from,
+    front_bake_identity,
+)
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontPick import pick_front_grade
+from app.application.worldData.pack.refine.detailed.detailedGradeFrontUid import uid_for_front
+from app.application.worldData.pack.refine.detailed.detailedGradeHalo import length_cap_for_context
+from app.application.worldData.pack.refine.detailed.detailedGradePaint import apply_grade_paint_spec
+from app.application.worldData.pack.refine.detailed.detailedGradeResult import DetailedGradeResult
+from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.gradeRimRays import (
+    rim_rays_from_front,
+)
+from app.application.worldData.pack.refine.fineGradeSurface import (
+    FineGradeSurface,
+    apply_grade_uids,
+    fine_grade_cell_blocked,
+)
+from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
+from app.dataModel.terrain.relief.enums import ReliefContext
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.db.models.world import World
+
+
+def build_vertex_slot_seams(
+    vertices: ReliefVertices,
+    painted_uids: dict[int, list[str]],
+    rect: ColumnBounds,
+    side_parent: Mapping[int, int] | None = None,
+) -> tuple[VertexSlotSeam, ...]:
+    """Body cells on the owned rect rim + painted Instance uids per slot (T-3c).
+
+    ``side_parent_slot`` is recorded only for slots that painted (this iterates
+    ``painted_uids``). Unpainted mill sides are not in the T-3c fingerprint.
+    """
+    parents = side_parent or {}
+    seams: list[VertexSlotSeam] = []
+    x_lo, x_hi = int(rect.x_min), int(rect.x_max)
+    y_lo, y_hi = int(rect.y_min), int(rect.y_max)
+    for slot in sorted(painted_uids):
+        uids = tuple(sorted({uid for uid in painted_uids[slot] if uid}))
+        if not uids:
+            continue
+        members = (
+            vertices.members[slot - 1]
+            if 0 < slot <= len(vertices.members)
+            else {}
+        )
+        edge: list[tuple[int, int, int]] = []
+        for (x, y), z in members.items():
+            xi, yi = int(x), int(y)
+            if xi < x_lo or xi > x_hi or yi < y_lo or yi > y_hi:
+                continue
+            if xi == x_lo or xi == x_hi or yi == y_lo or yi == y_hi:
+                edge.append((xi, yi, int(z)))
+        parent = parents.get(int(slot))
+        seams.append(VertexSlotSeam(
+            slot=int(slot),
+            grade_uids=uids,
+            edge_body=tuple(sorted(edge)),
+            side_parent_slot=(
+                int(parent) if parent is not None and int(parent) >= 1 else None
+            ),
+        ))
+    return tuple(seams)
+
+
+def discover_and_paint(
+    world: World,
+    surface_state: TileSurfaceState,
+    rect: ColumnBounds,
+    *,
+    halo: int,
+    catalog: TileFaceCatalog | None,
+    templates: dict[str, ReliefTemplate],
+    existing_uids: dict[Coord, str] | None = None,
+    run_mill: bool = True,
+    run_paint: bool = True,
+) -> tuple[DetailedGradeResult, tuple[VertexSlotSeam, ...], GradePipelineTimings]:
+    """Discover vertices/fronts on the ready heightmap, then one L2 write-set."""
+    if not templates or not run_mill:
+        return DetailedGradeResult.empty(), (), GradePipelineTimings()
+
+    t0 = time.perf_counter()
+    grid = FineGradeSurface.from_tile_surface_state(
+        surface_state, alias_heights=True,
+    )
+    known = dict(existing_uids or {})
+    if known:
+        apply_grade_uids(grid, known)
+
+    contexts = frozenset(tpl.context for tpl in templates.values())
+    registry = terrain(world)
+    masks = terrain_masks(world)
+    road_key = str(masks.default_roads.system_terrain)
+    plugins = plugins_for_keys(
+        land_keys=open_land_terrain_keys(world),
+        road_key=road_key,
+        ravine_key=ravine_terrain_key(world),
+        contexts=contexts,
+    )
+    barrier_keys = WorldTerrainRegistry.canonical_barrier_terrain_keys()
+
+    def cell_blocked(xy: Coord) -> bool:
+        return fine_grade_cell_blocked(
+            grid, xy, road_key=road_key, barrier_keys=barrier_keys,
+        )
+
+    def cap_front(context: ReliefContext) -> int | None:
+        return length_cap_for_context(context, templates)
+
+    grid_rect = expand_rect(rect, max(0, int(halo)))
+    grade_setup_s = time.perf_counter() - t0
+    discovered = discover_fronts(
+        grid,
+        origin_x=grid_rect.x_min,
+        origin_y=grid_rect.y_min,
+        width=grid_rect.x_max - grid_rect.x_min + 1,
+        height=grid_rect.y_max - grid_rect.y_min + 1,
+        plugins=plugins,
+        cell_blocked=cell_blocked,
+        existing_uids=known,
+        cap_front=cap_front,
+        terrain_registry=registry,
+    )
+    vertices = discovered.vertices
+    fronts = discovered.fronts
+
+    world_seed = seed_root(world)
+    policy = relief_pick_policy(world)
+    pick_seq = 0
+    acc = DetailedGradeResult.empty()
+    interior_seq: dict[tuple[int, int], int] = defaultdict(int)
+    painted_uids: dict[int, list[str]] = defaultdict(list)
+    paint_t0 = time.perf_counter()
+    if run_paint:
+        for front in fronts:
+            owned = tuple(
+                xy for xy in front.corridor
+                if rect_contains(rect, xy[0], xy[1])
+            )
+            if not owned:
+                continue
+            identity = front_bake_identity(grid, front)
+            if int(front.path_length) < 1:
+                relief_debug(
+                    "grade_front_skip",
+                    why="no_path_length",
+                    site_id=identity.site_id,
+                )
+                continue
+            picked = pick_front_grade(
+                front,
+                identity,
+                policy=policy,
+                world_seed=world_seed,
+                templates=templates,
+                occurrence_seq=pick_seq,
+                terrain_registry=registry,
+            )
+            pick_seq += 1
+            if picked is None:
+                continue
+            uid = uid_for_front(
+                front,
+                world_uid=world.world_uid,
+                site_id=identity.site_id,
+                catalog=catalog,
+                existing=known,
+                interior_seq=interior_seq,
+            )
+            painted = discovered_front_from(
+                front,
+                identity,
+                grade_uid=uid,
+                decision=picked.decision,
+                template_uid=picked.template_uid,
+            )
+            part = apply_grade_paint_spec(painted, world=world, surface=grid)
+            clipped = part.clipped_to_rect(rect)
+            if not clipped.grade_instances:
+                continue
+            acc = acc.merged_with(
+                replace(clipped, rim_rays=rim_rays_from_front(painted)),
+            )
+            apply_grade_uids(grid, clipped.surface_grade_uid)
+            known.update(clipped.surface_grade_uid)
+            painted_uids[int(front.slot)].append(uid)
+    paint_s = time.perf_counter() - paint_t0
+    seams_t0 = time.perf_counter()
+    seams = build_vertex_slot_seams(
+        vertices, painted_uids, rect, side_parent=discovered.side_parent,
+    )
+    seams_s = time.perf_counter() - seams_t0
+    timings = replace(
+        discovered.mill,
+        grade_setup_s=grade_setup_s,
+        paint_s=paint_s,
+        seams_s=seams_s,
+        grade_s=time.perf_counter() - t0,
+    )
+    return acc, seams, timings

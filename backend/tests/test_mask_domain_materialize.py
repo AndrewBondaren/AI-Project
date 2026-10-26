@@ -22,8 +22,14 @@ from app.dataModel.terrainMasks import (
     MountainSpec,
     WorldTerrainMasks,
 )
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 from types import SimpleNamespace
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+
+
+def _relief_templates():
+    return {"test-mountain": ReliefTemplate(system_name="test-mountain", display_name="Test mountain",
+        context="mountain", side_recipe={"default_side_kind": "slope"})}
 
 
 def _world(**overrides):
@@ -95,9 +101,13 @@ class TestMountainMaterialize(unittest.TestCase):
             locations_index=LocationsIndexWire(locations=[]),
             tiles=[(0, 0)],
             scale=scale,
+            relief_templates_by_uid=_relief_templates(),
         )
-        n = run_mask_domain(compose, ctx, MountainMaskMaterializer())
-        self.assertEqual(n, 1)
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
+        materializer = MountainMaskMaterializer()
+        self.assertEqual(len(materializer.collect(ctx)), 1)
+        materializer.apply_plan(compose, ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertGreater(sum(1 for c in cells if c.system_terrain == "mountain"), 0)
 
@@ -140,20 +150,14 @@ class TestSpecSourcesP0(unittest.TestCase):
             locations_index=LocationsIndexWire(locations=[]),
             tiles=[(0, 0)],
             scale=scale,
+            relief_templates_by_uid=_relief_templates(),
         )
-        mat = MountainMaskMaterializer()
-        declared = mat.load_declared(ctx)
-        anchors = mat.load_anchor_specs(ctx)
-        self.assertEqual(len(declared), 1)
-        self.assertEqual(declared[0].origin_x_m, 100)
-        self.assertEqual(len(anchors), 1)
-        self.assertEqual(anchors[0].location_uid, "peak-1")
-        from app.application.jsonValidation import terrain_masks as read_tm
-
-        policy = mat.category_policy(read_tm(world))
-        self.assertFalse(policy.autoresolve)
-        collected = mat.collect(ctx, policy)
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
+        collected = MountainMaskMaterializer().collect(ctx)
         self.assertEqual(len(collected), 2)
+        self.assertEqual(collected[0].origin_x_m, 100)
+        self.assertEqual(collected[1].location_uid, "peak-1")
 
 
 class TestMaskFootprintTyped(unittest.TestCase):
@@ -200,7 +204,7 @@ class TestQ3ACoarseFormRaster(unittest.TestCase):
             form=StarForm(rays=5, inner_ratio=0.35),
         )
         cell_m = 500
-        form_keys = set(coarse_footprint_for_spec(spec, cell_m=cell_m, light_m=31).keys())
+        form_keys = set(coarse_footprint_for_spec(spec, cell_m=cell_m, light_span=31).keys())
         cx = spec.origin_x_m // cell_m
         cy = spec.origin_y_m // cell_m
         disk_keys = raster_disk(cx, cy, max(0, int(round(spec.radius_m / cell_m))))
@@ -220,7 +224,7 @@ class TestQ3ACoarseFormRaster(unittest.TestCase):
             radius_m=2000,
             form=MountainFormBySides(side_count=6),
         )
-        fp = coarse_footprint_for_spec(spec, cell_m=500, light_m=31)
+        fp = coarse_footprint_for_spec(spec, cell_m=500, light_span=31)
         self.assertGreater(len(fp), 1)
         self.assertTrue(any(f > 0.85 for f in fp.values()))
         self.assertTrue(any(f < 0.5 for f in fp.values()))
@@ -248,21 +252,21 @@ class TestRangeSideFill(unittest.TestCase):
             sides=sides,
         )
         half = 500.0
-        light_m = 31.0
+        light_span = 31.0
         # Point near left boundary (y>0 with spine along +x → left = +y)
         left_frac = range_side_fraction_at_xy(
             1000.0, 480.0,
             spine=list(spec.spine),
             half_width_m=half,
             sides=sides,
-            light_m=light_m,
+            light_span=light_span,
         )
         right_frac = range_side_fraction_at_xy(
             1000.0, -480.0,
             spine=list(spec.spine),
             half_width_m=half,
             sides=sides,
-            light_m=light_m,
+            light_span=light_span,
         )
         self.assertIsNotNone(left_frac)
         self.assertIsNotNone(right_frac)

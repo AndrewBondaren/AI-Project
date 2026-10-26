@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.application.importResult import ImportError, ImportResult
+from app.application.imports.result import ImportError, ImportResult
 
 __all__ = ["PathImportRequest", "ImportError", "ImportResult"]
 

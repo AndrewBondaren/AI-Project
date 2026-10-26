@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.dataModel.spatial.facing import Facing, parse_facing
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
 from app.db.models.mapCell import MapCell
 
 # Location flush is one FineTerrain blob; chunk index is always origin.
@@ -75,6 +75,7 @@ def cells_to_fine_terrain_chunk(
     origin_x: int,
     origin_y: int,
     cells: list[MapCell],
+    region_uid_by_xy: dict[tuple[int, int], str] | None = None,
 ) -> FineTerrainChunkWire:
     by_column: dict[tuple[int, int], list[MapCell]] = {}
     for cell in cells:
@@ -82,8 +83,10 @@ def cells_to_fine_terrain_chunk(
         ly = cell.y - origin_y
         by_column.setdefault((lx, ly), []).append(cell)
     columns: list[FineTerrainColumnWire] = []
+    region_uid_by_xy = region_uid_by_xy or {}
     for (lx, ly), col_cells in sorted(by_column.items()):
         facing, grade_uid = _column_surface_attrs(col_cells)
+        uid = region_uid_by_xy.get((origin_x + lx, origin_y + ly))
         columns.append(
             FineTerrainColumnWire(
                 lx=lx,
@@ -91,6 +94,7 @@ def cells_to_fine_terrain_chunk(
                 runs=_compress_z_runs(col_cells),
                 system_facing=facing,
                 system_grade_uid=grade_uid,
+                region_uid=uid if isinstance(uid, str) else None,
             ),
         )
     return FineTerrainChunkWire(cx=cx, cy=cy, chunk_columns=chunk_columns, columns=columns)

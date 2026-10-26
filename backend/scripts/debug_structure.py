@@ -149,12 +149,15 @@ _LADDER_TYPES = {"ladder", "trapdoor"}
 
 
 def _print_results(data: dict, show_all: bool, target_z: int | None, verbose: bool = False) -> None:
+    from app.dataModel.locations.transitions.transition import Transition
+    from app.dataModel.locations.transitions.transitionType import TransitionType
+    transitions = [Transition.model_validate(item) for item in data["transitions"]]
     s = data["summary"]
     print("=== ИТОГ ===")
     print(f"  Уровней:  {s['levels']}")
     print(f"  Комнат:   {s['rooms']}")
     print(f"  Ячеек:    {s['cells']}")
-    print(f"  Проходов: {s['passages']}")
+    print(f"  Переходов: {s['transitions']}")
     print(f"  Элементы: {s['elements']}")
 
     print("\n--- Уровни ---")
@@ -162,11 +165,11 @@ def _print_results(data: dict, show_all: bool, target_z: int | None, verbose: bo
         print(f"  z={lvl['z']:+d}  z_height={lvl['z_height']}  '{lvl['display_name']}'")
 
     print("\n--- Проходы ---")
-    for p in data["passages"]:
-        if p["system_passage_type"] == "staircase":
+    for p in transitions:
+        if p.system_transition_type == TransitionType.STAIRCASE:
             continue
-        fr = p["from_level_uid"] or "exterior"
-        print(f"  {p['system_passage_type']:12s}  {fr} → {p['to_level_uid']}  to=({p['to_xy'][0]},{p['to_xy'][1]})")
+        fr = p.source.level_uid or "exterior"
+        print(f"  {p.system_transition_type:12s}  {fr} → {p.destination.level_uid}  to=({p.destination.x},{p.destination.y})")
 
     validation = data.get("validation", {})
     warnings = validation.get("warnings", [])
@@ -177,17 +180,15 @@ def _print_results(data: dict, show_all: bool, target_z: int | None, verbose: bo
             print(f"  {w}")
 
     print("\n--- Лестница: все ячейки ---")
-    level_z = {lvl["level_uid"]: lvl["z"] for lvl in data["levels"]}
     cells = data["cells"]
     rows: list[tuple[int, int, int, str, str | None]] = [
         (c["x"], c["y"], c["z"], "fr_anchor" if c["element"] == "stair_anchor" else c["element"], c.get("facing"))
         for c in cells if c["element"] in _STAIR_TYPES | _LADDER_TYPES
     ]
-    for p in data["passages"]:
-        if p["system_passage_type"] != "staircase":
+    for p in transitions:
+        if p.system_transition_type != TransitionType.STAIRCASE:
             continue
-        tz = level_z.get(p["to_level_uid"], 0)
-        rows.append((p["to_xy"][0], p["to_xy"][1], tz, "to_anchor", None))
+        rows.append((p.destination.x, p.destination.y, p.destination.z, "to_anchor", None))
     if rows:
         for x, y, z, t, facing in sorted(rows, key=lambda c: (c[2], c[0], c[1])):
             f = f"facing={facing}" if facing else ""

@@ -19,14 +19,9 @@ from app.application.worldData.generators.terrain.mountains.peakAssembler import
     assemble_peak_from_policy,
 )
 from app.application.worldData.generators.terrain.mountains.ridgePlacement import (
-    iter_ridge_cells_in_meter_rect,
     place_ridge_candidates,
 )
 from app.application.worldData.masks.mergeDeclare import merge_declare_over_auto
-from app.application.worldData.pack.bake.lightGrid.coords import (
-    light_to_macro_local,
-    meters_to_light,
-)
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
 from app.dataModel.terrainMasks.worldTerrainMasks import (
     MountainsCategoryPolicy,
@@ -34,7 +29,6 @@ from app.dataModel.terrainMasks.worldTerrainMasks import (
 )
 
 if TYPE_CHECKING:
-    from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.world import World
 
@@ -124,50 +118,6 @@ def candidates_from_ridge_cells(
     )
 
 
-def autoresolve_mountain_specs(
-    ctx: LightGridBakeContext,
-    policy: MountainsCategoryPolicy,
-    *,
-    reserved: list[MountainEntry] | None = None,
-) -> list[MountainEntry]:
-    """Placement → MountainPassBuilder → MountainSpec | MountainRangeSpec."""
-    if not policy.autoresolve:
-        return []
-    seed = world_seed(ctx.world)
-    scale = ctx.scale
-    tile_set = set(ctx.tiles)
-    cells: list[tuple[int, int, int, int]] = []
-    for gx, gy in ctx.tiles:
-        x0 = gx * scale.tile_m
-        y0 = gy * scale.tile_m
-        x1 = x0 + scale.tile_m - 1
-        y1 = y0 + scale.tile_m - 1
-        cells.extend(
-            iter_ridge_cells_in_meter_rect(
-                x0=x0, y0=y0, x1=x1, y1=y1, ridge_cell_m=int(policy.ridge_cell_m),
-            )
-        )
-
-    def _typical(ox: int, oy: int) -> int:
-        lx, ly = meters_to_light(ox, oy, scale)
-        mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
-        return _typical_from_pole(ctx.pole_field, ctx.world, mgx, mgy)
-
-    def _accept(ox: int, oy: int) -> bool:
-        lx, ly = meters_to_light(ox, oy, scale)
-        mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
-        return (mgx, mgy) in tile_set
-
-    return candidates_from_ridge_cells(
-        seed=seed,
-        policy=policy,
-        cells=cells,
-        typical_of=_typical,
-        accept=_accept,
-        reserved=reserved,
-    )
-
-
 def collect_mountain_entries_for_coarse(
     world: World,
     locations: list[NamedLocation],
@@ -181,9 +131,24 @@ def collect_mountain_entries_for_coarse(
     """Pass 1.4 collect — same merge SoT as light (Q3-A: no Range→disk expand)."""
     declared = load_declared_mountains(masks)
     anchors = specs_from_geographic_locations(locations, policy)
+    return collect_prepared_mountain_entries_for_coarse(
+        seed=world_seed(world), policy=policy, declared=declared, anchors=anchors,
+        heightmap_keys=heightmap_keys, cell_m=cell_m,
+        typical_of=lambda ox, oy: _typical_from_pole(pole_field, world, ox // cell_m, oy // cell_m))
+
+
+def collect_prepared_mountain_entries_for_coarse(
+    *, seed: int, policy: MountainsCategoryPolicy,
+    declared: list[MountainEntry], anchors: list[MountainSpec],
+    heightmap_keys: Iterable[tuple[int, int]], cell_m: int,
+    typical_of: Callable[[int, int], int],
+) -> list[MountainEntry]:
+    """Single selection kernel; frozen adapter supplies canonical row-major cells.
+
+    Legacy set iteration is retained until caller cutover; ordering is an input.
+    """
     auto: list[MountainEntry] = []
     if policy.autoresolve:
-        seed = world_seed(world)
         cells: list[tuple[int, int, int, int]] = []
         ridge_m = max(1, int(policy.ridge_cell_m))
         seen_q: set[tuple[int, int]] = set()
@@ -196,17 +161,12 @@ def collect_mountain_entries_for_coarse(
             seen_q.add((qx, qy))
             cells.append((qx, qy, qx * ridge_m + ridge_m // 2, qy * ridge_m + ridge_m // 2))
 
-        def _typical(ox: int, oy: int) -> int:
-            gx = ox // max(1, cell_m)
-            gy = oy // max(1, cell_m)
-            return _typical_from_pole(pole_field, world, gx, gy)
-
         reserved: list[MountainEntry] = list(declared) + list(anchors)
         auto = candidates_from_ridge_cells(
             seed=seed,
             policy=policy,
             cells=cells,
-            typical_of=_typical,
+            typical_of=typical_of,
             reserved=reserved,
         )
     return merge_mountain_spec_sources(

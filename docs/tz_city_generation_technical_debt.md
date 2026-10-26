@@ -167,7 +167,7 @@ C23 как раз создаёт children + city edges **без** packing. Ст�
 
 **Status:** `open` | **Severity:** low | **P:** P3
 
-[`debug_settlement.py`](../backend/scripts/debug_settlement.py), [`debug_settlement_persist.py`](../backend/scripts/debug_settlement_persist.py): `settlement_density = "medium"`. Поле на NL есть (1a), setattr не падает. Дубль [`DistrictDensity.MEDIUM.wire_value`](../backend/app/dataModel/settlement/enums/districtDensity.py).
+[`debug_settlement.py`](../backend/scripts/debug_settlement.py), [`debug_settlement_persist.py`](../backend/scripts/debug_settlement_persist.py): `settlement_density = "medium"`. Поле на NL есть (1a), setattr не падает. Дубль [`DistrictDensity.MEDIUM.wire_value`](../backend/app/dataModel/locations/settlement/enums/districtDensity.py).
 
 Не generate-consumer; ломает правило no-hardcode в harness.
 
@@ -330,7 +330,7 @@ Area `uuid4` в `areaPaths.py` — не переносить в этом ID.
 **Status:** `open` | **Severity:** high — корень путаницы слоёв CITY-T-5n | **P:** P1  
 **План имплементации:** [`.cursor/plans/city-t-5n-5o-structure-split.md`](../.cursor/plans/city-t-5n-5o-structure-split.md).
 
-**Проблема:** один POJO играет две роли — [`buildingLayoutTemplate.py`](../backend/app/dataModel/structure/building/buildingLayoutTemplate.py):
+**Проблема:** один POJO играет две роли — [`buildingLayoutTemplate.py`](../backend/app/dataModel/locations/structure/building/buildingLayoutTemplate.py):
 
 - **Чертёж участка** (packing root): `structure_types`, `occupied_footprint`, `perimeter_barrier`, `default_structure_context`, `economic_tier*`, `subjects` / `resource_kind` / `crop_kind` / `livestock_kind`, `main_building`.
 - **Тело здания** (generate body): `levels`, `staircases`, `connections`, `default_z_height` — вложено рекурсивно тем же типом (`main_building: BuildingLayoutTemplate`).
@@ -346,7 +346,7 @@ Area `uuid4` в `areaPaths.py` — не переносить в этом ID.
 - **`secondary_buildings: list[…]`** — прочие здания/пристройки на участке. **Пока stub**: поле в контракте, generate не наполняет; `AreaLayout.small_layouts` остаётся пустым. Формат элемента (голое тело или `{body, placement}`) — определить когда пристройки дойдут до реализации; locked-контракт «пристройки не на чертеже v1» трогать не надо, пока stub.
 - **`BuildingBodyTemplate`** — здание на участке: envelope — **тип основания и тип крыши** (нынешний `default_structure_context` → на body: `foundation_type` / `roof_type` / `foundation_depth` / материалы / `porch_*`) + **`structure: RegistryKey[StructureTemplate]` — всегда ссылка**, не inline.
 - **`StructureTemplate`** — чистая спека геометрии §3: `system_name` (library key), `display_name`, `structure_types` / `subjects` (нужны на теле — фильтрация библиотеки), `levels` / `staircases` / `connections`, `default_z_height`. Живёт в библиотеке. То, что ест `StructureGeneratorService` — сервис не видит ни участок, ни envelope.
-- **Две библиотеки** (консистентно существующей архитектуре): engine stdlib — паки `structures_templates/` на диске; world overlay — `building_templates` + `worlds.building_template_registry` (`system_template_uid` pointer). Резолв `structure`-ref: world overlay → engine stdlib (паттерн purpose_packs). Inline `main_building`-тело в fixtures (`inn_small` ⊃ `tavern_1`) — заменяется на ref; wire-миграция fixtures + sync ТЗ («main_building = тело §3 inline» → ref).
+- **Две библиотеки** (консистентно существующей архитектуре): engine stdlib — паки `structures_templates/` на диске; world overlay — `building_templates` + world-owned pack membership (историч. `worlds.building_template_registry` `system_template_uid` pointer — удалён в B7). Резолв `structure`-ref: world overlay → engine stdlib (паттерн purpose_packs). Inline `main_building`-тело в fixtures (`inn_small` ⊃ `tavern_1`) — заменяется на ref; wire-миграция fixtures + sync ТЗ («main_building = тело §3 inline» → ref).
 - `interior_of` → `plot.main_building.structure` (resolved); ветка «root levels = body» умирает вместе с эвристикой — bare body-файл валидируется `StructureTemplate`, не прикидывается участком.
 - Участок передаёт здания вниз: `BuildingAssembler.assemble(world, building, body: BuildingBodyTemplate, context, terrain)` per building (main + secondaries); внутри — сервис получает `body.structure` + envelope из полей body. Runtime `StructureContext` (`ground_z`, `facing`, clamp) — по-прежнему выводит area-слой.
 - **Scope слоя структуры — только геометрия** (так и задумано, ТЗ §11): `BuildingAssembler` + домен `structure` (`geometry` / `foundation` / `roof`) = геометрия + envelope. Ни участка, ни наполнения (`StructureInteriorAssembler`), ни persist.

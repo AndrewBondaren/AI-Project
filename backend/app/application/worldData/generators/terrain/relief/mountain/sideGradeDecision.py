@@ -45,7 +45,7 @@ def decide_radial_grade(
     t: float,
     dist_origin: float,
     outer_m: float,
-    light_m: float,
+    light_span: float,
     px: float,
     py: float,
     origin_x: float,
@@ -57,13 +57,13 @@ def decide_radial_grade(
         t=t,
         dist_for_sheer=dist_origin,
         outer_m=outer_m,
-        light_m=light_m,
+        light_span=light_span,
     )
     kind = side.kind
     if kind == ReliefSideKind.SHEER:
         band = sheer_band_m(
             sheer_band_light=int(side.sheer_band_light),
-            light_m=light_m,
+            light_span=light_span,
         )
         threshold = outer_m - band
         inside = dist_origin < threshold

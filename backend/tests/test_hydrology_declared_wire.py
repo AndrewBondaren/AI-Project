@@ -9,16 +9,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 )
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.db.models.namedLocation import NamedLocation
-
-
-def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "fine_cells_per_map_cell": 3000,
-        "hydrology": {"enabled": True},
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+from tests.hydrology_fixtures import hydro_world as _world
 
 
 class TestDeclaredWire(unittest.TestCase):
@@ -30,6 +21,7 @@ class TestDeclaredWire(unittest.TestCase):
             "hydrology": {
                 "declared_coastlines": [{
                     "location_uid": "loc-sea",
+                    "kind": "sea",
                     "path": [
                         {"x": 6000, "y": 6000, "z": 0},
                         {"x": 24000, "y": 6000, "z": 0},
@@ -41,7 +33,7 @@ class TestDeclaredWire(unittest.TestCase):
         w = SimpleNamespace(**normalized)
         loaded = load_declared_hydrology(w, [])
         self.assertEqual(len(loaded.coastline_segments), 1)
-        self.assertEqual(loaded.coastline_segments[0], ((2, 2), (8, 2)))
+        self.assertEqual(loaded.coastline_segments[0], ((6000, 6000), (24000, 6000)))
 
     def test_load_lake_and_river_segments(self):
         w = _world(hydrology={
@@ -77,7 +69,7 @@ class TestDeclaredWire(unittest.TestCase):
         self.assertEqual(len(loaded.lake_specs), 1)
         self.assertEqual(loaded.lake_specs[0].location_uid, "loc-lake")
         self.assertEqual(len(loaded.river_edges), 1)
-        self.assertEqual(loaded.river_edges[0].segment, ((1, 3), (2, 3)))
+        self.assertEqual(loaded.river_edges[0].segment, ((3000, 9000), (6000, 9000)))
         self.assertEqual(len(loaded.river_intents), 0)
 
     def test_endpoints_deferred_to_generate(self):

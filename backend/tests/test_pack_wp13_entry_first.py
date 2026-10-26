@@ -6,8 +6,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import (
+from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import (
     FineTerrainRefineOrchestrator,
 )
 from app.application.worldData.generators.coordinates.worldTile import (
@@ -18,10 +18,10 @@ from app.application.worldData.generators.terrain.worldMapSettings import terrai
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 
 
-def _world(*, cell_m: int = 1000, chunk: int = 32) -> SimpleNamespace:
+def _world(*, tile_macro: int = 1000, chunk: int = 32) -> SimpleNamespace:
     return SimpleNamespace(
         world_uid="w-wp13",
-        fine_cells_per_map_cell=cell_m,
+        fine_cells_per_map_cell=tile_macro,
         terrain_chunk_columns=chunk,
         terrain_parallel_workers=None,
     )
@@ -33,14 +33,14 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
         orch = FineTerrainRefineOrchestrator(MagicMock())
         queue = ChunkRefineQueue(max_workers=1)
         policy = SceneVolumePolicy.canonical_defaults()
-        cell_m = world.fine_cells_per_map_cell
+        tile_macro = world.fine_cells_per_map_cell
         chunk_size = terrain_chunk_columns(world)
-        fine_bbox = fine_bbox_for_tile(0, 0, cell_m)
+        fine_bbox = fine_bbox_for_tile(0, 0, tile_macro)
         full_tile = sum(1 for _ in iter_fine_chunks(fine_bbox, chunk_size))
 
         # Anchor near tile center so ring is interior.
-        ax = cell_m // 2
-        ay = cell_m // 2
+        ax = tile_macro // 2
+        ay = tile_macro // 2
         enqueued = await orch.schedule_tile_background(
             world, queue, ax, ay, 0, 0,
         )
@@ -49,7 +49,7 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
         # Whole-tile enqueue was ~900+ jobs at 1000m/32; rings must stay far below.
         self.assertLess(enqueued, full_tile // 4)
         self.assertEqual(enqueued, len(queue))
-        self.assertGreater(policy.background_expand_radius_m, policy.scene_xy_radius)
+        self.assertGreater(policy.background_expand_radius_fine, policy.scene_xy_radius)
 
     async def test_skip_scene_rects_excludes_scene_chunks(self) -> None:
         world = _world()
@@ -76,6 +76,7 @@ class TestRefineQueuedChunkIndex(unittest.IsolatedAsyncioTestCase):
             await orch.refine_queued_chunk(
                 world, [], MagicMock(), MagicMock(), MagicMock(),
                 0, 0, 999, 999,
+                working=MagicMock(),
             )
 
 

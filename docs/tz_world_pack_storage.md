@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **План имплементации агента:** [`.cursor/plans/world-data-storage-migration.md`](../.cursor/plans/world-data-storage-migration.md)
+> **План имплементации агента:** [`.cursor/plans/world-data-storage-migration-done.md`](../.cursor/plans/world-data-storage-migration-done.md)
 
 ## Назначение
 
@@ -188,7 +188,7 @@ L2_tile = refine(
 | Правило | Контракт |
 |---|---|
 | **SoT** | Disk wire после successful write — не live `LightGridCompose`, не пересборка маски из `SurfaceTerrainContext` |
-| **Load** | `load_parent_light(gx, gy)` → wire / typed `ParentLightTile` (+ `side`, `light_m`) |
+| **Load** | `load_parent_light(gx, gy)` → wire / typed `ParentLightTile` (+ `side`, `light_span`) |
 | **Cache** | Process-local `{(world_uid, gx, gy) → ParentLightTile}` после successful `write_world_map_tile` **или** первого decode; **miss → disk**. Cache = latency, **не** второй SoT |
 | **Cache scope** | Один pack session / process bake→refine; **не** глобальный singleton без `world_uid`; cold / другой process / restart → только disk |
 | **Same bake** | Write → disk + `cache.put`; refine в том же process бьёт в cache |
@@ -219,7 +219,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 | Правило | Контракт |
 |---|---|
-| **Mode** | **Hard corridor** — fine river/sea/lake/shore **только** внутри light cells с соответствующим L0 `hydrology_role` (и dilate по `hydrology_width` → meters через `light_m`) |
+| **Mode** | **Hard corridor** — fine river/sea/lake/shore **только** внутри light cells с соответствующим L0 `hydrology_role` (и dilate по `hydrology_width` → fine cells через `light_span`) |
 | **Role bridge** | L0 → fine только через `WorldMapHydrologyRole.to_fine_role()` (SoT enum) |
 | **Outside mask** | Не писать river/sea bed вне corridor; Pass 1.5 уточняет bed **внутри**, не смещает русло на карте |
 | **Declared** | Master declared уже отражён в L0; L2 не «перерисовывает» declared вне mask |
@@ -230,6 +230,21 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 **Антипаттерн (запрещено):** независимый `run_surface_pass` на fine grid без L0 → река на карте и в сцене в разных местах.
 
 #### L2 open-land hills (locked 2026-08-20)
+
+Column fill (уточнение 10b по замечанию мастера): subsurface/magma terrain
+выбирается по TerrainRegistryEntry.fill_roles и fill_priority. Ни materialize,
+ни pack read не сравнивают ключи с earth/magma; оба получают typed registry
+мира. MAGMA без кандидата использует SUBSURFACE, отсутствие SUBSURFACE
+диагностируется WarningError без произвольной подстановки terrain-ключа.
+
+**Cutover 10b (2026-10-18):** runtime holder — TerrainRegistryEntry.hills.
+Старые default_plains/default_forests.hills — read aliases, преобразуемые
+в одну LandcoverRegionsCategoryPolicy.terrain_policies и разрешаемые на
+world boundary. Самостоятельных forest/plains policy-классов и mask-доменов
+больше нет. Явный registry hills (включая null) приоритетнее alias;
+этот приоритет применяется до canonical registry dump при импорте.
+Фон для read tombstone и L0/L2 — default_landcover.fallback_terrain.
+Локационный hills override сохраняется.
 
 Холм — **утилита / pure helper**. Не mask domain, не L0 contributor, не ReliefContext / не writer `system_grade_uid`.
 
@@ -247,7 +262,22 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 **Шум consumer = посадка холмов с `min_spacing`**, не `cell_z_noise` `amplitude=1` на каждую метровую клетку. Одиночный `±1` — тот же helper с минимальным geom, если consumer так задал смесь; не второй канал белого шума.
 
-**Политика knobs — consumer, не домен холмов.** Helper не читает JSON. Wire **совпадает** с POJO `HillPolicy`. Живёт на `PlainsCategoryPolicy.hills` / `ForestsCategoryPolicy.hills` — [`hillPolicy.py`](../backend/app/dataModel/terrainMasks/hillPolicy.py). Нет `MaskDomainId.HILLS`.
+**Политика knobs — consumer, не домен холмов.** Helper не читает JSON. Wire **совпадает** с POJO `HillPolicy`. Runtime holder — `TerrainRegistryEntry.hills`; legacy policy-поля читаются через alias (§ Cutover 10b выше). Модель — [`hillPolicy.py`](../backend/app/dataModel/terrainMasks/hillPolicy.py). Нет `MaskDomainId.HILLS`.
+
+**Target (2026-10-17, регионы покрытия):** holder переезжает на **ключ** — `TerrainRegistryEntry.hills: HillPolicy | None` (world data, N+1): `place_hills` выбирает политику по `system_terrain` клетки, а не по паре `plains_key`/`forest_key`, иначе клетка `steppe`/`swamp` холмов не получает. `default_plains.hills` / `default_forests.hills` остаются wire-совместимым источником для builtin-ключей до миграции данных мира (план wilderness шаг 7b); canonical defaults реестра — тот же единственный литерал. Локационный override не меняется.
+
+**Уточнение 7b (2026-10-17):** физическая `terrain_category` не определяет
+open-land grade. `TerrainRegistryEntry.supports_open_land_grade: bool = False`
+задаёт допуск; `open_land_profile: Literal["plains", "forest"] | None = None`
+выбирает существующие envelope и condition шаблона. Допуск true требует профиль,
+false — отсутствующего профиля. Canonical plains/forest включены со своими
+профилями; остальные builtin выключены. N+1 явно выбирает профиль, без
+неявного unrestricted envelope. Hills и допуск grade независимы: отсутствие
+hills не запрещает grade на существующих перепадах. Профиль не переписывает
+system_terrain и identity grade. Discover и pick используют одинаковый профиль.
+Явное hills в записи реестра (включая null) приоритетнее transitional default_*.hills;
+если поле опущено, builtin получают политику из default_* по их system_terrain.
+Числа canonical остаются только в HillPolicy. Локационный override не меняется.
 
 `HillPolicy` (встроена в `default_plains` / `default_forests` как `hills`; тот же объект на локации):
 
@@ -336,7 +366,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 | Правило | Контракт |
 |---|---|
-| **SoT surface-типа** | nearest parent `WorldMapCellWire.system_terrain` (`ParentLightTile.meters_to_tx_ty`) |
+| **SoT surface-типа** | nearest parent `WorldMapCellWire.system_terrain` (`ParentLightTile.fine_to_tx_ty`) |
 | **Resample** | **только nearest** (`categorical_resample`; categorical); bilinear / majority **запрещены** |
 | **Fallback** | тот же resolve, что read (`resolve_world_map_terrain`) — empty wire → plains |
 | **Hydro** | hard corridor override **после** landcover stamp (shore / river_bed / liquid) |
@@ -349,7 +379,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 **Не смешивать имена (R36u lock):** «terrain mask carry» = **только** `system_terrain`. Hydro hard corridor, `system_facing` upsample и `surface_z` upsample — **соседние** parent-light контракты (WP-PERF-22 / facing), не mask carry; R36u их тоже не меняет.
 
 ```text
-(xm, ym) → meters_to_tx_ty → wire.system_terrain → columnFill z_top
+(x_fine, y_fine) → fine_to_tx_ty → wire.system_terrain → columnFill z_top
          → hydro corridor may recolor
 ```
 
@@ -401,7 +431,7 @@ flowchart TB
 |---|---|
 | **WP-8** | L2 tile = `refine(L0_tile, world_seed, declared_hydro)` — реки/озёра/рельеф **согласованы** с world map |
 | **WP-9** | Локации на world map: L1 anchors + optional coarse footprint; L0 хранит **pins**, не дублирует `NamedLocation` целиком |
-| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_m = fine_cells_per_map_cell / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
+| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_span = fine_cells_per_map_cell / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
 | **WP-11** | L2 соседей — фон **по одному tile**; очередь **path-first** (heading + tile cross), не burst кольцом |
 | **WP-12** | Восстановление refine: **chunk manifest + atomic chunk commit**; прерванный chunk — redo; tile `partial` \| `complete` |
 | **WP-13** | L2 gameplay: **от точки входа**; blocking **только** scene volume; **никогда** blocking целого tile |
@@ -471,7 +501,11 @@ flowchart TB
 | **on-demand grade (не bake)** | Product: DAG **только** когда сцена требует grade и в pack нет — 1…N чанков (не тайл/мир; mill спекулятивно **дорого**). Debug: `POST …/refine-chunk`. Тот же `FineChunkRunner` (R41) | mill на каждый scene/entry; GradeBakeOrchestrator; `generate_detailed_grade` + ручная запись pack; `detailed_bake` `max_tiles=1` как «один чанк» |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`. Повторный materialize / patch на объёме с grade → **сброс** stale relief ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). Не mill в том же fill-only проходе | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=`; stamp старого grade на новые колонки |
 
-**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w**. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
+**Шов мира L0** задаётся режимом `world_topology_mode`, а не безусловным
+тором: пары, facings, partial bake и invalidation определены в
+[§ Шов мира L0](#шов-мира-l0). Координатная карта и typed lookup —
+[`tz_terrain_generation.md` § Форма мира](./tz_terrain_generation.md#форма-мира--world_bounds-утверждено-2026-07-19).
+**`detailed_bake` шов мира не считает и не пишет.**
 
 **Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
 
@@ -583,8 +617,72 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 |---|---|
 | Unit | **1 macro-tile** (`fine_cells_per_map_cell`, default 1000 m) |
 | Разрешение внутри tile | **`world_map_cells_per_tile = 32`** (константа маски L0) |
-| Физический шаг light cell | `light_m = fine_cells_per_map_cell // 32` — **масштаб** маски плывёт с размером tile |
+| Физический шаг light cell | `light_span = fine_cells_per_map_cell // 32` — **масштаб** маски плывёт с размером tile |
 | Файл pack | `tiles/r.{gx}.{gy}.world_map.zst` + глобальный `climate_coarse.zst` |
+
+#### Шов мира L0
+
+Seam — стык **макро-тайлов на краях `world_bounds`**, общий контракт
+`light_bake`/`full_bake` с разным bake-scope. Пары и facings определяет
+`WorldTopology` (`dataModel/worldPack/wire/worldTopology.py`);
+`grid_neighbor`/`antagonist_tile` — делегаты. Координатная карта,
+`NeighborResult`, чётность ширины для sphere и `canonicalize` заданы в
+[`tz_terrain_generation.md` § Форма мира](./tz_terrain_generation.md#форма-мира--world_bounds-утверждено-2026-07-19).
+Стороны задаются typed `Facing`; собственного mode/wrap-ветвления в
+writer нет. Идентичность тайла остаётся существующей pack tile identity.
+
+**Пары и грани:**
+
+| Режим / край | Пара тайлов | Соответствие rim |
+|---|---|---|
+| `wrapped`, x | `(x_min, gy) ↔ (x_max, gy)` | `WEST ↔ EAST` |
+| `wrapped`, y | `(gx, y_min) ↔ (gx, y_max)` | `SOUTH ↔ NORTH` |
+| `sphere`, x | как у `wrapped` | `WEST ↔ EAST` |
+| `sphere`, север | `(gx, y_max) ↔ (x_half, y_max)` | **`NORTH ↔ NORTH`** |
+| `sphere`, юг | `(gx, y_min) ↔ (x_half, y_min)` | **`SOUTH ↔ SOUTH`** |
+| `planar`, любой край | пары нет | seam — no-op |
+
+Здесь `x_half = x_min + ((gx - x_min + w/2) mod w)`,
+`w = x_max - x_min + 1`, после нормализации чётности sphere.
+В `wrapped` и на x-краях `sphere` грань партнёра — `opposite(facing)`;
+на y-краях `sphere` это **та же** грань, применять `opposite` нельзя.
+Оба facings приходят из topology, writer не выводит второй сам.
+
+**Canonical owner → antagonist.** Для каждой seam-пары переиспользуется
+идиома `wrap_owner_and_other`: неупорядоченная identity пары — `frozenset`
+двух координат тайлов; owner — минимальная координата `(gx, gy)`,
+`other` (antagonist) — вторая. Источник rim всегда owner, получатель —
+antagonist. Набор bake-тайлов не меняет owner.
+`WorldSeamCopy` переносит существующие `surface_z` и `system_terrain`;
+климат, гидрология и grade этим seam-копированием не перезаписываются.
+Это не magma antipode и не технический стык fine chunks / `ColumnRect`.
+
+**Pull-строчка частичного bake** (тот же контракт для light и full):
+
+- Оба тайла входят в bake-scope: owner-rim из текущего compose копируется
+  в соответствующий rim antagonist в том же scope.
+- Запекается только `other` (antagonist): caller читает owner-rim из пака
+  и применяет его `WorldSeamCopy` **к себе**; владение записью остаётся
+  у запекаемого тайла. Чтение чужого tile state — по идиоме detailed halo.
+- Запекается только owner: он ничего не строчит за пределами scope;
+  его rim — источник. Antagonist подтянет owner при собственном bake
+  (self-healing).
+
+**Pack-write за пределы bake-scope не вводится.** Направление owner →
+antagonist не разворачивается ради partial bake; per-tile persist
+ownership сохраняется.
+
+**Смена `world_topology_mode` — pack invalidation.** Меняется карта
+соседей, поэтому seam-пары и halo **всех** уже испечённых тайлов становятся
+невалидны. Требуется **full re-bake**; частичный light/detailed bake не
+восстанавливает валидность всего пака. При worldEdit смены режима мастер
+получает warning об этой invalidation и необходимости full re-bake,
+как при смене размеров мира. Это изменение версии/настроек мира,
+не игровая дельта Patch Store.
+
+Отсутствующее поле сохраняет default `wrapped`: это текущее тор-поведение,
+а не смена режима; такие старые миры и паки не инвалидируются самим
+добавлением скаляра.
 
 #### Масштаб light grid (утверждено 2026-07-15)
 
@@ -592,18 +690,27 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 
 ```
 side     = 32                                 # WORLD_MAP_CELLS_PER_TILE (константа)
-light_m  = fine_cells_per_map_cell // side            # физический шаг light-cell
+light_span = fine_cells_per_map_cell // side            # физический шаг light-cell
 ```
 
 | Константа / поле | Default | POJO / код |
 |---|---|---|
 | `WORLD_MAP_CELLS_PER_TILE` / `side` | **32** | `WorldMapCellsPerTilePolicy` — единственный SoT |
-| `light_m` | `fine_cells_per_map_cell // 32` | вычисляется при bake; не хранить параллельный литерал |
+| `light_span` | `fine_cells_per_map_cell // 32` | вычисляется при bake; не хранить параллельный литерал |
 | Master override `worlds.world_map_cells_per_tile` | optional | редкий тумблер; default = 32 |
+
+Typed world wire: `WorldMapResolutionSettings.world_map_cells_per_tile` —
+nullable override, missing/null сохраняют отсутствие настройки. Supplied
+значение приводится существующим policy-преобразованием `int(value)`; новых
+strict/min ограничений этот перенос не добавляет. Runtime side по-прежнему
+`max(1, int(override))`, отсутствие override использует policy default 32.
+Финализация L0 сохраняет фактический side manifest обратно в world, как прежде.
+Path/hash принадлежат отдельному nullable `WorldPackMetadata`; size G-1
+и `terrain_pack_version` финализатор не меняет.
 
 **Примеры:**
 
-| `fine_cells_per_map_cell` | `side` | `light_m` | Light cells / tile |
+| `fine_cells_per_map_cell` | `side` | `light_span` | Light cells / tile |
 |---:|---:|---:|---:|
 | 1000 | 32 | 31 m | 1024 |
 | 3000 | 32 | 93 m | 1024 |
@@ -636,7 +743,7 @@ light_m  = fine_cells_per_map_cell // side            # физический ш�
 **Инвариант:** игрок **входит в мир** после light (или attach готового pack); недостающее — `full_bake` / resume / lazy L2 (WP-28). Partial pack у игрока допустим; SoT формы всё равно bounds.  
 **Cross-ref:** L2 — § WP-13 + **detailed_bake**; generators — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Bake modes.
 
-**L2 не зависит:** fine grid всегда `fine_cells_per_map_cell × fine_cells_per_map_cell` meter cells; L0 всегда `32×32`, меняется только `light_m`, не детализация gameplay.
+**L2 не зависит:** fine grid всегда `fine_cells_per_map_cell × fine_cells_per_map_cell` fine cells; L0 всегда `32×32`, меняется только `light_span`, не детализация gameplay.
 
 **Данные на light cell `(tx, ty)` внутри tile:**
 
@@ -826,6 +933,13 @@ wilderness_chunk.cells = refine_chunk(L0, rect)
 
 ### Генерация от точки входа (WP-13, утверждено)
 
+**Граница с Transition:** источник входов переходит на единый
+[контракт переходов](./tz_location_transitions.md) §4/§8.
+Упоминания `location_entry_points` в этом разделе — прежний источник.
+Выбор якоря/ближайшего входа и discovery policy — контекст session/scene,
+отдельная работа WP-13; они не являются задачами генератора или условием
+приёмки текущего generator/storage/CRUD плана.
+
 **Принцип:** генерация **не** «весь tile разом», а **от точки, где игрок появился или вошёл**, кольцами наружу. При переходах — **новый anchor** = точка входа на границе / в локации.
 
 ```mermaid
@@ -873,7 +987,7 @@ flowchart TB
 
 **Чтение до готовности chunk:** `MapCellQueryFacade` → merge(**L2 chunk if present**, else **L0 upsample** sample, patches). Gameplay **не блокируется** на весь tile.
 
-**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry` (**без** mill). Background rings/path-ahead: `schedule_chunk_refine`. Outdoor grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller — DAG mill 1…N чанков когда сцена требует grade и в pack нет; ГМ может залить pack заранее; не mill на entry.
+**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_fine` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry` (**без** mill). Background rings/path-ahead: `schedule_chunk_refine`. Outdoor grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller — DAG mill 1…N чанков когда сцена требует grade и в pack нет; ГМ может залить pack заранее; не mill на entry.
 
 #### WP-13 — статус impl и открытый backlog
 
@@ -888,7 +1002,7 @@ flowchart TB
 | Виды якоря (лейблы) | `AnchorKind`: `session_start` \| `tile_cross` \| `location_entry` |
 | Light bake spawn | `kind=session_start` + schedule |
 | Debug HTTP | `POST …/refine-from-entry`, `POST …/schedule-chunk-refine`, `POST …/refine-chunk` |
-| WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_m` |
+| WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_fine` |
 | Read ≠ write | § Read path / Entry load — два потока |
 
 #### L2 refine module layout (утверждено)
@@ -1307,6 +1421,27 @@ effective_climate(x,y) =
 | **L2 location** | Fine terrain территории локации | `location_terrain`, `LocationTerrainEntry`, `location_terrain_entries[]`, `terrain_path`, `terrain_hash` | `locations/l.{uid}.terrain.zst` |
 | **Merge fallback** | Coarse cell при отсутствии fine | `MapLayerKind.WORLD_MAP` | `merge_layers` / `MapCellQueryFacade` |
 
+### Locations index — тип ключа локации
+
+`LocationsIndexPin.system_location_type` —
+`DefaultWhenMissing[LocationTypeKey | None]`, где
+`LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]`. JSON остаётся
+строкой; исторические пропуск и `null` допустимы. `system_location_subtype`
+сохраняет текущий строковый контракт до дизайна parent→namespace.
+
+Граница построения нового индекса — `build_locations_index`: membership
+проверяется через REF-W по разрешённому `location_types(world)` (включая
+пользовательские ключи и engine-типы). Вызов без мира допускает только
+engine-типы. Неизвестный ключ даёт `REF_W_UNKNOWN`, без подстановки типа.
+`WorldPackWriter` сериализует подготовленный индекс.
+
+Чтение `locations_index.json` — snapshot-семантика: принадлежность ключа
+сегодняшнему реестру не проверяется; удалённый или переименованный тип
+не делает старый pack нечитаемым. Read-overlay SQL identity повторно
+разбирает `LocationsIndexPin`, сохраняя номинальный тип, без live-membership.
+SQL-модели и wire-имена полей не меняются. Тип генерируемой комнаты берётся
+из `WorldLocationTypeRegistry.SYSTEM_TYPE_ROOM`.
+
 **Payload kinds (`tileCodec`):** `PAYLOAD_KIND_WORLD_MAP` (0), `PAYLOAD_KIND_FINE_TERRAIN` (1).
 
 **Debug read API:** `GET …/map/pack/fine-terrain-read` — probe merged fine terrain; **не** `l2-probe`.
@@ -1360,6 +1495,7 @@ effective_climate(x,y) =
 | `map_cell_fine_span`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
 | `location_terrain_entries[]` | per-location L2 terrain — см. § `LocationTerrainEntry` |
 | `settlement_structure_entries[]` | per-settlement city structure — см. § `SettlementStructureEntry` |
+| `wilderness_region_entries[]` | индекс регионов покрытия (uid/entry_type/current_type/bbox/status) — см. § `WildernessRegionEntry`; состояние — § Region state store |
 | `tiles[]` | per macro-tile — см. § `TileManifestEntry` |
 | `world_map_cells`, `wilderness_tiles_total`, `wilderness_chunks_baked` | progress |
 
@@ -1412,9 +1548,112 @@ Authored outdoor city (**C15** / **C24**). Оглавление packed-райо�
 | `refine_role` | enum? | `scene` \| `background` \| `path` |
 | `content_hash`, `bytes` | | hash и размер wilderness chunk blob |
 
+#### `WildernessRegionEntry` (`wilderness_region_entries[]`) — target (2026-10-17)
+
+Spatial index resolved coverage-регионов (контракт — [`tz_map_light_bake.md`](./tz_map_light_bake.md) § Регионы покрытия). **Индекс, не SoT**: resolved Specs derive-on-read из world data; записи переписываются при bake.
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `region_uid` | str | `entity_uid(world_uid, UidKind.REGION, …)` — стабилен при правке shape/смене типа |
+| `entry_type` | str | вид декларации / выведенный вид autoresolve на момент bake |
+| `current_type` | str | ключ состояния на момент bake (snapshot; актуальное — `region_states`) |
+| `bbox` | AABB | пространство мира (fine-координаты), seam-aware |
+| `status` | enum | `declared` \| `anchor` \| `autoresolved` \| `sublocation` |
+| `parent_region_uid` | str? | для `sublocation` — регион-родитель |
+| `spec_fingerprint` | str? | fingerprint spec на момент bake — быстрый revision-check без чтения store |
+
+**Шаг 8 (2026-10-18):** bake заменяет индекс целиком из world-scoped collect,
+включая при partial bake; отсутствие anchor в конкретном мире допустимо.
+Все UID уникальны между регионами и саблокациями. Sublocation требует
+существующего родителя другого UID; parent не может быть саблокацией.
+Дубликаты и некорректные ссылки отклоняются до замены индекса и при чтении/
+сохранении manifest. При отказе публикации старый manifest остаётся целым.
+`bbox` — `{x_min,y_min,x_max,y_max}` в canonical fine cells; для разорванного
+швом footprint один AABB консервативно включает все части. Это индекс, не контур.
+`current_type` — snapshot, `entry_type` сохраняет первоначальный тип collect,
+даже если state snapshot его уже изменил. Fingerprint declared/anchor —
+`state_fingerprint(spec_wire)`; autoresolve включает исходный claim и entry_type.
+Поле называется `spec_fingerprint`; `app.ids.state_fingerprint(value)` — общая
+hash-утилита, не имя поля. Старый ключ `state_fingerprint` принимается только
+при чтении исторического manifest; новая сериализация пишет `spec_fingerprint`.
+Hydro-наблюдения без достоверных UID/типа/геометрии не превращаются в coverage entries.
+
+**Типизация покрытия (WR-TD-1, 2026-10-18):** `entry_type` и `current_type`
+в resolved/index-моделях — обязательные `TerrainKey = RegistryKey[WorldTerrainRegistry]`;
+wire остаётся строковым. `entry_type` фиксирует исходный ключ, а не live state.
+Collect и построение нового индекса проверяют оба ключа по разрешённому реестру
+мира через REF-W (`REF_W_UNKNOWN`), без подстановки ошибочных значений. State override
+меняет только current_type и не отменяет проверку исходного ключа. Отсутствующий/
+null исходный ключ не создаёт ResolvedRegion. Старый manifest читается как
+исторический snapshot без проверки membership по сегодняшнему реестру.
+
+Debug HTTP: `GET /worlds/{world_uid}/map/regions/{region_uid}` возвращает
+`{snapshot:true,entry:WildernessRegionEntry}`; нет мира/индекса/UID → 404.
+`GET .../{region_uid}/outline` пересобирает collect/rasterize из world data,
+возвращает `{region_uid,source:"derived_world_data",resolution:"L0",outline}`.
+ASCII `#` — контур, `.` — внутренность. Отсутствующий в текущих данных регион
+при наличии baked snapshot → 409 (устаревший индекс), без выдумывания Spec из bbox.
+
+#### Region state store (target, 2026-10-17)
+
+`RegionState` — runtime-эволюция поверх authored declaration. Хранится в SQL-таблице **`region_states`**, keyed by `(world_uid, region_uid)` — **entity-store рядом с Patch Store, не WP-20** (`map_cell_patches` — дельты клеток `(x,y,z)`; состояние сущности туда не ложится). Схема — `0001_initial.sql` + `db/models/regionState.py` + repo; массовая запись — `app.db.bulkSql`.
+
+Поля: `current_type`, `pending_target`, `progress`, `last_eval_tick`, `overrides` (JSON), `history` (JSON append-only: `{from_type, to_type, cause, at}`), `spec_fingerprint`, `tombstone`. **Единый writer — `StateChangeConsumer`** (не генератор, не bake). Revision-check: при bake/refine тайла `state_fingerprint(spec_wire)` ≠ сохранённому → клетки региона **в этом тайле** перекрашиваются; немедленной перепечки всего мира нет. `remove` declared → `tombstone` + чистка при следующем чтении/bake; rename → новая сущность (старый state — orphan → tombstone).
+
+Контракт 9b: `RegionState` — frozen Pydantic в `dataModel/regions/`;
+`region_uid: str` (opaque identity), `current_type`/`pending_target` и
+`history.from_type`/`to_type` — `TerrainKey`. `progress` — конечное число
+0..1, `last_eval_tick >= 0`. `RegionStateOverrides` содержит только optional
+`density` (конечное число 0..1); применение density override — вне 9b.
+История — JSON-массив, в POJO immutable tuple frozen-переходов: writer
+сохраняет старый префикс и добавляет новые записи. `RegionTransitionCause` —
+закрытый enum `drift | declared_edit | event`; `at: str | int` — явная
+временная заглушка до доменов событий/времени (строка — временная метка или
+opaque event reference). `spec_fingerprint: str | None` — opaque revision
+token; NULL существующих строк 9a означает неизвестную ревизию и mismatch.
+Пустой SQL overrides `{}` соответствует отсутствию overrides; JSON читается
+через typed модели, неизвестные поля/причины отклоняются.
+
+Async owner L0/L2 читает repo один раз перед compute и передаёт snapshot в
+collect; отсутствующий repo/строка означает отсутствие override. Collect
+проверяет исходный/текущий ключи через REF-W. Fingerprint вычисляется из
+исходного spec wire до резолва anchor (для auto — также claim и entry_type),
+одинаково для collect и нового manifest. `ResolvedRegion.spec_fingerprint`
+и `revision_changed` — read-only сигнал следующему writer; mismatch не
+меняет store. Материализация уже всегда выводит footprint из текущего Spec;
+для anchor `authored_anchor_shape` сохраняет исходную ссылку формы до
+резолва координат, чтобы индекс пересчитывал токен по authored wire даже
+при дальнейшей правке density/прочих параметров resolved Spec.
+matching fingerprint не меняет state/type/геометрию. Shape-edit сохраняет
+current_type, reset progress/pending выполняет writer 10a; type-edit reset
+к новому entry_type и history `declared_edit` также выполняет только writer.
+Tombstone не материализуется; в L2 старое region-покрытие parent восстанавливается
+policy-фоном даже при отсутствии других живых регионов. Геометрия/paint
+ограничены scope bake/refine, глобальный re-bake не запускается. Historical
+manifest остаётся snapshot и при чтении не получает live state.
+
+#### Region state overlay (read, target 2026-10-17)
+
+Pack остаётся immutable snapshot. Клетка L0 (`WorldMapCellWire`) и колонка L2 (`FineTerrainColumnWire`) при bake получают **`region_uid`** победителя (optional поле) и `system_terrain` = paint на момент bake (snapshot самодостаточен для raw-читателей). На read — **один фасад** overlay:
+
+```text
+cell.region_uid is None            → system_terrain как в pack
+state(region_uid).tombstone        → policy-fallback ключ (LandcoverRegionsCategoryPolicy)
+state.current_type != baked key    → current_type
+иначе                              → system_terrain как в pack
+```
+
+Применяется ко всем слоям Layer priority **ниже `patch`**: `terrain_delta` (взрыв, раскопки) остаётся сверху. Overlay подменяет только `system_terrain`; доменные эффекты морфинга (роль воды, bed carve, z) — при materialize/refine чанков, не на read.
+
+**Известный gap — overlap re-rank:** клетка в двух регионах, у одного из которых сменился `current_type`, не пересчитывает победителя (overlay по uid, не по геометрии) до ближайшего refine чанка / re-bake тайла. По согласованию 2026-10-18 диагностирует read-overlay шага 9c: при отличии ключа живого состояния от baked ключа и `current_type` manifest-записи логируется `region_state | overlap_rerank_deferred | world_uid=… region_uid=… neighbors=…` при пересечении bbox по индексу. Один WARNING на изменившийся UID за batch-запрос; соседи упорядочены по UID, baked-победитель сохраняется. Эмиттер — `regions/regionStateLog.py`, общий фасад `loggingConfig`, sink `logs/region_state/regionStateLog.log`; событие не выводится на stdout (L8). Writer 10a не дублирует это read-событие.
+
+Контракт чтения 9c: `IRegionStateRepository.get_many(world_uid, region_uids)` возвращает строки запрошенных UID, включая tombstone, с batch SQL и изоляцией мира. Общая точка overlay — перед `merge_layers`, для всех слоёв ниже `patch`; scene/bbox/footprint/export загружают один snapshot на batch, без постоянного кэша state. `CellContribution.region_uid: str | None` — opaque pack membership metadata, не поле результата field-wise merge. Raw sync pack/debug/render читатели сохраняют snapshot-семантику. До cutover 10b tombstone использует `WorldTerrainMasks.default_plains.system_terrain` как transitional policy-fallback; подмена ключа typed `TerrainKey`, без хардкода.
+
+Отвергнуто (2026-10-17): re-bake тайлов на смену типа (мастерский рычаг WP-7 — симуляция невидима); flood `terrain_delta` на footprint (10⁶ строк на регион, WP-FIX-DEBT-1); геометрия на read (дублирует bake-paint).
+
 ### Fine terrain column (внутри zstd)
 
-`(lx, ly)` + z-runs + **`system_terrain`** / **`system_material`** (registry keys, строки). Legacy wire с `terrain_id: u8` — мигрируется при read (`FineTerrainZRun._migrate_legacy_wire`). См. `dataModel/worldPack/fineTerrainChunkWire.py`.
+`(lx, ly)` + z-runs + **`system_terrain`** / **`system_material`** (registry keys, строки) + **`region_uid?`** (target, § Region state overlay). Legacy wire с `terrain_id: u8` — мигрируется при read (`FineTerrainZRun._migrate_legacy_wire`). См. `dataModel/worldPack/wire/fineTerrainChunkWire.py`.
 
 ---
 
@@ -1446,6 +1685,23 @@ map_cell_patches (
 | `terrain_pack_path` | путь к pack |
 | `terrain_pack_hash` | fast validate |
 | `terrain_pack_version` | wire version |
+
+**Scoped L0 finalization (2026-10-16):** light/full orchestration владеет
+короткой SQL UOW. Finalizer загружает свежий World через repository, проверяет
+world/writer/manifest identity, готовит три authored поля через facade-slice
+POJO и делает один repository update без мастерского WorldService.update.
+Посторонние колонки не ревалидируются и не перезаписываются старым bake snapshot.
+`terrain_pack_version` не меняется. Путь сохраняет actual writer root:
+существующая корректная ссылка сохраняется, managed root использует переносимую
+ссылку, иной custom root — абсолютную. Общий path resolver остаётся источником
+round-trip семантики.
+
+`PackManifestStore.save` публикует JSON через временный файл в том же каталоге
+и replace; до replace прежний manifest остаётся читаемым. File-first порядок
+сохраняется: после успешного manifest save сбрасываются caches actual/old root,
+в том числе при последующей ошибке SQL. Это не общий атомарный FS+SQLite commit:
+rollback SQL не откатывает опубликованный manifest. Success-log финализатора
+следует за успешным repository update.
 
 **`map_cells` удаляется** при cutover (один PR с кодом + `0001_initial.sql`).
 
@@ -1516,7 +1772,7 @@ sequenceDiagram
 
 **Контракт (v2, 2026-07-10):** `dataModel/worldPack/mergeMapCells.py` — **`merge_layers` field-wise overlay** по `LAYER_PRIORITY_ORDER` (высший приоритет перекрывает **отдельные поля**, не всю ячейку) + `MapCellQueryFacade` — единая точка read при наличии pack.
 
-**Climate coarse:** `climate_coarse.sample_macro(macro_gx, macro_gy)` — coords = **macro grid**. Fine (`r.{gx}.{gy}.climate.zst`) — `sample_meters` with `sample_step_m`. Patch `climate_delta` — через слой PATCH (wins over fine/coarse). См. [`tz_climate.md`](./tz_climate.md) § World Pack climate.
+**Climate coarse:** `climate_coarse.sample_macro(macro_gx, macro_gy)` — coords = **macro grid**. Fine (`r.{gx}.{gy}.climate.zst`) — `sample_fine` with `sample_step_fine`. Patch `climate_delta` — через слой PATCH (wins over fine/coarse). См. [`tz_climate.md`](./tz_climate.md) § World Pack climate.
 
 **`POST generate-climate` на pack-мире:** reject (422) — base climate только через `pack/bake`.
 
@@ -1542,7 +1798,7 @@ sequenceDiagram
 | Приоритет | ID | Задача | Статус | Примечание |
 |---|---|---|---|---|
 | **P0** | **MERGE-1** | PLAYER_SCENE в manifest/read | ✅ | `ChunkRef.refine_role` |
-| **P0** | **MERGE-2** | Climate в read path | ✅ | coarse bake + sample_macro; fine prefer via sample_meters |
+| **P0** | **MERGE-2** | Climate в read path | ✅ | coarse bake + sample_macro; fine prefer via sample_fine |
 | **P1** | **MERGE-3** | Location L2 coords | ⚠️ | footprint v1 ✅; multi-z overlap / layout bbox — backlog |
 | **P1** | **MERGE-4** | terrain/material → registry keys | ✅ | FIX-01/02 |
 | **P2** | **MERGE-5** | PLAYER_PATH corridor | ⚠️ | heading corridor ✅; DAG movement intent — backlog |
@@ -1555,7 +1811,7 @@ sequenceDiagram
 
 **Тесты backlog:** integration WP-A6, WP-A13; unit tie-break multi-location; golden patch-over-L2.
 
-**Инженерные фиксы (WP-FIX):** § ниже. Детальный чеклист: [`.cursor/plans/world-pack-fixes.md`](../.cursor/plans/world-pack-fixes.md).
+**Инженерные фиксы (WP-FIX):** § ниже. Детальный чеклист: [`.cursor/plans/world-pack-fixes-done.md`](../.cursor/plans/world-pack-fixes-done.md).
 
 ---
 
@@ -1687,7 +1943,7 @@ sequenceDiagram
 
 | Шаг | Действие |
 |---|---|
-| 1 | Impl L1–L7 по [plan](../.cursor/plans/world-data-storage-migration.md) |
+| 1 | Impl L1–L7 по [plan](../.cursor/plans/world-data-storage-migration-done.md) |
 | 2 | Smoke WP-A1…A14 на pack (debug HTTP / tests), **до** drop schema |
 | 3 | **Один PR:** код + `0001_initial.sql` drop `map_cells` + `map_cell_patches` / jobs |
 | 4 | Recreate local DB |
@@ -2138,12 +2394,12 @@ flowchart LR
 | 2026-07-19 | Smell fixes: `WorldBounds` POJO; `light_l0_tiles`; single `resolve_light_tile_cap`; light = locations∪declared hydro |
 | 2026-07 | § Идея 1 (light world map) + § Идея 2 (refine from L0) утверждены |
 | 2026-07 | WP-10: `world_map_cells_per_tile` ∝ 1/`fine_cells_per_map_cell` |
-| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_m = fine_cells_per_map_cell // 32`; убрана ∝-формула / clamp 8…48 |
+| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_span = fine_cells_per_map_cell // 32`; убрана ∝-формула / clamp 8…48 |
 | 2026-07 | World Pack + Patch Store; LOD L0/L1/L2 |
 | 2026-07 | WP-26: legacy freeze — map_cells/materialize-stack/TR-PERF вне scope Pack migration |
 | 2026-07 | WP-MERGE: статус merge v1 + приоритет доработок MERGE-1…9 |
 | 2026-07 | WP-25: сессия=world+character; characters/import ✅; starter_characters + npcs — backlog spec only |
-| 2026-07 | Ссылка на fix backlog: `.cursor/plans/world-pack-fixes.md` (FIX-01…33) |
+| 2026-07 | Ссылка на fix backlog: `.cursor/plans/world-pack-fixes-done.md` (FIX-01…33) |
 | 2026-07-10 | **WP-FIX:** FIX-01…30 ✅, FIX-32/33 ✅; merge v2 field-wise; L1–L7 ✅ |
 | 2026-07-10 | **WP-MERGE v2:** статус слоёв; MERGE-1/4/7 ✅; WP-FIX-DEBT-1…9 |
 | 2026-07-10 | **WP-FIX-REVIEW:** REVIEW-5/6 — `PackDebugReadFacade`, `PackLoadingProgressFacade`, `MapCellReadService` |

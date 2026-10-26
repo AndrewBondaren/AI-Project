@@ -13,9 +13,9 @@ def _smoothstep(edge0: float, edge1: float, x: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
-def sheer_band_m(*, sheer_band_light: int, light_m: float) -> float:
-    """ε band in meters — SoT: ``sheer_band_light * light_m``."""
-    return max(0, int(sheer_band_light)) * max(1.0, float(light_m))
+def sheer_band_m(*, sheer_band_light: int, light_span: float) -> float:
+    """ε band in meters — SoT: ``sheer_band_light * light_span``."""
+    return max(0, int(sheer_band_light)) * max(1.0, float(light_span))
 
 
 def sheer_fraction_radial(
@@ -49,13 +49,13 @@ def profile_side_fraction(
     t: float,
     dist_for_sheer: float,
     outer_m: float,
-    light_m: float,
+    light_span: float,
 ) -> float:
     """Apply SHEER/SLOPE profile. ``outer_m`` = radius (peak) or half_width (range)."""
     if side.kind == ReliefSideKind.SHEER:
         band = sheer_band_m(
             sheer_band_light=int(side.sheer_band_light),
-            light_m=light_m,
+            light_span=light_span,
         )
         return sheer_fraction_radial(
             dist_origin=dist_for_sheer,

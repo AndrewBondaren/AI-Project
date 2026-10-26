@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 
 
 class MaskCategoryPolicy(BaseModel):
@@ -15,5 +15,5 @@ class MaskCategoryPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    enabled: DefaultOnWire[bool] = True
-    autoresolve: DefaultOnWire[bool] = True
+    enabled: DefaultWhenMissing[bool] = True
+    autoresolve: DefaultWhenMissing[bool] = True

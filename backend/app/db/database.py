@@ -5,8 +5,24 @@ from contextvars import ContextVar
 from pathlib import Path
 
 import aiosqlite
+from app.db.guardedConnection import GuardedConnection
 
-_in_transaction: ContextVar[bool] = ContextVar("_in_transaction", default=False)
+class _TransactionFlag:
+    """A child task cannot inherit ownership of its parent's transaction."""
+    def __init__(self):
+        self._value = ContextVar("_transaction_owner", default=None)
+
+    def get(self):
+        return self._value.get() is asyncio.current_task() and self._value.get() is not None
+
+    def set(self, value):
+        return self._value.set(asyncio.current_task() if value else None)
+
+    def reset(self, token):
+        self._value.reset(token)
+
+
+_in_transaction = _TransactionFlag()
 
 log = logging.getLogger(__name__)
 
@@ -25,12 +41,12 @@ class Database:
 
     async def connect(self) -> None:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = await aiosqlite.connect(self.path)
+        self._conn = await GuardedConnection(self.path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
 
-        self._bootstrap_conn = await aiosqlite.connect(self.path)
+        self._bootstrap_conn = await GuardedConnection(self.path)
         self._bootstrap_conn.row_factory = aiosqlite.Row
         await self._bootstrap_conn.execute("PRAGMA journal_mode=WAL")
         await self._bootstrap_conn.execute("PRAGMA foreign_keys=ON")
@@ -106,18 +122,35 @@ class Database:
             yield self.main_conn
 
     @asynccontextmanager
+    async def transaction_if_needed(self):
+        """``transaction()`` unless the caller is already inside one —
+
+        outer transaction wins (atomicity belongs to the outermost unit
+        of work); standalone calls get their own BEGIN/COMMIT.
+        """
+        if _in_transaction.get():
+            if not self.main_conn.owns_unit_of_work:
+                raise RuntimeError("caller UOW must own this database's main connection")
+            yield self.main_conn
+            return
+        async with self.transaction() as conn:
+            yield conn
+
+    @asynccontextmanager
     async def transaction_on(self, conn: aiosqlite.Connection):
         """BEGIN/COMMIT/ROLLBACK on the given connection (TR-PAR-6 writer txn)."""
-        token = _in_transaction.set(True)
-        await conn.execute("BEGIN")
-        try:
-            yield conn
-            await conn.execute("COMMIT")
-        except Exception:
-            await conn.execute("ROLLBACK")
-            raise
-        finally:
-            _in_transaction.reset(token)
+        async with conn.unit_of_work():
+            token = _in_transaction.set(True)
+            try:
+                await conn.execute("BEGIN IMMEDIATE")
+                try:
+                    yield conn
+                    await conn.execute("COMMIT")
+                except BaseException:
+                    await conn.execute("ROLLBACK")
+                    raise
+            finally:
+                _in_transaction.reset(token)
 
     @asynccontextmanager
     async def bulk_write_lock(self):

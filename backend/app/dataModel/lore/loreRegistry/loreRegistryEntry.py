@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 
 
 class LoreRegistryEntry(BaseModel):
@@ -12,10 +12,15 @@ class LoreRegistryEntry(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    display_name: StrictOnWire[str] = Field(
-        validation_alias=AliasChoices("display_name", "title"),
-    )
-    description: DefaultOnWire[str | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("description", "content"),
-    )
+    display_name: StrictOnWire[str]
+    description: DefaultWhenMissing[str | None] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_keys(cls, data):
+        """Removed keys read as an error, not a silent drop."""
+        if isinstance(data, dict):
+            for old in ("title", "content"):
+                if old in data:
+                    raise ValueError(f"{old} was removed; use display_name/description")
+        return data

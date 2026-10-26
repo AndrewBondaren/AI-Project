@@ -1,17 +1,12 @@
-"""Open-water bathymetry stub — mountain-rise analog (R5b / HY-BATH-1)."""
+"""L0 copies resolved bathymetry; no temporary floor synthesis (HY-12/6)."""
 
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
-from app.application.worldData.generators.hydrology.bathymetry import (
-    ocean_stub_drop_amount,
-    resolve_open_water_surface_z,
-)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
@@ -24,85 +19,56 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.coarseOpen
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.hydrology.seas import HydrologySeasPolicy
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-
-
-class TestStubElevationResolve(unittest.TestCase):
-    def test_drop_from_pojo_fraction(self) -> None:
-        policy = HydrologySeasPolicy(stub_drop_fraction_of_span=0.05)
-        self.assertEqual(ocean_stub_drop_amount(policy, z_sea=0, z_min=-20), 1)
-        self.assertEqual(
-            resolve_open_water_surface_z(z_sea=0, z_min=-20, policy=policy),
-            -1,
-        )
-
-    def test_prefers_coarse_carved_floor(self) -> None:
-        policy = HydrologySeasPolicy(stub_drop_fraction_of_span=0.5)
-        z = resolve_open_water_surface_z(
-            z_sea=0, z_min=-100, policy=policy, coarse_z=-40,
-        )
-        self.assertEqual(z, -40)
-
-    def test_stub_when_coarse_still_above_sea(self) -> None:
-        policy = HydrologySeasPolicy(stub_drop_fraction_of_span=0.05)
-        z = resolve_open_water_surface_z(
-            z_sea=0, z_min=-20, policy=policy, coarse_z=5,
-        )
-        self.assertEqual(z, -1)
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from tests.hydrology_fixtures import hydro_world
 
 
 class TestLightSeaZ(unittest.TestCase):
-    def test_sea_cells_below_plains_relief(self) -> None:
-        world = SimpleNamespace(
-            world_uid="world-bath-stub",
-            z_min=-20,
-            z_max=8,
-            fine_cells_per_map_cell=1000,
-            hydrology={
-                "enabled": True,
-                "default_seas": {"stub_drop_fraction_of_span": 0.05},
-            },
-        )
-        pole = MagicMock(spec=ClimatePoleField)
-        hm = SurfaceHeightmap(
-            world_uid=world.world_uid,
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={(0, 0): 0},
-        )
-        surface = SurfaceTerrainContext(
-            pole_field=pole,
-            local_field=ClimateAnchorField(()),
-            coarse_hm=hm,
-            coarse_hydro={
-                (0, 0): MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA),
-            },
-            sparse_meter_hydro={},
-            meter_z_overrides={},
-            coarse_relief_z={(0, 0): 4},
-            # Simulate leaked land z on coarse (pre-fix) — stub must still drop.
-            coarse_surface_z={(0, 0): 4},
-        )
-        scale = LightGridScale.from_tile(1000, 4)
-        compose = LightGridCompose(scale=scale)
-        # Plains-like relief base on a land cell outside sea paint path.
+    def _bake(self, floor_z, *, level=0, role=HydrologyCellRole.COASTAL_SEA, river=False):
+        from tests.planning.consumers.test_l0_l2 import context
+        from tests.planning.consumers.test_wiring import Composition, capture, world
+        source = world(z_min=-100, z_max=40,
+            world_map_cells_per_tile=4, hydrology={"enabled": True, "default_water_level": level,
+                "default_lakes": {"autoresolve": False},
+                "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+                "declared_basins": [{"location_uid": "water", "kind": "lake" if role is HydrologyCellRole.LAKE else "ocean",
+                    "floor_z": floor_z if floor_z is not None else -12, "z_water_level": level,
+                    "footprint": {"kind": "bbox", "x_min": 0, "x_max": 3000, "y_min": 0, "y_max": 3000}}]})
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        bundle = composition.prepare(capture(source))
+        ctx = context(source, bundle, [(0, 0)])
+        if floor_z is None:
+            ctx.surface_bundle = None
+        compose = LightGridCompose(ctx.scale)
         compose.ensure(0, 0, 0, 0).surface_z = 4
-        ctx = LightGridBakeContext(
-            world=world,
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            surface_planning=surface,
-        )
+        if river:
+            compose.ensure(0, 0, 0, 0).hydrology_role = WorldMapHydrologyRole.RIVER
         stats = apply_coarse_open_water(compose, ctx)
+        return compose.get(0, 0, 0, 0), stats
+
+    def test_sea_copies_resolved_floor(self):
+        sea, stats = self._bake(-12)
         self.assertGreater(stats["z_applied"], 0)
-        sea = compose.get(0, 0, 0, 0)
         assert sea is not None
         self.assertEqual(sea.hydrology_role, WorldMapHydrologyRole.SEA)
-        self.assertLess(sea.surface_z, 4)
-        self.assertEqual(sea.surface_z, -1)
+        self.assertEqual(sea.surface_z, -12)
+
+    def test_high_lake_uses_own_floor_above_ocean_default(self):
+        lake, stats = self._bake(20, level=25, role=HydrologyCellRole.LAKE)
+        self.assertEqual(lake.surface_z, 20)
+        self.assertEqual(lake.hydrology_role, WorldMapHydrologyRole.LAKE)
+
+    def test_missing_snapshot_is_an_explicit_contract_error(self):
+        with self.assertRaisesRegex(ValueError, "frozen surface plan"):
+            self._bake(None)
+
+    def test_declared_river_height_survives_coarse_paint(self):
+        river, stats = self._bake(-12, river=True)
+        self.assertEqual(river.surface_z, 4)
+        self.assertEqual(river.hydrology_role, WorldMapHydrologyRole.RIVER)
+        self.assertEqual(stats["river_preserved"], 1)
 
 
 if __name__ == "__main__":

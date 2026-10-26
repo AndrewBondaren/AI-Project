@@ -5,11 +5,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from app.application.worldData.mapCellReadService import MapCellReadService
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellReadService import MapCellReadService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.worldPack import WorldMapCellWire
 
 

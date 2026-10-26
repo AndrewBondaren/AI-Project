@@ -1,24 +1,20 @@
-"""Coarse SEA/LAKE fill from surface_planning — Path A areal open water.
+"""Coarse SEA/LAKE fill from the final frozen hydrology plan — Path A areal open water.
 
 Invariant (narrow): do **not** overwrite light cells that already have
 ``hydrology_role == RIVER`` from declared corridors. Global ``WorldMapHydrologyRole.merge``
 (SEA ≥ RIVER) is unchanged; this skip is only for coarse open-water paint so a declared
 river survives inside a SEA macro tile.
 
-R5b: after paint, write bathymetry ``surface_z`` (stub drop / coarse floor).
+Copy the resolved coarse floor; L0 never synthesizes bathymetry.
 """
 
 from __future__ import annotations
 
-from app.application.jsonValidation import hydrology
-from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
-from app.application.worldData.generators.hydrology.bathymetry import resolve_open_water_surface_z
-from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import paint_role
 from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 _PRESERVE_DECLARED_RIVER = frozenset({WorldMapHydrologyRole.RIVER})
 _OPEN_WATER = frozenset({WorldMapHydrologyRole.SEA, WorldMapHydrologyRole.LAKE})
@@ -28,16 +24,7 @@ def apply_coarse_open_water(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
 ) -> dict[str, int]:
-    planning = ctx.surface_planning
-    if planning is None:
-        return {
-            "skipped_no_planning": 1,
-            "sea_macros": 0,
-            "lake_macros": 0,
-            "cells_painted": 0,
-            "river_preserved": 0,
-            "z_applied": 0,
-        }
+    planning = ctx.require_surface_bundle().hydrology.payload
     scale = compose.scale
     tile_set = set(ctx.tiles)
     sea_macros = 0
@@ -46,13 +33,12 @@ def apply_coarse_open_water(
     preserved = 0
     z_applied = 0
 
-    seas = hydrology(ctx.world).default_seas
-    z_sea = resolve_z_sea(ctx.world)
-    z_min = world_z_min(ctx.world)
-    coarse_z_map = planning.coarse_surface_z
+    coarse_z_map: dict[tuple[int, int], int] = {(ref.gx, ref.gy): z for ref, z in planning.coarse_surface_z}
+    coarse_hydro = {(int(ref.gx), int(ref.gy)): hydro for ref, hydro in planning.coarse_hydro}
+    # Final post-river envelope only.
 
     for gx, gy in ctx.tiles:
-        role = world_map_hydro_role_from_cell(planning.coarse_hydro.get((gx, gy)))
+        role = world_map_hydro_role_from_cell(coarse_hydro.get((gx, gy)))
         if role not in _OPEN_WATER:
             continue
         if role is WorldMapHydrologyRole.SEA:
@@ -74,12 +60,9 @@ def apply_coarse_open_water(
         painted += n
         preserved += p
 
-        floor_z = resolve_open_water_surface_z(
-            z_sea=z_sea,
-            z_min=z_min,
-            policy=seas,
-            coarse_z=coarse_z_map.get((gx, gy)),
-        )
+        floor_z = coarse_z_map.get((gx, gy))
+        if floor_z is None:
+            continue
         for lx, ly in fill:
             ngx = lx // scale.side
             ngy = ly // scale.side

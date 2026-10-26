@@ -1,96 +1,47 @@
 """Unit tests for procedural sea/ocean autoresolve — D HY-5a."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-    declare_coastline_bbox_padded,
-    flood_water_side,
-    flood_water_side_unbounded,
-)
-from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
-    seas_autoresolve_policy,
-)
+from tests.hydrology_fixtures import hydro_topology
+
+from tests.hydrology_geometry_helpers import (flood_water_side, flood_water_side_unbounded)
+from app.application.jsonValidation.worldRow import hydrology
+from app.dataModel.hydrology.seas import HydrologySeasPolicy
+from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
-    autoresolve_sea_basins,
-)
 from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     HydrologyScope,
     LoadedConnectionGraph,
 )
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from tests.hydrology_fixtures import (
+    coastline_world as _world_with_coastline,
+    flat_heightmap as _flat_heightmap,
+    hydro_world,
+    seas_hydrology,
+)
 
 
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_seas": {
-                "bands": {"min": 1, "max": 2},
-                "autoresolve_coastal_sea": True,
-                "autoresolve_open_ocean": True,
-            },
-        },
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+    kwargs.setdefault("hydrology", seas_hydrology())
+    return hydro_world(**kwargs)
 
 
-def _flat_heightmap(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 5) -> SurfaceHeightmap:
-    surface_z = {
-        (gx, gy): z
-        for gx in range(gx_lo, gx_hi + 1)
-        for gy in range(gy_lo, gy_hi + 1)
-    }
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(gx_lo, gx_hi, gy_lo, gy_hi),
-        surface_z=surface_z,
-    )
-
-
-def _world_with_coastline(**kwargs):
-    base = {
-        "enabled": True,
-        "default_seas": {
-            "bands": {"min": 1, "max": 2},
-            "autoresolve_coastal_sea": True,
-            "autoresolve_open_ocean": True,
-        },
-        "declared_coastlines": [{
-            "location_uid": "loc-sea",
-            "path": [
-                {"x": 6000, "y": 6000, "z": 0},
-                {"x": 24000, "y": 6000, "z": 0},
-            ],
-        }],
-    }
-    if "hydrology" in kwargs:
-        merged = {**base, **kwargs.pop("hydrology")}
-        return _world(hydrology=merged, **kwargs)
-    return _world(hydrology=base, **kwargs)
-
-
-class TestSeasAutoresolvePolicy(unittest.TestCase):
+class TestSeasPolicy(unittest.TestCase):
 
     def test_defaults_on(self):
-        policy = seas_autoresolve_policy(_world())
-        self.assertTrue(policy.seas_enabled)
+        policy = hydrology(_world()).default_seas
+        self.assertIsInstance(policy, HydrologySeasPolicy)
+        self.assertTrue(policy.enabled)
         self.assertTrue(policy.autoresolve_coastal_sea)
         self.assertTrue(policy.autoresolve_open_ocean)
 
     def test_explicit_off(self):
-        policy = seas_autoresolve_policy(
+        policy = hydrology(
             _world(
                 hydrology={
                     "enabled": True,
@@ -100,7 +51,7 @@ class TestSeasAutoresolvePolicy(unittest.TestCase):
                     },
                 },
             ),
-        )
+        ).default_seas
         self.assertFalse(policy.autoresolve_coastal_sea)
         self.assertFalse(policy.autoresolve_open_ocean)
 
@@ -111,85 +62,49 @@ class TestUnboundedFlood(unittest.TestCase):
         hm = _flat_heightmap(0, 10, 0, 6)
         segments = [((2, 2), (8, 2))]
         coastline = rasterize_segments(segments)
-        bounded = flood_water_side(hm, coastline, segments)
-        unbounded = flood_water_side_unbounded(hm, coastline, segments)
+        bounded = flood_water_side(hm, coastline, segments, topology=hydro_topology(hm))
+        unbounded = flood_water_side_unbounded(hm, coastline, segments, topology=hydro_topology(hm))
         self.assertNotIn((0, 1), bounded)
         self.assertIn((0, 1), unbounded)
         self.assertIn((10, 0), unbounded)
 
-    def test_declare_bbox_padding(self):
-        segments = [((2, 2), (8, 2))]
-        bbox = declare_coastline_bbox_padded(segments)
-        self.assertEqual(bbox, GridBBox(1, 9, 1, 3))
-
-
-class TestProceduralSeaAutoresolve(unittest.TestCase):
-
-    def test_skips_occupied_and_inside_bbox(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        segments = [((2, 2), (8, 2))]
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.COASTAL_SEA}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_segments=segments,
-        )
-        occupied = {(5, 1): MapCellHydrology(role=HydrologyCellRole.SHORE)}
-        auto, bbox = autoresolve_sea_basins(
-            _world(),
-            hm,
-            master,
-            occupied,
-            autoresolve_coastal=True,
-            autoresolve_open_ocean=True,
-        )
-        self.assertNotIn((5, 1), auto)
-        self.assertIn((0, 1), auto)
-        self.assertTrue(bbox is not None)
-
-    def test_disabled_flags_return_empty(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        segments = [((2, 2), (8, 2))]
-        master = HydrologyMasterInput(
-            world_uid="test-world",
-            hydrology_enabled=True,
-            scopes=frozenset({HydrologyScope.COASTAL_SEA}),
-            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_segments=segments,
-        )
-        auto, bbox = autoresolve_sea_basins(
-            _world(),
-            hm,
-            master,
-            {},
-            autoresolve_coastal=False,
-            autoresolve_open_ocean=False,
-        )
-        self.assertEqual(auto, {})
-        self.assertIsNone(bbox)
-
 
 class TestBoundaryAutoresolve(unittest.TestCase):
 
-    def test_flood_from_bbox_north_ocean(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-            flood_from_bbox_ocean_edge,
-        )
-        dist = flood_from_bbox_ocean_edge(hm)
-        self.assertIn((5, 0), dist)
-        self.assertNotIn((5, 6), dist)
+    def test_high_flat_world_is_not_synthesized_into_an_ocean(self):
+        hm = _flat_heightmap(0, 10, 0, 6, z=5)
+        before = dict(hm.surface_z)
+        result = HydrologyGeneratorService().apply(_world(), [], hm,
+            scopes=frozenset({HydrologyScope.OPEN_OCEAN}))
+        self.assertEqual(result.cell_index.by_cell, {})
+        self.assertEqual(hm.surface_z, before)
+
+    def test_below_default_ocean_does_not_depend_on_world_edge(self):
+        for mode in ("planar", "wrapped", "sphere"):
+            with self.subTest(mode=mode):
+                hm = _flat_heightmap(0, 5, 0, 4, z=-5)
+                result = HydrologyGeneratorService().apply(_world(world_topology_mode=mode), [], hm,
+                    scopes=frozenset({HydrologyScope.OPEN_OCEAN}))
+                self.assertEqual(set(result.cell_index.by_cell), set(hm.surface_z))
+                self.assertEqual(len(result.water_bodies), 1)
+                self.assertEqual(result.water_bodies[0].z_water_level, 0)
+
+    def test_equal_level_flat_world_stays_dry(self):
+        hm = _flat_heightmap(0, 5, 0, 4, z=0)
+        result = HydrologyGeneratorService().apply(_world(), [], hm,
+            scopes=frozenset({HydrologyScope.OPEN_OCEAN}))
+        self.assertEqual(result.cell_index.by_cell, {})
+
 
     def test_service_without_declare_coastline(self):
         w = _world()
-        hm = _flat_heightmap(0, 12, 0, 6)
+        hm = _flat_heightmap(0, 12, 0, 6, z=-5)
         master = HydrologyMasterInput(
             world_uid="test-world",
             hydrology_enabled=True,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
             connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            declared_coastline_segments=[],
+            declared_coastline_specs=[],
         )
         svc = HydrologyGeneratorService()
         result = svc.apply(w, [], hm, master=master)
@@ -200,9 +115,10 @@ class TestBoundaryAutoresolve(unittest.TestCase):
 
 class TestHydrologyServiceAutoresolve(unittest.TestCase):
 
-    def test_apply_adds_open_ocean_outside_declare_strip(self):
+    def test_autoresolve_reads_existing_depression_outside_declare_strip(self):
         w = _world_with_coastline()
-        hm = _flat_heightmap(0, 12, 0, 6)
+        hm = _flat_heightmap(0, 12, 0, 6, z=-5)
+        before = dict(hm.surface_z)
         svc = HydrologyGeneratorService()
         result = svc.apply(
             w,
@@ -214,28 +130,27 @@ class TestHydrologyServiceAutoresolve(unittest.TestCase):
         self.assertIn((0, 0), roles)
         self.assertEqual(roles[(0, 0)].role, HydrologyCellRole.OPEN_OCEAN)
         self.assertGreater(result.cells_modified, 12)
+        self.assertEqual(hm.surface_z, before)
 
-    def test_autoresolve_off_keeps_narrow_strip(self):
-        w = _world(
-            hydrology={
-                "enabled": True,
-                "default_seas": {
-                    "bands": {"min": 1, "max": 2},
-                    "autoresolve_coastal_sea": False,
-                    "autoresolve_open_ocean": False,
-                },
-            },
+    def test_sea_generation_gates_on_existing_below_level_terrain(self):
+        cases = (
+            ("on", WorldHydrology(), HydrologyScope.OPEN_OCEAN, True),
+            ("global_off", WorldHydrology(enabled=False), HydrologyScope.OPEN_OCEAN, False),
+            ("category_off", WorldHydrology(default_seas=HydrologySeasPolicy(enabled=False)),
+             HydrologyScope.OPEN_OCEAN, False),
+            ("autoresolve_off", WorldHydrology(default_seas=HydrologySeasPolicy(
+                autoresolve_coastal_sea=False, autoresolve_open_ocean=False)), HydrologyScope.OPEN_OCEAN, False),
+            ("scope_off", WorldHydrology(), HydrologyScope.LANDFORMS, False),
         )
-        hm = _flat_heightmap(0, 12, 0, 6)
-        svc = HydrologyGeneratorService()
-        result = svc.apply(
-            w,
-            [],
-            hm,
-            scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
-        )
-        roles = result.cell_index.by_cell
-        self.assertNotIn((0, 0), roles)
+        for name, policy, scope, expected_water in cases:
+            with self.subTest(case=name):
+                hm = _flat_heightmap(0, 12, 0, 6, z=-5)
+                before = dict(hm.surface_z)
+                w = _world(hydrology=policy.model_dump(mode="json"))
+                result = HydrologyGeneratorService().apply(w, [], hm, scopes=frozenset({scope}))
+                self.assertEqual(bool(result.water_bodies), expected_water)
+                self.assertEqual(bool(result.cell_index.by_cell), expected_water)
+                self.assertEqual(hm.surface_z, before)
 
 
 if __name__ == "__main__":

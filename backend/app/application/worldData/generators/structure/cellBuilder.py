@@ -21,7 +21,8 @@ z_height: pass 3 walls are repeated for every z in [z_base, z_base + z_height - 
 """
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 
 _NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -59,6 +60,20 @@ def _wall_cell(x: int, y: int, z: int, world_uid: str, building_uid: str,
 # ---------------------------------------------------------------------------
 # Pass 2
 
+def _open_shaft_perimeter(rooms: list[_RoomInstance]) -> set[tuple[int, int]]:
+    """Remove shaft partitions inside the building, preserving its exterior shell."""
+    placed = [r for r in rooms if r.placed]
+    open_shafts = [r for r in placed if r.is_shaft and not r.shaft_has_walls]
+    if not open_shafts:
+        return set()
+    union = set().union(*(r.get_footprint() for r in placed))
+    building_interior = _interior(union)
+    opened = set()
+    for shaft in open_shafts:
+        fp = shaft.get_footprint()
+        opened |= (fp - _interior(fp)) & building_interior
+    return opened
+
 def pass2_floors(
     rooms: list[_RoomInstance],
     z: int,
@@ -75,7 +90,12 @@ def pass2_floors(
         if not room.placed or room.is_shaft:
             continue
         loc_uid = room_uids[room.uid_key]
-        for (x, y) in room.get_footprint():
+        holes = set().union(*(
+            shaft.get_footprint() if shaft.shaft_has_walls else _interior(shaft.get_footprint())
+            for shaft in rooms if shaft.placed and shaft.is_shaft
+            and shaft.embedded_host_key == room.uid_key
+        ))
+        for (x, y) in room.get_footprint() - holes:
             cells.append(_floor_cell(x, y, z, world_uid, loc_uid, room.floor_material))
     return cells
 
@@ -85,29 +105,37 @@ def pass2_floors(
 
 def pass3_interior_walls(
     rooms: list[_RoomInstance],
-    connections: list[dict],
+    connections: list[RoomConnection],
     z: int,
     world_uid: str,
     building_uid: str,
     wall_material: str,
+    cell_materials: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
     """
-    Walls for every perimeter cell of every room (footprint minus interior).
+    Walls for every perimeter cell, except partitions of open shafts.
+    Exterior building walls are preserved even where shared with an open shaft.
     Covers both shared perimeter (between adjacent rooms) and unshared perimeter
     (outer face of a room with no neighbour on that side).
     Pass 2 placed floor at every footprint cell; this overwrites perimeter cells with wall.
     Passage builder later replaces specific wall cells with door/archway cells.
+    `cell_materials` (XY → material, from the §8.7.1 selector) overrides the
+    building `wall_material` per cell; cells absent from it keep the default.
     """
     placed = [r for r in rooms if r.placed]
     seen: dict[tuple[int, int], MapCell] = {}
+    opened = _open_shaft_perimeter(placed)
+    overrides = cell_materials or {}
 
     for room in placed:
         fp = room.get_footprint()
         interior = _interior(fp)
         for (x, y) in fp:
-            if (x, y) not in interior:
+            if (x, y) not in interior and (x, y) not in opened:
                 if (x, y) not in seen:
-                    seen[(x, y)] = _wall_cell(x, y, z, world_uid, building_uid, wall_material)
+                    seen[(x, y)] = _wall_cell(
+                        x, y, z, world_uid, building_uid,
+                        overrides.get((x, y), wall_material))
 
     return list(seen.values())
 
@@ -117,18 +145,21 @@ def pass3_interior_walls(
 
 def build_level_cells(
     rooms: list[_RoomInstance],
-    connections: list[dict],
+    connections: list[RoomConnection],
     z: int,
     z_height: int,
     world_uid: str,
     building_uid: str,
     wall_material: str,
     room_uids: dict[str, str],
+    cell_materials: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
     """
     Run all 3 passes and return combined cell list.
     Walls (Pass 1 + Pass 3) are generated for every z in [z, z + z_height - 1].
     Floor (Pass 2) is generated only at the base z.
+    `cell_materials` (XY → material, from the §8.7.1 selector) overrides the
+    building `wall_material` per cell.
     """
     cells: list[MapCell] = []
 
@@ -137,6 +168,6 @@ def build_level_cells(
 
     # Walls for every z in the room's full height span
     for z_layer in range(z, z + z_height):
-        cells.extend(pass3_interior_walls(rooms, connections, z_layer, world_uid, building_uid, wall_material))
+        cells.extend(pass3_interior_walls(rooms, connections, z_layer, world_uid, building_uid, wall_material, cell_materials))
 
     return cells

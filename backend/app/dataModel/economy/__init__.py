@@ -9,6 +9,14 @@ from app.dataModel.economy.economyTier import (
     EconomyTierKey,
     WorldEconomyTierRegistry,
 )
+from app.dataModel.economy.materialPolicies import (
+    BuildingEconomicContext,
+    MaterialCandidate,
+    MaterialPolicy,
+    MaterialPolicyDecision,
+    MaterialPolicyFailure,
+    MaterialPolicyRequest,
+)
 from app.dataModel.economy.enums import (
     BAND_COMMON,
     BAND_MIDDLE,
@@ -27,10 +35,16 @@ __all__ = [
     "BAND_POOR",
     "BAND_RICH",
     "BAND_WEALTHY",
+    "BuildingEconomicContext",
     "DEFAULT_SIDEWALK_WIDTH_CELLS",
     "EconomyTierEntry",
     "EconomyTierKey",
     "EconomicTierBand",
+    "MaterialCandidate",
+    "MaterialPolicy",
+    "MaterialPolicyDecision",
+    "MaterialPolicyFailure",
+    "MaterialPolicyRequest",
     "SidewalkWidthDefault",
     "WorldEconomyTierRegistry",
     "sidewalk_width_for_band",

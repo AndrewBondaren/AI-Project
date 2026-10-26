@@ -6,15 +6,17 @@ import logging
 
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.application.worldData.pack.bake.lightGrid.coords import meters_to_macro_local
+from app.application.worldData.pack.bake.lightGrid.coords import fine_to_macro_local
 from app.dataModel.locations.locationFootprintPolicy import (
     is_settlement_map_site,
     named_location_is_settlement_map_site,
 )
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
-from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.dataModel.worldPack.wire.lightSettlementFootprint import LightSettlementFootprintPolicy
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin
 from app.db.models.namedLocation import NamedLocation
+from app.application.jsonValidation.worldRow import location_types
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +24,11 @@ logger = logging.getLogger(__name__)
 def _pin_is_settlement_site(
     pin: LocationsIndexPin,
     loc: NamedLocation | None,
+    registry: WorldLocationTypeRegistry,
 ) -> bool:
     if loc is not None:
-        return named_location_is_settlement_map_site(loc)
-    return is_settlement_map_site(system_location_type=pin.system_location_type)
+        return named_location_is_settlement_map_site(loc, registry=registry)
+    return is_settlement_map_site(system_location_type=pin.system_location_type, registry=registry)
 
 
 class SettlementContributor:
@@ -42,12 +45,13 @@ class SettlementContributor:
         pins_in_tiles = 0
         cells_stamped = 0
         radii: list[int] = []
+        registry = location_types(ctx.world)
 
         for index, pin in enumerate(pins):
             loc = loc_by_uid.get(pin.location_uid)
-            if not _pin_is_settlement_site(pin, loc):
+            if not _pin_is_settlement_site(pin, loc, registry):
                 continue
-            gx, gy, tx, ty = meters_to_macro_local(pin.map_x, pin.map_y, scale)
+            gx, gy, tx, ty = fine_to_macro_local(pin.map_x, pin.map_y, scale)
             if (gx, gy) not in tile_set:
                 continue
             pins_in_tiles += 1

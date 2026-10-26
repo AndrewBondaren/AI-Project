@@ -279,7 +279,7 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
     from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
     from app.application.worldData.pack.io.worldPackReader import WorldPackReader
     from app.application.worldData.render.gradeRayDump import GradeSlotIndex
-    from app.application.worldData.render.wildernessTilePackRenderer import (
+    from app.application.worldData.render.pack.wildernessTilePackRenderer import (
         WildernessTilePackRenderer,
     )
 
@@ -297,12 +297,12 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
         chunks.append(reader.read_wilderness_chunk(gx, gy, ref.cx, ref.cy))
     if not chunks:
         return None
-    tile_size_m = int(reader.manifest.fine_cells_per_map_cell)
+    tile_macro = int(reader.manifest.fine_cells_per_map_cell)
     return WildernessTilePackRenderer(
         chunks,
         tile_gx=gx,
         tile_gy=gy,
-        tile_size_m=tile_size_m,
+        tile_macro=tile_macro,
         slot_index=GradeSlotIndex(reader.read_grade_cell_slots_tile(gx, gy)),
     )
 

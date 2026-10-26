@@ -1,19 +1,22 @@
 """Unit tests — resolve_light_tile_cap, PackTilePlanner scopes, completeness."""
 
 from __future__ import annotations
+from app.application.cancellation.requestPlanWait import RequestPlanWait
 
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
-from app.dataModel.worldPack.packBakeDefaults import (
+from app.application.worldData.generators.terrain.passes import bbox
+from app.application.worldData.pack.bake import packCompletenessClassifier, packTileCollect, packTilePlanner
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.bake.packBakeDefaults import (
     PackBakeDefaults,
     resolve_detailed_grade_stages,
     resolve_light_tile_cap,
 )
-from app.dataModel.worldPack.packTilePlan import PackTileRef
-from app.dataModel.worldPack.worldPackManifest import (
+from app.dataModel.worldPack.bake.packTilePlan import PackTileRef
+from app.dataModel.worldPack.meta.worldPackManifest import (
     TileManifestEntry,
     WorldPackManifest,
 )
@@ -84,7 +87,7 @@ class TestResolveDetailedGradeStages(unittest.TestCase):
 
 class TestDetailedBakeRequestGradeStages(unittest.TestCase):
     def test_paint_without_mill_coerced_off(self):
-        from app.dataModel.worldPack.detailedBakeScope import DetailedBakeRequest
+        from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
 
         req = DetailedBakeRequest(
             scope="wilderness",
@@ -98,7 +101,7 @@ class TestDetailedBakeRequestGradeStages(unittest.TestCase):
         self.assertEqual(req.stages, GradePipelineStages.off())
 
     def test_location_coerce_same(self):
-        from app.dataModel.worldPack.detailedBakeScope import (
+        from app.dataModel.worldPack.bake.detailedBakeScope import (
             resolve_detailed_bake_request,
         )
 
@@ -145,22 +148,22 @@ class TestPackTilePlannerScopes(unittest.TestCase):
         ]
 
         with patch(
-            "app.application.worldData.pack.bake.packTileCollect.is_hydrology_enabled",
+            packTileCollect.__name__ + ".is_hydrology_enabled",
             return_value=False,
         ), patch(
-            "app.application.worldData.pack.bake.packTileCollect.static_map_anchors",
+            packTileCollect.__name__ + ".static_map_anchors",
             side_effect=lambda locs: list(locs),
         ), patch(
-            "app.application.worldData.pack.bake.packTileCollect.map_cell_fine_span",
+            packTileCollect.__name__ + ".map_cell_fine_span",
             return_value=3000,
         ), patch(
-            "app.application.worldData.generators.terrain.passes.bbox.static_map_anchors",
+            bbox.__name__ + ".static_map_anchors",
             side_effect=lambda locs: list(locs),
         ), patch(
-            "app.application.worldData.generators.terrain.passes.bbox.map_cell_fine_span",
+            bbox.__name__ + ".map_cell_fine_span",
             return_value=3000,
         ), patch(
-            "app.application.worldData.generators.terrain.passes.bbox.grid_bbox_padding",
+            bbox.__name__ + ".grid_bbox_padding",
             return_value=2,
         ):
             planner = PackTilePlanner()
@@ -187,7 +190,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
         locations: list = []
 
         with patch(
-            "app.application.worldData.pack.bake.packTilePlanner.light_l0_tiles",
+            packTilePlanner.__name__ + ".light_l0_tiles",
             return_value=[(0, 0), (1, 1), (2, 2)],
         ):
             light = PackTilePlanner(
@@ -202,7 +205,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         with patch(
-            "app.application.worldData.pack.bake.packTilePlanner.light_l0_tiles",
+            packTilePlanner.__name__ + ".light_l0_tiles",
             return_value=[(0, 0), (1, 1), (2, 2)],
         ):
             light = PackTilePlanner(
@@ -221,7 +224,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
 
         world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         snap = PackCompletenessClassifier().classify(
-            world, [], manifest=None,
+            world, [], manifest=None, wait=RequestPlanWait.unbounded(),
         )
         self.assertEqual(snap.completeness, "absent")
 
@@ -252,11 +255,11 @@ class TestPackCompletenessClassifier(unittest.TestCase):
             ],
         )
         with patch(
-            "app.application.worldData.pack.bake.packCompletenessClassifier.prepare_surface_terrain_context",
+            packCompletenessClassifier.__name__ + ".prepare_surface_terrain_context",
             return_value=MagicMock(),
         ):
             snap = PackCompletenessClassifier(planner).classify(
-                world, [], manifest=manifest, locations_index=None,
+                world, [], manifest=manifest, locations_index=None, surface_ctx=MagicMock(), wait=RequestPlanWait.unbounded(),
             )
         self.assertEqual(snap.completeness, "light_complete")
         self.assertEqual(snap.expected_l0_full, 2)

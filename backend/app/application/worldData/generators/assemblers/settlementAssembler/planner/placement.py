@@ -7,7 +7,8 @@ from app.application.jsonValidation import (
     economic_tiers,
 )
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     check_district_economic_compat,
 )
@@ -15,13 +16,13 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
     tier_at_most,
 )
-from app.dataModel.settlement.district.cellZone import CellZone
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.placementCondition import (
+from app.dataModel.locations.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.placementCondition import (
     PlacementCondition,
     PlacementConditionType,
 )
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -84,7 +85,7 @@ def template_constraint_key(template: DistrictTemplateEntry) -> tuple[int, int, 
 def check_placement_conditions(
     template:      DistrictTemplateEntry,
     settlement:    NamedLocation,
-    skeleton:      CitySkeleton,
+    skeleton:      SettlementSkeleton,
     origin_x:      int,
     origin_y:      int,
     width_fine:       int,
@@ -186,7 +187,7 @@ def pick_template_for_ref(
     candidates: list[DistrictTemplateEntry],
     ref: TypicalDistrictRef,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world: World,
     origin_x: int,
     origin_y: int,
@@ -235,7 +236,7 @@ def pick_template_for_ref(
 def select_district_template(
     candidates:    list[DistrictTemplateEntry],
     settlement:    NamedLocation,
-    skeleton:      CitySkeleton,
+    skeleton:      SettlementSkeleton,
     world:         World,
     origin_x:      int,
     origin_y:      int,
@@ -251,6 +252,7 @@ def select_district_template(
     unspecialized_only: bool = False,
 ) -> DistrictTemplateEntry | None:
     zone = _cell_zone(cell_x, cell_y, grid_n)
+    payload = settlement_payload(settlement)
     if typical_district_types:
         return _select_by_recipe(
             candidates, settlement, skeleton, world,
@@ -259,6 +261,9 @@ def select_district_template(
             cell_x, cell_y, grid_n, rng, zone, typical_district_types,
             unspecialized_only=unspecialized_only,
         )
+
+    if not payload.is_inhabited:
+        return None
 
     eligible = [
         t for t in candidates
@@ -336,7 +341,7 @@ def _pick_constrained(
 def _select_by_recipe(
     candidates: list[DistrictTemplateEntry],
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world: World,
     origin_x: int,
     origin_y: int,

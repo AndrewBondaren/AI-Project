@@ -6,7 +6,8 @@ from app.application.jsonValidation.worldRow import (
     location_types,
     settlement_specializations,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,
@@ -40,16 +41,18 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     column_surface,
     resolve_district_pin_z,
 )
-from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
-    WorldLocationTypeRegistry,
+from app.application.cascade.locationScope import district_context
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    district_location_uid,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     unhosted_settlement_types,
     union_required_structures,
 )
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     AllowedToken,
     BuildingPurposeFamily,
     leaves_for_family,
@@ -71,10 +74,11 @@ class SettlementSpecializationResolve:
 
 
 def plan_district_slots(
-    world:         World,
-    settlement:    NamedLocation,
-    skeleton:      CitySkeleton,
-    terrain_cells: list[MapCell] | None,
+    world:          World,
+    settlement:     NamedLocation,
+    skeleton:       SettlementSkeleton,
+    terrain_cells:  list[MapCell] | None,
+    settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot]:
     """
     v1: равномерная прямоугольная сетка глобальных ячеек footprint.
@@ -85,10 +89,11 @@ def plan_district_slots(
     n      = grid_dimension(side_m, cell_m)
     origin = settlement_origin_fine(settlement)
     templates = district_templates(world)
+    payload = settlement_payload(settlement)
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (
         location_types(world).subtype_for(
-            WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT, subtype,
+            settlement.system_location_type, subtype,
         ) if subtype else None
     )
     typical: tuple[str, ...] | None = None
@@ -159,6 +164,7 @@ def plan_district_slots(
             allowed,
             enabled,
         )
+        slot_index = len(slots)
         slots.append(DistrictSlot(
             origin_x=origin_x,
             origin_y=origin_y,
@@ -171,7 +177,22 @@ def plan_district_slots(
             cell_x=cell_x,
             cell_y=cell_y,
             subject_tags=subject_tags,
-            slot_index=len(slots),
+            slot_index=slot_index,
+            district_ctx=(
+                district_context(
+                    world,
+                    settlement_ctx,
+                    template,
+                    district_uid=district_location_uid(
+                        world.world_uid,
+                        settlement.location_uid,
+                        template.system_name,
+                        slot_index,
+                    ),
+                )
+                if settlement_ctx is not None
+                else None
+            ),
         ))
         logger.info(
             "DistrictSlot created | cell=(%d,%d) template=%s district_type=%s"
@@ -279,7 +300,7 @@ def plan_district_slots(
                 )
                 if _materialize(cell_x, cell_y, template):
                     continue
-            elif not city_refs and not spec_refs:
+            elif payload.is_inhabited and not city_refs and not spec_refs:
                 template = _select(cell_x, cell_y, allow_legacy=True)
                 if template is None:
                     logger.warning(
@@ -324,6 +345,8 @@ def slot_allowed_for_template(
     template: DistrictTemplateEntry,
     resolved: SettlementSpecializationResolve,
 ) -> list[AllowedToken] | None:
+    if template.allowed_structure_types is not None:
+        return template.allowed_structure_types
     have = (template.district_subtype or "").strip() or None
     families = resolved.family_by_district.get((template.district_type, have))
     if families:
@@ -334,12 +357,13 @@ def slot_allowed_for_template(
 def resolve_settlement_specialization(
     world: World,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
 ) -> SettlementSpecializationResolve:
+    payload = settlement_payload(settlement)
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (
         location_types(world).subtype_for(
-            WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT, subtype,
+            settlement.system_location_type, subtype,
         ) if subtype else None
     )
     spec_reg = settlement_specializations(world)
@@ -360,7 +384,8 @@ def resolve_settlement_specialization(
             seen_req.add(type_name)
             required.append(type_name)
 
-    for bind in skeleton.system_settlement_specializations or ():
+    binds = (skeleton.system_settlement_specializations or ()) if payload.is_inhabited else ()
+    for bind in binds:
         entry = spec_reg.entry_for(bind.system_specialization)
         if entry is None:
             unknown.append(bind.system_specialization)

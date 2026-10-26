@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 
-from app.application.import_helpers import with_default_created_at
+from app.application.imports.helpers import with_default_created_at
 
 
 class ImportCreatedAtDefaultTests(unittest.TestCase):

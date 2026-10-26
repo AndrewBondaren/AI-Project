@@ -3,23 +3,30 @@
 from __future__ import annotations
 
 from typing import ClassVar
+from copy import replace
+from collections.abc import Set
 
 from pydantic import RootModel
 
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.terrain import terrainRegistryEntry as _terrain_entry_mod
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
+from app.dataModel.terrain.hillPolicy import HillPolicy
+from app.dataModel.terrain.eligibilityRule import EligibilityRule
+from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp
+from app.dataModel.terrain.enums.terrainFillRole import TerrainFillRole
 
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TERRAIN"
+    CANONICAL_OVERLAY_ID_FIELD: ClassVar[str] = "system_terrain"
     """Root POJO for `worlds.terrain_registry`. Wire shape: JSON array."""
 
     root: list[TerrainRegistryEntry]
 
     @classmethod
     def canonical_defaults(cls) -> WorldTerrainRegistry:
-        """Fixture outdoor set — fixtures/world_template.json."""
+        """Engine outdoor defaults: fixture set plus declared farmland."""
         return cls(list(_CANONICAL_ENTRIES))
 
     @classmethod
@@ -33,6 +40,47 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     def occupancy_terrain_key(cls) -> str:
         """Settlement footprint ``system_terrain`` — not wilderness."""
         return _URBAN_ENTRY.system_terrain
+
+    @classmethod
+    def forest_terrain_key(cls) -> str:
+        """Builtin key for the forest declaration branch."""
+        return _FOREST_ENTRY.system_terrain
+
+    @classmethod
+    def forest_min_rainfall(cls) -> int:
+        """Legacy mask-policy default shares the canonical eligibility threshold."""
+        return int(_FOREST_RAINFALL_RULE.lo)
+
+    @classmethod
+    def minimum_rainfall_rule(cls, minimum: float) -> EligibilityRule:
+        """Parameterize the existing canonical rule; preserve all other metadata."""
+        return EligibilityRule.model_validate(replace(_FOREST_RAINFALL_RULE, lo=minimum).model_dump())
+
+    @classmethod
+    def authored_hill_keys_from_wire(cls, raw: object) -> frozenset[TerrainKey]:
+        if not isinstance(raw, list):
+            return frozenset()
+        return frozenset(key for row in raw
+                         if (key := TerrainRegistryEntry.authored_hills_key_from_wire(row)) is not None)
+
+    def column_terrain_key(self, role: TerrainFillRole, available: Set[str]) -> TerrainKey:
+        candidates = [entry for entry in self.root
+                      if role in entry.fill_roles and entry.system_terrain in available]
+        if candidates:
+            return min(candidates, key=lambda entry: (-entry.fill_priority, entry.system_terrain)).system_terrain
+        if role.fallback_role is not None:
+            return self.column_terrain_key(role.fallback_role, available)
+        raise ValueError(f"no available terrain supplies column fill role {role.value}")
+
+    @classmethod
+    def plains_terrain_key(cls) -> str:
+        """Builtin key for the plains declaration branch."""
+        return _PLAINS_ENTRY.system_terrain
+
+    @classmethod
+    def farmland_terrain_key(cls) -> str:
+        """Builtin key for the farmland declaration branch."""
+        return _FARMLAND_ENTRY.system_terrain
 
     def entry_for(self, system_terrain: str) -> TerrainRegistryEntry | None:
         for entry in self.root:
@@ -74,23 +122,48 @@ type TerrainKey = RegistryKey[WorldTerrainRegistry]
 _terrain_entry_mod.WorldTerrainRegistry = WorldTerrainRegistry
 TerrainRegistryEntry.model_rebuild()
 
-# Outdoor + hydrology-facing set — fixtures/world_template.json
+# interim; цель — rules мира + flora suitability (flora.* канал).
+_FOREST_RAINFALL_RULE = EligibilityRule(
+    fact="climate.rainfall", op=EligibilityOp.GTE, lo=45, required=True,
+)
+
+_PLAINS_ENTRY = TerrainRegistryEntry(
+    system_terrain="plains",
+    glossary_ref="terrain_plains",
+    terrain_category="solid",
+    travel_modifier=1.5,
+    default_material="earth",
+    merge_rank=1,
+    fill_roles=(TerrainFillRole.SUBSURFACE,),
+    hills=HillPolicy.canonical_plains(),
+    supports_open_land_grade=True,
+    open_land_profile="plains",
+    # interim; цель — rules мира + flora suitability (flora.* канал).
+    eligibility=[EligibilityRule(fact="climate.rainfall", op=EligibilityOp.LTE, hi=_FOREST_RAINFALL_RULE.lo)],
+)
+_FOREST_ENTRY = TerrainRegistryEntry(
+    system_terrain="forest",
+    glossary_ref="terrain_forest",
+    terrain_category="solid",
+    travel_modifier=2.5,
+    danger_level="medium",
+    default_material="wood",
+    merge_rank=2,
+    hills=HillPolicy.canonical_forest(),
+    supports_open_land_grade=True,
+    open_land_profile="forest",
+    # interim; цель — rules мира + flora suitability (flora.* канал).
+    eligibility=[_FOREST_RAINFALL_RULE],
+)
+_FARMLAND_ENTRY = TerrainRegistryEntry(
+    system_terrain="farmland",
+    terrain_category="solid",
+)
+
+# Outdoor + hydrology-facing set, including declared farmland coverage.
 _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
-    TerrainRegistryEntry(
-        system_terrain="plains",
-        glossary_ref="terrain_plains",
-        terrain_category="solid",
-        travel_modifier=1.5,
-        default_material="earth",
-    ),
-    TerrainRegistryEntry(
-        system_terrain="forest",
-        glossary_ref="terrain_forest",
-        terrain_category="solid",
-        travel_modifier=2.5,
-        danger_level="medium",
-        default_material="wood",
-    ),
+    _PLAINS_ENTRY,
+    _FOREST_ENTRY,
     TerrainRegistryEntry(
         system_terrain="mountain",
         glossary_ref="terrain_mountain",
@@ -98,6 +171,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         travel_modifier=3.0,
         danger_level="medium",
         default_material="stone",
+        merge_rank=3,
     ),
     TerrainRegistryEntry(
         system_terrain="ravine",
@@ -106,6 +180,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         travel_modifier=2.5,
         danger_level="medium",
         default_material="earth",
+        merge_rank=4,
     ),
     TerrainRegistryEntry(
         system_terrain="road",
@@ -114,6 +189,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         travel_modifier=1.0,
         danger_level="none",
         default_material="earth",
+        merge_rank=5,
     ),
     TerrainRegistryEntry(
         system_terrain="shore",
@@ -167,6 +243,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         glossary_ref="terrain_open_space",
         terrain_category="aerial",
     ),
+    _FARMLAND_ENTRY,
 )
 
 # Interior / structure types — engine delta beyond world_template outdoor slice.

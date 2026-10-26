@@ -1,21 +1,18 @@
 """Single-writer canal for ribbon seeds — R28/R36p/q.
 
 Fit → knobs (+ registry). Not-fit → ``canal_obstacle_policy``.
-Returns typed ``Canal | None``; unknown ref → one R21 path.
+Returns typed ``Canal | None``; unknown ref → shared unresolved.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from app.application.jsonValidation.resolve import ResolveContext
 
 from app.application.worldData.generators.terrain.relief.canal.attachments import (
     EVENT_CANAL_CUT_NO_CELLS,
-    EVENT_RESOLVE_FALLBACK,
-    FALLBACK_NO_CANAL,
-    WHY_UNKNOWN_CANAL_REF,
-    WHY_UNKNOWN_STRUCTURE_CANAL,
     aggregate_canals,
-    canal_from_registry_ref,
+    require_canal_from_registry_ref,
     normalize_structure_canal_ref,
 )
 from app.application.worldData.generators.terrain.relief.canal.obstacleResolve import (
@@ -23,7 +20,7 @@ from app.application.worldData.generators.terrain.relief.canal.obstacleResolve i
     resolve_canal_obstacle_cut,
 )
 from app.application.worldData.generators.terrain.relief.log.log import relief_warning
-from app.dataModel.terrain.relief.canal import Canal, EarthenCanal, StructureCanal
+from app.dataModel.terrain.relief.canal import Canal, EarthenCanal
 from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicyRule
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (
     WorldCanalTemplateRegistry,
@@ -46,6 +43,7 @@ def resolve_seed_canal(
     registry: WorldCanalTemplateRegistry,
     site_id: str,
     allow_cut_without_cells: bool = False,
+    resolve_ctx: ResolveContext | None = None,
 ) -> Canal | None:
     """R36p/q: knobs if ``L_eff >= requested``; else world canal policy."""
     requested = max(0, int(requested_length))
@@ -57,10 +55,11 @@ def resolve_seed_canal(
             knobs_structure_canal=knobs_structure_canal,
             registry=registry,
             site_id=site_id,
+            resolve_ctx=resolve_ctx,
         )
 
     entity = canal_entity_from_terrain(terrain_key)
-    cut = resolve_canal_obstacle_cut(entity=entity, rules=policy_rules)
+    cut = resolve_canal_obstacle_cut(entity=entity, rules=policy_rules, resolve_ctx=resolve_ctx)
     if not cut.enable:
         return None
 
@@ -82,7 +81,7 @@ def resolve_seed_canal(
         cut.canal_ref,
         registry=registry,
         site_id=site_id,
-        why=WHY_UNKNOWN_CANAL_REF,
+        resolve_ctx=resolve_ctx,
     )
 
 
@@ -92,6 +91,7 @@ def _from_knobs(
     knobs_structure_canal: str | None,
     registry: WorldCanalTemplateRegistry,
     site_id: str,
+    resolve_ctx: ResolveContext | None = None,
 ) -> Canal | None:
     ref = normalize_structure_canal_ref(knobs_structure_canal)
     if ref is None:
@@ -102,7 +102,7 @@ def _from_knobs(
         ref,
         registry=registry,
         site_id=site_id,
-        why=WHY_UNKNOWN_STRUCTURE_CANAL,
+        resolve_ctx=resolve_ctx,
     )
 
 
@@ -111,25 +111,7 @@ def _resolve_canal_ref(
     *,
     registry: WorldCanalTemplateRegistry,
     site_id: str,
-    why: str,
-) -> Canal | None:
-    found = canal_from_registry_ref(canal_ref, registry)
-    if found is None:
-        return _r21_unknown(why=why, canal_ref=canal_ref, site_id=site_id)
-    return found
-
-
-def _r21_unknown(
-    *,
-    why: str,
-    canal_ref: str,
-    site_id: str,
-) -> StructureCanal:
-    relief_warning(
-        EVENT_RESOLVE_FALLBACK,
-        why=why,
-        canal_ref=canal_ref,
-        site_id=site_id,
-        chosen_fallback=FALLBACK_NO_CANAL,
-    )
-    return StructureCanal(system_type=canal_ref, structure_refs=[])
+    resolve_ctx: ResolveContext | None = None,
+) -> Canal:
+    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("canal", site_id))
+    return require_canal_from_registry_ref(canal_ref, registry, resolve_ctx=ctx)

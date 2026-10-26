@@ -6,7 +6,7 @@ import logging
 
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def load_parent_light(
     *,
     reader: WorldPackReader,
     cache: ParentLightCache,
-    tile_m: int,
+    tile_macro: int,
 ) -> ParentLightTile | None:
     """Return baked L0 tile view. Cache hit or decode ``world_map.zst`` → put."""
     hit = cache.get(world_uid, gx, gy)
@@ -60,7 +60,7 @@ def load_parent_light(
         gx=gx,
         gy=gy,
         side=side,
-        tile_m=tile_m,
+        tile_macro=tile_macro,
         cells=cells,
     )
     cache.put(tile)
@@ -74,11 +74,11 @@ def require_parent_light(
     *,
     reader: WorldPackReader,
     cache: ParentLightCache,
-    tile_m: int,
+    tile_macro: int,
 ) -> ParentLightTile:
     """Fail-closed load — raises ``MissingParentLightError`` when L0 is absent."""
     tile = load_parent_light(
-        world_uid, gx, gy, reader=reader, cache=cache, tile_m=tile_m,
+        world_uid, gx, gy, reader=reader, cache=cache, tile_macro=tile_macro,
     )
     if tile is None:
         raise MissingParentLightError(world_uid, gx, gy)

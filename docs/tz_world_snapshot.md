@@ -13,9 +13,11 @@ metadata:
 | Принцип | Смысл |
 |---|---|
 | **Единый сервис** | Один `WorldSnapshotService` отвечает за capture / restore / branch / delete |
-| **Полный слепок на ход** | После **каждого хода** мир **целиком** сохраняется в `world_snapshots` |
+| **Полный слепок на ход** | После **каждого хода** мир **целиком** сохраняется в `world_snapshots`; набор доменных патчей хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
 | **Потребители** | Climate LOD, terrain regen, lazy sim, time travel, debug replay — **читают восстановленное состояние**, не делают свой ad-hoc snapshot |
 | **Не маска** | Snapshot — **состояние мира** (данные + сессия), не boolean mask и не один derived field |
+| **Игрок — отдельная цепочка** | Состояние игрока живёт в параллельной `player_snapshots`, синхронизированной по `turn_id` — export/import и time travel без привязки к world blob |
+| **Immutable** | Записанный snapshot никогда не мутируется; изменение = новый узел/ветка, не правка существующего |
 
 **Статус:** schema ✅ ([`project_data_storage_tz.md`](./project_data_storage_tz.md) § `world_snapshots`) · **runtime module ⬜** · capture на каждый ход ⬜
 
@@ -24,6 +26,130 @@ metadata:
 ---
 
 ## Что это **не** является
+
+### Уточнение общего CRUD и LOD-чтения (решение мастера, 2026-10-25)
+
+Runtime snapshot ещё не реализован. Цель отдельного snapshot-трека — один
+общий CRUD-интерфейс и его реализация, без самостоятельных world snapshot
+источников у planning/materialization. Начальный snapshot при инициализации
+также иммутабелен; модификации создают последующие snapshots. Update/delete
+в будущем CRUD должны сохранять эту неизменяемость; точные операции и
+физическое хранение истории определяются при проектировании трека.
+
+Контракт должен позволять адресовать данные от объекта/чанка/области до
+конкретной fine_cell. Пространственный scope/единица адресации и LOD
+результата задаются отдельно. Полнота логического состояния snapshot не
+означает полную материализацию мира или replay всех промежуточных snapshots.
+
+LOD сначала читает запланированные метаданные, затем проверяет наличие
+фактической материализации требуемого scope/LOD. На текущем этапе existing
+cell/patch CRUD и pack read facades читают готовые слои с fallback по WP-20;
+materialize/refine — отдельный explicit write по WP-13, не side effect read.
+Snapshot freshness/provenance и новый inspector не являются частью PC-11.
+Создание snapshot не запускает materialization. После реализации общего
+snapshot CRUD путь LOD также проверяет наличие snapshot; точное место этой
+проверки, поведение при отсутствии и связь с world-source-versioning
+нужно определить в отдельном треке. PC-11 этот CRUD и проверку не реализует.
+Задел PC-11 ограничивается TODO в коде application owner LOD-чтения рядом
+с metadata/materialization lookup, со ссылкой на
+[WS-план, §7](../.cursor/plans/world-state-crud-transition.md#7-связь-с-pc-11-и-будущими-snapshots).
+Read-owner cutover PC-11.6b — WildernessRegionReadService.outline; TODO
+ставится до membership early return. Точный текст:
+`TODO(snapshot): integrate snapshot existence lookup via the shared CRUD;
+see .cursor/plans/world-state-crud-transition.md, section 7 (PC-11 and future snapshots).`
+Debug outline имеет явное исключение из общего порядка gameplay LOD-read:
+сначала membership в baked индексе; absent → None без planning/state reads,
+present → подготовка metadata/inputs → render контура для ответа; отсутствие
+matching geometry → existing RegionOutlineStaleError. Вычисление контура
+не создаёт и не публикует L0/L2. Gameplay read сохраняет WP-20 merge/fallback,
+без capture/prepare на каждую клетку. EntryRefineOrchestrator.refine_from_entry
+и materialize_pack_* — отдельные explicit write операции; read TODO им не
+назначается. При WS cutover он переносится к общему application read-owner
+по caller ledger. Будущий порядок snapshot lookup и missing semantics
+остаются предметом отдельного WS/snapshot design. Заглушки,
+новые snapshot API и фиктивная existence-проверка в PC-11 не создаются.
+
+Следующие таблицы описывают терминологию; существующие черновые API/blob
+контракты ниже требуют согласования с этим уточнением до реализации.
+
+### Общий World State CRUD и snapshot lifecycle
+
+Решение мастера 2026-10-25: общий интерфейс состояния мира и его реализация
+принадлежат платформенному домену **worldState**, вне generators:
+IWorldStateCrud / WorldStateService. IWorldStateRead — read-only capability
+того же service instance; домены terrain/climate/landcover и другие генераторы
+являются потребителями этого контракта либо подготовленных через него DTO.
+В compute kernels/worker loops IO не встраивается; application boundary
+получает typed metadata/data до pure generation.
+
+Existing WorldService, NamedLocationService, MapCellService, MapCellQueryFacade,
+PatchStoreService и region-state owner подключаются через typed adapters к
+общей реализации. Их доменные algorithms, merge/fallback и atomic writes не
+переносятся в WorldStateService. Read не вызывает materialization. Общий CRUD
+текущего состояния реализуется без ожидания snapshot runtime и не создаёт
+параллельного state store.
+
+WorldSnapshotService отвечает только за историю/immutable snapshot lifecycle;
+будущий snapshot backend подключается к общему worldState contract. Snapshot
+не владеет текущим CRUD terrain/climate/regions. Полная карта классов, методов,
+путей и перехода WS-0…WS-5 —
+[world-state-crud-transition](../.cursor/plans/world-state-crud-transition.md).
+План пока DESIGN ДЛЯ ПРИЁМКИ; код/полный DTO freeze им не разрешены.
+Архитектура query/mutation фасадов, независимых CRUD capabilities, backend
+ports и UOW детализирована в
+[WS-0A](../.cursor/plans/world-state-crud-capabilities-uow.md) §7–13.
+Эта общая реализация работает с текущим состоянием; snapshot lifecycle не
+внедряется ради её реализации и не становится владельцем domain mutation.
+
+### Домен snapshot CRUD и методы (design для приёмки, 2026-10-25)
+
+Владелец только snapshot lifecycle — платформенный домен **worldSnapshot**. Контракт
+`IWorldSnapshotCrud` принадлежит application/worldSnapshot/contracts/
+snapshotCrud.py, реализация — `WorldSnapshotService` в существующем target
+application/worldSnapshot/worldSnapshotService.py. Это одна реализация
+публичного lifecycle, с делегированием serializer/repository/domain handlers.
+Файлы пока не создаются; snapshot runtime вне PC-11.
+
+| Интерфейс → реализация | Typed вход → выход | Семантика |
+|---|---|---|
+| IWorldSnapshotCrud.create → WorldSnapshotService.create | SnapshotCreate → SnapshotRef | Начальный immutable snapshot из согласованных доменных данных |
+| IWorldSnapshotCrud.read → WorldSnapshotService.read | SnapshotQuery → SnapshotReadResult | Metadata/scoped read выбранного состояния, без генерации отсутствующих данных |
+| IWorldSnapshotCrud.update → WorldSnapshotService.update | SnapshotUpdate(base_ref, typed_changes) → SnapshotRef | Новое immutable состояние; исходный snapshot сохраняется |
+| IWorldSnapshotCrud.delete → WorldSnapshotService.delete | SnapshotDelete(base_ref, typed_targets) → SnapshotRef | Логическое удаление данных в новом состоянии; не физическое удаление истории |
+
+Snapshot identity/query/mutation/result DTO — dataModel/worldSnapshot/;
+payload/patch типы и операции над ними принадлежат соответствующим доменам.
+WorldScope — dataModel/spatial/query/worldScope.py, typed union ObjectScope,
+ChunkScope, AreaScope, FineCellScope. FineCellScope использует existing
+FineGridCoord; AreaScope задаёт координатную систему явно, chunk size берётся
+из метаданных. Scope, requested LOD и физическая единица хранения независимы.
+Object→footprint разрешает домен объекта; neighbor/canonicalize принадлежат
+домену topology, не CRUD service.
+
+Read selector различает latest и конкретный SnapshotRef, включая timeline/
+world. Latest разрешается один раз на запрос и возвращается как resolved ref;
+следующие scoped reads используют его. Player accepted state не подменяется
+latest мастера. Result различает missing snapshot и missing scoped data;
+самостоятельного parallel existence-store нет. Update/delete принимают явный
+base_ref; conflict/branch policy фиксируется до реализации, скрытой перезаписи
+head нет. GC/prune удерживаемой истории не является CRUD delete.
+
+WorldSnapshotService владеет lineage/refs, согласованностью сохранения и scoped
+чтением. Доменные handlers проверяют/применяют свои typed changes; serializer
+кодирует, repository сохраняет. Сервис не импортирует hydrology jobs/buffers,
+terrain placement, climate scorer/tier kernel и не выполняет LOD/materialize.
+Planning/pack views — потребители/производные, не реализации snapshot CRUD.
+Это граница против monster-adapter из layer-boundaries.mdc: делегирование
+доменному API вместо переноса алгоритмов в общий сервис.
+
+До кода snapshot-трек обязан завершить freeze DTO/versions, точных storage
+портов и путей, transaction/conflict protocol и folder composition. Настоящая
+карта фиксирует домен и публичные операции, но не означает готовность runtime
+к реализации. Черновые capture_turn/restore/list_timeline/branch_from ниже —
+операционные сценарии того же WorldSnapshotService; они не создают второй
+CRUD/хранилище. Restore не запускает domain materialization, branch не копирует
+мир через генераторы. Соответствие этим сценариям и world-source-versioning
+нужно детализировать в отдельном треке.
 
 | Сущность | Что это | Где |
 |---|---|---|
@@ -134,8 +260,9 @@ class WorldSnapshotService:
 | `map_cells` (materialized scope) | ✅ | lazy cells = absent until generated; после capture — как в БД |
 | `connection_nodes` / `connection_edges` | ✅ | |
 | `location_states`, `location_weather`, `location_resources` | ✅ | far-zone LOD state |
-| NPC + `character_sheet` + needs/goals | ✅ | |
+| NPC + `character_sheet` + needs/goals | ✅ | NPC — часть мира; **игрок — в `player_snapshots`**, см. ниже |
 | Active session + chat pointers | ✅ | messages могут оставаться отдельно — TBD |
+| Patch set хода | ✅ | дельта изменений хода — audit/diff/regen вход ([`tz_patch_system.md`](./tz_patch_system.md)); blob остаётся authoritative для restore |
 | **`SurfaceClimateField`** (optional derived) | ⬜ v2 | либо в blob, либо rebuild из map_cells + poles при restore |
 | Engine `snapshot_store` (chat pipeline) | ❌ | ephemeral; не world snapshot |
 
@@ -182,6 +309,16 @@ Target: materialization run **один раз** → persist → capture; сле�
 
 ---
 
+## Player snapshot — параллельная цепочка
+
+`player_snapshots` — отдельная цепочка, синхронизированная с `world_snapshots` по `turn_id`. Игрок отделён от мира ради **export/import** и **time travel**: переносится между мирами и ветками, его состояние не живёт внутри world blob.
+
+- Player state = `memory` (история, timeline-агностична, переживает откат мира, опционально `origin_timeline`) + `intrinsic` (статы, инвентарь). **Placement** — свойство session-binding `player↔world`, живёт в world blob («Active session»), в player state не входит.
+- Ослабленная односторонняя зависимость: player → world-факты (как memory); world знает session-bindings, но не player state.
+- `attach(player, world_snapshot)` — операция session-домена: создаёт привязку в целевом мире; результат — session-патч. Player ↔ npc scope migration — `tz_patch_system.md` § «Scope migration».
+
+Контракт patch-системы и attach — [`tz_patch_system.md`](./tz_patch_system.md). Schema — [`project_data_storage_tz.md`](./project_data_storage_tz.md) § `player_snapshots`.
+
 ## Порядок работ
 
 | Фаза | Scope |
@@ -205,7 +342,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 | Sparse vs full `map_cells` в blob для lazy worlds | открыт |
 | `SurfaceClimateField` — persist in blob vs recompute on restore | открыт (CL-17) |
 | Incremental capture (delta) vs full каждый ход | v1: **full**; delta — v2+ |
-| Sync events между timelines | отложено (storage TZ) |
+| Sync events между timelines | решено: sync нет — между ветками перемещается только игрок; продвигается только таймлайн с игроком ([`tz_patch_system.md`](./tz_patch_system.md) § Timelines) |
 
 ---
 
@@ -214,6 +351,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 | Дата | Изменение |
 |---|---|
 | 2026-06 | Initial TZ — единый `WorldSnapshotService`; disambiguation от climate field cache |
+| 2026-10 | Две цепочки: `world_snapshots` + `player_snapshots` (player отделён для export/import и time travel); patch set хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
 
 ---
 
@@ -225,3 +363,22 @@ Target: materialization run **один раз** → persist → capture; сле�
 - [`tz_lazy_simulation.md`](./tz_lazy_simulation.md) — LOD unfold
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — TR-2 deferred → snapshot
 - [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) — post-turn capture node (future)
+
+
+## PC-0 — surface source view и будущий snapshot adapter (2026-10-23)
+
+[Норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0) фиксирует
+StateViewRevision как SHA-256 canonical source projection. До общего
+WorldSnapshot runtime caller передаёт world/locations и loaded mountain
+member projections из одного authoritative read/draft view. Capture только
+разрешает inputs/refs; не запускает генерацию, не читает cache/SQL/pack.
+
+PlanKey использует собственный input closure и exact dependency refs,
+а bundle — source-view revision. Неизменившийся domain artifact может
+переиспользоваться после unrelated edit. Cache не хранит current pointer.
+Publication owner повторно сверяет source projection под write guard до
+pack/manifest publication; stale compute не становится latest. Coherent
+read/guard — обязанность caller boundary, не обещание транзакционности
+существующего file writer самого по себе. Future restore adapter меняет
+эту boundary, не создаёт terrain-local snapshot/restore/branch service.
+Новые schemas не означают реализацию WorldSnapshotService.

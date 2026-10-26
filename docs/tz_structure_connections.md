@@ -1,12 +1,14 @@
 # ТЗ: Механика соединений (tz_structure_connections.md)
 
+**A0, 2026-10-14:** [доменные библиотеки](tz_domain_template_libraries.md) задают UID template identity. В packing recipe/cache/token counts/priority адресуют plot UID; имена в старых пояснениях — только читаемые labels/legacy.
+
 ## 1. Концепция
 
 Соединения — граф (Вариант B): узлы (`ConnectionNode`) и рёбра (`ConnectionEdge`).  
 Граф иерархический: мировой → городской → районный → участок.  
 Pathfinding поднимается и опускается по уровням иерархии.
 
-**Участок** — слот из шаблона (`building_template_registry`). Назначение — **листья** `structure_types` ([tz_building_generator.md](./tz_building_generator.md) §2.1). Не N+1 ключ мира. `portal` / `air_dock` — семья `transit`: участок, если пак мира включил лист (не fill в каноне `fantasy`). `lamp_post` — не plot-purpose. Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
+**Участок** — слот из шаблона (библиотека шаблонов мира — pack membership; `building_template_registry` удалён в B7). Назначение — **листья** `structure_types` ([tz_building_generator.md](./tz_building_generator.md) §2.1). Не N+1 ключ мира. `portal` / `air_dock` — семья `transit`: участок, если пак мира включил лист (не fill в каноне `fantasy`). `lamp_post` — не plot-purpose. Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
 
 **Площадь** — не тип соединения. Это тег назначения `"plaza"` на чертеже: общественная зона (сады, фонтаны, террасы — состав шаблона). Frontage hierarchy **не** применяется, если `plaza` ∈ `structure_types`. В граф — `ConnectionNode` с `location_uid` площади. Участок в pack **не** `location_type` (outdoor **C3**).
 
@@ -61,7 +63,7 @@ N+1: движок определяет встроенные типы со спе
 | `mountain_river` | подтип: круче, пороги; segment from classifier (U17); graph via **`riverConnectionEmit`** (U18) | partial (steep bed) | `world` |
 | `lake_shoreline` | **routing / travel** тип для берега озера в connection graph; **declare контур** — `world.hydrology.declared_lakes[]` (U20, U23) | partial (shore bands via hydrology) | `world` |
 | `coastline` | **routing / travel** тип для берега моря; **declare polyline** — `world.hydrology.declared_coastlines[]` (U21, U23) | partial (shore bands via hydrology) | `world` |
-| `portal` | мгновенный переход; не ребро — связи хранятся на узле (см. 4.1) | — | — |
+| `portal` | абстракция перехода с реализациями graph/coordinate; данные в Transition, node — графовая привязка (см. 4.1) | — | — |
 
 **Реки — geometry vs routing:** declare geometry — `declared_rivers[]` ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U27). Routing polyline — **`ConnectionEdge`** после carve/**emit** (autoresolve). **`NamedLocation` optional** — только если мастер дал имя. См. [`tz_locations.md`](./tz_locations.md), U9/U11.
 
@@ -363,50 +365,45 @@ effective_degradation_rate = base_degradation
 
 ### 4.1 Портал
 
-Портал — перемещение из точки A в точку B без физического пути. Не использует рёбра графа.  
-Связи хранятся непосредственно на узле портала.
+**SoT:** [`tz_location_transitions.md`](./tz_location_transitions.md)
+§1, §2 инв. 9 и §3.4. Портал — общая абстракция
+`Transition(type=portal)` с двумя обязательными реализациями:
 
-**Типы порталов (`portal_type`):**
+- **`graph`:** перемещение учитывает граф. Специальный барьер, на который
+  наталкивается маршрут графа портала, может заблокировать сам переход.
+  Это не модель «сначала успешный телепорт на node, затем обычное движение
+  до первого препятствия».
+- **`coordinate`:** буквальный перенос между конкретными точками A и B.
+  Граф полностью игнорируется; специальные барьеры, блокирующие графовое
+  портальное перемещение, не блокируют эту реализацию. Общие active,
+  direction и access-состояния перехода сохраняют силу.
 
-| Тип | Описание |
-|---|---|
-| `coordinate` | Телепорт напрямую на (x, y, z); граф полностью игнорируется |
-| `graph` | Телепорт на узел графа; дальнейшее движение идёт по рёбрам от этого узла — барьер на ребре означает, что персонаж застревает у точки выхода |
+**Назначение** может быть локацией как местом назначения, а не только
+конкретными xyz или node UID. Реализация портала и вид ссылки на назначение
+не смешиваются: реализации — graph/coordinate, не location/point.
+Статическая клетка выхода не обязательна для объявления назначения-локации.
+Правило прибытия и typed wire-контракт фиксируются в transitions §10 до кода;
+центр локации, ближайший вход или автоматический resolver не являются
+утверждённым fallback.
 
-**Свойства портала на `ConnectionNode`:**
+Направленность, активность, объявленные назначения и параметры реализации
+хранятся в SQL-ярусе transitions, состояние сторон — в отдельной
+`transition_sides`. Узел с `node_type="portal"` и `location_uid` — привязка
+к графу, не вторая сущность поведения портала. `portal_*` колонки node
+удаляются при реализации; множественность назначений и форма связи с node
+уточняются в transitions §10, не ограничиваются одним `transition_uid`.
 
-```python
-portal_type:              str        # "coordinate" | "graph"
-portal_destinations:      list[dict] # список точек назначения
-bidirectional:            bool       # портал работает в обе стороны
-is_active:                bool       # портал включён; False = портал не работает
-blocked_behavior_override: str | None  # переопределяет world.mechanics_settings["portal_blocked_behavior"]; None = использовать мировую настройку
-```
+Через **игровые действия** можно перенаправлять портал, запечатывать/
+открывать обратный проход, активировать/деактивировать и менять
+`blocked_behavior_override`. При блокировке graph-маршрута override
+переопределяет `world.mechanics_settings["portal_blocked_behavior"]`:
+`random_portal`, `before_portal` или `random_effect`; значения и семантика
+описаны в transitions §3.4. Для coordinate этот graph-specific механизм
+не применяется. `is_accessible` — состояние, управляемое движком;
+оно не заменяет проверку барьера на графовом маршруте.
 
-Все поля выше могут быть изменены через **игровое действие** (game action) в рантайме:
-- `portal_destinations` — перенаправить портал
-- `bidirectional` — запечатать / открыть обратный проход
-- `is_active` — активировать / деактивировать портал
-- `blocked_behavior_override` — изменить поведение при заблокированном выходе
-
-Каждый элемент `portal_destinations`:
-```json
-{ "type": "coordinate", "x": 100, "y": 200, "z": 0 }
-{ "type": "graph", "node_uid": "node_abc123" }
-```
-
-**Поведение при заблокированном выходе** (только для `graph`-порталов; настройка механик мира):
-
-| `portal_blocked_behavior` | Описание |
-|---|---|
-| `random_portal` | Персонаж выбрасывается в случайный портал сети |
-| `before_portal` | Персонаж возвращается перед порталом входа |
-| `random_effect` | Случайно применяется один из вариантов выше |
-
-Хранится в `world.mechanics_settings["portal_blocked_behavior"]`.
-
-Узлы портала имеют `node_type="portal"` + `location_uid` (NamedLocation портала).  
-Порталы генерируются как `structure_type="portal"` через `StructureAreaAssembler`.
+Порталы генерируются как `structure_type="portal"` через
+`StructureAreaAssembler`; обе реализации всегда SQL, даже внутри здания.
 
 ### 4.2 Мост
 
@@ -659,7 +656,7 @@ Peek `node.z` в §5.1.1 — **не этот контракт** (C21 leftover / 
 
 **Посадка и шаг сетки.** Шаг улицы района = `block_size` плотности (**50 / 80 / 120 клеток**). Это **модуль сетки** (прямоугольник между узлами), не особый «суперблок». Generate считает клетками; метры/футы — display.
 
-Размер участка — **шаблон** из `building_template_registry` (`occupied_footprint` + опц. двор), в клетках. Любой `structure_type`, любой размер. Нет хардкода 200×200.
+Размер участка — **шаблон** из библиотеки шаблонов мира — pack membership (`occupied_footprint` + опц. двор), в клетках. Любой `structure_type`, любой размер. Нет хардкода 200×200.
 
 **Один модуль ≠ один участок.** Модуль сетки — **двумерный бин** `(block_size × block_size)`, рамка главной улицы, не лот. Участок — прямоугольник из cache (`occupied_footprint` + опц. двор), любой `structure_type` и любой размер.
 
@@ -677,9 +674,9 @@ SoT полного порядка района (C22). Внутренность *
 
 **Коллекция токенов.** После cache — упорядоченный пул. Посадка **вынимает** токен. Не декартово пары. Сколько копий — ниже.
 
-#### Число токенов (копии `system_name`)
+#### Число токенов (копии plot template_uid)
 
-SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.plot_counts`), §9.2 / §9.4 (район). Здесь — резолв **N** для каждого чертежа (`system_name`). Wire alias: `structure_counts`.
+SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.plot_counts`), §9.2 / §9.4 (район). Здесь — резолв **N** для каждого чертежа (plot template_uid). Wire alias `structure_counts` снят 2026-10-18.
 
 Пул: для каждого кандидата cache — **N** одинаковых токенов (один footprint). Кандидаты = `allowed_structure_types` ∩ тир ∪ шаблоны из `required_structures`. Нет в cache — нет токенов.
 
@@ -687,18 +684,18 @@ SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`Ci
 
 | № | Источник | Когда |
 |---|---|---|
-| 1 | `required_structures[].count` | этот шаблон есть в `required_structures` района (`plot_template` = `system_name`) |
-| 2 | `district_template.plot_counts[system_name]` | ключ есть |
-| 3 | `CitySkeleton.plot_counts[system_name]` | ключ есть |
+| 1 | `required_structures[].count` | этот шаблон есть в `required_structures` района (`plot_template` = plot template_uid) |
+| 2 | `district_template.plot_counts[template_uid]` | ключ есть |
+| 3 | `CitySkeleton.plot_counts[template_uid]` | ключ есть |
 | 4 | **1** | иначе |
 
-Нет поля / нет ключа — **не** ноль: смотреть уровень ниже. Явный `0` — ноль токенов (не сажать). Запись в `required_structures` включает уровень 1 (нет `count` → 1) и **не** смотрит `plot_counts` для этого имени, даже если там больше.
+Нет поля / нет ключа — **не** ноль: смотреть уровень ниже. Явный `0` — ноль токенов (не сажать). Запись в `required_structures` включает уровень 1 (нет `count` → 1) и **не** смотрит `plot_counts` для этого UID, даже если там больше.
 
-`plot_counts` — `{ "<drawing system_name>": int }`, optional. Район перекрывает город **по ключу**, не целиком map. Import: `structure_counts` — alias.
+`plot_counts` — `{ "<plot template_uid>": int }`, optional. Район перекрывает город **по ключу**, не целиком map. Import: `structure_counts` — alias снят 2026-10-18, только `plot_counts`.
 
 Не добивать район копиями «пока есть место». Не влезло — `warning`; лишние токены не превращаются в ещё N копий других шаблонов.
 
-Пример: город `{ "house_std": 4 }`, район `{ "house_std": 2, "tavern_1": 3 }`, `required_structures`: `town_hall` `count` 1 → house 2, tavern 3, town_hall 1, прочие кандидаты по 1.
+Схематический пример с читаемыми labels вместо UID: город `{ "house_std": 4 }`, район `{ "house_std": 2, "tavern_1": 3 }`, `required_structures`: `town_hall` `count` 1 → house 2, tavern 3, town_hall 1, прочие кандидаты по 1.
 
 #### Приоритет посадки
 
@@ -709,7 +706,7 @@ SoT. Не путать с N: priority **не** меняет число токе�
 1. **Приоритетные** (проход 1, до рамки пустых кварталов): `required_structures` (порядок массива) и шаблоны с `plot_priority` **> 0**. Для каждого — бронь во внутреннем bbox. Не «взять первый из кучи». Не «сначала нарезать район, потом втиснуть».
 2. **Остальная коллекция** (проход 2, после рамки): остальные токены (`priority` ≤ 0 и не required).
 
-`plot_priority` — `{ "<drawing system_name>": int }`, optional. Больше = раньше **внутри прохода 1**. Нет поля / нет ключа — **0** (проход 2). Район перекрывает город **по ключу**. Явный `0` = остальная коллекция. Отрицательное — тоже проход 2, после нуля в списке коллекции. Import: `structure_priority` — alias.
+`plot_priority` — `{ "<plot template_uid>": int }`, optional. Больше = раньше **внутри прохода 1**. Нет поля / нет ключа — **0** (проход 2). Район перекрывает город **по ключу**. Явный `0` = остальная коллекция. Отрицательное — тоже проход 2, после нуля в списке коллекции. Import: `structure_priority` — alias снят 2026-10-18, только `plot_priority`.
 
 Не делает шаблон `required_structures`. Не встал в проходе 1 — `warning`, в проход 2 как затычку щели **не** класть.
 
@@ -722,7 +719,7 @@ SoT. Не путать с N: priority **не** меняет число токе�
 
 `(60,60)` раньше `(18,18)` при одном priority; `(100,20)` раньше `(80,80)` (max 100>80). Площадь `w*h` в ключ не входит.
 
-Пример: `plot_priority`: `{ "manor_rich": 10 }` → усадьба в **проходе 1** до прочих приоритетных с меньшим числом. Ратуша в `required_structures` — раньше усадьбы. Дома с priority 0 — только проход 2.
+Схематический пример с label вместо UID: `plot_priority`: `{ "manor_rich": 10 }` → усадьба в **проходе 1** до прочих приоритетных с меньшим числом. Ратуша в `required_structures` — раньше усадьбы. Дома с priority 0 — только проход 2.
 
 #### Два прохода посадки
 
@@ -948,14 +945,9 @@ connection_nodes (
     node_type       TEXT NOT NULL,   -- "intersection"|"settlement_gate"|"portal"|"building_entrance"|"location_hub"
     location_uid    TEXT REFERENCES named_locations(location_uid),
     graph_level     TEXT NOT NULL,
-    world_uid       TEXT NOT NULL REFERENCES worlds(world_uid),
-
-    -- только для node_type="portal"
-    portal_type                  TEXT,        -- "coordinate" | "graph"
-    portal_destinations          TEXT,        -- JSON: list[dict]
-    portal_bidirectional         INTEGER,     -- 0 | 1
-    portal_is_active             INTEGER,     -- 0 | 1
-    portal_blocked_behavior_override TEXT     -- "random_portal"|"before_portal"|"random_effect"|null
+    world_uid       TEXT NOT NULL REFERENCES worlds(world_uid)
+    -- Данные портала — transitions + transition_sides, не portal_* на node.
+    -- Форма связи node↔portal уточняется в tz_location_transitions §10.
 )
 
 connection_edges (
@@ -992,7 +984,11 @@ connection_edge_cells (
 ```
 
 `cells` вынесены в отдельную таблицу `connection_edge_cells` — у порталов записей нет.  
-Portal-поля на `connection_nodes` заполняются только при `node_type="portal"`, иначе `null`.
+Портальные данные хранятся в `transitions` + `transition_sides`; `connection_nodes`
+сохраняет роль/координаты графового узла (§4.1). Schema выше — целевой контракт,
+перенос старых `portal_*` отложен до отдельной portal-миграции после
+контрактов [Transition SoT](./tz_location_transitions.md) §10.
+Текущий generator/storage/CRUD план сохраняет эти node/import поля.
 
 ---
 
@@ -1015,7 +1011,7 @@ street_objects: list[dict]  # открытый список; [] по умолч�
 ```
 
 **Идея разделения по стилям:**  
-`street_objects` объявляет только `structure_type` + вероятность. Конкретный шаблон выбирается из `building_template_registry` по `structure_type` + `economic_tier` из `CitySkeleton` — та же механика что для зданий в районе.
+`street_objects` объявляет только `structure_type` + вероятность. Конкретный шаблон выбирается из библиотеки шаблонов мира (pack membership) по `structure_type` + `economic_tier` из `CitySkeleton` — та же механика что для зданий в районе.
 
 Применимо к `sidewalk`, `road`, `alley` — объекты вдоль дороги существуют в любую эпоху.
 
@@ -1109,6 +1105,7 @@ generators/
 | Алгоритм городской сетки улиц — референс: Parish & Müller (2001), tmwhere; паттерны: grid / radial / organic | отложено — реализуется при написании DistrictAssembler |
 | `air_route` узлы — всегда `structure_type="air_dock"` или могут быть произвольные точки | открыт |
 | Морской путь (`sea_route`) — нужен отдельный мировой WorldGenerator или часть SettlementAssembler | открыт |
+| Построенная подводная магистраль (`undersea_tunnel`) — коридор под дном (`undergroundTunnel`) или structure на floor-клетках; **не** `sea_route` (нет физических клеток) | **решено семантически:** [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Подводный мир; impl — отдельный `system_connection_type`, открыт |
 | Связь `connection_edge_cells` с `map_cells` — физическое изменение terrain-ячеек при прокладке (раздел 3.5) | закрыт |
 | Traversal в реальном времени — как engine проверяет `traversal_conditions` при движении | нет ТЗ |
 | Подъезд участок↔улица при разном z | **closed §5.1.1–§5.1.2:** луч только при Δz участок↔улица; иначе стык; ≤30° grade / 45° лестница; >45° только `map_z` |

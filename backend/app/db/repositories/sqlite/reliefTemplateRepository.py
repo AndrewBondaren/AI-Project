@@ -16,9 +16,6 @@ class SqliteReliefTemplateRepository(BaseRepository[ReliefTemplateRow], IReliefT
     async def get_by_uid(self, template_uid: str) -> ReliefTemplateRow | None:
         return await self.fetch_one("template_uid = ?", [template_uid])
 
-    async def get_by_system_name(self, system_name: str) -> ReliefTemplateRow | None:
-        return await self.fetch_one("system_name = ?", [system_name])
-
     async def list_all(self) -> list[ReliefTemplateRow]:
         return await self.fetch_all("1=1", [], order="system_name ASC")
 

@@ -7,6 +7,27 @@ metadata:
   originSessionId: 633eddca-8d16-4119-94ab-ef548d071851
 ---
 
+## Package layout
+
+`dataModel/locations/` — корень домена «локации»: одна сущность
+`named_locations` покрывает всю иерархию `ScopeLevel`
+(settlement → district → area → building → room), поэтому поддомены
+живут под одним зонтиком, а не соседними корнями.
+
+| Подпакет | Содержание |
+|---|---|
+| `namedLocation/` | `BundleNamedLocation` — wire-модель NL |
+| `context/` | `ScopeLevel` (локационная ось), `LocationContext`, `cascadeParams` |
+| `locationType/` | `worlds.location_type_registry` POJO |
+| `enums/` | `borderCategory`, `entryRole`, `geographicSubtype` |
+| `locationFootprintPolicy.py` | политика fine-footprint |
+| `settlement/` | поселение/район/участок: skeleton, district/area templates, enums |
+| `structure/` | структуры: building/room/barrier шаблоны, enums (вкл. `buildingPurpose`) |
+
+`dataModel/cascade/` — домен-нейтральный механизм каскада (любая ось
+`ScopeAxis`), **не** часть домена: локационная ось и параметры
+объявлены в `locations/context/`.
+
 ## Два уровня карты
 
 **Уровень 1 — `map_cells`** — сырая матрица местности (sparse 3D grid):
@@ -128,7 +149,10 @@ Geographic subtype **не** является SoT declare маски ([`tz_map_li
 
 **Реки:** declare — `world.hydrology.declared_rivers[]`; routing polyline — **`ConnectionEdge`** после carve/emit (U9/U18). **Имя optional** (`location_uid` на declare entry).
 
-**Уровень 2 — `named_locations`** — агрегат ячеек с именем:
+**Уровень 2 — `named_locations`** — агрегат ячеек с именем.
+Ниже — целевой контракт typed host (**NL-P1**); текущий DDL ещё
+хранит type-specific поля отдельными колонками, их перенос выполняется
+по плану `nl-typed-host-payload-done.md` (P2–P3).
 ```sql
 named_locations (
   location_uid, world_uid,
@@ -149,9 +173,8 @@ named_locations (
   owner_uid,                      -- nullable FK → character_sheet; персональный владелец
   system_climate_zone,            -- nullable ref → worlds.climate_zone_registry; null = наследует от parent
   state_uid,                      -- nullable; soft ref → states; orphan = ничейная, движок логирует
-  system_settlement_size,         -- nullable ref → worlds.settlement_size_registry (ранг small/medium/large).
-                                  -- Целевой ключ (**LOC-T-2**). Код/SQL до impl: `system_city_size`.
-                                  -- Только settlement-like. Абсолютный footprint — не это поле, а subtype × ранг.
+  location_payload,              -- nullable TEXT JSON; контракт по location_type_registry[].payload_kind.
+                                  -- Authored + type-stamped поля типа, включая system_city_size; не generic каналы.
   system_economic_tier,           -- nullable ref → worlds.economic_tier_registry; null = наследует от parent; если у всех предков null → медианный тир (index = floor(count/2) по base_value ASC) + лог WARNING
   is_public,                      -- bool default False; публичная локация — NPC-занятость не блокирует старт игрока
   is_forbidden,                   -- bool default False; restricted-зона — location_faction_access переходит в режим allowlist
@@ -164,14 +187,271 @@ named_locations (
                                   -- Писать `map_z` только для ненулевого пина (подземный/hive/плато). `0` на wire = то же, что omit.
   system_template_uid,            -- nullable FK → building_templates; из какого шаблона сгенерировано здание
   parent_wall_material,           -- nullable MaterialKey → material_registry; стены здания (из шаблона). Omit/null → None; "" → reject.
-  parent_floor_material,          -- nullable MaterialKey → material_registry; полы. Как dominant_material. Не заполнять wood/stone на import.
-  hills                           -- nullable JSON; IgnoreOnWire. Patch холмов: {plains?, forest?} тех же ключей POJO.
-                                  -- Нет ключа = мир. Перекрывает world.terrain_masks.default_plains|forests.
-                                  -- SoT: tz_world_pack_storage § L2 open-land hills. L2 only; schema 0001 при impl.
+  parent_floor_material           -- nullable MaterialKey → material_registry; полы. Как dominant_material. Не заполнять wood/stone на import.
 )
 -- __update_exclude__ = {"world_uid"} — world_uid неизменяем при update
 -- Инвариант: is_public=true AND is_forbidden=true — невалидная комбинация; движок логирует WARNING
 ```
+
+#### Payload per type — NL как typed host (**NL-P1**, целевое)
+
+`NamedLocation` — **generic host**: identity, иерархия, geometry/occupancy,
+generic-флаги и generic stamped-каналы каскада. Type-семантика живёт в
+**payload по `payload_kind`**, а не плоскими колонками на NL-строке.
+
+```text
+named_locations
+  …generic колонки…                -- как сейчас, минус settlement overlay
+  location_payload TEXT            -- JSON, валидируется payload-моделью
+```
+
+**Привязка:** `location_type_registry[].payload_kind` (новое поле,
+`null` = generic без payload) → builtin payload-контракт в коде.
+Type-ключи — данные мастера (N+1); payload-контракты — код. Мастер может
+объявить `system_type:"elven_city", payload_kind:"settlement"` — получает
+settlement-семантику без смены имени типа. `subtype` остаётся рецептом
+морфологии внутри типа (`city`/`village` — один `SettlementPayload`).
+
+**P1 — контракт модели:** `PayloadKind` перечисляет builtin-контракты
+`settlement` / `district`; неизвестное значение на `LocationTypeEntry`
+отклоняется валидацией. `LocationPayload.model_for(kind)` возвращает
+модель, `LocationPayload.validate(kind, value)` — валидированный POJO.
+Для известного kind `None` создаёт пустой payload с дефолтами модели;
+для `kind=None` допустим только `value=None`. Dispatch не зависит от
+имени типа локации. `fixture_identity()` сохраняет `payload_kind`;
+при overlay world→engine отсутствующее поле наследует engine-контракт,
+а явно заданное значение (включая `null`) имеет приоритет.
+
+Payload-модели используют общие определения полей со старым skeleton
+(`SettlementPayloadFields`), сохраняя wire-имена
+(`structure_counts` / `structure_priority` сняты 2026-10-18, только `plot_*`). Generic `economic_tier` и
+`system_location_mood` остаются в skeleton, не входят в settlement payload.
+До P4 каскадные аннотации остаются на skeleton; новые payload-модели
+не создают дополнительных узлов каскада. Перенос import/persist и SQL —
+следующие шаги, наличие POJO ещё не означает сохранение payload в БД.
+
+**P1b — выбор pipeline:** `is_settlement_map_site` проверяет
+`entry.payload_kind == settlement`; `uses_settlement_fine_footprint`
+допускает settlement и district payload. Subtype и size rank не выбирают
+pipeline; неизвестный type и generic type не проходят этот gate.
+Policy принимает `registry=WorldLocationTypeRegistry`; без аргумента
+использует builtin engine registry. World-caller передаёт результат
+`location_types(world)`: occupancy, territory volumes, C6/packing,
+detailed bake, layout geometry и L0 contributor учитывают world-контракт.
+Renderer использует переданный ему registry для отбора location marks
+и легенды всех типов с settlement payload. Legacy тип `city` больше
+не является исключением; мастер может объявить его с нужным payload_kind.
+
+**P2a — хранилище:** в `0001_initial.sql` и DB-модели `NamedLocation`
+добавлено `location_payload`: nullable TEXT JSON / `dict | None` через
+`json_nullable_col`. `None` хранится как SQL NULL, пустой объект — как
+`{}`; они различаются при чтении. Legacy type-колонки сохраняются до
+переноса import/persist-потребителей P3 и cascade-каналов P4, затем
+удаляются в P2b. На этом шаге импортер ещё пишет прежние колонки.
+Схема проверяется на новой временной БД из основной миграции; существующая
+dev БД этим шагом не пересоздаётся.
+
+**P3 — перенос потребителей:** плоские wire-ключи `locations[]` сохраняются.
+`BundleNamedLocation` выбирает payload-модель через registry из validation
+context (без world — builtin registry), валидирует type-поля и aliases
+ею; `to_db_fields()` сериализует их только внутри `location_payload`.
+Generic tier, mood и parent materials сохраняются на NL. Recipe default
+`is_inhabited` применяется при импорте, явное значение имеет приоритет.
+CRUD проходит тот же контракт, частичное обновление сливает текущий payload
+и новые поля, включая явную очистку поля до `None`.
+
+`settlement_payload` / `district_payload` валидируют сохранённый JSON при
+чтении. До P2b при `location_payload=None` использовались legacy-колонки;
+этот временный fallback удалён в P2b. Skeleton,
+footprint/occupancy, locations index и topology читают payload через эти
+адаптеры. Новые district freezes создаются в `DistrictPayload`, persist
+выполняет read–validate–merge перед записью в своей транзакции.
+
+**P4 — cascade channels:** размер, density и dominant material объявлены
+на `SettlementPayload` (SETTLEMENT). NL-узлы этих параметров и их рёбра
+к skeleton удалены; `source_wire` удалён. Settlement caller передаёт
+отдельные source-POJO: generic NL, typed payload и skeleton POJO для
+неизменённого generic economic-tier fallback. `CITY_SIZE` и
+`DOMINANT_MATERIAL` имеют по одному payload-узлу; density — цепочку
+`DistrictTemplateEntry.density → SettlementPayload.settlement_density`.
+Provenance authored type-значений теперь указывает `SettlementPayload.field`.
+Fold/default, наследование ниже settlement и generic stamp-приоритеты
+сохраняются. Legacy DB-колонки и read fallback удалены в P2b.
+
+**P2b — единое type-хранилище:** из `0001_initial.sql` и DB-модели
+`NamedLocation` удалены 11 прежних type-колонок (10 settlement-полей и
+`district_topology`); они хранятся только в `location_payload`.
+Generic tier, mood, parent materials и геометрия остаются на NL.
+Адаптеры чтения используют только payload; SQL NULL создаёт пустой POJO
+с его дефолтами, без поиска одноимённых атрибутов на runtime-объекте.
+CRUD больше не переносит старые колонки при частичном обновлении:
+он сливает текущий payload с wire-обновлением через прежний validator.
+Плоские wire-ключи и aliases импорта сохранены. Fixtures и debug-вызовы
+DB-модели переведены на payload. Синхронность SQL/model, отсутствие type
+колонок, NULL/empty/nested roundtrip и CRUD проверяются на новой временной
+БД из основной схемы; существующая dev-БД не пересоздаётся автоматически.
+
+**P5 — единый POJO скелета:** assembler-потребители используют
+`SettlementSkeleton` из dataModel без зеркального `CitySkeleton` dataclass.
+Application-адаптер `settlementSkeletonAccess` строит authored source-view
+из typed payload и generic tier/mood NL, а resolved view — с явно переданными
+результатами каскада (включая None). `dominant_material` в assembler-view
+остаётся None, как до зачистки: итоговый материал берётся из каскада/fold.
+Overlay-таблиц имён и алиасов между NL и skeleton нет. `BundleNamedLocation`
+содержит generic поля и typed payload; плоские type wire keys/aliases принимает
+его before-validator по payload-модели. Persist-сериализация не фильтрует
+удалённые flat-поля. Generic economic-tier source и приоритеты не меняются.
+
+**Граница полей:**
+
+| Класс | Где | Поля |
+|---|---|---|
+| generic identity/content/access/geometry | NL-колонки | `location_uid`, `display_name`, `system_location_type/subtype`, `parent_location_uid`, descriptions, glossary/tag refs, discovery/access/state флаги, `owner_uid`, `system_climate_zone`, mood-пара, `map_x/y/z`, `is_outdoor/sheltered/transit`, `is_mobile`, `system_template_uid`, `created_at` |
+| generic stamped cascade-каналы | NL-колонки | `system_economic_tier`, `parent_wall_material`, `parent_floor_material` — stamped-узлы для локации **любого** типа на любом scope (room данжа тоже имеет tier) |
+| type-specific (authored + type-stamped) | `location_payload` JSON | по `payload_kind` — см. таблицу ниже |
+
+**Payload-контракты (builtin):**
+
+| `payload_kind` | Модель | Поля |
+|---|---|---|
+| `settlement` | `SettlementPayload` | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations`, `is_inhabited: bool = False` |
+| `district` | `DistrictPayload` | `district_topology` (C23 stamped freeze) |
+| `null` | — | building / room / region / territory / geographic / climate_pole / declare-only типы |
+
+**Тип локации и контракт payload — разные оси:**
+
+| `system_type` | `payload_kind` | Морфология / семантика |
+|---|---|---|
+| `settlement` | `settlement` | живое поселение; `city`, `village`, `underground_city` |
+| `location_complex` | `settlement` | комплекс; `crypt`, `mine`, `ruins`, `fortress`, `lair`; настройка типа `is_inhabited=false` |
+| `district` | `district` | район поселения или комплекса |
+| building / room / region / territory / geographic / climate_pole | `null` | generic host без payload |
+
+`location_complex` — отдельный `system_type`, **не** subtype поселения.
+Он использует тот же pipeline footprint → district topology → plot packing
+и тот же `SettlementPayload`. Каждый subtype комплекса задаёт свой рецепт
+на `LocationTypeSubtypeEntry`: `typical_district_types`, `footprint_by_size`,
+`required_structure_types`. Отдельный `DungeonPayload` не нужен.
+Subtype `dungeon` у `settlement` удаляется; `underground_city` остаётся:
+это рецепт живого города. Поверхность / подземелье / воздух задаются
+`map_z`, а не типом. `underground_city` задаёт морфологию и описание,
+его рецепт не заменяется координатой z.
+
+`is_inhabited` — authored-флаг **payload конкретной локации**. Дефолт
+модели — `False`. `LocationTypeEntry.is_inhabited: bool = False` задаёт
+настройку типа; builtin `settlement` явно задаёт `True`, включая экземпляры
+без subtype. Комплекс и пользовательские типы по умолчанию необитаемы.
+Приоритет: явное bool экземпляра → bool subtype → настройка типа → базовый
+False. Поле объявлено в SettlementPayloadFields и наследуется skeleton.
+Флаг гейтит специализации и settlement-planner; economic gate пока не
+подключён. Комментарий непосредственно у поля фиксирует это назначение
+и требует перепроверить подключение перед реализацией economic gate.
+При `is_inhabited=false` непустой `system_settlement_specializations` —
+ошибка контракта `SettlementPayload`: импорт и CRUD отвергают данные;
+`None` и пустой список допустимы. Runtime проверяет тот же POJO-контракт.
+Settlement-planner сохраняет authored `typical_districts`, морфологическую
+добивку и required-структуры рецепта, но отключает специализации и
+автоматический подбор районов без рецепта. Рецепт выбирается по фактическим
+`system_location_type` и `system_location_subtype`, без списка имён типов.
+Lazy-settlement DAG-нода
+также должна учитывать живость; её wiring и economy planner — leftovers,
+не входят в эту имплементацию и остаются под gate DAG.
+
+На `LocationTypeSubtypeEntry` поле `is_inhabited: bool | None = None` —
+optional override; None наследует тип. Builtin recipes наследуют тип.
+World-overlay сохраняет engine-настройку при отсутствии поля; explicit
+bool переопределяет её, explicit None на subtype возвращает наследование.
+Сериализация POJO сохраняет отсутствие override и при normalize_world roundtrip.
+Импорт разрешает default только при отсутствии поля экземпляра и сохраняет
+итоговый bool в payload. CRUD сохраняет уже записанный bool при частичном
+обновлении. Прямое чтение payload без поля использует базовый False;
+автоматической миграции прежних строк нет. Explicit None экземпляра запрещён.
+
+**Правила:**
+
+- Payload = authored (import) + type-stamped (результаты генерации домена
+  типа: `district_topology`, `system_city_size`). Generic stamped-каналы
+  каскада остаются на NL — cascade-узлы type-параметров переезжают на
+  payload-класс, дубль «NL→skeleton» исчезает.
+- SQL-запросов по payload-полям нет (как и сейчас по overlay); при
+  появлении — `json_extract` или проекционная колонка точечно.
+- Wire-ключи `locations[]` не меняются: type-поля валидируются payload-моделью,
+  выбранной по `payload_kind` типа строки.
+- Pipeline застройки (`is_settlement_map_site`, C23 topology, C24 packing)
+  выбирается по `payload_kind == "settlement"`, независимо от строки
+  type/subtype и живости. `system_` в имени поля не означает NL-колонку:
+  `system_city_size` — type-stamped поле payload.
+- Type-stamped запись — read-modify-write `location_payload` через
+  payload-модель (`model_copy(update=…)` → dump) в persist-сервисе,
+  одна запись на NL-строку. Генератор возвращает данные, payload не пишет.
+- Граничное поле `architectural_style` — сейчас settlement-authored; если
+  станет generic для зданий — промоутится на NL отдельным решением.
+
+#### Иерархия NL и каскад полей (**NL-P1**, целевое)
+
+Вложенность локаций — **произвольное дерево** `parent_location_uid`, не
+фиксированная линейная ось: wilderness-ветки (`region → territory →
+forest → glade → cave`) и urban-ветки (`… → settlement → district →
+building → room`) — одно дерево; комплекс может висеть под городом или под
+лесом. Допустимые формы вложенности — **данные мастера**: `parent_types`
+в `location_type_registry` (`forest → glade/cave`, …).
+
+Каскад (`tz_cascade_context.md` §2) — отдельный **linked list полей POJO**.
+Его порядок и приоритет задаются `CascadeLink.above/below`, не
+`parent_location_uid`, `parent_types` или enum-порядком. Движок сам
+разворачивает объявленные связи в runtime-проход на параметр.
+`ScopeLevel` отмечает домен узла; отсутствующий runtime-объект не удаляет
+объявленные промежуточные звенья. Generic stamped-каналы NL
+`parent_wall_material` / `parent_floor_material` становятся level-agnostic:
+одна декларация с маркером «repeat on every tag», поскольку цепочка
+содержит только NL-узлы (отдельный шаг S2 со сменой контракта).
+`ECONOMIC_TIER` сохраняет явную цепочку: между NL-узлами есть
+`DistrictTemplateEntry` / `PlotLayoutTemplate`, которые не укладываются
+в повтор одного NL-канала. Settlement-каналы остаются привязаны к тегу
+`SETTLEMENT` и переезжают на payload-класс.
+
+**Одна scope-ось.** `location_complex` имеет тег `SETTLEMENT`, его районы —
+`DISTRICT`, здания — `BUILDING`, помещения — `ROOM`. Отдельной оси
+`DUNGEON→LEVEL→ROOM` нет. Уровни комплекса задаются `map_z` и
+`parent_location_uid`, а не новым scope-тегом. Generic обход предков,
+теги `GEOGRAPHIC` / `TERRITORY` и lazy NL над масками — отдельный
+план parent-цепочки, не часть переноса payload.
+
+**Требования parent-цепочки:**
+
+- `parent_location_uid` — **явное семантическое ребро** (authored на
+  import или назначенное генератором в момент размещения, когда домен
+  знает смыслового хоста). Никогда не выводится из координат: spatial
+  overlap ≠ containment.
+- **z-стекинг независим:** одна колонка `(x,y)` на разных `z` — разные
+  ветки. Таверна на z=0 — саблокация леса; пещерная сеть под ней —
+  саблокация горы рядом; лес и гора могут не пересекаться.
+- **Маска без NL — не scope-узел.** `terrain_masks.declared_*` сами по
+  себе не звенья: лес-маска без именованной локации прозрачна для
+  цепочки (`world → mountain-NL → cave`; лес не входит). NL над маской
+  (`location_uid` на declare entry) — вот scope-узел; генератор,
+  ставящий POI внутрь маски, либо использует существующий NL маски,
+  либо создаёт его, когда объекту нужен semantic parent.
+- `parent_types` в реестре — схема легальных веток («building/POI может
+  висеть под geographic» — объявляется мастером, не кодом).
+- **Глубина и смешение веток произвольны:** например,
+  `forest → location_complex(ruins) → district → building → room`.
+  Мастер может объявить другой type с `payload_kind:"settlement"` —
+  payload_kind отделяет контракт данных от имени типа.
+- **Semantic parent ≠ physical entry.** `parent_location_uid` задаёт
+  каскадную ветку; физические входы/переходы — отдельный домен
+  `Transition(hatch|tunnel)` ([tz_location_transitions.md](tz_location_transitions.md)).
+  Связь комплекса с физическим хостом через переход не создаёт parent-ребро.
+  Входов может быть несколько (здание в руинах + расщелина в лесу),
+  semantic parent — один.
+- **Lazy NL для procedural-масок (решено).** Генератор, ставящий объект
+  внутрь маски без NL (`declared_*` без `location_uid`), **эмитит**
+  synthetic NL маски — объект пишет persist-слой, генератор не пишет SQL
+  (сужение правила «generators не пишут в named_locations»: запрет на
+  persist-вызовы, не на emit). Fallback: маски-хоста нет → parent =
+  ближайший предок-NL. Synthetic NL — кандидат на U13-именование;
+  `display_name` — placeholder до него. Выбор parent при overlapping
+  масках — явный, в момент размещения.
 
 ---
 
@@ -181,7 +461,7 @@ named_locations (
 
 | Ось | Wire | Что это | Канон |
 |---|---|---|---|
-| Морфология | `system_location_subtype` | вид места (рецепт районов, глиф L0) | `village`, `city`, `dungeon`, `underground_city` |
+| Морфология | `system_location_subtype` | вид места (рецепт районов, глиф L0) | settlement: `village`, `city`, `underground_city`; location_complex: `crypt`, `mine`, `ruins`, `fortress`, `lair` |
 | Ранг размера | `system_settlement_size` | **относительный** масштаб **в контексте** морфологии | `small`, `medium`, `large` (+ N+1) |
 
 | Wire | Вердикт |
@@ -191,7 +471,7 @@ named_locations (
 | `subtype: village` + `size: village` | ❌ один токен на двух осях |
 | `subtype: city` + `size: city` | ❌ то же |
 
-Ошибка — **дублирование значения** (одна и та же строка в subtype и size), не пара «морфология + ранг». Import: оба заданы и равны (trim, case-insensitive) → **422**. N+1 size registry не должен брать ключи морфологии (`village`, `city`, `dungeon`, …); канон рангов — `small` / `medium` / `large`. Код до impl ещё хранит `hamlet`…`megalopolis` в `city_size_registry` — это как раз сломанный словарь размера.
+Ошибка — **дублирование значения** (одна и та же строка в subtype и size), не пара «морфология + ранг». Import: оба заданы и равны (trim, case-insensitive) → **422**. N+1 size registry не должен брать ключи морфологии (`village`, `city`, `crypt`, …); канон рангов — `small` / `medium` / `large`. Код до impl ещё хранит `hamlet`…`megalopolis` в `city_size_registry` — это как раз сломанный словарь размера.
 
 Инвариант абсолютного footprint (метры): **малый город всегда больше большой деревни.**  
 `footprint(city, small) > footprint(village, large)` при любом N+1, пока мастер не сломает таблицы — тогда **422** на import реестра.
@@ -202,13 +482,13 @@ named_locations (
 
 - `village` + `small` — маленькая деревня (хутор)
 - `city` + `small` — маленький город (городок)
-- `dungeon` + `small` — маленький данж
+- `location_complex` / `crypt` + `small` — маленькая крипта
 
 Столица — не размер и не морфология (`states.capital_location_uid`). Geographic / лес: ранг поселения **не** задаёт pin; omit `system_settlement_size`. Лес — terrain, не size.
 
 Omit ранга на settlement → канон **`medium`** (обычный для этой морфологии). Не выводить ранг из subtype.
 
-Невалидный ранг на **городе/поселении** (не строка, пусто, ключ не из `settlement_size_registry` мира — в т.ч. legacy `hamlet`/`town`): generate ставит **`medium`** и пишет **WARNING** в продуктовый фасад логов ([`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve`, сообщение `json_validation | settlement_size invalid`). Omit (поля нет / SQL NULL) — тот же `medium` **без** warning. Не 422. Дубль subtype==size — 422, не этот fallback.
+Невалидный ранг на **городе/поселении** (не строка или неизвестный ключ) — unresolved по [общей политике](tz_runtime_world_edit_policy.md): WarningError без подстановки `medium` в runtime; диагностика без runtime-лога при validate_only. Omit/SQL NULL/пустая строка — штатный `medium` без warning (E6, 2026-10-08). Дубль subtype==size остаётся ошибкой контракта.
 
 ### `worlds.settlement_size_registry` (N+1)
 
@@ -228,7 +508,11 @@ Omit ранга на settlement → канон **`medium`** (обычный дл
 
 `footprint_m = footprint_by_size[subtype][size] × fine_cells_per_map_cell`
 
-Таблица множителей — на **`location_type_registry`**, subtype поселения (`subtypes[].footprint_by_size`), не на ранге. Hex/square — число метров стороны квадрата v1, не форма.
+Таблица множителей — на **`location_type_registry`**, subtype типа с
+`payload_kind:"settlement"` (`subtypes[].footprint_by_size`), не на ранге.
+Ранг хранится в `SettlementPayload.system_city_size`; историческое целевое
+имя `system_settlement_size` в LOC-T-2 не меняет wire в этом плане.
+Hex/square — число метров стороны квадрата v1, не форма.
 
 Канон (полосы не пересекаются: max village < min city):
 
@@ -236,8 +520,12 @@ Omit ранга на settlement → канон **`medium`** (обычный дл
 |---|---|---|---|
 | `village` | 0.25 | 0.50 | 0.75 |
 | `city` | 1.00 | 2.00 | 4.00 |
-| `dungeon` | 0.25 | 0.50 | 1.00 |
 | `underground_city` | 1.00 | 2.00 | 4.00 |
+
+Комплексы используют тот же размерный контракт; конкретные множители
+`crypt` / `mine` / `ruins` / `fortress` / `lair` задаются их рецептами
+при P1. Старый рецепт settlement-subtype `dungeon` (0.25 / 0.50 / 1.00)
+не становится автоматически общим рецептом всех комплексов.
 
 При `fine_cells_per_map_cell=3000`: большая деревня 2250 м, малый город 3000 м. N+1 может сдвинуть числа, **не** инвариант village≺city. `huge` и др. — только N+1; если ключ есть в size registry, он должен быть в `footprint_by_size` этого subtype или import 422.
 
@@ -267,7 +555,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 | Тип | Пример | outdoor? | leaf? | Источник |
 |---|---|---|---|---|
 | `district` | Торговый квартал, Портовый район | `true` | нет | вручную / LLM |
-| `building` | Таверна, Арсенал, Особняк | `false` | нет (если есть rooms) | `building_template_registry` |
+| `building` | Таверна, Арсенал, Особняк | `false` | нет (если есть rooms) | библиотека шаблонов мира (membership) |
 | `room` | Общий зал, Кухня, Подвал | `false` | **да** | `room_type_registry` внутри building |
 
 Строение без внутренних комнат (`room`) — `building` сам является leaf в дереве. **Якорь** `SessionScene.location_uid` = этот leaf; **объём сцены** (карта вокруг игрока, события за окном) — не этот uid. SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C18**.
@@ -275,6 +563,18 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 Общественная площадь (тег `plaza` в `structure_types`) и любое другое назначение шаблона — **NamedLocation** под районом. Площадь: `is_outdoor=true`, состав из шаблона. Не новый `location_type` **участка** (outdoor **C3**: area uid только в pack). В SQL-дереве parent = район (**C4**). Не тип ребра графа (connections §1).
 
 ### `worlds.location_type_registry` (N+1)
+
+Runtime-контракт семейства ключей: `LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]`.
+`LocationTypeEntry.system_type` — собственный ключ этого реестра,
+`parent_types` — `list[LocationTypeKey | None]` (`None` означает отсутствие
+родителя). `BundleNamedLocation.system_location_type` — `StrictOnWire[LocationTypeKey]`.
+`display_type` остаётся локализованным текстом. JSON и SQL остаются строковыми;
+membership проверяется на существующих границах REF-W, а не при создании
+номинального ключа. Цикл entry↔registry разрывается через `TYPE_CHECKING`
+и `model_rebuild` до создания canonical-записей. При построении REF-W vocabulary
+списки ссылок не становятся identity-ключами; допустимый `null` в списке
+родителей не проверяется как ссылка. Historical pins — snapshot по
+[`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Locations index.
 
 ```json
 [
@@ -284,13 +584,19 @@ room         (depth 5) — indoor: комната внутри building; leaf и
       { "system_subtype": "mountain",     "border_category": null     },
       { "system_subtype": "underground",  "border_category": null     }
   ]},
-  { "system_type": "settlement", "display_type": "Поселение",  "parent_types": ["territory"],                "is_outdoor": true,  "subtypes": [
+  { "system_type": "settlement", "display_type": "Поселение", "payload_kind": "settlement", "parent_types": [null, "territory", "region"], "is_outdoor": true, "subtypes": [
       { "system_subtype": "city",             "border_category": null },
       { "system_subtype": "village",          "border_category": null },
-      { "system_subtype": "dungeon",          "border_category": null },
       { "system_subtype": "underground_city", "border_category": null }
   ]},
-  { "system_type": "district",   "display_type": "Район",      "parent_types": ["settlement"],               "is_outdoor": true,  "subtypes": [
+  { "system_type": "location_complex", "display_type": "Комплекс", "payload_kind": "settlement", "parent_types": ["territory", "geographic", "settlement", null], "is_outdoor": true, "subtypes": [
+      { "system_subtype": "crypt",    "border_category": null },
+      { "system_subtype": "mine",     "border_category": null },
+      { "system_subtype": "ruins",    "border_category": null },
+      { "system_subtype": "fortress", "border_category": null },
+      { "system_subtype": "lair",     "border_category": null }
+  ]},
+  { "system_type": "district", "display_type": "Район", "payload_kind": "district", "parent_types": ["settlement", "location_complex"], "is_outdoor": true, "subtypes": [
       { "system_subtype": "extract",     "border_category": null },
       { "system_subtype": "process",     "border_category": null },
       { "system_subtype": "manufacture", "border_category": null },
@@ -298,7 +604,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
       { "system_subtype": "farm",        "border_category": null },
       { "system_subtype": "livestock",   "border_category": null }
   ]},
-  { "system_type": "building",   "display_type": "Строение",   "parent_types": ["settlement","district"],    "is_outdoor": false, "subtypes": [
+  { "system_type": "building",   "display_type": "Строение",   "parent_types": ["settlement","location_complex","district"], "is_outdoor": false, "subtypes": [
       { "system_subtype": "residential", "border_category": null },
       { "system_subtype": "commercial",  "border_category": null },
       { "system_subtype": "military",    "border_category": null },
@@ -325,7 +631,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 ]
 ```
 
-L0 debug-карта: глиф footprint поселения — `subtypes[].l0_map_symbol` (optional; canonical: city=`u`, village=`n`, dungeon=`d`, underground_city=`g`). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity. Специализация поселения (`extract` / `farm` / …) — **не** этот subtype и не глиф; SoT [`tz_city_generation.md`](./tz_city_generation.md) §1.2. NL района: `system_location_subtype` = `district_subtype` чертежа (`extract`, `culture`, …), не `civic`.
+L0 debug-карта: глиф footprint — `subtypes[].l0_map_symbol` (optional; city=`u`, village=`n`, underground_city=`g`; глифы subtypes комплекса задаются его рецептами). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity. Специализация поселения (`extract` / `farm` / …) — **не** этот subtype и не глиф; SoT [`tz_city_generation.md`](./tz_city_generation.md) §1.2. NL района: `system_location_subtype` = `district_subtype` чертежа (`extract`, `culture`, …), не `civic`.
 
 `porch` и `entrance_steps` — субтипы `room` с `is_outdoor` override на уровне `NamedLocation` (поле `is_outdoor` на записи, не из реестра). `entrance_steps` дополнительно имеет `is_transit=true`.
 
@@ -333,8 +639,17 @@ L0 debug-карта: глиф footprint поселения — `subtypes[].l0_ma
 - `is_outdoor: true` — применяются weather, travel_ticks, danger_level, terrain-правила
 - `is_outdoor: false` — indoor: нет weather, навигация через `location_passages`, ячейки типа floor/wall/door
 - `border_category` — граничные ячейки локации должны быть этой terrain_category
+- `subtypes[].l0_map_symbol` — world-overlay: отсутствие поля или `null` наследуют
+  символ engine-subtype; строка из ровно одного символа переопределяет его.
+  `null` не отключает отображение. POJO допускает `None`; ограничение длины
+  применяется только к строке. Контракт сохраняется после normalize → JSON → read.
 - `is_public` / `is_forbidden` — живут на `building`; на `room` — переопределения для конкретных комнат
 - Пользователь добавляет кастомные типы на любом уровне
+- `settlement` может быть корнем (`parent_location_uid = null`) либо находиться
+  под `territory` или `region`. Непустой world-список `parent_types` заменяет
+  engine-список целиком; отсутствие или `[]` сохраняют engine-список согласно
+  действующему overlay. Разрешение родителя не создаёт связь автоматически,
+  не меняет linked list каскада и не добавляет наследование footprint от родителя.
 
 **Правила валидации:**
 - `named_locations.parent.location_type` обязан входить в `child.location_type_registry.parent_types`
@@ -365,7 +680,7 @@ L0 debug-карта: глиф footprint поселения — `subtypes[].l0_ma
 
 Слой: typed helper на `WorldLocationTypeRegistry` + fill в import/`NamedLocationService` (world уже в bundle до `locations`). **Не** в генераторах. **Не** `world.fetch` внутри Pydantic-модели. `normalize_world` локации не трогает — это не world-slice.
 
-Код ⬜ — план: [`.cursor/plans/infer-location-type-from-subtype.md`](../.cursor/plans/infer-location-type-from-subtype.md).
+Код ⬜ — план: [`.cursor/plans/infer-location-type-from-subtype-done.md`](../.cursor/plans/infer-location-type-from-subtype-done.md).
 
 ### Вертикальное наложение локаций
 
@@ -454,7 +769,13 @@ Create/update одной строки против уже лежащих в ми
 
 **Resolve (locked):** POJO `canonical_defaults` → настройки мира (`terrain_masks.default_plains` / `default_forests`) → **настройки локации перекрывают мир**.
 
-`named_locations.hills` — `IgnoreOnWire` JSON. **Не** тот же объект, что `default_plains.hills`: на локации это карта `{plains?, forest?}`, внутри — те же ключи POJO (`min_spacing`, `radius`, `height`, `shapes`). Ключа нет → не автозаполняем. Частичный объект: только указанные поля. Цепочка parent, если у ребёнка ключа нет.
+Overlay холмов локации — отдельный целевой контракт, **не существующая
+колонка `named_locations`**: в `0001_initial.sql` и DB-модели `hills` нет.
+Этот план не добавляет хранение hills. Предполагаемый `IgnoreOnWire` JSON
+не тот же объект, что `default_plains.hills`: на локации это карта
+`{plains?, forest?}`, внутри — те же ключи POJO (`min_spacing`, `radius`,
+`height`, `shapes`). Ключа нет → не автозаполняем. Частичный объект:
+только указанные поля. Цепочка parent, если у ребёнка ключа нет.
 
 Пример (только то, что мастер хочет сменить):
 
@@ -519,11 +840,18 @@ else:
 
 ### `worlds.material_registry` (N+1)
 
+Библиотека defaults подключается автоматически: при полном импорте отсутствующий
+реестр или `[]` дают канонический реестр. Частичный список дополняется по
+`system_material`; явно указанные поля мира переопределяют канон, отсутствующие
+поля совпавшей записи наследуют канон. N+1 материалы добавляются к библиотеке.
+Полный результат сохраняется в мире; runtime использует ту же семантику.
+Подробный контракт import/partial update — `tz_json_validation.md`, раздел WorldSlice.
+
 **`material_category`** — фиксированный enum движка, **не расширяется пользователем**. Движок строит физику на этих трёх категориях:
 
 | `material_category` | Физика движка |
 |---|---|
-| `solid` | падает если `g > 0` и нет опоры снизу; всплывает если `density < liquid.density`; горит если `flammable`; замерзает если `freezable`; разрушается кислотой если `corrodible`; плавится от жара если `meltable`; добывается если `mineable`; блокирует обзор если `transparent: false` |
+| `solid` | падает если `g > 0` и нет опоры снизу; всплывает если `density < liquid.density`; горит если `flammable`; замерзает если `freezable`; разрушается кислотой если `corrodible`; плавится от жара если `meltable`; добывается если `mineable`; имеет прозрачность `transparent` процентов (0 — непрозрачен, 100 — полностью прозрачен) |
 | `liquid` | течёт вниз по z; слоение: более плотная жидкость опускается ниже; утопание; температурный урон если `temp_damage`; блокирует видимость если `vision_block` |
 | `gas` | движение по z определяется `density` относительно соседей: тяжелее → оседает вниз, легче → поднимается; блокирует видимость если `vision_block`; токсичность если `temp_damage` |
 
@@ -537,17 +865,17 @@ else:
 | `corrodible` | `true` | большинство материалов поддаются коррозии |
 | `meltable` | `false` | только явно плавкие плавятся |
 | `mineable` | `false` | только явно добываемые добываются |
-| `transparent` | `false` | материал непрозрачен по умолчанию |
+| `transparent` | `0` | материал непрозрачен по умолчанию |
 
 В БД все поля всегда хранятся явно — пустых значений нет.
 
 ```json
 [
-  { "system_material": "stone",     "display_name": "Камень",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "mineral"],          "use_type": ["wall", "floor", "column"], "economic_tier": "standard", "hardness": 3, "density": 250, "structural_strength": 0.8,  "flammable": false, "freezable": false, "corrodible": true,  "meltable": false, "mineable": true,  "transparent": false, "components": null },
-  { "system_material": "wood",      "display_name": "Дерево",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "organic"],           "use_type": ["wall", "floor", "door", "railing"], "economic_tier": "basic", "hardness": 2, "density": 60,  "structural_strength": 0.3,  "flammable": true,  "freezable": false, "corrodible": true,  "meltable": false, "mineable": false, "transparent": false, "components": null },
-  { "system_material": "iron",      "display_name": "Железо",        "glossary_ref": null, "material_category": "solid",  "tags": ["metal", "mineral"],                  "use_type": ["wall", "door", "gate", "railing"], "economic_tier": "standard", "hardness": 4, "density": 800, "structural_strength": 0.9,  "flammable": false, "freezable": false, "corrodible": true,  "meltable": true,  "mineable": false, "transparent": false, "components": null },
-  { "system_material": "earth",     "display_name": "Земля",         "glossary_ref": null, "material_category": "solid",  "tags": ["raw", "mineral"],                    "use_type": ["floor"], "economic_tier": "poor", "hardness": 1, "density": 150, "structural_strength": 0.2,  "flammable": false, "freezable": false, "corrodible": true,  "meltable": false, "mineable": true,  "transparent": false, "components": null },
-  { "system_material": "crystal",   "display_name": "Кристалл",      "glossary_ref": null, "material_category": "solid",  "tags": ["mineral", "magic"],                  "use_type": ["wall", "floor"], "economic_tier": "premium", "hardness": 3, "density": 260, "structural_strength": 0.4,  "flammable": false, "freezable": false, "corrodible": false, "meltable": false, "mineable": false, "transparent": true, "components": null },
+  { "system_material": "stone",     "display_name": "Камень",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "mineral"],          "use_type": ["wall", "floor", "column"], "economic_tier": "standard", "hardness": 3, "density": 250, "structural_strength": 0.8,  "flammable": false, "freezable": false, "corrodible": true,  "meltable": false, "mineable": true,  "transparent": 0, "components": null },
+  { "system_material": "wood",      "display_name": "Дерево",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "organic"],           "use_type": ["wall", "floor", "door", "railing"], "economic_tier": "basic", "hardness": 2, "density": 60,  "structural_strength": 0.3,  "flammable": true,  "freezable": false, "corrodible": true,  "meltable": false, "mineable": false, "transparent": 0, "components": null },
+  { "system_material": "iron",      "display_name": "Железо",        "glossary_ref": null, "material_category": "solid",  "tags": ["metal", "mineral"],                  "use_type": ["wall", "door", "gate", "railing"], "economic_tier": "standard", "hardness": 4, "density": 800, "structural_strength": 0.9,  "flammable": false, "freezable": false, "corrodible": true,  "meltable": true,  "mineable": false, "transparent": 0, "components": null },
+  { "system_material": "earth",     "display_name": "Земля",         "glossary_ref": null, "material_category": "solid",  "tags": ["raw", "mineral"],                    "use_type": ["floor"], "economic_tier": "poor", "hardness": 1, "density": 150, "structural_strength": 0.2,  "flammable": false, "freezable": false, "corrodible": true,  "meltable": false, "mineable": true,  "transparent": 0, "components": null },
+  { "system_material": "crystal",   "display_name": "Кристалл",      "glossary_ref": null, "material_category": "solid",  "tags": ["mineral", "magic"],                  "use_type": ["wall", "floor"], "economic_tier": "premium", "hardness": 3, "density": 260, "structural_strength": 0.4,  "flammable": false, "freezable": false, "corrodible": false, "meltable": false, "mineable": false, "transparent": 100, "components": null },
   { "system_material": "water",     "display_name": "Вода",          "glossary_ref": null, "material_category": "liquid", "tags": [],                                    "use_type": [], "economic_tier": null, "hardness": null, "density": 100, "structural_strength": null, "flammable": false, "freezable": true,  "corrodible": false, "meltable": false, "temp_damage": false, "vision_block": false, "components": null },
   { "system_material": "lava",      "display_name": "Лава",          "glossary_ref": null, "material_category": "liquid", "tags": [],                                    "use_type": [], "economic_tier": null, "hardness": null, "density": 270, "structural_strength": null, "flammable": false, "freezable": false, "corrodible": false, "meltable": false, "temp_damage": true,  "vision_block": false, "components": null },
   { "system_material": "air",       "display_name": "Воздух",        "glossary_ref": null, "material_category": "gas",    "tags": [],                                    "use_type": [], "economic_tier": null, "hardness": null, "density": 1,   "structural_strength": null, "flammable": false, "freezable": false, "corrodible": false, "meltable": false, "temp_damage": false, "vision_block": false, "components": null },
@@ -557,6 +885,18 @@ else:
 ```
 
 ### `worlds.terrain_registry` (N+1)
+
+Для L2 на записи также: `hills: HillPolicy | None`,
+`supports_open_land_grade: bool = False`,
+`open_land_profile: Literal["plains", "forest"] | None = None`.
+Допуск требует явно выбранного профиля; при выключенном допуске профиль отсутствует.
+Физическая `terrain_category` сохраняет свой смысл. Контракт и transitional
+источник builtin hills — `tz_world_pack_storage.md` § L2 open-land hills.
+
+Как у material_registry: автоматическое подключение канонической библиотеки и
+overlay явно указанных world-полей по `system_terrain`. Канонические shore_*
+доступны defaults гидрологии без повторения их определений в fixture.
+Явный `[]` подключает канон, а отсутствие ключа при partial update не меняет мир.
 
 Структурный тип ячейки. `cell_material` на `map_cells` указывает из чего сделан. `has_state: true` — ячейка имеет динамическое состояние.
 
@@ -723,7 +1063,17 @@ THEN
 
 ## Точки входа
 
-### `location_entry_points`
+### `location_entry_points` — прежняя схема
+
+**Целевой SoT:** [переходы](./tz_location_transitions.md) §2–§4, §8.1.
+Схема и правила чтения ниже — legacy до переключения callers. Новые входы —
+Transition с builtin `main_entrance`/`service_entrance` через `behaves_as`;
+`destination_side.owner` — входимая локация, отдельной оси `entry_role` нет.
+Стороны — `transition_sides`; внешнее пространство может быть `surface`
+без NL. Parent/child не требуется. Discovery, pathfinding и выбор входа —
+контекст движка, вне текущей миграции генератора.
+Таблица удаляется после переключения callers.
+
 ```sql
 location_entry_points (
   entry_uid,
@@ -813,9 +1163,21 @@ location_levels (
 - Локация без `location_levels` → только нарратив, без позиционирования
 
 ### `location_passages` — переходы между локациями
+
+**Целевой SoT:** [`tz_location_transitions.md`](./tz_location_transitions.md).
+Схема ниже описывает прежнее хранение, заменяемое единым Transition;
+новые portal-контракты из неё не выводятся. Портал — один builtin-тип
+с двумя реализациями (§3.4 целевого ТЗ): `graph` учитывает граф перемещения
+и блокирующий маршрут специальный барьер; `coordinate` буквально
+телепортирует между точками, игнорируя граф. Назначением может быть локация,
+не только фиксированные xyz/node UID. Реализация и вид назначения — разные
+понятия. Данные портала — SQL transitions, стороны — отдельная
+transition_sides; правила прибытия и проекции назначения-локации
+остаются вопросами §10 целевого ТЗ.
+
 ```sql
 location_passages (
-  passage_uid, world_id,
+  passage_uid, world_uid,
   from_level_uid, from_x, from_y,   -- позиция входа (уровень + локальные координаты)
   to_level_uid,   to_x,   to_y,     -- позиция выхода
   is_bidirectional,
@@ -828,7 +1190,13 @@ location_passages (
 - Горизонтальные (дверь, коридор): from_level.z = to_level.z
 - Нет `travel_ticks` — interior-переходы логические, без временной стоимости
 
-### `worlds.passage_type_registry` (N+1)
+### `worlds.passage_type_registry` (N+1) — прежний реестр
+
+Целевой реестр — `worlds.transition_type_registry` с обязательным
+`behaves_as: TransitionType`, единый для проходов и входов
+([SoT](./tz_location_transitions.md) §3.1).
+Пример ниже — legacy, его поля не копируются в новый реестр.
+
 ```json
 [
   { "system_type": "door",      "display_type": "Дверь"               },
@@ -935,7 +1303,7 @@ ceiling: Железная люстра
 **Использование:**
 - `items.item_value_tier` — ценность предмета
 - `named_locations.economic_tier` — ценовой уровень локации/здания
-- `building_template_registry[].economic_tier_range` — диапазон при генерации
+- `economic_tier_range` на теле шаблона здания/участка — диапазон при генерации
 
 **Фактическая цена** (отложено до системы экономики):
 ```
@@ -978,9 +1346,9 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 **`is_public` / `is_forbidden`** — определяются в шаблоне на каждой комнате, не в реестре. Один и тот же `room_type = "common_hall"` может быть публичным в таверне и закрытым в частном доме.
 
-### `worlds.building_template_registry` (N+1)
+### Шаблоны зданий — библиотека (N+1; было `worlds.building_template_registry`, удалено в B7)
 
-Чертежи зданий с interior. Загружаются из JSON-файлов. Template engine создаёт `named_location` типа `building` (с `is_public` / `is_forbidden` из `default_*` шаблона) + дочерние `named_location` типа `room` по `room_type_registry` (с `is_public` / `is_forbidden` из `default_*` типа комнаты).
+Чертежи зданий с interior — тела библиотечных шаблонов; availability в мире — pack membership (`tz_template_library_packs`), не колонка `worlds`. Загружаются из JSON-файлов. Template engine создаёт `named_location` типа `building` (с `is_public` / `is_forbidden` из `default_*` шаблона) + дочерние `named_location` типа `room` по `room_type_registry` (с `is_public` / `is_forbidden` из `default_*` типа комнаты).
 
 ```json
 [
@@ -1024,13 +1392,13 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 `perimeter_barrier.template` — ref → `barrier_template_registry.system_type` (`BarrierTemplateKey`, [POJO-C-6](./tz_pojo_city_typing.md)). **Нет поля**, или поле есть и `template` **null** / `""` — инстанса нет (скип как нет поля).  
 `perimeter_barrier.probability` — поле **класса**; читает только владелец-участок (roll 0.0–1.0). Владельцы поселение и район не крутят.  
-`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: кардиналы `north`/`south`/`east`/`west` (`Facing`, [POJO-C-9](./tz_pojo_city_typing.md)). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — skip ключа + warning. Не синглтон: три хоста — три объекта, зоны не пересекаются.
+`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: кардиналы `north`/`south`/`east`/`west` (`Facing`, [POJO-C-9](./tz_pojo_city_typing.md)). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — unresolved всей операции по общей runtime/worldEdit политике; элементы не фильтруются (E6). Не синглтон: три хоста — три объекта, зоны не пересекаются.
 
 **Класс один:** `PerimeterBarrier`. Владельцы — **разные инстансы**, не shared object. Толщина прямой — `barrier_template_registry.width_cells` (дефолт **1**).
 
 | Владелец инстанса | Периметр (чьи прямые) | Контракт инстанса | Клетки |
 |---|---|---|---|
-| поселение (`SettlementSkeleton` / `CitySkeleton.perimeter_barrier`) | грани **footprint** поселения, не bbox района | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. Нет `sides` / `null` / `[]` → четыре прямые footprint | `SettlementLayout.barrier_cells`. Пишет **`SettlementAssembler`**. До generate района этот слой **вычитает** свои прямые (`footprint ∩ DistrictSlot`) из площади района, чтобы слот не заходил на клетки поселения. Чертёж может быть `city_wall` — это `template`, не другой класс |
+| поселение (`SettlementSkeleton.perimeter_barrier`) | грани **footprint** поселения, не bbox района | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. Нет `sides` / `null` / `[]` → четыре прямые footprint | `SettlementLayout.barrier_cells`. Пишет **`SettlementAssembler`**. До generate района этот слой **вычитает** свои прямые (`footprint ∩ DistrictSlot`) из площади района, чтобы слот не заходил на клетки поселения. Чертёж может быть `city_wall` — это `template`, не другой класс |
 | `DistrictTemplateEntry.perimeter_barrier` | грани **уже урезанного** `DistrictSlot` | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. `sides` — прямые **слота** | `DistrictLayout.barrier_cells`. Пишет **`DistrictAssembler`** (TODO generate). **v1 packing:** вычесть прямые района из слота. Не пишет список поселения; xy с поселением не делит (зоны) |
 | шаблон здания `perimeter_barrier` | грани **участка** | roll `probability` → `_build_barrier` | `AreaLayout.barrier_cells` |
 
@@ -1047,6 +1415,13 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 6. Инстанс `perimeter_barrier` **этого** шаблона здания: `probability` → roll → при успехе барьер вокруг участка (`AreaLayout.barrier_cells`, `_build_barrier`). Не стены комнат (шаг 5). Не инстанс района.
 
 ### `worlds.barrier_template_registry` (N+1)
+
+**Opt-out global canonical attach (library-packs, шаг 7, 2026-10-16):**
+barrier templates остаются inline world-реестром. Источник —
+`WorldBarrierTemplateRegistry.canonical_defaults()` + world entries,
+identity — `system_type`; runtime T-29 объединяет канон и overrides по этому
+ключу. SQL library/FS-паков и global spec нет. Перенос в pack library —
+отдельная deferred per-domain миграция; текущую семантику WorldSlice не менять.
 
 Чертежи барьеров без interior. Любой инстанс `PerimeterBarrier.template` ссылается сюда (`wooden_fence`, `stone_fence`, **`city_wall`** — шаблон для **поселения**, не «вместо» класса). Не несущие стены комнат.
 
@@ -1502,5 +1877,5 @@ repositories = {
 | Ранги доступа в `is_forbidden`-зонах | `location_faction_access.min_rank` — не реализовано; отложено до системы рангов фракций |
 | Fallback для бездомного + hometown при пустых детях | Если все дочерние `system_home_settlement_uid.depth+1` отфильтрованы `can_start()` — `NoLocationsAvailableError`. Нет fallback на глубину+2 или другой settlement. Требует решения совместно с UI-флоу. |
 | **LOC-T-1** Infer `system_location_type` из уникального subtype | Контракт locked (этот §). Код ⬜: omit type + `subtype=city` сейчас 422 (`BundleNamedLocation` StrictOnWire). Не CITY-T-5. |
-| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit → medium; type/unknown rank на generate → medium + WARNING фасада. Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size.md`](../.cursor/plans/loc-t-2-settlement-size.md). |
-| **LOC-T-3** Разведение поселений (объём + запас) | Контракт locked (§ Разведение поселений): AABB + запас; import **200** + ERROR лог; occupancy: больше `footprint_side_fine`, иначе раньше в `locations[]`. Не 422. Код ⬜. План: [`.cursor/plans/loc-t-3-settlement-volume-separation.md`](../.cursor/plans/loc-t-3-settlement-volume-separation.md). Команда: [`/impl-loc-t-3`](../.cursor/commands/impl-loc-t-3.md). |
+| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit/blank → medium; type/unknown rank → unresolved по общей политике (E6). Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size-done.md`](../.cursor/plans/loc-t-2-settlement-size-done.md). |
+| **LOC-T-3** Разведение поселений (объём + запас) | Контракт locked (§ Разведение поселений): AABB + запас; import **200** + ERROR лог; occupancy: больше `footprint_side_fine`, иначе раньше в `locations[]`. Не 422. Код ⬜. План: [`.cursor/plans/loc-t-3-settlement-volume-separation-done.md`](../.cursor/plans/loc-t-3-settlement-volume-separation-done.md). Команда: [`/impl-loc-t-3`](../.cursor/commands/impl-loc-t-3.md). |

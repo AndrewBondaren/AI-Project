@@ -19,7 +19,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def _resolve_node_meters(
+def _resolve_node_fine(
     node: ConnectionNode,
     locations_by_uid: dict[str, NamedLocation],
 ) -> tuple[int, int, int]:
@@ -38,20 +38,20 @@ def load_connection_graph(
     nodes: list[ConnectionNode],
     edges: list[ConnectionEdge],
 ) -> LoadedConnectionGraph:
-    """Resolve waypoint coords (meters) and grid indices for hydrology."""
+    """Resolve waypoint fine-cell coords and grid indices for hydrology."""
     loc_map = {loc.location_uid: loc for loc in locations}
-    cell_m = map_cell_fine_span(world)
+    map_cell = map_cell_fine_span(world)
 
     resolved: list[ResolvedConnectionNode] = []
     for node in nodes:
-        x_m, y_m, z_m = _resolve_node_meters(node, loc_map)
+        x_fine, y_fine, z = _resolve_node_fine(node, loc_map)
         resolved.append(ResolvedConnectionNode(
             node_uid=node.node_uid,
-            x_m=x_m,
-            y_m=y_m,
-            z_m=z_m,
-            gx=int(fine_to_grid_x(x_m, cell_m)),
-            gy=int(fine_to_grid_y(y_m, cell_m)),
+            x_fine=x_fine,
+            y_fine=y_fine,
+            z=z,
+            gx=int(fine_to_grid_x(x_fine, map_cell)),
+            gy=int(fine_to_grid_y(y_fine, map_cell)),
             node_type=node.node_type,
             graph_level=node.graph_level,
             location_uid=node.location_uid,

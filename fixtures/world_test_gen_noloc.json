@@ -1,10 +1,4 @@
 {
-  "_fixture_meta": {
-    "description": "Аналог world_test_gen.json без секции locations — скелет мира (states/races/perks + registries). L0 bake сейчас fail-closed: см. tz_map_light_bake § Edge case / MLB-11.",
-    "world_uid": "world-test-gen-noloc",
-    "based_on": "fixtures/world_test_gen.json",
-    "expected_bake": "422 surface terrain context unavailable until wilderness-without-anchors"
-  },
   "world": {
     "world_uid": "world-test-gen-noloc",
     "name": "Эйдора (генерация, без локаций)",
@@ -46,59 +40,35 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "location_type_registry": {
-      "continent": {
-        "display_name": "Континент"
+    "location_type_registry": [
+      {
+        "system_type": "continent",
+        "display_type": "Континент",
+        "parent_types": [
+          null
+        ]
       },
-      "region": {
-        "display_name": "Регион"
+      {
+        "system_type": "region",
+        "display_type": "Регион",
+        "parent_types": [
+          null,
+          "continent"
+        ]
       },
-      "kingdom": {
-        "display_name": "Королевство"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "empire": {
-        "display_name": "Империя"
+      {
+        "system_type": "building",
+        "display_type": "Здание"
       },
-      "duchy": {
-        "display_name": "Герцогство"
-      },
-      "city": {
-        "display_name": "Город"
-      },
-      "town": {
-        "display_name": "Посёлок"
-      },
-      "village": {
-        "display_name": "Деревня"
-      },
-      "district": {
-        "display_name": "Район"
-      },
-      "square": {
-        "display_name": "Площадь"
-      },
-      "street": {
-        "display_name": "Улица"
-      },
-      "building": {
-        "display_name": "Здание"
-      },
-      "gate": {
-        "display_name": "Ворота"
-      },
-      "room": {
-        "display_name": "Комната"
-      },
-      "dungeon": {
-        "display_name": "Подземелье"
-      },
-      "cave": {
-        "display_name": "Пещера"
-      },
-      "camp": {
-        "display_name": "Лагерь"
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       }
-    },
+    ],
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {
@@ -317,34 +287,16 @@
     ],
     "city_size_registry": [
       {
-        "system_size": "hamlet",
-        "display_size": "Хутор",
-        "radius": 0
+        "system_size": "small",
+        "display_size": "Малый"
       },
       {
-        "system_size": "village",
-        "display_size": "Деревня",
-        "radius": 0
+        "system_size": "medium",
+        "display_size": "Средний"
       },
       {
-        "system_size": "town",
-        "display_size": "Городок",
-        "radius": 1
-      },
-      {
-        "system_size": "city",
-        "display_size": "Город",
-        "radius": 1
-      },
-      {
-        "system_size": "metropolis",
-        "display_size": "Метрополис",
-        "radius": 2
-      },
-      {
-        "system_size": "megalopolis",
-        "display_size": "Мегалополис",
-        "radius": 3
+        "system_size": "large",
+        "display_size": "Большой"
       }
     ]
   },
@@ -366,54 +318,52 @@
       "created_at": "2026-05-23T00:00:00"
     }
   ],
-  "races": [
+  "race_templates": [
     {
-      "race_uid": "race-human-002",
-      "world_uid": "world-test-gen-noloc",
-      "display_race": "Человек",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "adaptive": true,
         "lifespan_years": 80
-      }
+      },
+      "template_uid": "race-human-002",
+      "display_name": "Человек",
+      "system_name": "race-human-002"
     },
     {
-      "race_uid": "race-elf-002",
-      "world_uid": "world-test-gen-noloc",
-      "display_race": "Эльф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "night_vision": true,
         "lifespan_years": 500
-      }
+      },
+      "template_uid": "race-elf-002",
+      "display_name": "Эльф",
+      "system_name": "race-elf-002"
     },
     {
-      "race_uid": "race-dwarf-002",
-      "world_uid": "world-test-gen-noloc",
-      "display_race": "Дворф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "stone_sense": true,
         "lifespan_years": 200
-      }
+      },
+      "template_uid": "race-dwarf-002",
+      "display_name": "Дворф",
+      "system_name": "race-dwarf-002"
     }
   ],
-  "perks": [
+  "perk_templates": [
     {
-      "perk_uid": "perk-iron-will-002",
-      "world_uid": "world-test-gen-noloc",
       "system_name": "iron_will",
       "display_name": "Железная воля",
       "system_description": "Resistance to fear and mind effects",
-      "display_description": "Устойчивость к страху и ментальным эффектам"
+      "display_description": "Устойчивость к страху и ментальным эффектам",
+      "template_uid": "perk-iron-will-002"
     },
     {
-      "perk_uid": "perk-tracker-002",
-      "world_uid": "world-test-gen-noloc",
       "system_name": "tracker",
       "display_name": "Следопыт",
       "system_description": "Enhanced tracking and navigation in wilderness",
-      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности",
+      "template_uid": "perk-tracker-002"
     }
   ]
 }

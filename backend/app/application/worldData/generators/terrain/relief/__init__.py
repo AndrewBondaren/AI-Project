@@ -1,6 +1,5 @@
 """Relief grade generators — tz_terrain_relief."""
 
-from app.application.worldData.generators.terrain.relief.geom.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.geom.facing import (
     CARDINAL_ORTHO_DELTAS,
     facing_wire,
@@ -50,7 +49,6 @@ __all__ = [
     "RibbonGradeDecision",
     "RibbonGradeResult",
     "RibbonSegment",
-    "bake_seed",
     "decide_radial_grade",
     "expand_shoulder_ring",
     "facing_wire",

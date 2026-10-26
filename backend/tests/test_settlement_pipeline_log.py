@@ -7,6 +7,7 @@ import unittest
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
+from app.application.worldData.pack.bake import packBakeLog
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_c11_done,
     log_pack_settlement_c11_start,
@@ -69,7 +70,7 @@ class SettlementPipelineTimingsTests(unittest.TestCase):
 
 class SettlementPackBakeLogTests(unittest.TestCase):
     def test_c11_done_line_has_stage_keys(self):
-        logger_name = "app.application.worldData.pack.bake.packBakeLog"
+        logger_name = packBakeLog.__name__
         with self.assertLogs(logger_name, level="INFO") as cm:
             log_pack_settlement_c11_start("w1", location_uid="loc-city")
             log_pack_settlement_c11_done(
@@ -94,7 +95,7 @@ class SettlementPackBakeLogTests(unittest.TestCase):
         self.assertNotIn("materialize_s=", text)
 
     def test_topology_done_line_has_stage_keys(self):
-        logger_name = "app.application.worldData.pack.bake.packBakeLog"
+        logger_name = packBakeLog.__name__
         with self.assertLogs(logger_name, level="INFO") as cm:
             log_pack_settlement_topology_done(
                 "w1",

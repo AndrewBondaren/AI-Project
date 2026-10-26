@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -48,6 +48,10 @@ def slot_rect(slot: DistrictSlot) -> Rect:
     )
 
 
-def district_step(slot: DistrictSlot, skeleton: CitySkeleton) -> int:
-    density = slot.district_template.density or skeleton.settlement_density
-    return block_size_for_density(density)
+def district_step(slot: DistrictSlot, skeleton: SettlementSkeleton) -> int:
+    ctx = slot.district_ctx
+    if ctx is not None:
+        return block_size_for_density(ctx.settlement_density)
+    return block_size_for_density(
+        slot.district_template.density or skeleton.settlement_density
+    )

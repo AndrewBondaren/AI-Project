@@ -13,16 +13,16 @@ import math
 from random import Random
 
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.utils.materialResolver import resolve_material
-from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import (
     ExteriorWallProfile,
     compute_exterior_wall_profiles,
 )
 from app.application.worldData.generators.structure.passages.wallZAdjuster import ZADJUSTER_BY_TYPE
-from app.dataModel.structure.enums.buildingElement import (
+from app.dataModel.locations.structure.enums.buildingElement import (
     DOOR_BUILDING_ELEMENTS,
     StructureElement,
 )
@@ -115,7 +115,6 @@ def place_wall_openings(
     building_uid: str,
     rng: Random,
     ground_z: int = 0,
-    building_tier: str | None = None,
 ) -> None:
     # §3.11: underground levels get no openings
     if level.z < ground_z:
@@ -135,22 +134,35 @@ def place_wall_openings(
             continue
 
         # OQ-17: opening_type per room_type — default window
-        element = StructureElement.WINDOW
+        spec = room.wall_openings[0] if room.wall_openings else WallOpeningSpec()
+        element = spec.opening_type or StructureElement.WINDOW
+        frame_mat = spec.frame_material or room.wall_material
 
         glass_use = _GLASS_USE_TYPE.get(element)
-        glass_tier = TierResolver.resolve(
-            world=world,
-            room_tier=room.economic_tier,
-            building_tier=building_tier,
-            rng=rng,
-        )
-        glass_mat = (
+        # room.economic_tier already carries the resolved room-scope
+        # cascade value (tz_cascade_context §4, cascade-migration M3).
+        glass_tier = room.economic_tier
+        glass_mat = spec.glass_material or (
             resolve_material(world, glass_use, glass_tier, rng, glass_use)
             if glass_use else None
         )
 
         zadjuster = ZADJUSTER_BY_TYPE[element]
-        z_list = zadjuster.resolve(level.z, profile.z_height)
+        # The profile may narrow usable wall height, but cannot raise the room ceiling.
+        z_height = min(room.z_height, profile.z_height)
+        z_list = zadjuster.resolve(level.z, z_height)
+        if spec.window_z is not None:
+            # Reuse the element's proportional opening height, changing only its base.
+            wh = len(z_list)
+            if spec.window_z >= z_height or spec.window_z + wh > z_height:
+                logger.error(
+                    "Building '%s' room '%s': wall_openings[0].window_z=%d "
+                    "does not fit z_height=%d (opening height=%d) — auto-resolve",
+                    building_uid, room.room_id, spec.window_z, z_height, wh,
+                )
+            else:
+                start = level.z + spec.window_z
+                z_list = list(range(start, start + wh))
 
         shaft_facing = room.facing if room.is_shaft else None
         placed = 0
@@ -164,7 +176,7 @@ def place_wall_openings(
                             continue
                         cells_dict[(x, y, abs_z)] = _opening_cell(
                             x, y, abs_z, world.world_uid, building_uid,
-                            element.value, room.wall_material,
+                            element.value, frame_mat,
                             glass_material=glass_mat,
                             system_facing=direction,
                         )

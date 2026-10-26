@@ -104,7 +104,7 @@ def _print_results(data: dict, z_filter: int | None) -> None:
     print(f"Уровней:   {s['levels']}")
     print(f"Комнат:    {s['rooms']}")
     print(f"Ячеек:     {s['cells']}")
-    print(f"Проходов:  {s['passages']}")
+    print(f"Переходов:  {s['transitions']}")
 
     print("\n--- Уровни ---")
     for lvl in data["levels"]:
@@ -117,10 +117,12 @@ def _print_results(data: dict, z_filter: int | None) -> None:
               f"origin=({o['x']},{o['y']})  z={o['z']}")
 
     print("\n--- Проходы ---")
-    for p in data["passages"]:
-        fr  = p["from_level_uid"] or "exterior"
-        txy = p["to_xy"]
-        print(f"  {p['system_passage_type']}  {fr} -> {p['to_level_uid']}  to=({txy[0]},{txy[1]})")
+    from app.dataModel.locations.transitions.transition import Transition
+    from app.dataModel.locations.transitions.transitionType import TransitionType
+    transitions = [Transition.model_validate(item) for item in data["transitions"]]
+    for p in transitions:
+        fr = p.source.level_uid or "exterior"
+        print(f"  {p.system_transition_type}  {fr} -> {p.destination.level_uid}  to=({p.destination.x},{p.destination.y})")
 
     cells = data["cells"]
 
@@ -151,16 +153,14 @@ def _print_results(data: dict, z_filter: int | None) -> None:
         print(f"  ({x},{y},z={z:+d}): {elem}")
 
     print("\n--- Лестница: все ячейки ---")
-    level_z = {lvl["level_uid"]: lvl["z"] for lvl in data["levels"]}
     rows: list[tuple[int, int, int, str, str | None]] = [
         (c["x"], c["y"], c["z"], c["element"], c.get("facing"))
         for c in cells if c["element"] in _STAIR_TYPES | _LADDER_TYPES
     ]
-    for p in data["passages"]:
-        if p["system_passage_type"] != "staircase":
+    for p in transitions:
+        if p.system_transition_type != TransitionType.STAIRCASE:
             continue
-        tz = level_z.get(p["to_level_uid"], 0)
-        rows.append((p["to_xy"][0], p["to_xy"][1], tz, "to_anchor", None))
+        rows.append((p.destination.x, p.destination.y, p.destination.z, "to_anchor", None))
     if rows:
         for x, y, z, t, facing in sorted(rows, key=lambda c: (c[2], c[0], c[1])):
             f = f"facing={facing}" if facing else ""

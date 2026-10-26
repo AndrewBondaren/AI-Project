@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from app.application.worldData.mapCellService import MapCellService
-from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.mapCells.mapCellService import MapCellService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
 from app.application.worldData.render.legacyMapGridRender import LegacyMapGridRender
-from app.application.worldData.render.packMapGridRender import PackMapGridRender
+from app.application.worldData.render.pack.packMapGridRender import PackMapGridRender
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -105,7 +105,7 @@ class MapGridRenderService:
         pack = self._pack(world)
         if pack is None:
             from app.application.worldData.render.renderPayloads import WildernessTileGridPayload
-            from app.application.worldData.render.wildernessTilePackRenderer import (
+            from app.application.worldData.render.pack.wildernessTilePackRenderer import (
                 WildernessTilePackRenderer,
             )
 

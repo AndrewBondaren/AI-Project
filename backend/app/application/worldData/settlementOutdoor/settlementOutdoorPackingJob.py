@@ -8,30 +8,23 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
-)
-from app.application.worldData.structureTemplateLibraryService import (
-    StructureTemplateLibraryService,
-)
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-    assemble_structure_catalog,
+    building_catalog_from_snapshot,
 )
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.cascade.locationScope import settlement_context
+from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
@@ -62,11 +55,11 @@ from app.application.worldData.settlementOutdoor.settlementPipelineTimings impor
     SettlementPipelineTimings,
     WallClock,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.worldPack.settlementStructureStatus import (
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.worldPack.wire.settlementStructureStatus import (
     settlement_structure_status_for,
 )
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
@@ -74,6 +67,8 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
 from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
+from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
+from app.application.jsonValidation.worldRow import transition_types
 
 
 @dataclass
@@ -100,18 +95,18 @@ class SettlementOutdoorPackingJob:
         generator: SettlementGeneratorService,
         sql_persist: SettlementOutdoorSqlPersist,
         invalidate: Callable[[World, MapCellQueryFacade], None],
-        library: BuildingTemplateLibraryService,
-        structure_library: StructureTemplateLibraryService,
+        snapshot_loader: TemplateSnapshotLoader,
         node_repo: IConnectionNodeRepository,
         edge_repo: IConnectionEdgeRepository,
+        location_repo: INamedLocationRepository | None = None,
     ) -> None:
         self._generator = generator
         self._sql = sql_persist
         self._invalidate = invalidate
-        self._library = library
-        self._structure_library = structure_library
+        self._snapshots = snapshot_loader
         self._nodes = node_repo
         self._edges = edge_repo
+        self._locations = location_repo
 
     async def run_queue(
         self,
@@ -139,21 +134,20 @@ class SettlementOutdoorPackingJob:
             location_uid=location_uid,
         )
         terrain_s = clock.lap()
-        library_layouts = await self._library.layouts_for_world(world)
-        structure_rows = await self._structure_library.list_all()
-        catalog = assemble_building_catalog(
-            world, library_layouts,
-            structures=assemble_structure_catalog(structure_rows),
-        )
+        snapshot = await self._snapshots.load(world)
+        catalog = building_catalog_from_snapshot(snapshot)
         catalog_s = clock.lap()
-        skeleton = city_skeleton_from_settlement(
+        settlement_ctx = settlement_context(world, settlement)
+        skeleton = resolved_settlement_skeleton(
             settlement,
-            economic_tier=TierResolver.resolve(world=world, city=settlement),
+            economic_tier=settlement_ctx.economic_tier,
+            settlement_density=settlement_ctx.settlement_density,
         )
         world_nodes = await self._nodes.get_by_world(world.world_uid)
         world_edges = await self._edges.get_by_world(world.world_uid)
         frozen_slots = load_topology_slots(
             world, settlement, skeleton, topology_districts(children),
+            settlement_ctx,
         )
         if frozen_slots is None:
             raise SettlementOutdoorConflictError(
@@ -187,23 +181,25 @@ class SettlementOutdoorPackingJob:
                 raise SettlementOutdoorError(
                     f"C23 slot missing for district '{row.location_uid}'"
                 )
-            one, nbytes, part = await self.materialize_district(
-                DistrictPackContext(
-                    world=world,
-                    settlement=settlement,
-                    facade=facade,
-                    writer=writer,
-                    volume=volume,
-                    terrain_cells=terrain_cells,
-                    catalog=catalog,
-                    city_graph=city_graph,
-                    slot=slot,
-                    district_uid=row.location_uid,
-                    census_uids=census_uids,
-                    clock=clock,
-                    assemble=assemble,
-                ),
+            ctx = DistrictPackContext(
+                world=world,
+                settlement=settlement,
+                facade=facade,
+                writer=writer,
+                volume=volume,
+                terrain_cells=terrain_cells,
+                catalog=catalog,
+                city_graph=city_graph,
+                slot=slot,
+                district_uid=row.location_uid,
+                census_uids=census_uids,
+                clock=clock,
+                assemble=assemble,
             )
+            try:
+                one, nbytes, part = await self.materialize_district(ctx)
+            except GenerationError as exc:
+                raise SettlementOutdoorError(str(exc)) from exc
             buildings += one.buildings
             levels += one.levels
             entry_points += one.entry_points
@@ -246,16 +242,23 @@ class SettlementOutdoorPackingJob:
         ctx: DistrictPackContext,
     ) -> tuple[MaterializeResult, int, SettlementPipelineTimings]:
         location_uid = ctx.settlement.location_uid
+        existing_buildings = None
+        if self._locations is not None:
+            existing_buildings = {
+                nl.location_uid: nl
+                for nl in await self._locations.get_children(ctx.district_uid)
+            }
         layout = self._generator.generate_layout(
             ctx.world, ctx.settlement, ctx.terrain_cells or None,
             catalog=ctx.catalog,
             district_slots=[ctx.slot],
             city_graph=ctx.city_graph,
             timings=ctx.assemble,
+            existing_buildings=existing_buildings,
         )
         generate_s = ctx.clock.lap()
         extracted = extract_settlement(
-            ctx.settlement, layout, graph_levels=PACKING_GRAPH_LEVELS,
+            ctx.settlement, layout, graph_levels=PACKING_GRAPH_LEVELS, registry=transition_types(ctx.world),
         )
         if (
             not extracted.districts
@@ -266,7 +269,7 @@ class SettlementOutdoorPackingJob:
             )
         extract_s = ctx.clock.lap()
         tmp_ref = ctx.writer.encode_settlement_structure_tmp(
-            location_uid, extracted.wire,
+            location_uid, extracted.wire, registry=extracted.transition_context.registry,
         )
         encode_s = ctx.clock.lap()
         await self._sql.persist(extracted)
@@ -292,7 +295,8 @@ class SettlementOutdoorPackingJob:
                 districts=1,
                 buildings=len(extracted.buildings),
                 levels=len(extracted.levels),
-                entry_points=len(extracted.entry_points),
+                entry_points=sum(extracted.transition_context.registry.entry_for(item.system_transition_type).entry
+                                 for item in extracted.sql_transitions),
                 dominant_material=layout.dominant_material,
             ),
             tmp_ref.nbytes,

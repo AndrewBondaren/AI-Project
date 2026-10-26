@@ -15,7 +15,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.road.layouts.culDeSacLayout import generate_cul_de_sac
 from app.application.worldData.generators.road.layouts.courtyardLayout import generate_courtyard
@@ -25,10 +25,11 @@ from app.application.worldData.generators.road.layouts.radialLayout import gener
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     StreetFrameContext,
 )
-from app.dataModel.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.dataModel.roads.enums.streetLayout import StreetLayout
+from app.ids import UidKind, entity_rng
 from app.application.worldData.generators.road.connectionPolicy import paint_for_connection
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.world import World
@@ -56,14 +57,18 @@ class DistrictRoadGenerator:
     def generate(
         self,
         slot:      DistrictSlot,
-        skeleton:  CitySkeleton,
+        skeleton:  SettlementSkeleton,
         world:     World,
         rng:       random.Random | None = None,
         surface:   dict[tuple[int, int], int] | None = None,
         frame:     StreetFrameContext | None = None,
     ) -> DistrictStreetGraph:
         if rng is None:
-            rng = random.Random()
+            rng = entity_rng(
+                world.world_uid, UidKind.TOPOLOGY,
+                district=slot.district_template.system_name,
+                index=slot.slot_index, x=slot.origin_x, y=slot.origin_y,
+            )
 
         template      = slot.district_template
         street_layout = StreetLayout.for_generator(template.street_layout)

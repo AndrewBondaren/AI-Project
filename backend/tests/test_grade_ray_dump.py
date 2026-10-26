@@ -21,7 +21,7 @@ from app.application.worldData.render.mapSymbols import (
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
 
 
 class TestGradeRayDump(unittest.TestCase):

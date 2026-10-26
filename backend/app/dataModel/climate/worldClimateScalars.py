@@ -21,7 +21,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.worldScalarWire import (
     pojo_wire_keys,
@@ -46,10 +46,10 @@ class SeasonTempOffsets(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    winter: DefaultOnWire[int] = 0
-    spring: DefaultOnWire[int] = 0
-    summer: DefaultOnWire[int] = 0
-    autumn: DefaultOnWire[int] = 0
+    winter: DefaultWhenMissing[int] = 0
+    spring: DefaultWhenMissing[int] = 0
+    summer: DefaultWhenMissing[int] = 0
+    autumn: DefaultWhenMissing[int] = 0
 
     @classmethod
     def canonical_fixture(cls) -> SeasonTempOffsets:
@@ -64,19 +64,19 @@ class WorldClimateScalars(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    default_climate_zone: DefaultOnWire[str] = DEFAULT_CLIMATE_ZONE
-    climate_temperature_peak_min: DefaultOnWire[int | None] = None
-    climate_temperature_peak_max: DefaultOnWire[int | None] = None
-    climate_pole_mode: DefaultOnWire[str] = DEFAULT_CLIMATE_POLE_MODE
-    climate_pole_preset: DefaultOnWire[str] = DEFAULT_CLIMATE_POLE_PRESET
-    climate_local_influence_fraction: DefaultOnWire[float] = constrained_field(
+    default_climate_zone: DefaultWhenMissing[str] = DEFAULT_CLIMATE_ZONE
+    climate_temperature_peak_min: DefaultWhenMissing[int | None] = None
+    climate_temperature_peak_max: DefaultWhenMissing[int | None] = None
+    climate_pole_mode: DefaultWhenMissing[str] = DEFAULT_CLIMATE_POLE_MODE
+    climate_pole_preset: DefaultWhenMissing[str] = DEFAULT_CLIMATE_POLE_PRESET
+    climate_local_influence_fraction: DefaultWhenMissing[float] = constrained_field(
         default=DEFAULT_LOCAL_INFLUENCE_FRACTION,
         greater_equals=0.0,
         lesser_equals=1.0,
     )
-    precipitation_liquid: DefaultOnWire[str] = DEFAULT_PRECIPITATION_LIQUID
-    climate_parallel_workers: DefaultOnWire[int | None] = None
-    season_temp_offsets: DefaultOnWire[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)
+    precipitation_liquid: DefaultWhenMissing[str] = DEFAULT_PRECIPITATION_LIQUID
+    climate_parallel_workers: DefaultWhenMissing[int | None] = None
+    season_temp_offsets: DefaultWhenMissing[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)
 
     @classmethod
     def canonical_defaults(cls) -> WorldClimateScalars:

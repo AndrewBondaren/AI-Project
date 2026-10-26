@@ -1,16 +1,18 @@
 """MapCellQueryFacade tests with temp pack."""
 
 import tempfile
+from app.application.cancellation.requestPlanWait import RequestPlanWait
+from tests.planning.consumers.test_wiring import planning_kwargs
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.dataModel.worldPack import WorldMapCellWire
-from app.dataModel.worldPack.layerPriority import MapLayerKind
+from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
 
 
 def _world(**kwargs):
@@ -34,6 +36,7 @@ class TestMapCellQueryFacade(unittest.IsolatedAsyncioTestCase):
         writer.save_manifest()
         self.services = build_pack_read_services(
             "w1", PatchStoreService(), db_path=self.db_path,
+            **{k: v for k, v in planning_kwargs(self).items() if k != "wait"},
         )
         self.facade = self.services.gameplay
         self.debug = self.services.debug
@@ -56,7 +59,7 @@ class TestMapCellQueryFacade(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cells[0].system_terrain, "plains")
 
     def test_loading_progress(self):
-        snap = self.loading.get_loading_progress(_world())
+        snap = self.loading.get_loading_progress(_world(), wait=RequestPlanWait.unbounded())
         self.assertEqual(snap.world_map.tiles_ready, 1)
         self.assertEqual(snap.world_map.tiles_pct, 100.0)
         self.assertEqual(snap.world_map.locations_pct, 100.0)

@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-09-07 — **NC-10** leftover `_m` (горы / гидрология / pack `light_m`) после rename coordinate hub на fine grid. 2026-09-05 — **CITY-T-4** планировщик после 2d **resolved** (`/impl-city-t-4`: POJO rank/zone/conditions, один resolve, cache=tokens, skip unknown assembler). **CITY-T-2d** контракт §1.2 в коде (`partial`; leftover **2b**). **CITY-T-2a** null=каталог + civic allow-list (`resolved`). **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
+**Обновлено:** 2026-10-20 — **HY-6 resolved:** геометрия water-side + два warning, 35 тестов, light/full smoke; перенос deepening band в L0 выделен мастером в **HY-10** (open). **COV-1** (P1) бритвенная граница покрытия: `required`-отсев на зонно-константном `climate.rainfall` → идеальная параллель forest↔plains; цель — variance-канал факта. **HY-7** shoreline × mountain mask; **HY-8** вода — уровень, не краска. **HY-9** coastline forms (sine+noise+lagoon вместо дословной прямой). **HY-11 resolved:** домен топологии + морская геометрия через швы; 233 теста, light/full HTTP smoke на world_test_004, gx=+2 water band подтверждён. **TOPO-1** — системный трек: генераторы planar при wrapped-default (карта консьюмеров). **HY-12** declare морей = carve elevation-бассейна с формой + `kind`, не paint по линии; autoresolve по `z < z_water_level` (уровень на водоём); autoresolve = classify-only. **GEO-1** designed water: процедурный океан — объект общего Placement resolver + continental/plate-поле в рельефе (не задача гидрологии). **HY-RIV-1** — источник процедурных рек под новым контрактом (declare-only / policy-синтез / GEO-1). **HY-WF-1** — waterfall-домен: факты `WaterfallDrop` есть, продукта нет. **HY-12 шаги 1–5 реализованы** (2026-10-21); шаг 6 — финальная приёмка + legacy cleanup. 2026-10-19 — **HY-6** declared coastline flood не даёт воду для N-S берегов (water strip только E-W; seeds требуют клеток heightmap; autoresolve нужен ≥2 map-клеток за линией). 2026-10-14 — repo review: **HY-S-6** `HydrologyBands` дубль POJO + divergent clamp defaults; **HY-S-5** evidence+; **FM-4** `StructureGeneratorService` ~575 class; **DR-8** `grid_bbox_padding` третий литерал; **RELIEF-T-68** два relief domain root; **LIBPACK-T-8** write-pipeline granularity. 2026-09-07 — **NC-10** leftover `_m` (горы / гидрология / pack `light_m`) после rename coordinate hub на fine grid. 2026-09-05 — **CITY-T-4** планировщик после 2d **resolved** (`/impl-city-t-4`: POJO rank/zone/conditions, один resolve, cache=tokens, skip unknown assembler). **CITY-T-2d** контракт §1.2 в коде (`partial`; leftover **2b**). **CITY-T-2a** null=каталог + civic allow-list (`resolved`). **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).
 **Связанные документы:**
 
 | Документ | Роль |
@@ -21,15 +21,15 @@
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10); terrain mask carry |
-| `.cursor/plans/full-bake-seam-halo-shoulder.md` | отдельные шаги: шов мира L0 · halo grid-соседа · T-10 |
-| `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
-| `.cursor/plans/c21-plot-ground-z.md` | C21 / P13; **NC-2** parcel + barrier без `DEFAULT_PARCEL_MARGIN_M` |
-| `.cursor/plans/grade-detailed-location-render.md` | L2 location grade ASCII impl |
-| `.cursor/plans/r36u-grade-detailed-migrate.md` | R36u migrate L0 ribbon → detailed geometry |
-| `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
-| `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
-| `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
-| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-12** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; v1 sample/stitch срезан |
+| `.cursor/plans/full-bake-seam-halo-shoulder-done.md` | отдельные шаги: шов мира L0 · halo grid-соседа · T-10 |
+| `.cursor/plans/settlement-assembler-done.md` | Phase-план settlement |
+| `.cursor/plans/c21-plot-ground-z-done.md` | C21 / P13; **NC-2** parcel + barrier без `DEFAULT_PARCEL_MARGIN_M` |
+| `.cursor/plans/grade-detailed-location-render-done.md` | L2 location grade ASCII impl |
+| `.cursor/plans/r36u-grade-detailed-migrate-done.md` | R36u migrate L0 ribbon → detailed geometry |
+| `.cursor/plans/r36u-post-impl-debt-done.md` | R36u-T-1…T-10 post-impl polish |
+| `.cursor/plans/r36v-grade-chunk-pool-done.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
+| `.cursor/plans/detailed-grade-volume-canal-done.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
+| `.cursor/plans/relief-pipeline-v2-done.md` | R41 discover в worker; **R41-T-1…T-12** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; v1 sample/stitch срезан |
 
 ---
 
@@ -45,6 +45,48 @@
 **Правило:** новый smell → новый ID; resolved не удалять (история).
 
 ---
+
+## Отложенные контракты генераторов
+
+### PORTAL-T-1 — задание назначения портала в генераторе и прибытие в локацию
+
+**Severity:** info. **Status:** open. **P:** P3 (не приоритет).
+**Решение мастера:** отложено 2026-10-05; не заниматься в текущем заходе.
+**SoT:** [`tz_location_transitions.md`](./tz_location_transitions.md) §3.4 и §10.4.
+
+Контекст — **портал**, создаваемый генератором в локации: как его шаблон/
+генератор объявляет назначение в локацию и как определяется фактическое
+место прибытия. Контракт ещё не согласован. Предложение обязательных
+«мест прибытия» на всех целевых локациях не принято; не вводить его как
+правило или реализацию. Центр, ближайший вход и произвольный resolver
+также не утверждены.
+
+Принятые требования сохраняются: портал — общая абстракция с реализациями
+graph/coordinate; graph-маршрут может блокироваться специальным барьером,
+coordinate игнорирует граф; назначением может быть локация. Техдолг
+касается задания такого назначения генератором и правила прибытия,
+а не отмены этих требований. Вернуться по отдельной просьбе мастера;
+закрытие — согласованный контракт в SoT и отдельные шаги генерации/приёмки.
+
+### SURFACE-T-1 — поиск выхода в surface среди комбинаций генератора
+
+**Severity:** info. **Status:** open. **P:** P3 (не приоритет).
+**Решение мастера:** семантика принята, алгоритм TODO, отложен 2026-10-05.
+**SoT:** [`tz_location_transitions.md`](./tz_location_transitions.md) §1 и §10.11.
+
+`surface` обозначает внешнее пространство мира без обязательной NL;
+это семантическое назначение выхода, не требование автору вручную задавать
+фиксированную точку. В wilderness мало семантических привязок. Алгоритм
+должен самостоятельно искать ближайший допустимый выход из возможных
+комбинаций генератора: лестница, тоннель и другие поддержанные решения.
+
+TODO: критерий близости, получение кандидатов из генератора, проверка
+допустимости комбинаций и материализация выбранного выхода. Эти правила
+не согласованы и сейчас не реализуются. Не подменять алгоритм обязательным
+parent/host, фиксированной точкой или выдуманным fallback. Геометрия
+материализованного результата появится после выбора решения; она не
+подменяет семантику surface. Возврат к алгоритму — по отдельной просьбе.
+Это отдельный вопрос от назначения/прибытия портала PORTAL-T-1.
 
 ## God-object verdict
 
@@ -76,6 +118,7 @@
 | `worldData/reliefTemplateLibraryService.py` | ~135 | CRUD + R29 FS + validate + **HTTPException** — см. **RELIEF-T-3** |
 | `pack/refine/fineChunkRunner.py` | ~390 | pool + persist; grade sample+materialize в том же compute task (**R36w**) |
 | `relief/discover/core.py` | ~160 | тонкий фасад: leftover walk + `run_mill_schedule` + sheer/C38 — **R41-T-20** ✅ |
+| `structure/structureGeneratorService.py` | ~825 (class ~575) | interior pipeline все фазы — **2× лимит** `class-size-limit`; latent ctx-deref; dead `validate_template` — см. **FM-4** |
 
 ---
 
@@ -100,6 +143,7 @@
 | CL-13 | Tier resolution docs vs code | `tz_climate.md` § на ячейке | resolved |
 | R-11 | `collect_map_cells` silent mix | split `collect_surface_grid_*` / `collect_geometry_fine_*` | resolved |
 | R-12 | Inline `// map_cell_fine_span` в planners | только `coordinates/convert.py` | resolved |
+| R-15 | `districtAssembler/planner/tokens.py` 549 строк — subjects + picks + facade | сплит `planner/{subjects,layoutPicks,tokens}.py` (161/256/188); шов `tokens` без изменений | resolved |
 
 ---
 
@@ -146,7 +190,7 @@ LOCATION_FINE_GRID     x, y, z    interior — v2, отложено
 | NC-1h | low | `needs_geometry` только `system_building_element`; barriers-only → re-gen | расширить heuristic или doc limitation |
 | NC-1i | — | leftover `_m` вне hub | **не этот ряд** — отдельный ID **NC-10** |
 
-**Refs:** `.cursor/plans/coordinate-spaces.md`
+**Refs:** `.cursor/plans/coordinate-spaces-done.md`
 
 ---
 
@@ -163,8 +207,8 @@ Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fin
 | Кластер | Примеры (не исчерпывающий grep) | Целевые имена (черновик) |
 |---|---|---|
 | Горы / relief masks | `MountainSpec.origin_x_m` / `radius_m` / `width_m`, `peak_spacing_m`, `hat_radius_m`, `half_width_m`, `band_m` | `*_fine` или без суффикса + тип `Fine*` на границе convert |
-| Гидрология | `CorridorForm.half_width_m`, `semi_minor_m`, `spine_m`, `apply_declared_meter_river_carves`, `sparse_meter_hydro`, `merge_meter_hydro_for_tile` | `*_fine`, `apply_declared_fine_river_carves`, `sparse_fine_hydro` |
-| Pack / parent light | `ParentLightTile.tile_m`, `light_m`, `light_m_for`, `tile_size_m`, `background_expand_radius_m`, `corridor_half_width_m`, `max_radius_m` | `map_cell_span` / `fine_per_light_cell` / `*_fine` |
+| ~~Гидрология~~ ✅ | `CorridorForm.half_width_m`, `semi_minor_m`, `spine_m`, `apply_declared_meter_river_carves`, `sparse_meter_hydro`, `merge_meter_hydro_for_tile`, `meter_z_overrides`, `ResolvedConnectionNode.x_m/y_m/z_m` | done: `*_fine`, `apply_declared_fine_river_carves`, `sparse_fine_hydro`, `merge_fine_hydro_for_tile`, `fine_z_overrides`, `x_fine/y_fine/z`; ТЗ `tz_terrain_hydrology` U20/U21/C1 → fine-клетки |
+| ~~Pack / parent light~~ ✅ | `ParentLightTile.tile_m`, `light_m`, `light_m_for`, `tile_size_m`, `background_expand_radius_m`, `corridor_half_width_m`, `max_radius_m`, `meter_surface_z`, `MeterGradeSurface`, `sample_step_m` (wire) | done: `tile_macro` / `light_span` (`light_span_for`) / `*_fine`; `fineGradeSurface`; `sample_step_fine` + `AliasChoices` на чтении старых паков |
 | Locals | `cell_m`, `tile_m`, `xm`/`ym` как «meter x» в surface/pack | `map_cell`, `x_fine` — по касанию, не mass-rename ради grep |
 
 **Замок:**
@@ -185,10 +229,10 @@ Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fin
 ### NC-2 — `AreaSlot.cells` ≠ «участок с двором»
 
 **Status:** `open` | **Severity:** medium | **P:** P1  
-**Impl:** [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md) §2.2b (C21 / P13, тот же pass).
+**Impl:** [`.cursor/plans/c21-plot-ground-z-done.md`](../.cursor/plans/c21-plot-ground-z-done.md) §2.2b (C21 / P13, тот же pass).
 
 Docstring `AreaSlot`: «здание + двор + забор». `_make_area_slot` заполняет **только bbox `occupied_footprint`**.  
-Area barrier: `DEFAULT_PARCEL_MARGIN_M = 1` в `dataModel/settlement/area/perimeterBarrier.py` + `expand_bbox` в `areaBarriers` — workaround «забор снаружи дома». Константа **не** поле `PerimeterBarrier` (`template` + `probability` — [tz_locations.md](./tz_locations.md)).
+Area barrier: `DEFAULT_PARCEL_MARGIN_M = 1` в `dataModel/locations/settlement/area/perimeterBarrier.py` + `expand_bbox` в `areaBarriers` — workaround «забор снаружи дома». Константа **не** поле `PerimeterBarrier` (`template` + `probability` — [tz_locations.md](./tz_locations.md)).
 
 **Замок (не слайс):**
 
@@ -263,7 +307,7 @@ Perimeter не учитывает template района — v1 compromise.
 
 **Status:** `open` | **Severity:** low | **P:** P3
 
-`building_template_registry` / `barrier_template_registry` — dict в модели, list-like в коде.  
+`barrier_template_registry` — dict в модели, list-like в коде (`building_template_registry` удалён в B7, половина пункта снята).  
 **Fix:** validator при JSON import.
 
 ---
@@ -292,7 +336,7 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | **CITY-T-1a** | **high** | **P1** | ~~import ignore / нет колонок~~ | **resolved** (C23): `BundleNamedLocation` overlay из `SettlementSkeleton`; колонки `0001`; `city_skeleton_from_settlement` читает поля NL |
 | **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город | Persist/wiring **ноды** — Gate: DAG (агент ноды не трогает). Reuse freeze в generate — **[CITY-T-5b](./tz_city_generation_technical_debt.md)** (интерфейс, не нода) |
 | **CITY-T-1c** | medium | P2 | Два движка стен поселения: `shrink_slot_by_settlement_barrier` (C22 поле) vs `plan_settlement_barriers` (эвристика size/tier, поле не читает). Перекрывает [NC-3](#nc-3--три-barrier-pipeline-разная-gate-политика) | Клетки периметра из инстанса `PerimeterBarrier`; эвристика — только omit/null. Зоны без общей xy — city C22 |
-| **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
+| **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler-done.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
 | **CITY-T-1e** | medium | DAG | `SettlementLayout.dominant_material` post-assemble есть. На `NamedLocation` не пишется. `lazy_settlement` в `NodeResult` material не кладёт → LLM «мраморные стены» не из layout | Persist опционально (§3.1); payload — DAG (`tz_engine_flow.md`) |
 | **CITY-T-1f** | info | — | `street_layout` кроме `grid`: `NotImplementedError`. Canonical templates все `grid`. **CONN-PACK-1** | Не слайс 1a. Не выдавать organic/radial в registry, пока нет generate |
 
@@ -311,7 +355,7 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | Sub-ID | Severity | P | Status | Проблема | Fix |
 |---|---|---|---|---|---|
 | **CITY-T-2a** | medium | P2 | **resolved** | Контракт §9.2 в коде (`allowed_fill_structure_types`). Civic flood закрыт allow-list на `civic_center` + cache=tokens (**4c**) | — |
-| **CITY-T-2b** | **high** | **P1** | **open** | Building §5.2: `building_template_registry` = uid → SQL `building_templates`. Packing (`building_layout_templates`) принимает только строки, которые валидятся как `BuildingLayoutTemplate` (`system_name` + `levels`) + builtins (в т.ч. stub `mine`/`temple`/… с телом ратуши). Указатели uid **игнор** | Generate читает library по uid реестра мира (тот же SoT, что import шаблона). Пока 2b open smoke layout-телами в JSON мира — interim, не контракт мастера |
+| **CITY-T-2b** | **high** | **P1** | **open** | ~~Building §5.2: `building_template_registry` = uid → SQL `building_templates`. Packing (`building_layout_templates`) принимает только строки, которые валидятся как `BuildingLayoutTemplate` (`system_name` + `levels`) + builtins (в т.ч. stub `mine`/`temple`/… с телом ратуши). Указатели uid **игнор**~~ — **interim-контракт снят B7 (2026-10-15): колонка и accessors удалены; availability = membership, generate читает snapshot (B3) по member uid** | Generate читает library по uid — реализовано через `TemplateSnapshotLoader`/`BuildingCatalog` (member uid, не world-column). Остаток — smoke/приёмка; статус закрытия за мастером |
 | **CITY-T-2c** | medium | P1 | **partial** | Ничья **района** = клетка footprint + `_districts`. Packing зданий: `BUILDINGS` seed (**4g** ✅). Frontage / city streets — проверить `world_uid` | В seed не `city_size` и не pack tile. Планирование слотов serial (CITY-T-3) |
 | **CITY-T-2d** | medium | P2 | **partial** | Контракт §1.2 в коде: `typical_districts` → роли → морфология; `district_subtype`; registry + subjects; size ≠ рецепт. Leftover: SQL uid (**2b**); материал как отдельный фильтр сверх `subjects` | Не reopen рецепт. Дальше — 2b |
 
@@ -355,7 +399,7 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 ### CITY-T-4 — планировщик после 2d: смешение и хардкоды
 
 **Status:** `resolved` | **Severity:** high | **P:** P1 (4e — N+1 типов районов) / P2 (остальное)
-**Имплементация:** [`.cursor/plans/city-t-4-planner-debt.md`](../.cursor/plans/city-t-4-planner-debt.md) → `/impl-city-t-4` (2026-09-05).
+**Имплементация:** [`.cursor/plans/city-t-4-planner-debt-done.md`](../.cursor/plans/city-t-4-planner-debt-done.md) → `/impl-city-t-4` (2026-09-05).
 **Контекст:** 2026-09-05, ревью кода после [CITY-T-2d](#city-t-2--пул-шаблонов-мира--packing). Оси: смешанные ответственности · хардкоды (дубль POJO / политика только в assembler). **Не** reopen рецепт §1.2 (роли + subjects в реестре). **Не** CITY-T-3.
 
 Канон в `dataModel` (`WorldSettlementSpecializationRegistry.canonical_defaults`, specialized district drawings) — SoT, не этот ID.
@@ -432,6 +476,7 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 | DR-5 | low | `_smoothstep`, `_dist` (hypot) | `climatePoleField.py` + `tierResolve.py` | `generators/climate/math.py` или shared | P2 |
 | DR-6 | low | `terrain_set` comprehension | inline ×6 (`columnFillPass`, `heightmapPass`, `liquidOverlayPass`, `cavesGenerator`, `generate_minimal`, `_non_surface_anchor_cells`); `_terrain_set` только в `columnFillPass` | `terrain_registry_set(world)` в `terrain/terrainZ.py` | P2 |
 | DR-7 | low | lazy single-cell weather MapCell | `TerrainGeneratorService.generate_minimal` ≈ `ClimateSurfaceAssembler._non_surface_anchor_cells` | shared `build_weathered_anchor_cell(...)` | P3 |
+| DR-8 | low | `worldMapSettings.py:10` + `db/models/world.py:123` + `0001_initial.sql:116` | `grid_bbox_padding = 2` — **третий литерал**: колонка `NOT NULL DEFAULT 2`, fallback в `worldMapSettings` (`v is None`) мёртв по схеме; POJO-owner отсутствует | POJO (terrain scalars) или убрать fallback — читать колонку как есть | P3 |
 | MAP-1 | low | `api/routes/map.py` | 4× fetch world/locations; 6× `status_code`/`JSONResponse`; module-level `_terrain_generator` / `_climate_orchestrator` | route dep `load_world_context`; container factory | P3 |
 
 ---
@@ -447,12 +492,25 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 | **HY-3** | medium | Нет LLM naming для autoresolved geography | U13: `llm_name_procedural_locations` + persist; **после DAG**, gate `materialize_named_locations` | open |
 | **HY-4** | low | `type_classify` null в template без normalize | U22: import validator подставляет schema defaults и пишет explicit values; runtime fallback до validator | open |
 | **HY-5** | medium | **Smoke 2026-07-17:** rivers/lakes cells=0 (flat z, absolute detect, min_z=20). | **partial (Pass 1.4 + debt fixes):** relief_objects_z before hydro; `coarse_relief_z` vs post-1.4 (no light double-rise); shared footprint/depression; explicit `ProminenceScale`; pole required on coarse mountain. **Smoke checklist:** rebake `world_test_gen` → `world-height` max ≫ plains; rivers/lakes cells>0 **or** sources/basins in log. **HY-5b:** light procedural RIVER paint still open | partial |
-| **HY-BATH-1** | medium | Light SEA (`~`) с `surface_z` как у plains: hydro paint role без bathymetry z; Relief читает `coarse_relief_z` (намеренно). | **partial (stub 2026-07-19):** `HydrologySeasPolicy.stub_drop_fraction_of_span` + `resolve_open_water_surface_z`; light `apply_coarse_open_water` пишет floor (prefer coarse ≤ z_sea, else stub drop). **TZ:** full DepressionForm pipeline still open | partial |
+| **HY-BATH-1** | medium | Light SEA (`~`) с `surface_z` как у plains: hydro paint role без bathymetry z; Relief читает `coarse_relief_z` (намеренно). **2026-10-20:** carve не смотрит на рельеф — профиль строится от `z_sea` вверх (`level + shelf − d + 1`), а не от `z_land` вниз; `bands.min` как гарантированный счётчик съедает узкую воду целиком (`world_test_004` после сдвига линии: 1 столбец воды, `bands.min=5` → всё deepening band, open water нет). | **partial (stub 2026-07-19):** `HydrologySeasPolicy.stub_drop_fraction_of_span` + `resolve_open_water_surface_z`; light `apply_coarse_open_water` пишет floor (prefer coarse ≤ z_sea, else stub drop). **TZ:** full DepressionForm pipeline still open. **Target (2026-10-20):** океан = впадина в heightmap; U15 bands = **rim-профиль борта** впадины `z_land(K) → z_floor` (ширина из перепада/grade, `bands.max` — cap), не счётчик от берега → пересмотр D4 (`shelf = U15` ≠ Depression) и `bands.min` для моря в `tz_terrain_hydrology.md` §U15. Не clamp-костыль в `_shelf_depth`. **Роль поднята (HY-8):** DepressionForm — не «котловины внутри уже существующего open ocean», а **источник autoresolve-океана**: бассейн через общий placement → relief spec до level-fill; natural-only autoresolve читает готовые впадины, bbox-edge synthesis снят (GEO-1 отдельно); Scope A «только внутри open_ocean mass» снимается | partial |
+| **HY-6** | medium | Declared coastline flood: осевой `_in_water_strip` не давал воду для N-S берегов; unbounded flood обтекал торцы; берег на bounds молчаливо оставался без воды. **Smoke 2026-10-19** `world_test_004`: x=-1500 на gx=-2 → `coastal_sea cells=5` (только shore), `autoresolve_sea cells=0`. | **Resolved 2026-10-20:** общий `shore/waterSideFootprint.py`: ближайший отрезок (не растровая клетка), единые owning `n(K)`/проекция для seeds, land shore и bounded/unbounded flood; dot-стена, deterministic max-dot tie; `passable` как параметр, footprint → apply carve. Оба warning пишутся в generation log. **35 тестов OK** (HY-6 + hy2/hy5a), compileall/diff-check OK. Smoke после x=-500: light/full HTTP 200, `coastal_sea cells=9`, пять клеток gx=-2 с `water_dist=1` / `deepening_index=1`, ocean-пин на band; warning `water extent 1 <= bands.min 5`. Исходное состояние даёт warning `water_dist=0`. По решению мастера пропуск band в L0 выделен в **HY-10**; HY-7/HY-8/HY-BATH-1 не реализованы. [План и evidence](../.cursor/plans/hy-6-coastline-water-side-done.md). | resolved |
+| **HY-7** | medium | **Shoreline × mountain mask** (smoke 2026-10-19 `world_test_004`: `s` идёт сквозь `m` по всей высоте карты). (G1) `carve_deepening_bands` land_shore + light `apply_declared_basins` ставят role `SHORE` / `shore_sea` на клетке `system_terrain == mountain`; (G2) carve безусловно `surface_z = z_sea` → гора режется в вертикальную стену по линии; (G3) precedence `mountain` vs hydro-role `SHORE` в `tz_map_light_bake` § precedence не определён (`hydro не затирает terrain` покрывает только paint, не role); (G4) light z-band stub `m` vs порядок carve (R3/R4). | Семантика: океан — впадина; **shoreline рисуется только там, где борт выходит на не-гору; на клетках `mountain`-маски shoreline не рисуется** (ни `SHORE`, ни bands, ни `shore_sea`) — гора кончается на воде. Критерий — маска `system_terrain == mountain`, **не** порог z и **не** relief grade (`SHEER`/cliff — другая ось, не вводить). Вода на водной стороне внутри маски — всё равно впадина (линия мастера главнее); warning `coastline crosses mountain mask`. Гора на берегу **сама является скалистым берегом** по семантике — отдельного класса/paint не нужно. Зафиксировать precedence role в `tz_map_light_bake`. Фикстура — `world_test_004` как есть (линия через западный `m`-столбец); линию по z не двигать. **Механизм — HY-8** (level-fill не заходит на z > `z_sea`, борт глубиной ≤ `bands.max` гору не прорезает); маска `mountain` — семантика берега, не отдельная проверка | open |
+| **HY-8** | **high** | Legacy вода была paint/flood с безусловной z-записью и заливкой гор. | **Resolved семантика 2026-10-21 в HY-12:** единый placement → relief carve → strict `z < z_water_level` → derived dry shore. `z = level` остаётся сушей. Горы защищены reserved-клетками, bands задают ширину профиля, не z-cap (решение HY-12/3); fill рельеф не меняет. Natural-only не синтезирует океан; уровень принадлежит телу. Legacy writers удалены, unit/coarse/hash-seed приёмка в [HY-12](../.cursor/plans/hy-12-sea-elevation-contract-done.md). Mountain-mask precedence HY-7 и L0 bands HY-10 остаются открыты. | resolved |
+| **COV-1** | **high** | **Бритвенная граница покрытия на eligibility-отсеве** (smoke 2026-10-19 `world_test_004`: forest↔plains — идеальная параллель через всю карту). Цепочка: `climate.rainfall`-факт — зонно-константный (`base_rainfall` профиля nearest anchor, `factConsumers/climate.py`); builtin `forest` eligibility = `rainfall ≥45, required=True` → кандидат отпадает разом на всей зонной полосе → граница = ступень факта, не край маски: `edge_noise`/claim-шум к ней не применяются. Тот же паттерн у любого `required`-факта на зонно-константном значении | **P1.** Целевое: факт с вариативностью — `ClimateZoneProfile.rainfall_variance` уже в контракте, но не читается → `base + seeded_u01(uid, x, y)·variance` в `ClimateFacts` (или continuous-факт `distance_to_zone_edge`): порог → рваный контур без смены контракта eligibility. Альтернативы (решение мастера): `required`→`weight` + satisfaction-falloff = переходная полоса. Authored-workaround уже сегодня: `declared_regions` с `edge_noise` поверх autoresolve | open |
+| **HY-9** | medium | **Coastline form: единственная форма — дословная ломаная.** `DeclaredCoastline.path` растеризуется точь-в-точь → абсолютно прямой берег выглядит ненатурально; autoresolve без declare — bbox-edge flood (прямые края мира). Нет аналога `RegionShape.edge_noise` для гидрологии; нет бухт/лагун — только руками через `declared_lakes` | `DeclaredCoastline += form: CoastlineForm` (`straight` default — авторская воля / `sine_noise` / `sine_lagoons`) + knobs (amplitude, wavelength, noise_scale, bay_density); `default_seas` += политика формы для autoresolve (`seeded_u01(channel="coast_form")`); трансформация спайна на границе load → master input **до** rasterize (HY-6 водная сторона не трогается); лагуны — эмиссия `LakeSpec` (существующий carve, детерминированно); autoresolve без declare — процедурный спайн вдоль ocean-axis вместо bbox-edge flood; U14 ≤45° на изгибы; clip bounds. План: [`.cursor/plans/coastline-forms.md`](../.cursor/plans/coastline-forms.md) | open |
+| **HY-10** | medium | **Deepening band отсутствует в L0 при корректном coarse flood.** Smoke 2026-10-20 `world_test_004`, x=-500: пять западных coarse-клеток gx=-2 имеют `SHORE`, `deepening_index=1`, ocean-пин на band; L0 gx=-2 содержит **0 `s`**, на всей карте 160 `s` только declare-линии. `coarseOpenWater._OPEN_WATER` пропускает `SHORE` (только `SEA`/`LAKE`), `declaredBasins` красит только линию; compact light wire не хранит `deepening_index`. [Coarse evidence](../.local/map-render/1ff7d3a4-a832-4951-ad33-fe9cb314336c/hy6-coarse-acceptance.json), [L0 dump](../.local/map-render/1ff7d3a4-a832-4951-ad33-fe9cb314336c/20261019T222833Z/world-map.txt). | По решению мастера выделено из HY-6, геометрия HY-6 закрыта. Спроектировать light-footprint shore/deepening bands и его применение через `HydroContributor`/compose с общим merge ролей; coarse planning остаётся диагностическим источником, **не** вторым SoT L0 mask (см. `tz_map_light_bake` § Source of truth). Согласовать сохранение band metadata и precedence с HY-7/HY-8; не делать flood/carve или rim-профиль повторно в paint, не подменять это HY-BATH-1. До кода — отдельный план и ТЗ. | open |
+| **HY-11** | **high** | Hydrology обходила `WorldTopology`: planar flood/метрика/центроид и rasterize в wrapped-мире; вода за краем была void. | **Resolved 2026-10-20:** `dataModel/topology/`, unrolled images/метрика/проекция/centroid/canonical frame; declared flood и sea-autoresolve используют домен, rasterize канонизирует выходные клетки. 233 теста OK; compileall/diff-check OK. Smoke `world_test_004`, runtime `1ff7d3a4-a832-4951-ad33-fe9cb314336c`: coastline x=-1500, wrapped; light/full HTTP 200 (10240/25600 L0 cells), render HTTP 200; все пять gx=+2 имеют `water_dist=1`, `deepening_index=1`. Ложного `water_dist=0` нет; `water extent 2 <= bands.min 5` ожидаем. L0 band остаётся HY-10. [Выполненный план](../.cursor/plans/hy-11-topology-domain-geometry-done.md); [HTTP/coarse evidence](../.local/map-render/1ff7d3a4-a832-4951-ad33-fe9cb314336c/hy11-generation-evidence.json). | resolved |
+| **HY-12** | **high** | Legacy declare морей = линия → paint/flood, bbox-edge autoresolve; footprint/kind/уровень на тело отсутствовали. | **Resolved 2026-10-21:** шаги 1–6: общий placement → абсолютный relief basinZ → priority elevation hierarchy/spill/physical union → strict fill `z < z_water_level` → dry shore → river waterline/RiverBedSpec. Legacy body generators, bbox-edge flood, deepening paint-carver и bathymetry stub удалены. Fine river profiles читают один snapshot. Offline production `world_test_004`: 11 water + 10 shore, wrapped-шов/UID/level/reserved mountains и replay подтверждены; synthetic planar/sphere/river и hash-seed replay покрыты. 523 tests OK, compileall/diff-check. [План](../.cursor/plans/hy-12-sea-elevation-contract-done.md), [coarse evidence](../.local/map-render/hy12-coarse/acceptance.json), [render](../.local/map-render/hy12-coarse/coarse.svg). HTTP/L0, HY-7/9/10, дополнительные Depression forms, GEO-1, HY-RIV-1, HY-WF-1 и W/L не закрыты. Review-долг шага 5/6 (2026-10-21): [hy-12-step5-review-debt](../.cursor/plans/hy-12-step5-review-debt-done.md) — контракт `topology=None`, приватный `_channel_depth_step`, shim `generate_rivers`, алиасинг `surface_z` в fine-пути, POJO `with_*`; решения R-1…R-5 приняты 2026-10-21; R-6 принят: default допуска authored mouth — 200 world-fine cells (L2); coarse использует пересчёт того же расстояния. Runtime-fallback — ближайший достижимый водоём с полным WarningError; отсутствие водоёмов/достижимых тел — отдельные отказы. Глубина POJO — default 3 cells. Review-debt шаги 1–2 выполнены: явный WorldTopology без PLANAR-fallback, один resolve на caller; POJO channel_depth_cells=3 с mountain-множителем, riverBedProfile вместо приватного depth-helper; 157 tests OK. Шаг 3 выполнен: accepted-only assembler без shim/bed_specs, атомарный runtime-fallback к ближайшему достижимому телу, полные typed WarningError; mouth_search_radius_fine=200 и прежний cap пути через POJO; 468 tests OK. Шаг 4 выполнен: resolved вода до fine planning, sparse sampling через coordinate hub/topology, общий prepare и полный diagnostic sink, возврат hm.surface_z без alias-контракта; 478 tests OK + финальные 38 tests OK (12 fine tests). Шаг 5 выполнен: with_* сохраняют все поля и повторно валидируют обновления, test-helper требует явный z_min; 117 tests OK. Шаг 6 выполнен: ТЗ/docstring сверены с accepted-only результатом, общим устьем, проходимым SHORE, fallback и fine-метрикой допуска; алгоритмы не менялись. Шаг 7 выполнен 2026-10-22: location/body UID разделены, terminal притоки с typed drainage и защитой от циклов, неверный тип изолирован по объектам, RECEIVER_METADATA возвращается отдельной причиной поиска; исходный reason сохранён. Явная policy/topology, общий runtime gate; 515 tests OK (22 новых round2), compileall/diff-check. Review-debt шаги 1–7 закрыты. | resolved |
+| **GEO-1** | **high** | **Процедурный океан — неоткуда взяться: рельеф генерирует noise-поля без понятия «океанское дно».** Autoresolve гидрологии по elevation (HY-12) умеет только классифицировать существующие впадины; на плоском/высоком heightmap воды нет вообще. Вариант «synthesize бассейн из lowest-component» отклонён мастером: нестабилен на пересчёте (читает post-carve террейн → океан прыгает между re-bake) и делает океан случайностью распределения — нет доли воды, нет континентальной структуры. На wrapped/sphere нет «ocean-края bbox» — размещение не опирается на bounds. Граница слоёв: **размещение воды — не задача гидрологии** (HY-12 = fill/classify/shore/rivers только) | **Designed water = объект общего Placement resolver.** Контракт (мастер, `tz_map_light_bake` § Placement priority, единый для всех объектов генератора): водоёмы и coastline участвуют в общем resolve размещения — `placement_specificity` → площадь footprint → `region_uid`; зависимости «опора → зависимый»; coastline = контракт создания воды (приоритет 0 без воды). Будущий алгоритм размещения океана — **continental/plate-поле в terrain pass**: низкочастотное поле опускает designed-регионы ниже `default_water_level` **до** hydrology (кандидаты: plate-модель Azgaar-типа, continental noise + target `water_fraction` скаляр мира, authored region→basin); hydrology затем читает готовый heightmap. Стабильность пересчёта: размещение определяется от pre-hydrology снимка рельефа, не от post-carve. Отдельный план: архитектура общего resolver + инвентарь потребителей + миграция — согласуется с мастером до кода. Связи: HY-12 (declare-сторона), TOPO-1 (поле через шов), relief-треки | open |
+| **TOPO-1** | **high** | Системный перевод генераторов на домен топологии при default `wrapped`. **HY-11 закрыт:** доменный корень/сервисы и первый консьюмер — морская геометрия; маски/landcover и pack seam/halo также проводные. Реки переведены на topology D8 и waterline в HY-12/5 (2026-10-21). Остаются климат, рельеф/горы и локации. | [Карта консьюмеров и очередь](../.cursor/plans/topo-1-domain-consumers.md). Домен + морской консьюмер подтверждены 233 тестами и HTTP smoke HY-11; остальные домены подключаются отдельными планами/smoke. Per-domain обход wrap запрещён. | open |
+| **HY-RIV-1** | **high** | **Источник процедурных рек под новым контрактом не решён.** `proceduralRiverAutoresolve` синтезирует реки из terrain без declare; после HY-12 declared-путь покрыт (RiverBedSpec → relief writer, устье на waterline), но мир без authored рек остаётся либо на legacy-модуле, либо без рек вовсе. Варианты: declare-only (мастер обязан описать), policy-синтез источников через общий placement resolver, или как часть GEO-1 designed water. | Решение мастера: отдельный мини-план (согласовать до кода). До решения `proceduralRiverAutoresolve` остаётся единственным producer'ом — не удалять в HY-12 cleanup приёмке. Связи: GEO-1 (размещение воды), P3-миграция consumers. | open |
+| **HY-WF-1** | medium | **Waterfall — только факты, нет продукта.** HY-12/5 даёт `waterfalls/riverDrops` → typed `WaterfallDrop` в `HydrologyResult.waterfall_drops` (физический факт перепада; на устье нижний уровень = waterline). Нет: игрового render/persist фичи водопада, sill-producer (порог по relief grade), authored-drop producer (мастер задаёт водопад явно), cell-роли вертикальной воды. | Отдельный waterfall-домен: мини-контракт (порог перепада, POJO фичи, роль клетки, producers sill/authored) — согласовать до кода. Не внутри HY-12. | open |
 | **TR-1b** | medium | Generator isolation: pole resolve **вне** `TerrainGeneratorService` | **resolved** — `MapCellService` / `map.py`; `pole_field` аргумент |
 | **DBG-1** | medium | `debug_settlement.py` pipeline smoke in-process | **resolved** — HTTP path **2** + `debug_api_helpers.py` |
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
 | FM-2 | medium | `streets.plan_city_street_grid` | split graph vs policy | P3 |
 | FM-3 | low | `pick_barrier_template_type` | registry-driven pick; см. § ниже | P2 |
+| FM-4 | medium | `structure/structureGeneratorService.py` — файл 825 строк, class body ~575 (250→825) | 2× лимит `class-size-limit`, phased pipeline растёт; latent `ctx.wall_material` deref (:667) до guard `ctx is not None` (:670); мёртвый `validate_template` stub (:824-825) | split по фазам (instantiate/layout/cells/transitions); guard order; удалить stub | P2 |
 | DBG-2 | medium | `scripts/debug_settlement.py` monolith (~1500 строк) | split `debug_climate.py` / core settlement smoke; shared `make_test_world()` | P2 |
 
 ---
@@ -488,6 +546,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 |---|---|---|---|---|---|
 | DR-6 | low | P2 | `terrain_set` inline ×6 | `terrain_registry_set(world)` | open |
 | DR-7 | low | P3 | lazy anchor cell builder duplicated | shared helper | open |
+| DR-8 | low | P3 | `grid_bbox_padding` — третий литерал `2` (`worldMapSettings` + db model + SQL `DEFAULT`; колонка NOT NULL → fallback мёртв) | POJO owner или убрать fallback | open |
 | MAP-1 | low | P3 | `map.py` route boilerplate | deps / helper | open |
 | TR-2 | medium | P2 | Debug path S→CL: double `run_pole_resolve_pass` | **deferred** — snapshot-run (§ `tz_city_generation.md` §11.4); не orchestrated HTTP | deferred |
 
@@ -578,7 +637,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **R41-T-19** | Снос mill-очереди Q3 (`is_q3_seed`, `q3_s`, `q3_parent`); бок-attach persist оставить | **resolved** |
 | ~~NC-1b~~ | ✅ `tz_terrain_generation.md` rework | resolved |
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
-| **NC-10** | leftover `_m` вне hub (горы / гидрология / pack `light_m`) — отдельный ID | open |
+| **NC-10** | leftover `_m` вне hub (горы; ~~гидрология ✅~~ / ~~pack ✅~~ / locals) — отдельный ID | open |
 | LC-1..LC-4 | Neutral packages | open |
 | NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
 | **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **resolved** |
@@ -596,10 +655,11 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | MR-1, MR-2, MR-6 | Split cache / rebind / footprint | open |
 | **CITY-T-4** | Смешение + хардкоды после 2d | **resolved** |
 | NC-3, NC-4, **CITY-T-1c** | Barrier contract; стены поселения = C22 инстанс, не эвристика size | open |
-| **NC-10** | leftover `_m` вне hub (горы / гидрология / pack `light_m`); слайс по кластеру | open |
+| **NC-10** | leftover `_m` вне hub (горы; ~~гидрология ✅~~ / ~~pack ✅~~ / locals); слайс по кластеру | open |
 | **CITY-T-1d** | Синхрон шапки city TZ / §6.3 / connections §5.1 vs C22 packing | open |
 | **CITY-T-5** | Швы после C23 (слои, хардкоды leftover) — SoT [city debt TZ](./tz_city_generation_technical_debt.md) | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
+| **FM-4** | `StructureGeneratorService` 825 / class ~575 — split по фазам; ctx-deref :667; dead stub :824 | open |
 | **CL-3** | Единый `ClimateSpatialSample` / Protocol | open |
 | **CL-4** | `climate_pole_mode` в `poleResolve.py` | **resolved** |
 | **CL-2b** | Admin не merge при active pole | **resolved** |
@@ -620,6 +680,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | MR-4, FM-2 | Split `streets.py` | open |
 | NC-6..NC-9 | Docs / model fields / validators | open |
 | DR-2, DR-3, DR-4 | API cleanup после Phase 6 | open |
+| DR-8 | `grid_bbox_padding` — третий литерал; fallback мёртв (NOT NULL колонка) | open |
 | **CL-7** | contracts `ClimateChangeEvent`/`ClimateRecalcRequest` ✅; node routing spec ✅; generator impl + node ⬜ |
 | **CL-5, CL-6, CL-8, CL-9** | validator; pole contract; legacy deprecate; CGS split | open |
 | **CL-2a, CL-2c..CL-2e** | tierResolve edge cases (см. § CL) | open / accepted |
@@ -750,7 +811,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 **Причина:**
 
-1. Много child-таблиц ссылаются на `worlds(world_uid)` **без** `ON DELETE CASCADE`.
+1. Много child-таблиц ссылаются на `worlds(world_uid)` **без** `ON DELETE CASCADE`. Явно зафиксированные блокеры: **`region_states`** (`0001_initial.sql` § region_states, FK `world_uid` без CASCADE; строки пишет `StateChangeConsumer` при import/edit declared-регионов — delete мира со state-строками = `IntegrityError`; ревью wilderness 7+, 2026-10-19).
 2. `WorldService.delete` / repo удаляют только строку `worlds`.
 3. Debug helper (`api_delete_world`) сначала purge'ит `locations`, потом вызывает API delete → при FK fail мир остаётся **half-deleted** (локации уже снесены, другие children + `worlds` row живы) → последующий bake: `surface terrain context unavailable`.
 
@@ -786,7 +847,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 ### BUNDLE-2 — `WorldBundleService` → section handlers по доменам
 
 **Severity:** medium · **P:** P2 · **Status:** **resolved** (2026-07-30)  
-**Product SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) (WB-1…WB-15) · plan [`.cursor/plans/bundle-2-section-handlers.md`](../.cursor/plans/bundle-2-section-handlers.md)
+**Product SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) (WB-1…WB-15) · plan [`.cursor/plans/bundle-2-section-handlers-done.md`](../.cursor/plans/bundle-2-section-handlers-done.md)
 
 **Сделано:** `WorldBundleService` = thin facade (no FastAPI); `build_bundle_handlers` + entity/library kinds; skeleton keys `race_templates` / `perk_templates` / `building_templates` / `relief_templates`; global `race_templates` / `perk_templates` SQL + world pointer registries; HY-S-2 via two connection handlers; remap skips library UIDs.
 
@@ -860,8 +921,8 @@ if ptype is PassageType.STAIRCASE:
 | Shim | Статус |
 |---|---|
 | `generators/utils/facing.py` | удалён → `dataModel.spatial.facing` |
-| `generators/structure/structureElement.py` | удалён → `dataModel.structure.enums.buildingElement` |
-| `generators/structure/staircase/staircaseType.py` | удалён → `dataModel.structure.enums.staircaseType` |
+| `generators/structure/structureElement.py` | удалён → `dataModel.locations.structure.enums.buildingElement` |
+| `generators/structure/staircase/staircaseType.py` | удалён → `dataModel.locations.structure.enums.staircaseType` |
 | `generators/structure/staircase/staircaseSize.py` | удалён (call sites уже на dataModel) |
 | `generators/structure/room/roomSize.py` | удалён (call sites уже на dataModel) |
 
@@ -881,7 +942,7 @@ if ptype is PassageType.STAIRCASE:
 |---|---|---|
 | `HydrologyScope`, `HydrologyCellRole` | `generators/hydrology/types.py` | pipeline hydrology; dataModel — когда стабилизируем HY-S-3 API |
 | `AnchorSource` | `climate/climateAnchor.py` | climate pipeline |
-| `CellZone` | `dataModel/settlement/district/cellZone.py` | ✅ wire+planner (CITY-T-4e) |
+| `CellZone` | `dataModel/locations/settlement/district/cellZone.py` | ✅ wire+planner (CITY-T-4e) |
 | `CoordinateSpace` | `coordinates/space.py` | теги координатных систем |
 | `PoleMode` | `climate/climatePole.py` | ✅ удалён; `ClimatePoleMode` из dataModel |
 
@@ -923,7 +984,7 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 
 **Generators (HY-5):**
 
-1. ✅ `PassageType`, `StaircaseType`, `StructureElement` → `dataModel/structure/enums/`
+1. ✅ `PassageType`, `StaircaseType`, `StructureElement` → `dataModel/locations/structure/enums/`
 2. ✅ Roads/settlement graph enums → `dataModel`; `streets.py` slice
 3. ✅ `wireEnums.py` — pure re-export barrel
 4. ✅ Удалить shims: `facing`, `structureElement`, `staircaseType`, `staircaseSize`, `roomSize`
@@ -998,11 +1059,113 @@ Declare geometry: `declared_coastline_segments`, `declared_lake_specs`, `declare
 
 ### HY-S-5 — `LoadedConnectionGraph.edges: list[dict]`
 
-**Severity:** low · **P:** P2 · **Status:** open
+**Severity:** low → **medium** · **P:** P2 · **Status:** open
 
-Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Неявный контракт polyline / width для rasterize.
+**Уточнено 2026-10-14:** это не только «dict вместо dataclass» — прямое нарушение `pojo-world-row-wire` / `dataModel-no-hardcode` (typed-контракт есть, читают через `.get`).
 
-**Fix:** `ResolvedConnectionEdge` frozen dataclass; или reuse `ConnectionEdge` если generator layer may import DB models (climate pattern).
+Nodes typed (`ResolvedConnectionNode`, `types.py:55-64`), edges — `asdict(ConnectionEdge)` (`load/loadConnectionGraph.py:60`). Consumers: `edge.get("connection_type")` / `.get("from_node_uid", "")` в `rivers/riverSpecs.py:34-49` и `load/declaredEdges.py:16-19`. Локальный fallback `width_cells else 1` (`riverSpecs.py:41-46`) дублирует `DeclaredRiverEdge.width_cells=1` (`types.py:85`). Неявный контракт polyline / width для rasterize.
+
+**Fix:** `ResolvedConnectionEdge` frozen dataclass (снять асимметрию с `ResolvedConnectionNode`); или reuse `ConnectionEdge` если generator layer may import DB models (climate pattern).
+
+---
+
+### HY-S-6 — `HydrologyBands`: dataclass-дубль POJO + divergent defaults
+
+**Severity:** medium · **P:** P2 · **Status:** resolved (2026-10-21) · **Найдено:** 2026-10-14.
+
+**Было:** runtime dataclass `HydrologyBands` дублировал POJO из dataModel;
+`resolveHydrologyBands` повторял bounds литералами, подставлял missing max=99
+вместо POJO default 5 и содержал raw local_profile/clamp API.
+
+**Сделано 2026-10-21:** по повторной инвентаризации production уже читает
+канонический POJO, у legacy resolver остались только два тестовых вызова.
+Удалены dataclass из `generators/hydrology/types.py` и весь неиспользуемый
+`load/resolveHydrologyBands.py` без compat alias или нового resolver.
+Остался единственный `dataModel/hydrology/bands.py:HydrologyBands`;
+policy, BasinSpec и floor_profile_z используют его напрямую. Wire и текущая
+валидация POJO не менялись, новые правила/coercion/сортировка bounds не вводились.
+Whole-category defaults и typed rim сохраняются; legacy max=99 fallback удалён.
+
+Два теста старого API заменены пятью проверками существующего POJO-контракта:
+missing category bands, partial bands с max=5, custom bounds round-trip,
+отказ невалидных границ без clamp/default, typed rim и отказ inverted rim.
+**68 tests OK**: HY-1, bathymetry, water resolver, HY-12 rivers/smoke и
+water placement pass; compileall backend/app и diff-check прошли.
+Поиск Python-кода подтверждает одно определение HydrologyBands и отсутствие
+legacy API imports/callers. Backend не запускался, коммит не создавался.
+
+План и отчёт: [hy-s-6-hydrology-bands-pojo-done.md](../.cursor/plans/hy-s-6-hydrology-bands-pojo-done.md).
+HY-S-7 и HY-S-8 остаются отдельными open задачами.
+
+---
+
+### HY-S-7 — `RiverTypeClassify`: runtime-дубль существующего POJO
+
+**Severity:** medium · **P:** P2 · **Status:** resolved (2026-10-21) · **Найдено:** 2026-10-21.
+
+**Было:** dataclass в `generators/hydrology/types.py` повторял пять полей
+Pydantic `dataModel/hydrology/rivers.py:RiverTypeClassify`. Активный resolver
+вручную копировал поля, повторял cast/default/null fallback и raw-dict parse.
+
+**Сделано:** dataclass удалён без compat alias. Planner, classifier,
+declared intent/request helpers, fine sampling и test consumers импортируют
+канонический POJO напрямую. `load/resolveRiverTypeClassify.py` сохранён как
+typed accessor: `hydrology(world).default_rivers.type_classify`; ручная
+проекция, `_pojo_to_runtime`, `_type_classify_from_defaults` и локальные
+fallback-ветки удалены. Defaults/валидация остаются у существующего POJO
+и общего jsonValidation; public exports jsonValidation не менялись.
+
+Синхронизированы устаревшие U22 / раздел import validator в ТЗ: missing
+использует defaults POJO; supplied null/invalid отклоняется общим resolver.
+Это уже действующее поведение, подтверждённое прежним null regression;
+новая строгость или новые правила классификации не вводились.
+
+**126 tests OK**: HY-1, edge_cases, HY-5a/b/c, depth, routing/topology,
+fine planning, coarse space, HY-12 rivers/smoke, relief. Добавлены проверки
+типа accessor, default/partial/custom policy round-trip, фактического влияния
+custom source threshold на mountain/river и отказа invalid import/runtime.
+Существующие depth tests подтверждают multiplier/rounding в coarse/fine.
+compileall backend/app и diff-check прошли; поиск подтверждает один класс
+RiverTypeClassify и отсутствие imports runtime-дубля/ручной проекции.
+
+План и отчёт: [hy-s-7-river-classify-pojo-done.md](../.cursor/plans/hy-s-7-river-classify-pojo-done.md).
+HY-S-8 и HY-12 review-debt не выполнялись. Backend не запускался,
+коммит не создавался; изменения HY-S-6 сохранены.
+
+---
+
+### HY-S-8 — неиспользуемые autoresolve policy-обёртки
+
+**Severity:** low · **P:** P3 · **Status:** resolved (2026-10-21) · **Найдено:** 2026-10-21.
+
+**Было:** `load/hydrologyAutoresolvePolicy.py` объявлял три dataclass
+RiversAutoresolvePolicy/LakesAutoresolvePolicy/SeasAutoresolvePolicy и helpers.
+Они копировали флаги existing POJO и добавляли локальные fallback True,
+не вычисляя effective policy. Повторная инвентаризация подтвердила отсутствие
+production-callers: sea/lake helpers вызывались четырьмя policy-тестами,
+river helper внешних callers не имел.
+
+**Сделано:** loader с тремя обёртками удалён целиком без compat alias,
+нового DTO/resolver или замены defaults. Четыре policy tests переключены на
+существующий typed reader и HydrologySeasPolicy/HydrologyLakesPolicy.
+Production facade/assembler и canonical POJO не менялись.
+
+Сохранено и усилено покрытие production gates. Sea off test теперь использует
+реально подходящий below-level terrain с положительным on-контролем,
+проверяет global/category enabled, autoresolve flags и scope. Lake test
+проверяет global/category/autoresolve/scope off на существующей впадине;
+положительный сценарий lake fill сохранён. Добавлен river test: category
+enabled=False / autoresolve=False не выпускает segments/roles и не пишет z
+на том же типе terrain/water входа, где положительный существующий test
+материализует реку. Declared при autoresolve=False покрыт routing/depth suites.
+
+**115 tests OK**: HY-1, HY-5a/b/c, edge cases, coarse/fine, HY-12 rivers/smoke,
+depth, routing/topology и fine planning. compileall backend/app и diff-check
+прошли. Поиск Python-кода: ноль старых imports, классов и helpers.
+
+План и отчёт: [hy-s-8-autoresolve-policy-cleanup-done.md](../.cursor/plans/hy-s-8-autoresolve-policy-cleanup-done.md).
+Изменения HY-S-6/HY-S-7 сохранены. HY-12 review-debt не выполнялся;
+backend не запускался, коммит не создавался.
 
 ---
 
@@ -1044,10 +1207,13 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | HY-S-2 | low | P2 | connections import special-case | **resolved** (BUNDLE-2 connection handlers) |
 | **BUNDLE-2** | medium | P2 | WorldBundleService → section handlers | **resolved** — handlers + library domains (relief/building/race/perk); see [`tz_world_bundle.md`](./tz_world_bundle.md) |
 | HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** — dataModel ✅; shims + literals ⬜; JV-0 ⬜ |
-| HY-BATH-1 | medium | P1 | light SEA z = plains; Depression forms TZ | **partial** — stub drop ✅; full Form pipeline ⬜ |
+| HY-BATH-1 | medium | P1 | light SEA z = plains; Depression forms TZ | **partial** — HY-12/6: единый BasinSpec/RegionShape + shelf→slope→floor relief pipeline готов, L0 копирует рассчитанное дно, interim stub удалён; дополнительные DepressionSpec/Form/Kind внутри дна остаются будущим расширением |
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
 | HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
-| HY-S-5 | low | P2 | edges as dict | open |
+| HY-S-5 | low→medium | P2 | edges as dict (`asdict` + `.get` consumers) | open |
+| HY-S-6 | medium | P2 | `HydrologyBands` дубль POJO + divergent clamp defaults | **resolved 2026-10-21** — один POJO, legacy resolver удалён; 68 tests OK |
+| HY-S-7 | medium | P2 | `RiverTypeClassify`: активный runtime-дубль POJO и ручное копирование/fallback | **resolved 2026-10-21** — прямой POJO accessor, 126 tests OK |
+| HY-S-8 | low | P3 | Неиспользуемые autoresolve policy-обёртки поверх существующих POJO | **resolved 2026-10-21** — loader удалён, coverage на POJO/production; 115 tests OK |
 | CONN-1 | low | P2 | `node_type` → `connection_node_type` wire rename | open |
 
 ---
@@ -1066,7 +1232,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 **Scope:** `dataModel/terrain/relief`, `generators/terrain/relief`, mountains stamp, library/import, bundle R35, bake preload / road_shoulder, JV relief accessors.  
 **Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R8/R20–R36q · audits 2026-07-30 (×2) · **SOLID+dataModel 2026-08-02** · **canal R36p/q audit 2026-08-05** · **BUNDLE-2** · **RELIEF-BAR-1**.  
-**Plan фиксов (round 1–2):** [`.cursor/plans/relief-tech-debt-fixes.md`](../.cursor/plans/relief-tech-debt-fixes.md).  
+**Plan фиксов (round 1–2):** [`.cursor/plans/relief-tech-debt-fixes-done.md`](../.cursor/plans/relief-tech-debt-fixes-done.md).  
 **Не в scope здесь:** UI R30; climb gameplay; DAG nodes; full barrier materialize (→ RELIEF-BAR-1); footprint scan для R36n в bake (helper `obstacleClearance` есть — wire gap later).
 
 **Verdict (god-object):** 500+ LOC **relief generator** god-class нет. Round-1 + round-2 — **resolved**.  
@@ -1211,7 +1377,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 **Не смешивать с B5:** T-61 adapters, T-62 `_ORTHO`, T-63 `EMPTY_DRAW`, T-65 double log, T-66 event split.
 
 **Не долг:** sample без `ordered` (Q6); `reliefEvents` SoT; silent-path logs (T-60).  
-**Agent pointer:** [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Agent pointer:** [`.cursor/plans/relief-dev-plan-done.md`](../.cursor/plans/relief-dev-plan-done.md).
 
 ### roadShoulderApply split (T-30 / T-52)
 
@@ -1247,6 +1413,12 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 ---
 
+### Registry — 2026-10-14 (repo review)
+
+| ID | Sev | Status | P | Категория | Суть |
+|---|---|---|---|---|---|
+| **RELIEF-T-68** | low | **open** | P3 | FS layout | `relief_templates/smoke_003` лежит **дважды**: `repo_root/relief_templates/` и `backend/relief_templates/`. `resolve_relief_domain_root()` (T-7) = `RELIEF_TEMPLATES_ROOT` env или `cwd/relief_templates` → SoT root зависит от cwd запуска. Fix: один canonical root + задокументировать разделение (authoring vs test fixture), либо убрать дубликат |
+
 ### Clean (не долг / wins)
 
 - POJO SoT: R26/R27/R32/R33 validators; I8 normalize→schedule→classify.
@@ -1261,7 +1433,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 ### Приоритетный backlog (sync relief waves)
 
-**Product SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Порядок · [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
+**Product SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Порядок · [`.cursor/plans/relief-dev-plan-done.md`](../.cursor/plans/relief-dev-plan-done.md).  
 **Post-B2/B3 review map:** § [Post-B2/B3 review](#post-b2b3-review-god--dry--srp-2026-08-06) выше.
 
 1. ~~**Wave B1 — Q6** dilate shoulder sample~~ ✅  
@@ -1271,7 +1443,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `ribbonBarrierApply`)
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
-8. ~~**Post-R36w —** GradeFormation apply~~ ✅ ([план](../.cursor/plans/detailed-grade-volume-canal.md); § R36i-T)
+8. ~~**Post-R36w —** GradeFormation apply~~ ✅ ([план](../.cursor/plans/detailed-grade-volume-canal-done.md); § R36i-T)
    ~~**Post-impl (не Wave E):** **R36i-T-4…T-11**~~ ✅ — § [R36i-T post-impl](#r36i-t--gradeformation-apply--post-impl-smells)
    ~~**R36i-T-12**~~ ✅ — write-set `reconcile` (R36j uid ↔ `cell_refs`)
    ~~**R36i-T-13…T-15**~~ ✅ — T-12 leftovers (`of` / drop-log / sorted refs)
@@ -1296,7 +1468,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 ### Legacy L0 grade — inventory (R36u migrate off)
 
-**Статус:** §A outdoor grade writers + §C upsample helper **removed** (R36u-T-8). Pure generators (§B) reuse on detailed. **Не трогать:** terrain mask carry (`system_terrain`), hydro hard corridor, facing upsample, `surface_z` upsample. Agent plan: [`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md).
+**Статус:** §A outdoor grade writers + §C upsample helper **removed** (R36u-T-8). Pure generators (§B) reuse on detailed. **Не трогать:** terrain mask carry (`system_terrain`), hydro hard corridor, facing upsample, `surface_z` upsample. Agent plan: [`.cursor/plans/r36u-grade-detailed-migrate-done.md`](../.cursor/plans/r36u-grade-detailed-migrate-done.md).
 
 #### A. L0 compose writers (stamp `system_grade_uid` на light) — **removed**
 
@@ -1349,9 +1521,9 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### R36u post-impl smells (R36u-T)
 
-**Контекст:** 2026-08-13 — migrate shipped ([`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md)); ревью 6 осей. **Scope:** только outdoor grade. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`.
+**Контекст:** 2026-08-13 — migrate shipped ([`.cursor/plans/r36u-grade-detailed-migrate-done.md`](../.cursor/plans/r36u-grade-detailed-migrate-done.md)); ревью 6 осей. **Scope:** только outdoor grade. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`.
 
-**Agent pointer:** [`.cursor/plans/r36u-post-impl-debt.md`](../.cursor/plans/r36u-post-impl-debt.md).
+**Agent pointer:** [`.cursor/plans/r36u-post-impl-debt-done.md`](../.cursor/plans/r36u-post-impl-debt-done.md).
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1373,7 +1545,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### R36v post-impl smells (R36v-T)
 
-**Контекст:** 2026-08-13 — T-11 shipped ([`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md)); ревью 6 осей + `materialize_segment_meter`. **Scope:** только outdoor grade generate/persist на detailed. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`; DAG `modify_terrain`.
+**Контекст:** 2026-08-13 — T-11 shipped ([`.cursor/plans/r36v-grade-chunk-pool-done.md`](../.cursor/plans/r36v-grade-chunk-pool-done.md)); ревью 6 осей + `materialize_segment_meter`. **Scope:** только outdoor grade generate/persist на detailed. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`; DAG `modify_terrain`.
 
 **Не долг:** stamp → `columnFillPass.system_grade_uid` → pack column → SQL instance — **конвейер одного writer’а**, не dual-write геометрии. Три caller’а `persist_relief_grades(..., replace_world=False)` — один persist.
 
@@ -1395,7 +1567,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Fix order:** ~~T-1 → T-13~~ ✅. **Не трогать:** mask carry; DAG node.
 
-**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md); bake SoT [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R36v / **R36w**.
+**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool-done.md`](../.cursor/plans/r36v-grade-chunk-pool-done.md); bake SoT [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R36v / **R36w**.
 
 ### R36w — worker stitch (resolved)
 
@@ -1409,7 +1581,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Не трогать:** mask carry; DAG; L0 grade writer. **Не** remap после persist. **Не** SW-волна как SoT порядка.
 
-Шов `full_bake` / halo `grid_neighbor` / T-10 — [план](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅. Lookup только `WorldBounds` / `PackJobUid` / `Facing` / `ReliefContext`.
+Шов `full_bake` / halo `grid_neighbor` / T-10 — [план](../.cursor/plans/full-bake-seam-halo-shoulder-done.md) ✅. Lookup только `WorldBounds` / `PackJobUid` / `Facing` / `ReliefContext`.
 
 ### FineChunkRunner layers (resolved)
 
@@ -1423,7 +1595,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### R36i-T — volume z / canal on detailed
 
-**Контекст:** 2026-08-14 apply shipped — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w. Plan: [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).
+**Контекст:** 2026-08-14 apply shipped — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w. Plan: [`.cursor/plans/detailed-grade-volume-canal-done.md`](../.cursor/plans/detailed-grade-volume-canal-done.md).
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1461,7 +1633,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Fix order:** **T-25** первым (полный pack occupancy). ~~T-1…T-12~~ ✅. ~~**T-17**~~ ✅ (COUPLE + валидатор не из z — не заменяет T-25). ~~**T-18**~~ ✅. ~~**T-19**~~ ✅. ~~**T-20…T-23**~~ ✅. ~~**T-24**~~ ✅. ~~**T-13…T-16**~~ ✅. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`; Occupancy v1.
 
-**Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
+**Agent pointer:** [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
 
 ### R41-T — pipeline v2 post-impl smells
 
@@ -1950,7 +2122,7 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 
 **Fix order:** ~~T-4 → T-8 → T-5 / T-6 → T-7; T-9 / T-10 / T-11~~ ✅. ~~**T-12**~~ ✅. ~~**T-13…T-15**~~ ✅. **Не трогать:** Wave E; DAG; mask carry; voxel-ditch; BAR-1 (T-2). Graph stitch — ~~T-3b~~ ✅. System — ~~**T-3c**~~ ✅ (не этот apply).
 
-**Agent pointer:** [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w.
+**Agent pointer:** [`.cursor/plans/detailed-grade-volume-canal-done.md`](../.cursor/plans/detailed-grade-volume-canal-done.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w.
 
 ### R36i-T-12 — write-set reconcile — shipped
 
@@ -2033,7 +2205,32 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 **Fix order (рекомендация):** ~~T-1 → T-3 → T-2 → T-5 → T-6; T-7/T-8~~ ✅; ~~**T-4**~~ ✅ (Facing pack wire, 2026-08-12).
 
-**Agent pointer:** [`.cursor/plans/grade-detailed-location-render.md`](../.cursor/plans/grade-detailed-location-render.md); SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md).
+**Agent pointer:** [`.cursor/plans/grade-detailed-location-render-done.md`](../.cursor/plans/grade-detailed-location-render-done.md); SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md).
+
+---
+
+## Library packs — шаг 4a transitional leftovers (LIBPACK-T)
+
+**Ревью шага 4c (2026-10-11):** согласованные пункты по коммиту `9a50d4d1` — **LIBPACK-4C-R-1** (**resolved**, P2: диагностика через общий resolve logger проекта; 122 теста прошли), **LIBPACK-4C-R-2** (**resolved**, P3: единая декларация ref-полей для чтения/remap; 81 тест прошёл), **LIBPACK-4C-R-3** (**resolved**, P3: snapshot загрузка отдельно от pure update-plan, body/retention/fingerprint разделены; 103 теста прошли). Подробности и критерии закрытия — [library-packs-4c-review-debt-done.md](../.cursor/plans/library-packs-4c-review-debt-done.md).
+
+**Ревью шага B3 плана 5b (2026-10-14):** находки по коммитам `a7d01a7f`/`9522f962` (snapshot loader, packing identity по `template_uid`) — packing-литералы (`Facing.SOUTH`, district-метки), ложный `catalog=None`, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, private-имена как межмодульный API. Подробности и шаги — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md).
+
+**Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model-done.md`](../.cursor/plans/library-packs-model-done.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt-done.md`](../.cursor/plans/library-packs-4a-review-debt-done.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **LIBPACK-T-1** | medium | **open** | P1 | владение | Ownerless write-paths ещё открыты: `relief_template_uid()`, `building_template_uid()`, `upsert_outline(pack_uid=None)` в relief/building libs пишут тела вне членства (тело без членства владельца не имеет, TZ §1.1) | Закрыть/запретить ownerless-paths когда все писатели на `LibraryPackService`; не позднее 5b |
+| **LIBPACK-T-2** | medium | **resolved** | P1 | interim API | `ReliefWorldImportService.import_library_uid_into_world` — копия engine-тела в `legacy` world-пак | ✅ [`libpack-t2-relief-import-instantiate-done.md`](../.cursor/plans/libpack-t2-relief-import-instantiate-done.md): роут `template_uid` → member→pack→`instantiate_pack`; R34 → `ReliefPackAdapter.remap_world_refs` (helper `reliefTerrainSync`, raw-scan); метод удалён; W2-3 разблокирован |
+| **LIBPACK-T-3** | low | **open** | P2 | transitional | `get_by_system_name` на domain repos deprecated: при >1 строке обязан ошибкой — коллизии `system_name` возможны с 4a (контракт шага 2) | Снять с registry-миграцией — **шаг 5b** |
+| **LIBPACK-T-4** | low | **open** | P3 | производительность | `_swap_pointer` O(реестр) на член → `delete_pack` O(members × registry); pointer-write идёт через полный `worlds.update` (normalize+merge всей строки мира) | Принято: реестры умирают в 5b, оптимизировать не нужно |
+| **LIBPACK-T-5** | medium | **open** | P1 | used-member policy | `member_usages` покрывает pins (`library_pins`) + `relief_pick_policy.*.default_template_uid`; refs **внутри тел** (`main_building.structure` и прочие cross-template ссылки) не сканируются — удаление члена может оставить битый ref | Referenced-set — **шаг 4c** (`member_usages` — точка расширения адаптера) |
+| **LIBPACK-T-6** | info | **open** | P3 | конвенция | `from app.db.database import _in_transaction` — приватный ContextVar на ~15 файлах (repos, library services, canonicalLibrary) | Отдельная тема: публичный флаг транзакции на `Database` |
+| **LIBPACK-T-7** | low | **open** | P2 | ТЗ семантика / overlay | `terrain(world)` резолвит `canonical_defaults ⊕ world rows` (T-29) — resolved-scan делает R34-upsert мёртвым: `added` всегда пуст. `merge_missing_terrain_entries` (libpack-t2 шаг 1) читает **сырую** колонку и теперь реально дописывает canonical-ряды в stored `terrain_registry` (legacy import + instantiate). Побочки выбранного persist-прочтения: canonical-дубли в stored/bundle; `terrain_registry` — write-колонка двух писателей (учесть в W2 `COLUMN_INVALIDATES`) | Решение к ТЗ `tz_terrain_relief` R34: оставить persist-семантику (зафиксировать в ТЗ) или удалить upsert как рудимент — overlay гарантирует resolved-полноту. При «удалить» — убрать helper + вызов в `ReliefPackAdapter.remap_world_refs` |
+| **LIBPACK-T-8** | low | **open** | P3 | granularity | Write pipeline размазан по ~15 `write*`/`reinstantiate*` модулям (пакет `libraryPacks/` ~65 файлов / ~5.6k строк) — ravioli-риск, обратный god-file: каждый файл мал, но call graph write стадий трудно удержать целиком | Watch; либо консолидировать стадии вокруг `writeFacade`, либо doc-map слоёв (facade → ops → planner → executor → inspector) |
+
+**Related (info):** member identity иммутабельна (update = замена тела) и `source_pack_uid`/`source_template_uid` колонки заведены, но не пишутся — это контракт, не долг; remap заполняет их в 4b.
+
+**Agent pointer:** [`.cursor/plans/library-packs-model-done.md`](../.cursor/plans/library-packs-model-done.md) **шаг 4a**; SoT [`tz_template_library_packs.md`](./tz_template_library_packs.md) §0.2/§1.1/§3.
 
 ---
 
@@ -2050,10 +2247,18 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-14 | **NC-10** pack/parent-light ✅ (`.cursor/plans/nc10-pack-light-m-suffix.md`): `tile_m`→`tile_macro`, `light_m`→`light_span`, `light_m_for`→`light_span_for`, `tile_size_m`/`cell_m`→`tile_macro`, `meter_surface_z`→`fine_surface_z`, `meterGradeSurface`→`fineGradeSurface`, `*_radius_m`/`depth_m`/`half_width_m`→`*_fine`, wire `sample_step_m`→`sample_step_fine` + `AliasChoices` legacy-read. Остались: горы/relief, locals по касанию. |
+| 2026-10-14 | **5b-B3 review debt** ✅ closed — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md): packing-литералы, `catalog=None`→raise, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, `_`-имена как межмодульный API — все устранены; `StructureAreaAssembler` ~281 (pre-existing, repo-лимит не перейден) — зафиксирован, вынос при следующей правке файла |
+| 2026-10-14 | **Repo review → open:** **HY-S-6** `HydrologyBands` dataclass-дубль POJO + `clamp_bands` divergent default (`max`→99 vs POJO 5); **HY-S-5** enriched (`asdict` edges, `.get` consumers, width fallback — severity low→medium); **FM-4** `StructureGeneratorService` class ~575 (2× лимит) + latent ctx-deref + dead `validate_template`; **DR-8** `grid_bbox_padding` третий литерал (NOT NULL → fallback мёртв); **RELIEF-T-68** два relief domain root (cwd-dependent SoT); **LIBPACK-T-8** write-pipeline granularity watch |
+| 2026-10-11 | **LIBPACK-T-2** **resolved** — оба шага `libpack-t2-relief-import-instantiate-done.md`; interim-метод и caller удалены, engine→world relief только через `instantiate_pack`. |
+| 2026-10-11 | **LIBPACK-T-7** open: R34-upsert был мёртв под T-29 overlay (resolved-scan всегда полон); шаг 1 libpack-t2 ввёл raw-scan и реальный persist. Открытый вопрос к R34: persist vs удалить рудимент. |
+| 2026-10-11 | **LIBPACK-T-2** → план `libpack-t2-relief-import-instantiate.md` (2 шага: R34→adapter, роут→instantiate). Решения: `template_uid`→member→pack→`instantiate_pack`; member-level engine→world отклонён по ТЗ §0.1; R34 в `remap_world_refs`. |
+| 2026-10-10 | **LIBPACK-T** open: шаг 4a `library-packs-model` — ownerless write-paths (T-1), interim `import_library_uid_into_world` → 4b (T-2), `get_by_system_name` deprecated → 5b (T-3), `_swap_pointer` O(members×registry) accepted (T-4), referenced-set used-check → 4c (T-5), `_in_transaction` convention (T-6). Code smells шага — `library-packs-4a-review-debt-done.md`. |
+| 2026-10-06 | **NC-10** гидрология ✅: loader fine, coarse view в `build_hydrology_master_input`, `resolve_declared_river_intents(space=)`, rename `*_meter*` → `*_fine*`; `tz_terrain_hydrology` U20/U21/C1. Остались горы, pack, locals. |
 | 2026-09-07 | **NC-10** open: leftover `_m` / «метры» вне coordinate hub (горы, гидрология, pack `light_m`/`tile_m`, `sparse_meter_hydro`) после rename на fine grid. Не NC-1a/c/g, не NC-2 parcel. Слайс по кластеру. |
 | 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |
 | 2026-09-05 | **CITY-T-4** **resolved** (`/impl-city-t-4` слои A–G): POJO rank/zone/conditions; один resolve; cache=`pick_layout_names`; Bind-only coerce; skip unknown assembler; `max_per` type+subtype. **2a** civic flood ✅; **2c** tokens `BUILDINGS` ✅; leftover **2b**. **MR-8** ✅. Не reopen §1.2 |
-| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план слоёв A–G (`city-t-4-planner-debt.md`). Не reopen §1.2, не 2b. |
+| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план слоёв A–G (`city-t-4-planner-debt-done.md`). Не reopen §1.2, не 2b. |
 | 2026-09-05 | **CITY-T-4** open: ревью после 2d — смешение (`plan_district_slots`, placement, cache≠tokens, coerce×3) и хардкоды (`CITY_SIZE_ORDER`, zone preference, assembler `"building"`, `max_per` по type). **2d/2a/2c** → `partial`. **MR-8**. Не reopen рецепт §1.2 |
 | 2026-09-05 | **CITY-T-3** open, **owner: мастер:** как безопасно параллелить generate **одного** поселения (cache freeze → районы; packing внутри района serial; persist C19 serial; один pool). Не C16 batch, не TR-PAR земля. Агент не слайс |
 | 2026-09-05 | **CITY-T-2d:** SoT §1.2 — `typical_districts` на городе, затем specialization registry, затем морфология; `district_subtype`. Код всё ещё только city/village typical. |
@@ -2071,13 +2276,13 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-18 | **Слой 7 срез v1 ✅:** sample/stitch/`planned` удалены. Next **R41-T-9…T-12** |
 | 2026-08-18 | **T-3c слой 6 ✅:** `emit_relief_grade_systems` после merge; persist `systems`; intra-chunk = slot; C29 тело 8 + UF refine. Next слой 7 |
 | 2026-08-18 | **T-3c шов locked** в [`tz_terrain_relief.md`](./tz_terrain_relief.md) § T-3c на шве чанков (catalog ≠ вершина; UF тайла; макро-шов двух bake — не слой 6) |
-| 2026-08-18 | **ShorePlugin тело ✅** (банк + полоса; дно iff `grades_channel_bed`; terrace min с envelope). Next **T-3c**. Команда: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
-| 2026-08-18 | **Shore онтология+paint ✅.** Команда агенту: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
+| 2026-08-18 | **ShorePlugin тело ✅** (банк + полоса; дно iff `grades_channel_bed`; terrace min с envelope). Next **T-3c**. Команда: [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md) |
+| 2026-08-18 | **Shore онтология+paint ✅.** Команда агенту: [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md) |
 | 2026-08-17 | **R41-T-5…T-8 resolved:** ТЗ `z >` (равная z = L); inherit только орто; `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
 | 2026-08-17 | **Очередь SoT в ТЗ:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (apply закрыт; ~~T-5…T-8~~ ✅ → слой 5) |
 | 2026-08-17 | **R41-T-2…T-4 resolved:** apply=`DiscoveredFront`; occupancy cap = L_tpl (envelope = halo); ravine flood = bank, open_land не глотает берег |
 | 2026-08-17 | **R41-T-2…T-12 open:** post-impl v2 (C40 spec≠L2-only; cap_front pick; ravine flood шире claims; walk `>` vs TZ `≥`; inherit 4 vs 8; R37 не на envelope; три L; fat facade; DRY/hardcode/leftover). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C40 |
-| 2026-08-17 | **R41-T-1:** v1 sample/stitch/`planned` deprecated vs R41; impl [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). T-3b occupancy не SoT; каталог `face_key` живой |
+| 2026-08-17 | **R41-T-1:** v1 sample/stitch/`planned` deprecated vs R41; impl [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md). T-3b occupancy не SoT; каталог `face_key` живой |
 | 2026-08-15 | **C28 T-3b resolved:** `stitch_planned_segments`; sample до пула; rim-canonical. T-3c System later. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-15 | **C29:** шов технический (климат / дороги / шаг / локация·город); T-3b rim = механизм C29. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-15 | **C28 TZ lock:** topology → entity → stamp; T-3 split (T-3a omit / T-3b graph / T-3c System). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
@@ -2085,7 +2290,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-15 | **R36i-T-12 resolved:** `reconciled()` на write-set; clip режет `cell_refs`; `merge_grade_instances` last-wins поля как upsert |
 | 2026-08-15 | **R36i-T-4…T-11 resolved:** write-set на `GradeFormation`/`DetailedGradeResult`; volume vs canal-cut; `apply_grade_uids`; `merged_with`+`clipped_to_rect`; `CorridorColumn`; `cell_center_m`; слои corridor/canalCut/result. T-2/T-3 remain |
 | 2026-08-15 | **R36i-T-4…T-11 open:** GradeFormation post-impl (write-set split; corridor god; MeterGradeSurface/commit SRP; dual merge; wrote[i]↔columns / cut bool / registry or; Coord/rect DRY; 0.5 + empty surface; god-module). T-1 остаётся ✅ |
-| 2026-08-14 | **R36i-T-1 resolved:** GradeFormation apply (z overlay + canal + uid); T-2/T-3 remain out of apply. План [`detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) |
+| 2026-08-14 | **R36i-T-1 resolved:** GradeFormation apply (z overlay + canal + uid); T-2/T-3 remain out of apply. План [`detailed-grade-volume-canal-done.md`](../.cursor/plans/detailed-grade-volume-canal-done.md) |
 | 2026-08-14 | **FCR-T-1 resolved:** FineChunkRunner = `FineTileContext` + prep + `compute_rect` + persist; grade в ColumnRect worker |
 | 2026-08-14 | **R36w edge test:** два bake смежных тайлов, семена на owner-грани → один uid (`test_two_tile_bakes_along_seam_one_uid`); bind: rim оси sample → грань оси; `< 2` chunk-родителей грани → void ≠ C18 |
 | 2026-08-14 | **R36w TZ:** каталог граней + заранее uid (`world`+tile+`face_key`); T-1…T-3 open; SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
@@ -2116,7 +2321,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-06 | **Post-B2/B3 SRP review → T-64…T-66:** false `clearance_skip`; double `empty_sample` log; EVENT монотокен; map → Wave B4/B5 |
 | 2026-08-06 | **Wave B2/B3 — T-60/T-56 resolved:** `reliefEvents.py`; silent bake/grade paths → `relief_warning`/`relief_debug` |
 | 2026-08-06 | **Wave B1 / Q6 shipped:** footprint-edge `sample_shoulder_cells`; apply drops `ordered_road_light` |
-| 2026-08-06 | **Relief dev plan sync:** Wave A shipped; backlog → Wave B (Q6→T-60/T-56→T-54) → C BAR-1 → D consumers → E later; pointer `relief-dev-plan.md` |
+| 2026-08-06 | **Relief dev plan sync:** Wave A shipped; backlog → Wave B (Q6→T-60/T-56→T-54) → C BAR-1 → D consumers → E later; pointer `relief-dev-plan-done.md` |
 | 2026-08-06 | **Post-split review → T-60…T-63 open:** silent bake logs; Intent/emit glue; `_ORTHO`≠Facing; `CanalDrawResult(False,…)` vs `EMPTY_DRAW`. T-56 loci уточнены |
 | 2026-08-06 | **T-30/T-52 bake split shipped:** sample / materialize / stamp / intent + thin apply facade; god-orchestrator gone |
 | 2026-08-06 | **T-30/T-52 split plan locked:** phases 0–5 (contracts → materialize_seed → stamp → sample → intent → thin apply); leave canal/grade helpers as-is |
@@ -2140,9 +2345,9 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-02 | **RELIEF-T-28…T-41:** SOLID+dataModel audit (god/SRP/DRY/wire keys/values); R36n obstacle POJO = clean win; backlog sync |
 | 2026-07-31 | **R36** locked in TZ: SLOPE h/L/θ triangle; Geom-A\|B bake; backlog #1 = normalize POJO + materialize |
 | 2026-07-30 | **BUNDLE-2 resolved:** handlers facade; library race/perk/building/relief; schema `race_templates`/`perk_templates`; HY-S-2 closed |
-| 2026-07-30 | **BUNDLE-2 SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) WB-1…WB-10 + plan `bundle-2-section-handlers.md`; debt symptom sync |
+| 2026-07-30 | **BUNDLE-2 SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) WB-1…WB-10 + plan `bundle-2-section-handlers-done.md`; debt symptom sync |
 | 2026-07-30 | **RELIEF-T-12 / T-16…T-27** fix wave: width bake, ImportResult, bake_seed, preload WARN, typed edge policy, knobs SoT, FS split, RoadShoulderIntent; T-26 accepted (wire letters) |
-| 2026-07-30 | **RELIEF-T-16…T-27** + plan `relief-tech-debt-fixes.md`: re-audit (width dead, bundle HTTP/api, seed, knobs SoT, …) |
+| 2026-07-30 | **RELIEF-T-16…T-27** + plan `relief-tech-debt-fixes-done.md`: re-audit (width dead, bundle HTTP/api, seed, knobs SoT, …) |
 | 2026-07-30 | **RELIEF-T-7/T-9/T-14:** domain_root enforce; road_shoulder bake wire + intents; schedule hole → SLOPE; T-15 accepted |
 | 2026-07-30 | **RELIEF-T polish:** T-1…T-6/T-8/T-10/T-11/T-13 resolved; BUNDLE-2 ReliefSection partial; T-7/T-9/T-12/T-14/T-15 open |
 | 2026-07-30 | **BUNDLE-2** + **RELIEF-T-1…T-15:** post-impl audit (god-object/layers/dataModel); section handlers; R21≠Mode D; FastAPI в services; dual ReliefGradeDecision |
@@ -2164,3 +2369,20 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; shims removed; P1-A roads literals |
 | 2026-06 | **HY-S registry:** BUNDLE-1, HY-5, HY-S-4, HY-GEO-1 |
 | 2026-06 | **`docs/tz_json_validation.md` v0.1** — Field Contract Registry; ENUM-E / REF-W / N1-S / N1-W (§0) |
+
+## Осознанный остаток «legacy» после срезки контрактов (2026-10-19)
+
+Трек [`legacy-contract-removal-done.md`](../.cursor/plans/legacy-contract-removal-done.md)
+снял старый формат данных (flat body-секции, world-owned `legacy` pack,
+old→new UID map, wire-алиасы чтения, loose-body world import). Ниже —
+места, где слово «legacy» осталось **осознанно** и принадлежит другим трекам:
+
+| Остаток | Файлы | Владелец / причина |
+|---|---|---|
+| Debug read-path `map_cells` | `render/legacyMapGridRender`, `mapGridRenderService`, `worldGridRenderer`, `locationGridRenderer`, `renderPayloads` (`ReadPath`), `mapCellService` (`PACK_LEGACY_GENERATE_MSG`, `reject_legacy_generate_on_pack`), `bootstrapMapCellWriter`, debug routes `map.py`/`locations.py` | Debug/smoke визуализация; pack-миграция debug рендеров — отдельный долг |
+| Deprecated имена кода | `WorldPerk` (класс), `reliefGeomWarn`, `footprint` re-export, `planner/defaults` re-export, `resolve.py` «legacy wire interpretation» | Переименования без контракта данных |
+| Алгоритмические | `seed_int` md5 (`deterministicIds`), `make_grade_uid` legacy mint, v1 Voronoi climate (`climateGeneratorService`, `anchorCollect`), `worldTile` legacy occupancy, `columnFillPass` legacy path, `planner/districts` `allow_legacy` (typical_district_types fallback), `economicTierBand` map shape, `gradeRimPackLegacy`/`gradeRimRays`/`gradeRayDump`, `packBlobWire` shell-only contract | Доменные треки (climate CL-8, wilderness, relief TD-4) |
+| REF-W `default_shore` / lore `terrain_shore` | `resolveRiverTypeClassify`, `validate.py` shore class, `worldLoreRegistry` | Hydrology/lore домен |
+| Landcover wire-алиасы | `landcoverWire`, `worldTerrainMasks.read_legacy_landcover`, `default_plains`/`default_forests`/`forest_min_rainfall` | **wilderness-10b** — владелец снятия |
+| Wire reject-guards (D2) | `_LEGACY_BODY_KEYS`/`_reject_legacy_body_wire` (plotLayoutTemplate), `_reject_legacy_width` (reliefGradeKnobs/reliefRoleCase/reliefTemplate), `reject_legacy_climate_status` (climateFieldWire) | Сознательно: старый ключ = явная ошибка, не silent drop |
+| `allow_legacy` district select | `planner/districts.py` | City-generation домен, не формат |

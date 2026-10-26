@@ -7,7 +7,8 @@ from app.application.worldData.masks.terrainMerge import (
     may_paint_terrain,
 )
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import TerrainMergeEntry
 
 
 def paint_system_terrain(
@@ -15,7 +16,7 @@ def paint_system_terrain(
     light_cells: set[tuple[int, int]],
     system_terrain: str,
     *,
-    masks: WorldTerrainMasks,
+    registry: WorldTerrainRegistry | tuple[TerrainMergeEntry, ...],
     tile_set: set[tuple[int, int]],
     preserve_hydro: bool = True,
 ) -> int:
@@ -34,9 +35,10 @@ def paint_system_terrain(
         cell = compose.ensure(gx, gy, tx, ty)
         if preserve_hydro and cell.hydrology_role in PRESERVE_HYDROLOGY_ROLES:
             continue
-        if not may_paint_terrain(cell.system_terrain, system_terrain, masks):
+        if not may_paint_terrain(cell.system_terrain, system_terrain, registry):
             continue
         cell.system_terrain = system_terrain
+        cell.region_uid = None
         painted += 1
     return painted
 
@@ -49,13 +51,14 @@ def paint_system_terrain_cell(
     ty: int,
     system_terrain: str,
     *,
-    masks: WorldTerrainMasks,
+    registry: WorldTerrainRegistry | tuple[TerrainMergeEntry, ...],
     preserve_hydro: bool = True,
 ) -> bool:
     cell = compose.ensure(gx, gy, tx, ty)
     if preserve_hydro and cell.hydrology_role in PRESERVE_HYDROLOGY_ROLES:
         return False
-    if not may_paint_terrain(cell.system_terrain, system_terrain, masks):
+    if not may_paint_terrain(cell.system_terrain, system_terrain, registry):
         return False
     cell.system_terrain = system_terrain
+    cell.region_uid = None
     return True

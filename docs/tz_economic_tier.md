@@ -61,19 +61,49 @@ Band — **входной язык намерения** в шаблонах. П�
 
 ---
 
-## 4. `TierResolver` — каскад effective tier
+## 4. Каскад effective tier
 
-Модуль: `backend/app/application/worldData/generators/utils/tierResolver.py`
+Механизм — `LocationContext.extend()` по канонической цепочке scope
+([tz_cascade_context.md](tz_cascade_context.md) §2, §4). Реализация —
+`contextResolver.extend()` + caller-side helpers в
+`application/worldData/context/locationScope.py`
+(`settlement_context` / `district_context` / `area_context` /
+`building_context` / `room_context`). Легаси `TierResolver` удалён
+(cascade-migration M6).
 
-Порядок (от частного к общему):
+Эффективный приоритет (от частного к общему):
 
 ```
-room_tier  →  building.system_economic_tier  →  district.system_economic_tier  →  city.system_economic_tier
+room: RoomDef.economic_tier
+  → building: NL.system_economic_tier
+  → area: plot.economic_tier → plot.economic_tier_band → plot.economic_tier_range
+  → district: NL.system_economic_tier (stamped) / district_template.economic_tier_range
+  → settlement: NL.system_economic_tier / SettlementSkeleton.economic_tier
 ```
 
-Если на всех уровнях `null` → `median_system_tier(world.economic_tier_registry)` + **WARNING** в лог (см. [tz_locations.md](tz_locations.md), поле `named_locations.system_economic_tier`).
+Резолв идёт сверху вниз по границам scope: на каждой границе
+materialize-канал разворачивается один раз (scope-seeded rng), authored
+VALUE на своём scope бьёт унаследованное значение. Порядок каналов на
+уровне: `economic_tier` → `band` → `range`. `economic_tier_range` —
+materialize-канал: ближайший к унаследованному тиру (anchor) внутри
+`[min, max]`; без anchor — rng внутри range. Фильтрация размещения по
+range (`planner/economic.py`) — отдельная механика отбора шаблонов, не
+часть каскада.
 
-Explicit `system_tier` на более глубоком уровне **перебивает** наследование с родителя.
+Если ни один scope не дал значения → `DefaultPolicy.REGISTRY_MEDIAN`
+(`economic_tiers(world).resolve_default`) + один **WARNING** при первом
+default-резолве; deeper scopes не пере-варнят (см. [tz_locations.md](tz_locations.md),
+поле `named_locations.system_economic_tier`).
+
+**Persist-решение (зафиксировано):** каждая новая `NamedLocation` цепочки
+stamp'ится effective tier'ом своего ctx — settlement NL при создании,
+district NL в `settlementOutdoorExtract._district_named_location`,
+building NL в `StructureAreaAssembler.assemble`, room NL в
+`_room_to_named_location`. При перегенерации persisted NL идёт первым
+link'ом своего scope → stamped/ authored тир сохраняется без re-roll
+(tz_cascade_context §8.4).
+
+Explicit `system_tier` на более глубоком уровне **перебивает** наследование с родителя; null-звенья каскад пропускает до ближайшего non-null предка.
 
 ---
 
@@ -84,7 +114,7 @@ Explicit `system_tier` на более глубоком уровне **пере�
 Мастер задаёт конкретные имена: город `"standard"`, район `economic_tier_range: {min, max}`, здание `"premium"`.
 
 ```
-TierResolver → effective system_tier → tierRegistry (материалы, placement, поля registry)
+LocationContext → effective system_tier → tierRegistry (материалы, placement, поля registry)
 ```
 
 `economicTierBands` не участвует, пока правило явно привязано к `system_tier`.
@@ -148,7 +178,7 @@ economic_tier_band
 | `tier_entry` | `None` — поля registry недоступны |
 | `tier_rank` | **0** (как самый бедный) — сравнения `tier_at_least` / `tier_at_most` могут дать ложный результат |
 | `band_of` | `None` |
-| `TierResolver`, все null | `median_system_tier` + WARNING |
+| каскад `extend()`, все null | `REGISTRY_MEDIAN` default + один WARNING при первом резолве |
 | `materialResolver` | нет кандидатов по tier → fallback вниз по `base_value` → любой подходящий материал → hard default + WARNING |
 | `sidewalkWidthResolver` | нет полей в entry → hardcoded default по имени / `_DEFAULT_WIDTH = 2` |
 
@@ -160,17 +190,20 @@ economic_tier_band
 
 | Место | Утилита |
 |---|---|
-| `settlementAssembler._build_skeleton` | `TierResolver.resolve(city=…)` |
+| `locationScope.py` | scope-boundary ctx: `settlement_context` … `room_context`, scope-seeded rng |
+| `contextResolver.extend()` | движок каскада: VALUE/BAND/RANGE каналы, `materialize_band`, `_materialize_tier_range`, `resolve_default` |
+| `settlementAssembler._build_skeleton` | `settlement_context(...).economic_tier` |
+| `structureGeneratorService.py` и structure-фазы | `ctx.economic_tier` (building/room scope) |
+| `StructureAreaAssembler` | `derive_structure_context` → `location_ctx`; stamp building NL |
 | `planner/placement.py` | `tier_at_least`, `tier_at_most` |
-| `materialResolver.py` | `median_system_tier`, `tiers_sorted`, fallback вниз |
+| `materialResolver.py` | `resolve_material`/`resolve_room_materials` — чистый консьюмер effective tier; `median_system_tier` только как material-default при `effective_tier=None`, `tiers_sorted`, fallback вниз |
 | `sidewalkWidthResolver.py` | `tier_entry` + `band_of` fallback |
-| `structureGeneratorService.py` | `TierResolver.resolve(world, building, band, rng)` |
-| `economicTierBands.py` | `materialize_band`, `band_of` в sidewalk fallback |
+| `economicTierBands.py` | `materialize_band` (вызывается только из `contextResolver`), `band_of` в sidewalk fallback |
 
 Соседи (не дублировать):
 
-- `TierResolver` — только каскад «откуда взять tier».
-- `materialResolver` — выбор материала + fallback.
+- `LocationContext`/`extend()` — единственный путь «откуда взять tier» до консьюмеров.
+- `materialResolver` — выбор материала + fallback (резолва тира внутри нет).
 - `economicTierBands` — только N→5 bands; формула §3 не сливать с `tier_rank`.
 
 ---
@@ -182,7 +215,7 @@ economic_tier_band
 | `worlds.economic_tier_registry[]` | World N+1 | источник истины |
 | `named_locations.system_economic_tier` | локация | `EconomyTierKey` → `system_tier` |
 | `SettlementSkeleton.economic_tier` | скелет города | тот же ключ (alias SQL `system_economic_tier`) |
-| `building_template_registry[].economic_tier_range` | шаблон здания | `{min, max}` → `EconomyTierKey` |
+| `economic_tier_range` (тело шаблона — `PlotLayoutTemplate`/building body) | шаблон здания | `{min, max}` → `EconomyTierKey` |
 | `district_template_registry[].economic_tier_range` | шаблон района | `{min, max}` → `EconomyTierKey` |
 | `district_template_registry[].placement_conditions` | `{type: economic_tier_min/max, tier}` | → `system_tier` |
 | `economic_tier_band` | шаблон города/района/здания | → band enum (§3) — **planned** |
@@ -194,7 +227,104 @@ economic_tier_band
 ## 10. Roadmap
 
 1. Подключить `economicTierBands` в `sidewalkWidthResolver` (fallback через `band_of`, не по raw имени tier).
-2. Реализовать разворот `economic_tier_band` в `TierResolver` / отдельном `BandResolver`.
+2. ~~Реализовать разворот `economic_tier_band`~~ — сделано: `materialize_band` вызывается движком `contextResolver.extend()` на границе scope (BAND-канал, anchor = унаследованный тир).
 3. `plan_area_placements` / `buildingCache`: `economic_tier_range` + ±1 через `building_tier_compatible` и `tier_rank`.
 4. **Validator** при import и в редакторе миров (§6) — после стабилизации fallback-тестов.
 5. При включении validator: рассмотреть `tier_rank(unknown) → -1` или явный `is_known_tier()`, чтобы сравнения не маскировали битые ref.
+
+## 11. Политики строительных материалов
+
+Статус: реализовано 2026-10-04 (план
+`.cursor/plans/structure-wall-materials-done.md`): `MaterialPolicyConsumer`,
+`DefaultMaterialPolicyConsumer` и helper `defaultMaterialPolicy` живут в
+`app/application/economy/materialPolicies/`, контракты — в
+`app/dataModel/economy/materialPolicies/`, первый caller — selector
+`generators/structure/wallMaterials.py` (прямое подключение с TODO про DAG).
+Нерешённые вопросы §11.5 не имеют неявных defaults.
+
+### 11.1 Ответственность слоя
+
+Консьюмер политики материалов — самостоятельный слой решений экономики и
+поведения NPC. Его потребителями являются генерация зданий и, в дальнейшем,
+строительство игрока/NPC. Консьюмер не зависит от геометрии комнат, вида лестницы
+или writer клеток. Генератор предоставляет кандидатов и контекст, получает
+решение и применяет его в рамках своего геометрического контракта.
+
+Стоимость материалов сейчас отсутствует. Не вводить расчёт цены и не считать
+`base_value` экономического тира ценой материала. Текущее правило выбора по
+прочности является изменяемой логикой helper, а не определением стоимости.
+
+Доменные консьюмеры и helper размещаются в
+`app/application/economy/materialPolicies/`, typed-контракты — в
+`app/dataModel/economy/materialPolicies/`. Генератор стен импортирует контракт
+этого слоя; доменные решения не размещаются в generators/utils.
+
+### 11.2 Входные данные и результат
+
+Typed-вход содержит кандидатов с material identity, `structural_strength` из
+реестра материалов и происхождением, optional явно заданную policy и resolved
+экономический контекст здания. Контекст здания определяется существующим
+каскадом §4, band — существующим отображением реестра мира из §3. Контекст
+обязателен и резолвится полным каскадом §4 через `LocationContext.extend()`:
+settlement → district → area → building → room; band/range materialize на
+своей границе; пустая цепочка → REGISTRY_MEDIAN + WARNING. Отсутствие контекста после
+полного каскада — баг caller'а и повод для ошибки, а не для молчаливого
+выбора band консьюмером.
+
+Выход содержит выбранный материал и основание решения либо структурированную
+причину невозможности выбора. Консьюмер не обращается самостоятельно к БД,
+не подбирает другой материал из полного реестра и не использует RNG. Формирование
+пула кандидатов — ответственность caller; наличие экономического контекста не
+разрешает консьюмеру менять геометрию или размещение здания.
+
+### 11.3 Явная политика и отдельный default consumer
+
+Явно переданная политика имеет приоритет. Первые политики выбирают кандидата с
+максимальной или минимальной `structural_strength` (0–1). Не использовать вместо
+прочности `hardness`: это отдельная характеристика твёрдости.
+
+Если политика не указана, применяется отдельный `DefaultMaterialPolicyConsumer`.
+Его расширяемый helper определяет default по экономическому контексту здания:
+
+- `EconomicTierBand.RICH` → максимальная прочность;
+- остальные bands, включая `WEALTHY`, → минимальная прочность.
+
+Используется существующая пятиступенчатая шкала §3, а не список имён конкретных
+тиров мира. Helper выбирает policy; сравнение кандидатов выполняется общим
+механизмом и не дублируется в default consumer. Будущие правила могут учитывать
+экономику и поведение NPC через этот слой без изменений wall writer.
+
+При равной `structural_strength` кандидатов побеждает материал комнаты с
+большей площадью footprint. При равной площади и равной прочности побеждает
+первый кандидат в списке typed-входа; порядок списка обязан быть
+детерминированным у caller'а. Typed-вход несёт площадь источника-комнаты;
+сам консьюмер геометрию не вычисляет.
+
+### 11.4 Первое подключение
+
+Первый caller — selector материалов общих перегородок здания
+([tz_building_generator.md §8.7.1](tz_building_generator.md#871-происхождение-и-материалы-стен)).
+На первом этапе он вызывает консьюмер напрямую с комментарием:
+
+```python
+# TODO: отключить прямое подключение консьюмеров политики материалов и вывести в DAG
+```
+
+Перенос в DAG — последующая задача. Текущий контракт должен сохранять явные
+входные данные/результат, чтобы подключение через DAG не требовало переноса
+политик в геометрию. В рамках исправления стен не реализовывать поведение NPC.
+
+### 11.5 Нерешённые вопросы
+
+Неизвестный material identity, fallback и подготовка требуемых характеристик —
+ответственность зоны материалов. Консьюмер получает подготовленных кандидатов
+и не дублирует разрешение ссылок, диагностику или восстановление прочности.
+Имеющиеся проверки и подтверждённый пробел общего контракта зафиксированы в
+[tz_materials.md §9, MAT-T-1](tz_materials.md#mat-t-1--подготовка-материала-с-требуемыми-характеристиками-для-потребителей).
+До закрытия MAT-T-1 не считать наличие resolved ключа гарантией числовой strength.
+
+- Место задания явной policy и способ её передачи существующим callers.
+
+Не приравнивать None к нулю и не назначать неизвестному тиру band молча;
+победитель при полном равенстве кандидатов — первый в их списке, порядок
+которого детерминирован у caller'а.

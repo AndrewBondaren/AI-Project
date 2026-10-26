@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
+from app.application.worldData.mapCells.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.db.database import BULK_CACHE_SIZE, Database
 from app.db.models.mapCell import MapCell
 from app.db.repositories.sqlite.mapCellRepository import SqliteMapCellRepository
@@ -43,6 +43,7 @@ def _map_cell_patches_ddl() -> str:
         display_facing TEXT,
         glass_material TEXT,
         hydrology TEXT,
+        system_grade_uid TEXT,
         PRIMARY KEY (world_uid, x, y, z)
     );
     """

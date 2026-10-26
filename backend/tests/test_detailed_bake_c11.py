@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from app.application.cancellation.requestPlanWait import RequestPlanWait
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +11,7 @@ from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
-from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.materialize.persistResult import PersistResult
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     SettlementOutdoorExtractError,
 )
@@ -18,13 +19,14 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
     MaterializeResult,
     SettlementOutdoorError,
 )
-from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
+from app.application.worldData.materialize import worldSurfaceMaterializationOrchestrator
+from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.worldPack.detailedBakeScope import DetailedBakeRequest
+from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -35,7 +37,7 @@ def _city(**kwargs) -> NamedLocation:
         "display_name": "Hold",
         "system_location_type": WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         "created_at": "2026-01-01T00:00:00",
-        "system_city_size": "town",
+        "location_payload": {"system_city_size": "town"},
     }
     payload.update(kwargs)
     return NamedLocation(**payload)
@@ -52,8 +54,15 @@ def _l2(*, scope="location", location_uid="loc-city", failed=0) -> PackDetailedB
 def _orch(*, outdoor=None, bake_result=None):
     detailed = MagicMock()
     detailed.bake = AsyncMock(return_value=bake_result or _l2())
+    pack = MagicMock()
+    pack.relief_loader = None
+    db = MagicMock()
+    db.transaction_if_needed.return_value.__aenter__ = AsyncMock()
+    db.transaction_if_needed.return_value.__aexit__ = AsyncMock(return_value=False)
+    guard = MagicMock()
+    guard.require_fresh = AsyncMock()
     return WorldSurfaceMaterializationOrchestrator(
-        MagicMock(),
+        pack, planning=MagicMock(), capture=MagicMock(), db=db, publication_guard=guard,
         detailed=detailed,
         outdoor=outdoor,
     )
@@ -110,8 +119,9 @@ class PackBakeResultSettlementTests(TestCase):
 
 class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_city_location_calls_materialize_with_skip(self, _ctx):
         outdoor = MagicMock()
@@ -126,7 +136,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [city],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertEqual(detailed.location_uid, "loc-city")
@@ -138,8 +148,9 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         )
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_wilderness_does_not_call_c11(self, _ctx):
         outdoor = MagicMock()
@@ -155,15 +166,16 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [_city()],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertIsNone(settlement)
         outdoor.materialize.assert_not_called()
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_non_city_location_does_not_call_c11(self, _ctx):
         outdoor = MagicMock()
@@ -186,15 +198,16 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [pin],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertIsNone(settlement)
         outdoor.materialize.assert_not_called()
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_district_uid_does_not_call_c11(self, _ctx):
         outdoor = MagicMock()
@@ -217,15 +230,16 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [district],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertIsNone(settlement)
         outdoor.materialize.assert_not_called()
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_outdoor_none_skips_c11(self, _ctx):
         orch = _orch(outdoor=None)
@@ -236,14 +250,15 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [_city()],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertIsNone(settlement)
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_c11_error_keeps_l2_and_records_settlement(self, _ctx):
         outdoor = MagicMock()
@@ -257,7 +272,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [_city()],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertIs(detailed, l2)
@@ -265,8 +280,9 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
         self.assertEqual(settlement.error, "no pack")
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_extract_error_is_settlement_error_not_raise(self, _ctx):
         outdoor = MagicMock()
@@ -281,15 +297,16 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [_city()],
             MagicMock(),
             MagicMock(),
-            request,
+            request, wait=RequestPlanWait.unbounded(),
         )
 
         self.assertEqual(settlement.status, "error")
         self.assertIn("bad layout", settlement.error)
 
     @patch(
-        "app.application.worldData.worldSurfaceMaterializationOrchestrator"
-        ".require_surface_terrain_context",
+        worldSurfaceMaterializationOrchestrator.__name__
+        + ".SurfacePlanningEntry.prepare_captured",
+        return_value=(MagicMock(), MagicMock()),
     )
     async def test_bake_pack_attaches_settlement(self, _ctx):
         outdoor = MagicMock()
@@ -308,7 +325,7 @@ class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
             [city],
             MagicMock(),
             MagicMock(),
-            mode="detailed",
+            mode="detailed", wait=RequestPlanWait.unbounded(),
             detailed_request=DetailedBakeRequest(
                 scope="location",
                 location_uid=city.location_uid,

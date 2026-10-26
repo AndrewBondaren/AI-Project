@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 
-from app.dataModel.spatial.facing import parse_facing
 from app.application.worldData.generators.structure.cellFactory import (
     _floor_cell, _ladder_cell, _trapdoor_cell,
 )
@@ -27,7 +26,7 @@ class VerticalLadderBuilder(StaircaseBuilder):
 
     @property
     def _on_the_edge(self) -> bool:
-        return (self.sc_entry or {}).get("on_the_edge", False)
+        return self.sc_entry.on_the_edge
 
     def _build_fixed(
         self,
@@ -77,15 +76,15 @@ class VerticalLadderBuilder(StaircaseBuilder):
         raise NotImplementedError(f"vertical_ladder {self.conn_label}: movable not implemented")
 
     def build(self) -> tuple[tuple[int, int], tuple[int, int]]:
-        entry        = self.sc_entry or {}
-        is_movable   = entry.get("is_movable",   False)
-        has_trapdoor = entry.get("has_trapdoor", False)
-        near_wall    = entry.get("near_wall",    False)
-        on_the_edge  = self._on_the_edge
-        has_walls        = entry.get("has_walls",        False)
-        facing           = parse_facing(entry.get("facing", None))
-        open_wall_shaft  = entry.get("open_wall_shaft",  None)
-        closed_exit      = entry.get("closed_exit",      False)
+        spec           = self.sc_entry
+        is_movable     = spec.is_movable
+        has_trapdoor   = spec.has_trapdoor
+        near_wall      = spec.near_wall
+        on_the_edge    = self._on_the_edge
+        has_walls      = spec.has_walls
+        facing         = spec.facing
+        open_wall_shaft = spec.open_wall_shaft
+        closed_exit    = spec.closed_exit
 
         params = _compute_vertical_ladder_params(
             self.fr, self.to,

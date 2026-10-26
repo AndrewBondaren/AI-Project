@@ -1,0 +1,652 @@
+"""Library packs — plan library-packs-model-done.md step B-3.
+
+Covers the step-3 contracts: typed ``pack.manifest.json`` loading and
+validation (TZ §4, template-pack-layout), manifest-aware FS importers
+(manifest never parsed as a body, lone root files rejected), declared
+default sources (no wildcard scans), and member identity on FS import.
+
+Real SQLite for catalog writes — same pattern as test_library_packs_schema.
+"""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import IsolatedAsyncioTestCase
+
+from app.ids import LibraryKind, library_uid
+from app.application.templateLibrary.packs.defaults import default_pack_names
+from app.application.templateLibrary.packs.manifest import (
+    PACK_MANIFEST_FILENAME,
+    PackManifestError,
+    load_pack_manifest,
+)
+from app.application.templateLibrary.reliefErrors import ReliefValidationError
+from app.application.templateLibrary.reliefTemplateFsImport import import_relief_path
+from app.application.templateLibrary.structureTemplateErrors import (
+    StructureTemplateValidationError,
+)
+from app.application.templateLibrary.structureTemplateFsImport import (
+    import_structure_templates_path,
+    load_structure_stdlib,
+)
+from app.core.container import Container
+from app.dataModel.libraryPacks.packManifest import LibraryPackManifest
+from app.db.database import Database
+from app.db.models.world import World
+from app.db.repositories.sqlite.libraryPackMemberRepository import (
+    SqliteLibraryPackMemberRepository,
+)
+from app.db.repositories.sqlite.libraryPackRepository import (
+    SqliteLibraryPackRepository,
+)
+from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_STRUCTURES_ROOT = _REPO_ROOT / "structures_templates"
+_RELIEF_ROOTS = (
+    _REPO_ROOT / "relief_templates",
+    _REPO_ROOT / "backend" / "relief_templates",
+)
+_FIXTURES = _REPO_ROOT / "fixtures"
+
+_STRUCT = LibraryKind.STRUCTURE_TEMPLATES
+_RELIEF = LibraryKind.RELIEF_TEMPLATES
+_BUILDING = LibraryKind.BUILDING_TEMPLATES
+_PACKS = LibraryKind.LIBRARY_PACKS
+
+
+def _member_dict(
+    pack_name: str,
+    *,
+    kind: LibraryKind,
+    pack_uid: str,
+    local_uid: str = "item_1",
+    stem: str | None = None,
+) -> dict:
+    template_uid = library_uid(kind, local_uid, pack_uid=pack_uid)
+    file_stem = stem if stem is not None else (
+        template_uid if kind is _STRUCT else local_uid
+    )
+    return {
+        "library_kind": kind.value,
+        "local_uid": local_uid,
+        "template_uid": template_uid,
+        "source_file": f"{pack_name}/{file_stem}.json",
+    }
+
+
+def _manifest_dict(
+    pack_name: str,
+    *,
+    kind: LibraryKind = _STRUCT,
+    system_name: str | None = None,
+    members: list[dict] | None = None,
+    **extra,
+) -> dict:
+    system_name = system_name or f"test.pack.{pack_name}"
+    pack_uid = library_uid(_PACKS, system_name)
+    if members is None:
+        members = [_member_dict(pack_name, kind=kind, pack_uid=pack_uid)]
+    manifest = {
+        "pack_uid": pack_uid,
+        "system_name": system_name,
+        "pack_name": pack_name,
+        "display_name": pack_name,
+        "members": members,
+    }
+    manifest.update(extra)
+    return manifest
+
+
+def _write_pack(
+    root: Path,
+    pack_name: str,
+    *,
+    kind: LibraryKind = _STRUCT,
+    manifest: dict | None = None,
+    bodies: dict[str, dict] | None = None,
+) -> Path:
+    """Materialise a pack folder: manifest + body files for its members."""
+    pack_dir = root / pack_name
+    pack_dir.mkdir(parents=True, exist_ok=True)
+    manifest = manifest or _manifest_dict(pack_name, kind=kind)
+    (pack_dir / PACK_MANIFEST_FILENAME).write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
+    for member in manifest["members"]:
+        rel = Path(member["source_file"])
+        body = bodies.get(member["local_uid"], {}) if bodies else {}
+        target = pack_dir / rel.name
+        target.write_text(json.dumps(body or {"x": 1}), encoding="utf-8")
+    return pack_dir
+
+
+class ManifestPojoTests(unittest.TestCase):
+    """Typed POJO — TZ §4 field shape."""
+
+    def test_valid_manifest_parses(self):
+        manifest = LibraryPackManifest.model_validate(_manifest_dict("base"))
+        member = manifest.members[0]
+        self.assertEqual(manifest.pack_name, "base")
+        self.assertEqual(manifest.version, "1.0")
+        self.assertEqual(manifest.dependencies, [])
+        self.assertIsNone(manifest.source_pack_uid)
+        self.assertEqual(member.local_uid, "item_1")
+        self.assertEqual(member.library_kind, _STRUCT.value)
+        self.assertIsNone(member.source_template_uid)
+
+    def test_missing_required_member_field_rejected(self):
+        from pydantic import ValidationError
+
+        raw = _manifest_dict("p")
+        del raw["members"][0]["template_uid"]
+        with self.assertRaises(ValidationError):
+            LibraryPackManifest.model_validate(raw)
+        raw = _manifest_dict("p")
+        del raw["pack_uid"]
+        with self.assertRaises(ValidationError):
+            LibraryPackManifest.model_validate(raw)
+
+
+class LoadPackManifestTests(unittest.TestCase):
+    """Filesystem layout validation — template-pack-layout.mdc + TZ §4."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name) / "structures_templates"
+        self.root.mkdir(parents=True)
+
+    def _load(self, pack_dir: Path, *, kind: LibraryKind = _STRUCT):
+        return load_pack_manifest(
+            pack_dir, domain_root=self.root, library_kind=kind
+        )
+
+    def test_valid_pack_loads_members(self):
+        pack_dir = _write_pack(self.root, "base")
+        loaded = self._load(pack_dir)
+        self.assertEqual(loaded.manifest.pack_name, "base")
+        self.assertEqual(len(loaded.members), 1)
+        self.assertTrue(loaded.members[0].file.is_file())
+
+    def test_missing_manifest_rejected(self):
+        (self.root / "p").mkdir()
+        with self.assertRaisesRegex(PackManifestError, PACK_MANIFEST_FILENAME):
+            self._load(self.root / "p")
+
+    def test_pack_name_must_match_folder(self):
+        manifest = _manifest_dict("declared")
+        pack_dir = _write_pack(self.root, "actual", manifest=manifest)
+        with self.assertRaisesRegex(PackManifestError, "pack_name"):
+            self._load(pack_dir)
+
+    def test_pack_uid_must_match_central_formula(self):
+        manifest = _manifest_dict("p")
+        manifest["pack_uid"] = library_uid(_PACKS, "test.pack.other")
+        pack_dir = _write_pack(self.root, "p", manifest=manifest)
+        with self.assertRaisesRegex(PackManifestError, "pack_uid"):
+            self._load(pack_dir)
+
+    def test_pack_must_be_direct_child_of_domain_root(self):
+        nested = self.root / "outer" / "p"
+        nested.mkdir(parents=True)
+        with self.assertRaisesRegex(PackManifestError, "direct child"):
+            self._load(nested)
+
+    def test_member_kind_must_match_domain(self):
+        manifest = _manifest_dict("p", kind=_RELIEF)
+        pack_dir = _write_pack(self.root, "p", manifest=manifest)
+        with self.assertRaisesRegex(PackManifestError, "domains never mix"):
+            self._load(pack_dir)
+
+    def test_member_template_uid_must_match_central_formula(self):
+        manifest = _manifest_dict("p")
+        manifest["members"][0]["template_uid"] = library_uid(
+            _STRUCT, "item_1", pack_uid=library_uid(_PACKS, "test.pack.other")
+        )
+        pack_dir = _write_pack(self.root, "p", manifest=manifest)
+        with self.assertRaisesRegex(PackManifestError, "template_uid"):
+            self._load(pack_dir)
+
+    def test_member_file_stem_must_match(self):
+        manifest = _manifest_dict("p")
+        manifest["members"][0]["source_file"] = "p/renamed.json"
+        pack_dir = self.root / "p"
+        pack_dir.mkdir()
+        (pack_dir / PACK_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+        (pack_dir / "renamed.json").write_text("{}")
+        with self.assertRaisesRegex(PackManifestError, "file stem"):
+            self._load(pack_dir)
+
+    def test_member_source_file_must_stay_inside_pack(self):
+        for rel in ("other/x.json", "p/../x.json", "../x.json"):
+            with self.subTest(source_file=rel):
+                manifest = _manifest_dict("p")
+                manifest["members"][0]["source_file"] = rel
+                pack_dir = self.root / "p"
+                pack_dir.mkdir(exist_ok=True)
+                (pack_dir / PACK_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+                with self.assertRaises(PackManifestError):
+                    self._load(pack_dir)
+
+    def test_manifest_never_a_member_body(self):
+        manifest = _manifest_dict("p")
+        manifest["members"][0]["source_file"] = f"p/{PACK_MANIFEST_FILENAME}"
+        pack_dir = self.root / "p"
+        pack_dir.mkdir()
+        (pack_dir / PACK_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(PackManifestError, "never a template body"):
+            self._load(pack_dir)
+
+    def test_undeclared_json_in_pack_rejected(self):
+        pack_dir = _write_pack(self.root, "p")
+        (pack_dir / "stray.json").write_text("{}")
+        with self.assertRaisesRegex(PackManifestError, "undeclared"):
+            self._load(pack_dir)
+
+    def test_missing_member_file_rejected(self):
+        manifest = _manifest_dict("p")
+        pack_dir = self.root / "p"
+        pack_dir.mkdir()
+        (pack_dir / PACK_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(PackManifestError, "does not exist"):
+            self._load(pack_dir)
+
+    def test_duplicate_local_uid_rejected(self):
+        pack_dir = _write_pack(
+            self.root, "p",
+            manifest=_manifest_dict(
+                "p",
+                members=[
+                    _member_dict(
+                        "p", kind=_STRUCT,
+                        pack_uid=library_uid(_PACKS, "test.pack.p"),
+                        local_uid="dup",
+                    ),
+                    _member_dict(
+                        "p", kind=_STRUCT,
+                        pack_uid=library_uid(_PACKS, "test.pack.p"),
+                        local_uid="dup",
+                    ),
+                ],
+            ),
+        )
+        # Both members point at the same file — duplicate local_uid fires first.
+        with self.assertRaisesRegex(PackManifestError, "duplicate"):
+            self._load(pack_dir)
+
+    def test_empty_members_rejected(self):
+        pack_dir = _write_pack(
+            self.root, "p", manifest=_manifest_dict("p", members=[])
+        )
+        with self.assertRaisesRegex(PackManifestError, "no members"):
+            self._load(pack_dir)
+
+    def test_fs_manifest_never_declares_provenance(self):
+        manifest = _manifest_dict("p", source_pack_uid=library_uid(_PACKS, "x"))
+        pack_dir = _write_pack(self.root, "p", manifest=manifest)
+        with self.assertRaisesRegex(PackManifestError, "source_pack_uid"):
+            self._load(pack_dir)
+
+        manifest = _manifest_dict("q")
+        manifest["members"][0]["source_template_uid"] = "old-uid"
+        pack_dir = _write_pack(self.root, "q", manifest=manifest)
+        with self.assertRaisesRegex(PackManifestError, "source_template_uid"):
+            self._load(pack_dir)
+
+    def test_dependencies_validated(self):
+        uid = library_uid(_PACKS, "test.pack.p")
+        for deps, marker in (
+            ([uid, uid], "duplicate"),
+            ([uid], "itself"),
+            (["bad|uid"], r"'\|'"),
+        ):
+            with self.subTest(deps=deps):
+                manifest = _manifest_dict("p", dependencies=deps)
+                pack_dir = _write_pack(self.root, "p", manifest=manifest)
+                with self.assertRaisesRegex(PackManifestError, marker):
+                    self._load(pack_dir)
+
+
+class FsImporterTests(IsolatedAsyncioTestCase):
+    """Manifest-aware importers — pack only, no lone files, no wildcard."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name) / "structures_templates"
+        self.root.mkdir(parents=True)
+
+    @staticmethod
+    def _collector():
+        calls = []
+
+        async def upsert(raw, **kwargs):
+            calls.append(kwargs)
+            return kwargs
+
+        return upsert, calls
+
+    async def test_pack_import_passes_pack_identity_and_skips_manifest(self):
+        pack_dir = _write_pack(self.root, "base")
+        upsert, calls = self._collector()
+        outcome = await import_structure_templates_path(
+            pack_dir, upsert_from_dict=upsert, domain_root=self.root
+        )
+        member = outcome.manifest.members[0]
+        self.assertEqual(len(outcome.rows), 1)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["pack_uid"], outcome.manifest.pack_uid)
+        self.assertEqual(calls[0]["local_uid"], member.local_uid)
+        self.assertEqual(calls[0]["expected_stem"], member.template_uid)
+        self.assertTrue(
+            calls[0]["source_file"].startswith("structures_templates/base/")
+        )
+
+    async def test_lone_file_in_domain_root_rejected(self):
+        lone = self.root / "orphan.json"
+        lone.write_text("{}")
+        upsert, calls = self._collector()
+        with self.assertRaisesRegex(
+            StructureTemplateValidationError, "lone file"
+        ):
+            await import_structure_templates_path(
+                lone, upsert_from_dict=upsert, domain_root=self.root
+            )
+        self.assertEqual(calls, [])
+
+    async def test_single_member_file_imports_via_owning_pack(self):
+        pack_dir = _write_pack(self.root, "base")
+        member_file = next(
+            p for p in pack_dir.glob("*.json") if p.name != PACK_MANIFEST_FILENAME
+        )
+        upsert, calls = self._collector()
+        outcome = await import_structure_templates_path(
+            member_file, upsert_from_dict=upsert, domain_root=self.root
+        )
+        self.assertEqual(len(outcome.rows), 1)
+        self.assertEqual(calls[0]["pack_uid"], outcome.manifest.pack_uid)
+
+    async def test_pack_without_manifest_rejected(self):
+        (self.root / "p").mkdir()
+        (self.root / "p" / "body.json").write_text("{}")
+        upsert, _ = self._collector()
+        with self.assertRaises(StructureTemplateValidationError):
+            await import_structure_templates_path(
+                self.root / "p", upsert_from_dict=upsert, domain_root=self.root
+            )
+
+    async def test_path_outside_domain_root_rejected(self):
+        outside = Path(self._tmp.name) / "elsewhere" / "x.json"
+        outside.parent.mkdir()
+        outside.write_text("{}")
+        upsert, _ = self._collector()
+        with self.assertRaises(StructureTemplateValidationError):
+            await import_structure_templates_path(
+                outside, upsert_from_dict=upsert, domain_root=self.root
+            )
+
+    async def test_relief_pack_import_symmetric(self):
+        root = Path(self._tmp.name) / "relief_templates"
+        pack_dir = _write_pack(root, "user_pack", kind=_RELIEF)
+        upsert, calls = self._collector()
+        outcome = await import_relief_path(
+            pack_dir, upsert_from_dict=upsert, domain_root=root
+        )
+        self.assertEqual(len(outcome.rows), 1)
+        self.assertEqual(calls[0]["pack_uid"], outcome.manifest.pack_uid)
+        self.assertEqual(calls[0]["expected_stem"], "item_1")
+
+        lone = root / "orphan.json"
+        lone.write_text("{}")
+        with self.assertRaisesRegex(ReliefValidationError, "lone file"):
+            await import_relief_path(
+                lone, upsert_from_dict=upsert, domain_root=root
+            )
+
+
+class DefaultSourceTests(unittest.TestCase):
+    """Declared defaults only — never a wildcard scan of the domain root."""
+
+    def test_declared_defaults(self):
+        self.assertEqual(default_pack_names(_STRUCT), ("base",))
+        self.assertEqual(default_pack_names(_RELIEF), ())
+        self.assertEqual(default_pack_names(_BUILDING), ("base",))
+        self.assertEqual(default_pack_names(LibraryKind.PLOT_TEMPLATES), ("base",))
+
+    def test_stdlib_reads_only_declared_packs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "structures_templates"
+            manifest = _manifest_dict("base")
+            member_uid = manifest["members"][0]["template_uid"]
+            _write_pack(
+                root, "base", manifest=manifest,
+                bodies={"item_1": {"system_name": member_uid, "display_name": "X"}},
+            )
+            # A foreign pack folder — even a malformed one — is never read.
+            (root / "foreign").mkdir()
+            (root / "foreign" / "anything.json").write_text("{broken")
+            loaded = load_structure_stdlib(root)
+            self.assertEqual([str(o.system_name) for o in loaded], [member_uid])
+
+    def test_shipped_base_pack_loads_through_manifest(self):
+        loaded = load_structure_stdlib(_STRUCTURES_ROOT)
+        uids = [str(o.system_name) for o in loaded]
+        self.assertEqual(len(uids), 13)
+        self.assertEqual(uids, sorted(uids))
+        manifest = load_pack_manifest(
+            _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT, library_kind=_STRUCT)
+        self.assertEqual(uids, sorted(m.member.template_uid for m in manifest.members))
+        # Repeated load is uid-stable.
+        self.assertEqual(uids, [str(o.system_name) for o in load_structure_stdlib(_STRUCTURES_ROOT)])
+
+
+class SuppliedContentTests(unittest.TestCase):
+    """Migrated shipped content — manifest/body/refs consistency."""
+
+    def test_base_pack_manifest_validates_against_files(self):
+        loaded = load_pack_manifest(
+            _STRUCTURES_ROOT / "base",
+            domain_root=_STRUCTURES_ROOT,
+            library_kind=_STRUCT,
+        )
+        self.assertEqual(loaded.manifest.system_name, "engine.structures.base")
+        self.assertEqual(len(loaded.members), 13)
+        for lm in loaded.members:
+            body = json.loads(lm.file.read_text(encoding="utf-8"))
+            self.assertEqual(body["system_name"], lm.member.template_uid)
+            self.assertEqual(lm.file.stem, lm.member.template_uid)
+
+    _OLD_STRUCTURE_UIDS = frozenset({
+        "0f6d7a8b-9c0d-4e1f-9a2b-4c5d6e7f8a9b", "1a7e8b9c-0d1e-4f2a-8b3c-5d6e7f8a9b0c",
+        "2b8f9c0d-1e2f-4a3b-9c4d-6e7f8a9b0c1d", "3c9a0d1e-2f3a-4b4c-8d5e-7f8a9b0c1d2e",
+        "4d0b1e2f-3a4b-4c5d-9e6f-8a9b0c1d2e3f", "5a1f2b3c-4d5e-4f6a-8b7c-9d0e1f2a3b4c",
+        "5e1c2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a", "6b2f3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+        "6f2d3a4b-5c6d-4e7f-9a8b-0c1d2e3f4a5b", "7a3e4b5c-6d7e-4f8a-8b9c-1d2e3f4a5b6c",
+        "7c3a4d5e-6f7a-4b8c-8d9e-1f2a3b4c5d6e", "8d4b5e6f-7a8b-4c9d-9e0f-2a3b4c5d6e7f",
+        "9e5c6f7a-8b9c-4d0e-8f1a-3b4c5d6e7f8a",
+    })
+
+    def test_no_old_structure_uids_left_in_supplied_files(self):
+        old_uids = self._OLD_STRUCTURE_UIDS
+        for folder in (_STRUCTURES_ROOT, _FIXTURES / "templates"):
+            for path in folder.rglob("*.json"):
+                text = path.read_text(encoding="utf-8")
+                leaked = [uid for uid in old_uids if uid in text]
+                self.assertEqual(leaked, [], path)
+
+    def test_plot_fixtures_reference_base_member_uids(self):
+        manifest = load_pack_manifest(
+            _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT, library_kind=_STRUCT)
+        member_uids = {m.member.template_uid for m in manifest.members}
+        hits = 0
+        for path in (_FIXTURES / "templates").glob("*.json"):
+            body = json.loads(path.read_text(encoding="utf-8"))
+            structure = (body.get("main_building") or {}).get("structure")
+            if structure:
+                self.assertIn(structure, member_uids, path.name)
+                hits += 1
+        self.assertTrue(hits)
+
+    def test_inn_small_points_at_migrated_tavern(self):
+        body = json.loads(
+            (_FIXTURES / "templates" / "inn_small.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            body["main_building"]["structure"],
+            library_uid(_STRUCT, "tavern_1",
+                        pack_uid=library_uid(_PACKS, "engine.structures.base")),
+        )
+
+    def test_relief_smoke_003_manifests_validate(self):
+        for root in _RELIEF_ROOTS:
+            if not (root / "smoke_003").is_dir():
+                continue
+            with self.subTest(root=root):
+                loaded = load_pack_manifest(
+                    root / "smoke_003",
+                    domain_root=root,
+                    library_kind=_RELIEF,
+                )
+                self.assertEqual(loaded.manifest.system_name, "user.relief.smoke_003")
+                self.assertEqual(
+                    {lm.member.local_uid for lm in loaded.members},
+                    {"open_land_soft", "shore_soft", "road_shoulder_soft", "ravine_soft"},
+                )
+
+    def test_gen_003_world_pins_and_pick_policy_migrated(self):
+        fixture = json.loads(
+            (_FIXTURES / "world_test_gen_003.json").read_text(encoding="utf-8")
+        )
+        world_uid = fixture["world"]["world_uid"]
+        pins = {
+            (p["library_kind"], p["template_uid"]) for p in fixture["world"]["library_pins"]
+        }
+        pack_uid = library_uid(_PACKS, f"world.{world_uid}.smoke_003")
+        self.assertEqual(
+            pins,
+            {(_RELIEF.value, library_uid(_RELIEF, local, pack_uid=pack_uid))
+             for local in ("open_land_soft", "shore_soft", "road_shoulder_soft", "ravine_soft")},
+        )
+        policy = fixture["world"]["relief_pick_policy"]
+        expected = {
+            "open_land": "open_land_soft",
+            "shore": "shore_soft",
+            "road_shoulder": "road_shoulder_soft",
+            "ravine": "ravine_soft",
+        }
+        for key, local in expected.items():
+            self.assertEqual(
+                policy[key]["default_template_uid"],
+                library_uid(_RELIEF, local, pack_uid=pack_uid),
+                key,
+            )
+
+
+class _DbCase(IsolatedAsyncioTestCase):
+    """Real SQLite + migrated schema, like test_library_packs_schema."""
+
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.db = Database(str(Path(self.tmp.name) / "test.sqlite"))
+        await self.db.connect()
+        self.addAsyncCleanup(self.db.disconnect)
+        await self.db.apply_migrations()
+        self.packs = SqliteLibraryPackRepository(self.db)
+        self.members = SqliteLibraryPackMemberRepository(self.db)
+
+    async def _world(self, world_uid: str) -> World:
+        world = World(world_uid=world_uid, name=world_uid, created_at="2026-10-09")
+        await SqliteWorldRepository(self.db).create(world)
+        return world
+
+
+class FsPackImportCatalogTests(_DbCase):
+    """Pack FS import lands bodies + catalog rows in one unit of work."""
+
+    async def test_structure_pack_import_attaches_catalog(self):
+        loaded = load_pack_manifest(
+            _STRUCTURES_ROOT / "base",
+            domain_root=_STRUCTURES_ROOT,
+            library_kind=_STRUCT,
+        )
+        container = Container(None, self.db)
+        service = container.structure_template_library_service()
+        rows = await service.import_path(
+            _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT
+        )
+        self.assertEqual(len(rows), 13)
+
+        pack = await self.packs.get_by_uid(loaded.manifest.pack_uid)
+        self.assertIsNotNone(pack)
+        self.assertIsNone(pack.owner_world_uid)
+        members = await self.members.list_by_pack(loaded.manifest.pack_uid)
+        self.assertEqual(len(members), 13)
+        self.assertEqual(
+            {m.template_uid for m in members}, {r.template_uid for r in rows}
+        )
+        for row in rows:
+            self.assertTrue(row.source_file.startswith("structures_templates/base/"))
+
+        # Trusted canonical attach is additive, preserving existing bodies.
+        again = await service.import_path(
+            _STRUCTURES_ROOT / "base", domain_root=_STRUCTURES_ROOT
+        )
+        self.assertEqual({r.template_uid for r in again}, {r.template_uid for r in rows})
+        self.assertEqual(
+            len(await self.members.list_by_pack(loaded.manifest.pack_uid)), 13
+        )
+
+
+class MemberIdentityGuardTests(_DbCase):
+    """``upsert_from_dict``: ``local_uid``/``pack_uid`` — live identity checks."""
+
+    async def test_relief_body_must_match_local_uid(self):
+        container = Container(None, self.db)
+        service = container.relief_template_library_service()
+        pack = await container.library_pack_service().create_pack(system_name="user.relief.x")
+        with self.assertRaises(ReliefValidationError):
+            await service.upsert_from_dict(
+                {
+                    "system_name": "other_name",
+                    "display_name": "X",
+                    "context": "open_land",
+                },
+                local_uid="meadow_x",
+            )
+        row = await service.upsert_from_dict(
+            {
+                "system_name": "meadow_x",
+                "display_name": "Meadow",
+                "context": "open_land",
+            },
+            local_uid="meadow_x",
+            pack_uid=pack.pack_uid,
+        )
+        self.assertEqual(row.system_name, "meadow_x")
+
+    async def test_structure_body_must_match_member_identity(self):
+        container = Container(None, self.db)
+        service = container.structure_template_library_service()
+        pack_uid = (await container.library_pack_service().create_pack(system_name="user.structures.x")).pack_uid
+        member_uid = library_uid(_STRUCT, "shop", pack_uid=pack_uid)
+        with self.assertRaises(StructureTemplateValidationError):
+            await service.upsert_from_dict(
+                {"system_name": "not-the-member-uid", "display_name": "Shop"},
+                local_uid="shop",
+                pack_uid=pack_uid,
+            )
+        row = await service.upsert_from_dict(
+            {"system_name": member_uid, "display_name": "Shop"},
+            local_uid="shop",
+            pack_uid=pack_uid,
+        )
+        self.assertEqual(row.template_uid, member_uid)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,4 +1,4 @@
-import random
+from app.ids import UidKind, entity_rng
 import time
 
 from app.application.jsonValidation import connection_types
@@ -7,7 +7,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.planner.plotCollision import (
     plot_z_collisions,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.districtAssembler.planner.areaSlots import (
@@ -16,8 +16,10 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.a
     origin_in_reservation,
     placements_from_reservations,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import (
+from app.application.worldData.generators.assemblers.districtAssembler.planner.alleys import (
     add_alleys,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import (
     apply_frontage,
     plot_cells,
     touching_street_xy,
@@ -60,9 +62,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
     packing_warning,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
 from app.application.worldData.generators.coordinates.columnSurface import column_surface
 from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
@@ -77,13 +76,16 @@ from app.application.worldData.generators.road.streetCells import (
     rasterize_street_xy,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    district_location_uid,
+)
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.settlement.district.districtConnection import street_classes_for
-from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.mapCell import MapCell
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
@@ -101,12 +103,14 @@ class DistrictAssembler:
         self,
         world:           World,
         slot:            DistrictSlot,
-        city_skeleton:   CitySkeleton,
+        city_skeleton:   SettlementSkeleton,
         terrain_cells:   list[MapCell] | None = None,
         layout_cache:    BuildingLayoutCache | dict[str, StructureLayout] | None = None,
         settlement_uid:  str | None = None,
-        catalog:         BuildingCatalog | None = None,
+        *,
+        catalog:         BuildingCatalog,
         timings:         SettlementAssembleTimings | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> DistrictLayout:
         packing_t0 = time.perf_counter()
         template = slot.district_template
@@ -114,7 +118,6 @@ class DistrictAssembler:
         classes = street_classes_for(template)
         cache = _as_cache(layout_cache)
         settlement_uid = settlement_uid or world.world_uid
-        catalog = catalog or assemble_building_catalog(world)
         buildings_rng = settlement_cell_rng(
             world.world_uid,
             settlement_uid,
@@ -122,9 +125,10 @@ class DistrictAssembler:
             slot.cell_y,
             SettlementCellRngRole.BUILDINGS,
         )
-        rng = random.Random(
-            f"{world.world_uid}_{settlement_uid}_{slot.cell_x}_{slot.cell_y}"
-            f"_{slot.origin_x}_{slot.origin_y}",
+        rng = entity_rng(
+            world.world_uid, UidKind.TOPOLOGY,
+            settlement=settlement_uid, cell_x=slot.cell_x, cell_y=slot.cell_y,
+            x=slot.origin_x, y=slot.origin_y,
         )
 
         inner, _widths, _reason = inner_bbox_for_slot(slot, world)
@@ -150,7 +154,7 @@ class DistrictAssembler:
         nodes, edges, edge_roles = graph.nodes, graph.edges, graph.edge_roles
         empty_holes = holes_after_frame(lattice, occupied)
         packing_info(
-            district, "frame",
+            district, PackingStep.FRAME,
             block_size=step,
             empty_modules=len(empty_holes),
             inner=inner.as_rect(),
@@ -163,11 +167,15 @@ class DistrictAssembler:
         _ = leftover2
         reservations = pass1 + pass2
         placements = placements_from_reservations(
-            reservations, cache, world, city_skeleton, slot.ground_z, catalog=catalog,
+            reservations, cache, slot.ground_z, catalog,
+            district=district,
             deck=slot.district_template.deck,
         )
 
-        add_alleys(slot, placements, nodes, edges, world.world_uid, edge_roles)
+        add_alleys(
+            slot, placements, nodes, edges, world.world_uid, edge_roles,
+            surface=surface,
+        )
 
         plot_mask: set[tuple[int, int]] = set()
         for placement in placements:
@@ -176,7 +184,7 @@ class DistrictAssembler:
         edge_xy = rasterize_edges_xy(nodes, edges)
         street_xy = rasterize_street_xy(nodes, edges) - plot_mask
         packing_info(
-            district, "graph",
+            district, PackingStep.GRAPH,
             nodes=len(nodes), edges=len(edges),
             street_xy=len(street_xy), plots=len(plot_mask),
         )
@@ -186,12 +194,13 @@ class DistrictAssembler:
             placements, nodes, edges, edge_xy, street_xy,
             slot, city_skeleton, known, rng, settlement_uid,
             edge_roles=edge_roles,
+            world_uid=world.world_uid,
         )
 
         for placement in placements:
             facing = placement.area_slot.facing
             layout = cache.ensure(
-                world, placement.template, facing,
+                placement.template_uid, placement.template, facing,
                 district=district,
                 leaves=catalog.structures.leaves_of(placement.template),
             )
@@ -202,10 +211,10 @@ class DistrictAssembler:
             bx, by = origin_in_reservation(fp, res.rect_xy)
             if not footprint_fits_rect(fp, res.rect_xy, bx, by):
                 packing_warning(
-                    district, "cache",
+                    district, PackingStep.CACHE,
                     system_name=placement.template.system_name,
                     facing=facing.value,
-                    reason="footprint_miss_reservation",
+                    reason=PackingReason.FOOTPRINT_MISS,
                 )
                 continue
             placement.building_x = bx
@@ -216,7 +225,7 @@ class DistrictAssembler:
             )
 
         packing_info(
-            district, "area_slots",
+            district, PackingStep.AREA_SLOTS,
             area_slots=len(placements),
             street_xy=len(street_xy),
             connection_type=classes.spine.connection_type,
@@ -231,17 +240,14 @@ class DistrictAssembler:
         )
 
         area_assembler = StructureAreaAssembler()
+        d_uid = district_location_uid(
+            world.world_uid, settlement_uid, template.system_name, slot.slot_index,
+        )
         area_layouts: list[AreaLayout] = []
         for placement in placements:
             local_street = touching_street_xy(plot_cells(placement), street_xy)
-            cached = cache.get(
-                placement.template.system_name,
-                placement.area_slot.facing,
-            )
-            if cached is None:
-                cached = cache.get(placement.template.system_name, Facing.SOUTH)
             packing_info(
-                district, "area",
+                district, PackingStep.AREA,
                 template=placement.template.system_name,
                 facing=placement.area_slot.facing.value,
                 touching=len(local_street),
@@ -253,9 +259,13 @@ class DistrictAssembler:
                 city_skeleton,
                 terrain_cells,
                 street_xy=local_street,
-                cached_layout=cached,
+                structure_catalog=catalog.structures,
                 building_x=placement.building_x,
                 building_y=placement.building_y,
+                district_ctx=slot.district_ctx,
+                district_uid=d_uid,
+                existing_buildings=existing_buildings,
+                template_uid=placement.template_uid,
             )
             area_layouts.append(layout)
 
@@ -282,13 +292,17 @@ class DistrictAssembler:
     def _plan_streets(
         self,
         slot:          DistrictSlot,
-        city_skeleton: CitySkeleton,
+        city_skeleton: SettlementSkeleton,
         world:         World,
         surface:       dict[tuple[int, int], int] | None = None,
         frame:         StreetFrameContext | None = None,
     ) -> DistrictStreetGraph:
         generator = DistrictRoadGenerator()
-        rng = random.Random(f"{slot.origin_x}_{slot.origin_y}")
+        rng = entity_rng(
+            world.world_uid, UidKind.TOPOLOGY,
+            district=slot.district_template.system_name, index=slot.slot_index,
+            x=slot.origin_x, y=slot.origin_y,
+        )
         return generator.generate(
             slot, city_skeleton, world, rng, surface=surface, frame=frame,
         )

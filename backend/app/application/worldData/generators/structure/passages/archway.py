@@ -1,4 +1,4 @@
-﻿"""
+"""
 Archway passage builder.
 
 Rule: arch frame starts one z-level above the floor (z_base + 1).
@@ -14,19 +14,22 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
     validate_archway_frame,
     validate_archway_through,
 )
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.application.worldData.generators.structure.passages.shared import (
-    _center_slice, _det_uuid, _shared_segment,
+    _center_slice, _shared_segment,
 )
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
 
 
 def _build_archway(
-    conn: dict,
+    conn: RoomConnection,
     fr: _RoomInstance,
     to: _RoomInstance,
     fr_level: LocationLevel,
@@ -37,10 +40,11 @@ def _build_archway(
     passage_height: int,
     other_rooms: list | None = None,
     deferred: list | None = None,
-) -> LocationPassage | None:
-    shared = _shared_segment(fr, to)
+    shared_cells: list[tuple[int, int]] | None = None,
+) -> Transition | None:
+    shared = _shared_segment(fr, to) if shared_cells is None else shared_cells
     if not shared:
-        logger.warning("archway %r->%r: no shared wall found", conn["from_room"], conn["to_room"])
+        logger.warning("archway %r->%r: no shared wall found", conn.from_room, conn.to_room)
         return None
 
     if other_rooms:
@@ -52,16 +56,16 @@ def _build_archway(
         if not shared:
             logger.warning(
                 "archway %r->%r: all shared cells blocked by third rooms",
-                conn["from_room"], conn["to_room"],
+                conn.from_room, conn.to_room,
             )
             return None
 
-    width = conn.get("width", 2)
+    width = conn.width
     if width > len(shared):
         width = len(shared)
 
     arch_cells = _center_slice(shared, width)
-    mat = conn.get("frame_material") or fr.floor_material
+    mat = conn.frame_material or fr.wall_material
     z_base = fr_level.z
 
     for (x, y) in arch_cells:
@@ -70,7 +74,7 @@ def _build_archway(
         for z_layer in range(z_base + 1, z_base + fr_level.z_height):
             cells[(x, y, z_layer)] = _open_cell(x, y, z_layer, world_uid, building_uid, mat)
 
-    conn_label = f"{conn.get('from_room', '?')}->{conn.get('to_room', '?')}"
+    conn_label = f"{conn.from_room}->{conn.to_room}"
     validate_archway_frame(cells, arch_cells, z_base, conn_label)
     if deferred is not None:
         deferred.append((arch_cells, z_base, conn_label))
@@ -78,16 +82,4 @@ def _build_archway(
         validate_archway_through(cells, arch_cells, z_base, conn_label)
 
     cx, cy = arch_cells[len(arch_cells) // 2]
-    passage_uid = _det_uuid(building_uid, "arch", conn["from_room"], conn["to_room"])
-    return LocationPassage(
-        passage_uid=passage_uid,
-        world_uid=world_uid,
-        from_level_uid=fr_level.level_uid,
-        from_x=cx,
-        from_y=cy,
-        to_level_uid=to_level.level_uid,
-        to_x=cx,
-        to_y=cy,
-        system_passage_type=PassageType.ARCHWAY,
-        is_bidirectional=True,
-    )
+    return physical_transition(world_uid, TransitionType.ARCHWAY, level_endpoint(fr_level, cx, cy, building_uid), level_endpoint(to_level, cx, cy, building_uid), building_uid)

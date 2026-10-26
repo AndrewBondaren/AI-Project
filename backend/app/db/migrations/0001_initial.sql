@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     cell_state_registry         TEXT,
     danger_level_registry       TEXT,
     road_type_registry          TEXT,
-    passage_type_registry       TEXT,
+    transition_type_registry    TEXT,
     location_type_registry      TEXT,
     settlement_specialization_registry TEXT,
     location_state_registry     TEXT,
@@ -78,18 +78,17 @@ CREATE TABLE IF NOT EXISTS worlds (
     city_size_registry          TEXT,
     district_zone_preference    TEXT,
     economic_tier_registry      TEXT,
-    building_template_registry  TEXT,
     purpose_packs               TEXT,  -- enabled pack ids; omit/[] → [base, fantasy]
     purpose_pack_registry       TEXT,  -- pack recipes (canonical ⊕ overlay); base frozen
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,
-    relief_template_registry    TEXT,
     canal_template_registry     TEXT,  -- R36q canal bodies (system_type + earthen/structure)
     relief_pick_policy          TEXT,
     relief_grade_obstacle_policy TEXT,  -- truncate_skip | allow_flush (R36n); NULL → POJO default
     race_template_registry      TEXT,
     perk_template_registry      TEXT,
+    library_pins                TEXT,  -- pin-набор мира: пары library_kind/local_uid (tz_template_library_packs §1.1)
 
     -- generation policy (hydrology / caves / terrain masks — tz_terrain_hydrology.md, tz_map_light_bake.md)
     hydrology                   TEXT,
@@ -116,6 +115,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     terrain_chunk_columns       INTEGER NOT NULL DEFAULT 32,
     terrain_parallel_workers    INTEGER,
     world_bounds                TEXT,
+    world_topology_mode         TEXT NOT NULL DEFAULT 'wrapped',
     magma_band_thickness        INTEGER,
     closed_planet_grid          INTEGER NOT NULL DEFAULT 0,
     elevation_lapse_rate        REAL,
@@ -624,13 +624,23 @@ CREATE TABLE IF NOT EXISTS states (
 CREATE INDEX IF NOT EXISTS idx_states_world ON states (world_uid);
 
 -- ============================================================
+-- plot_templates (шаблоны участков; owner/membership — library pack catalog)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS plot_templates (
+    template_uid TEXT PRIMARY KEY,
+    system_name  TEXT NOT NULL,  -- readable key, not member identity or UNIQUE
+    display_name TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    source_file  TEXT
+);
+
+-- ============================================================
 -- building_templates  (глобальная библиотека шаблонов зданий)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS building_templates (
     template_uid   TEXT PRIMARY KEY,
-    system_name    TEXT NOT NULL UNIQUE,
+    system_name    TEXT NOT NULL,  -- не глобально UNIQUE (tz_template_library_packs §3): локальный ключ, уникальность — в library_pack_members
     display_name   TEXT NOT NULL,
-    structure_type TEXT NOT NULL,
     version        TEXT NOT NULL DEFAULT '1.0',
     data           TEXT NOT NULL,
     source_file    TEXT
@@ -641,7 +651,7 @@ CREATE TABLE IF NOT EXISTS building_templates (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS relief_templates (
     template_uid   TEXT PRIMARY KEY,
-    system_name    TEXT NOT NULL UNIQUE,
+    system_name    TEXT NOT NULL,  -- не глобально UNIQUE (tz_template_library_packs §3): локальный ключ, уникальность — в library_pack_members
     display_name   TEXT NOT NULL,
     context        TEXT NOT NULL,
     version        TEXT NOT NULL DEFAULT '1.0',
@@ -659,6 +669,52 @@ CREATE TABLE IF NOT EXISTS structure_templates (
     version        TEXT NOT NULL DEFAULT '1.0',
     data           TEXT NOT NULL,
     source_file    TEXT
+);
+
+-- ============================================================
+-- library_packs  (каталог паков библиотек — tz_template_library_packs §3)
+-- Ровно один владелец: owner_world_uid NULL = библиотека движка,
+-- NOT NULL = библиотека мира (mutable, каскадно умирает с миром).
+-- source_pack_uid — provenance remap-операции, не enforced FK: удаление
+-- engine-пака безопасно всегда (миры держат инстансы-копии); dangling
+-- значение читается как статус «source deleted». Таблицы bindings нет —
+-- доступность = owner_world_uid либо default-статус.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS library_packs (
+    pack_uid         TEXT PRIMARY KEY,
+    system_name      TEXT NOT NULL UNIQUE,
+    pack_name        TEXT NOT NULL,
+    display_name     TEXT NOT NULL,
+    version          TEXT NOT NULL DEFAULT '1.0',
+    owner_world_uid  TEXT REFERENCES worlds(world_uid) ON DELETE CASCADE,
+    source_pack_uid  TEXT              -- provenance: пак-источник; может ссылаться на удалённый пак
+);
+
+-- ============================================================
+-- library_pack_members  (состав паков; тела — в доменных таблицах)
+-- Одна строка = единственный владелец члена. source_template_uid —
+-- provenance remap-операции, не FK-integrity (ТЗ §3): источник может
+-- быть удалён, dangling допустим как у required_pack_uid.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS library_pack_members (
+    template_uid        TEXT PRIMARY KEY,
+    pack_uid            TEXT NOT NULL REFERENCES library_packs(pack_uid) ON DELETE CASCADE,
+    library_kind        TEXT NOT NULL,
+    local_uid           TEXT NOT NULL,
+    source_template_uid TEXT,          -- provenance: член-источник; может ссылаться на удалённого члена
+    creation_kind       TEXT NOT NULL DEFAULT 'authored'
+                        CHECK (creation_kind IN ('authored', 'pack_copy', 'member_copy'))
+);
+
+-- ============================================================
+-- library_pack_dependencies  (явные зависимости паков)
+-- required_pack_uid не FK: допускает ещё не импортированный пак —
+-- неполнота диагностируется, не блокируется (ТЗ §3, §5).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS library_pack_dependencies (
+    pack_uid          TEXT NOT NULL REFERENCES library_packs(pack_uid) ON DELETE CASCADE,
+    required_pack_uid TEXT NOT NULL,
+    PRIMARY KEY (pack_uid, required_pack_uid)
 );
 
 -- ============================================================
@@ -684,10 +740,7 @@ CREATE TABLE IF NOT EXISTS named_locations (
     owner_uid               TEXT,
     system_climate_zone     TEXT,
     state_uid               TEXT,
-    system_city_size        TEXT,
     system_economic_tier    TEXT,
-    typical_districts       TEXT,
-    system_settlement_specializations TEXT,
     is_public               INTEGER NOT NULL DEFAULT 0,
     is_forbidden            INTEGER NOT NULL DEFAULT 0,
     is_selectable           INTEGER NOT NULL DEFAULT 1,
@@ -695,25 +748,22 @@ CREATE TABLE IF NOT EXISTS named_locations (
     map_y                   INTEGER,
     map_z                   INTEGER,
     is_mobile               INTEGER NOT NULL DEFAULT 0,
-    system_template_uid     TEXT,
+    system_template_uid     TEXT,              -- applied library member uid (plot for city buildings)
+    system_structure_template_uid TEXT,        -- structure member uid actually materialized (B4)
     parent_wall_material    TEXT,
     parent_floor_material   TEXT,
     is_outdoor              INTEGER,
     is_sheltered            INTEGER NOT NULL DEFAULT 0,
     is_transit              INTEGER NOT NULL DEFAULT 0,
-    architectural_style     TEXT,
-    dominant_material       TEXT,
-    settlement_density      TEXT,
-    frontage_type_order     TEXT,
-    plot_counts             TEXT,
-    plot_priority           TEXT,
-    perimeter_barrier       TEXT,
-    district_topology       TEXT,
+    location_payload        TEXT,              -- typed payload JSON; contract via location_type_registry[].payload_kind
     created_at              TEXT NOT NULL,
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),
     FOREIGN KEY (owner_uid)           REFERENCES character_sheet(character_uid),
-    FOREIGN KEY (system_template_uid) REFERENCES building_templates(template_uid)
+    -- Template refs point at the shared member catalog; a member removed via
+    -- the explicit used-delete override clears the persisted ref to NULL.
+    FOREIGN KEY (system_template_uid) REFERENCES library_pack_members(template_uid) ON DELETE SET NULL,
+    FOREIGN KEY (system_structure_template_uid) REFERENCES library_pack_members(template_uid) ON DELETE SET NULL
 );
 
 -- ============================================================
@@ -744,6 +794,26 @@ CREATE TABLE IF NOT EXISTS map_cell_patches (
     PRIMARY KEY (world_uid, x, y, z),
     FOREIGN KEY (world_uid)    REFERENCES worlds(world_uid),
     FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- region_states (entity store; StateChangeConsumer is the sole state writer)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS region_states (
+    world_uid               TEXT NOT NULL,
+    region_uid              TEXT NOT NULL,
+    current_type            TEXT NOT NULL,
+    pending_target          TEXT,
+    progress                REAL NOT NULL DEFAULT 0,
+    last_eval_tick          INTEGER NOT NULL DEFAULT 0,
+    overrides               TEXT NOT NULL DEFAULT '{}',
+    history                 TEXT NOT NULL DEFAULT '[]',
+    spec_fingerprint       TEXT,
+    tombstone               INTEGER NOT NULL DEFAULT 0,
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    PRIMARY KEY (world_uid, region_uid),
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
 );
 
 -- ============================================================
@@ -796,29 +866,6 @@ CREATE TABLE IF NOT EXISTS location_levels (
 );
 
 -- ============================================================
--- location_entry_points
--- ============================================================
-CREATE TABLE IF NOT EXISTS location_entry_points (
-    entry_uid                  TEXT PRIMARY KEY,
-    location_uid               TEXT NOT NULL,
-    x                          INTEGER NOT NULL,
-    y                          INTEGER NOT NULL,
-    z                          INTEGER NOT NULL,
-    leads_to_level_uid         TEXT,
-    display_name               TEXT NOT NULL,
-    entry_role                 TEXT NOT NULL DEFAULT 'front'
-                               CHECK (entry_role IN ('front', 'service')),
-    entry_difficulty_override  INTEGER,
-    guard_level_override       INTEGER,
-    is_discovered              INTEGER NOT NULL DEFAULT 0,
-    is_accessible              INTEGER NOT NULL DEFAULT 1,
-    glossary_ref               TEXT,
-    tag_refs                   TEXT,
-    FOREIGN KEY (location_uid)       REFERENCES named_locations(location_uid) ON DELETE CASCADE,
-    FOREIGN KEY (leads_to_level_uid) REFERENCES location_levels(level_uid)
-);
-
--- ============================================================
 -- roads
 -- ============================================================
 CREATE TABLE IF NOT EXISTS roads (
@@ -839,26 +886,65 @@ CREATE TABLE IF NOT EXISTS roads (
 );
 
 -- ============================================================
--- location_passages (переходы между уровнями / комнатами)
+-- transitions (physical aggregate shared by generator, SQL and pack)
+-- Defaults/behavior are supplied by the Transition POJO, not by source second SQL registry.
 -- ============================================================
-CREATE TABLE IF NOT EXISTS location_passages (
-    passage_uid         TEXT PRIMARY KEY,
-    world_uid           TEXT NOT NULL,
-    to_level_uid        TEXT NOT NULL,
-    to_x                INTEGER NOT NULL,
-    to_y                INTEGER NOT NULL,
-    system_passage_type TEXT NOT NULL,
-    from_level_uid      TEXT,        -- NULL = внешнее пространство (entry_point снаружи)
-    from_x              INTEGER,
-    from_y              INTEGER,
-    is_bidirectional    INTEGER NOT NULL DEFAULT 1,
-    display_name        TEXT,
-    glossary_ref        TEXT,
-    tag_refs            TEXT,
-    FOREIGN KEY (world_uid)      REFERENCES worlds(world_uid),
-    FOREIGN KEY (from_level_uid) REFERENCES location_levels(level_uid),
-    FOREIGN KEY (to_level_uid)   REFERENCES location_levels(level_uid)
+CREATE TABLE IF NOT EXISTS transitions (
+    transition_uid         TEXT PRIMARY KEY NOT NULL,
+    world_uid              TEXT NOT NULL REFERENCES worlds(world_uid),
+    system_transition_type TEXT NOT NULL CHECK (length(system_transition_type) > 0),
+    origin                 TEXT NOT NULL CHECK (origin IN ('authored', 'generated', 'runtime')),
+    is_bidirectional       INTEGER NOT NULL CHECK (is_bidirectional IN (0, 1)),
+    is_active              INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+    access_mechanic         TEXT NOT NULL CHECK (json_valid(access_mechanic) AND json_type(access_mechanic) = 'array'),
+    type_params            TEXT NOT NULL CHECK (json_valid(type_params) AND json_type(type_params) = 'object'),
+    display_name           TEXT,
+    glossary_ref           TEXT,
+    tag_refs               TEXT NOT NULL CHECK (json_valid(tag_refs) AND json_type(tag_refs) = 'array'),
+    source_space                TEXT NOT NULL CHECK (source_space IN ('surface', 'level')),
+    source_level_uid            TEXT REFERENCES location_levels(level_uid),
+    source_host_location_uid    TEXT REFERENCES named_locations(location_uid),
+    source_node_uid             TEXT REFERENCES connection_nodes(node_uid),
+    source_x                    INTEGER,
+    source_y                    INTEGER,
+    source_z                    INTEGER,
+    destination_space                TEXT NOT NULL CHECK (destination_space IN ('surface', 'level')),
+    destination_level_uid            TEXT REFERENCES location_levels(level_uid),
+    destination_host_location_uid    TEXT REFERENCES named_locations(location_uid),
+    destination_node_uid             TEXT REFERENCES connection_nodes(node_uid),
+    destination_x                    INTEGER,
+    destination_y                    INTEGER,
+    destination_z                    INTEGER,
+    CHECK ((source_space = 'surface' AND source_level_uid IS NULL) OR
+           (source_space = 'level' AND source_level_uid IS NOT NULL AND source_x IS NOT NULL AND source_y IS NOT NULL AND source_z IS NOT NULL)),
+    CHECK ((destination_space = 'surface' AND destination_level_uid IS NULL) OR
+           (destination_space = 'level' AND destination_level_uid IS NOT NULL AND destination_x IS NOT NULL AND destination_y IS NOT NULL AND destination_z IS NOT NULL)),
+    CHECK ((source_x IS NULL AND source_y IS NULL AND source_z IS NULL) OR
+           (typeof(source_x) = 'integer' AND typeof(source_y) = 'integer' AND typeof(source_z) = 'integer')),
+    CHECK ((destination_x IS NULL AND destination_y IS NULL AND destination_z IS NULL) OR
+           (typeof(destination_x) = 'integer' AND typeof(destination_y) = 'integer' AND typeof(destination_z) = 'integer'))
 );
+
+CREATE TABLE IF NOT EXISTS transition_sides (
+    transition_uid            TEXT NOT NULL REFERENCES transitions(transition_uid) ON DELETE CASCADE,
+    side                      TEXT NOT NULL CHECK (side IN ('source', 'destination')),
+    owner_location_uid        TEXT REFERENCES named_locations(location_uid),
+    is_discovered             INTEGER NOT NULL CHECK (is_discovered IN (0, 1)),
+    is_accessible             INTEGER NOT NULL CHECK (is_accessible IN (0, 1)),
+    entry_difficulty_override INTEGER CHECK (entry_difficulty_override IS NULL OR
+                                           (typeof(entry_difficulty_override) = 'integer' AND entry_difficulty_override BETWEEN 0 AND 100)),
+    guard_level_override      INTEGER CHECK (guard_level_override IS NULL OR
+                                           (typeof(guard_level_override) = 'integer' AND guard_level_override BETWEEN 0 AND 100)),
+    display_name              TEXT,
+    PRIMARY KEY (transition_uid, side)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transitions_world ON transitions(world_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_source_level ON transitions(world_uid, source_level_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_destination_level ON transitions(world_uid, destination_level_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_source_node ON transitions(world_uid, source_node_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_destination_node ON transitions(world_uid, destination_node_uid);
+CREATE INDEX IF NOT EXISTS idx_transition_sides_owner ON transition_sides(owner_location_uid, side, transition_uid);
 
 -- ============================================================
 -- location_states
@@ -1300,8 +1386,6 @@ CREATE INDEX IF NOT EXISTS idx_named_locations_public   ON named_locations (worl
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location_z ON map_cell_patches (world_uid, location_uid, z);
 
 CREATE INDEX IF NOT EXISTS idx_location_levels_location ON location_levels (location_uid);
-CREATE INDEX IF NOT EXISTS idx_location_passages_from   ON location_passages (from_level_uid);
-CREATE INDEX IF NOT EXISTS idx_location_passages_to     ON location_passages (to_level_uid);
 
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location ON map_cell_patches (world_uid, location_uid, z);
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_xy       ON map_cell_patches (world_uid, x, y);
@@ -1335,3 +1419,8 @@ CREATE INDEX IF NOT EXISTS idx_conn_edges_to            ON connection_edges (to_
 CREATE INDEX IF NOT EXISTS idx_conn_edges_level         ON connection_edges (world_uid, graph_level);
 
 CREATE INDEX IF NOT EXISTS idx_conn_edge_cells_edge     ON connection_edge_cells (edge_uid);
+
+CREATE INDEX IF NOT EXISTS idx_library_packs_owner       ON library_packs (owner_world_uid);
+CREATE INDEX IF NOT EXISTS idx_library_packs_source      ON library_packs (source_pack_uid);
+CREATE INDEX IF NOT EXISTS idx_library_pack_members_pack ON library_pack_members (pack_uid);
+CREATE INDEX IF NOT EXISTS idx_library_pack_deps_required ON library_pack_dependencies (required_pack_uid);

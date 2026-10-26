@@ -1,11 +1,11 @@
-"""Frontage threads, touching street cells, alleys — C22 §5.1.3 / §5.5."""
+"""Frontage threads, touching street cells — C22 §5.1.3 / §5.5."""
 
 from __future__ import annotations
 
 import random
 from collections import defaultdict
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -17,25 +17,18 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     PackingStep,
     packing_info,
 )
-from app.application.worldData.generators.road.widthResolver import resolve_width
-from app.application.worldData.generators.road.connectionPolicy import sidewalk_of
-from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
-    WorldConnectionTypeRegistry,
-)
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
-    street_classes_for,
 )
-from app.dataModel.settlement.enums.districtStreetRole import (
+from app.dataModel.locations.settlement.enums.districtStreetRole import (
     DistrictStreetRole,
     frontage_role_rank,
 )
-from app.dataModel.settlement.district.frontageTypeOrder import resolve_frontage_type_order
+from app.dataModel.locations.settlement.district.frontageTypeOrder import resolve_frontage_type_order
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
-from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
-from app.dataModel.connections.enums.graphLevel import GraphLevel
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
+from app.ids import UidKind, entity_rng
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 
@@ -44,11 +37,8 @@ Coord = tuple[int, int]
 _NEIGHBORS = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))
 
 def is_plaza(template: PlotLayoutTemplate) -> bool:
-    """Purpose tag ``plaza`` skips frontage hierarchy (connections §5.1.3)."""
-    return (
-        template.main_building is None
-        and template.plot_type == BuildingPurposeFamily.PUBLIC
-    )
+    """Public plots skip frontage hierarchy, including plots with a building."""
+    return template.plot_type == BuildingPurposeFamily.PUBLIC
 
 
 def plot_cells(placement: AreaPlacement) -> set[Coord]:
@@ -132,10 +122,11 @@ def apply_frontage(
     edge_xy: dict[str, set[Coord]],
     street_xy: set[Coord],
     slot: DistrictSlot,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     known_types: frozenset[str],
     rng: random.Random,
     settlement_uid: str,
+    world_uid: str,
     edge_roles: dict[str, DistrictStreetRole] | None = None,
 ) -> list[str]:
     """Set AreaSlot.facing from abutting streets. Type then role; equal-rank tie-break."""
@@ -219,178 +210,21 @@ def apply_frontage(
                 counts={str(k): thread_plot_count[k] for k, _ct in tied},
             )
         else:
-            seed = f"{settlement_uid}_{placement.building_x}_{placement.building_y}"
-            local = random.Random(seed)
+            local = entity_rng(
+                world_uid, UidKind.FRONTAGE,
+                settlement=settlement_uid,
+                x=placement.building_x, y=placement.building_y,
+            )
             winner = local.choice([k for k, _ct in tied])
             packing_info(
                 PackingStep.FRONTAGE, district=district,
                 template=placement.template.system_name,
                 reason=PackingReason.RNG,
-                seed=seed,
             )
         placement.area_slot.facing = facing_from_street(list(cells), thread_xy[winner])
     _ = by_uid
     _ = rng
     return order
-
-
-def alley_connection_type() -> str:
-    return WorldConnectionTypeRegistry.require_engine("alley")
-
-
-def alley_from_template(slot: DistrictSlot) -> DistrictConnection | None:
-    return street_classes_for(slot.district_template).alley
-
-
-def _emit_alley_for_group(
-    *,
-    district: str,
-    alley: DistrictConnection | None,
-    alley_type: str,
-    width: int,
-    has_sidewalk: bool,
-    group: list[AreaPlacement],
-    nodes: list[ConnectionNode],
-    edges: list[ConnectionEdge],
-    world_uid: str,
-    edge_roles: dict[str, DistrictStreetRole] | None,
-    edge_key: str,
-) -> None:
-    if alley is None:
-        packing_info(
-            PackingStep.ALLEY, district=district,
-            n_plots=len(group), alley="no", reason=PackingReason.NOT_IN_SETTINGS,
-        )
-        return
-    if len(group) < 2:
-        packing_info(
-            PackingStep.ALLEY, district=district,
-            n_plots=len(group), alley="no", reason=PackingReason.SINGLE_PLOT,
-        )
-        return
-    a, b = group[0], group[1]
-    ax = a.building_x
-    ay = a.building_y
-    bx = b.building_x
-    by = b.building_y
-    gap = abs(bx - ax) if ay == by else abs(by - ay)
-    if gap < width:
-        packing_info(
-            PackingStep.ALLEY, district=district,
-            n_plots=len(group), alley="no", reason=PackingReason.WIDTH,
-            width_cells=width,
-        )
-        return
-    from_node = _node_at(nodes, (ax + bx) // 2, ay if ay == by else (ay + by) // 2, world_uid)
-    to_node = _node_at(
-        nodes,
-        (ax + bx) // 2 if ay == by else ax,
-        (ay + by) // 2 if ay != by else ay,
-        world_uid,
-    )
-    if from_node not in nodes:
-        nodes.append(from_node)
-    if to_node not in nodes:
-        nodes.append(to_node)
-    edge = ConnectionEdge(
-        edge_uid=f"e_alley_{edge_key}_{from_node.node_uid}",
-        from_node_uid=from_node.node_uid,
-        to_node_uid=to_node.node_uid,
-        connection_type=alley_type,
-        width_cells=width,
-        has_sidewalk=has_sidewalk,
-        graph_level=GraphLevel.DISTRICT.value,
-        world_uid=world_uid,
-    )
-    edges.append(edge)
-    if edge_roles is not None:
-        edge_roles[edge.edge_uid] = DistrictStreetRole.BACK_ALLEY
-    packing_info(
-        PackingStep.ALLEY, district=district,
-        n_plots=len(group), alley="yes", reason=PackingReason.FROM_CONNECTIONS,
-        width_cells=width,
-    )
-
-
-def add_alleys(
-    slot: DistrictSlot,
-    placements: list[AreaPlacement],
-    nodes: list[ConnectionNode],
-    edges: list[ConnectionEdge],
-    world_uid: str,
-    edge_roles: dict[str, DistrictStreetRole] | None = None,
-) -> None:
-    """Alley thread from back_alley role or connection_type=alley when ≥2 plots fit."""
-    district = slot.district_template.system_name
-    alley = alley_from_template(slot)
-    by_module: dict[tuple[int, int], list[AreaPlacement]] = defaultdict(list)
-    by_cluster: dict[str, list[AreaPlacement]] = defaultdict(list)
-    for placement in placements:
-        res = placement.reservation
-        if res is None:
-            continue
-        if res.cluster_id is not None:
-            by_cluster[res.cluster_id].append(placement)
-            continue
-        by_module[(res.col, res.row)].append(placement)
-
-    alley_type = alley.connection_type if alley is not None else alley_connection_type()
-    width = resolve_width(alley_type)
-    if width is None:
-        packing_info(
-            PackingStep.ALLEY, district=district,
-            alley="no", reason=PackingReason.WIDTH,
-        )
-        return
-    has_sidewalk = sidewalk_of(alley) if alley is not None else False
-    for (col, row), group in by_module.items():
-        _emit_alley_for_group(
-            district=district,
-            alley=alley,
-            alley_type=alley_type,
-            width=width,
-            has_sidewalk=has_sidewalk,
-            group=group,
-            nodes=nodes,
-            edges=edges,
-            world_uid=world_uid,
-            edge_roles=edge_roles,
-            edge_key=f"{col}_{row}",
-        )
-    for cluster_id, group in by_cluster.items():
-        _emit_alley_for_group(
-            district=district,
-            alley=alley,
-            alley_type=alley_type,
-            width=width,
-            has_sidewalk=has_sidewalk,
-            group=group,
-            nodes=nodes,
-            edges=edges,
-            world_uid=world_uid,
-            edge_roles=edge_roles,
-            edge_key=f"cluster_{cluster_id.replace(':', '_')}",
-        )
-
-
-def _node_at(
-    existing: list[ConnectionNode],
-    x: int,
-    y: int,
-    world_uid: str,
-) -> ConnectionNode:
-    for node in existing:
-        if node.x == x and node.y == y:
-            return node
-    return ConnectionNode(
-        node_uid=f"n_alley_{x}_{y}",
-        x=x,
-        y=y,
-        z=0,
-        node_type=ConnectionNodeType.INTERSECTION.value,
-        graph_level=GraphLevel.DISTRICT.value,
-        world_uid=world_uid,
-    )
 
 
 def outward_delta(facing: Facing) -> tuple[int, int]:

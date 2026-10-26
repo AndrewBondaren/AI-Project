@@ -23,13 +23,13 @@ def _surface_terrain(world: World) -> str:
     urban = WorldTerrainRegistry.occupancy_terrain_key()
     if urban in terrain_system_keys(world):
         return urban
-    return terrain_masks(world).default_plains.system_terrain
+    return terrain_masks(world).default_landcover.fallback_terrain
 
 
 def plan_footprint_occupancy_cells(
     world:            World,
     settlement:       NamedLocation,
-    system_city_size: str | None = None,
+    system_city_size: str | None,
 ) -> list[MapCell]:
     """
     Маркирует global map cells под footprint поселения.

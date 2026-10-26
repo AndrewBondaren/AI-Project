@@ -29,15 +29,15 @@ class TestRangeU6Compose(unittest.TestCase):
                 ),
             ],
         )
-        scale = LightGridScale(tile_m=1000, light_m=10, side=100)
+        scale = LightGridScale(tile_macro=1000, light_span=10, side=100)
         fp = materialize_mountain_range(spec, scale)
         # Mid saddle cell should have lower fraction than peak tip cells when
         # corridor-only before peaks — after max-wins peaks dominate tip.
         # Find a corridor cell near saddle (60,0) away from peak disks.
         saddle_refs = [
             ref for ref, frac in fp.elevation_fraction.items()
-            if abs(ref.tx * scale.light_m + ref.gx * scale.tile_m - 60) < 15
-            and abs(ref.ty * scale.light_m + ref.gy * scale.tile_m) < 15
+            if abs(ref.tx * scale.light_span + ref.gx * scale.tile_macro - 60) < 15
+            and abs(ref.ty * scale.light_span + ref.gy * scale.tile_macro) < 15
         ]
         self.assertTrue(fp.cells)
         # Peaks max-wins: origin cells near peaks should be high
@@ -45,8 +45,8 @@ class TestRangeU6Compose(unittest.TestCase):
             fp.elevation_fraction[ref]
             for ref in fp.cells
             if ref in fp.elevation_fraction
-            and abs(ref.tx * scale.light_m - 0) < 20
-            and abs(ref.ty * scale.light_m) < 20
+            and abs(ref.tx * scale.light_span - 0) < 20
+            and abs(ref.ty * scale.light_span) < 20
         ]
         self.assertTrue(any(f > 0.8 for f in peak_fracs) or any(
             float(fp.elevation_fraction.get(r, 0)) > 0.5 for r in fp.cells

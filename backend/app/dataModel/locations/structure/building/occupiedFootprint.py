@@ -1,0 +1,22 @@
+"""Declared main-building bbox on a plot drawing — packing envelope, not generated rooms.
+
+Runtime packing dataclass lives in ``structureGeneratorService.OccupiedFootprint``.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict
+
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
+from app.dataModel.constrainedField import constrained_field
+
+
+class OccupiedFootprintSpec(BaseModel):
+    """Fine-cell bbox of the main building on the plot (origin relative to building origin)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    min_x: DefaultWhenMissing[int] = 0
+    min_y: DefaultWhenMissing[int] = 0
+    width: StrictOnWire[int] = constrained_field(greater_equals=1)
+    depth: StrictOnWire[int] = constrained_field(greater_equals=1)

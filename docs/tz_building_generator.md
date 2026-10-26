@@ -1,5 +1,13 @@
 # ТЗ: Генератор зданий
 
+**A0, 2026-10-14 — актуальный библиотечный контракт:**
+[plot/building/structure](tz_domain_template_libraries.md).
+Plot имеет собственный шаблон с building templates внутри; building содержит
+structure UID ref. Standard plot/building — members default-библиотек,
+defaults параметров — в POJO. Вложенность не требует замены тела голой
+UID-ссылкой. Исторические name-based SQL/JSON library snippets ниже не
+отменяют UID identity и новое разделение доменов.
+
 > **Архитектура нод:** ноды structure-домена пишут только в `state.structure_context: StructureContext` — типизированный контекст на `ExecutionState`. `shared_context` не использовать как канал передачи данных. См. `tz_engine_node_context.md`.
 
 ## Участок: главное здание (locked)
@@ -36,7 +44,7 @@
 
 | Термин | Смысл |
 |--------|-------|
-| **Шаблон участка** | JSON-корень packing: `BuildingLayoutTemplate`. Identity = `system_name` (`DrawingKey`). |
+| **Шаблон участка** | Собственный шаблон plot с building templates внутри; библиотечная identity = template_uid, system_name — читаемый ключ. |
 | **main_building** | Главное здание на участке (вложенное тело §3). Фасад забора / калитка целятся в него. Не `structure_types[]`. |
 | **Шаблон** | JSON тела здания: этажи, комнаты, связи, входы. На участке — поле `main_building`. |
 | **structure_types** | Листья дерева назначений (ребёнок `BuildingPurpose`), не семья и не чертёж. Не N+1: мир не выдумывает `"blacksmith"` — это чертёж с тегом `smithy` / `workshop` (+ опц. `house`). Omit/`[]` → `[house]`. Leftover scalar `structure_type` → один лист. Primary (первый тег) — колонка SQL library. Не `district_type`, не subtype NL `building`, не `ASSEMBLER_REGISTRY`. Дерево + паки мира — **§2.1**. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2 |
@@ -75,6 +83,12 @@
 - Явный список сеттингов (`["modern"]`, `["steampunk", "magic"]`) **всегда** дополняется `base` первым. Выключить каркас нельзя. Только каркас: `["base"]`. Id вне merged-реестра рецептов → drop + warning.
 - `dungeon` — морфология поселения, не лист. `lamp_post` — не plot-purpose (уличная мебель).
 - **Код:** дерево семей / листьев в файлах семей + `catalog.py`. Рецепты паков — `WorldPurposePackRegistry` (`worlds.purpose_pack_registry`); включённые id — `worlds.purpose_packs` (omit/`[]` → `[base, fantasy]`; `base` всегда). `allowed` рецепта ссылается на enum семьи/листа, не на строковый хардкод. Район `allowed` expand семьи перед like/strict. Packing ∩ enabled.
+
+**Opt-out global canonical attach purpose packs (library-packs, шаг 7):**
+источник рецептов — `WorldPurposePackRegistry.canonical_defaults()` + world
+entries, identity — `system_pack`; runtime T-29 + frozen `base` сохраняются.
+`WorldPurposePacks` задаёт включённые id. Это маски назначений на мире,
+без SQL library/FS-паков и global spec; перенос в pack library deferred.
 
 Эпоха сеттинга — **не** родитель здания. `temple` — семья `culture`, `hospital` — `public`; какие листья живы — решают паки (`base` + сеттинг).
 
@@ -166,11 +180,11 @@ Wire включённых id: omit/`[]` → `[base, fantasy]`. `purpose_packs: [
 
 ### 3.1 Поля верхнего уровня
 
-Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `plot_template`) — **чертёж участка**. Главное здание — только поле `main_building` (тело §3: `levels` / `connections` / `staircases`). Ключ `building` на участке запрещён. Leftover pin `building_template`. Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
+Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `plot_template`) — **чертёж участка**. Главное здание — только поле `main_building` (тело §3: `levels` / `connections` / `staircases`). Ключ `building` на участке запрещён. Leftover pin `building_template` снят 2026-10-18 — только `plot_template`. Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
 
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
-| `system_name` | string | required | Identity **участка** (`DrawingKey`): `"inn_small"`, `"tavern_1"`. Не путать с `main_building.system_name` интерьера |
+| `system_name` | string | required | Читаемый ключ **участка**, например inn_small; не identity member. Библиотечные ссылки — template_uid. |
 | `structure_types` | `BuildingPurpose[]` | optional | Теги назначения **участка** (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing. **Не** выбор здания на участке |
 | `structure_type` | string | leftover | Скаляр → `structure_types` из одного ключа. Не писать в новых JSON |
 | `display_name` | string | required | Отображаемое название шаблона |
@@ -272,18 +286,25 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `count_range` | [int, int] | conditional | Диапазон кол-ва (только при `required: false`) |
 | `perimeter_required` | bool | optional | Комната должна касаться внешней стены здания. Default: `false`. Принудительно `true` если объявлен `entry_point` или `back_entry_point` (см. правило ниже) |
 | `attach_to` | string | optional | `room_id` комнаты-хоста (коридора); эта комната прикрепляется вдоль его стены |
-| `attach_wall` | string | conditional | Обязателен если `attach_to` задан. `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"` |
+| `attach_wall` | string | optional | `StrictEnumOnWire[AttachWall]`: `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"`. Отсутствующее или некорректное значение → `both` (решение мастера 2026-09-30); при `attach_to` отсутствие, а также любая подмена заданного значения сопровождаются ERROR на runtime-границе через централизированный лог |
 | `passage_type` | string | optional | Тип прохода к комнате-хосту при `attach_to`. Default: `"doorway"`. Заменяет явный connection entry. |
 | `max_overhang` | int | optional | Макс. выступ за границы ground floor footprint в ячейках. Default: `0`. Разрешён только для `room_type: "balcony"`. Без `has_column`: не более 2. С `has_column`: не более 4 |
 | `has_column` | bool | optional | Балкон опирается на колонны. Увеличивает лимит `max_overhang` до 4. Генератор размещает ячейки `column` на ground floor под выступающими углами балкона |
 | `economic_tier` | string | optional | Переопределяет экономический уровень для этой комнаты. Если не задан — берётся из шаблона |
 | `entry_point` | object | optional | Главный (парадный) вход. Только одна комната в шаблоне v1. Persist: `entry_role=front`. Здание без front — ошибка (**C20**) |
 | `back_entry_point` | object | optional | Чёрный вход. Только одна комната. 0 допустимо. Persist: `entry_role=service` |
-| `wall_openings` | array | optional | Отверстия в стенах комнаты: окна, бойницы, люки, иллюминаторы и др. (см. раздел 3.10) |
+| `wall_openings` | array | optional | Параметры проёмов в стенах комнаты: `opening_type`, `frame_material`, `glass_material`, `window_z` (см. §3.10–3.11). Только параметры — позиции, количество и распределение по сторонам всегда алгоритмические. Отсутствующий или невалидный параметр → auto-resolve по алгоритму + ERROR на runtime-границе |
 | `underground_fallback` | bool | optional | Если комнату невозможно разместить на текущем уровне — перенести на уровень ниже. Default: `false`. Уместно для складских, подсобных, кладовых, котельных |
 | `shape_params` | object | conditional | Параметры специфичные для формы. Обязателен для `l_shape` и `t_shape`. Игнорируется для остальных |
 
 **Правило `perimeter_required` + entry_point:**
+
+Форсинг флага реализован в `roomFactory.instantiate_level_rooms`: после валидации
+входов любой ненулевой `entry_point` / `back_entry_point` задаёт
+`_RoomInstance.perimeter_required=True`, включая явно переданное `false`.
+При явно заданном `perimeter_required: false` фабрика пишет один WARNING
+на определение комнаты, независимо от count и количества входов (A2, 2026-10-01).
+Отсутствующее поле и явное `true` не вызывают эту диагностику.
 
 ```
 если room.entry_point OR room.back_entry_point объявлены:
@@ -297,6 +318,22 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 Генератор обеспечивает периметральное размещение такой комнаты при layout. `attach_to` на комнате с `entry_point`/`back_entry_point` — дополнительный WARNING: архитектурно некорректно, но технически допустимо.
 
 Либо `count`, либо `count_range` — не оба одновременно.
+
+**POJO-границы (срез 6.3, 2026-09-30).** `StructureTemplate.levels` и вложенные
+`rooms` сохраняют исходные dict. Импорт проверяет `LevelDef` / `RoomDef` /
+`SizeSpec` / `ShapeParams`; генератор повторно парсит их перед генерацией.
+Нарушенные required-условия отклоняются на импорте, на runtime-границе дают
+`GenerationError` с контекстом. Дубли `room_id` запрещены во всём шаблоне;
+`attach_to` должен существовать на том же уровне. Битая runtime-ссылка приводит
+к пропуску комнаты и зависимых прикреплений с ERROR, остальные комнаты генерируются.
+POJO не эмитируют лог: отметки подмен обрабатывает `StructureGeneratorService`.
+
+Сохранены текущие defaults: `count=1`, `isolated=false`, `access_mechanic=[]`,
+`arm_corner/stem_wall=any`; отсутствующий `shape_type` сохраняет вывод формы из size.
+Некорректный `z_height` (включая `0`) заменяется на наследование высоты шаблона,
+с ERROR при генерации; отсутствие или `null` — штатное наследование без лога.
+Диапазоны L/T обязательны, в том числе если соответствующая форма — один из
+элементов массива `shape_type`; геометрический алгоритм и порядок RNG не менялись.
 
 ---
 
@@ -449,9 +486,32 @@ else:
 
 Валидация: `stem_width_range[1] < size.width_range[0]` → иначе `ValidationError` (стержень шире балки).
 
+**Внутренняя граница геометрии (6.4, решение мастера 2026-09-30):** wire-дефолт
+`stem_wall="any"` по-прежнему выбирается через RNG в фабрике. Если до геометрии
+дошло отсутствующее, неразрешённое или некорректное направление, генерация
+продолжается с `SOUTH` и централизованным ERROR. Единственный защитный дефолт
+хранится в `ResolvedStemWall` (`StrictEnumOnWire[Facing]`); POJO не логирует.
+Фабрика нормализует направление один раз с контекстом template/room, чтобы
+повторные footprint-запросы не дублировали ERROR. Прямой вызов геометрии также
+защищён и сообщает координаты. Известный mixed-array L/T баг этим не исправлен,
+его прежний RNG-поток и геометрия сохранены.
+
 ---
 
 ### 3.6 Поля entry_point / back_entry_point (на комнате)
+
+Оба поля используют `dataModel/locations/structure/room/EntryPoint` — frozen Pydantic-модель
+с `extra="forbid"`. `wall` и `passage_type` обязательны; стена — только кардинальная,
+тип прохода — только `main_entrance` или `service_entrance`, `width >= 1`.
+`StructureTemplate` валидирует входы при импорте, сохраняя комнаты словарями;
+`roomFactory` повторно валидирует их на runtime-границе и передаёт в `_RoomInstance`
+экземпляры `EntryPoint`. Ошибка импорта — `ValidationError` с room_id;
+ошибка runtime-границы — `GenerationError` с uid структуры и room_id.
+
+Wire-ключ высоты — **`door_height`**. Прежнее чтение `height` было ошибкой;
+этот ключ не является алиасом и отклоняется как неизвестный. `door_height=None`
+означает авто-резолв. `panel_material` и `access_type` типизированы, но их
+потребление builder/assembler в плане EntryPoint не реализуется.
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -467,9 +527,17 @@ else:
 
 **Авто-резолв `door_height`:**
 
+Формула реализована для обоих входов в `passages/entry.py`; `z_height` берётся из
+`room.z_height`. Поля `StructureTemplate`: `door_height_ratio` (default `0.75`,
+`0 < ratio <= 1`) и `door_height_max` (default `5`, `>= 1`). Явная высота не
+ограничивается cap и не clamp'ится к пределу мира: значение ниже
+`world.default_passage_height` — ошибка автора, unresolved по общей runtime/worldEdit
+политике (E6, 2026-10-08). Авто-резолв разрешён только при отсутствии высоты.
+
 ```
 если door_height задан явно:
-    door_height = max(door_height, world.default_passage_height)
+    если door_height < world.default_passage_height: unresolved
+    использовать door_height
 иначе:
     если z_height <= 3:
         door_height = z_height - 1
@@ -486,9 +554,21 @@ else:
   z=20 → max(5, 2) = 5    (cap)
 ```
 
-`world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение.
+`world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение. Явное `door_height` ниже предела мира — unresolved: runtime пишет WarningError и прекращает зависимую операцию; validate_only возвращает диагностику без runtime-лога. Авто-формула не заменяет ошибочное авторское значение.
 
-Валидация: `door_height >= world.default_passage_height` и `door_height < z_height` → иначе `ValidationError`.
+Runtime-валидация: `door_height >= world.default_passage_height` и
+`door_height < room.z_height` → иначе `GenerationError` с uid структуры и room_id.
+Поэтому пример `z=2 → 2` показывает результат формулы, но при нижнем пределе мира 2
+такой вход отклоняется: проём достигает потолка.
+
+**Регрессия EntryPoint E4, 2026-09-29.** Sweep всех 13 файлов
+`structures_templates/base/`, `facing=None`, координаты `(0,0,0)`,
+`world_uid="entry-sweep-world"`, `building_uid="entry-sweep-" + structure.system_name`:
+исключений нет. Текущий код и baseline `edb16a7` дают одинаковые 8 ERROR-сообщений
+(7 у `5a1f2b3c-…`, 1 у `6b2f3c4d-…`), без добавленных или удалённых сообщений.
+Это сравнительный прогон с фиксированными uid, а не воспроизведение прежних 36 ERROR
+из §7 п.11 плана CITY-T-5n/5o: параметры того прогона не сохранены. Существующие
+ошибки геометрии сохраняются и не исправляются планом EntryPoint.
 
 **Центрирование:** `entry_point` всегда центрируется на указанной стене.
 
@@ -558,10 +638,10 @@ porch_material = context.porch_material ?? building.parent_floor_material
 |------|-----|----------|
 | `from_room` | string | `room_id` источника |
 | `to_room` | string | `room_id` цели. Оба должны быть на одном `z_offset`. |
-| `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. |
+| `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. Любое значение вне `{doorway, archway}` (включая `staircase` и мусор) не валит импорт: `RoomConnection` коерсит в `doorway`; ERROR-лог — на границе генератора (`_resolve_connections`), попадает в generation-транскрипт — толерантность к битым шаблонам (решение мастера 2026-09-29) |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
 | `width` | int | optional. Ширина проёма в ячейках. Default: `1` |
-| `door_height` | int | optional. Явная высота проёма. Если не задана — тот же авто-резолв что в `entry_point`. Финальное значение всегда `max(resolved, world.default_passage_height)` |
+| `door_height` | int | optional. Явная высота проёма. Если не задана — тот же авто-резолв; явное значение ниже `world.default_passage_height` — unresolved. Авто-формула та же что в `entry_point`, но `z_height` берётся `min(from_room.z_height, to_room.z_height)` — проём живёт в стене обеих комнат, формула высокой комнаты не должна пробить потолок низкой (решение мастера 2026-09-30). Финальное значение всегда `>= world.default_passage_height` |
 | `frame_material` | string\|null | optional. Материал дверной коробки / арки. Fallback: `wall_material` from_room |
 | `panel_material` | string\|null | optional. Только для `doorway`. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = проём без двери |
 
@@ -604,11 +684,12 @@ mid = len(shared_segment) // 2
 | `staircase_id` | string | optional | Локальный ID для отладки и логов. Авто: `"staircase_{from}_{to}"` |
 | `staircase_type` | string | optional | Тип лестницы (см. раздел 3.9). Авто-резолв по `z_height` если не задан |
 | `size` | object | optional | Размер shaft (см. раздел 3.5). Авто-резолв если не задан |
-| `facing` | string | optional | Сторона выхода shaft к `to_room`. `"north"`, `"south"`, `"east"`, `"west"`. Авто-резолв по позиции to_room если не задан |
+| `facing` | string | optional | Для u_shape — направление первого подъёма, от entry к far end; entry = opposite(facing). Auto: opposite направления с максимальным числом наружных floor-ячеек на z_top; score=0 → шаблон/runtime fallback (staircase §2, B2) |
 | `has_walls` | bool | optional | Shaft замкнут стенами. Default: `true`. При `false` — shaft обязан быть внутри здания. |
 | `outside` | bool | optional | Только при `has_walls: true`. Default: `false`. При `true` — shaft edge-mounted: три стороны снаружи, внешние стены заменяются на floor, facing-сторона через archway к зданию. |
-| `in_a_room` | bool | optional | Shaft embedded внутри помещения. Default: `false`. Несовместим с `outside: true`. |
-| `embed_in` | string | conditional | `room_id` родителя при `in_a_room: true` |
+| `in_a_room` | bool | optional | Shaft embedded внутри помещения на z_lo. Default: `false`. Несовместим с `outside: true`. Реализовано v1, staircase §2 |
+| `embed_in` | string | conditional | `room_id` родителя при `in_a_room: true`; отсутствующий/неразмещённый хост → самая большая размещённая комната на z_lo + ERROR (staircase §2) |
+| `embed_at` | string | conditional | Позиция шахты внутри `embed_in`: intercardinal-угол (`north_east` … `south_west`) или `center`; отсутствие → deterministic auto-угол. Невместимость/пересечение → ERROR + adjacent fallback (v1, staircase §2) |
 | `stops` | string[] | required | Упорядоченный список `room_id` снизу вверх. Минимум 2 элемента. Генератор создаёт один shaft-сегмент на каждую соседнюю пару. |
 
 **Правило `stops`:**
@@ -620,10 +701,10 @@ mid = len(shared_segment) // 2
 → оба сегмента выровнены по XY (одна непрерывная шахта)
 ```
 
-Shaft позиционируется так, чтобы `facing`-сторона shaft прилегала к стене `to_room`.
+У u_shape к комнате примыкает entry-сторона shaft, противоположная facing (staircase §2, сверка S0).
 Архитектурное следствие: shaft всегда смежен с комнатой назначения, никогда не стоит посреди уровня.
 
-Якоря (`fr_anchor`, `to_anchor`) всегда на `facing`-стороне shaft.
+У u_shape `fr_anchor` находится на near/entry стороне; `to_anchor` — floor комнаты на z_top вне шахты. Их точный контракт — staircase §6.
 
 **Размещение shaft по `outside`:**
 
@@ -1024,7 +1105,39 @@ TopWallZAdjuster — v2 (открытые верхние стены / парап
 
 ### 3.11 Алгоритмическая генерация: какие комнаты получают проёмы
 
-Генератор сам решает, какие проёмы ставить. Шаблон (v2, опционально) переопределяет только: тип проёма (`opening_type`), материал рамы (`frame_material`), материал стекла (`glass_material`), высоту (`window_z`).
+Генератор сам решает, какие проёмы ставить. Шаблон переопределяет только параметры
+проёмов через `wall_openings` на комнате: `opening_type`, `frame_material`,
+`glass_material`, `window_z`.
+
+**Граница authored/algorithmic (решение мастера 2026-10-01):**
+
+| Аспект | Источник |
+|---|---|
+| Количество, позиции, распределение по сторонам и сегментам | **всегда алгоритмически** (Правила 1–3). Поля позиционирования на wire не существует — автор не задаёт «окно в третьей ячейке северной стены» |
+| `opening_type`, `frame_material`, `glass_material`, `window_z` | authored `wall_openings` → override алгоритмического резолва |
+| Каждый параметр: отсутствует или невалиден | auto-resolve по алгоритму (`opening_type` → правило room_type, материалы → resolve_material по тиру, `window_z` → `window_z_ratio`/`window_z_offset` уровня/шаблона) + **ERROR** в централизованный транскрипт |
+
+Варианты стратегии расстановки XY (`zone_center`, `edges`, `every_n`, `none` и т.п.)
+— **v2+, поля `placement` на wire нет**; текущий единственный алгоритм —
+zone-center Правила 2. Добавление `placement` требует реестра XY-стратегий рядом
+с `ZADJUSTER_BY_TYPE`.
+
+**Реализация v1 (2026-10-01, срез §6.7):** `WallOpeningSpec` на границе
+`RoomDef` потребляется в `wallOpening.py`. Первая запись применяется ко всем
+алгоритмическим проёмам комнаты; записи сверх первой игнорируются с ERROR.
+Пустая спека `{}`, отсутствие массива и omitted/None-поля — легальный тихий
+auto-resolve. Невалидный заданный параметр → auto-resolve + ERROR на runtime-границе;
+dataModel только сохраняет отметку подмены. Неизвестные поля спеки запрещены.
+`window_z` задаёт нижнюю z проёма от `level.z`; высота проёма —
+`max(1, int(available_z_height * 0.4))`, где
+`available_z_height = min(room.z_height, profile.z_height)` — одна доступная высота
+для геометрии и проверки `window_z` (C6, 2026-10-02).
+Сегодня профиль равен высоте комнаты; его сокращение ограничивает проём,
+а увеличение не поднимает потолок комнаты. Если проём не вмещается в доступную высоту,
+используется автоматический ZAdjuster с ERROR. Default opening_type пока WINDOW
+(OQ-17); fallback рамы — `room.wall_material`, стекла — resolve_material по тиру.
+Потребление template/level `window_z_ratio`/`window_z_offset` остаётся вне этого среза:
+автоматический z сохраняет текущий `ZADJUSTER_BY_TYPE[element]`.
 
 **Общие фильтры (до правил по room_type):**
 
@@ -1180,7 +1293,22 @@ TopWallZAdjuster — v2 (открытые верхние стены / парап
 
 ## 5. Хранение шаблонов
 
+**Целевое расширение (2026-10-08):** паки, единственный владелец шаблона,
+подключение ко всему миру и UID определяются
+[tz_template_library_packs.md](./tz_template_library_packs.md).
+Приведённая ниже историческая схема требует миграции: глобальная UNIQUE
+на `system_name` отменяется; local_uid может повторяться даже внутри пака.
+Identity — template_uid. UID вычисляет центральный `app.ids` с владельцем,
+не локальный uuid5. Раздельное хранение доменов — [A0 §3](tz_domain_template_libraries.md).
+`building_templates` хранит родительские участки; `structure_templates` —
+дочернюю геометрию по ссылке `main_building.structure` (только UID, без pack-id).
+
 ### 5.1 Глобальная библиотека — `building_templates`
+
+**После A0:** plot_templates хранит участки, building_templates — здания,
+structure_templates — geometry. Общие membership/default declarations —
+[A0 §1/3/4](tz_domain_template_libraries.md). SQL ниже — исторический mixed
+storage до split, не инструкция создать UNIQUE(system_name).
 
 ```sql
 CREATE TABLE IF NOT EXISTS building_templates (
@@ -1194,7 +1322,10 @@ CREATE TABLE IF NOT EXISTS building_templates (
 );
 ```
 
-Глобальная библиотека шаблонов. Не привязана к миру. Генератор напрямую не читает отсюда — только через per-world реестр.
+Глобальная библиотека шаблонов не принадлежит одному миру. Целевой генератор
+получает каталог defaults + всех явно подключённых миру паков. Per-world
+registry хранит индивидуальные pointers/выборы, но не заменяет привязку пака
+и не ограничивает доступные члены подключённого пака только этими pointers.
 
 **Удаление шаблона — RESTRICT:**
 
@@ -1202,7 +1333,11 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 **Замена шаблона (update in-place):**
 
-Пользователь может загрузить новый JSON с тем же `system_name` — выполняется `UPDATE building_templates SET data=..., version=..., source_file=... WHERE template_uid=?` после валидации.
+Пользователь может явно загрузить новое тело того же шаблона своего пака —
+выполняется `UPDATE building_templates SET data=..., version=..., source_file=...
+WHERE template_uid=?` после валидации UID и неизменного владельца. Одинаковый
+`system_name` в другом паке не означает замену. Автоattach defaults не заменяет
+существующие строки.
 
 Если здания уже используют этот `system_template_uid`:
 ```
@@ -1217,7 +1352,15 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 Перегенерация выполняется синхронно до подтверждения пользователю об успехе замены шаблона.
 
-### 5.2 Per-world реестр — `worlds.building_template_registry`
+### 5.2 Per-world реестр — `worlds.building_template_registry` (удалён, B7)
+
+**Колонка удалена из schema и `World`-модели (5b/B7).** Wire-формат ниже
+остаётся только legacy input для explicit migration boundary
+(`legacyWorldInput` + compatibility migration); современные читатели колонку
+не разбирают. Доступность — defaults + world-owned packs (membership),
+явный выбор — `library_pins` по UID + declared refs. Embedded authored plots
+мигрируются в world-owned `legacy` pack без потери building параметров/
+structure refs. Name-based runtime overlay отменён.
 
 Хранится как JSON-массив внутри `worlds` (аналогично `terrain_registry`, `material_registry`):
 
@@ -1228,7 +1371,28 @@ CREATE TABLE IF NOT EXISTS building_templates (
 ]
 ```
 
-Генератор читает `system_template_uid` отсюда, затем загружает полный JSON из `building_templates`.
+Явный `system_template_uid` разрешается через каталог членства и подключений:
+мир должен иметь доступ к паку-владельцу. При отсутствии явного выбора генератор
+может выбирать подходящий шаблон из любого подключённого миру пака.
+Дочерняя структура разрешается тем же механизмом по `main_building.structure`.
+
+Колонка **гетерогенная** — два вида строк, дискриминатор = наличие
+`system_template_uid`:
+
+| Вид | Признак | Семантика | Потребитель |
+|---|---|---|---|
+| uid-pointer | `system_template_uid` | подключённый член библиотеки (`BuildingTemplateRegistryEntry`) | каталог шаблонов мира |
+| embedded layout | `system_name` + `display_name` (+ `main_building`/`secondary_buildings`) | world-override чертёж участка — `PlotLayoutTemplate` (поля §3.1) | packing overrides поверх builtin каталога по `system_name` |
+
+Layout-строки — **interim-хранилище** world-override чертежей участка
+(CITY-T-2b/5o, overlay до целевого pack-механизма). Это не uid-ссылки и не
+подключение паков — правила §6.2 касаются только pointer-вида.
+
+~~Контракт колонки — union-POJO `WorldBuildingTemplateRegistry`~~ — POJO
+удалён вместе с колонкой (B7). Legacy wire-форму разбирает только
+explicit migration boundary (`legacyWorldInput` / `legacyDomainSplit`)
+как сырые dict: дискриминация `system_template_uid`-pointer vs embedded
+layout остаётся правилом конвертации, не runtime-контрактом мира.
 
 ---
 
@@ -1236,14 +1400,36 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 ### 6.1 Загрузка в глобальную библиотеку
 
+**Аудит global attach (шаг 7, 2026-10-16):** plot layouts — members
+`plot_templates`, building bodies — members `building_templates`, structures —
+members `structure_templates`. Три global `CanonicalLibrarySpec` уже
+подключены в A5: источники — явно перечисленные plot fixtures,
+их standard `main_building` и `structures_templates/base`; identity —
+pack-owned `template_uid`; attach — atomic fill-missing тел, membership и deps
+в общей UOW. Непосредственный выбор — UID, defaults параметров — POJO.
+Отдельной POJO-only библиотеки plot layouts или специального selector нет.
+
 - Пользователь загружает JSON-файл через UI (аналог импорта миров, см. tz_json_import.md)
 - Один файл = один шаблон
-- При загрузке: JSON валидируется через `validate_template()`; `template_uid = uuid5(system_name)` upsert по PK
+- При загрузке JSON валидируется доменным POJO; pack-owned `template_uid`
+  вычисляется только центральным `worldData/ids`, владение проверяется по manifest.
 - Шаблон хранится в `building_templates.data` как JSON blob
+- **Canonical-паки** (для structures объявленный `structures_templates/base`)
+  подключаются автоматически единым движком canonical defaults — scope `global`,
+  перед публичным чтением, атомарный `global_fill_missing` без замены существующих
+  тел и `source_file` (см. [`tz_json_validation.md`](./tz_json_validation.md) § «Wire
+  projection → WorldSlice», «Единый движок canonical defaults»). Явный импорт
+  остаётся для пользовательских паков; canonical-паки их не перетирают.
 
 ### 6.2 Импорт шаблона в мир
 
-Явная операция пользователя: выбрать шаблон из глобальной библиотеки → импортировать в конкретный мир.
+Явная операция пользователя: подключить пак ко всему миру через bundle либо
+позднее. Импорт пака в global SQL без подключения не делает его доступным миру.
+Выбор отдельного шаблона хранится UID-ссылкой, без pack-id; принадлежность
+находит движок. Зависимые паки также подключаются явно; автоподключения нет.
+Неразрешимый template UID/неподключённая зависимость сейчас дают default + warning
+через штатный `packingLog`, не изменяя исходную ссылку. Будущий master-mode
+даёт конкретную ошибку вместо fallback. Проверки прочих REF-W не меняются.
 
 При импорте выполняется **валидация совместимости с миром**:
 
@@ -1258,8 +1444,11 @@ CREATE TABLE IF NOT EXISTS building_templates (
     иначе → ImportWarning (шаблон импортируется, но комната не будет сгенерирована в v1)
 ```
 
-При успехе: `system_template_uid` + `display_template_name` добавляются в `worlds.building_template_registry`.  
-Импортированный шаблон можно удалить из мира (убрать из реестра) — глобальная запись в `building_templates` не затрагивается.
+Подключение — это владение паком (`owner_world_uid`) либо default-статус.
+Индивидуальный выбор сохраняется в `world.library_pins`; это
+не отдельное разрешение доступа и не замена подключения всего пака.
+Удаление такого pin не отключает остальных членов пака. Для отключения
+пользовательского пака удаляется явная world binding, глобальные тела сохраняются.
 
 ---
 
@@ -1275,7 +1464,13 @@ class BuildingLayout:
 ```
 
 Здание (`NamedLocation` с `system_location_type="building"`):
-- `system_template_uid` — ссылка на `building_templates.template_uid`; RESTRICT при удалении шаблона
+- `system_template_uid` — UID реально выбранного библиотечного шаблона,
+  переданный caller отдельно от имени; kind определяется источником.
+  Имя plot/building не записывается вместо UID.
+- `system_structure_template_uid` — UID фактически применённой structure;
+  участвует в usage/deletion, import/export/remap. Обычное чтение не
+  пересчитывает его после изменения building template; regeneration
+  записывает вновь применённый UID. Это identity, не версия тела.
 - `map_x, map_y, map_z` — origin здания в глобальных координатах
 
 Каждая комната — `NamedLocation` с:
@@ -1353,7 +1548,7 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
     "corrodible":         true,
     "meltable":           false,
     "mineable":           true,
-    "transparent":        false,
+    "transparent":        0,
     "components":         null
   }
 ]
@@ -1376,7 +1571,7 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
 | `corrodible` | bool | Поддаётся коррозии. Default: true |
 | `meltable` | bool | Плавится. Default: false |
 | `mineable` | bool | Добывается. Default: false |
-| `transparent` | bool | Прозрачен. Default: false |
+| `transparent` | number (0–100) | Процент прозрачности; дробные значения допустимы. Default: 0 |
 | `components` | string[]\|null | optional. Компоненты для `crafted`/`refined` материалов |
 | `temp_damage` | bool | только liquid/gas. Наносит температурный урон |
 | `vision_block` | bool | только liquid/gas. Блокирует видимость |
@@ -1444,6 +1639,10 @@ floor_material = rng.choice(find_candidates("floor"))
 ```
 
 ### 8.6 Layout: размещение комнат
+
+Вся раскладка и все builders работают в авторском фрейме `StructureTemplate`.
+Ориентация здания применяется одним проходом после post-process, непосредственно перед
+`_assemble_result` (§9); перестановка комнат или повторный запуск builders после поворота не выполняются.
 
 Два режима — определяются наличием `attach_to` на уровне:
 
@@ -1550,6 +1749,18 @@ entry_point.wall = "west"  → левый столбец
 
 `perimeter_required` форсируется автоматически для всех комнат с `entry_point` / `back_entry_point`.
 
+Реализация A1 проверяет доступный наружный проём по реальному footprint:
+снаружи стены нет клетки другого помещения, изнутри есть floor, доступных
+кандидатов достаточно для ширины входа. Уже подходящая BFS-позиция сохраняется;
+при неуспехе сначала перебираются направления authored-входов и смещения вдоль
+смежной стены, затем остальные стороны. Последующие комнаты не могут перекрыть
+доступный вход ранее размещённой комнаты. Изолированные комнаты используют ту
+же проверку; после clipping и mode B выполняется итоговая проверка входов.
+При fallback сторона меняется в runtime-копии EntryPoint для построения реального
+проёма; wire-шаблон остаётся неизменным. Отсутствие доступного периметра для входа
+вызывает GenerationError, включая optional-комнаты. Периметр определяется по
+footprint, а не только по общему bbox: наружные стены в уступах тоже доступны.
+
 **Пример — первый этаж таверны:**
 ```
 start: main_hall (entry_point)
@@ -1596,13 +1807,25 @@ while sum(widths) > corridor_length и actual_count > 0:
 Прикреплённые комнаты не переносятся в "следующую строку" — только вдоль стен коридора.  
 При `attach_wall: "both"` — чередуются по обе стороны.
 
-`"any"` — генератор выбирает сторону по позиции лестницы в коридоре:
+`"any"` на хосте `room_type="corridor"` — все комнаты группы размещаются на одной
+осевой стороне, с учётом лестниц (срез 6.6, решения A1–A5):
 ```
-staircase.position IN (north, northeast, northwest) → attach_wall = "south"
-staircase.position IN (south, southeast, southwest) → attach_wall = "north"
-staircase.position IN (east, west, center)          → attach_wall = rng.choice(["north", "south"])
-staircase-connection к коридору отсутствует         → attach_wall = rng.choice(["north", "south"])
-```  
+sides = (north, south) если corridor.depth >= corridor.width, иначе (east, west)
+occupied = стороны sc.facing всех staircases, где corridor.room_id входит в sc.stops
+           и существует shaft этой лестницы на z_offset коридора
+free = sides минус occupied, спроецированные на выбранную ось
+если свободна ровно одна сторона → выбрать её
+иначе → scoped_rng(building_uid, corridor.room_id, str(z_offset), AttachWall.ANY).choice(sides)
+```
+Источник стороны — `StaircaseSpec.facing`, preferred-направление AdjacentShaftPlacer;
+старое `staircase.position` больше не используется. Шахты на момент выбора могут
+ещё не иметь координат. `facing=None` и кардинал вне оси не занимают сторону;
+внутренние intercardinal-значения проецируются на ось (wire остаётся cardinal-only).
+Несколько лестниц объединяют занятые стороны. При обеих занятых сторонах или
+отсутствии лестницы выбор детерминирован и не потребляет общий RNG генерации.
+Ось берётся по фактическим размерам хоста после clipping; квадрат использует N/S.
+Для некоридорного хоста `any` сохраняет прежнее чередование, как `both`;
+семантика `both` и явных направлений не меняется. Fit-проверки плейсера сохраняются.
 Дверной проём — на стене комнаты, смежной с коридором.
 
 **Ограничение верхних этажей (overhang rule):**
@@ -1652,6 +1875,10 @@ room.y_max <= footprint.y_max + expansion
 Балкон с `has_column: true` → ячейки `column` (is_structural=True) размещаются на **ground floor** (z_offset=0) под каждым выступающим углом балкона. `column` — terrain type, `cell_material` = wall_material здания.
 
 ### 8.7 Cells
+
+Финальный поворот (§9) преобразует ключи `cells_dict` и `MapCell.x/y`, `system_facing`
+и каждую грань `railing_sides`. Z, материалы и uid сохраняются. `display_facing` генератор
+структур не заполняет. `occupied_footprint` вычисляется из финальных повёрнутых клеток.
 
 Генерация ячеек — три отдельных прохода. Комнаты **не генерируют стен** — только пол.
 
@@ -1740,7 +1967,88 @@ Shared segment = один ряд ячеек на границе footprint дву
 
 Нет дублирующихся `(world_uid, x, y, z)`: здание создаёт внешний контур один раз, комнаты создают только пол, несущие стены создаются по рёбрам графа один раз.
 
+### 8.7.1 Происхождение и материалы стен
+
+Статус: реализовано 2026-10-04 по принятым решениям мастера (план
+`.cursor/plans/structure-wall-materials-done.md`). Чистый классификатор —
+`generators/structure/wallRegions.py` → `WallRegion`; selector материалов —
+`wallMaterials.py`; консьюмеры — `application/economy/materialPolicies/`.
+До исправления runtime хранил material здания и каждой комнаты отдельно, но
+wall pass применял материал здания также ко внутренним стенам.
+Это расхождение устранено до миграции общего размещения лестниц.
+
+Внешняя стена получает resolved `building.parent_wall_material` с существующим
+fallback здания. Внутренняя стена получает resolved `room.wall_material`.
+Материал ступеней не является источником материала стены. Обработка фундамента,
+крыши и полов данным исправлением не меняется.
+
+Для общей перегородки комнат с разными материалами кандидаты — материалы этих
+комнат. Selector источников передаёт их отдельному консьюмеру политики из
+[tz_economic_tier.md §11](tz_economic_tier.md#11-политики-строительных-материалов).
+Явная policy имеет приоритет; если она отсутствует, отдельный default consumer
+через расширяемый helper выбирает минимальную прочность для всех экономических
+тиров здания кроме богатого, максимальную — для богатого. При равной прочности
+побеждает материал комнаты с большей площадью footprint, при равной площади —
+первый кандидат в списке typed-входа (§11.3 экономического ТЗ). Обработка
+неизвестной прочности остаётся открытым вопросом экономического контракта
+(MAT-T-1).
+
+Геометрическая классификация не выбирает материал. Она выдаёт typed-регионы
+фактических стен с XY, применимым Z, внешней/внутренней принадлежностью и
+связанными комнатами. Материал или `location_uid=building_uid` сами по себе не
+доказывают принадлежность стены. Внешняя оболочка определяется по реальной
+геометрии, не только по bbox. Одна физическая клетка стены создаётся один раз;
+исходный порядок комнат не должен определять её материал.
+
+Единственный writer обычных стен остаётся в cellBuilder и потребляет готовое
+решение. Консьюмер политики не создаёт клетки. Проёмы сохраняют отдельный
+контракт §8.8. Происхождение стен должно быть доступно последующему размещению
+лестниц без второго несовместимого определения внешней оболочки.
+
+Исправление меняет только согласованные материалы стен; координаты, высоты,
+геометрия проёмов, anchors/facing/пути UShape, RNG и диагностики сохраняются.
+Данный раздел не требует перестраивать существующую геометрию проходов §8.7.
+Наследование нового ограждения лестниц относится к
+[tz_staircase_generation.md §12.1](tz_staircase_generation.md#121-единое-размещение-лестниц).
+
+**Принято для shaft/host:** существующая общая стена сохраняется по всему Z,
+а не получает повторный выбор min/max. Собственное ограждение у внутренней
+стены повторяет материал host-комнаты, у внешней — материал фактической внешней
+стены. Эти решения из лестничного контракта не ставятся повторно на согласование.
+
+**Принято для shaft без однозначной host-комнаты** (standalone, adjacent,
+edge-mounted `outside: true`): отдельного shaft-правила материалов нет —
+каждая сторона ограждения shaft классифицируется общим классификатором по
+фактической смежности. Стена, смежная с внешней средой, — часть внешней
+оболочки, материал здания. Стена, смежная с внутренним помещением, —
+внутренняя, материал смежной комнаты; комната — единственный кандидат,
+консьюмер политики не вызывается. Стена с archway между комнатой и shaft —
+внутренняя (смотрит внутрь здания): материал внутренних стен смежной комнаты.
+У `outside: true` три наружные стороны shaft являются `floor` и стен не
+создают. Источник материала ограждения shaft определяет единый helper
+selector-слоя в одном месте; не размазывать по placers и cellBuilder.
+
+**Принято для дворов, проёмов и открытых площадок:** стена классифицируется
+по объёму по другую сторону. Смежная с открытым воздухом или неиспользуемым
+пространством — внешняя оболочка, материал здания: внешний контур, ниши
+concave-форм (l_shape, t_shape, будущий polygon) и замкнутый двор-колодец.
+Здания с двором-колодцем как тип пока не проектировались; правило
+зафиксировано заранее как следствие общей классификации, а не как дизайн
+этого типа. Смежная с используемым объёмом — комнатой или shaft с проходом —
+внутренняя, материал смежной комнаты (shaft кандидатом не является; два
+кандидата — консьюмер политики). Проёмы в стенах (window, door, archway —
+`wall_openings`) наследуют материал региона своей стены; пропуски в оболочке
+(периметр open shaft, стороны `outside: true`) wall cells не создают.
+Открытая площадка `balcony` отдельной обработки стен не имеет: стороны в
+воздух — внешняя оболочка, общая с комнатой перегородка — общее правило;
+dedicated-механика балкона (колонны, парапеты) — отдельный scope вне этого
+исправления.
+
 ### 8.8 Passages (LocationPassage)
+
+Перед сборкой результата общий поворот (§9) преобразует обе XY-точки каждого
+прохода; отсутствующая внешняя точка остаётся `None`. У `LocationPassage` нет
+поля facing. Ссылки на уровни, тип прохода и `is_bidirectional` сохраняются.
 
 Каждый connection → один `LocationPassage`:
 - `from_x/from_y` — центр дверного проёма в from_room
@@ -1829,14 +2137,30 @@ class StructureGeneratorService:
         *,
         ground_z:         int | None = None,     # None → building.map_z
         foundation_depth: int        = 0,        # для z_offset < 0
-        facing:           Facing | None = None,  # None/SOUTH → фрейм шаблона; иначе поворот (§8.6)
+        facing:           Facing | None = None,  # None → авторский фрейм; кардинал → направление главного входа
         building_band:    str | None = None,     # economic tier band участка → TierResolver (§8.5b)
     ) -> StructureLayout: ...
 ```
 
 Валидация шаблона — `StructureTemplate.model_validate(data)` у caller (§10): сервис `dict` не принимает и участок (`main_building`) не разворачивает. Полный контракт параметров — [tz_assembler_hierarchy.md](tz_assembler_hierarchy.md) §6.8.
 
-**Ориентация.** Раскладка (§8.6) выполняется в SOUTH-фрейме шаблона (`entry_point.wall` как записано). При `facing ∉ {None, SOUTH}` после раскладки и **до** эмиссии `NamedLocation`/клеток/passages комнаты, шахты лестниц и проёмы поворачиваются rigid-body вокруг origin входной комнаты так, что стена главного входа смотрит на `facing`; при 90°/270° `width↔depth`. Готовый `StructureLayout` не поворачивается (у `rooms[]` нет размеров).
+**Ориентация (вариант B).** `facing=None` сохраняет авторский фрейм. Явный `facing`
+допускает только `CARDINAL_FACINGS`; диагональ → `GenerationError` до генерации.
+Нужен ровно один размещённый `main_entrance`; отсутствие или несколько входов →
+`GenerationError` с uid структуры и room_id кандидатов. Pivot — исходный origin входной
+комнаты, угол — разница между её `entry_point.wall` и запрошенным facing (включая SOUTH).
+Четверть-оборот: `(dx,dy) → (−dy,dx)`, east=+X, north=+Y.
+После post-process перед `_assemble_result` единым проходом поворачиваются cells (§8.7),
+обе XY-точки passages (поля facing у них нет), origin/bbox и `extra_cells` всех размещённых
+комнат и шахт. Origin становится минимальным углом повёрнутого bbox; при нечётном числе
+четверть-оборотов width/depth меняются местами. `NamedLocation` создаются уже повёрнутыми.
+Тот же проход поворачивает runtime facing-поля размещённых `_RoomInstance`:
+`entry_point.wall`, `back_entry_point.wall`, shaft `facing` и `embedded_entry`,
+а также кардинальные значения `attach_wall`; `attach_wall=both`/`any` инвариантны.
+После поворота все эти facing-поля находятся в мировом фрейме; авторский фрейм
+сохраняется только в немутированном `StructureTemplate`.
+Uid, Z, stops, материалы и свойства проходов сохраняются. `StructureTemplate` не мутируется.
+Builders лестниц работают в авторском фрейме; их собственный facing не заменяется facing здания.
 
 ---
 

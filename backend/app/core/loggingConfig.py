@@ -39,6 +39,7 @@ _CONSOLE_FILE_ONLY_ACTIVITIES = frozenset({
     "grade_system_create",
     "grade_system_members",
     "c22_packing_fit",
+    "overlap_rerank_deferred",
 })
 
 _CONSOLE_QUEUE_MAX = 4096
@@ -54,6 +55,11 @@ PROFILE_SCRIPT = "script"
 _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
     sorted(
         (
+            (
+                "app.application.worldData.regions.regionStateLog",
+                "region_state",
+                "regionStateLog",
+            ),
             (
                 "app.application.worldData.pack.bake.packDetailedBakeOrchestrator",
                 "pack",
@@ -75,7 +81,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "dumpLog",
             ),
             (
-                "app.application.worldData.terrainParallelLog",
+                "app.application.worldData.materialize.terrainParallelLog",
                 "terrain",
                 "terrainParallelLog",
             ),
@@ -95,6 +101,11 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "climateLog",
             ),
             (
+                "app.application.cascade",
+                "cascade",
+                "cascadeLog",
+            ),
+            (
                 "app.application.jsonValidation",
                 "jsonValidation",
                 "resolve",
@@ -109,6 +120,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
 # Server profile allowlist — catalog process=server plus unmatched sink.
 # Do not include script/* or render/dumpLog (script-only).
 SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
+    ("region_state", "regionStateLog"),
     ("http", "api"),
     ("pack", "packBakeLog"),
     ("pack", "packDetailedBake"),
@@ -120,6 +132,7 @@ SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
     ("jsonValidation", "resolve"),
     ("settlement", "settlementAssembler"),
     ("structure", "headroom"),
+    ("cascade", "cascadeLog"),
     ("core", "runtime"),
 })
 

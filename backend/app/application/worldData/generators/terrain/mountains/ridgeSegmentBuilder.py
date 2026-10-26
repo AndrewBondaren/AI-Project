@@ -50,12 +50,12 @@ def build_primary_range(
         n_peaks=len(peaks),
     )
     return MountainRangeSpec(
-        spine=spine,
+        spine=tuple(spine),
         width_m=width,
         kind=kind,
-        peaks=peaks,
+        peaks=tuple(peaks),
         style=range_style,
-        saddles=saddles,
+        saddles=tuple(saddles),
         peak_spacing_m=max(1, int(round(peak_gap_m))),
     )
 
@@ -97,17 +97,17 @@ def build_secondary_ranges(
                     radius_m=max(1, int(round(src.radius_m * _SECONDARY_SCALE))),
                     kind=src.kind,
                     form=src.form,
-                    sides=list(src.sides) if src.sides else [],
+                    sides=src.sides,
                 )
             )
         out.append(
             MountainRangeSpec(
-                spine=[p0, mid],
+                spine=(p0, mid),
                 width_m=width,
                 kind=primary.kind,
-                peaks=peaks,
+                peaks=tuple(peaks),
                 style=policy.default_range_style,
-                saddles=[],
+                saddles=(),
             )
         )
     return out

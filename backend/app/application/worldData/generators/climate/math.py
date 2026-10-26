@@ -1,9 +1,13 @@
 """Shared climate math helpers (DR-5 / CL-12)."""
 
-import hashlib
-import math
+from __future__ import annotations
 
-from app.db.models.world import World
+import math
+from typing import TYPE_CHECKING
+
+from app.ids import seed_int
+if TYPE_CHECKING:
+    from app.db.models.world import World
 
 
 def smoothstep(t: float) -> float:
@@ -20,4 +24,4 @@ def dist_sq(x1: int, y1: int, x2: int, y2: int) -> int:
 
 
 def world_seed(world: World) -> int:
-    return int(hashlib.md5(world.world_uid.encode()).hexdigest()[:8], 16)
+    return seed_int(world)

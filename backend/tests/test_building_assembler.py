@@ -2,20 +2,24 @@
 
 import unittest
 from dataclasses import replace
+from random import Random
 from unittest.mock import patch
 
+from app.application.cascade.locationScope import empty_location_chain
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.buildingAssembler.buildingAssembler import BuildingAssembler
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.namedLocation import NamedLocation
+from app.db.models.locationLevel import LocationLevel
 from app.db.models.world import World
 
 
@@ -62,14 +66,18 @@ class BuildingAssemblerTests(unittest.TestCase):
             system_name="band-plot", display_name="Plot", main_building=self.body,
             economic_tier_band=band,
         )
-        skeleton = CitySkeleton(None, None, None, None, None, None)
+        skeleton = SettlementSkeleton()
         return derive_structure_context(
-            plot, skeleton, AreaSlot([(0, 0)], 7, Facing.SOUTH), None, ground_z=7,
+            self.world, plot, skeleton, AreaSlot([(0, 0)], 7, Facing.SOUTH),
+            None, ground_z=7,
+            district_ctx=empty_location_chain(self.world, ScopeLevel.DISTRICT),
+            area_uid="band-area",
+            building=self.building,
         )
 
     def test_plot_band_selects_room_material_through_real_generation(self):
         for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
-            with self.subTest(band=band), patch.object(TierResolver, "resolve", wraps=TierResolver.resolve) as resolve:
+            with self.subTest(band=band):
                 layout = BuildingAssembler().assemble(
                     self.world, self.building, self.body, self.structure, self.context(band),
                 )
@@ -77,9 +85,40 @@ class BuildingAssemblerTests(unittest.TestCase):
                 self.assertEqual(layout.rooms[0].parent_wall_material, expected)
                 self.assertEqual(layout.rooms[0].parent_floor_material, expected)
                 self.assertTrue(layout.cells)
-                calls = [c for c in resolve.call_args_list if c.kwargs.get("building") is self.building]
-                self.assertEqual(len(calls), 4)
-                self.assertTrue(all(c.kwargs["building_band"] == band for c in calls))
+
+    def test_room_material_resolver_uses_effective_tier(self):
+        # M4: the helper is a pure consumer — no tier cascade inside.
+        for tier, expected in (("high", "high_stone"), ("low", "low_stone"), (None, "median_stone")):
+            with self.subTest(tier=tier):
+                self.assertEqual(
+                    resolve_room_materials(self.world, tier, Random(0)),
+                    (expected, expected),
+                )
+
+    def test_band_reaches_room_and_shaft_materials(self):
+        structure = self.structure.model_copy(deep=True)
+        upper = dict(structure.levels[0], z_offset=1)
+        upper["rooms"] = [dict(upper["rooms"][0], room_id="upper_hall")]
+        structure.levels.append(upper)
+        structure.staircases.append({
+            "staircase_id": "stairs", "staircase_type": "u_shape",
+            "stops": ["hall", "upper_hall"],
+        })
+        levels = {
+            z: LocationLevel(str(z), self.building.location_uid, 7 + 3 * z, 3, str(z))
+            for z in (0, 1)
+        }
+        for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
+            with self.subTest(band=band):
+                rooms, _, shafts = StructureGeneratorService()._instantiate_rooms(
+                    structure, self.building, levels, self.world, Random(0),
+                    StructureGeneratorService._resolve_staircases(structure),
+                    definitions=StructureGeneratorService._resolve_levels(structure),
+                    ctx=self.context(band).location_ctx,
+                )
+                self.assertEqual(len(shafts["stairs"]), 2)
+                self.assertEqual(len(rooms), 4)
+                self.assertTrue(all((r.wall_material, r.floor_material) == (expected, expected) for r in rooms))
 
     def test_explicit_building_tier_overrides_band(self):
         self.building.system_economic_tier = "low"
@@ -94,7 +133,10 @@ class BuildingAssemblerTests(unittest.TestCase):
             BuildingAssembler().assemble(self.world, self.building, self.body, self.structure, context)
         effective = attach.call_args.args[3]
         self.assertEqual((effective.foundation_type, effective.roof_type), ("none", "none"))
-        self.assertEqual((effective.ground_z, effective.building_band, effective.facing), (7, "rich", Facing.SOUTH))
+        self.assertEqual(
+            (effective.ground_z, effective.location_ctx.economic_tier, effective.facing),
+            (7, "high", None),
+        )
         self.assertEqual((context.foundation_type, context.roof_type), ("slab", "gable"))
 
     def test_registry_keeps_all_kinds_with_new_contract(self):
@@ -105,8 +147,9 @@ class BuildingAssemblerTests(unittest.TestCase):
                     self.world, self.building, self.body, self.structure, self.context("rich"),
                 )
 
-    def test_direct_generator_accepts_structure_and_band(self):
+    def test_direct_generator_accepts_structure_and_ctx(self):
         layout = StructureGeneratorService().generate_from_template(
-            self.world, self.building, structure=self.structure, building_band="rich",
+            self.world, self.building, structure=self.structure,
+            ctx=self.context("rich").location_ctx,
         )
         self.assertEqual(layout.rooms[0].parent_wall_material, "high_stone")

@@ -6,8 +6,8 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
     AreaSlot,
     SURFACE_DECK,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
+    PACKING_ENVELOPE_FACING,
     AreaPlacement,
     Reservation,
     YARD_PADDING_FINE,
@@ -15,16 +15,16 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-    lookup_building_template,
+from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
+    PackingReason,
+    PackingStep,
+    packing_warning,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.db.models.world import World
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 
 __all__ = [
     "AreaPlacement",
@@ -90,32 +90,46 @@ def footprint_fits_rect(fp: OccupiedFootprint, rect: tuple[int, int, int, int], 
 def placements_from_reservations(
     reservations: list[Reservation],
     cache: BuildingLayoutCache,
-    world: World,
-    skeleton: CitySkeleton,
     fallback_z: int,
-    catalog: BuildingCatalog | None = None,
+    catalog: BuildingCatalog,
     *,
+    district: str,
     deck: int = SURFACE_DECK,
 ) -> list[AreaPlacement]:
-    _ = skeleton
-    catalog = catalog or assemble_building_catalog(world)
     placements: list[AreaPlacement] = []
     for reservation in reservations:
-        name = reservation.token.system_name
-        template = catalog.by_system_name(name) or lookup_building_template(world, name)
-        fp = cache.envelope(name)
-        if template is None or fp is None:
+        uid = reservation.token.template_uid
+        template = catalog.by_uid(uid)
+        if template is None:
+            packing_warning(
+                PackingStep.AREA_SLOTS,
+                district=district,
+                system_name=uid,
+                required=reservation.token.required,
+                reason=PackingReason.MISSING_TEMPLATE,
+            )
+            continue
+        fp = cache.envelope(uid)
+        if fp is None:
+            packing_warning(
+                PackingStep.AREA_SLOTS,
+                district=district,
+                system_name=uid,
+                required=reservation.token.required,
+                reason=PackingReason.FOOTPRINT_MISS,
+            )
             continue
         bx, by = origin_in_reservation(fp, reservation.rect_xy)
         area_slot = make_area_slot(
-            fp, bx, by, Facing.SOUTH, fallback_z=fallback_z, deck=deck,
+            fp, bx, by, PACKING_ENVELOPE_FACING, fallback_z=fallback_z, deck=deck,
         )
         placements.append(AreaPlacement(
             area_slot=area_slot,
             template=template,
             building_x=bx,
             building_y=by,
-            facing=Facing.SOUTH,
+            facing=PACKING_ENVELOPE_FACING,
             reservation=reservation,
+            template_uid=uid,
         ))
     return placements

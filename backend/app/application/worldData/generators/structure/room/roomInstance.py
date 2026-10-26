@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
+from app.dataModel.spatial.facing import Facing
 
-from app.application.worldData.generators.structure.shapes import room_footprint
+from app.application.worldData.generators.structure.shape.shapes import room_footprint
 
 
 @dataclass
@@ -32,23 +36,28 @@ class _RoomInstance:
     # Layout — проставляются в _layoutEngine
     origin_x: int | None = None
     origin_y: int | None = None
+    layout_locked: bool = False  # aligned embedded upper host / inherited shaft
+    layout_excluded: bool = False  # failed placement contract; never retry elsewhere
 
     # Stairwell
     staircase_type: str | None = None
     facing:         str | None = None
     is_shaft:       bool = False
+    shaft_has_walls: bool = True  # factory copies StaircaseSpec.has_walls
     staircase_id:   str | None = None
+    embedded_host_key: str | None = None
+    embedded_entry: Facing | None = None
 
     # Опциональные поля из room_def
     attach_to:           str | None = None
-    attach_wall:         str | None = None
+    attach_wall:         AttachWall = AttachWall.BOTH
     perimeter_required:  bool = False
     underground_fallback: bool = False
-    entry_point:         dict | None = None
-    back_entry_point:    dict | None = None
+    entry_point:         EntryPoint | None = None
+    back_entry_point:    EntryPoint | None = None
     shape_params:        dict = field(default_factory=dict)
 
-    wall_openings: list[dict] = field(default_factory=list)
+    wall_openings: list[WallOpeningSpec] = field(default_factory=list)
 
     # Stairwell mutation: extra cells added to base footprint at generation time.
     # Used to widen the entry end of a corridor so a standard staircase can fit.

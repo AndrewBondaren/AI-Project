@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import unittest
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
 )
@@ -16,17 +16,18 @@ from app.application.worldData.generators.road.connectionPolicy import paint_for
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district import districtConnection
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
     street_classes_for,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing
 from app.db.models.connectionNode import ConnectionNode
 
@@ -89,7 +90,7 @@ class TestDistrictStreetClasses(unittest.TestCase):
 
     def test_unknown_role_skipped(self) -> None:
         with self.assertLogs(
-            "app.dataModel.settlement.district.districtConnection",
+            districtConnection.__name__,
             level="WARNING",
         ) as captured:
             classes = street_classes_for(_template(
@@ -136,7 +137,7 @@ class TestGridSpineFillPaint(unittest.TestCase):
                 ),
             ],
         )
-        skeleton = CitySkeleton(
+        skeleton = SettlementSkeleton(
             economic_tier=None,
             architectural_style=None,
             dominant_material=None,

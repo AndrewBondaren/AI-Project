@@ -11,14 +11,17 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     ApproachForm,
     StreetApproach,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.application.cascade.locationScope import (
+    debug_building_context,
+)
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import partition_height
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_ROAD_MATERIAL
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -31,7 +34,7 @@ def approach_material(
     kind: AreaThresholdKind,
     *,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     building: NamedLocation | None,
     context: StructureContext | None,
     rng: Random,
@@ -39,9 +42,14 @@ def approach_material(
     if kind == AreaThresholdKind.DOOR:
         # TODO(C21): porch / tambour — нет геометрии в здании. Когда клетки
         # крыльца появятся, материал подъезда = context.porch_material.
-        _ = context
-        if building is not None and building.parent_floor_material:
-            return building.parent_floor_material
+        # M9: the building floor material comes from the cascade ctx;
+        # callers without a chain still honor the building NL's authored
+        # material via the building-scope link (§8.4).
+        loc_ctx = context.location_ctx if context is not None else None
+        if loc_ctx is None and building is not None:
+            loc_ctx = debug_building_context(world, building)
+        if loc_ctx is not None:
+            return loc_ctx.floor_material
         return resolve_material(
             world, "floor", skeleton.economic_tier, rng, DEFAULT_FLOOR_MATERIAL,
         )

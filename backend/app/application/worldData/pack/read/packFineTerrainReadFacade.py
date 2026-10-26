@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.db.models.world import World
 

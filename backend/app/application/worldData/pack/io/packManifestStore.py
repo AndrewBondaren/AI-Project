@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
-from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
+from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
 
 
 class PackManifestStore:
@@ -14,11 +16,20 @@ class PackManifestStore:
         return WorldPackManifest.model_validate(raw)
 
     def save(self, path: Path, manifest: WorldPackManifest) -> None:
+        # Revalidate mutable lists before touching the published manifest.
+        manifest = WorldPackManifest.model_validate(manifest.model_dump(mode="json"))
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            manifest.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
+        payload = manifest.model_dump_json(indent=2)
+        staged = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                             prefix=path.name + ".", suffix=".tmp", delete=False) as handle:
+                staged = Path(handle.name)
+                handle.write(payload)
+            os.replace(staged, path)
+        finally:
+            if staged is not None:
+                staged.unlink(missing_ok=True)
 
     def exists(self, path: Path) -> bool:
         return path.is_file()

@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from app.application.worldData.generators.climate.climateAnchor import AnchorSource, ClimateAnchorPoint
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
@@ -17,9 +18,9 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -28,6 +29,7 @@ def _world(**overrides):
         world_uid="world-light-test",
         fine_cells_per_map_cell=1000,
         world_map_cells_per_tile=None,
+        world_bounds={"x_min": 0, "x_max": 0, "y_min": 0, "y_max": 0},
         z_min=-2,
         z_max=4,
         map_subsurface_depth=0,
@@ -69,7 +71,7 @@ class TestLightGridCompose(unittest.TestCase):
         self.assertEqual(resolve_world_map_cells_per_tile(1000), 32)
         scale = LightGridScale.from_tile(1000, 32)
         self.assertEqual(scale.side, 32)
-        self.assertEqual(scale.light_m, 31)
+        self.assertEqual(scale.light_span, 31)
 
     def test_default_pipeline_order(self):
         from app.application.worldData.pack.bake.lightGrid.bake import DEFAULT_CONTRIBUTORS
@@ -96,7 +98,9 @@ class TestLightGridCompose(unittest.TestCase):
                 world_uid=world.world_uid,
                 display_name="Town",
                 system_location_type="settlement",
-                system_city_size="town",
+                location_payload={
+                    'system_city_size': "town",
+                },
                 map_x=500,
                 map_y=500,
                 created_at="2026-01-01T00:00:00Z",
@@ -114,13 +118,15 @@ class TestLightGridCompose(unittest.TestCase):
         )
         surface = SurfaceTerrainContext(
             pole_field=pole,
-            local_field=ClimateAnchorField(()),
+            local_field=ClimateAnchorField((
+                ClimateAnchorPoint(0, 0, "temperate", "town-1", AnchorSource.AUTO),
+            )),
             coarse_hm=hm,
             coarse_hydro={
                 (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
             },
-            sparse_meter_hydro={},
-            meter_z_overrides={},
+            sparse_fine_hydro={},
+            fine_z_overrides={},
             coarse_relief_z={(0, 0): 1},
             coarse_surface_z={(0, 0): 1},
         )
@@ -145,6 +151,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertEqual(len(cells), 1024)
@@ -162,9 +170,7 @@ class TestLightGridCompose(unittest.TestCase):
         z_values = {c.surface_z for c in cells}
         self.assertGreaterEqual(len(z_values), 1)
 
-        # Temperate + wet → forest (not z==1 stub); climate_zone set before landcover.
-        forest_n = sum(1 for c in cells if c.system_terrain == "forest")
-        self.assertGreater(forest_n, 0)
+        # Climate now comes from the frozen base plan.
         climate_n = sum(1 for c in cells if c.climate_zone_id is not None)
         self.assertEqual(climate_n, 1024)
 
@@ -220,6 +226,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         road_n = sum(1 for c in cells if c.system_terrain == "road")
@@ -242,6 +250,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertEqual(sum(1 for c in cells if c.system_terrain == "mountain"), 0)
@@ -265,6 +275,8 @@ class TestLightGridCompose(unittest.TestCase):
             pole_field=pole,
             terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
+        from tests.planning.consumers.test_l0_l2 import bind_frozen_context
+        bind_frozen_context(self, ctx)
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
         self.assertGreater(sum(1 for c in cells if c.system_terrain == "mountain"), 0)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from random import Random
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
@@ -22,7 +22,8 @@ from app.application.worldData.generators.road.blockSize import block_size_for_d
 from app.application.worldData.generators.barrier.material import pick_barrier_material
 from app.application.worldData.generators.barrier.perimeter import perimeter_ring_bbox
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -35,10 +36,10 @@ _NO_WALL_SIZES = frozenset({"hamlet", "village"})
 
 def should_have_settlement_wall(
     settlement: NamedLocation,
-    skeleton:   CitySkeleton,
     rng:        Random,
+    ctx:        LocationContext,
 ) -> bool:
-    size = skeleton.system_city_size or settlement.system_city_size or "hamlet"
+    size = ctx.system_city_size
     if size in _NO_WALL_SIZES:
         logger.info(
             "plan_settlement_barriers | settlement=%s size=%s — no wall (size policy)",
@@ -55,10 +56,11 @@ def should_have_settlement_wall(
 
 def pick_barrier_template_type(
     world:    World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     rng:      Random,
+    ctx:      LocationContext,
 ) -> str | None:
-    """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler.md` § pick_barrier_template_type."""
+    """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler-done.md` § pick_barrier_template_type."""
     registry = economic_tiers(world).root
     uid = world.world_uid
     tier = skeleton.economic_tier or "standard"
@@ -68,7 +70,7 @@ def pick_barrier_template_type(
         return "wooden_fence"
     if rank >= tier_rank(registry, "quality", world_uid=uid) if registry else False:
         return "city_wall"
-    size = skeleton.system_city_size or "town"
+    size = ctx.system_city_size
     if size in ("city", "metropolis", "megalopolis"):
         return "city_wall"
     return "stone_fence"
@@ -77,7 +79,7 @@ def pick_barrier_template_type(
 def _pick_template_material(
     world:    World,
     template: BarrierTemplateEntry,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     rng:      Random,
 ) -> str:
     return pick_barrier_material(
@@ -99,17 +101,18 @@ def _perimeter_ring(
 def plan_settlement_barriers(
     world:      World,
     settlement: NamedLocation,
-    skeleton:   CitySkeleton,
+    skeleton:   SettlementSkeleton,
     rng:        Random,
+    ctx:        LocationContext,
 ) -> list[MapCell]:
     """
     Perimeter wall/gate map_cells в метрах на z=ground_z.
     Проёмы — на координатах settlement_gate (как plan_city_street_grid).
     """
-    if not should_have_settlement_wall(settlement, skeleton, rng):
+    if not should_have_settlement_wall(settlement, rng, ctx):
         return []
 
-    template_type = pick_barrier_template_type(world, skeleton, rng)
+    template_type = pick_barrier_template_type(world, skeleton, rng, ctx)
     template = lookup_barrier_template(world, template_type) if template_type else None
     if template is None:
         logger.warning(
@@ -120,9 +123,9 @@ def plan_settlement_barriers(
         return []
 
     origin = settlement_origin_fine(settlement)
-    side_m = footprint_side_fine(world, skeleton.system_city_size)
+    side_m = footprint_side_fine(world, ctx.system_city_size)
     cell_m = map_cell_fine_span(world)
-    step_m = block_size_for_density(skeleton.settlement_density)
+    step_m = block_size_for_density(ctx.settlement_density)
 
     gate_coords = footprint_gate_coordinates(origin.x, origin.y, side_m, cell_m)
     ring = set(_perimeter_ring(origin.x, origin.y, side_m, step_m))

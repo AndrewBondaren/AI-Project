@@ -33,7 +33,10 @@ def building_type_entry() -> LocationTypeEntry:
     return require_location_type(WorldLocationTypeRegistry.SYSTEM_TYPE_BUILDING)
 
 
-def is_district_location(system_location_type: str | None) -> bool:
+def is_district_location(system_location_type: str | None, *, registry: WorldLocationTypeRegistry | None = None) -> bool:
     if not system_location_type:
         return False
-    return system_location_type == district_type_entry().system_type
+    from app.dataModel.locations.payloadKind import PayloadKind
+
+    entry = (registry if registry is not None else _engine()).entry_for(system_location_type)
+    return entry is not None and entry.payload_kind is PayloadKind.DISTRICT

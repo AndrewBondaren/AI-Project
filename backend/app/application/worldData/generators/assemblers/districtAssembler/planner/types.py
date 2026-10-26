@@ -6,12 +6,16 @@ from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
 Rect = tuple[int, int, int, int]
 
 # C21 courtyard pad — not an alley. Packing and AreaSlot share this value.
 YARD_PADDING_FINE = 1
+
+# CONN-PACK-3: the packing envelope is fixed SOUTH. Token/cache/placement
+# facing read this single source — never the literal.
+PACKING_ENVELOPE_FACING = Facing.SOUTH
 
 
 @dataclass(frozen=True)
@@ -73,7 +77,7 @@ class Lattice:
 @dataclass(frozen=True)
 class PackingToken:
     uid: str
-    system_name: str
+    template_uid: str
     w: int
     h: int
     priority: int
@@ -128,5 +132,8 @@ class AreaPlacement:
     template: PlotLayoutTemplate
     building_x: int
     building_y: int
-    facing: Facing = Facing.SOUTH
+    facing: Facing = PACKING_ENVELOPE_FACING
     reservation: Reservation | None = None
+    # Library member uid of the applied plot (B3); None for synthetic
+    # non-member placements (tests/debug).
+    template_uid: str | None = None

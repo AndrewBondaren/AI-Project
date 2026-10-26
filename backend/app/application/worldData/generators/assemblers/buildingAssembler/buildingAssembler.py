@@ -1,6 +1,7 @@
 import logging
 from dataclasses import replace
 
+from app.application.cascade.locationScope import empty_location_chain
 from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 from app.application.worldData.generators.coordinates.columnSurface import column_surface
@@ -11,8 +12,9 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureGeneratorService,
     StructureLayout,
 )
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -89,6 +91,9 @@ class BuildingAssembler(BaseBuildingAssembler):
             world, building, structure,
             ground_z=ground_z,
             foundation_depth=fd,
-            building_band=context.building_band,
+            ctx=(
+                context.location_ctx
+                or empty_location_chain(world, ScopeLevel.BUILDING)
+            ),
         )
         return self.attach_envelope(world, building, layout, context, terrain_cells)

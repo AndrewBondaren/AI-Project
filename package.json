@@ -2,15 +2,14 @@
   "name": "ai-project",
   "version": "1.0.0",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "pyright": "1.1.414"
   },
   "scripts": {
-    "init":     "npm install && cd frontend && npm install",
-
-    "dev":      "chcp 65001 > nul && concurrently \"npm run backend\" \"npm run frontend\"",
-
-    "backend":  "cd backend && python start.py",
-
-    "frontend": "cmd /c \"cd frontend && npm run dev:electron\""
+    "init": "npm install && cd frontend && npm install",
+    "dev": "chcp 65001 > nul && concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && python start.py",
+    "frontend": "cmd /c \"cd frontend && npm run dev:electron\"",
+    "typecheck:cascade": "node scripts/check-cascade-types.cjs"
   }
 }

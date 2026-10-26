@@ -10,10 +10,14 @@ Trapdoor staircases: no shaft needed — vertical-only, no shaft footprint.
 import logging
 from random import Random
 
+from app.application.cascade.locationScope import empty_location_chain
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.staircaseType import (
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.staircaseType import (
     StaircaseType,
     default_shaft_size_type,
     requires_shaft,
@@ -21,7 +25,7 @@ from app.dataModel.structure.enums.staircaseType import (
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import (
     u_shape_march_depth,
 )
-from app.dataModel.structure.enums.staircaseSize import (
+from app.dataModel.locations.structure.enums.staircaseSize import (
     default_shaft_footprint_min,
     staircase_footprint_min,
 )
@@ -31,40 +35,44 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
-def _resolve_shaft_size(sc_entry: dict, staircase_type: StaircaseType) -> tuple[int, int]:
-    size = sc_entry.get("size") or {}
-    size_type = size.get("size_type")
-    if size_type:
-        footprint = staircase_footprint_min(size_type)
-        if footprint is not None:
-            return footprint
-    if "width_range" in size:
-        w = size["width_range"][0]
-        d = size.get("depth_range", size["width_range"])[0]
-        return w, d
+def _resolve_shaft_size(sc: StaircaseSpec, staircase_type: StaircaseType) -> tuple[int, int]:
+    size = sc.size
+    if size is not None:
+        if size.size_type:
+            footprint = staircase_footprint_min(size.size_type)
+            if footprint is not None:
+                return footprint
+        if size.width_range:
+            w = size.width_range[0]
+            d = (size.depth_range or size.width_range)[0]
+            return w, d
     fallback_key = default_shaft_size_type(staircase_type)
     return staircase_footprint_min(fallback_key) or default_shaft_footprint_min()
 
 
 def instantiate_shaft_rooms(
     template: StructureTemplate,
+    staircases: list[StaircaseSpec],
     room_z_offsets: dict[str, int],
     levels: dict[int, LocationLevel],
     world: World,
     rng: Random,
-    building_tier: str | None = None,
+    *,
+    ctx: LocationContext | None = None,
 ) -> list[_RoomInstance]:
     """
     Returns flat list of shaft _RoomInstances.
     Each instance has a unique room_id: 'shaft_{staircase_id}_{idx}'.
     All instances for the same staircase are identified by staircase_id prefix.
     """
+    ctx = ctx or empty_location_chain(world, ScopeLevel.BUILDING)
+    shaft_tier = ctx.economic_tier
     result: list[_RoomInstance] = []
 
-    for sc in template.staircases:
-        staircase_id = sc.get("staircase_id", "staircase")
-        staircase_type = StaircaseType.parse_template(sc.get("staircase_type"))
-        stops = sc.get("stops", [])
+    for sc in staircases:
+        staircase_id = sc.staircase_id
+        staircase_type = sc.staircase_type
+        stops = sc.stops
 
         if not requires_shaft(staircase_type):
             continue
@@ -110,8 +118,7 @@ def instantiate_shaft_rooms(
                 )
 
         wall_mat, floor_mat = resolve_room_materials(
-            world, None, None, rng, room_id=staircase_id,
-            building_tier=building_tier, template=template,
+            world, shaft_tier, rng, room_id=staircase_id,
         )
 
         for idx, z_off in enumerate(z_offsets):
@@ -133,9 +140,11 @@ def instantiate_shaft_rooms(
                 required=True,
                 wall_material=wall_mat,
                 floor_material=floor_mat,
+                economic_tier=shaft_tier,
                 staircase_type=staircase_type.value,
-                facing=sc.get("facing"),
+                facing=sc.facing,
                 is_shaft=True,
+                shaft_has_walls=sc.has_walls,
                 staircase_id=staircase_id,
             ))
             logger.info(

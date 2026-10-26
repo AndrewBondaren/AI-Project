@@ -59,7 +59,7 @@ def _count_anchors(field: ClimateAnchorField) -> tuple[int, int, int]:
 
 def _ensure_climate_defaults_sync(world: World) -> None:
     """In-memory import normalize when world row lacks climate defaults."""
-    from app.application.worldData.repairWorldDefaults import (
+    from app.application.worldData.registries.repairWorldDefaults import (
         WorldClimateDefaultsError,
         apply_import_normalize_to_world,
         precipitation_liquid_resolvable,

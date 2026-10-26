@@ -44,7 +44,7 @@ from app.application.worldData.generators.coordinates.columnSurface import (
 )
 from app.application.worldData.generators.coordinates.gridRay import walk_grid_ray
 from app.application.worldData.generators.road.streetCells import rasterize_street_xy
-from app.application.worldData.generators.structure.layoutTranslate import translate_layout
+from app.application.worldData.generators.structure.layout.layoutTranslate import translate_layout
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
     StructureLayout,
@@ -186,7 +186,7 @@ class TranslateDzTests(unittest.TestCase):
         layout = StructureLayout(
             cells=[_cell(0, 0, 0)],
             levels=[LocationLevel(level_uid="l", location_uid="b", z=0, z_height=3, display_name="g")],
-            passages=[],
+            transitions=[],
             rooms=[NamedLocation(
                 location_uid="r", world_uid="w", display_name="R",
                 system_location_type="room", created_at="t", map_x=0, map_y=0, map_z=0,

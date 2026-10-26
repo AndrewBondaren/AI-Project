@@ -3,7 +3,7 @@
 import unittest
 
 from app.dataModel.worldPack import CellContribution, LayerSlice, MapLayerKind, merge_layers
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 
 
 class TestWpAcceptance(unittest.TestCase):

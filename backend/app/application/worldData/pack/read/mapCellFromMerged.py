@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.dataModel.worldPack.mergeMapCells import MergedCellView
+from app.dataModel.worldPack.wire.mergeMapCells import MergedCellView
 from app.db.models.mapCell import MapCell
 
 

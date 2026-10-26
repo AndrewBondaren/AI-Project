@@ -8,13 +8,13 @@ from __future__ import annotations
 from app.application.jsonValidation import terrain_system_keys
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
 
 
 def default_surface_terrain(world: World) -> str:
     """Plains (or first registry key) when wire has no ``system_terrain``."""
-    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     registry = WorldTerrainRegistry.canonical_defaults()
     entry = registry.entry_for(plains)
     if entry is not None:

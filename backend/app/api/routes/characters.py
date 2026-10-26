@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
-from app.application.worldData.playerService import PlayerService
+from app.application.session.playerService import PlayerService
 
 router = APIRouter()
 

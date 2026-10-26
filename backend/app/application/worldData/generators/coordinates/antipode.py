@@ -1,6 +1,6 @@
 """Antipode mapping for closed planet grid (M-1)."""
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 
 
 def antipode_xy(gx: int, gy: int, bbox: GridBBox) -> tuple[int, int]:

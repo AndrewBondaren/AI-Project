@@ -10,7 +10,7 @@ SoT: ``docs/tz_json_validation.md`` §0 RegistryKey.
 from __future__ import annotations
 
 from types import UnionType
-from typing import Any, Union, get_args, get_origin
+from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
@@ -52,13 +52,16 @@ class RegistryKey[R](str):
 
 
 def _peel_aliases(annotation: Any) -> Any:
-    """Follow PEP 695 aliases, ``T | None``, and ``list[T]`` so branded keys resolve to ``R``."""
+    """Follow aliases, optional keys and list/variadic tuple members to registry ``R``."""
     inner = annotation
     while True:
         if type(inner).__name__ == "TypeAliasType":
             inner = inner.__value__
             continue
         origin = get_origin(inner)
+        if origin is Annotated:
+            inner = get_args(inner)[0]
+            continue
         if origin is Union or origin is UnionType:
             args = [a for a in get_args(inner) if a is not type(None)]
             if len(args) == 1:
@@ -67,6 +70,11 @@ def _peel_aliases(annotation: Any) -> Any:
         if origin is list:
             args = get_args(inner)
             if len(args) == 1:
+                inner = args[0]
+                continue
+        if origin is tuple:
+            args = get_args(inner)
+            if len(args) == 2 and args[1] is Ellipsis:
                 inner = args[0]
                 continue
         break

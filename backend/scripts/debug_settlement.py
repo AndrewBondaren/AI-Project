@@ -18,11 +18,35 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from app.db.models.world import World
 
 
+def _debug_catalog():
+    """Canonical-pack catalog — the script has no DB, so it hydrates the
+    declared defaults straight from the SoT fixtures (same bodies the
+    canonical packs serve)."""
+    from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
+    from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+    from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+    from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+    from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+    from app.ids import LibraryKind
+
+    structures = StructureCatalog(load_structure_stdlib(
+        Path(__file__).resolve().parents[2] / "structures_templates"
+    ))
+    return BuildingCatalog.from_entries(
+        {
+            canonical_member_uid(LibraryKind.PLOT_TEMPLATES, layout.system_name): layout
+            for layout in canonical_defaults()
+        },
+        structures=structures,
+    )
+
+
 def _run_case(label: str, world: World, settlement: NamedLocation, terrain=None) -> None:
-    layout = SettlementAssembler().assemble(world, settlement, terrain)
+    layout = SettlementAssembler().assemble(world, settlement, terrain, catalog=_debug_catalog())
     print(f"=== {label} ===")
     print(f"districts: {len(layout.district_layouts)}")
     for i, dl in enumerate(layout.district_layouts):
@@ -71,13 +95,15 @@ def test_phase_c_placement() -> None:
         display_name="Coasthold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     assembler = SettlementAssembler()
     skeleton = assembler._build_skeleton(world, settlement)
@@ -127,13 +153,15 @@ def test_city_shared_nodes() -> None:
         display_name="Bighold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
         plan_district_slots,
@@ -152,7 +180,7 @@ def test_city_shared_nodes() -> None:
         f"expected 1 shared node_uid on boundary x={boundary_x} y={sample_y}, got {uids}"
     )
 
-    layout = assembler.assemble(world, settlement)
+    layout = assembler.assemble(world, settlement, catalog=_debug_catalog())
     city_edges = [e for e in layout.connection_edges if e.graph_level == "city"]
     assert len(city_edges) > 8, "city should have perimeter + internal corridor edges"
     print("city shared-node check: OK")
@@ -164,9 +192,11 @@ def test_phase_e_building_cache() -> None:
     from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
     from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
         build_layout_cache,
-        collect_building_template_names,
+        collect_building_template_uids,
     )
-    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+    from app.ids import LibraryKind
+    from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
         WorldDistrictTemplateRegistry,
     )
 
@@ -185,13 +215,15 @@ def test_phase_e_building_cache() -> None:
         display_name="Cachehold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     civic = WorldDistrictTemplateRegistry.canonical_defaults().entry_for("civic_center")
     assert civic is not None
@@ -210,14 +242,14 @@ def test_phase_e_building_cache() -> None:
 
     assembler = SettlementAssembler()
     skeleton = assembler._build_skeleton(world, settlement)
-    names = collect_building_template_names([slot_a, slot_b], world, skeleton)
-    assert "town_hall" in names
+    catalog = _debug_catalog()
+    uids = collect_building_template_uids([slot_a, slot_b], world, skeleton, catalog)
+    assert canonical_member_uid(LibraryKind.PLOT_TEMPLATES, "town_hall") in uids
 
-    cache = build_layout_cache(world, skeleton, [slot_a, slot_b], None)
-    assert "town_hall" not in cache
+    cache = build_layout_cache(world, skeleton, [slot_a, slot_b], catalog)
     assert len(cache) == 0
 
-    layout = assembler.assemble(world, settlement)
+    layout = assembler.assemble(world, settlement, catalog=catalog)
     civic_layout = layout.district_layouts[0]
     assert civic_layout.area_layouts == []
     print("phase E building cache checks: OK")
@@ -230,26 +262,23 @@ def test_phase_area_barriers() -> None:
     from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
         should_build_area_barrier,
     )
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-        lookup_building_template,
-    )
+    from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+    from app.ids import LibraryKind
 
-    from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-    from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+    from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+    from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
     assert should_build_area_barrier(
-        BuildingLayoutTemplate(
+        PlotLayoutTemplate(
             system_name="probe_fence",
-            structure_type="building",
             display_name="probe",
             perimeter_barrier=PerimeterBarrier(template="stone_fence", probability=1.0),
         ),
         Random(0),
     )
     assert not should_build_area_barrier(
-        BuildingLayoutTemplate(
+        PlotLayoutTemplate(
             system_name="probe_open",
-            structure_type="building",
             display_name="probe",
             perimeter_barrier=PerimeterBarrier(template=None, probability=0),
         ),
@@ -271,19 +300,24 @@ def test_phase_area_barriers() -> None:
         display_name="Fencehold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
-    town_hall = lookup_building_template(world, "town_hall")
+    catalog = _debug_catalog()
+    town_hall = catalog.by_uid(
+        canonical_member_uid(LibraryKind.PLOT_TEMPLATES, "town_hall")
+    )
     assert town_hall is not None
     assert town_hall.perimeter_barrier.template == "stone_fence"
 
-    layout = SettlementAssembler().assemble(world, settlement)
+    layout = SettlementAssembler().assemble(world, settlement, catalog=catalog)
     assert layout.district_layouts[0].area_layouts == []
 
     print("phase area barriers checks: OK")
@@ -291,7 +325,7 @@ def test_phase_area_barriers() -> None:
 
 def test_phase_b_travel_and_sidewalk() -> None:
     """road_tier_bonus resolver + per-district has_sidewalk on city entry links."""
-    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
         WorldDistrictTemplateRegistry,
     )
     from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk
@@ -360,14 +394,16 @@ def test_phase_b_travel_and_sidewalk() -> None:
         display_name="Roadhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
-    layout = SettlementAssembler().assemble(world, settlement)
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
+    layout = SettlementAssembler().assemble(world, settlement, catalog=_debug_catalog())
     entry_edges = [e for e in layout.connection_edges if e.edge_uid.startswith("city_link_")]
     assert entry_edges, "town should have city entry link edges"
     for e in entry_edges:
@@ -412,7 +448,9 @@ def test_phase_d_barriers() -> None:
         display_name="Hollow",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="hamlet",
+        location_payload={
+            'system_city_size': "hamlet",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
@@ -428,21 +466,23 @@ def test_phase_d_barriers() -> None:
         display_name="Wallhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    city.settlement_density = "medium"
+    city.location_payload = {**(city.location_payload or {}), 'settlement_density': "medium"}
     sk_c = assembler._build_skeleton(world, city)
     rng = Random(f"{world.world_uid}_{city.location_uid}_barriers")
     barriers = plan_settlement_barriers(world, city, sk_c, rng)
     assert len(barriers) > 0
 
     ox, oy, gz = settlement_origin(city)
-    side_m = footprint_side_fine(world, sk_c.system_city_size)
-    gate_coords = footprint_gate_coordinates(ox, oy, side_m, map_cell_fine_span(world))
+    side_fine = footprint_side_fine(world, sk_c.system_city_size)
+    gate_coords = footprint_gate_coordinates(ox, oy, side_fine, map_cell_fine_span(world))
     barrier_by_xy = {(c.x, c.y): c for c in barriers}
     assert gate_coords <= set(barrier_by_xy)
     for x, y in gate_coords:
@@ -452,7 +492,7 @@ def test_phase_d_barriers() -> None:
     assert all(c.location_uid == city.location_uid for c in barriers)
     assert all(c.z == gz for c in barriers)
 
-    layout = assembler.assemble(world, city)
+    layout = assembler.assemble(world, city, catalog=_debug_catalog())
     assert len(layout.barrier_cells) == len(barriers)
     print("phase D barriers checks: OK")
 
@@ -493,13 +533,15 @@ def test_phase_f_map_occupancy() -> None:
         display_name="Foothold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    town.settlement_density = "medium"
+    town.location_payload = {**(town.location_payload or {}), 'settlement_density': "medium"}
 
     gx0, gy0, gx1, gy1 = footprint_grid_rect(world, town)
     assert (gx0, gy0, gx1, gy1) == (0, 0, 1, 1)
@@ -512,7 +554,7 @@ def test_phase_f_map_occupancy() -> None:
     svc = SettlementGeneratorService()
     assert svc.needs_geometry(town, world, occ) is True
 
-    layout, cells = svc.generate_map_cells(world, town)
+    layout, cells = svc.generate_map_cells(world, town, catalog=_debug_catalog())
     assert len(layout.occupancy_cells) == 1
     assert any(c.system_building_element for c in cells)
     assert svc.needs_geometry(town, world, cells) is False
@@ -523,13 +565,15 @@ def test_phase_f_map_occupancy() -> None:
         display_name="Gridhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    city.settlement_density = "medium"
+    city.location_payload = {**(city.location_payload or {}), 'settlement_density': "medium"}
     assert footprint_grid_rect(world, city) == (0, 0, 2, 2)
     assert len(plan_footprint_occupancy_cells(world, city)) == 4
 
@@ -538,8 +582,8 @@ def test_phase_f_map_occupancy() -> None:
 
 def test_coordinate_spaces_anchor_3000() -> None:
     """
-    NC-1: settlement at map_x=3000 must use grid index 1 and meter origin 3000.
-    Smoke at map_x=0 masks mixing grid index with absolute meters.
+    NC-1: settlement at map_x=3000 must use grid index 1 and fine origin 3000.
+    Smoke at map_x=0 masks mixing grid index with absolute fine cells.
     """
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
         plan_district_slots,
@@ -577,33 +621,35 @@ def test_coordinate_spaces_anchor_3000() -> None:
         display_name="Easthold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=3000,
         map_y=0,
         map_z=0,
     )
-    town.settlement_density = "medium"
+    town.location_payload = {**(town.location_payload or {}), 'settlement_density': "medium"}
 
-    cell_m = map_cell_fine_span(world)
-    assert cell_m == 3000
+    tile_macro = map_cell_fine_span(world)
+    assert tile_macro == 3000
 
     origin = settlement_origin_fine(town)
     assert (origin.x, origin.y, origin.z) == (3000, 0, 0)
     assert settlement_origin(town) == (3000, 0, 0)
 
-    side_m = footprint_side_fine(world, town.system_city_size)
-    assert side_m == 3000
+    side_fine = footprint_side_fine(world, settlement_payload(town).system_city_size)
+    assert side_fine == 3000
 
     grid_rect = settlement_grid_rect(world, town)
     assert grid_rect.as_tuple() == (1, 0, 2, 1)
     assert footprint_grid_rect(world, town) == (1, 0, 2, 1)
 
-    meter_rect = settlement_fine_rect(world, town)
-    assert meter_rect.as_tuple() == (3000, 0, 6000, 3000, 0)
+    fine_rect = settlement_fine_rect(world, town)
+    assert fine_rect.as_tuple() == (3000, 0, 6000, 3000, 0)
     assert footprint_fine_rect(world, town) == (3000, 0, 6000, 3000, 0)
 
-    gate_coords = footprint_gate_coordinates(3000, 0, side_m, cell_m)
+    gate_coords = footprint_gate_coordinates(3000, 0, side_fine, tile_macro)
     assert (3000, 0) in gate_coords
     assert (6000, 0) in gate_coords
     assert (3000, 3000) in gate_coords
@@ -622,7 +668,7 @@ def test_coordinate_spaces_anchor_3000() -> None:
     assert len(occ) == 1
     assert (occ[0].x, occ[0].y) == (1, 0), "occupancy uses world surface grid index, not meters"
 
-    layout = assembler.assemble(world, town)
+    layout = assembler.assemble(world, town, catalog=_debug_catalog())
     assert layout.connection_nodes, "town should have city connection nodes"
     assert min(n.x for n in layout.connection_nodes) >= 3000
     assert min(n.y for n in layout.connection_nodes) >= 0
@@ -635,13 +681,15 @@ def test_coordinate_spaces_anchor_3000() -> None:
         display_name="Eastgrid",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=3000,
         map_y=0,
         map_z=0,
     )
-    city.settlement_density = "medium"
+    city.location_payload = {**(city.location_payload or {}), 'settlement_density': "medium"}
     assert settlement_grid_rect(world, city).as_tuple() == (1, 0, 3, 2)
     assert settlement_fine_rect(world, city).as_tuple() == (3000, 0, 9000, 6000, 0)
 
@@ -703,7 +751,9 @@ def test_terrain_decoupled_from_settlements() -> None:
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
         parent_location_uid=region.location_uid,
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         map_x=3000,
         map_y=0,
         map_z=0,
@@ -728,7 +778,9 @@ def test_terrain_decoupled_from_settlements() -> None:
             system_location_type="city",
             created_at="2026-01-01T00:00:00",
             parent_location_uid=region.location_uid,
-            system_city_size="city",
+            location_payload={
+                'system_city_size': "city",
+            },
             map_x=9000,
             map_y=0,
             map_z=0,
@@ -1116,9 +1168,9 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
         run_heightmap_pass,
     )
 
-    cell_m     = map_cell_fine_span(world)
+    tile_macro     = map_cell_fine_span(world)
     bbox       = grid_bbox_from_locations(world, [region])
-    pole_field = resolve_pole_field(world, [region], cell_m, bbox)
+    pole_field = resolve_pole_field(world, [region], tile_macro, bbox)
     heightmap  = run_heightmap_pass(world, [region], pole_field, 2)
     field      = run_anchor_collect_pass(world, [region], heightmap, pole_field)
 
@@ -1134,7 +1186,7 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
             climate_pole_mode="manual",
         ),
         [region],
-        cell_m,
+        tile_macro,
         bbox,
     )
     field_legacy = run_anchor_collect_pass(world, [region], heightmap, pole_empty)
@@ -1380,7 +1432,7 @@ def test_climate_logging_warnings() -> None:
 
 
 def test_phase_4_collect_map_cells() -> None:
-    """Split persist: surface grid occupancy vs meter geometry (Option A)."""
+    """Split persist: surface grid occupancy vs fine geometry (Option A)."""
     from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
         collect_geometry_fine_cells,
         collect_map_cells_from_layout,
@@ -1410,17 +1462,19 @@ def test_phase_4_collect_map_cells() -> None:
         display_name="Splithold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=3000,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
-    layout = SettlementAssembler().assemble(world, settlement)
+    layout = SettlementAssembler().assemble(world, settlement, catalog=_debug_catalog())
     grid_cells = collect_surface_grid_cells(layout)
-    meter_cells = collect_geometry_fine_cells(layout)
+    fine_cells = collect_geometry_fine_cells(layout)
     merged = collect_map_cells_from_layout(world, settlement, layout)
 
     assert grid_cells == layout.occupancy_cells
@@ -1428,15 +1482,15 @@ def test_phase_4_collect_map_cells() -> None:
     assert (grid_cells[0].x, grid_cells[0].y) == (1, 0)
     assert not any(c.system_building_element for c in grid_cells)
 
-    assert not any(c.system_building_element for c in meter_cells)
+    assert not any(c.system_building_element for c in fine_cells)
     ox, oy, x1, y1, _ = footprint_fine_rect(world, settlement)
-    for c in meter_cells:
+    for c in fine_cells:
         assert cell_in_footprint_fine(c.x, c.y, ox, oy, x1, y1), (
-            f"meter cell ({c.x},{c.y}) outside meter footprint"
+            f"fine cell ({c.x},{c.y}) outside fine footprint"
         )
 
-    assert merged == grid_cells + meter_cells
-    assert {id(c) for c in grid_cells}.isdisjoint({id(c) for c in meter_cells})
+    assert merged == grid_cells + fine_cells
+    assert {id(c) for c in grid_cells}.isdisjoint({id(c) for c in fine_cells})
 
     svc = SettlementGeneratorService()
     assert needs_settlement_geometry(settlement, world, grid_cells) is True
@@ -1461,13 +1515,15 @@ def main() -> None:
         display_name="Ironhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     _run_case("town 1x1", world, settlement)
     test_phase_c_placement()

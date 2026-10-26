@@ -1,10 +1,4 @@
 {
-  "_fixture_meta": {
-    "description": "Copy of world_test_gen (002) without locations/cities — L0 terrain via world_bounds. No settlement footprint / detailed city scope.",
-    "world_uid": "world-test-003",
-    "based_on": "fixtures/world_test_gen.json",
-    "expected_bake": "full_bake over world_bounds; light may be empty/fail-closed without location tiles (MLB-11)"
-  },
   "world": {
     "world_uid": "world-test-003",
     "name": "Эйдора (генерация, terrain-only 003)",
@@ -46,59 +40,35 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "location_type_registry": {
-      "continent": {
-        "display_name": "Континент"
+    "location_type_registry": [
+      {
+        "system_type": "continent",
+        "display_type": "Континент",
+        "parent_types": [
+          null
+        ]
       },
-      "region": {
-        "display_name": "Регион"
+      {
+        "system_type": "region",
+        "display_type": "Регион",
+        "parent_types": [
+          null,
+          "continent"
+        ]
       },
-      "kingdom": {
-        "display_name": "Королевство"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "empire": {
-        "display_name": "Империя"
+      {
+        "system_type": "building",
+        "display_type": "Здание"
       },
-      "duchy": {
-        "display_name": "Герцогство"
-      },
-      "city": {
-        "display_name": "Город"
-      },
-      "town": {
-        "display_name": "Посёлок"
-      },
-      "village": {
-        "display_name": "Деревня"
-      },
-      "district": {
-        "display_name": "Район"
-      },
-      "square": {
-        "display_name": "Площадь"
-      },
-      "street": {
-        "display_name": "Улица"
-      },
-      "building": {
-        "display_name": "Здание"
-      },
-      "gate": {
-        "display_name": "Ворота"
-      },
-      "room": {
-        "display_name": "Комната"
-      },
-      "dungeon": {
-        "display_name": "Подземелье"
-      },
-      "cave": {
-        "display_name": "Пещера"
-      },
-      "camp": {
-        "display_name": "Лагерь"
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       }
-    },
+    ],
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {
@@ -317,34 +287,16 @@
     ],
     "city_size_registry": [
       {
-        "system_size": "hamlet",
-        "display_size": "Хутор",
-        "radius": 0
+        "system_size": "small",
+        "display_size": "Малый"
       },
       {
-        "system_size": "village",
-        "display_size": "Деревня",
-        "radius": 0
+        "system_size": "medium",
+        "display_size": "Средний"
       },
       {
-        "system_size": "town",
-        "display_size": "Городок",
-        "radius": 1
-      },
-      {
-        "system_size": "city",
-        "display_size": "Город",
-        "radius": 1
-      },
-      {
-        "system_size": "metropolis",
-        "display_size": "Метрополис",
-        "radius": 2
-      },
-      {
-        "system_size": "megalopolis",
-        "display_size": "Мегалополис",
-        "radius": 3
+        "system_size": "large",
+        "display_size": "Большой"
       }
     ],
     "world_bounds": {
@@ -353,171 +305,392 @@
       "y_min": -2,
       "y_max": 2
     },
-    "relief_template_registry": [
-      {
-        "system_template_uid": "21fb5cb8-eb9a-5f5d-a75b-e632135fc0b5",
-        "context": "open_land",
-        "display_template_name": "Open land soft grade"
-      },
-      {
-        "system_template_uid": "f80e22de-09b1-5f0b-b773-5bd58cab6f10",
-        "context": "shore",
-        "display_template_name": "Shore soft grade"
-      },
-      {
-        "system_template_uid": "1296ee22-f830-5a85-9a55-1f1b46afd3a3",
-        "context": "road_shoulder",
-        "display_template_name": "Road shoulder soft grade"
-      },
-      {
-        "system_template_uid": "67fdb229-267e-5996-bfb9-0ef15f18061c",
-        "context": "ravine",
-        "display_template_name": "Ravine soft grade"
-      }
-    ],
     "relief_pick_policy": {
       "open_land": {
         "mode": "fixed",
-        "default_template_uid": "21fb5cb8-eb9a-5f5d-a75b-e632135fc0b5"
+        "default_template_uid": "46de8675-526c-50c1-9def-2d892eec5d66"
       },
       "shore": {
         "mode": "fixed",
-        "default_template_uid": "f80e22de-09b1-5f0b-b773-5bd58cab6f10"
+        "default_template_uid": "09dfb395-e69e-5d1e-adbe-4469f2d7ad9f"
       },
       "road_shoulder": {
         "mode": "fixed",
-        "default_template_uid": "1296ee22-f830-5a85-9a55-1f1b46afd3a3"
+        "default_template_uid": "684f44c4-56b9-55a3-a813-c554044ad4e1"
       },
       "ravine": {
         "mode": "fixed",
-        "default_template_uid": "67fdb229-267e-5996-bfb9-0ef15f18061c"
+        "default_template_uid": "b9bb0748-a494-59ea-83a9-e8147c8830e1"
       }
-    }
+    },
+    "library_pins": [
+      {
+        "library_kind": "relief_templates",
+        "template_uid": "46de8675-526c-50c1-9def-2d892eec5d66"
+      },
+      {
+        "library_kind": "relief_templates",
+        "template_uid": "09dfb395-e69e-5d1e-adbe-4469f2d7ad9f"
+      },
+      {
+        "library_kind": "relief_templates",
+        "template_uid": "684f44c4-56b9-55a3-a813-c554044ad4e1"
+      },
+      {
+        "library_kind": "relief_templates",
+        "template_uid": "b9bb0748-a494-59ea-83a9-e8147c8830e1"
+      }
+    ]
   },
-  "relief_templates": [
+  "library_packs": [
     {
-      "system_name": "open_land_soft",
-      "display_name": "Open land soft grade",
-      "context": "open_land",
-      "pack_name": "smoke_003",
-      "slope_length_cells": 2,
-      "conditions": [
-        {
-          "terrain": "plains",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.85, "sheer_weight": 0.15, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+      "manifest": {
+        "pack_uid": "705b5610-fbaa-5754-9811-7a5e474e4af0",
+        "system_name": "world.world-test-003.smoke_003",
+        "pack_name": "smoke_003",
+        "display_name": "Smoke 003 relief templates",
+        "version": "1.0",
+        "dependencies": [],
+        "members": [
+          {
+            "library_kind": "relief_templates",
+            "local_uid": "open_land_soft",
+            "template_uid": "46de8675-526c-50c1-9def-2d892eec5d66",
+            "source_file": "bundle"
+          },
+          {
+            "library_kind": "relief_templates",
+            "local_uid": "shore_soft",
+            "template_uid": "09dfb395-e69e-5d1e-adbe-4469f2d7ad9f",
+            "source_file": "bundle"
+          },
+          {
+            "library_kind": "relief_templates",
+            "local_uid": "road_shoulder_soft",
+            "template_uid": "684f44c4-56b9-55a3-a813-c554044ad4e1",
+            "source_file": "bundle"
+          },
+          {
+            "library_kind": "relief_templates",
+            "local_uid": "ravine_soft",
+            "template_uid": "b9bb0748-a494-59ea-83a9-e8147c8830e1",
+            "source_file": "bundle"
+          }
+        ]
+      },
+      "bodies": {
+        "46de8675-526c-50c1-9def-2d892eec5d66": {
+          "system_name": "open_land_soft",
+          "display_name": "Open land soft grade",
+          "context": "open_land",
+          "pack_name": "smoke_003",
+          "slope_length_cells": 2,
+          "conditions": [
+            {
+              "terrain": "plains",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.85,
+                  "sheer_weight": 0.15,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "forest",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.7,
+                  "sheer_weight": 0.3,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            }
           ]
         },
-        {
-          "terrain": "forest",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+        "09dfb395-e69e-5d1e-adbe-4469f2d7ad9f": {
+          "system_name": "shore_soft",
+          "display_name": "Shore soft grade",
+          "context": "shore",
+          "pack_name": "smoke_003",
+          "slope_length_cells": 2,
+          "conditions": [
+            {
+              "terrain": "plains",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.8,
+                  "sheer_weight": 0.2,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "forest",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.75,
+                  "sheer_weight": 0.25,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "shore_river",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.7,
+                  "sheer_weight": 0.3,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "shore_mountain_river",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.5,
+                  "sheer_weight": 0.5,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "shore_lake",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.8,
+                  "sheer_weight": 0.2,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "shore_sea",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.7,
+                  "sheer_weight": 0.3,
+                  "slope_length_cells": 5
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 5
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        "684f44c4-56b9-55a3-a813-c554044ad4e1": {
+          "system_name": "road_shoulder_soft",
+          "display_name": "Road shoulder soft grade",
+          "context": "road_shoulder",
+          "pack_name": "smoke_003",
+          "slope_length_cells": 2,
+          "conditions": [
+            {
+              "terrain": "plains",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.8,
+                  "sheer_weight": 0.2,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            },
+            {
+              "terrain": "forest",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.7,
+                  "sheer_weight": 0.3,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            }
+          ]
+        },
+        "b9bb0748-a494-59ea-83a9-e8147c8830e1": {
+          "system_name": "ravine_soft",
+          "display_name": "Ravine soft grade",
+          "context": "ravine",
+          "pack_name": "smoke_003",
+          "slope_length_cells": 2,
+          "conditions": [
+            {
+              "terrain": "ravine",
+              "cases": [
+                {
+                  "policy": "slope_down",
+                  "delta_z": 1,
+                  "slope_weight": 0.6,
+                  "sheer_weight": 0.4,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_up",
+                  "delta_z": 1,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0,
+                  "slope_length_cells": 2
+                },
+                {
+                  "policy": "slope_none",
+                  "delta_z": 0,
+                  "slope_weight": 1.0,
+                  "sheer_weight": 0.0
+                }
+              ]
+            }
           ]
         }
-      ]
-    },
-    {
-      "system_name": "shore_soft",
-      "display_name": "Shore soft grade",
-      "context": "shore",
-      "pack_name": "smoke_003",
-      "slope_length_cells": 2,
-      "conditions": [
-        {
-          "terrain": "plains",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.8, "sheer_weight": 0.2, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        },
-        {
-          "terrain": "forest",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.75, "sheer_weight": 0.25, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        },
-        {
-          "terrain": "shore_river",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        },
-        {
-          "terrain": "shore_mountain_river",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.5, "sheer_weight": 0.5, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        },
-        {
-          "terrain": "shore_lake",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.8, "sheer_weight": 0.2, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        },
-        {
-          "terrain": "shore_sea",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 5},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 5},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        }
-      ]
-    },
-    {
-      "system_name": "road_shoulder_soft",
-      "display_name": "Road shoulder soft grade",
-      "context": "road_shoulder",
-      "pack_name": "smoke_003",
-      "slope_length_cells": 2,
-      "conditions": [
-        {
-          "terrain": "plains",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.8, "sheer_weight": 0.2, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        },
-        {
-          "terrain": "forest",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        }
-      ]
-    },
-    {
-      "system_name": "ravine_soft",
-      "display_name": "Ravine soft grade",
-      "context": "ravine",
-      "pack_name": "smoke_003",
-      "slope_length_cells": 2,
-      "conditions": [
-        {
-          "terrain": "ravine",
-          "cases": [
-            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.6, "sheer_weight": 0.4, "slope_length_cells": 2},
-            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
-            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
-          ]
-        }
-      ]
+      }
     }
   ],
   "states": [
@@ -538,54 +711,52 @@
       "created_at": "2026-05-23T00:00:00"
     }
   ],
-  "races": [
+  "race_templates": [
     {
-      "race_uid": "race-human-002",
-      "world_uid": "world-test-003",
-      "display_race": "Человек",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "adaptive": true,
         "lifespan_years": 80
-      }
+      },
+      "template_uid": "race-human-002",
+      "display_name": "Человек",
+      "system_name": "race-human-002"
     },
     {
-      "race_uid": "race-elf-002",
-      "world_uid": "world-test-003",
-      "display_race": "Эльф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "night_vision": true,
         "lifespan_years": 500
-      }
+      },
+      "template_uid": "race-elf-002",
+      "display_name": "Эльф",
+      "system_name": "race-elf-002"
     },
     {
-      "race_uid": "race-dwarf-002",
-      "world_uid": "world-test-003",
-      "display_race": "Дворф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "stone_sense": true,
         "lifespan_years": 200
-      }
+      },
+      "template_uid": "race-dwarf-002",
+      "display_name": "Дворф",
+      "system_name": "race-dwarf-002"
     }
   ],
-  "perks": [
+  "perk_templates": [
     {
-      "perk_uid": "perk-iron-will-002",
-      "world_uid": "world-test-003",
       "system_name": "iron_will",
       "display_name": "Железная воля",
       "system_description": "Resistance to fear and mind effects",
-      "display_description": "Устойчивость к страху и ментальным эффектам"
+      "display_description": "Устойчивость к страху и ментальным эффектам",
+      "template_uid": "perk-iron-will-002"
     },
     {
-      "perk_uid": "perk-tracker-002",
-      "world_uid": "world-test-003",
       "system_name": "tracker",
       "display_name": "Следопыт",
       "system_description": "Enhanced tracking and navigation in wilderness",
-      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности",
+      "template_uid": "perk-tracker-002"
     }
   ],
   "locations": []

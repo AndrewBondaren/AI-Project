@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 
 
 class ParentLightCache:

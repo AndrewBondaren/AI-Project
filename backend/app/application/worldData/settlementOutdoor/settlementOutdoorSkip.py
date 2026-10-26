@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from app.application.jsonValidation.worldRow import location_types
 
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.settlementMapOccupancy import settlement_map_occupants
+from app.application.worldData.locations.settlementMapOccupancy import settlement_map_occupants
 from app.application.worldData.settlementOutdoor.settlementOutdoorTopology import (
     has_authored_non_district_children,
     resolve_district_uid,
@@ -13,15 +14,17 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTopology impor
 from app.dataModel.locations.locationFootprintPolicy import (
     named_location_is_settlement_map_site,
 )
-from app.dataModel.worldPack.worldPackManifest import SettlementStructureEntry
+from app.dataModel.worldPack.meta.worldPackManifest import SettlementStructureEntry
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 
 
-def is_settlement_outdoor_target(location: NamedLocation) -> bool:
-    """C6: settlement-like footprint, not district/building descendants."""
-    return named_location_is_settlement_map_site(location)
+def is_settlement_outdoor_target(location: NamedLocation, *, world: World | None = None) -> bool:
+    """C6: the location's registry contract selects the settlement pipeline."""
+    return named_location_is_settlement_map_site(
+        location, registry=location_types(world) if world is not None else None,
+    )
 
 
 def packing_queue(
@@ -41,16 +44,16 @@ def topology_targets(
     }
     return [
         loc for loc in locations
-        if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
+        if is_settlement_outdoor_target(loc, world=world) and loc.location_uid in occupant_uids
     ]
 
 
 def packing_targets(
-    locations: list[NamedLocation], index_uids: frozenset[str],
+    locations: list[NamedLocation], index_uids: frozenset[str], *, world: World | None = None,
 ) -> list[NamedLocation]:
     return [
         loc for loc in locations
-        if is_settlement_outdoor_target(loc) and loc.location_uid in index_uids
+        if is_settlement_outdoor_target(loc, world=world) and loc.location_uid in index_uids
     ]
 
 

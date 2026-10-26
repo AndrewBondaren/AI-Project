@@ -15,6 +15,8 @@ from app.application.worldData.generators.coordinates import (
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.climate.climateZone.worldClimateZoneRegistry import WorldClimateZoneRegistry
 
 
 def collect_manual_anchors(
@@ -27,10 +29,12 @@ def collect_manual_anchors(
             continue
         if not loc.system_climate_zone:
             continue
+        if loc.map_x is None or loc.map_y is None:
+            raise ValueError("static climate anchor requires coordinates")
         points.append(ClimateAnchorPoint(
             gx=fine_to_grid_x(loc.map_x, cell_m),
             gy=fine_to_grid_y(loc.map_y, cell_m),
-            system_climate_zone=loc.system_climate_zone,
+            system_climate_zone=RegistryKey[WorldClimateZoneRegistry](loc.system_climate_zone),
             location_uid=loc.location_uid,
             source=AnchorSource.MANUAL,
         ))
@@ -48,10 +52,12 @@ def collect_admin_anchors(
         climate = loc.system_climate_zone
         if not climate:
             continue
+        if loc.map_x is None or loc.map_y is None:
+            raise ValueError("static admin anchor requires coordinates")
         points.append(ClimateAnchorPoint(
             gx=fine_to_grid_x(loc.map_x, cell_m),
             gy=fine_to_grid_y(loc.map_y, cell_m),
-            system_climate_zone=climate,
+            system_climate_zone=RegistryKey[WorldClimateZoneRegistry](climate),
             location_uid=loc.location_uid,
             source=AnchorSource.ADMIN,
         ))
@@ -84,13 +90,7 @@ def build_merged_field(
     Pass 2+ climate: manual first, then auto outside manual exclusion.
     Admin fallback only when no local modifiers and include_admin_fallback (legacy v1).
     """
-    merged: list[ClimateAnchorPoint] = list(manual)
-    exclusion_sq = MANUAL_EXCLUSION_GRID ** 2
-
-    for candidate in auto:
-        if any(dist_sq(candidate.gx, candidate.gy, m.gx, m.gy) <= exclusion_sq for m in manual):
-            continue
-        merged.append(candidate)
+    merged = merge_local_anchors(tuple(manual), tuple(auto), MANUAL_EXCLUSION_GRID)
 
     if merged:
         return ClimateAnchorField(tuple(merged))
@@ -108,3 +108,11 @@ def build_merged_field(
 
     admin = collect_admin_anchors(locations, cell_m)
     return ClimateAnchorField(tuple(admin))
+
+
+def merge_local_anchors(manual: tuple[ClimateAnchorPoint, ...], auto: tuple[ClimateAnchorPoint, ...],
+                        exclusion_grid: int) -> tuple[ClimateAnchorPoint, ...]:
+    """Manual order first; retain automatic centers outside the inclusive radius."""
+    exclusion_sq = exclusion_grid ** 2
+    return manual + tuple(candidate for candidate in auto if not any(
+        dist_sq(candidate.gx, candidate.gy, point.gx, point.gy) <= exclusion_sq for point in manual))

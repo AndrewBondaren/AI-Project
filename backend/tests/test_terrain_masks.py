@@ -1,31 +1,32 @@
-"""Surface mask domains — forest/plains resolve + WorldTerrainMasks (SM-*)."""
+"""Surface mask domains РІР‚вЂќ forest/plains resolve + WorldTerrainMasks (SM-*)."""
 
 from __future__ import annotations
 
 import json
 import unittest
 
-from app.application.worldData.masks.resolveForestPlains import resolve_forest_plains
-from app.application.worldData.masks.terrainMerge import may_paint_terrain
+from app.application.worldData.generators.terrain.terrainZ import surface_biome_terrain
+from app.application.worldData.masks.terrainMerge import may_paint_terrain, terrain_merge_rank
 from app.application.worldData.pack.bake.lightGrid.maskDomainRegistry import (
     build_default_contributors,
 )
 from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.masks.enums.maskDomainId import (
     COMPOSE_CONTRIBUTOR_ORDER,
-    TERRAIN_MERGE_RANK_HIGH_TO_LOW,
     MaskDomainId,
 )
 from app.dataModel.terrainMasks import WorldTerrainMasks
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrainMasks.hillShape import HillShape
 
 
 class TestTerrainMasks(unittest.TestCase):
     def setUp(self) -> None:
         self.masks = WorldTerrainMasks.canonical_defaults()
+        self.registry = WorldTerrainRegistry.canonical_defaults()
         self.terrain = {
-            self.masks.default_plains.system_terrain,
-            self.masks.default_forests.system_terrain,
+            self.masks.default_landcover.fallback_terrain,
+            self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()).system_terrain,
             self.masks.default_mountains.system_terrain,
         }
 
@@ -35,37 +36,31 @@ class TestTerrainMasks(unittest.TestCase):
 
     def test_temperate_wet_is_forest_not_mountain(self) -> None:
         temperate = ClimateZone.TEMPERATE.to_profile()
-        key = resolve_forest_plains(
-            base_rainfall=temperate.base_rainfall,
-            base_temperature=temperate.base_temperature,
+        key = surface_biome_terrain(
+            system_climate_zone=temperate.system_climate,
             terrain_set=self.terrain,
-            forests=self.masks.default_forests,
-            plains=self.masks.default_plains,
+            masks=self.masks,
         )
-        self.assertEqual(key, self.masks.default_forests.system_terrain)
+        self.assertEqual(key, self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()).system_terrain)
 
     def test_arid_is_plains(self) -> None:
         arid = ClimateZone.ARID.to_profile()
-        key = resolve_forest_plains(
-            base_rainfall=arid.base_rainfall,
-            base_temperature=arid.base_temperature,
+        key = surface_biome_terrain(
+            system_climate_zone=arid.system_climate,
             terrain_set=self.terrain,
-            forests=self.masks.default_forests,
-            plains=self.masks.default_plains,
+            masks=self.masks,
         )
-        self.assertEqual(key, self.masks.default_plains.system_terrain)
+        self.assertEqual(key, self.masks.default_landcover.fallback_terrain)
 
     def test_cold_is_plains_not_tundra_terrain(self) -> None:
         """Cold biome stays on climate_zone_id; landcover paints plains (or forest if wet)."""
         tundra = ClimateZone.TUNDRA.to_profile()
-        key = resolve_forest_plains(
-            base_rainfall=tundra.base_rainfall,
-            base_temperature=tundra.base_temperature,
+        key = surface_biome_terrain(
+            system_climate_zone=tundra.system_climate,
             terrain_set=self.terrain,
-            forests=self.masks.default_forests,
-            plains=self.masks.default_plains,
+            masks=self.masks,
         )
-        self.assertEqual(key, self.masks.default_plains.system_terrain)
+        self.assertEqual(key, self.masks.default_landcover.fallback_terrain)
         self.assertNotEqual(key, "tundra")
 
     def test_merge_road_beats_mountain(self) -> None:
@@ -73,29 +68,24 @@ class TestTerrainMasks(unittest.TestCase):
             may_paint_terrain(
                 self.masks.default_mountains.system_terrain,
                 self.masks.default_roads.system_terrain,
-                self.masks,
+                self.registry,
             )
         )
         self.assertFalse(
             may_paint_terrain(
                 self.masks.default_roads.system_terrain,
                 self.masks.default_mountains.system_terrain,
-                self.masks,
+                self.registry,
             )
         )
 
-    def test_merge_rank_follows_mask_domain_id(self) -> None:
-        order = self.masks.merge_rank_order()
-        expected = tuple(
-            self.masks.system_terrain_for_domain(d)
-            for d in TERRAIN_MERGE_RANK_HIGH_TO_LOW
+    def test_merge_rank_preserves_builtin_order(self) -> None:
+        policies = (
+            self.masks.default_roads, self.masks.default_ravines, self.masks.default_mountains,
+            self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()), self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.plains_terrain_key()),
         )
-        self.assertEqual(order, expected)
-        self.assertEqual(
-            self.masks.system_terrain_for_domain(MaskDomainId.MOUNTAINS),
-            self.masks.default_mountains.system_terrain,
-        )
-        self.assertIsNone(self.masks.system_terrain_for_domain(MaskDomainId.HYDROLOGY))
+        ranks = [terrain_merge_rank(policy.system_terrain, self.registry) for policy in policies]
+        self.assertEqual(ranks, list(range(len(policies), 0, -1)))
 
     def test_default_pipeline_from_compose_order_sot(self) -> None:
         contributors = build_default_contributors()
@@ -106,8 +96,8 @@ class TestTerrainMasks(unittest.TestCase):
 
     def test_consumer_owns_hills_not_mask_domain(self) -> None:
         self.assertFalse(hasattr(MaskDomainId, "HILLS"))
-        plains = self.masks.default_plains.hills
-        forest = self.masks.default_forests.hills
+        plains = self.masks.default_landcover.hills_for(WorldTerrainRegistry.plains_terrain_key())
+        forest = self.masks.default_landcover.hills_for(WorldTerrainRegistry.forest_terrain_key())
         self.assertEqual(
             (plains.min_spacing, plains.radius, plains.height, plains.shapes),
             (500, 40, 2, ()),
@@ -123,11 +113,11 @@ class TestTerrainMasks(unittest.TestCase):
 
         path = Path(__file__).resolve().parents[2] / "fixtures" / "world_template.json"
         raw = json.loads(path.read_text(encoding="utf-8"))
-        hills = raw["world"]["terrain_masks"]
-        plains = self.masks.default_plains.hills
-        forest = self.masks.default_forests.hills
-        self.assertEqual(hills["default_plains"]["hills"], plains.model_dump(mode="json"))
-        self.assertEqual(hills["default_forests"]["hills"], forest.model_dump(mode="json"))
+        policies = raw["world"]["terrain_masks"]["default_landcover"]["terrain_policies"]
+        plains = self.masks.default_landcover.hills_for(WorldTerrainRegistry.plains_terrain_key())
+        forest = self.masks.default_landcover.hills_for(WorldTerrainRegistry.forest_terrain_key())
+        self.assertEqual(policies["plains"]["hills"], plains.model_dump(mode="json"))
+        self.assertEqual(policies["forest"]["hills"], forest.model_dump(mode="json"))
 
 
 

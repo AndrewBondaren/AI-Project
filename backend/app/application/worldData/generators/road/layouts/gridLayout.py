@@ -4,9 +4,9 @@ Grid street layout — lattice step from DistrictDensity, omit edges through pas
 from __future__ import annotations
 
 import random
-import uuid
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.application.worldData.persist.connectionUids import connection_node_uid
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
 )
@@ -25,8 +25,8 @@ from app.application.worldData.generators.road.connectionPolicy import Connectio
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing, is_latitudinal_edge, is_meridional_edge
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -34,7 +34,7 @@ from app.db.models.connectionNode import ConnectionNode
 
 def generate_grid(
     slot:     DistrictSlot,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world_uid: str,
     fill:     ConnectionPaint,
     spine:    ConnectionPaint,
@@ -79,7 +79,11 @@ def generate_grid(
             y = ys[row]
             z = node_z(x, y)
             node_grid[key] = ConnectionNode(
-                node_uid=f"n_{x}_{y}_{z}_{uuid.uuid4().hex[:6]}",
+                node_uid=connection_node_uid(
+                    world_uid, level=GraphLevel.DISTRICT,
+                    node_type=ConnectionNodeType.INTERSECTION,
+                    x=x, y=y, z=z,
+                ),
                 x=x, y=y, z=z,
                 node_type=ConnectionNodeType.INTERSECTION.value,
                 graph_level=GraphLevel.DISTRICT.value,

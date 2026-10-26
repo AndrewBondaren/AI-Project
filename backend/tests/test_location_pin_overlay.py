@@ -5,14 +5,14 @@ from __future__ import annotations
 import unittest
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.lightMapCells import wire_symbol
-from app.application.worldData.render.locationPinOverlay import (
+from app.application.worldData.render.light.lightMapCells import wire_symbol
+from app.application.worldData.render.pack.locationPinOverlay import (
     l0_settlement_glyph,
     overlay_location_pins,
 )
-from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.application.worldData.render.pack.worldMapPackRenderer import WorldMapPackRenderer
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -31,7 +31,9 @@ def _loc(
         system_location_type=loc_type,
         created_at="2026-01-01T00:00:00Z",
         system_location_subtype=subtype,
-        system_city_size=size,
+        location_payload={
+            'system_city_size': size,
+        },
     )
 
 
@@ -99,7 +101,7 @@ class TestLocationPinOverlay(unittest.TestCase):
         )
         pins = overlay_location_pins(pack_pins, [_loc("v1")])
         light = WorldMapPackRenderer(
-            [tile], tile_size_m=3000, pins=pins,
+            [tile], tile_macro=3000, pins=pins,
         ).render_tile_light_grid(0, 0, mark_location=True)
         self.assertIn("n", light)
         self.assertNotIn("@", light)

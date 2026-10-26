@@ -1,7 +1,9 @@
 """
-SCH-WORLD-LOC-TYPE — `worlds.location_type_registry` (N1-W-07).
+Домен «локации» — корень: идентичность NL, типы, каскадный контекст,
+поддомены `settlement/` и `structure/` (см. docs/tz_locations.md §Package layout).
 
-Эталон: fixtures/world_template.json (legacy map), docs/tz_locations.md (target array).
+SCH-WORLD-LOC-TYPE — `worlds.location_type_registry` (N1-W-07).
+Эталон: fixtures/world_template.json, docs/tz_locations.md.
 """
 
 from app.dataModel.locations.locationFootprintPolicy import (
@@ -15,12 +17,11 @@ from app.dataModel.locations.locationType import (
     LocationTypeSubtypeEntry,
     WorldLocationTypeRegistry,
 )
-from app.dataModel.locations.enums import EntryRole, GeographicSubtype, GEOGRAPHIC_LOCATION_TYPE
+from app.dataModel.locations.enums import GeographicSubtype, GEOGRAPHIC_LOCATION_TYPE
 from app.dataModel.locations.namedLocation import BundleNamedLocation
 
 __all__ = [
     "BundleNamedLocation",
-    "EntryRole",
     "GEOGRAPHIC_LOCATION_TYPE",
     "GeographicSubtype",
     "LocationTypeEntry",

@@ -8,8 +8,8 @@ from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompo
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.bake.lightGrid.worldSeam import apply_world_seam
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.worldBounds import WorldBounds
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.topology.worldBounds import WorldBounds
 
 
 class TestLightGridRim(unittest.TestCase):

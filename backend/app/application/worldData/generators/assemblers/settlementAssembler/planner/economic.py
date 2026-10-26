@@ -1,6 +1,6 @@
 """Economic tier compatibility for district / building template selection."""
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
@@ -8,14 +8,14 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_rank,
     tiers_within_rank_delta,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.world import World
 
 
 def check_district_economic_compat(
     template: DistrictTemplateEntry,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world:    World,
 ) -> bool:
     """Шаблон района совместим с economic_tier города."""
@@ -37,13 +37,13 @@ def check_district_economic_compat(
 
 def building_tier_compatible(
     building_template: PlotLayoutTemplate,
-    city_skeleton:     CitySkeleton,
+    city_skeleton:     SettlementSkeleton,
     world:             World,
     delta:             int = 1,
 ) -> bool:
     """
     building_template.economic_tier_range пересекается с city ± delta тир.
-    v1 фильтр для plan_area_placements / buildingCache.collect_building_template_names.
+    v1 фильтр для plan_area_placements / buildingCache.collect_building_template_uids.
     """
     city_tier = city_skeleton.economic_tier
     if not city_tier:

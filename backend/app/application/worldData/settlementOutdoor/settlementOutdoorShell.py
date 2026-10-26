@@ -6,11 +6,11 @@ Persist (C8): all ``StructureLayout.cells`` / yard / barrier as-is.
 
 from __future__ import annotations
 
-from app.dataModel.structure.enums.buildingElement import (
+from app.dataModel.locations.structure.enums.buildingElement import (
     OUTDOOR_SHELL_ELEMENTS,
     StructureElement,
 )
-from app.dataModel.worldPack.settlementStructureWire import ShellCellWire
+from app.dataModel.worldPack.wire.settlementStructureWire import ShellCellWire
 from app.db.models.mapCell import MapCell
 
 

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
+
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     footprint_side_fine,
     settlement_fine_rect,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
 from app.dataModel.locations.locationFootprintPolicy import named_location_uses_settlement_fine_footprint
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.application.jsonValidation.worldRow import location_types
 
 
 def _inclusive_xy_bounds(x0: int, y0: int, x1_exclusive: int, y1_exclusive: int) -> tuple[int, int, int, int]:
@@ -22,7 +25,7 @@ def _settlement_territory_volume(world: World, location: NamedLocation) -> Terri
     if location.map_x is None or location.map_y is None:
         return None
     policy = TerritoryVolumePolicy.canonical_defaults()
-    rect = settlement_fine_rect(world, location)
+    rect = settlement_fine_rect(world, location, settlement_payload(location).system_city_size)
     x0, y0, x1, y1 = _inclusive_xy_bounds(int(rect.x0), int(rect.y0), int(rect.x1), int(rect.y1))
     ground_z = int(rect.z)
     depth = n_base(world)
@@ -59,7 +62,7 @@ def _pin_territory_volume(
 
 def territory_volume_for_location(world: World, location: NamedLocation) -> TerritoryVolume | None:
     """Settlement footprint from assembler; pin locations use POJO policy box."""
-    if named_location_uses_settlement_fine_footprint(location):
+    if named_location_uses_settlement_fine_footprint(location, registry=location_types(world)):
         return _settlement_territory_volume(world, location)
     return _pin_territory_volume(world, location, policy=TerritoryVolumePolicy.canonical_defaults())
 
@@ -68,7 +71,7 @@ def territory_volumes_by_location(
     world: World,
     locations: list[NamedLocation],
 ) -> list[tuple[str, TerritoryVolume]]:
-    from app.application.worldData.settlementMapOccupancy import occupancy_locations
+    from app.application.worldData.locations.settlementMapOccupancy import occupancy_locations
 
     out: list[tuple[str, TerritoryVolume]] = []
     for location in occupancy_locations(world, locations):
@@ -80,7 +83,7 @@ def territory_volumes_by_location(
 
 def settlement_footprint_side_fine(world: World, location: NamedLocation) -> int | None:
     """Expose footprint side for tests/debug without duplicating POJO math."""
-    if not named_location_uses_settlement_fine_footprint(location):
+    if not named_location_uses_settlement_fine_footprint(location, registry=location_types(world)):
         return None
-    size = location.system_city_size
+    size = settlement_payload(location).system_city_size
     return footprint_side_fine(world, size)

@@ -17,7 +17,7 @@ from app.application.worldData.generators.structure.passages.doorValidator impor
     _THROUGH,
     validate_door_cell,
 )
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 
 logger = logging.getLogger(__name__)
 

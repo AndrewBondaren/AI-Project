@@ -3,7 +3,7 @@
 import unittest
 
 from app.application.worldData.pack.read.mapCellToFineTerrainWire import cells_to_fine_terrain_chunk
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
 from app.db.models.mapCell import MapCell
 
 

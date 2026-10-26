@@ -4,7 +4,7 @@ Base staircase validator — ABC + universal checks.
 import logging
 from abc import ABC, abstractmethod
 
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 
 logger = logging.getLogger(__name__)
 

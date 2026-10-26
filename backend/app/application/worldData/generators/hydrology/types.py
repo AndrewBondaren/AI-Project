@@ -3,60 +3,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
+from app.dataModel.hydrology.enums.planning.hydrologyScope import (
+    HydrologyScope as HydrologyScope, HYDROLOGY_BOOTSTRAP_SCOPES as HYDROLOGY_BOOTSTRAP_SCOPES,
+)
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.application.worldData.generators.climate.climatePoleField import GridBBox
+    from app.dataModel.spatial.grid.gridBBox import GridBBox
     from app.db.models.namedLocation import NamedLocation
 
 
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic
+from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
+from app.dataModel.hydrology.waterfallDrop import WaterfallDrop
+from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
 )
 
 
-class HydrologyScope(StrEnum):
-    COASTAL_SEA = "coastal_sea"
-    OPEN_OCEAN  = "open_ocean"
-    LAKES       = "lakes"
-    RIVERS      = "rivers"
-    LANDFORMS   = "landforms"
-
-
-HYDROLOGY_BOOTSTRAP_SCOPES = frozenset({
-    HydrologyScope.COASTAL_SEA,
-    HydrologyScope.OPEN_OCEAN,
-    HydrologyScope.LAKES,
-    HydrologyScope.RIVERS,
-})
-
-
-@dataclass(frozen=True)
-class HydrologyBands:
-    min: int
-    max: int
-
-
-@dataclass(frozen=True)
-class RiverTypeClassify:
-    mountain_min_source_z:        int
-    path_mountain_fraction:       float
-    rapid_drop_threshold_m:       int
-    mountain_bed_steepness_factor: float
-    foothill_gradient_threshold:  float
-
-
 @dataclass(frozen=True)
 class ResolvedConnectionNode:
     node_uid:     str
-    x_m:          int
-    y_m:          int
-    z_m:          int
+    x_fine:       int
+    y_fine:       int
+    z:            int
     gx:           int
     gy:           int
     node_type:    str
@@ -72,9 +49,15 @@ class LoadedConnectionGraph:
 
 @dataclass(frozen=True)
 class LakeSpec:
+    """Declared ring geometry for legacy L0 consumers until HY-10; no physics."""
     shoreline_segments: list[tuple[tuple[int, int], tuple[int, int]]]
     location_uid: str | None = None
-    open_water_role: HydrologyCellRole = HydrologyCellRole.LAKE
+
+
+@dataclass(frozen=True)
+class CoastlineSpec:
+    segments: list[tuple[tuple[int, int], tuple[int, int]]]
+    location_uid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -113,13 +96,18 @@ class HydrologyMasterInput:
     scopes:            frozenset[HydrologyScope]
     connection_graph:  LoadedConnectionGraph
     geographic_locations: list[NamedLocation] = field(default_factory=list)
-    declared_coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]] = field(
-        default_factory=list,
-    )
+    declared_coastline_specs: list[CoastlineSpec] = field(default_factory=list)
     declared_lake_specs: list[LakeSpec] = field(default_factory=list)
     declared_river_edges: list[DeclaredRiverEdge] = field(default_factory=list)
     declared_river_intents: list[Any] = field(default_factory=list)  # DeclaredRiver POJO, modes 1/2
     river_system_index: RiverSystemIndex | None = None
+    # Authored fine geometry; placement normalization belongs to HY-12 step 3.
+    declared_basins: list[DeclaredBasin] = field(default_factory=list)
+
+    @property
+    def declared_coastline_segments(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+        """Flat union for geometry-wide consumers (autoresolve bbox, landforms, logs)."""
+        return [seg for spec in self.declared_coastline_specs for seg in spec.segments]
 
 
 @dataclass
@@ -141,9 +129,16 @@ class HydrologyCellIndex:
 class HydrologyResult:
     heightmap:      Any = None  # SurfaceHeightmap after carve; same ref as input
     cell_index:     HydrologyCellIndex = field(default_factory=HydrologyCellIndex)
-    river_segments: list[Any] = field(default_factory=list)
+    river_segments: list[RiverSegment] = field(default_factory=list)
+    river_diagnostics: tuple[RiverRouteDiagnostic, ...] = ()
+    river_drainage_links: tuple[RiverDrainageLink, ...] = ()
     dirty_bbox:     GridBBox | None = None
     landforms:      Any = None
+    waterfall_drops: tuple[WaterfallDrop, ...] = ()
+    water_bodies: tuple[WaterBody, ...] = ()
+    physical_unions: tuple[PhysicalWaterUnion, ...] = ()
+    water_areas: dict[str, int] = field(default_factory=dict)
+    water_floors: dict[str, int] = field(default_factory=dict)
 
     @property
     def cells_modified(self) -> int:

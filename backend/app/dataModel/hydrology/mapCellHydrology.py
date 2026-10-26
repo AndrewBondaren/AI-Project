@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from typing import Annotated
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
+from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
@@ -23,11 +26,14 @@ class MapCellHydrology(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    liquid_candidate: DefaultOnWire[bool] = False
-    role: DefaultOnWire[HydrologyCellRole | None] = None
-    deepening_index: DefaultOnWire[int | None] = constrained_field(default=None, greater_equals=0)
-    connection_edge_uid: DefaultOnWire[str | None] = None
-    shore_kind: DefaultOnWire[HydrologyShoreKind | None] = None
+    liquid_candidate: DefaultWhenMissing[bool] = False
+    role: DefaultWhenMissing[HydrologyCellRole | None] = None
+    deepening_index: DefaultWhenMissing[Annotated[int, Field(ge=0)] | None] = constrained_field(default=None)
+    connection_edge_uid: DefaultWhenMissing[str | None] = None
+    shore_kind: DefaultWhenMissing[HydrologyShoreKind | None] = None
+    water_body_uid: DefaultWhenMissing[str | None] = None
+    z_water_level: DefaultWhenMissing[int | None] = None
+    river_drainage: DefaultWhenMissing[RiverDrainageLink | None] = None
 
     @classmethod
     def shore(
@@ -36,6 +42,7 @@ class MapCellHydrology(BaseModel):
         *,
         deepening_index: int = 0,
         connection_edge_uid: str | None = None,
+        water_body_uid: str | None = None,
     ) -> MapCellHydrology:
         """``role=shore`` cell with paint kind (U15)."""
         return cls(
@@ -43,6 +50,7 @@ class MapCellHydrology(BaseModel):
             shore_kind=kind,
             deepening_index=deepening_index,
             connection_edge_uid=connection_edge_uid,
+            water_body_uid=water_body_uid,
         )
 
     @model_validator(mode="before")
@@ -63,6 +71,11 @@ class MapCellHydrology(BaseModel):
 
     def is_liquid_candidate(self) -> bool:
         return bool(self.liquid_candidate)
+
+    def with_water_level(self, z_water_level: int) -> Self:
+        return type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | {
+            "z_water_level": z_water_level,
+        })
 
 
 def parse_cell_hydrology(raw: dict | None) -> MapCellHydrology | None:

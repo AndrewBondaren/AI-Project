@@ -1,8 +1,8 @@
 from collections.abc import Sequence
 
-from app.db.bulkSql import executemany_rows
+from app.db.bulkSql import upsert_rows
 from app.db.database import Database, _in_transaction
-from app.db.mapper import from_row, to_row
+from app.db.mapper import from_row
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.sqlite.base import BaseRepository
@@ -57,24 +57,22 @@ class SqliteNamedLocationRepository(BaseRepository[NamedLocation], INamedLocatio
             order="location_uid ASC",
         )
 
+    async def find_by_template_ref(self, template_uid: str) -> list[NamedLocation]:
+        return await self.fetch_all(
+            "system_template_uid = ? OR system_structure_template_uid = ?",
+            [template_uid, template_uid],
+            order="location_uid ASC",
+        )
+
     async def upsert_bulk(self, rows: Sequence[NamedLocation]) -> int:
         if not rows:
             return 0
         if _in_transaction.get():
-            await self._replace_many(rows)
+            await upsert_rows(self._db.conn, rows)
             return len(rows)
         async with self._db.transaction():
-            await self._replace_many(rows)
+            await upsert_rows(self._db.conn, rows)
         return len(rows)
-
-    async def _replace_many(self, rows: Sequence[NamedLocation]) -> None:
-        cols, _ = to_row(rows[0])
-        placeholders = ", ".join("?" * len(cols))
-        sql = (
-            f"INSERT OR REPLACE INTO {self._table} ({', '.join(cols)}) "
-            f"VALUES ({placeholders})"
-        )
-        await executemany_rows(self._db.conn, sql, rows)
 
     async def get_tree(self, world_uid: str) -> dict[str, int]:
         sql = """

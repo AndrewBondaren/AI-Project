@@ -1,13 +1,4 @@
 {
-  "_fixture_meta": {
-    "version": "2026-07",
-    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). map_cells пуст — после import: python backend/scripts/initialize_world.py (POST …/map/pack/bake). character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
-    "sources": [
-      "world_test.json",
-      "world_template.json"
-    ],
-    "world_uid": "world-test-all-001"
-  },
   "world": {
     "world_uid": "world-test-all-001",
     "name": "Эйдора (полный эталон)",
@@ -49,71 +40,77 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "location_type_registry": {
-      "region": {
-        "display_name": "Регион"
+    "location_type_registry": [
+      {
+        "system_type": "continent",
+        "display_type": "Континент",
+        "parent_types": [
+          null
+        ]
       },
-      "territory": {
-        "display_name": "Территория"
+      {
+        "system_type": "region",
+        "display_type": "Регион",
+        "parent_types": [
+          null,
+          "continent"
+        ]
       },
-      "settlement": {
-        "display_name": "Поселение"
+      {
+        "system_type": "district",
+        "display_type": "Район"
       },
-      "district": {
-        "display_name": "Район"
+      {
+        "system_type": "building",
+        "display_type": "Здание"
       },
-      "building": {
-        "display_name": "Здание"
+      {
+        "system_type": "room",
+        "display_type": "Комната"
       },
-      "room": {
-        "display_name": "Комната"
+      {
+        "system_type": "territory",
+        "display_type": "Территория"
       },
-      "geographic": {
-        "display_name": "География"
+      {
+        "system_type": "settlement",
+        "display_type": "Поселение",
+        "subtypes": [
+          {
+            "system_subtype": "city",
+            "footprint_by_size": {
+              "huge": 8.0
+            }
+          },
+          {
+            "system_subtype": "underground_city",
+            "footprint_by_size": {
+              "huge": 8.0
+            }
+          },
+          {
+            "system_subtype": "village",
+            "footprint_by_size": {
+              "huge": 0.9
+            }
+          }
+        ]
       },
-      "climate_pole": {
-        "display_name": "Климатический полюс"
+      {
+        "system_type": "geographic",
+        "display_type": "География",
+        "parent_types": [
+          null,
+          "region",
+          "territory",
+          "geographic"
+        ]
       },
-      "continent": {
-        "display_name": "Континент"
-      },
-      "kingdom": {
-        "display_name": "Королевство"
-      },
-      "empire": {
-        "display_name": "Империя"
-      },
-      "duchy": {
-        "display_name": "Герцогство"
-      },
-      "city": {
-        "display_name": "Город"
-      },
-      "town": {
-        "display_name": "Посёлок"
-      },
-      "village": {
-        "display_name": "Деревня"
-      },
-      "square": {
-        "display_name": "Площадь"
-      },
-      "street": {
-        "display_name": "Улица"
-      },
-      "gate": {
-        "display_name": "Ворота"
-      },
-      "dungeon": {
-        "display_name": "Подземелье"
-      },
-      "cave": {
-        "display_name": "Пещера"
-      },
-      "camp": {
-        "display_name": "Лагерь"
+      {
+        "system_type": "climate_pole",
+        "display_type": "Климатический полюс"
       }
-    },
+    ],
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {
@@ -138,7 +135,7 @@
       },
       "terrain_road": {
         "display_name": "Дорога",
-        "description": "Мощёная или грунтовая дорога. Ускоряет передвижение."
+        "description": "Дорога / тракт на world map light mask."
       },
       "terrain_crevice": {
         "display_name": "Расщелина",
@@ -179,6 +176,10 @@
       "terrain_mountain": {
         "display_name": "Горы",
         "description": "Высокий рельеф, крутые склоны."
+      },
+      "terrain_ravine": {
+        "display_name": "Овраг",
+        "description": "Локальное понижение рельефа на world map."
       },
       "terrain_shore": {
         "display_name": "Берег",
@@ -396,6 +397,16 @@
         "default_material": "stone"
       },
       {
+        "system_terrain": "ravine",
+        "glossary_ref": "terrain_ravine",
+        "terrain_category": "solid",
+        "travel_modifier": 2.5,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
+      },
+      {
         "system_terrain": "shore",
         "glossary_ref": "terrain_shore",
         "terrain_category": "solid",
@@ -448,34 +459,20 @@
     ],
     "city_size_registry": [
       {
-        "system_size": "hamlet",
-        "display_size": "Хутор",
-        "radius": 0
+        "system_size": "small",
+        "display_size": "Малый"
       },
       {
-        "system_size": "village",
-        "display_size": "Деревня",
-        "radius": 0
+        "system_size": "medium",
+        "display_size": "Средний"
       },
       {
-        "system_size": "town",
-        "display_size": "Городок",
-        "radius": 1
+        "system_size": "large",
+        "display_size": "Большой"
       },
       {
-        "system_size": "city",
-        "display_size": "Город",
-        "radius": 1
-      },
-      {
-        "system_size": "metropolis",
-        "display_size": "Метрополис",
-        "radius": 2
-      },
-      {
-        "system_size": "megalopolis",
-        "display_size": "Мегалополис",
-        "radius": 3
+        "system_size": "huge",
+        "display_size": "Огромный"
       }
     ],
     "economic_tier_registry": [
@@ -546,7 +543,7 @@
         "corrodible": true,
         "meltable": false,
         "mineable": true,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -573,7 +570,7 @@
         "corrodible": true,
         "meltable": false,
         "mineable": false,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -600,7 +597,7 @@
         "corrodible": true,
         "meltable": true,
         "mineable": false,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -624,7 +621,7 @@
         "corrodible": true,
         "meltable": false,
         "mineable": true,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -649,7 +646,7 @@
         "corrodible": false,
         "meltable": false,
         "mineable": false,
-        "transparent": true,
+        "transparent": 100,
         "components": null
       },
       {
@@ -768,6 +765,52 @@
         "hardness": 1,
         "density": 90,
         "flammable": false
+      },
+      {
+        "system_material": "window_glass",
+        "display_name": "Оконное стекло",
+        "material_category": "solid",
+        "tags": [
+          "glass"
+        ],
+        "use_type": [
+          "window_glass"
+        ],
+        "transparent": 100
+      },
+      {
+        "system_material": "porthole_glass",
+        "display_name": "Стекло иллюминатора",
+        "material_category": "solid",
+        "tags": [
+          "glass"
+        ],
+        "use_type": [
+          "porthole_glass"
+        ],
+        "transparent": 100
+      },
+      {
+        "system_material": "vent_mesh",
+        "display_name": "Вентиляционная сетка",
+        "material_category": "solid",
+        "tags": [
+          "metal"
+        ],
+        "use_type": [
+          "vent_mesh"
+        ]
+      },
+      {
+        "system_material": "dirt_road",
+        "display_name": "Грунтовое покрытие дороги",
+        "material_category": "solid",
+        "tags": [
+          "raw"
+        ],
+        "use_type": [
+          "road"
+        ]
       }
     ],
     "hydrology": {
@@ -841,6 +884,7 @@
       "declared_coastlines": [
         {
           "location_uid": "loc-template-sea-declared",
+          "kind": "sea",
           "path": [
             {
               "x": 21000,
@@ -1177,54 +1221,52 @@
       "world_uid": "world-test-all-001"
     }
   ],
-  "races": [
+  "race_templates": [
     {
-      "race_uid": "race-human",
-      "world_uid": "world-test-all-001",
-      "display_race": "Человек",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "adaptive": true,
         "lifespan_years": 80
-      }
+      },
+      "template_uid": "race-human",
+      "display_name": "Человек",
+      "system_name": "race-human"
     },
     {
-      "race_uid": "race-elf",
-      "world_uid": "world-test-all-001",
-      "display_race": "Эльф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "night_vision": true,
         "lifespan_years": 500
-      }
+      },
+      "template_uid": "race-elf",
+      "display_name": "Эльф",
+      "system_name": "race-elf"
     },
     {
-      "race_uid": "race-dwarf",
-      "world_uid": "world-test-all-001",
-      "display_race": "Дворф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "stone_sense": true,
         "lifespan_years": 200
-      }
+      },
+      "template_uid": "race-dwarf",
+      "display_name": "Дворф",
+      "system_name": "race-dwarf"
     }
   ],
-  "perks": [
+  "perk_templates": [
     {
-      "perk_uid": "perk-iron-will",
-      "world_uid": "world-test-all-001",
       "system_name": "iron_will",
       "display_name": "Железная воля",
       "system_description": "Resistance to fear and mind effects",
-      "display_description": "Устойчивость к страху и ментальным эффектам"
+      "display_description": "Устойчивость к страху и ментальным эффектам",
+      "template_uid": "perk-iron-will"
     },
     {
-      "perk_uid": "perk-tracker",
-      "world_uid": "world-test-all-001",
       "system_name": "tracker",
       "display_name": "Следопыт",
       "system_description": "Enhanced tracking and navigation in wilderness",
-      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности",
+      "template_uid": "perk-tracker"
     }
   ],
   "locations": [
@@ -1254,7 +1296,8 @@
       "location_uid": "loc-city-ironhold",
       "world_uid": "world-test-all-001",
       "display_name": "Айронхолд",
-      "system_location_type": "city",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-northern",
       "display_description": "Укреплённый торговый город на севере",
@@ -1262,7 +1305,7 @@
       "is_accessible": true,
       "is_public": true,
       "guard_level": 3,
-      "system_city_size": "city",
+      "system_city_size": "medium",
       "state_uid": "state-iron-crown",
       "map_x": 2,
       "map_y": 2,
@@ -1284,7 +1327,7 @@
       "location_uid": "loc-market-ironhold",
       "world_uid": "world-test-all-001",
       "display_name": "Рыночная площадь",
-      "system_location_type": "square",
+      "system_location_type": "district",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold",
       "display_description": "Главная торговая площадь Айронхолда. По утрам заполняется лавками и торговцами со всего севера.",
@@ -1308,7 +1351,8 @@
       "location_uid": "loc-city-gate-ironhold",
       "world_uid": "world-test-all-001",
       "display_name": "Северные ворота",
-      "system_location_type": "gate",
+      "system_location_type": "building",
+      "system_location_subtype": "military",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold",
       "display_description": "Массивные каменные ворота с постоянной стражей. Главный въезд в Айронхолд с севера.",
@@ -1357,14 +1401,15 @@
       "location_uid": "loc-city-amberport",
       "world_uid": "world-test-all-001",
       "display_name": "Амберпорт",
-      "system_location_type": "city",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-southern",
       "display_description": "Оживлённый портовый город на южном побережье. Перекрёсток торговых путей со всего континента.",
       "is_discovered": true,
       "is_accessible": true,
       "is_public": true,
-      "system_city_size": "city",
+      "system_city_size": "medium",
       "state_uid": "state-amber-league",
       "map_x": 2,
       "map_y": 6,
@@ -1398,7 +1443,7 @@
       "location_uid": "loc-amberport-market",
       "world_uid": "world-test-all-001",
       "display_name": "Торговая набережная",
-      "system_location_type": "square",
+      "system_location_type": "district",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-amberport",
       "display_description": "Длинная набережная с рядами лавок. Торгуют специями, тканями и морскими товарами.",
@@ -1652,6 +1697,5 @@
       "is_selectable": false,
       "world_uid": "world-test-all-001"
     }
-  ],
-  "map_cells": []
+  ]
 }

@@ -28,7 +28,7 @@ FOREIGN_MARK = -1
 
 
 class ReliefSurface(Protocol):
-    """Read-only height/terrain for discover. ``MeterGradeSurface`` satisfies this."""
+    """Read-only height/terrain for discover. ``FineGradeSurface`` satisfies this."""
 
     def z_height_map(self, xy: Coord) -> int | None: ...
     def terrain_at(self, xy: Coord) -> str | None: ...

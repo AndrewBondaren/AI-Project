@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
 
 
 def load_locations_index(paths: WorldPackPaths) -> LocationsIndexWire | None:

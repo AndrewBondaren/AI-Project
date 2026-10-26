@@ -19,8 +19,8 @@ from app.application.worldData.generators.terrain.reliefObjects.elevationResolve
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
 from app.dataModel.terrainMasks.mountain.enums import MountainKind
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
-from app.dataModel.worldPack.worldMapCellsPerTile import (
-    light_m_for,
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
+    light_span_for,
     resolve_world_map_cells_per_tile,
 )
 
@@ -44,12 +44,12 @@ def apply_mountain_z(
     *,
     pole_field: ClimatePoleField,
     light_side: int,
-) -> int:
-    """Raise ``surface_z`` from mountain Specs (Q3-A FormRaster+SideFill). Returns raised cell count."""
+) -> frozenset[tuple[int, int]]:
+    """Raise ``surface_z`` from mountain Specs (Q3-A FormRaster+SideFill). Returns raised cells."""
     masks = terrain_masks(world)
     policy = masks.default_mountains
     if not masks.category_enabled(policy):
-        return 0
+        return frozenset()
 
     z_min = world_z_min(world)
     z_max = world_z_max(world)
@@ -60,7 +60,7 @@ def apply_mountain_z(
     )
     if light_side is not None and int(light_side) > 0:
         side = max(1, int(light_side))
-    light_m = float(light_m_for(cell_m, side))
+    light_span = float(light_span_for(cell_m, side))
     keys = set(heightmap.surface_z.keys())
     specs = collect_mountain_entries_for_coarse(
         world,
@@ -75,7 +75,7 @@ def apply_mountain_z(
     frac_map: dict[tuple[int, int], float] = {}
     kind_map: dict[tuple[int, int], MountainKind] = {}
     for spec in specs:
-        fp = coarse_footprint_for_entry(spec, cell_m=cell_m, light_m=light_m)
+        fp = coarse_footprint_for_entry(spec, cell_m=cell_m, light_span=light_span)
         kind = _entry_kind(spec)
         for key, frac in fp.items():
             if key not in keys:
@@ -85,7 +85,7 @@ def apply_mountain_z(
                 frac_map[key] = float(frac)
                 kind_map[key] = kind
 
-    raised = 0
+    raised = frozenset(frac_map)
     for key, frac in frac_map.items():
         base = heightmap.surface_z[key]
         heightmap.surface_z[key] = resolve_mountain_surface_z(
@@ -95,12 +95,11 @@ def apply_mountain_z(
             kind=kind_map[key],
             side_fraction=frac,
         )
-        raised += 1
 
     logger.debug(
         "relief_objects_mountain_z | world=%s raised=%d specs=%d",
         world.world_uid,
-        raised,
+        len(raised),
         len(specs),
     )
     return raised

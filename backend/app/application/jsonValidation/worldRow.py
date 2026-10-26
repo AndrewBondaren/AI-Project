@@ -6,17 +6,14 @@ Runtime DX accessors. Slice-backed resolve → ``worldSlices.resolve_*_world``
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from pydantic import ValidationError
 
 from app.application.jsonValidation.worldSlices import (
     resolve_json_blob_world,
     resolve_multi_column_world,
     resolve_registry_dict_world,
     resolve_registry_list_world,
-    slice_column_key,
 )
 from app.dataModel import (
     WorldClimateZoneRegistry,
@@ -39,31 +36,24 @@ from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.district.worldDistrictZonePreference import (
+from app.dataModel.locations.settlement.district.worldDistrictZonePreference import (
     WorldDistrictZonePreference,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.building.plotLayoutTemplate import (
-    PlotLayoutTemplate,
-    plot_type_defaulted,
-)
-from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
-from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
-    WorldBuildingTemplateRegistry,
-)
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     WorldPurposePackRegistry,
     WorldPurposePacks,
@@ -75,17 +65,14 @@ from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     WorldReliefGradeObstacleScalars,
 )
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.dataModel.worldPack.meta.worldGridSettings import WorldGridSettings
 from app.dataModel.terrainMasks import WorldTerrainMasks
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
 _ENGINE_MATERIALS = WorldMaterialRegistry.canonical_engine()
 
-logger = logging.getLogger(__name__)
 
 
 def _uid(world: Any) -> str:
@@ -139,9 +126,12 @@ def livestock(world: Any) -> WorldLivestockRegistry:
 
 
 def terrain(world: Any) -> WorldTerrainRegistry:
-    return resolve_registry_list_world(
+    registry = resolve_registry_list_world(
         world, WorldTerrainRegistry, world_uid=_uid(world),
     )
+    from app.application.jsonValidation.terrainHillRegistry import apply_landcover_policies
+    return apply_landcover_policies(registry, terrain_masks(world).default_landcover,
+                                    getattr(world, "terrain_registry", None))
 
 
 def terrain_rows(world: Any) -> list[dict]:
@@ -189,6 +179,12 @@ def road_settings_rows(world: Any) -> list[dict]:
 def climate_zones(world: Any) -> WorldClimateZoneRegistry:
     return resolve_registry_list_world(
         world, WorldClimateZoneRegistry, world_uid=_uid(world),
+    )
+
+
+def grid_settings(world: Any) -> WorldGridSettings:
+    return resolve_multi_column_world(
+        world, WorldGridSettings, label=f"world={_uid(world)} grid_settings",
     )
 
 
@@ -243,68 +239,6 @@ def settlement_specializations(world: Any) -> WorldSettlementSpecializationRegis
         world, WorldSettlementSpecializationRegistry, world_uid=_uid(world),
     )
 
-def world_building_layout_overrides(world: Any) -> list[PlotLayoutTemplate]:
-    """Plot-shaped registry rows only (not uid pointers, not engine builtins)."""
-    from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
-        PackingReason,
-        PackingStep,
-        packing_warning,
-    )
-
-    col = slice_column_key(WorldBuildingTemplateRegistry)
-    raw = getattr(world, col, None) or []
-    if isinstance(raw, dict):
-        raw = list(raw.values())
-    out: list[PlotLayoutTemplate] = []
-    for row in raw:
-        if not isinstance(row, dict):
-            continue
-        if "system_template_uid" in row:
-            continue
-        try:
-            layout = PlotLayoutTemplate.model_validate(row)
-        except ValidationError:
-            logger.warning(
-                "world | building_template_registry row not a PlotLayoutTemplate"
-                " world=%s keys=%s",
-                _uid(world),
-                sorted(row.keys()),
-            )
-            continue
-        if plot_type_defaulted(layout):
-            packing_warning(
-                PackingStep.CACHE,
-                district="world",
-                system_name=layout.system_name,
-                reason=PackingReason.PLOT_TYPE_DEFAULTED,
-            )
-        out.append(layout)
-    return out
-
-
-def building_layout_templates(world: Any) -> list[PlotLayoutTemplate]:
-    """Engine builtins + world rows that validate as plot layouts (not uid pointers)."""
-    from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
-        PackingReason,
-        PackingStep,
-        packing_warning,
-    )
-
-    by_name: dict[str, PlotLayoutTemplate] = {}
-    for layout in canonical_defaults():
-        if plot_type_defaulted(layout):
-            packing_warning(
-                PackingStep.CACHE,
-                district="defaults",
-                system_name=layout.system_name,
-                reason=PackingReason.PLOT_TYPE_DEFAULTED,
-            )
-        by_name[layout.system_name] = layout
-    for layout in world_building_layout_overrides(world):
-        by_name[layout.system_name] = layout
-    return list(by_name.values())
-
-
 def barrier_templates(world: Any) -> WorldBarrierTemplateRegistry:
     """Canonical ⊕ world by ``RUNTIME_MERGE_ID_FIELD`` (T-29)."""
     return resolve_registry_list_world(
@@ -319,6 +253,12 @@ def barrier_template_defaults() -> list[dict]:
 def connection_types(world: Any) -> WorldConnectionTypeRegistry:
     return resolve_registry_list_world(
         world, WorldConnectionTypeRegistry, world_uid=_uid(world),
+    )
+
+
+def transition_types(world: Any) -> WorldTransitionTypeRegistry:
+    return resolve_registry_list_world(
+        world, WorldTransitionTypeRegistry, world_uid=_uid(world),
     )
 
 
@@ -359,12 +299,6 @@ def location_moods(world: Any) -> WorldLocationMoodRegistry:
     )
 
 
-def building_template_registry(world: Any) -> WorldBuildingTemplateRegistry:
-    return resolve_registry_list_world(
-        world, WorldBuildingTemplateRegistry, world_uid=_uid(world),
-    )
-
-
 def purpose_pack_registry(world: Any) -> WorldPurposePackRegistry:
     """Canonical ⊕ world by ``system_pack``; ``base`` recipe is frozen."""
     resolved = resolve_registry_list_world(
@@ -384,12 +318,6 @@ def enabled_building_purposes(world: Any) -> frozenset[BuildingPurpose]:
     return purposes_for_world(
         purpose_packs(world).root,
         recipes=purpose_pack_registry(world),
-    )
-
-
-def relief_template_registry(world: Any) -> WorldReliefTemplateRegistry:
-    return resolve_registry_list_world(
-        world, WorldReliefTemplateRegistry, world_uid=_uid(world),
     )
 
 

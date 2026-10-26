@@ -1,0 +1,136 @@
+"""L2 fine-chunk generate + pack persist — WP-PERF-22 parent light path.
+
+Owns pool dispatch. Prep / compute / persist live in sibling modules.
+Does not enqueue background jobs (see ``chunkSchedule``).
+"""
+
+from __future__ import annotations
+from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
+
+import time
+from dataclasses import replace
+from functools import partial
+
+from app.application.worldData.materialize.chunkComputePool import ChunkComputePool
+from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+from app.application.worldData.generators.terrain.types import ColumnRect
+from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.pack.bake.packBakeLog import log_pack_l2_formation_done
+from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
+from app.application.worldData.pack.refine.fine.fineChunkPersist import FineChunkPersist
+from app.application.worldData.pack.refine.fine.fineGradeCatalog import emit_fine_grade_catalog
+from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
+from app.application.worldData.pack.refine.fine.fineTileContext import ChunkComputeResult
+from app.application.worldData.pack.refine.fine.fineTilePrep import prepare_fine_tile
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.meta.worldPackManifest import ChunkRefineRole
+from app.db.models.namedLocation import NamedLocation
+from app.db.models.world import World
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
+from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
+
+
+class FineChunkRunner:
+    """Parent light → surface → chunk generate → pack persist."""
+
+    def __init__(self, terrain: TerrainBatchOrchestrator, *,
+                 region_state_repo: IRegionStateRepository | None = None) -> None:
+        self._terrain = terrain
+        self._region_state_repo = region_state_repo
+
+    async def refine_rects(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        surface_bundle: SurfacePlanBundle,
+        tile_gx: int,
+        tile_gy: int,
+        rects: list[ColumnRect],
+        volumes: list[TerritoryVolume],
+        *,
+        refine_role: ChunkRefineRole = "scene",
+        phase: str | None = None,
+        relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+        stages: GradePipelineStages | None = None,
+        working: SurfaceWorkingMaps,
+    ) -> FineRefineResult:
+        """Generate + persist fine chunks; ``fine_surface_z`` for climate ladder."""
+        if not rects:
+            return FineRefineResult.empty()
+
+        l2_t0 = time.perf_counter()
+        region_states = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
+        ctx = prepare_fine_tile(
+            self._terrain,
+            world,
+            locations,
+            writer,
+            mat_ctx,
+            surface_bundle,
+            tile_gx,
+            tile_gy,
+            rects,
+            volumes,
+            refine_role=refine_role,
+            phase=phase,
+            relief_templates_by_uid=relief_templates_by_uid,
+            stages=stages or GradePipelineStages.off(),
+            region_state_snapshot=region_states,
+            working=working,
+        )
+        persist = FineChunkPersist(ctx, writer)
+        compute = partial(compute_rect, self._terrain, ctx)
+        indexed_rects = list(enumerate(rects, start=1))
+
+        if ctx.workers == 1 or ctx.chunks_total <= 1:
+            for pair in indexed_rects:
+                persist.persist_rect(compute(pair))
+        else:
+            pool = ChunkComputePool(
+                ctx.workers,
+                thread_name_prefix="pack-compute",
+                log_diagnostics=True,
+            )
+            try:
+                async def on_chunk(
+                    _pair: tuple[int, ColumnRect],
+                    result: ChunkComputeResult,
+                ) -> None:
+                    await persist.persist_rect_locked(result)
+
+                await pool.map_sync_with_callback(indexed_rects, compute, on_chunk)
+            finally:
+                pool.shutdown()
+
+        pack = persist.finish()
+        instances, systems, emit_s = emit_fine_grade_catalog(
+            pack.grade_instances,
+            pack.vertex_seams,
+            ctx.catalog,
+            world_uid=ctx.world_uid,
+        )
+        result = replace(
+            pack,
+            grade_instances=instances,
+            grade_systems=systems,
+            pipeline_s=replace(pack.pipeline_s, systems_emit_s=emit_s),
+        )
+        log_pack_l2_formation_done(
+            ctx.world_uid,
+            phase=ctx.phase_name,
+            chunks=ctx.chunks_total,
+            materialize_s=result.materialize_s,
+            grade_s=result.grade_s,
+            l2_s=time.perf_counter() - l2_t0,
+            tile_gx=ctx.tile_gx,
+            tile_gy=ctx.tile_gy,
+            workers=ctx.workers,
+            pipeline=result.pipeline_s,
+        )
+        return result

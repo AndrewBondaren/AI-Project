@@ -242,20 +242,18 @@ class SeedCanalResolveTest(unittest.TestCase):
 
     def test_unknown_structure_canal_r21(self) -> None:
         reg = WorldCanalTemplateRegistry.canonical_defaults()
-        canal = resolve_seed_canal(
-            requested_length=2,
-            L_eff=2,
-            terrain_key="plains",
-            knobs_earthen=None,
-            knobs_structure_canal="missing_canal",
-            policy_rules=[],
-            registry=reg,
-            site_id="s-unknown",
-        )
-        self.assertIsInstance(canal, StructureCanal)
-        assert isinstance(canal, StructureCanal)
-        self.assertEqual(canal.system_type, "missing_canal")
-        self.assertEqual(canal.structure_refs, [])
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        with self.assertRaises(UnresolvedModelError):
+            resolve_seed_canal(
+                requested_length=2,
+                L_eff=2,
+                terrain_key="plains",
+                knobs_earthen=None,
+                knobs_structure_canal="missing_canal",
+                policy_rules=[],
+                registry=reg,
+                site_id="s-unknown",
+            )
 
 
 if __name__ == "__main__":

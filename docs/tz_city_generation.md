@@ -1,5 +1,7 @@
 # ТЗ: Генератор города
 
+**A0, 2026-10-14:** [библиотеки plot/building/structure](tz_domain_template_libraries.md). Standard plots — default library members с UID. Recipe plot refs и keys counts/priority — UID; name-based examples только legacy input. District N+1 keys этим не меняются.
+
 **Обновлено:** 2026-09-20 **C24** packing по району (outdoor); 2026-09-07 **§9.3** PlacementCondition RegistryKey/`CellZone`; `min_adjacent_cells`; **LOC-T-2** ранг размера (`small`…) ≠ морфология, footprint из контекста; 2026-09-06 **detailed_bake** консьюмер C11 (`generate-settlement`); **§8** topology на `full_bake`; **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
 
 **Связанные документы:**
@@ -7,10 +9,10 @@
 | Документ | Роль |
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Stack Settlement → District → Area → Structure |
-| [.cursor/plans/settlement-assembler.md](../.cursor/plans/settlement-assembler.md) | Фазы A–H impl, acceptance |
-| [.cursor/plans/city-three-axes-transition.md](../.cursor/plans/city-three-axes-transition.md) | Три оси §1.1 слои A–F (сделано в коде) |
+| [.cursor/plans/settlement-assembler-done.md](../.cursor/plans/settlement-assembler-done.md) | Фазы A–H impl, acceptance |
+| [.cursor/plans/city-three-axes-transition-done.md](../.cursor/plans/city-three-axes-transition-done.md) | Три оси §1.1 слои A–F (сделано в коде) |
 | [.cursor/plans/settlement-specialization-districts.md](../.cursor/plans/settlement-specialization-districts.md) | §1.2 CITY-T-2d: специализация, `district_subtype`, приоритет районов |
-| [.cursor/plans/city-t-4-planner-debt.md](../.cursor/plans/city-t-4-planner-debt.md) | CITY-T-4 планировщик после 2d — **сделано** (`/impl-city-t-4`) |
+| [.cursor/plans/city-t-4-planner-debt-done.md](../.cursor/plans/city-t-4-planner-debt-done.md) | CITY-T-4 планировщик после 2d — **сделано** (`/impl-city-t-4`) |
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19; topology после `full_bake`; **detailed_bake** = pack локации (консьюмер L2 + C11; не алгоритм C22) |
@@ -80,7 +82,7 @@ Subtype локации `building` в дереве NL (`residential` / `commercia
 | Ключ | Где | Что это | Канон |
 |---|---|---|---|
 | Морфология | `named_locations.system_location_subtype` → `location_type_registry` тип `settlement` | город / село / данж / подземный город: глиф L0, каркас `district_type` | `city`, `village`, `dungeon`, `underground_city` |
-| Специализация | шаблон **этого** поселения (`CitySkeleton` / import JSON), список | чем живёт место; несколько сразу («добыча + обработка + производство») | `extract`, `process`, `manufacture`, `culture`, `farm`, `livestock` (+ N+1) |
+| Специализация | шаблон **этого** поселения (`SettlementSkeleton` / import JSON), список | чем живёт место; несколько сразу («добыча + обработка + производство») | `extract`, `process`, `manufacture`, `culture`, `farm`, `livestock` (+ N+1) |
 | Районы на городе | тот же шаблон, список **типов** кварталов (§ ниже) | что мастер явно хочет в **этом** Ironhold | объекты `district_type` + optional `district_subtype` + optional pin `system_name` чертежа |
 
 Реестр специализаций — `worlds.settlement_specialization_registry` (§4.1): ключ → какие районы (`district_type` + `district_subtype`) и какую **семью** назначений (`allowed_family`) штамповать на слот. Листья = дети семьи ∩ live leaves включённых паков (`purpose_packs` + рецепты `purpose_pack_registry`). Geographic subtypes поля рецепта игнорируют.
@@ -94,6 +96,17 @@ Subtype локации `building` в дереве NL (`residential` / `commercia
 3. Ещё оставшиеся — typical морфологии `city`/`village`/… ∩ зона.
 
 Пересечения зоны нет — клетка **скип**, не подставлять чужой `district_type` «с пола». Несколько `system_settlement_specializations` = объединение районов и штампов `allowed_family` на своих слотах, не «одна специализация победила». C14: authored-дети города — скип generate, не этот рецепт.
+
+Живость задаёт `SettlementPayload.is_inhabited`, независимо от имени типа.
+Базовый default False; builtin settlement задаёт True через POJO реестра
+типа. При импорте приоритет: экземпляр → subtype (если bool) → тип → False.
+SettlementSkeleton получает готовое поле из payload; экономические фильтры
+пока не подключены к этому флагу и в этом изменении не меняются.
+При `false` непустые специализации отвергаются POJO-валидацией на импорте,
+CRUD и runtime-чтении. Явные районы и морфология комплекса продолжают
+генерироваться; required-структуры его рецепта сохраняются. Подбор районов
+без рецепта разрешён только при `true`. Рецепт ищется по фактической паре
+тип/subtype локации, включая пользовательские типы с settlement-payload.
 
 Список на городе — **типы** (и optional subtype), не каталог `tavern_1`. Optional `system_name` — pin **чертежа района** из `district_template_registry`, не здания. Нет pin — чертёж того же `district_type`+`district_subtype` из реестра мира (seed §9.6).
 
@@ -181,10 +194,13 @@ LLM описывает → только из скелета (ограничен�
 
 ---
 
-## 3. Скелет города (CitySkeletonFields)
+## 3. Скелет города (SettlementSkeleton)
 
-Скелет собирается в `CitySkeleton` (`generators/assemblers/citySkeleton.py`) из полей `NamedLocation`.  
-**Runtime:** `SettlementAssembler._build_skeleton`; часть полей — optional JSON / `getattr` (NC-9 в tech debt).
+Скелет — `SettlementSkeleton` POJO (dataModel), общие type-поля объявлены в
+`SettlementPayloadFields`. `settlementSkeletonAccess` читает typed payload и
+generic tier/mood NL; resolved view получает tier/density от LocationContext.
+Зеркальный CitySkeleton dataclass и overlay/shim удалены в NL-P5.
+**Runtime:** `SettlementAssembler._build_skeleton`; далее POJO передаётся вниз.
 
 | Поле | Тип | Откуда | Описание | Impl |
 |---|---|---|---|---|
@@ -194,14 +210,14 @@ LLM описывает → только из скелета (ограничен�
 | `system_settlement_size` | string | `NamedLocation` | ранг → `settlement_size_registry`; footprint — subtype × ранг (**LOC-T-2**). Код: `system_city_size` | ⬜ LOC-T-2 |
 | `system_settlement_specializations` | string[] | JSON import, optional | Ключи §4.1. Пусто / omit — нет вторичного рецепта районов. Несколько = union. Не `system_location_subtype` | ⬜ §1.2 |
 | `typical_districts` | object[] | JSON import, optional | Приоритет 1: `{ "district_type", "district_subtype"?, "system_name"? }`. Pin `system_name` — `DistrictTemplateKey`. Omit/`null`/`""` → нет пина (подбор по type/subtype); blank на resolve — warning. Пусто — сразу приоритет 2–3. [POJO-C-4](./tz_pojo_city_typing.md) | ⬜ §1.2 |
-| `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; **не** import | ✅ `resolve_dominant_material` |
+| `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; authored import — fallback-канал каскада (§3.1) | ✅ `resolve_dominant_material` |
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | `DistrictDensity` | JSON import | ENUM-E `sparse` / `medium` / `dense` | ✅ read (NC-9) |
-| `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `CitySkeleton`; SQL — JSON на NL. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
-| `plot_counts` | object | JSON import, optional | Городской дефолт копий участка: `{ "<drawing system_name>": int }`. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
-| `plot_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<drawing system_name>": int }`. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
-| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `CitySkeleton`. Нет поля / `template` null/`""` — скип. `template` — `BarrierTemplateKey`. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района. [POJO-C-6](./tz_pojo_city_typing.md) | ⬜ |
-| `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `CitySkeleton` |
+| `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `SettlementPayload` → `SettlementSkeleton`; SQL — JSON внутри location_payload. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
+| `plot_counts` | object | JSON import, optional | Городской дефолт копий участка: `{ "<plot template_uid>": int }`. Wire alias `structure_counts` снят 2026-10-18 — только `plot_counts`, старый ключ = ошибка импорта. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
+| `plot_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<plot template_uid>": int }`. Wire alias `structure_priority` снят 2026-10-18 — только `plot_priority`, старый ключ = ошибка импорта. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
+| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `SettlementPayload` → `SettlementSkeleton`. Нет поля / `template` null/`""` — скип. `template` — `BarrierTemplateKey`. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района. [POJO-C-6](./tz_pojo_city_typing.md) | ⬜ |
+| `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `SettlementSkeleton` |
 
 **Что LLM получает из скелета:**
 - `display_location_mood` → тон описания
@@ -210,7 +226,7 @@ LLM описывает → только из скелета (ограничен�
 - `system_settlement_size` → относительный масштаб (контекст = морфология; LOC-T-2)
 - `system_settlement_specializations` / `typical_districts` → чем живёт город и какие кварталы мастер зафиксировал (когда поля появятся на скелете)
 
-**`dominant_material`** — не из import; вычисляется **после** `SettlementAssembler.assemble` (§3.1), хранится на `SettlementLayout.dominant_material`.
+**`dominant_material`** — вычисляется **после** `SettlementAssembler.assemble` (§3.1), хранится на `SettlementLayout.dominant_material`. Authored-поле на import — нижний fallback-канал каскада, не источник напрямую.
 
 ### 3.1 `dominant_material` (post-assemble)
 
@@ -223,10 +239,12 @@ LLM описывает → только из скелета (ограничен�
    - `barrier_cells[].system_material`
    - `area_layouts`: building/small `cells[].system_material`, `barrier_cells`
 2. **Город** — mode district-dominants; если в районах материалов нет — mode city-level (`connection_edges`, `barrier_cells` поселения).
-3. **Fallback** — `economic_tier` города → `material_registry` (`use_type=wall`, как barriers).
-4. **Fallback** — `stone` + `warn_once`, если tier отсутствует.
+3. **Fallback** — `LocationContext.dominant_material` (каскад, `tz_cascade_context` §4; cascade-migration M10):
+   - authored `dominant_material` на NL поселения → на `SettlementSkeleton` (chain, authored бьёт fold);
+   - `Cascade.fold`: `economic_tier` города → `material_registry` (`use_type=wall`, как barriers; rng seed по поселению);
+   - `CANONICAL_DEFAULT` — `CONSTRUCTION_MATERIAL_DEFAULTS.dominant` (`stone`).
 
-Import `dominant_material` на `NamedLocation` **игнорируется** генератором — иначе LLM-описание может не совпадать с фактической застройкой.
+Derived mode **всегда выше** authored/fold: LLM-описание обязано совпадать с фактической застройкой — поэтому authored-значение участвует только когда в layout материалов нет вовсе.
 
 **Граница ответственности:** генератор отдаёт `SettlementLayout.dominant_material`. Прокидывание в LLM payload — **DAG** (`lazy_settlement` / scene nodes, см. `tz_engine_flow.md`, `tz_world_generation_dag.md`); пишется вместе с остальным DAG. Persist на `NamedLocation` — ⬜ (цикл §11.5), опционально для offline/скелета до layout.
 
@@ -355,14 +373,14 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 ## 6. Алгоритм размещения зданий (v1)
 
 > **Impl:** не монолитный алгоритм §6.2–6.3, а pipeline `SettlementAssembler` → `DistrictAssembler` → `StructureAreaAssembler`.  
-> Smoke: `backend/scripts/debug_settlement.py`. Детали фаз: `.cursor/plans/settlement-assembler.md`.
+> Smoke: `backend/scripts/debug_settlement.py`. Детали фаз: `.cursor/plans/settlement-assembler-done.md`.
 
 ### 6.1 Входные данные
 
 - `city.map_x, map_y` — origin города на глобальной карте
 - `footprint_by_size[subtype][system_settlement_size]` — множитель на `world.fine_cells_per_map_cell`; сторона footprint в fine-клетках = множитель × `fine_cells_per_map_cell`. SoT таблица и инвариант village≺city: [`tz_locations.md`](./tz_locations.md) **LOC-T-2**. Код до impl: `city_size_registry[system_city_size].footprint_multiplier` (токены `hamlet`… смешаны с морфологией — **не** целевой контракт)
 - `settlement_density` → плотность застройки
-- `building_template_registry` — доступные шаблоны
+- библиотека шаблонов мира (pack membership / `library_pins`) — доступные шаблоны; `building_template_registry` удалён (B7)
 
 **Канон множителей** — на subtype, не на ранге. Не копировать полную таблицу сюда (SoT — locations **LOC-T-2**). Omit ранга → `medium`.
 
@@ -498,6 +516,13 @@ L0 restamp полотна новых world-рёбер на уже записан
 
 ## 9. Шаблоны районов (`district_template_registry`)
 
+**Opt-out global canonical attach (library-packs, шаг 7, 2026-10-16):**
+district templates — inline world-реестр, источник
+`WorldDistrictTemplateRegistry.canonical_defaults()` + world entries,
+identity — `system_name`. Runtime T-29 объединяет канон и overrides по ключу;
+SQL library/FS-паков и global spec нет. Pack migration этого домена deferred,
+не часть подключения plot/building/structure-библиотек.
+
 > **Impl:** ✅ core — `planner/placement.py`, `planner/districts.py`, `DistrictAssembler`. См. settlement-assembler Phase A–C.
 
 Район — **тип** (`district_type`) + **подтип** (`district_subtype`) плюс **чертёж** в `district_template_registry`. Сначала пара type/subtype по приоритету §1.2 и зоне клетки footprint (§9.6); `DistrictAssembler` получает уже выбранный чертёж. Не путать с `structure_type` библиотеки зданий.
@@ -507,7 +532,7 @@ L0 restamp полотна новых world-рёбер на уже записан
 ### 9.1 Хранение
 
 Аналогично `building_templates` — глобальная таблица шаблонов, не привязанная к конкретному миру.
-Per-world реестр: `worlds.district_template_registry` (JSON-массив, как `building_template_registry`).
+Per-world реестр: `worlds.district_template_registry` (JSON-массив, как прочие `*_registry`).
 
 ### 9.2 Схема шаблона района
 
@@ -528,8 +553,8 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
 | `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
 | `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4. `count` — §5.1.3 «Число токенов»; очередь — §5.1.3 «Приоритет посадки» |
-| `plot_counts` | object | optional | `{ "<drawing system_name>": int }` — районный override копий участка. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
-| `plot_priority` | object | optional | `{ "<drawing system_name>": int }` — районный override очереди fill. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
+| `plot_counts` | object | optional | `{ "<plot template_uid>": int }` — районный override копий участка. Wire alias `structure_counts` снят 2026-10-18. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
+| `plot_priority` | object | optional | `{ "<plot template_uid>": int }` — районный override очереди fill. Wire alias `structure_priority` снят 2026-10-18. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
 | `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Барьер **района** (прямые **уже урезанного** `DistrictSlot`). Тот же класс, другой инстанс, чем у поселения ([tz_locations.md](./tz_locations.md)). Omit/null / `template` null/`""` — скип. `template` — `BarrierTemplateKey` ([POJO-C-6](./tz_pojo_city_typing.md)). Поле + `template` — всегда, без roll. `sides` — прямые **слота**; нет ключа / `null` / `[]` → четыре прямые слота. **v1 packing:** inner bbox минус эти прямые внутрь. Клетки — `DistrictAssembler` (TODO). Список поселения не пишет; общая xy запрещена (вычет поселения раньше). |
 | `deck` | int | optional | **Ярус** района. Omit → `0` (поверхность). Не этаж здания, не `economic_tier`, не climate hive, **не** разведение двух поселений ([`tz_locations.md`](./tz_locations.md) **LOC-T-3**). Участки копируют значение при packing (`AreaSlot.deck`); не независимая настройка участка. Канон omit. Коллизия xy×z — assembler §7.1. |
 
@@ -581,14 +606,16 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 **Хост:** settlement-required purpose садится только в слоты, чей **штамп** `DistrictSlot.allowed_structure_types` содержит ключ (семья раскрывается). Ткань без специализации несёт семьи на чертеже, не omit=весь каталог. `[]` = pins only, не хост. Нет хоста среди слотов → leftover + warning. Не копировать тип на каждый слот.
 
-**Район `required_structures[]`:** `plot_template` — pin **чертежа участка** (`system_name` / `DrawingKey`). Только `by_system_name`. Не пул purpose по строке pin (два чертежа `tavern_*` не выбираются pin-ом `"tavern"`). Назначение — массив **самого** чертежа (`structure_types`). Optional leftover `RequiredStructure.structure_type` — дубль purpose на строке рецепта поселения, не pin. Leftover JSON `building_template` → тот же pin. Пул fill района — `allowed_structure_types` + `allowed_match`. Рецепт поселения даёт types; generate выбирает чертёж. Комбо `[house, workshop]` при like на `workshop` годится, если влезает в щель; одна посадка закрывает **все** свои теги (fill `house` после не ставить).
+**Район `required_structures[]`:** `plot_template` — UID конкретного **шаблона участка** доступной библиотеки; name lookup не поддерживается (legacy importer снят 2026-10-18). Не пул purpose по строке pin (два чертежа `tavern_*` не выбираются pin-ом `"tavern"`). Назначение — массив **самого** чертежа (`structure_types`). Optional leftover `RequiredStructure.structure_type` — дубль purpose на строке рецепта поселения, не pin. Leftover JSON `building_template` снят 2026-10-18 — только `plot_template`. Пул fill района — `allowed_structure_types` + `allowed_match`. Рецепт поселения даёт types; generate выбирает чертёж. Комбо `[house, workshop]` при like на `workshop` годится, если влезает в щель; одна посадка закрывает **все** свои теги (fill `house` после не ставить).
 
 ```json
 "required_structures": [
-  { "plot_template": "town_hall",  "count": 1, "position": "center" },
-  { "plot_template": "market",     "count": 1, "position": "any"    }
+  { "plot_template": "11111111-1111-5111-8111-111111111111",  "count": 1, "position": "center" },
+  { "plot_template": "22222222-2222-5222-8222-222222222222",     "count": 1, "position": "any"    }
 ]
 ```
+
+UUID в примере — условные ссылки: реальный importer проверяет membership/kind/body; UID вычисляет app.ids. Имена town_hall/market — читаемые названия, не ссылки.
 
 `count` — число токенов; default 1. Приоритет над `plot_counts` — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Массив — проход 1 **до** рамки пустых кварталов; порядок массива = очередь среди required — §5.1.3 «Приоритет посадки». Не путать с `plot_priority` (желательный fill, не обязательность).
 
@@ -704,7 +731,7 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | Regeneration — скелет изменился после generate | **deferred** — snapshot (§11.4) |
 | Механика дорог внутри района и между районами | **closed** — [tz_structure_connections.md](./tz_structure_connections.md) §5; `DistrictAssembler` + `connectionPolicy`. Рамка после брони — §6.3 |
 | **TODO** generate барьера **района** | **открыт** — `DistrictLayout.barrier_cells`. Зоны: не список поселения |
-| **TODO** поле барьера **поселения** на скелете (`CitySkeleton.perimeter_barrier`) | **открыт** — generate shrink есть; клетки стен всё ещё эвристика — **CITY-T-1c**; import поля нет — **CITY-T-1a** |
+| **TODO** поле барьера **поселения** на скелете (`SettlementSkeleton.perimeter_barrier`) | **открыт** — generate shrink есть; клетки стен всё ещё эвристика — **CITY-T-1c**; import поля нет — **CITY-T-1a** |
 | Зоны трёх инстансов `PerimeterBarrier` (нет общей xy) | **закрыт** — поселение вычитает `footprint ∩ слот` из площади района; packing района — только прямые района; [tz_locations.md](./tz_locations.md) |
 | **CONN-PACK-1** — рамка `radial` / `organic` вокруг брони; snap якорей вне `grid` | **открыт** — [connections](./tz_structure_connections.md) §8 |
 | **CONN-PACK-2** — два+ `required_structures` с `position: center` | **closed** — кластер вокруг home inner bbox; connections §5.1.3 / §8; поле — §9.4 |
@@ -923,7 +950,7 @@ DAG может materialize **разные уровни** в разных нод�
 | 2026-09-06 | **Extract resources:** ENUM-E `resource_kind` (`ore`/`stone`/`timber`/`liquid`) + N+1 `resource_type_registry`. Шаблон здания: `resource_kind`; layout-shaped `subjects` — REF-W + kind match. |
 | 2026-09-06 | **§1.2 subjects:** несколько видов на роли (`subject_kind` строка\|список) и на bind (`subjects` список или карта kind→токены). |
 | 2026-09-05 | **CITY-T-4** resolved (`/impl-city-t-4` A–G): POJO zone/rank/conditions; один resolve; cache=tokens; Bind-only coerce; skip unknown assembler. Не reopen §1.2. Recreate DB (`district_zone_preference`). |
-| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план `city-t-4-planner-debt.md` (слои A–G). Не reopen §1.2. |
+| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план `city-t-4-planner-debt-done.md` (слои A–G). Не reopen §1.2. |
 | 2026-09-05 | **§1.2 subjects:** N+1 руды/культуры/изделия/домены на роли (`subjects`, `subject_kind`, `subjects_to_structure_types`); чертёж здания `subjects`. |
 | 2026-09-05 | **§1.2:** морфология (`city`/`village`) ≠ специализация на шаблоне поселения (`extract`/`process`/…). Районы: `district_type` + `district_subtype`. Приоритет: список на городе → специализация → морфология. Реестр §4.1. |
 | 2026-09-05 | **§1.1** три оси: тип поселения (рецепт районов + обязательные типы зданий) ≠ тип района ≠ `structure_type` / чертёж библиотеки. Клетка = footprint, не макротайл. §9.4/§9.6/seed под оси. **CITY-T-2d**. |

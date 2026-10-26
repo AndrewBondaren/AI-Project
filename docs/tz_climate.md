@@ -10,6 +10,21 @@ metadata:
 
 Климат — **отдельный pure-generator**, независимый от terrain shape и weather runtime.
 
+PC-5 (2026-10-23): `climate/planning/ClimateBasePlanProvider` получает frozen
+`ClimateBaseInput` и возвращает `PlanBuildResult[ClimateBasePlan]` через общий
+PlanningService. Полюса и resolved profiles не содержат World/registry callbacks.
+`ClimatePlanSampler.sample(plan,gx,gy)` использует captured profiles/blend;
+legacy ClimatePoleField.sample делегирует тому же pure profile kernel,
+сохраняя alias fallback существующего registry adapter. Provider возвращает
+diagnostics как данные, без logging. Local anchors после final hydrology —
+отдельный PC-8C; их изменение и column z не меняют base key при неизменных
+ClimateBaseInput. Production registration/caller activation — PC-9A/PC-9.
+
+Коды диагностики базового planning объявлены как ClimateBaseIssueCode рядом
+с ClimateBaseInput; модель создаёт FieldPathError через diagnostic_issue.
+Пути выводятся из typed FieldRef к manual_poles/zone, не из строк в provider.
+Wire values и пути ошибок при этом сохраняются.
+
 | Система | Роль |
 |---|---|
 | **ClimateGeneratorService** | spatial assignment + `temperature_base` / `rainfall` на eager generate |
@@ -1133,7 +1148,7 @@ class VolumeClimateContext:
 
 | Blob | Путь | Координаты sample |
 |---|---|---|
-| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_m=1`; light / full bake |
+| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_fine=1`; light / full bake |
 | **fine** | `r.{gx}.{gy}.climate.zst` / location climate | meters + stride; detailed_bake / scene / фон |
 
 Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше обоих.  
@@ -1161,7 +1176,7 @@ Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше о�
 |---|---|---|
 | 1 | coarse bake на light pack | ✅ |
 | 2 | apply: meters→macro для coarse (`sample_macro`) | ✅ |
-| 3 | prefer fine over coarse (`sample_meters`) | ✅ |
+| 3 | prefer fine over coarse (`sample_fine`) | ✅ |
 | 4 | reject legacy `generate-climate` | ✅ |
 | 5 | fine denser content (per light-cell sample) | ✅ |
 | 6 | fine через `ClimateFinePending` + worker drain (не inline mid-pipeline) | ✅ |
@@ -1175,7 +1190,7 @@ Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше о�
 | **CL-PACK-3** | ✅ | `locationsIndexBake.build_locations_index_payload` |
 | **CL-PACK-4** | accepted | L0 `climate_zone_id` — optional UI tint; не debt |
 | **CL-PACK-5** | ✅ | `climatePackApply.apply_climate_to_view` |
-| **CL-PACK-6** | ✅ | `sample_macro` / `sample_meters` + ValueError на mismatch |
+| **CL-PACK-6** | ✅ | `sample_macro` / `sample_fine` + ValueError на mismatch |
 | **CL-PACK-7** | ✅ | `coarse_surface_z` только macro keys |
 | **CL-PACK-8** | ✅ | denser `build_climate_tile_wire` |
 | **CL-PACK-9** | ✅ | `bake_tiles(surface_ctx=…)` |
@@ -1247,3 +1262,31 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — CL-* registry
 - [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — pack climate blobs, merge fine→coarse, WP-18 / WP-PERF-32
 - [`tz_logging.md`](./tz_logging.md) — sink `climate/climateLog`
+
+
+## PC-0 — climate planning и dependency closure (2026-10-23)
+
+Полные payload/input fields — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0).
+ClimateBaseInput→ClimateBasePlan не имеет plan dependencies: poles, bbox,
+resolved registry profiles и blend frozen. ClimateLocalInput→ClimateLocalPlan
+зависит от climate_base и final hydrology после river_relief. Auto features
+строит local provider, не capture. ClimateFeaturePolicy включает
+synthetic_surface_terrain и water_feature_terrain TerrainKey.
+
+Point/sample/AnchorSource definitions переносятся в dataModel/climate/
+planning/climatePoints.py с old-path re-exports. ClimatePlanSampler принимает
+ClimateBasePlan/GridX/GridY без World/profile accessor. Manual pole order
+сохраняет current first-only fallback semantics. Hydro-only edit не меняет
+climate_base key, но final z edit меняет dependent local anchors. Base
+planning не записывает materialized temperature/rainfall. Reports/NOTICE/
+FALLBACK на HIT/MISS одинаковы по общему envelope/report contract.
+
+**PC-1C реализован 2026-10-23:** immutable base/local inputs и plans,
+ResolvedClimateProfile и shared point/sample definitions находятся в
+`dataModel/climate/planning`. Профили включают default/manual/preset либо
+default/pole keys, повторные ключи отклоняются; ручной порядок сохраняется.
+ClimateFeaturePolicy хранит прежние METRIC/50/25/10/32/2 defaults и два
+required TerrainKey; legacy modules читают те же defaults. Старые imports
+реэкспортируют те же types. Sampling/feature algorithms не изменены,
+переключение на pure sampler остаётся PC-5. Проверки: 111 tests OK,
+pyright positive 0 errors/warnings, negative 9 ожидаемых diagnostics.

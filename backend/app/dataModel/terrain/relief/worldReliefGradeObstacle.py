@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultEnumOnWire
+from app.dataModel.annotationPolicy import DefaultEnumWhenMissing
 from app.dataModel.terrain.relief.enums import ReliefGradeObstaclePolicy
 from app.dataModel.worldScalarWire import (
     pojo_wire_keys,
@@ -28,7 +28,7 @@ class WorldReliefGradeObstacleScalars(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    relief_grade_obstacle_policy: DefaultEnumOnWire[ReliefGradeObstaclePolicy] = (
+    relief_grade_obstacle_policy: DefaultEnumWhenMissing[ReliefGradeObstaclePolicy] = (
         ReliefGradeObstaclePolicy.TRUNCATE_SKIP
     )
 

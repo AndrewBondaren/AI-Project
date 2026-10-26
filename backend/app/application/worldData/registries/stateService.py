@@ -1,0 +1,30 @@
+from app.application.imports.helpers import import_list, with_default_created_at, prepare_import_row
+from app.application.imports.result import ImportResult
+from app.application.worldData.errors import WorldDataNotFoundError
+from app.db.models.state import State
+from app.db.repositories.iStateRepository import IStateRepository
+
+
+class StateService:
+
+    def __init__(self, repo: IStateRepository) -> None:
+        self._repo = repo
+
+    async def get_all(self, world_uid: str) -> list[State]:
+        return await self._repo.get_by_world(world_uid)
+
+    async def get_by_id(self, world_uid: str, state_uid: str) -> State:
+        state = await self._repo.get_by_id(state_uid)
+        if state is None or state.world_uid != world_uid:
+            raise WorldDataNotFoundError(f"State '{state_uid}' not found")
+        return state
+
+    async def get_by_uids(self, uids: list[str]) -> list[State]:
+        return await self._repo.get_by_uids(uids)
+
+    async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
+        return await import_list(data, lambda row: self.prepare_import(world_uid, row), self._repo.upsert, id_key="state_uid")
+
+    @staticmethod
+    def prepare_import(world_uid: str, row: dict) -> State:
+        return prepare_import_row(State, {**with_default_created_at(row), "world_uid": world_uid})

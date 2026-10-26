@@ -1,0 +1,44 @@
+"""locations_index.json wire — L1 pins mirror for world map (WP-9)."""
+
+from __future__ import annotations
+
+from typing import ClassVar
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.dataModel.annotationPolicy import DefaultWhenMissing
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import LocationTypeKey
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+
+
+class LocationsIndexPin(BaseModel):
+    """Single location pin on the world map index."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-LOCATIONS-INDEX-PIN"
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    location_uid: str
+    map_x: int
+    map_y: int
+    map_z: int = 0
+    display_name: str | None = None
+    # Historical pack snapshot: membership is checked when building a new index.
+    system_location_type: DefaultWhenMissing[LocationTypeKey | None] = None
+    system_location_subtype: str | None = None
+    system_city_size: SettlementSizeKey | None = None
+
+
+class LocationsIndexWire(BaseModel):
+    """Root of ``locations_index.json``."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-LOCATIONS-INDEX-WIRE"
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    locations: list[LocationsIndexPin] = Field(default_factory=list)
+
+    def contains(self, location_uid: str) -> bool:
+        """True if ``location_uid`` is a pin (occupancy winner baked into pack)."""
+        uid = str(location_uid)
+        return any(pin.location_uid == uid for pin in self.locations)

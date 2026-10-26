@@ -1,5 +1,17 @@
 # JSON Validation — Technical Specification
 
+**Состояние реализации 2026-10-08:** DefaultWhenMissing + ResolveReport/ResolveResult/UnresolvedModelError реализованы в существующем resolver. После pilots мигрированы 578 legacy-default полей; membership проверяется до extend через WorldRegistryIndex. Import preview/apply используют один preflight и одинаковую wire interpretation; request flag определяет только обработку новой диагностики и отсутствие writes. Partial blob patch проверяется после merge с текущим миром. Нижеследующие исторические описания error defaults не отменяют новую политику; остающиеся legacy consumers перечислены в E6 [плана](../.cursor/plans/runtime-world-edit-policy.md).
+
+**Базовое требование последующих планов (2026-10-08):** общая политика [runtime/worldEdit](./tz_runtime_world_edit_policy.md): единый доменный resolver, runtime WarningError без error defaults, та же диагностика в worldEdit. Штатные defaults при отсутствии optional-поля отличаются от подстановок при ошибке; прежние error fallback ниже требуют явной миграции E6 [общего плана](../.cursor/plans/runtime-world-edit-policy.md), а не переноса в новые consumers. Некорректный wire и неразрешённый preflight останавливают import до записи; runtime domain conflicts имеют свой контракт операции.
+
+**Выбор policy:** frontend определяет сценарий и включает дополнительную валидационную policy флагом в том же import API. По умолчанию флаг/policy отсутствует; обычный импорт и загрузка относятся к runtime. Ниже описанный текущий `IMPORT` на write-path не является целевым автоматическим выбором авторской политики. Разбор wire/целостность остаются обязательными; отдельный backend worldEdit-mode не вводится.
+
+**Флаг утверждён:** `validate_only=true` запускает тот же pipeline проверки/разрешения без DB/Pack writes и изменяющих мир задач. Без флага/false — обычный импорт с прежней bundle transaction/rollback. После проверки обычный импорт повторяет проверки по актуальному состоянию. Проверочный вызов не является write с rollback и не добавляет partial persist.
+
+**Централизованное применение:** API-флаг разрешается один раз в общем request context. Существующий policy resolver автоматически применяет typed контракты полей/моделей dataModel с их индивидуальными ограничениями, field policies, refs и специфичными reason codes. Missing/null/empty/invalid/unresolved различаются. Вложенные handlers наследуют context/path и не выбирают политику самостоятельно. Межполевые и доменные проверки возвращают диагностику в тот же механизм. Параллельный field registry или новая локальная политика поверх resolve запрещены; актуальная реализация требует аудита/миграции.
+
+**Утверждённый и реализованный pilot contract (2026-10-08):** `DefaultWhenMissing[T]` заменяет объединённую missing/invalid default-семантику при явной миграции полей. Эталон: `ForestsCategoryPolicy.forest_min_rainfall: DefaultWhenMissing[int] = Field(default=45, ge=0)`. При полном вводе missing→45, 60→60, -1/"abc"/null→ошибка без 45; при partial update missing→не изменять. POJO не содержит выбора runtime/validation и logging. Ограничения проверяет Pydantic; общий resolver возвращает unresolved/report и централизует реакцию. Ошибка не превращается в unchecked POJO через model_construct или пропуск поля. Полный контракт — [общая политика](./tz_runtime_world_edit_policy.md#default-только-при-отсутствии-эталон-pojo-утверждено-2026-10-08). Исторические error-default нормы ниже не являются действующим контрактом общего resolver после миграции полей E6.
+
 **Версия документа: 1.2** (2026-07)
 
 **Статус кода:** v1 vertical slice — POJO-first `application/jsonValidation/`.  
@@ -9,7 +21,7 @@
 |------|----------|
 | Код | `backend/app/application/jsonValidation/` |
 | Покрытие import | `world` slice: climate scalars, tiers, materials, terrain, hydrology, climate_zones |
-| Покрытие runtime | `worldRow` — те же POJO через `resolve` (warn-only) |
+| Покрытие runtime | `worldRow` — те же POJO через `resolve`; invalid → WarningError + unresolved |
 | Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ (**LOC-T-1** type←subtype; **LOC-T-3** AABB occupancy — не 422, не `normalize_world`) |
 | JV-0 ENUM gate | JV-0a ✅; JV-0b ✅ bundle connections |
 | REF-W index | ✅ (MVP) |
@@ -75,6 +87,7 @@ type SettlementSpecializationKey = RegistryKey[WorldSettlementSpecializationRegi
 type DistrictTemplateKey = RegistryKey[WorldDistrictTemplateRegistry]
 type BarrierTemplateKey = RegistryKey[WorldBarrierTemplateRegistry]
 type MaterialKey = RegistryKey[WorldMaterialRegistry]
+type LocationTypeKey = RegistryKey[WorldLocationTypeRegistry]
 
 class SettlementSizeEntry:
     system_size: StrictOnWire[RegistryKey[WorldSettlementSizeRegistry]]
@@ -95,7 +108,7 @@ class DistrictTemplateEntry:
     system_name: StrictOnWire[RegistryKey[WorldDistrictTemplateRegistry]]
 
 class TypicalDistrictRef:
-    system_name: DefaultOnWire[DistrictTemplateKey | None]  # pin чертежа; omit/null/blank → None
+    system_name: DefaultWhenMissing[DistrictTemplateKey | None]  # pin чертежа; omit/null/blank → None
 
 class DistrictTopologySlot:
     template_system_name: StrictOnWire[DistrictTemplateKey]
@@ -104,32 +117,38 @@ class BarrierTemplateEntry:
     system_type: StrictOnWire[RegistryKey[WorldBarrierTemplateRegistry]]
 
 class PerimeterBarrier:
-    template: DefaultOnWire[BarrierTemplateKey | None]  # omit/null/blank → None (скип)
+    template: DefaultWhenMissing[BarrierTemplateKey | None]  # omit/null/blank → None (скип)
 
 class BundleNamedLocation:
-    system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
-    system_economic_tier: DefaultOnWire[EconomyTierKey | None]
-    parent_wall_material: DefaultOnWire[MaterialKey | None]  # omit/null → None; "" → reject
-    parent_floor_material: DefaultOnWire[MaterialKey | None]
+    system_location_type: StrictOnWire[LocationTypeKey]
+    system_settlement_size: DefaultWhenMissing[SettlementSizeKey | None]  # код до rename: system_city_size
+    system_economic_tier: DefaultWhenMissing[EconomyTierKey | None]
+    parent_wall_material: DefaultWhenMissing[MaterialKey | None]  # omit/null → None; "" → reject
+    parent_floor_material: DefaultWhenMissing[MaterialKey | None]
 
 class SettlementSkeleton:
-    economic_tier: DefaultOnWire[EconomyTierKey | None]
-    system_city_size: DefaultOnWire[SettlementSizeKey | None]
-    dominant_material: DefaultOnWire[MaterialKey | None]
-    settlement_density: DefaultOnWire[DistrictDensity | None]
-    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None]
-    system_location_mood: DefaultOnWire[LocationMoodKey | None]
+    economic_tier: DefaultWhenMissing[EconomyTierKey | None]
+    system_city_size: DefaultWhenMissing[SettlementSizeKey | None]
+    dominant_material: DefaultWhenMissing[MaterialKey | None]
+    settlement_density: DefaultWhenMissing[DistrictDensity | None]
+    frontage_type_order: DefaultWhenMissing[list[ConnectionTypeKey] | None]
+    system_location_mood: DefaultWhenMissing[LocationMoodKey | None]
 
 class EconomicTierRange:
     min: StrictOnWire[EconomyTierKey]
     max: StrictOnWire[EconomyTierKey]
 
 class PlacementCondition:
-    size: DefaultOnWire[SettlementSizeKey | None]
-    terrain_types: DefaultOnWire[list[TerrainKey] | None]
-    tier: DefaultOnWire[EconomyTierKey | None]
-    zone: DefaultOnWire[CellZone | None]  # ENUM-E, не RegistryKey
-    district_type: DefaultOnWire[str | None]  # нет реестра типов ткани
+    size: DefaultWhenMissing[SettlementSizeKey | None]
+    terrain_types: DefaultWhenMissing[list[TerrainKey] | None]
+    tier: DefaultWhenMissing[EconomyTierKey | None]
+    zone: DefaultWhenMissing[CellZone | None]  # ENUM-E, не RegistryKey
+    district_type: DefaultWhenMissing[str | None]  # нет реестра типов ткани
+
+class LocationTypeEntry:
+    system_type: StrictOnWire[LocationTypeKey]
+    parent_types: DefaultWhenMissing[list[LocationTypeKey | None]]
+    display_type: StrictOnWire[str]  # локализованный текст
 ```
 
 JSON на проводе — строка (`"small"`). Тип — номинальный: `RegistryKey[WorldSettlementSizeRegistry]` ≠ `str` ≠ `RegistryKey[WorldLocationTypeRegistry]`.
@@ -146,12 +165,39 @@ JSON на проводе — строка (`"small"`). Тип — номинал
 | Wire на city/settlement | Import persist | Generate / `resolve_settlement_size_key` |
 |---|---|---|
 | omit / SQL NULL | NULL | канон **medium**, без warning |
-| не строка, `""` (type fail) | `DefaultOnWire`: WARNING `json_validation \| … invalid; using field default` + NULL | **medium** |
+| не строка, `""` (type fail) | DefaultWhenMissing: unresolved без NULL/default | **medium** |
 | строка не из реестра мира (`hamlet`, `nope`) | строка как есть (N+1 identity) | **medium** + WARNING `json_validation \| settlement_size invalid`; sink [`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve` |
 
 Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
 
 Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, NL `parent_wall_material` / `parent_floor_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Очередь leftover city `str` — [`tz_pojo_city_typing.md`](./tz_pojo_city_typing.md) (`POJO-C-*`), при касании, не массово.
+
+### Contract hygiene — отложенные строковые поля
+
+AST-проверка `tests/test_contract_hygiene.py` фиксирует существующий долг
+`*_type`/`*_kind` (также полей `type`/`kind`) вне SQL-моделей. Allowlist
+не разрешает новые строковые контракты; исправленное поле удаляется из
+него. Поля шагов миграции перечислены в
+[`type-kind-str-fields-debt.md`](../.cursor/plans/type-kind-str-fields-debt.md).
+
+Осознанные исключения и отложенные границы разбора:
+
+- `LocationTypeEntry.display_type` — локализованный текст названия, а не
+  ключ реестра; остаётся `str`, разбирается как текст wire-поля.
+- `VastHullContext.hull_type`, `ResourceExtractionContext.extraction_type`,
+  `RuinsContext.base_structure_type` — scaffold без producer. Enum и
+  проверка вводятся вместе с producer по разделу Scaffold плана;
+  `base_structure_type` проверяется по `BUILDING_ASSEMBLER_REGISTRY`,
+  список engine-ключей не дублируется. `resource_type` исключением не
+  является: его типизация принадлежит шагу 4.
+- `SizeSpec.size_type`, `ShaftSize.size_type` — отложенный dependent-key
+  контракт: namespace зависит от вида комнаты/лестницы. До согласования
+  resolver parent→namespace сохраняются текущие wire-строки и существующие
+  проверки пресетов на границе разбора; новый enum этим исключением
+  не вводится.
+- `WorldTileEntryPayload.grid_kind` — единственный текущий producer
+  задаёт `world_map_light`; enum/Literal вводится при появлении второго
+  вида. Текущая граница — построение render payload и `to_dict()`.
 
 ### REF-W → N1-W (cross-ref, import-only)
 
@@ -238,20 +284,24 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 
 ## Field policy (annotationPolicy)
 
+**Доменные библиотеки A0:** [контракт §2](tz_domain_template_libraries.md).
+Plot/building/structure используют свои POJO defaults и валидируют полный
+результат overrides. Body preparation, canonical member attach и fallback
+неразрешимого UID не взаимозаменяемы. Cascade None сохраняет наследование.
+
 Контракт поля на POJO — `dataModel/annotationPolicy.py`:
 
 | Annotation | Import (facade) | Runtime (worldRow) |
 |------------|-----------------|---------------------|
-| `StrictOnWire[T]` / `StrictEnumOnWire[E]` | **422**, запись не идёт | warning, поле/строка пропускается |
-| `DefaultOnWire[T]` / `DefaultEnumOnWire[E]` | `Field(default)` + **log** | то же |
+| `StrictOnWire[T]` / `StrictEnumOnWire[E]` | **422**, запись не идёт | WarningError + unresolved объекта/операции |
+| `DefaultWhenMissing[T]` / `DefaultEnumWhenMissing[E]` | missing → schema default; invalid → reject | missing → schema default; invalid → WarningError + unresolved |
 | `IgnoreOnWire[T]` | wire as-is, без автозаполнения | то же |
 
-**Policy enum:** `WireFieldPolicy` — `strict_on_wire` | `ignore_on_wire` | `default` (`annotationPolicy.py`).  
-Три alias-типа на поле: `StrictOnWire`, `DefaultOnWire`, `IgnoreOnWire`. Без alias → resolve трактует как `default`.
+**Policy enum:** `strict_on_wire` | `ignore_on_wire` | `default_when_missing`. Старый `default` — deprecated metadata, error-default execution path удалён. Типы/required/nullable/constraints/defaults проверяет исходная Pydantic-модель; unannotated поле также не получает error default.
 
-**ENUM-E:** `StrictEnumOnWire[E]` / `DefaultEnumOnWire[E]` + маркер `EnumWire` → `parse_enum()`.
+**ENUM-E:** `StrictEnumOnWire[E]` / `DefaultEnumWhenMissing[E]` сохраняют EnumWire; исходная модель проверяет closed StrEnum, invalid → UNKNOWN_ENUM. Deprecated alias exports означают новую missing-only policy.
 
-**Ядерный fallback запрещён:** одна ошибка в registry **не** заменяет весь POJO на `canonical_defaults()`.
+**Ошибка registry:** unresolved всей коллекции; ни canonical fallback, ни пропуск строки не разрешены. Каноническое дополнение штатно отсутствующих библиотечных записей сохраняется.
 
 **Пустой registry `[]` / отсутствие ключа:**
 
@@ -264,6 +314,34 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 Политика empty-on-import — уточняется per-slice в POJO; не дублировать в facade.
 
 **Instance-каталоги extract/farm/livestock** (`resource_type_registry`, `crops_registry`, `livestock_registry`) — не T-29 union. Runtime: пусто → канон POJO; непустой список мира → **только** он (канонический `iron_ore` не дописывать, если мастер завёл свои руды). Overlay по id (canonical⊕world) остаётся для чертежей района / барьеров. SoT packing — [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1.
+
+### Unknown wire keys
+
+Поле присутствует на wire и отсутствует в модели — общий двухконтурный
+контракт для всех wire-моделей (решение
+[паков §0](./tz_template_library_packs.md), перенесено в доменный ТЗ
+слоя 2026-10-09):
+
+| Контур | Реакция |
+|--------|---------|
+| validation / импорт | `FieldPathError` per key, `code="UNKNOWN_FIELD"`; собирается вместе со всеми остальными ошибками полей за один проход — возвращается полный список, не первая ошибка |
+| runtime | WarningError-лог через sink `jsonValidation/resolve` (одна строка: модель + список ключей), ключ отбрасывается, resolve продолжается |
+
+- **Детект** — обязанность слоя `resolve`: diff wire-ключей против
+  `model_fields` с учётом `alias`/`validation_alias`, до
+  `model_validate`. `extra="forbid"`/`"ignore"` конфиг модели поведение
+  **не** определяет — режим един для всех wire-моделей и не требует
+  `extra="forbid"`.
+- **Coverage:** входные точки `resolve_model`, `resolve_patch`,
+  `resolve_root_list`/`resolve_root_dict` + один уровень внутрь
+  root-контейнеров (строки `RootModel[list[Entry]]`, значения
+  `RootModel[dict[str, Entry]]`; ключи dict-реестра — N+1 identity, не
+  unknown). Более глубокая вложенность — только там, где домен резолвит
+  её отдельным `resolve_model`.
+- `validate_only` — тот же import-контур: те же факты без записи.
+- Не путать с «корректное имя, ошибочное значение» — это field policy
+  таблица выше (strict → 422 / default → reject при invalid), а не
+  unknown-ключ.
 
 ---
 
@@ -287,6 +365,9 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 | SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ✅ runtime | **LOC-T-2** ⬜ `settlement_size_registry` + ранги `small`/`medium`/`large`; множитель на subtype |
 | SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ✅ | ✅ runtime |
 | SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ✅ | ✅ `terrain_scalars()` |
+| SCH-WORLD-GRID-SETTINGS | `WorldGridSettings` | `fine_cells_per_map_cell` | ✅ | ✅ `grid_settings()` |
+| SCH-WORLD-PACK-METADATA | `WorldPackMetadata` | `terrain_pack_path`, `terrain_pack_hash` | ✅ | ✅ общий slice resolve |
+| SCH-WORLD-MAP-RESOLUTION-SETTINGS | `WorldMapResolutionSettings` | `world_map_cells_per_tile` | ✅ | ✅ общий slice resolve |
 | SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ✅ | ✅ runtime |
 | SCH-WORLD-CONN | `WorldConnectionTypeRegistry` | `connection_type_registry` | ✅ | ⬜ |
 | SCH-RACE-* | — | `races` table | ⬜ JV-8 | ⬜ |
@@ -323,6 +404,98 @@ class WorldSlice:
 
 `facade` merge → `worldSliceMerge.merge_facade_slices` (T-29). Runtime (`worldRow`) — thin DX поверх `resolve_multi_column_world` / `resolve_registry_list_world` / `resolve_registry_dict_world` / `resolve_json_blob_world` (тот же catalog; RELIEF-T-28). Registry с `RUNTIME_MERGE_ID_FIELD` на POJO → runtime canonical⊕world (district/barrier). **Исключение:** resource / crops / livestock — пусто→канон, непусто→только мир ([`tz_city_generation.md`](./tz_city_generation.md) §1.2.1). Не свои `_LIST_REGISTRY_KEYS`.
 
+**Библиотеки defaults material/terrain:** реестр POJO объявляет ключ идентичности
+`CANONICAL_OVERLAY_ID_FIELD`; `WorldSlice` использует эту декларацию для одного
+механизма дополнения при import и runtime. В существующем пути
+`normalize_world → merge_facade_slices → _merge_registry_list` перед policy-resolve
+записей выполняется канон ⊕ явно указанные поля мира. При полном импорте отсутствие
+реестра или `[]` подключает канон; частичный список дополняется отсутствующими
+каноническими записями. Совпавший ключ наследует неуказанные поля канонической
+записи; явно указанные false/0/[] и допустимый null сохраняются. N+1 записи
+валидируются обычным resolver. Результат входит в нормализованный мир до REF-W
+и сохраняется обычным импортом bundle. Неизвестные ссылки остаются ошибками.
+При partial update отсутствующий реестр не записывается и не сбрасывает overrides.
+Переданный при partial update список нормализуется с каноном и заменяет
+сохранённый реестр целиком; неуказанные старые overrides не сохраняются.
+Runtime применяет то же дополнение к старым частичным реестрам. Этот режим не
+распространяется автоматически на instance-каталоги resource/crops/livestock
+или существующий T-29 overlay других реестров.
+
+**Единый движок canonical defaults (world + global scope).** Один домен-агностический
+механизм подключения канона для любых библиотек: реестры мира, глобальные
+template-библиотеки, будущие домены. Движок не знает потребителей; домен объявляет
+`CanonicalLibrarySpec` — декларацию, не код слияния:
+
+| Поле spec | Содержание |
+|---|---|
+| `identity_field` | Ключ совпадения world wire-строк; global identity адаптируется доменом к pack-owned UID |
+| `canonical_source` | Источник канона: `canonical_defaults()` POJO или FS domain root + список canonical-паков |
+| `scope` | `world` — реестр мира в bundle; `global` — SQL-библиотека вне мира |
+| `trigger` | `full_import` / `runtime_read` (world); перед каждым публичным global read, включая list/find/get вне генерации |
+| `persist` | `world_wire_overlay` — merge до валидации, персист обычным импортом; `global_fill_missing` — атомарно добавить отсутствующие UID и membership, без замены существующих строк |
+| `adapters` | Global source/validation/identity/persistence задаёт домен; ядро не импортирует доменные модели/репозитории |
+
+World wire-overlay: world/explicit строки первыми (индексы
+ошибок сохраняются), совпавший ключ наследует неуказанные поля канона, явные
+`false/0/[]` и допустимый `null` — значения, не отсутствие, canonical-only ключи
+добавляются. Global field-merge нормализованных SQL-тел не выполняется:
+исходная явность полей уже потеряна. Автоattach добавляет только отсутствующие
+UID, сохраняя существующие тела и `source_file`, включая пользовательские
+overrides canonical UID. Ручная замена — отдельная явная операция.
+Источник проверяется полностью до записи; запись атомарна, конкурентный conflict
+не заменяет строку, ошибка допускает rollback/retry без скрытого commit чужой
+транзакции. Полнота определяется всеми canonical UID и membership, а не
+непустотой таблицы. Подробный lifecycle — [паки §6](./tz_template_library_packs.md#6-canonical-attach-и-жизненный-цикл).
+
+**Уточнение A0, 2026-10-14:** стандартные plot/building templates — объявленные
+default library members с UID, body defaults остаются в POJO. Действует
+[доменный контракт §3–4](tz_domain_template_libraries.md); прежнее исключение
+plots вне SQL отменено. Runtime world catalog использует ownership ∪ defaults,
+а не bindings. Registry pointer-колонки world (`*_template_registry` со старым
+pointer-форматом) и flat body-секции сняты 2026-10-18 — importer отклоняет
+их до normalize.
+
+**Global scope:** библиотека глобальна — partial-update мира к ней неприменим; авто-импорт покрывает только явно объявленные defaults из spec. Пак вне defaults
+автоматически импортировать запрещено. Пользовательские паки используются после
+явного подключения ко всему миру, через bundle или позже. Global list_all не
+является runtime-каталогом мира; движок разрешает template-only refs через
+единственного пак-владельца и world ownership/default status (bindings нет). Template ref отсутствует/неразрешим →
+доменный default, при неразрешимой явной ссылке — warning без переписывания ref.
+Будущий master-mode заменяет warning/fallback ошибкой. Остальные REF-W правила
+не меняются. UID — только `app.ids`, логи — существующая инфраструктура
+`tz_logging.md`. Полный контракт владения, storage и bundle —
+[tz_template_library_packs.md](./tz_template_library_packs.md).
+FS domain root резолвится через env
+(`STRUCTURES_TEMPLATES_ROOT`, `RELIEF_TEMPLATES_ROOT`, …) → repo-relative
+fallback; зависимость от `Path.cwd()` запрещена. Opt-out — отсутствие spec;
+instance-каталоги (resource/crops/livestock) spec не объявляют.
+
+**Аудит global библиотек, шаг 7 (2026-10-16):**
+
+- Plot/building/structure: global specs A5, pack-owned `template_uid`,
+  atomic fill-missing graph в общей UOW; источники объявлены явно,
+  см. [building §6.1](tz_building_generator.md#61-загрузка-в-глобальную-библиотеку).
+- Relief: global `RELIEF_CANONICAL_SPEC`, identity `template_uid`, пустой
+  default-набор; find/get/list проходят через `ensure_canonical` без записи
+  и FS-сканирования. Generation — только membership-каталог, R21 сохраняется;
+  см. [relief — библиотека и мир](tz_terrain_relief.md#библиотека-и-мир).
+- Barrier/district/purpose: opt-out global spec, inline world lists;
+  существующий T-29 canonical⊕world по `system_type`/`system_name`/`system_pack`.
+  Источники и политика — в [locations](tz_locations.md),
+  [city §9](tz_city_generation.md#9-шаблоны-районов-district_template_registry),
+  [building §2.1](tz_building_generator.md).
+- Canal: opt-out global spec; inline world list по `system_type`, POJO defaults
+  пусты; [relief — canal registry](tz_terrain_relief.md).
+- Race/perk: opt-out autoattach; SQL rows по `template_uid` из явного import/create,
+  availability через world pointers; [race](tz_races.md),
+  [WB-13/14](tz_world_bundle.md#c-пока-не-library-секции).
+- Lore: opt-out global spec; world map по lore id, POJO fallback при пустом map;
+  [архитектурный стиль — lore](tz_architectural_style.md#1-текущий-статус).
+
+Эти opt-out не вводят новых defaults, global bypass или pack-ownership для
+inline/pointer доменов. Их перевод в библиотеки остаётся deferred per-domain
+фазой плана `library-packs-model`.
+
 **Чеклист нового POJO на `worlds`:**
 
 1. POJO + field policies
@@ -352,8 +525,10 @@ class WorldSlice:
 | JSON не парсится | 422 | `JSON parse failed: …` (`JsonResolver`) |
 | `StrictOnWire` | 422 | `detail: [{ "loc": [...], "msg": "..." }]` |
 | ENUM-E unknown (JV-0) | 422 | `code: "UNKNOWN_ENUM"` + список допустимых wire values |
+| Unknown wire key | 422 | `code: "UNKNOWN_FIELD"` — см. § Field policy → Unknown wire keys |
 | Normalize warnings | 200/201 | **не в HTTP** — только server log |
-| Technical (`fine_cells_per_map_cell`, …) | 422 | `WorldService._validate` |
+| Grid size (`fine_cells_per_map_cell`) | 422 | Structured `ImportValidationError`, schema `SCH-WORLD-GRID-SETTINGS` |
+| Remaining technical (`grid_bbox_padding`, …) | 422 | `WorldService._validate` |
 
 **Формат strict error (422):**
 
@@ -380,6 +555,124 @@ class WorldSlice:
 
 - peak `-40/45` explicit on import (`canonical_defaults` только на import)
 - `precipitation_liquid` ∈ `material_registry` liquid rows — **✅ import** (`index/validate.py`); runtime fallback в generators до JV-7
+
+### Scoped column write (internal)
+
+Две write-модели над колонками `worlds` — не смешивать:
+
+| Модель | Caller | Семантика |
+|--------|--------|-----------|
+| **Master-PATCH / import** | `PUT /worlds/{uid}`, `POST /worlds`, `import_from_json`, bundle | Full/partial normalize **всего** документа (все facade-слайсы + REF-W). Полная когерентность намеренна — мастер трогает документ, весь документ остаётся валидным |
+| **Scoped single-column** | Внутренние писатели `worldData`: registry-bind (`_ensure_registry`-паттерн), pack-адаптеры remap | Валидация **только пишущейся колонки** через её `WorldSlice`; чужие колонки не резолвятся |
+
+Внутренний писатель **не** вызывает `worlds.update` для maintenance-записи одной
+колонки — полная ревалидация вне его контракта, и невалидная чужая колонка
+обязана не блокировать scoped-запись (прецедент: `building_template_registry` с
+mixed-строками ломал любой PATCH до union-POJO; колонка и facade удалены в B7).
+
+**Примитивы (два явных, не один вызов):**
+
+| Функция | Слой | Роль |
+|---------|------|------|
+| `resolve_world_column(key, raw, ctx, *, existing=None) -> dict[str, Any]` | `jsonValidation/worldColumnResolve.py` | Чистый resolve атомарной колонки через общий merge либо исходную field schema; для общего инварианта — итоговый POJO с текущими значениями caller'а. Dump только явно изменяемых колонок. Без I/O |
+| `apply_world_column(world, key, raw, ctx) -> frozenset[str]` | `worldData/worldColumnWrite.py` — module-level функция, **не** сервис | resolve → `setattr` на `World` → возвращает имена инвалидированных таблиц |
+
+**Инварианты:**
+
+- **Supplied = atomic**: caller передаёт колонку целиком (`partial=False`);
+  `resolve_root_list` материализует canonical overlay + dump — та же семантика,
+  что у facade-merge. `wire_adapter` (canonical shape-адаптеры слайсов) работает на общем пути.
+  Для отдельного поля multi-column атомарно само переданное значение;
+  это не требование полного resolve всех соседних колонок POJO.
+- **Политика значений принадлежит POJO:** defaults, missing, допустимость null
+  и ограничения значений определяет соответствующий `dataModel` POJO.
+  Scoped write использует общий resolver с той же семантикой, что импорт;
+  собственных правил подстановки default или обработки `None` у
+  `resolve_world_column` / `apply_world_column` нет. Явный `None` не означает
+  универсально «подставить default»: применяется контракт конкретной модели.
+  Отсутствие колонки в операции означает «не менять её»; defaults, полученные
+  при resolve POJO, сами по себе не расширяют область записи.
+  Существующие early-return/skip в общем merge при `None` проверяются на
+  соответствие POJO-контракту. Несоответствие исправляется в общем
+  `worldSliceMerge` / resolver-пути для импорта и scoped write, без локальной
+  ветки обработки null в scoped-примитиве. Это проверка реализации, а не
+  открытый выбор отдельной scoped-политики.
+- **Действующие политики POJO (сверено с кодом 2026-10-12):** источник —
+  `dataModel/annotationPolicy.py` и исходная Pydantic-схема, исполнение — общий
+  `resolve_model` / `resolve_patch` (см. § Field policy).
+  `DefaultWhenMissing` / `DefaultEnumWhenMissing`: missing полного объекта →
+  объявленный schema default; supplied invalid → ошибка. Явный null для
+  `T | None` сохраняется как `None`, для non-nullable `T` отклоняется,
+  без подстановки default. `IgnoreOnWire` — wire as-is, без отдельного
+  policy-автозаполнения; required/nullable/schema defaults определяет исходная
+  модель. Ignore не означает пропуск ошибки или явно переданного null.
+  `StrictOnWire` / `StrictEnumOnWire` не дают error default.
+  `DefaultOnWire` / `DefaultEnumOnWire` / `WireFieldPolicy.DEFAULT` —
+  удалены 2026-10-18 вместе с error-default execution path; canonical
+  missing-only имя — `DefaultWhenMissing`. Общей политики «null → сброс к default» нет; W2 её не вводит.
+  Отсутствующая колонка scoped-операции не меняется. Допустимые явные
+  `false`, `0` и пустые коллекции не считаются отсутствием через `if not value`.
+  Это контракт полей POJO; root-коллекции используют существующий общий
+  slice-контракт `empty_factory` / canonical overlay, проверяемый отдельно,
+  а не новую field-политику null.
+- **Multi-column: область проверки и записи (решение 2026-10-12).** Независимый
+  скаляр проверяется отдельно по контракту поля исходного POJO через общий
+  resolver; невалидное независимое соседнее поле не блокирует его изменение.
+  Поля, связанные общим инвариантом POJO, проверяются совместно на итоговых
+  значениях: существующее состояние нужных полей + явно переданные изменения.
+  Существующие значения предоставляет caller, resolve остаётся без I/O.
+  Связность определяется контрактом POJO, а не самим нахождением полей в одном
+  классе; параллельные локальные правила в scoped write не создаются.
+  Возврат resolve — dict только явно изменяемых колонок; сохраняются только
+  они. Defaults и нормализация соседей не расширяют область записи и не
+  выполняют скрытый repair. Registry / JSON blob передаются целиком и
+  проверяются как атомарное значение соответствующей колонки.
+- **Библиотечный pipeline:** итоговые world-колонки подготавливаются,
+  нормализуются и проверяются до записи в общем `libraryPacks` pipeline через
+  доменные адаптеры и общий resolver. Ownership, dependencies, refs,
+  copy/replace и stale остаются проверками библиотечной операции, а не
+  scoped-примитива. Executor применяет подготовленный результат без новой
+  нормализации; защитная проверка при apply не должна менять этот результат.
+- **Шов не владеет транзакцией** и не делает `repo.update` сам — как
+  `PackDomainAdapter`: все методы внутри транзакции caller'а. Одиночная колонка:
+  `apply` → `repo.update`; мультиколонка (relief: registry + pick-policy):
+  `apply` ×N → **один** `repo.update`.
+- **Только facade-колонки**: ключ вне `WORLD_SLICES` facade → отказ. Контракт
+  колонки расширяется только через dataModel + `WorldSlice` (см. чеклист нового
+  POJO). Raw `repo.update` на колонках мира — вне пути, исключение только
+  repair-путь.
+- **Invalid rows never disappear** — reject с индексом строки, как на импорте.
+- **Ошибки scoped resolve/apply:** невалидные данные передаются caller'у как
+  `ImportValidationError` с исходными `FieldPathError` (список ошибок, пути,
+  индексы строк, schema и code). Не сворачивать их в текстовый
+  `WorldDataValidationError`. Это общий контракт диагностики POJO, несмотря
+  на историческое имя исключения. Ошибки библиотечной операции (ownership,
+  copy/replace, stale и т.п.) сохраняют контракт `libraryPacks`.
+- **`COLUMN_INVALIDATES`** — реестр `dict[str, frozenset[str]]` в `worldData`
+  (не на `WorldSlice`: jsonValidation не именует domain-таблицы). Колонка →
+  доменные таблицы, которые изменение её значения инвалидирует
+  (`fine_cells_per_map_cell` → `map_cells`). Мастер-путь `worlds.update` и
+  `apply_world_column` используют один расчёт: сравнение старых и новых
+  нормализованных значений фактически записываемых колонок → объединение
+  соответствующих наборов таблиц. Запись равного значения возвращает пустой
+  набор; при записи нескольких колонок учитываются все изменённые колонки.
+  `apply_world_column` возвращает последствия caller'у — тот организует
+  сохранение, очистку и транзакцию. Пользовательское подтверждение `force`
+  относится к мастерской операции, не к persistence-примитиву.
+- **Два независимых реестра:** `WORLD_SLICE_BY_KEY` описывает POJO-покрытие и
+  способ resolve; `COLUMN_INVALIDATES` — последствия изменения. Guard для
+  `COLUMN_INVALIDATES`: все ключи существуют среди полей `World`; принадлежность
+  к `WORLD_SLICE_BY_KEY` не требуется. Реестр может содержать technical-колонку,
+  доступную пока только мастер-пути. Наличие записи об инвалидации не разрешает
+  scoped write: facade-доступность отдельно проверяет `resolve_world_column`.
+  С G-1 (2026-10-16) `fine_cells_per_map_cell` покрыт `WorldGridSettings`
+  и доступен scoped-шву; изменение возвращает `map_cells`, равное значение —
+  пустой набор. Вызов `WorldService._validate` из scoped-примитива запрещён.
+
+**Не через шов:** мастер-PATCH, `import_from_json`, bundle — full-doc семантика
+сохраняется. Состояние внутри мира (клетки, здания, дороги, флора, поселения) —
+не колонки `worlds`: пишут доменные persist-сервисы своих таблиц, шов к ним
+неприменим.
 
 ---
 
@@ -432,15 +725,44 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 ## Technical validation (SCH-WORLD-ROW-TECH)
 
-Скалярные инварианты **без** POJO domain policy:
+Оставшиеся сервисные technical-проверки:
 
-- `fine_cells_per_map_cell` — int, ≥1000, кратно 1000
 - `grid_bbox_padding` ≥ 0
 - `terrain_chunk_columns` ≥ 1
-- `map_subsurface_depth` ≥ 10
+- `map_subsurface_depth` ≥ 0 (0 = surface-only; `tz_terrain_generation.md`)
 
-Сейчас: `WorldService._validate`.  
-Целевое: отдельный technical pass или поля на `World` metadata POJO — **не** смешивать с `WorldClimateScalars`.
+`grid_bbox_padding` пока не покрыт `WorldSlice`. `terrain_chunk_columns` и
+`map_subsurface_depth` принадлежат `WorldTerrainScalars`, но дополнительно
+проверяются сервисом: strictness POJO и сервиса пока расходится, эти проверки
+нельзя удалить как эквивалентные без отдельного согласования.
+
+**G-1 выполнен 2026-10-16:** `fine_cells_per_map_cell` принадлежит
+`dataModel/worldPack/worldGridSettings.py::WorldGridSettings`, schema
+`SCH-WORLD-GRID-SETTINGS`, facade multi-column slice из одного поля.
+Контракт: строгий int без bool, ≥1000, кратно 1000; default берётся из
+`mapCellSize.FINE_CELLS_PER_MAP_CELL_DEFAULT`. Missing полного объекта →
+default; missing PATCH → не менять; explicit null / float / строка отклоняются.
+`map_cell_size_m` отклоняется facade (`REMOVED_FROM_WIRE`, 2026-10-18);
+принимается только `fine_cells_per_map_cell`.
+Create/import/master-PATCH/bundle используют facade; прямой `prepare_import`
+проверяет grid-слайс общим resolver на исходном mapping до конструктора World.
+Ошибки сохраняют path/schema/code в `ImportValidationError`; ручного блока
+проверок размера в `WorldService._validate` больше нет.
+
+**Целевое решение (2026-10-12):** допустимость значения принадлежит `dataModel`
+POJO и переиспользуется всеми write-путями. `WorldService` организует операцию,
+а `worldData` определяет последствия изменения; постоянные параллельные
+ограничения в сервисе и POJO не допускаются. Для настроек сетки выделяется
+небольшой POJO по смыслу полей и связанным инвариантам, с регистрацией facade-слайса.
+Не смешивать его с `WorldClimateScalars` и не собирать все technical-поля в один
+общий контейнер. Сохранить строгий контракт размера клетки: int без bool,
+≥1000, кратно 1000; расширение покрытия не меняет допустимые значения.
+
+Перенос выполнен отдельным шагом **G-1** плана `world-scoped-column-write-done.md`,
+вне объёма W2-1…W2-4. `COLUMN_INVALIDATES` остаётся независимым от POJO-покрытия;
+scoped apply не сохраняет и не очищает таблицы. Мастерское подтверждение `force`
+сохранено. Атомарность очистки `map_cells`, padding и pack metadata — отдельные
+задачи.
 
 ---
 
@@ -448,7 +770,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 **Назначение:** зафиксировать перенос `application/worldData/generators/` с сырого `world.*` / `dict.get` на typed accessors `jsonValidation/worldRow` → `dataModel` POJO.
 
-**Не входит:** `world_seed()`; technical invariants (`fine_cells_per_map_cell`, …). Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
+**Не входит:** `world_seed()`; оставшиеся technical invariants. G-1 добавил `grid_settings(world)` для размера клетки; массовая миграция generator consumers на него не входит в G-1. Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
 
 **Правило:** generators читают master-data **только** через `worldRow`; `model_dump()` в generators — не целевой путь (допустим только в resolve-логах и import facade).
 
@@ -466,7 +788,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 | Barrier templates | `barrier_templates()` | barrierDefaults, barriers, areaBarriers | ✅ |
 | City sizes | `city_sizes()` | `footprint.footprint_multiplier` | ✅ код; целевой lookup subtype×ранг — [`tz_locations.md`](./tz_locations.md) **LOC-T-2** |
 | District templates | `district_templates()` | footprint → placement → DistrictSlot → roads | ✅ |
-| Building layouts | `building_layout_templates()` | buildingDefaults, buildingCache, assemblers | ✅ корень `BuildingLayoutTemplate`; nested — **JV-4b** `list[dict]` |
+| ~~Building layouts~~ | ~~`building_layout_templates()`~~ | accessor удалён (B7) вместе с колонкой `world_building_layout_overrides`; layouts — в world-owned packs | ✅ корень `BuildingLayoutTemplate`; nested — **JV-4b** `list[dict]` |
 | Terrain scalars | `terrain_scalars()` | worldMapSettings, columnFillPass, climateGeneratorService (lapse) | ✅ |
 | Connection types | ⬜ | — | ⬜ POJO есть, consumers нет |
 | Location types, lore, weather, room types, terrain categories, location mood | ⬜ | — | ⬜ |
@@ -509,8 +831,9 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 
 ### Facade import — пробелы (symmetry с runtime)
 
-`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `fine_cells_per_map_cell`, …); bundle sections (`races`, `locations`, …). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.  
+`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `grid_bbox_padding`, …); bundle sections (`races`, `locations`, …). `fine_cells_per_map_cell` покрыт facade `WorldGridSettings` (G-1). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.
 ~~barrier / city_size / district / road_settings / terrain scalars / connection_type_registry / location_type / lore / weather / terrain_category / room_type / location_mood / building_template_registry~~ — ✅ GV-3 registry facades.
+*B7 (2026-10-15): facades `building_template_registry` / `relief_template_registry` удалены вместе с колонками — pack-домены на membership, см. §B `tz_world_bundle`.*
 
 ### Очередь GV (приоритет)
 
@@ -559,29 +882,32 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 | `wire.parse_enum` | ✅; вызывается из `resolve` на IMPORT (JV-0a) |
 | `MaterialCategory` на `material_registry[]` | ✅ `parse_enum` → 422 `UNKNOWN_ENUM` (JV-0a) |
 
-### Целевой поток
+### Целевой поток после миграции полей E6
 
 ```
-WRITE (strict)                         READ (permissive)
+WRITE                                  READ
 JSON → facade / bundle normalize       DB → worldRow → resolve (RUNTIME)
-     → resolve + parse_enum (IMPORT)         → warn + canonical_* on gaps
-     → 422 UNKNOWN_ENUM                      generators НЕ вызывают facade
-     → persist
+     → исходная typed модель                 → исходная typed модель
+     → invalid: 422 / preview report          → invalid: WarningError + unresolved
+     → valid: persist / preview no-write      → valid: typed POJO
 ```
 
 **Правила:**
 
-- ENUM-E **reject** только на import (`ResolveMode.IMPORT`); runtime — warn + skip/default.
+- ENUM-E reject в обоих сценариях: runtime WarningError + unresolved, preview те же facts без runtime warning. Коллекция не теряет ошибочные строки.
 - Defaults и wire-контракт — **только** `dataModel`; не дублировать в `jsonValidation`.
 - `generators/registries/wireEnums.py` — re-export barrel **для jsonValidation**; generators не импортируют (HY-5).
 - N1-W registry keys — `RegistryKey[R]` на POJO + REF-W (JV-2), не `parse_enum` и не голый `StrictOnWire[str]` на identity/ref.
 - Settlement size: type/membership miss на generate → канон `medium` + WARNING фасада (`json_validation \| settlement_size invalid`), не 422 и не голый `getLogger` в planner.
 - Preset keys в fixtures (`temperate`, `water`) — N1-W, не ENUM-E.
 
-### Интеграция `parse_enum` (вариант A)
+### EnumWire и enum validation после E6
 
-Поле ENUM-E на POJO — **только** `StrictEnumOnWire[E]` / `OptionalEnumOnWire[E]` (`EnumWire` marker в `annotationPolicy.py`).  
-`resolve` вызывает `wire_enum_class(annotation)` → `parse_enum(E, wire)`; `StrictOnWire[SomeEnum]` без маркера — **не** ENUM gate.
+Enum aliases `StrictEnumOnWire[E]` / `DefaultEnumWhenMissing[E]` сохраняют
+EnumWire для introspection. Полная проверка делегируется исходной Pydantic-модели,
+включая обычный StrEnum внутри другой typed annotation. Ошибка enum становится
+UNKNOWN_ENUM; runtime не получает skip/default. `parse_enum` остаётся standalone
+wire helper, общий resolver не имеет отдельной enum-fallback ветки.
 
 В `resolve._resolve_field` на IMPORT:
 
@@ -607,6 +933,11 @@ JSON → facade / bundle normalize       DB → worldRow → resolve (RUNTIME)
 ```
 
 ### Bundle row DTO (вариант A+ для секций вне `worlds`)
+
+**A0:** NamedLocation DTO переносит system_template_uid (реальный member UID)
+и system_structure_template_uid (применённая geometry здания), см.
+[доменные библиотеки §5](tz_domain_template_libraries.md). Ошибочное значение
+при import не заменяется fallback; runtime resolve имеет доменную политику.
 
 Модуль: `jsonValidation/bundle/` (новый). Hook в `WorldBundleService.import_bundle` **до** `import_list` / repo upsert.
 
@@ -727,3 +1058,66 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | **1.1.4** | 2026-07 | JV-2 MVP: `jsonValidation/index/` — `WorldRegistryIndex`, REF-W на import (`precipitation_liquid`, climate zone, hydrology shore, material tier) |
 | **1.2.7** | 2026-07 | GV-3: все оставшиеся world registry slices (`location_type`, `lore`, `weather`, `terrain_category`, `room_type`, `location_mood`, `building_template_registry`); `registry_dict` wire kind; `worldRow` accessors; explicit JSON `null` на optional constrained fields |
 | **1.2.6** | 2026-07 | `connection_type_registry` — `facade=True` (import normalize symmetry) |
+
+## Приёмка миграции полей E6 (2026-10-08)
+
+[Перечень полей и границы](./runtime_policy_field_migration.md),
+[план и результаты тестов](../.cursor/plans/runtime-world-edit-policy.md#приёмка-миграции-полей-e6-2026-10-08).
+Full model validation сохраняет исходные validators и authored presence.
+Patch переиспользует compiled field schemas, затем полное состояние проверяется
+после merge. Не существует fieldwise model_construct/invalid default/row skip.
+Остальные доменные runtime fallback и cascade-source membership требуют
+отдельной миграции consumers; field migration не объявляет весь E6 завершённым.
+
+
+### Уточнение partial patch после E6-R1–R3
+
+Patch без discriminator не выбирает первую ветку union и не удаляет authored keys.
+Выбор ветки model union и проверка отложенных полей выполняются при обязательной
+полной валидации после merge с существующим состоянием, до persistence. Явный
+string discriminator проверяется по исходному tagged-union contract уже на patch.
+Nested field before-validators и aliases сохраняются; after/wrap field validators,
+потребляющие полные nested POJO, и model validators выполняются после merge.
+Patch не вызывает defaults отсутствующих полей и не является валидной полной POJO.
+
+`HillPolicy.shapes` допускает массив: missing/[] означают весь каталог, повторения
+задают веса. Explicit null и ошибочные элементы дают unresolved, без repair.
+Ошибочный тип `levels[].rooms` даёт штатный report/GenerationError, а не TypeError
+при построении диагностики. Приёмка исправлений: 188 synchronous + 10 import/API
+tests, OK; полный suite заново не запускался. Остаток E6 сохраняется в плане.
+
+
+## PC-0 — immutable inputs и diagnostic admission (2026-10-23)
+
+Полный contract — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0).
+EntityUid — единственное neutral определение прежнего PlacementUid value
+contract; identity/seed formulas не меняются. **PC-0U реализован 2026-10-23:**
+`dataModel/identity/uid.py::EntityUid` и old-path `PlacementUid` — один
+объект типа; strict string/nonempty/trimmed validation сохранена, без
+добавления требования UUID-формата или удаления внутренних пробелов.
+Приёмка: 5 geometry/value-contract + 23 placement contract + 37 water
+adapter tests, все OK. Pure FieldPathError,
+ReferenceIssueContext/Reason переносятся в dataModel/validation/diagnostics/
+fieldPathError.py; ResolveContext/Report/HTTP mapping остаются application.
+ResolutionMode RUNTIME/VALIDATE_ONLY — отдельная общая validation ось.
+
+PC-0I переводит перечисленные в нормативе shape/hydrology/mountain source
+collections и MountainSideRecipe.side_kinds в tuple. JSON arrays и
+DefaultWhenMissing/StrictOnWire semantics сохраняются; _reference_issues
+обходит tuple так же, как list, включая RegistryKey children.
+**PC-0I реализован 2026-10-23:** source fields/defaults и resolved_sides
+переведены в tuple; constructor/stamping helpers сохраняют immutable
+вложения. Существующий registry_key_target распознаёт также
+tuple[RegistryKey[R], ...] и nullable members, сохраняя REF-W paths.
+Приёмка: 186 tests OK; expanded JSON schemas девяти source моделей
+эквивалентны прежним; mountain identity_key не изменён. model_copy/
+construct не обходят recursive cache admission: actual enum/numeric fields,
+nested containers, duplicates, required fields и cross-field invariants
+проверяются даже на already-typed instances. Missing field не получает
+нового synthetic default на cache boundary.
+
+Capture provenance issues публикуются при каждом capture. Provider issues
+— immutable PlanDiagnostic в envelope; request reports их ровно один раз
+в явном phase order. ERROR/FALLBACK дают validation error, runtime FALLBACK
+проходит existing report_issues/log_issues/WarningError, NOTICE не ctx.errors.
+Cache/backend failure — technical error, не MISS/empty plan/runtime fallback.

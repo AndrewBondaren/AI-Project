@@ -31,6 +31,25 @@ flowchart LR
 
 ---
 
+## Владение геометрией terrain/relief
+
+**Согласовано мастером 2026-10-22; target, не отчёт о готовом cutover.**
+Terrain/relief планирует геометрию и пишет высоты гор, оврагов, дна
+морей/океанов/озёр и речных русел. Первый общий этап рельефа выполняется
+до гидрологии; повторный вызов строит русла по готовым гидрологическим
+маршрутам. Гидрология после этого читает итоговые высоты для водных фактов.
+Повторный вызов не перестраивает горы и дно водоёмов. Общий placement
+сохраняет ответственность за разрешение размещения.
+
+Горы имеют одно planning решение с coarse/light/fine проекциями.
+L0/L2 consumers не повторяют selection, template pick или placement;
+гидрология, landcover и bake tile scope не являются обратной зависимостью
+первого mountain planning. Используемые template inputs фиксируются
+immutable projection, не live accessor. Это владение surface geometry
+не смешивается с отдельными grade/mill обязанностями ниже.
+Полный норматив фаз, refs и приёмки —
+[Terrain/relief и гидрология: порядок планирования](./tz_terrain_generation.md#terrain-relief-hydrology-planning).
+
 ## Граница слоёв
 
 | Слой | Делает | Не делает |
@@ -101,22 +120,66 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 
 ### Библиотека и мир
 
-Как здания: глобальная библиотека + per-world pointers (**R11**). Тела **не** внутри `world` JSON (**R35**).
+**A0, 2026-10-14:** [доменные библиотеки §3/6/7](tz_domain_template_libraries.md).
+После 5b availability = default-паки ∪ world-owned паки, не pointers.
+Relief default bodies по-прежнему не объявлены; smoke_003 user pack.
+**Global canonical spec (шаг 7, 2026-10-16):** `RELIEF_CANONICAL_SPEC`
+объявляет scope `global`, identity `template_uid`, `global_fill_missing` и
+явно пустой источник тел/паков. Библиотечные find/get/list вызывают общий
+`ensure_canonical` без мира; при пустом источнике SQL и FS не меняются.
+Повторные/конкурентные чтения сохраняют пользовательские тела и `source_file`.
+Корень явного FS-импорта: `RELIEF_TEMPLATES_ROOT` → repo-relative
+`relief_templates/`, независимо от cwd. Generation остаётся на эффективном
+каталоге мира, без административного global lookup; отказ R21 сохраняется.
+Context pick-кандидата берётся из body, порядок — template_uid; pins не
+фильтр. Fixed ref — member UID; R21 отказ сохраняется, warning не дублируется.
+
+**Целевой контракт паков (2026-10-08):**
+[tz_template_library_packs.md](./tz_template_library_packs.md).
+Один шаблон — один пак-владелец, UID — только центральный `worldData/ids`
+с владельцем. Пользовательский пак доступен после явного подключения ко всему
+миру (bundle или позже); генератор выбирает из всех подключённых подходящих паков.
+Defaults перечисляет доверенный spec, а не FS-сканер; `smoke_003` не становится
+default по факту наличия на диске. Global autoattach добавляет только отсутствующие
+default UID/membership, не заменяет тела/`source_file` и не меняет pointers/policy
+мира. Effective candidates строятся по доступным пакам, не по всем SQL-строкам
+и не только по индивидуальным pointers. `fixed` UID проверяется на доступность.
+Неразрешимая template-ссылка или неподключённая зависимость → общий unresolved:
+runtime пишет WarningError и останавливает операцию; validate_only возвращает
+те же факты без runtime-лога. Исходный ref не переписывается (E6-R21).
+Новые параллельные UID/log-хелперы не вводятся.
+
+Как template-домены: общая библиотека + membership паков; per-world pointers
+R11 ниже — legacy до cutover 5b. Тела **не** внутри world JSON (R35).
+**Cutover выполнен (5b/B7, 2026-10-15):** колонка `relief_template_registry`
+удалена; availability — membership world-owned паков + `library_pins`.
 
 | Где | Что |
 |---|---|
 | Диск | корень **`relief_templates/`** (не `structures_templates/`). Пак `{pack_name}/{system_name}.json`; stem = `system_name`; иначе **reject** (**R29**) |
 | SQL library | плоский ряд `relief_templates` после import |
-| Мир | `relief_template_registry` (uid, display, `context`, imported_at) + `relief_pick_policy` |
-| Bundle | top-level секция `relief_templates` (тела) + pointers/policy в `world`. Import: library ← секция, registry/policy ← `world` |
+| Мир | membership world-owned паков + `library_pins` + `relief_pick_policy` (`default_template_uid` = member uid) |
+| Bundle | top-level секция `relief_templates` — compat flat input → `legacy` pack; policy/pins в `world` |
 
-Мастер: **(A)** файл/пак → library → registry и/или **(B)** world bundle (**R18**).
+Мастер: **(A)** файл/пак → library → attach к миру и/или **(B)** world bundle (**R18**).
 
 У шаблона **ровно один** `context` (**R17**), не список. v1: `mountain` \| `open_land` \| `shore` \| `road_shoulder` \| `ravine` (**R13**). Приоритет context на клетке: `road_shoulder > shore > mountain > ravine > open_land` (один шаблон, не blend).
 
+**N+1 open-land (7b, 2026-10-17):** допуск определяется
+`TerrainRegistryEntry.supports_open_land_grade`, независимо от физической
+`terrain_category` и наличия `hills`. Обязательный при допуске
+`open_land_profile` (`plains`/`forest`) определяет envelope discover/pick
+и condition шаблона; builtin лес сохраняет профиль forest, равнина — plains.
+Неизвестный ключ с допуском не использует unrestricted envelope. Фактический
+terrain и identity сохраняются. Wire-контракт — `tz_world_pack_storage` § L2 open-land hills.
+
 ### Pick: мир → локация / объект
 
-На **каждый** context — `fixed` \| `random` \| `round_robin` (**R19**). `fixed` требует `default_template_uid` в registry.
+На **каждый** context — `fixed` \| `random` \| `round_robin` (**R19**).
+В текущем legacy pointer-пути `fixed` ещё требует default_template_uid в registry.
+После pack-owned миграции UID должен быть в эффективном каталоге мира
+(defaults + явно подключённые паки); индивидуальный registry pointer не является
+обязательным для каждого члена пака. Недоступный fixed UID → общий отказ R21.
 
 | Уровень | Wire | Роль |
 |---|---|---|
@@ -126,7 +189,7 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 
 `effective = merge(world, object?)`; для гор target ещё `side[i]?`. Нет policy на объекте → мир.
 
-Шум pick/kind **детерминирован**: `world_seed` + `(context, template_uid, x, y [, edge])` (**R15**). Пустой candidates / битый `fixed` / дыра schedule → **warn + soft fallback**, не abort (**R21**). Не путать с **R34 skip**.
+Шум pick/kind **детерминирован**: `world_seed` + `(context, template_uid, x, y [, edge])` (**R15**). E6-R21: пустой candidates, недоступный `fixed` UID/body и дыра schedule → unresolved через общую runtime/worldEdit политику. Runtime: WarningError и прекращение зависимой операции; validate_only: те же facts без runtime-лога. First-template/SLOPE подстановки запрещены. **R34 skip** (нет condition) и `slope_none` сохраняются.
 
 ### Conditions (местность в шаблоне)
 
@@ -143,7 +206,7 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 
 `slope_weight + sheer_weight == 1` (±eps), иначе **reject** шаблона (**R27**).
 
-Geom knobs на case/band: `slope_length_cells` XOR `target_angle_deg` (omit L → 1). Невалидный geom → WARN + 20°, не reject import (архив **R36b**). Политика задаёт порог/knobs, не высоту карты (`h` = measured `|dz|`). Пресеты UI — не backend (**R30**).
+Geom knobs на root/case/band: `slope_length_cells` XOR `target_angle_deg` (оба отсутствуют → L=1). Длина < 1, не конечный угол, угол вне `(0, 90)` или одновременное задание L и угла — unresolved по [общей политике](tz_runtime_world_edit_policy.md): runtime пишет WarningError и прекращает зависимую операцию; validate_only возвращает диагностику без runtime-лога. Прежний C31 WARN + подстановка 20° отменён миграцией E6 (2026-10-08). Политика задаёт порог/knobs, не высоту карты (`h` = measured `|dz|`). Пресеты UI — не backend (**R30**).
 
 **Mountain:** `side_recipe` XOR weights \| pattern \| fixed kind; пусто → seeded random per side (**R33**). Непустые Mode A/B `conditions` на `context: mountain` → **reject**. Не-mountain + `side_recipe` → **reject**. `MountainKind` ≠ grade preset.
 
@@ -167,6 +230,13 @@ Runtime: `EarthenCanal` XOR `StructureCanal` (`dataModel/terrain/relief/canal.py
 Плоский `structure_refs` на knobs с earthen = BAR-1 fence, не тело canal.
 
 **`worlds.canal_template_registry`** (не inline в каждом case):
+
+**Opt-out global canonical attach (шаг 7):** это inline world-реестр,
+источник — `WorldCanalTemplateRegistry.canonical_defaults()` (пустой список)
+и явно заданные world entries, identity — `system_type`. Отдельной SQL
+library/FS-паков и global spec нет; WorldSlice сохраняет существующую
+валидацию/полный список мира. Перевод в pack library — deferred per-domain
+миграция из `library-packs-model`, не autoattach relief-паков.
 
 | Поле | |
 |---|---|
@@ -199,7 +269,7 @@ else:
 
 Canal-cut при укорочении — исключение «не мутировать якорь», когда земля упирается в footprint (**R36t**). Не T-15. Нормальный path якоря не трогает. **Запрещено:** silent canal без match; читать policy когда вмещается.
 
-Unknown canal/barrier ref на generate → R21 warn+fallback; на import unknown → reject.
+Unknown canal/barrier ref не разрешает подмену/пропуск требуемого объекта. E6-R21 для canal: unknown ref и конфликтующие enabled rules → unresolved; пустой StructureCanal не создаётся. Explicit disable, отсутствие канала и отсутствие места для cut по R36p остаются штатными доменными результатами. Проверка refs импорта и runtime использует общую политику, без отдельного master-mode.
 
 ### Obstacle clearance (R36m / R36n)
 
@@ -229,7 +299,7 @@ Schema — только [`0001_initial.sql`](../backend/app/db/migrations/0001_i
 
 ### Колонки мира (JSON)
 
-`worlds`: `relief_template_registry`, `canal_template_registry`, `relief_pick_policy` (context + опц. `canal_obstacle_policy`), `relief_grade_obstacle_policy` (`truncate_skip` \| `allow_flush`). `connection_edges.relief_pick_policy` — object overlay (дорога).
+`worlds`: `canal_template_registry`, `relief_pick_policy` (context + опц. `canal_obstacle_policy`), `relief_grade_obstacle_policy` (`truncate_skip` \| `allow_flush`), `library_pins`. `connection_edges.relief_pick_policy` — object overlay (дорога). Availability relief-шаблонов — pack membership, не колонка мира (`relief_template_registry` удалён в B7).
 
 ### DDL (как в 0001)
 
@@ -492,7 +562,7 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 ## Открыто (не этот документ закрывает)
 
-- **Набор клеток** sidecar / кто в обходе на тайле 1e6 — **R41-T-25** (не тело файла: consume § Тело sidecar locked; persist сейчас пишет все ключи `meter_surface_z` как stand-in).
+- **Набор клеток** sidecar / кто в обходе на тайле 1e6 — **R41-T-25** (не тело файла: consume § Тело sidecar locked; persist сейчас пишет все ключи `fine_surface_z` как stand-in).
 - Конечный валидатор набора: не 1e6 равнин vs не дыры из-за пустого leftover. Persist occupancy-validator (`validate_grade_cell_slots`) не закрывает из z; на persist **только** при `DEBUG_GRADE_SLOT_VALIDATE=1`. R44 `leftover_plus_halo` — interim.
 - Forest `|dz|=1` (mill skip stamp vs pack-слот).
 - Узкий dump прямой склон = только outward + `+`.
@@ -516,3 +586,43 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 | 2026-08-27 | **Leftover L=1 в коде:** `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` (`gradeLeftoverPair`), не конверт 45°. |
 | 2026-08-26 | **θ местности:** (0, 90), **90° нет**; SHEER **[80, 90)**; нависание — отдельные объекты (как холм), inherit родителя, не leftover pack. |
 | 2026-08-26 | **SoT generate сжат:** очереди Q1/Q2, итерация leftover, правила стрелок, эталоны ямы/W×L/каскад. Bake R36/R43 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Алгоритм и валидатор — следующая разработка. |
+
+
+## PC-0 — frozen relief layout и две фазы (2026-10-23)
+
+Exact schemas и bindings — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0),
+PC-B…PC-F. ReliefPlan содержит полную pre-river coarse поверхность,
+MountainLayout и LightReliefPlan. MountainLayout сохраняет целые merged/
+stamped MountainSpec/MountainRangeSpec, template member projections и
+world mountain pick policy; повторный coarse/light selection запрещён.
+LightReliefPlan содержит полную light base и sparse absolute mountain/
+ravine effects на полном generation extent, независимо от bake tiles.
+
+RiverReliefPlan — отдельный результат terrain: post-river coarse/fine
+surface и keyed-by-river-UID bed records. Он не заменяет ReliefPlan и не
+перезапускает mountain/ravine/basin pass. Hydrology routes передаются ему
+через exact dependency ref. River-bed profile computation принадлежит
+terrain/reliefObjects/riverBed/riverBedZ.py; legacy hydrology symbol только
+re-export до атомарного cutover. Receiver floor сохраняется, overlapping
+absolute targets merge min, повторное вычитание depth запрещено.
+
+Template projection: member UID/context/side_recipe, без conditions и
+structure_refs lists полного ReliefTemplate. PC-0I включает tuple перенос
+MountainSideRecipe.side_kinds; wire arrays/XOR/defaults сохраняются.
+PC-1R определяет contracts, PC-7 — оба providers, PC-9/10/11 — единый
+production cutover. Формулы identity/seed прежние; устранение отдельного
+light mountain selection и зависимости height от terrain color — явные
+baseline deltas с приёмкой, а не cache-only equivalence.
+
+**PC-1R реализован 2026-10-23:** immutable contracts находятся в
+`dataModel/terrain/relief/planning/reliefPlan.py` и
+`planning/inputs/reliefPlanInput.py`. MountainLayout сохраняет полные
+stamped specs, templates и pick policy; ReliefPlan содержит pre-river
+coarse/light outputs, RiverReliefPlan — отдельные post-river surfaces и
+typed beds по UID/space. Дубли identity/координат/UID и неполные peak sides
+отклоняются. Unstamped declarations допустимы только в source input.
+Проверки bbox/light_side/z bounds требуют captured input/dependency context
+и выполняются при provider/admission; output schemas не получают fake limits.
+BasinSpec уже перенесён в PC-1T. Selection/carve algorithms не изменены.
+Приёмка: 116 tests OK; pyright positive 0 errors/warnings, negative
+12 ожидаемых diagnostics; imports не загружают application/db.

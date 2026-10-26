@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import IsolatedAsyncioTestCase
 
-from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.db.database import Database
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
@@ -48,6 +48,7 @@ def _map_cell_patches_ddl() -> str:
         display_facing TEXT,
         glass_material TEXT,
         hydrology TEXT,
+        system_grade_uid TEXT,
         PRIMARY KEY (world_uid, x, y, z)
     );
     """
@@ -94,8 +95,8 @@ class MapCellPersistPerfTest(IsolatedAsyncioTestCase):
 
     async def test_save_pass_insert_only(self) -> None:
         cells = self._cells(5, terrain="tundra")
-        result = await self._svc.save_pass(cells, "terrain", insert_only=True)
-        self.assertEqual(result.succeeded, 5)
+        with self.assertRaises(ValueError):
+            await self._svc.save_pass(cells, "terrain", insert_only=True)
 
 
     async def test_has_column_cells(self) -> None:

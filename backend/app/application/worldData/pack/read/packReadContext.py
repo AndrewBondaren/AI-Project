@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
+from pathlib import Path
+
+from app.dataModel.worldPack.bake.packReadPolicy import PackReadPolicy
 from app.application.worldData.pack.read.fineTerrainDecodeCache import FineTerrainDecodeCache
 from app.application.worldData.pack.io.packPresence import has_pack as resolve_has_pack
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire
 from app.db.models.world import World
 
 
@@ -91,8 +93,14 @@ class PackReadContext:
         Manifest also self-validates via disk stamp on read; this covers same-stamp
         races and clears climate that may have been rewritten with the pack.
         """
-        key = str(self.paths_for(world).root)
+        self.invalidate_pack_root(self.paths_for(world).root)
+
+    def invalidate_pack_root(self, root: Path) -> None:
+        """Invalidate an actual root, including one no longer referenced by world SQL."""
+        key = str(root.resolve())
         reader = self._readers.get(key)
         if reader is not None:
             reader.invalidate_manifest()
-        self.invalidate_climate(world)
+        self._climate_cache.pop(key, None)
+        for stale in [entry for entry in self._climate_tile_cache if entry[0] == key]:
+            del self._climate_tile_cache[stale]

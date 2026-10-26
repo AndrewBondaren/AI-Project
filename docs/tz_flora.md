@@ -736,7 +736,7 @@ system_plant: str | None   # → plant_registry
 | FL2b | **`FloraKind` — engine StrEnum в `dataModel/flora/enums/`**; N+1 = виды; wire = `StrictEnumOnWire`; не glossary/имя/литералы в generators |
 | FL3 | Eligible = registry ∩ `FloraClimateSuitability` |
 | FL3b | **`FloraSuitabilityIndex`**: build из registries once/bake; autoresolve + FloraGenerator только через `query`; запрещён дубль фильтра в landcover |
-| FL3c | **Forest paint = A∧B**: landcover `forest_min_rainfall` (A) ∧ eligible trees ≠ ∅ (B); B=∅ → не `forest`, fallback plains, warn log; без phantom canopy / builtin tree |
+| FL3c | **Forest paint = A∧B** — для **autoresolve**: landcover `forest_min_rainfall` (A) ∧ eligible trees ≠ ∅ (B); B=∅ → не `forest`, fallback plains, warn log; без phantom canopy / builtin tree. **Declared/anchor регионы** (2026-10-17) veto не проходят — авторский лес ставится, B=∅ → `declared_without_suitability` warning, деградация через state-change ([`tz_map_light_bake.md`](./tz_map_light_bake.md) § Регионы покрытия › Declaration и suitability) |
 | FL4 | `crops_registry` ⊥ wild forest mix |
 | FL5 | Consumers оркестрируют; generator не пишет `system_terrain` |
 | FL6 | light_bake: **type refs per cell** (не инстансы); full_bake: chunk weight/occupancy |
@@ -770,7 +770,8 @@ Consumers карты **не** блокируются на flora stub: сейча
 
 - **DEFER:** полный FloraGenerator + dataModel flora registries — после map/mountain
 - Numeric defaults `k_*`, shade, occupancy sync (`canopy_area`)
-- `ForestSpec` / declare forests — в light bake / masks; flora mix — later
+- `ForestSpec` / declare forests — контракт зафиксирован в [`tz_map_light_bake.md`](./tz_map_light_bake.md) § Регионы покрытия (`declared_regions[]`, `LANDCOVER`); flora mix — later
+- **ForestComposition ↔ `ForestSpec` (target, 2026-10-17):** состав declared-леса (виды из `tree_registry`, доли, возраст) — контракт этого ТЗ; при его появлении `ForestSpec` получает typed ссылку, до этого поля `flora` в Spec **нет** (ключ в wire — unknown key). Требование: declared forest с B=∅ не отвергается — состав пуст либо из `DeclarationFacts`; правило здесь, не в регионах. Аналогично `FarmlandSpec.crop` ↔ `crops_registry`.
 - Optional lore keys `flora_*` (не дискриминатор kind)
 
 ---

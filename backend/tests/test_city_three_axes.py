@@ -6,7 +6,7 @@ import unittest
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pydantic import ValidationError
 
@@ -16,31 +16,31 @@ from app.application.jsonValidation.worldRow import (
     district_zone_preference,
     location_types,
 )
-from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
-from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.tokens import (
     build_tokens,
-    candidate_template_names,
-    pick_layout_names,
+    pick_layout_uids,
+    pick_layout_uids,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
+from tests.canonicalCatalog import canonical_building_catalog, canonical_plot_uid
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.placement import (
     cell_type_score,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
     plan_district_slots,
+    slot_allowed_for_template,
+    SettlementSpecializationResolve,
+    resolve_settlement_specialization,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import is_plaza
+from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
@@ -48,7 +48,7 @@ from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
     settlement_cell_rng,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.cascade.locationScope import settlement_context
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import (
     LocationTypeSubtypeEntry,
 )
@@ -56,39 +56,38 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.locations.namedLocation import BundleNamedLocation
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
-from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
-from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
-from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
     SettlementSpecializationEntry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.settlement.district.cellZone import CellZone
-from app.dataModel.settlement.district.allowedStructureTypes import (
+from app.dataModel.locations.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
     union_required_structures,
 )
 from app.dataModel.resources.enums.resourceKind import ResourceKind
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
-from app.db.models.buildingTemplate import BuildingTemplateRow
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -107,7 +106,7 @@ def _layout(system_name: str, structure_type: str, **fields) -> PlotLayoutTempla
         system_name=uid,
         display_name=system_name,
         structure_types=[structure_type],
-        levels=[{"z_offset": 0, "rooms": []}],
+        levels=[],
     )
     return PlotLayoutTemplate(
         system_name=system_name,
@@ -145,32 +144,39 @@ def _settlement(*, subtype: str | None, size: str = "medium", loc_type: str = "s
         system_location_type=loc_type,
         created_at="2026-01-01T00:00:00",
         system_location_subtype=subtype,
-        system_city_size=size,
+        location_payload={
+            'system_city_size': size,
+            'settlement_density': DistrictDensity.MEDIUM.wire_value,
+            # Runtime row fixture: import has already resolved the authored flag.
+            'is_inhabited': True,
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
-        settlement_density=DistrictDensity.MEDIUM.wire_value,
     )
     return loc
 
 
 def _skeleton(world: World, settlement: NamedLocation):
-    return city_skeleton_from_settlement(
+    ctx = settlement_context(world, settlement)
+    return resolved_settlement_skeleton(
         settlement,
-        economic_tier=TierResolver.resolve(world=world, city=settlement),
+        economic_tier=ctx.economic_tier,
+        settlement_density=ctx.settlement_density,
     )
 
 
 class RecipePojoTest(unittest.TestCase):
-    def test_engine_city_village_dungeon_recipes(self) -> None:
+    def test_engine_city_village_complex_recipes(self) -> None:
         engine = WorldLocationTypeRegistry.canonical_engine()
         city = engine.subtype_for("settlement", "city")
         village = engine.subtype_for("settlement", "village")
-        dungeon = engine.subtype_for("settlement", "dungeon")
+        crypt = engine.subtype_for("location_complex", "crypt")
         underground = engine.subtype_for("settlement", "underground_city")
         assert city is not None and village is not None
-        assert dungeon is not None and underground is not None
+        assert crypt is not None and underground is not None
+        self.assertIsNone(engine.subtype_for("settlement", "dungeon"))
         self.assertEqual(
             city.typical_district_types,
             ["civic", "commercial", "residential", "industrial", "port"],
@@ -180,7 +186,7 @@ class RecipePojoTest(unittest.TestCase):
         self.assertEqual(village.typical_district_types, ["civic", "residential"])
         self.assertEqual(village.required_structure_types, [])
         self.assertTrue(village.has_district_recipe())
-        self.assertFalse(dungeon.has_district_recipe())
+        self.assertTrue(crypt.has_district_recipe())
         self.assertEqual(underground.typical_district_types, ["civic", "residential"])
 
     def test_engine_district_subtypes_and_specialization_subjects(self) -> None:
@@ -216,7 +222,7 @@ class RecipePojoTest(unittest.TestCase):
             "system_settlement_specializations": ["extract"],
             "typical_districts": [{"district_type": "civic"}],
         })
-        fields = wire.to_db_fields()
+        fields = wire.to_db_fields()["location_payload"]
         self.assertEqual(
             fields["system_settlement_specializations"][0]["system_specialization"],
             "extract",
@@ -314,7 +320,7 @@ class AllowedAndRequiredTest(unittest.TestCase):
             RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in as_type], ["inn_small", "inn_suite"])
+        self.assertEqual([entry.body.system_name for entry in as_type], ["inn_small", "inn_suite"])
         pin_not_purpose = resolve_required_layouts(
             RequiredStructure(plot_template="tavern"),
             catalog,
@@ -324,7 +330,7 @@ class AllowedAndRequiredTest(unittest.TestCase):
             RequiredStructure(plot_template="town_hall"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in as_system], ["town_hall"])
+        self.assertEqual([entry.body.system_name for entry in as_system], ["town_hall"])
 
     def test_union_required_settlement_first(self) -> None:
         district = [RequiredStructure(plot_template="town_hall", count=1)]
@@ -349,11 +355,11 @@ class CatalogAndRngTest(unittest.TestCase):
             display_name="override",
             main_building={"structure": str(b_inn.main_building.structure)},
         )
-        catalog = _catalog(b_inn, _layout("a_hall", "civic"), override)
+        catalog = _catalog(b_inn, _layout("a_hall", "town_hall"), override)
         self.assertEqual([row.system_name for row in catalog.layouts], ["a_hall", "b_inn"])
-        self.assertEqual(catalog.by_system_name("b_inn").display_name, "override")
+        self.assertEqual(catalog.by_uid("b_inn").display_name, "override")
         self.assertEqual(
-            [row.system_name for row in catalog.of_structure_type("tavern")],
+            [entry.body.system_name for entry in catalog.of_structure_type("tavern")],
             ["b_inn"],
         )
 
@@ -367,9 +373,9 @@ class CatalogAndRngTest(unittest.TestCase):
             PlotLayoutTemplate.model_validate(outline.model_dump(mode="json"))
 
     def test_assemble_catalog_path3_builtins(self) -> None:
-        catalog = assemble_building_catalog(_world(), structures=_stdlib())
-        self.assertIsNotNone(catalog.by_system_name("town_hall"))
-        self.assertIsNotNone(catalog.by_system_name("inn_small"))
+        catalog = canonical_building_catalog()
+        self.assertIsNotNone(catalog.by_uid(canonical_plot_uid("town_hall")))
+        self.assertIsNotNone(catalog.by_uid(canonical_plot_uid("inn_small")))
 
     def test_cell_rng_stable_and_independent(self) -> None:
         a = settlement_cell_rng("w", "c", 1, 2, SettlementCellRngRole.BUILDINGS)
@@ -420,60 +426,24 @@ class JsonValidationRecipeTest(unittest.TestCase):
         out = normalize_world({
             "name": "T",
             "created_at": "2026-01-01T00:00:00",
-            "location_type_registry": {
-                "geographic": {
-                    "display_name": "География",
-                    "subtypes": [{
-                        "system_subtype": "mountain",
-                        "unknown_master_key": True,
-                    }],
-                },
-            },
+            "location_type_registry": [{
+                "system_type": "geographic",
+                "display_type": "География",
+                "subtypes": [{
+                    "system_subtype": "mountain",
+                    "display_subtype": "Гора",
+                    "unknown_master_key": True,
+                }],
+            }],
         })
         self.assertTrue(out["location_type_registry"])
 
 
-class LibraryHydrateTest(unittest.IsolatedAsyncioTestCase):
-    async def test_layouts_for_world_skips_outline(self) -> None:
-        layout = _layout("inn_small", "tavern")
-        outline = BuildingTemplateOutline(
-            system_name="tavern_outline",
-            structure_type="tavern",
-            display_name="Outline",
-        )
-        rows = {
-            "uid-ok": BuildingTemplateRow(
-                template_uid="uid-ok",
-                system_name="inn_small",
-                display_name="Tavern",
-                structure_type="tavern",
-                data=layout.model_dump(mode="json"),
-            ),
-            "uid-outline": BuildingTemplateRow(
-                template_uid="uid-outline",
-                system_name="tavern_outline",
-                display_name="Outline",
-                structure_type="tavern",
-                data=outline.model_dump(mode="json"),
-            ),
-        }
-        repo = MagicMock()
-        repo.get_by_uid = AsyncMock(side_effect=lambda uid: rows.get(uid))
-        service = BuildingTemplateLibraryService(repo=repo, world_service=MagicMock())
-        world = SimpleNamespace(
-            world_uid="w1",
-            building_template_registry=[
-                {"system_template_uid": "uid-ok"},
-                {"system_template_uid": "uid-outline"},
-            ],
-        )
-        got = await service.layouts_for_world(world)
-        self.assertEqual([row.system_name for row in got], ["inn_small"])
-
-
 class DistrictSelectTest(unittest.TestCase):
-    def test_legacy_without_subtype_keeps_civic_center(self) -> None:
-        world = _world()
+    def test_world_type_without_subtype_keeps_civic_center(self) -> None:
+        world = _world(location_type_registry=[{
+            "system_type": "city", "display_type": "City", "payload_kind": "settlement",
+        }])
         settlement = _settlement(subtype=None, loc_type="city")
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         civic = [slot for slot in slots if slot.district_template.system_name == "civic_center"]
@@ -505,11 +475,62 @@ class DistrictSelectTest(unittest.TestCase):
         self.assertTrue(slots)
 
 
+class InhabitedPlannerTest(unittest.TestCase):
+    def test_uninhabited_complex_keeps_recipe_geometry(self) -> None:
+        world = _world()
+        settlement = _settlement(subtype="crypt", loc_type="location_complex")
+        settlement.location_payload["is_inhabited"] = False
+        slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+        self.assertTrue(slots)
+        self.assertEqual({slot.district_template.district_type for slot in slots}, {"civic"})
+
+    def test_uninhabited_without_recipe_keeps_only_authored_districts(self) -> None:
+        world = _world(location_type_registry=[{
+            "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+        }])
+        for kind in ("settlement", "location_complex", "custom_site"):
+            with self.subTest(kind=kind):
+                settlement = _settlement(subtype=None, loc_type=kind)
+                settlement.location_payload["is_inhabited"] = False
+                self.assertEqual(plan_district_slots(world, settlement, _skeleton(world, settlement), None), [])
+                settlement.location_payload["typical_districts"] = [{"district_type": "civic"}]
+                slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+                self.assertEqual(len(slots), 1)
+                self.assertEqual(slots[0].district_template.district_type, "civic")
+
+    def test_custom_recipe_uses_actual_type_and_preserves_required_structures(self) -> None:
+        world = _world(location_type_registry=[{
+            "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+            "subtypes": [{"system_subtype": "city", "is_inhabited": False,
+                          "typical_district_types": ["industrial"], "required_structure_types": ["mine"]}],
+        }])
+        settlement = _settlement(subtype="city", loc_type="custom_site")
+        settlement.location_payload["is_inhabited"] = False
+        skeleton = _skeleton(world, settlement)
+        slots = plan_district_slots(world, settlement, skeleton, None)
+        self.assertTrue(slots)
+        self.assertEqual({slot.district_template.district_type for slot in slots}, {"industrial"})
+        resolved = resolve_settlement_specialization(world, settlement, skeleton)
+        self.assertEqual(resolved.required_types, ("mine",))
+        self.assertEqual(resolved.spec_refs, ())
+
+    def test_explicit_inhabited_complex_allows_specializations_and_fallback(self) -> None:
+        world = _world()
+        settlement = _settlement(subtype=None, loc_type="location_complex")
+        settlement.location_payload["is_inhabited"] = True
+        slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+        self.assertTrue(slots)
+        settlement.system_location_subtype = "ruins"
+        settlement.location_payload["system_settlement_specializations"] = ["extract"]
+        slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+        self.assertIn("mining_quarter", {slot.district_template.system_name for slot in slots})
+
+
 class SpecializationPassTest(unittest.TestCase):
     def test_extract_places_mining_keeps_civic_center(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("mining_quarter", names)
@@ -540,7 +561,7 @@ class SpecializationPassTest(unittest.TestCase):
     def test_extract_slot_fill_is_extract_family(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         skeleton = _skeleton(world, settlement)
         slots = plan_district_slots(world, settlement, skeleton, None)
         mining = next(
@@ -548,10 +569,10 @@ class SpecializationPassTest(unittest.TestCase):
             if slot.district_template.system_name == "mining_quarter"
         )
         catalog = _catalog(
-            _layout("mine", "mine"),
+            _layout("mine", "mine", plot_type="extract"),
             _layout("inn_small", "tavern"),
         )
-        names = candidate_template_names(
+        names = pick_layout_uids(
             mining, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(names, ["mine"])
@@ -559,7 +580,7 @@ class SpecializationPassTest(unittest.TestCase):
             slot for slot in slots
             if slot.district_template.system_name == "commercial_quarter"
         )
-        names_c = candidate_template_names(
+        names_c = pick_layout_uids(
             commercial, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(names_c, ["inn_small"])
@@ -567,8 +588,8 @@ class SpecializationPassTest(unittest.TestCase):
     def test_city_typical_districts_before_extract(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.typical_districts = [{"district_type": "civic"}]
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'typical_districts': [{"district_type": "civic"}]}
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         civic = [slot for slot in slots if slot.district_template.district_type == "civic"]
         mining = [
@@ -585,9 +606,9 @@ class SpecializationPassTest(unittest.TestCase):
     def test_farm_village_places_farm_quarter(self) -> None:
         world = _world()
         settlement = _settlement(subtype="village", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "farm", "subjects": ["wheat"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("farm_quarter", names)
@@ -595,9 +616,9 @@ class SpecializationPassTest(unittest.TestCase):
     def test_livestock_village_places_livestock_quarter(self) -> None:
         world = _world()
         settlement = _settlement(subtype="village", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "livestock", "subjects": ["cow"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("livestock_quarter", names)
@@ -605,9 +626,9 @@ class SpecializationPassTest(unittest.TestCase):
     def test_culture_religion_tags_culture_leaves(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "culture", "subjects": ["religion"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         types = {
             row.structure_type or row.plot_template
@@ -652,12 +673,12 @@ class SpecializationPassTest(unittest.TestCase):
         )
         world = _world()
         settlement = _settlement(subtype="city")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "extract", "subjects": ["iron_ore"]},
-        ]
+        ]}
         skeleton = _skeleton(world, settlement)
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        names = candidate_template_names(
+        names = pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng,
         )
         self.assertEqual(names, ["iron_mine_1"])
@@ -688,10 +709,10 @@ class SpecializationPassTest(unittest.TestCase):
             "resource_kind": "ore",
         }])
         settlement = _settlement(subtype="city")
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         skeleton = _skeleton(world, settlement)
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        candidate_template_names(
+        pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng, settlement_uid="loc-1",
         )
         self.assertEqual(slot.subject_tags.get("mine"), ("mithril_ore",))
@@ -706,7 +727,7 @@ class SpecializationPassTest(unittest.TestCase):
             cell_x=0, cell_y=0,
             subject_tags={},
         )
-        candidate_template_names(
+        pick_layout_uids(
             again, world, skeleton, catalog=catalog, rng=rng, settlement_uid="loc-1",
         )
         self.assertEqual(again.subject_tags.get("mine"), slot.subject_tags.get("mine"))
@@ -738,7 +759,7 @@ class SpecializationPassTest(unittest.TestCase):
         ])
         settlement = _settlement(subtype="city")
         skeleton = _skeleton(world, settlement)
-        candidate_template_names(
+        pick_layout_uids(
             slot, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(slot.subject_tags.get("mine"), ("mithril_ore",))
@@ -770,7 +791,7 @@ class SpecializationPassTest(unittest.TestCase):
         }])
         settlement = _settlement(subtype="city")
         skeleton = _skeleton(world, settlement)
-        candidate_template_names(
+        pick_layout_uids(
             slot, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
         self.assertEqual(slot.subject_tags.get("mine"), ("not_a_resource",))
@@ -798,13 +819,13 @@ class TokenPickTest(unittest.TestCase):
         world = _world()
         skeleton = _skeleton(world, _settlement(subtype="city"))
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        names = candidate_template_names(
+        names = pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng,
         )
         self.assertEqual(len(names), 1)
         self.assertIn(names[0], {"inn_small", "inn_suite", "inn_xl"})
         rng2 = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
-        names2 = candidate_template_names(
+        names2 = pick_layout_uids(
             slot, world, skeleton, catalog=catalog, rng=rng2,
         )
         self.assertEqual(names, names2)
@@ -833,7 +854,7 @@ class TokenPickTest(unittest.TestCase):
         layout = StructureLayout(
             cells=[],
             levels=[],
-            passages=[],
+            transitions=[],
             rooms=[],
             occupied_footprint=OccupiedFootprint(min_x=0, min_y=0, width=4, depth=4),
         )
@@ -841,10 +862,83 @@ class TokenPickTest(unittest.TestCase):
         rng = settlement_cell_rng("w1", "loc-1", 1, 1, SettlementCellRngRole.BUILDINGS)
         tokens = build_tokens(slot, cache, world, skeleton, catalog=catalog, rng=rng)
         self.assertEqual(len(tokens), 3)
-        self.assertEqual({token.system_name for token in tokens}, {"inn_small"})
+        self.assertEqual({token.template_uid for token in tokens}, {"inn_small"})
+
+
+class StructureCatalogPackingTest(unittest.TestCase):
+    def picks(self, catalog, *, allowed=None, stamp=None, required=(), match="like"):
+        world = _world()
+        template = DistrictTemplateEntry(
+            system_name="catalog-district", display_name="District", district_type="commercial",
+            allowed_structure_types=allowed, allowed_match=match,
+        )
+        slot = DistrictSlot(
+            0, 0, 40, 40, 0, template,
+            allowed_structure_types=stamp, required_structures=list(required),
+        )
+        return pick_layout_uids(slot, world, _skeleton(world, _settlement(subtype="city")), catalog)
+
+    def test_explicit_allowed_uses_structure_despite_plot_family_and_stamp(self):
+        tavern = _layout("tavern-on-dwelling", "tavern", plot_type="dwelling")
+        house = _layout("house-on-trade", "house", plot_type="trade")
+        catalog = _catalog(tavern, house)
+        self.assertEqual(self.picks(catalog, allowed=["tavern"], stamp=[BuildingPurposeFamily.EXTRACT]), [tavern.system_name])
+        self.assertEqual(self.picks(catalog, allowed=["trade"]), [tavern.system_name])
+        self.assertEqual(
+            [entry.body for entry in catalog.of_structure_type("tavern")],
+            [tavern],
+        )
+
+    def test_family_stamp_filters_plot_family_for_fill_and_required(self):
+        trade = _layout("trade-house", "house", plot_type="trade")
+        dwelling = _layout("dwelling-tavern", "tavern", plot_type="dwelling")
+        catalog = _catalog(trade, dwelling)
+        for required in ((), (RequiredStructure(plot_template=trade.system_name),)):
+            with self.subTest(required=required):
+                self.assertEqual(self.picks(catalog, stamp=[BuildingPurposeFamily.TRADE], required=required), [trade.system_name])
+
+    def test_explicit_filter_has_priority_over_specialization_stamp(self):
+        resolved = SettlementSpecializationResolve((), (), (), {}, {("commercial", None): (BuildingPurposeFamily.EXTRACT,)})
+        for allowed in (["tavern"], []):
+            template = DistrictTemplateEntry(
+                system_name="override", display_name="Override", district_type="commercial",
+                allowed_structure_types=allowed,
+            )
+            self.assertEqual(slot_allowed_for_template(template, resolved), template.allowed_structure_types)
+
+    def test_unresolved_ref_fails_instead_of_disappearing_from_pool(self):
+        plot = _layout("missing-structure", "tavern")
+        with self.assertRaises(GenerationError) as ctx:
+            self.picks(BuildingCatalog.from_layouts([plot], StructureCatalog.empty()), allowed=["tavern"])
+        self.assertIn(plot.system_name, str(ctx.exception))
+        self.assertIn(str(plot.main_building.structure), str(ctx.exception))
+
+    def test_structure_leaves_preserve_strict_matching_and_world_pack_filter(self):
+        mixed = _layout("mixed", "tavern")
+        uid = str(mixed.main_building.structure)
+        _STRUCTS[uid] = StructureTemplate(
+            system_name=uid, display_name="Mixed", structure_types=["tavern", "house"],
+        )
+        catalog = _catalog(mixed)
+        self.assertEqual(self.picks(catalog, allowed=["tavern"]), ["mixed"])
+        self.assertEqual(self.picks(catalog, allowed=["tavern"], match="strict"), [])
+        modern = _layout("modern-market", "hypermarket", plot_type="trade")
+        self.assertEqual(self.picks(_catalog(modern), stamp=[BuildingPurposeFamily.TRADE]), [])
+
+    def test_public_plots_keep_plaza_frontage_and_empty_plaza_requirement(self):
+        empty = PlotLayoutTemplate(system_name="plaza", display_name="Plaza", plot_type="public")
+        built = _layout("public-house", "house", plot_type="public")
+        self.assertTrue(is_plaza(empty))
+        self.assertTrue(is_plaza(built))
+        self.assertFalse(is_plaza(_layout("private-house", "house")))
+        self.assertEqual(
+            self.picks(_catalog(empty), allowed=[], required=[RequiredStructure(plot_template="plaza", structure_type="plaza")]),
+            ["plaza"],
+        )
 
 
 class Path3GenerateTest(unittest.TestCase):
+    @patch.dict("os.environ", {"STRUCTURES_TEMPLATES_ROOT": str(_STRUCTURES_ROOT)})
     def test_generate_layout_catalog_none_replay_same_drawings(self) -> None:
         world = _world(
             fine_cells_per_map_cell=16,
@@ -854,8 +948,8 @@ class Path3GenerateTest(unittest.TestCase):
         )
         settlement = _settlement(subtype="city", size="town")
         service = SettlementGeneratorService()
-        first = service.generate_layout(world, settlement, catalog=None)
-        second = service.generate_layout(world, settlement, catalog=None)
+        first = service.generate_layout(world, settlement, catalog=canonical_building_catalog())
+        second = service.generate_layout(world, settlement, catalog=canonical_building_catalog())
         self.assertTrue(first.district_layouts)
         types = {
             layout.slot.district_template.district_type for layout in first.district_layouts
@@ -943,18 +1037,18 @@ class CityT4PlannerTest(unittest.TestCase):
             slot for slot in slots
             if slot.district_template.system_name == "civic_center"
         )
-        catalog = assemble_building_catalog(world, structures=_stdlib())
-        names = pick_layout_names(center, world, skeleton, catalog)
-        self.assertIn("town_hall", names)
-        self.assertNotIn("mine", names)
-        self.assertNotIn("farm", names)
-        self.assertNotIn("library", names)
+        catalog = canonical_building_catalog()
+        uids = pick_layout_uids(center, world, skeleton, catalog)
+        self.assertIn(canonical_plot_uid("town_hall"), uids)
+        self.assertNotIn(canonical_plot_uid("mine"), uids)
+        self.assertNotIn(canonical_plot_uid("farm"), uids)
+        self.assertNotIn(canonical_plot_uid("library"), uids)
 
     def test_culture_and_civic_center_both_place(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.typical_districts = [{"district_type": "civic"}]
-        settlement.system_settlement_specializations = ["culture"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'typical_districts': [{"district_type": "civic"}]}
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["culture"]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("civic_center", names)
@@ -963,9 +1057,9 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_religion_tags_culture_family_leaves(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "culture", "subjects": ["religion"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         tags = slots[0].subject_tags
         self.assertIn("religion", tags.get("temple", ()))
@@ -975,14 +1069,14 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_extract_multiple_subject_kinds_tag_mine(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {
                 "system_specialization": "extract",
                 "subjects": {
                     "resource": ["iron_ore", "copper_ore"],
                 },
             },
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         mining = next(
             slot for slot in slots
@@ -1008,14 +1102,14 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_cache_envelope_from_plot_footprint_not_assembler_key(self) -> None:
         cache = BuildingLayoutCache()
         missing_fp = _layout("town_hall", "town_hall")
-        self.assertIsNone(cache.ensure(_world(), missing_fp))
+        self.assertIsNone(cache.ensure(missing_fp.system_name, missing_fp))
         self.assertNotIn("town_hall", cache)
         template = _layout(
             "town_hall",
             "town_hall",
             occupied_footprint={"width": 4, "depth": 4},
         )
-        layout = cache.ensure(_world(), template)
+        layout = cache.ensure(template.system_name, template)
         self.assertIsNotNone(layout)
         self.assertEqual(layout.occupied_footprint.width, 4)
         self.assertFalse(layout.rooms)
@@ -1041,10 +1135,10 @@ class CityT4PlannerTest(unittest.TestCase):
         )
         world = _world()
         skeleton = _skeleton(world, _settlement(subtype="city"))
-        names1 = pick_layout_names(
+        names1 = pick_layout_uids(
             slot, world, skeleton, catalog, settlement_uid="loc-1",
         )
-        names2 = pick_layout_names(
+        names2 = pick_layout_uids(
             slot, world, skeleton, catalog, settlement_uid="loc-1",
         )
         self.assertEqual(names1, names2)

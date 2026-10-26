@@ -6,8 +6,13 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
+from app.application.worldData.errors import WorldDataValidationError
 
 router = APIRouter()
+
+
+def _http_from_seed(exc: WorldDataValidationError) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/seed/import")
@@ -39,7 +44,10 @@ async def export_seed(
 
 @router.get("/seed/{table}")
 async def list_seed(table: str, container=Depends(get_container)) -> list[dict]:
-    return await container.seed_service().get_all(table)
+    try:
+        return await container.seed_service().get_all(table)
+    except WorldDataValidationError as exc:
+        raise _http_from_seed(exc) from exc
 
 
 @router.post("/seed/{table}", status_code=201)
@@ -48,7 +56,10 @@ async def upsert_seed(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    await container.seed_service().upsert_one(table, data)
+    try:
+        await container.seed_service().upsert_one(table, data)
+    except WorldDataValidationError as exc:
+        raise _http_from_seed(exc) from exc
     return {"ok": True}
 
 
@@ -58,4 +69,7 @@ async def delete_seed(
     pk_val: str,
     container=Depends(get_container),
 ) -> None:
-    await container.seed_service().delete_one(table, pk_val)
+    try:
+        await container.seed_service().delete_one(table, pk_val)
+    except WorldDataValidationError as exc:
+        raise _http_from_seed(exc) from exc

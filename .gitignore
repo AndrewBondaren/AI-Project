@@ -38,3 +38,4 @@ build/
 
 # Local debug artifacts (smoke renders, scratch)
 .local/
+backend/CUsersandrbAppDataLocalTemplp_out.txt

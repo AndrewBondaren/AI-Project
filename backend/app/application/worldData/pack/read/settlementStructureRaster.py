@@ -6,9 +6,9 @@ from collections import OrderedDict
 
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.settlementStructureIndex import index_shell_cells
-from app.dataModel.worldPack.mergeMapCells import CellContribution
-from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
-from app.dataModel.worldPack.settlementStructureWire import ShellCellWire
+from app.dataModel.worldPack.wire.mergeMapCells import CellContribution
+from app.dataModel.worldPack.bake.packReadPolicy import PackReadPolicy
+from app.dataModel.worldPack.wire.settlementStructureWire import ShellCellWire
 from app.db.models.world import World
 
 

@@ -12,23 +12,23 @@ from app.application.jsonValidation.worldRow import (
     purpose_pack_registry,
     purpose_packs,
 )
-from app.dataModel.settlement.district.allowedStructureTypes import (
+from app.dataModel.locations.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
     district_hosts_purpose,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
     unhosted_settlement_types,
     union_required_structures,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     FAMILY_OF,
     BuildingPurpose,
     BuildingPurposeFamily,
@@ -61,12 +61,8 @@ def _layout(
     _STRUCTS[uid] = StructureTemplate(
         system_name=uid,
         display_name=system_name,
-        structure_types=(
-            coerce_purpose_list(structure_type, empty_as_house=True)
-            if structure_type is not None
-            else None
-        ),
-        levels=[{"z_offset": 0, "rooms": []}],
+        structure_types=coerce_purpose_list(structure_type, empty_as_house=True),
+        levels=[],
     )
     return PlotLayoutTemplate(
         system_name=system_name,
@@ -98,12 +94,14 @@ class CoercePurposeTest(unittest.TestCase):
         layout = _layout("inn_small", "tavern")
         self.assertEqual(_leaves(layout), [BuildingPurpose.TAVERN])
 
-    def test_array_and_unknown_dropped(self) -> None:
-        layout = _layout("combo_1", ["house", "workshop", "blacksmith", "house"])
+    def test_array_dedup_and_unknown_rejected(self) -> None:
+        layout = _layout("combo_1", ["house", "workshop", "house"])
         self.assertEqual(
             _leaves(layout),
             [BuildingPurpose.HOUSE, BuildingPurpose.WORKSHOP],
         )
+        with self.assertRaises(ValueError):
+            _layout("bad_1", ["house", "blacksmith"])
 
     def test_empty_allowed_stays_empty(self) -> None:
         self.assertEqual(coerce_purpose_list([], empty_as_house=False), [])
@@ -172,7 +170,7 @@ class CatalogAndPinTest(unittest.TestCase):
             _layout("combo_1", ["house", "workshop"]),
             _layout("shop_1", "shop"),
         )
-        names = [row.system_name for row in catalog.of_structure_type("workshop")]
+        names = [entry.body.system_name for entry in catalog.of_structure_type("workshop")]
         self.assertEqual(names, ["combo_1"])
         self.assertEqual(
             sorted(catalog.structure_types()),
@@ -185,15 +183,15 @@ class CatalogAndPinTest(unittest.TestCase):
             _layout("pure_ws", "workshop"),
         )
         like = catalog.matching_allowed(
-            catalog.layouts, [BuildingPurpose.WORKSHOP], "like",
+            catalog.entries, [BuildingPurpose.WORKSHOP], "like",
         )
-        self.assertEqual([row.system_name for row in like], ["combo_1", "pure_ws"])
+        self.assertEqual([entry.body.system_name for entry in like], ["combo_1", "pure_ws"])
         strict = catalog.matching_allowed(
-            catalog.layouts, [BuildingPurpose.WORKSHOP], "strict",
+            catalog.entries, [BuildingPurpose.WORKSHOP], "strict",
         )
-        self.assertEqual([row.system_name for row in strict], ["pure_ws"])
+        self.assertEqual([entry.body.system_name for entry in strict], ["pure_ws"])
 
-    def test_pin_is_system_name_not_purpose_pool(self) -> None:
+    def test_pin_is_template_uid_not_purpose_pool(self) -> None:
         catalog = _catalog(
             _layout("inn_small", "tavern"),
             _layout("inn_suite", "tavern"),
@@ -202,7 +200,7 @@ class CatalogAndPinTest(unittest.TestCase):
             RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in pool], ["inn_small", "inn_suite"])
+        self.assertEqual([entry.body.system_name for entry in pool], ["inn_small", "inn_suite"])
         pin_miss = resolve_required_layouts(
             RequiredStructure(plot_template="tavern"),
             catalog,
@@ -212,7 +210,7 @@ class CatalogAndPinTest(unittest.TestCase):
             RequiredStructure(plot_template="inn_small"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in pin_hit], ["inn_small"])
+        self.assertEqual([entry.body.system_name for entry in pin_hit], ["inn_small"])
 
 
 class HostAndFillTest(unittest.TestCase):
@@ -384,7 +382,7 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         )
 
     def test_leaves_for_family_intersect_enabled(self) -> None:
-        from app.dataModel.structure.enums.buildingPurpose import leaves_for_family
+        from app.dataModel.locations.structure.enums.buildingPurpose import leaves_for_family
         fantasy = purposes_for_world(None)
         extract = leaves_for_family(BuildingPurposeFamily.EXTRACT, fantasy)
         self.assertEqual(
@@ -441,9 +439,9 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
             _layout("temple_1", "temple"),
         )
         like = catalog.matching_allowed(
-            catalog.layouts, [BuildingPurposeFamily.TRADE], "like",
+            catalog.entries, [BuildingPurposeFamily.TRADE], "like",
         )
-        self.assertEqual([row.system_name for row in like], ["inn_small"])
+        self.assertEqual([entry.body.system_name for entry in like], ["inn_small"])
 
     def test_omit_packs_is_base_and_fantasy(self) -> None:
         enabled = purposes_for_world(None)
@@ -505,7 +503,7 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         )
 
     def test_pack_recipes_use_family_and_leaf_enums(self) -> None:
-        import app.dataModel.structure.enums.buildingPurpose.catalog as catalog_mod
+        import app.dataModel.locations.structure.enums.buildingPurpose.catalog as catalog_mod
 
         self.assertFalse(hasattr(catalog_mod, "PACK_PURPOSES"))
         base = WorldPurposePackRegistry.canonical_defaults().entry_for("base")
@@ -526,31 +524,19 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         self.assertIn(BuildingPurposeFamily.FACTORY, steam.allowed)
         self.assertIn(BuildingPurposeFamily.UTILITY, steam.allowed)
 
-    def test_custom_pack_overlay_and_unknown_leaf(self) -> None:
-        world = SimpleNamespace(
-            world_uid="w1",
-            purpose_pack_registry=[{
-                "system_pack": "ironhold",
-                "allowed": ["culture", "tavern", "guild", "not_a_leaf"],
-            }],
-            purpose_packs=["ironhold"],
-        )
-        recipes = purpose_pack_registry(world)
-        custom = recipes.entry_for("ironhold")
-        self.assertIsNotNone(custom)
-        assert custom is not None
+    def test_custom_pack_unknown_leaf_rejects_without_dropping_it(self):
+        from app.application.jsonValidation.resolve import UnresolvedModelError
+        from pydantic import ValidationError
+        world = SimpleNamespace(world_uid="w1", purpose_pack_registry=[{
+            "system_pack": "ironhold", "allowed": ["culture", "tavern", "guild", "not_a_leaf"]}], purpose_packs=["ironhold"])
+        with self.assertRaises(UnresolvedModelError):
+            purpose_pack_registry(world)
+        with self.assertRaises(ValidationError):
+            PurposePackEntry(system_pack="ironhold", allowed=["temple", "not_a_leaf"])
+        world.purpose_pack_registry[0]["allowed"].remove("not_a_leaf")
+        custom = purpose_pack_registry(world).entry_for("ironhold")
         self.assertIn(BuildingPurposeFamily.CULTURE, custom.allowed)
-        self.assertNotIn("not_a_leaf", [str(token) for token in custom.allowed])
-        live = enabled_building_purposes(world)
-        self.assertIn(BuildingPurpose.HOUSE, live)
-        self.assertIn(BuildingPurpose.TEMPLE, live)
-        self.assertIn(BuildingPurpose.TAVERN, live)
-        self.assertNotIn(BuildingPurpose.PORTAL, live)
-        dropped = PurposePackEntry(
-            system_pack="ironhold",
-            allowed=["temple", "not_a_leaf"],
-        )
-        self.assertEqual(dropped.allowed, [BuildingPurpose.TEMPLE])
+        self.assertIn(BuildingPurpose.TAVERN, enabled_building_purposes(world))
 
     def test_world_overlay_cannot_replace_base(self) -> None:
         world = SimpleNamespace(

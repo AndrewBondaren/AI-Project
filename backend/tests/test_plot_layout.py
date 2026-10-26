@@ -12,18 +12,16 @@ from pydantic import ValidationError
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
-from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
+from tests.canonicalCatalog import canonical_building_catalog, canonical_plot_uid
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_has_building,
     structure_ref_of,
 )
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     BuildingPurposeFamily,
 )
@@ -33,11 +31,9 @@ _REPO = Path(__file__).resolve().parents[2]
 _TEMPLATES = _REPO / "fixtures" / "templates"
 _STRUCTURES = _REPO / "structures_templates"
 
-
-def _stdlib() -> StructureCatalog:
-    return StructureCatalog(load_structure_stdlib(_STRUCTURES))
-
-TAVERN_1_UID = "5a1f2b3c-4d5e-4f6a-8b7c-9d0e1f2a3b4c"
+# Pack-owned uid of the shared tavern structure (pack ``base``, member
+# ``tavern_1`` — library_packs uidMap, plan B-3).
+TAVERN_1_UID = "a58938ca-cd12-5d02-9884-7057cbcde3a8"
 
 
 def _world() -> World:
@@ -64,13 +60,13 @@ def _plot(
         system_name=uid,
         display_name=system_name,
         structure_types=[purpose],
-        levels=[{"z_offset": 0, "rooms": []}],
+        levels=[],
     )
     return plot, structure
 
 
 def _catalog(*pairs: tuple[PlotLayoutTemplate, StructureTemplate]):
-    from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+    from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 
     return BuildingCatalog.from_layouts(
         [plot for plot, _s in pairs],
@@ -118,7 +114,7 @@ class PlotLayoutContractTest(unittest.TestCase):
 
     def test_structure_accepts_uuid_and_normalizes_lower(self) -> None:
         template = StructureTemplate.model_validate({
-            "system_name": "5A1F2B3C-4D5E-4F6A-8B7C-9D0E1F2A3B4C",
+            "system_name": "A58938CA-CD12-5D02-9884-7057CBCDE3A8",
             "display_name": "Tavern",
         })
         self.assertEqual(str(template.system_name), TAVERN_1_UID)
@@ -156,13 +152,13 @@ class PlotLayoutContractTest(unittest.TestCase):
             _plot("town_hall", "town_hall"),
         )
         self.assertEqual(
-            [row.system_name for row in catalog.of_structure_type("tavern")],
+            [entry.body.system_name for entry in catalog.of_structure_type("tavern")],
             ["inn_small"],
         )
 
     def test_canonical_defaults_resolve_in_stdlib(self) -> None:
-        catalog = assemble_building_catalog(_world(), structures=_stdlib())
-        inn = catalog.by_system_name("inn_small")
+        catalog = canonical_building_catalog()
+        inn = catalog.by_uid(canonical_plot_uid("inn_small"))
         self.assertIsNotNone(inn)
         self.assertTrue(plot_has_building(inn))
         stdlib_uids = {str(t.system_name) for t in load_structure_stdlib(_STRUCTURES)}
@@ -176,7 +172,7 @@ class PlotLayoutContractTest(unittest.TestCase):
             structures.leaves_of(inn),
         )
         cache = BuildingLayoutCache()
-        layout = cache.ensure(_world(), inn)
+        layout = cache.ensure(canonical_plot_uid("inn_small"), inn)
         self.assertIsNotNone(layout)
         self.assertEqual(layout.occupied_footprint.width, 16)
         self.assertEqual(layout.occupied_footprint.depth, 16)

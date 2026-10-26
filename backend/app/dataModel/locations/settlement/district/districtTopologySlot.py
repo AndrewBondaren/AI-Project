@@ -1,0 +1,47 @@
+"""Persisted district slot freeze — C23 topology, not import bundle."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict
+
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
+)
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
+    DistrictTemplateKey,
+)
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.spatial.facing import Facing
+
+
+class DistrictTopologyEntry(BaseModel):
+    """One district-boundary entry persisted with topology (through_road / entry_point)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    node_uid: StrictOnWire[str]
+    x: StrictOnWire[int]
+    y: StrictOnWire[int]
+    z: StrictOnWire[int]
+    role: StrictOnWire[DistrictEntryRole]
+    facing: StrictOnWire[Facing]
+    connection_type: StrictOnWire[ConnectionTypeKey]
+    paired_exit_uid: DefaultWhenMissing[str | None] = None
+
+
+class DistrictTopologySlot(BaseModel):
+    """Geometry + template key in generated district NL's DistrictPayload."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
+
+    cell_x: StrictOnWire[int]
+    cell_y: StrictOnWire[int]
+    origin_x: StrictOnWire[int]
+    origin_y: StrictOnWire[int]
+    width_fine: StrictOnWire[int]
+    depth_fine: StrictOnWire[int]
+    ground_z: StrictOnWire[int]
+    template_system_name: StrictOnWire[DistrictTemplateKey]
+    slot_index: StrictOnWire[int]
+    entries: DefaultWhenMissing[tuple[DistrictTopologyEntry, ...]] = ()

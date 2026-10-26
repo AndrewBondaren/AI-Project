@@ -1,1 +1,9 @@
-[{"race_uid": "race-template-human", "display_race": "Человек", "race_traits": {"adaptive": true}}]
+[
+  {
+    "race_traits": {
+      "adaptive": true
+    },
+    "template_uid": "race-template-human",
+    "display_name": "Человек"
+  }
+]

@@ -6,10 +6,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.fine import fineChunkRunner, fineTilePrep
+from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.materialize.materializationContext import MaterializationContext
 from app.db.models.mapCell import MapCell
 
 
@@ -59,10 +60,10 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         pool_instance.map_sync_with_callback = AsyncMock(side_effect=fake_pool)
 
         with patch(
-            "app.application.worldData.pack.refine.fineChunkRunner.ChunkComputePool",
+            fineChunkRunner.__name__ + ".ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls, patch(
-            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await runner.refine_rects(
@@ -70,13 +71,14 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 [],
                 writer,
                 mat_ctx,
-                surface_ctx=MagicMock(),
+                surface_bundle=MagicMock(),
                 tile_gx=0,
                 tile_gy=0,
                 rects=rects,
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+                working=MagicMock(),
             )
             result, written, total = (
                 refined.persist,
@@ -93,15 +95,16 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(written, 4)
         self.assertEqual(result.succeeded, 4)
         self.assertEqual(terrain.generate_chunk_cells_sync.call_count, 4)
+        writer.save_manifest.assert_not_called()
 
     async def test_refine_rects_serial_when_single_chunk(self) -> None:
         terrain, writer, rects, mat_ctx = self._setup()
         runner = FineChunkRunner(terrain)
 
         with patch(
-            "app.application.worldData.pack.refine.fineChunkRunner.ChunkComputePool",
+            fineChunkRunner.__name__ + ".ChunkComputePool",
         ) as pool_cls, patch(
-            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await runner.refine_rects(
@@ -109,13 +112,14 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 [],
                 writer,
                 mat_ctx,
-                surface_ctx=MagicMock(),
+                surface_bundle=MagicMock(),
                 tile_gx=0,
                 tile_gy=0,
                 rects=rects[:1],
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+                working=MagicMock(),
             )
             result, written, total = (
                 refined.persist,
@@ -127,12 +131,24 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(total, 1)
         self.assertEqual(written, 1)
         self.assertEqual(result.succeeded, 1)
+        writer.save_manifest.assert_not_called()
+
+    async def test_standalone_rect_publishes_but_nested_queued_work_does_not(self):
+        from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
+        terrain, writer, rects, mat_ctx = self._setup()
+        runner = MagicMock()
+        runner.refine_rects = AsyncMock(return_value=FineRefineResult.empty())
+        facade = FineTerrainRefineOrchestrator(terrain, runner=runner)
+        await facade.refine_queued_chunk(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, 0, 0, working=MagicMock())
+        writer.save_manifest.assert_not_called()
+        await facade.refine_rect(_world(), [], writer, mat_ctx, MagicMock(), 0, 0, rects[0], working=MagicMock())
+        writer.save_manifest.assert_called_once_with()
 
     async def test_facade_delegates_refine_rects(self) -> None:
         terrain, writer, rects, mat_ctx = self._setup()
         facade = FineTerrainRefineOrchestrator(terrain)
         with patch(
-            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
+            fineTilePrep.__name__ + ".require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await facade._refine_rects(
@@ -140,13 +156,14 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 [],
                 writer,
                 mat_ctx,
-                surface_ctx=MagicMock(),
+                surface_bundle=MagicMock(),
                 tile_gx=0,
                 tile_gy=0,
                 rects=rects[:1],
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+                working=MagicMock(),
             )
             result, written, total = (
                 refined.persist,

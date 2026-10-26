@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-loc-t
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/loc-t-2-settlement-size.md`](../plans/loc-t-2-settlement-size.md) — **архитектура и порядок**; не отклоняться.
+1. [`.cursor/plans/loc-t-2-settlement-size-done.md`](../plans/loc-t-2-settlement-size-done.md) — **архитектура и порядок**; не отклоняться.
 2. [`docs/tz_locations.md`](../../docs/tz_locations.md) § **Размер поселения (LOC-T-2)** — продукт.
 3. [`docs/tz_city_generation.md`](../../docs/tz_city_generation.md) §1.1, §6.1, §9.3.
 4. Правила (нарушение = стоп, не «потом починим»):

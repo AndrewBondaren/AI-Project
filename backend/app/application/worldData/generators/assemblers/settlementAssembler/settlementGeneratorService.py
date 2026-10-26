@@ -5,11 +5,10 @@ Skeleton на NamedLocation — фаза 1 (world create).
 Полная геометрия — SettlementAssembler + map_cells persist при первом входе.
 """
 
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 import logging
 
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
     collect_geometry_fine_cells,
     collect_map_cells_from_layout,
@@ -20,6 +19,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_footprint_occupancy_cells,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import (
+    SettlementTopologyPlan,
     plan_slots_and_city_graph as plan_slots_and_city_graph_fn,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
@@ -28,14 +28,14 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import (
     SettlementAssembler,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
@@ -60,20 +60,24 @@ class SettlementGeneratorService:
         settlement: NamedLocation,
     ) -> list[MapCell]:
         """Только резерв footprint (можно вызвать при world create)."""
-        return plan_footprint_occupancy_cells(world, settlement)
+        return plan_footprint_occupancy_cells(
+            world, settlement, settlement_payload(settlement).system_city_size,
+        )
 
     def plan_slots_and_city_graph(
         self,
         world: World,
         settlement: NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-    ) -> tuple[list[DistrictSlot], list[ConnectionNode], list[ConnectionEdge]]:
-        skeleton = city_skeleton_from_settlement(
+    ) -> SettlementTopologyPlan:
+        ctx = settlement_context(world, settlement)
+        skeleton = resolved_settlement_skeleton(
             settlement,
-            economic_tier=TierResolver.resolve(world=world, city=settlement),
+            economic_tier=ctx.economic_tier,
+            settlement_density=ctx.settlement_density,
         )
         return plan_slots_and_city_graph_fn(
-            world, settlement, skeleton, terrain_cells,
+            world, settlement, skeleton, terrain_cells, ctx,
         )
 
     def generate_layout(
@@ -81,16 +85,17 @@ class SettlementGeneratorService:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-        catalog:       BuildingCatalog | None = None,
         *,
+        catalog:       BuildingCatalog,
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
         timings: SettlementAssembleTimings | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> SettlementLayout:
         return self._assembler.assemble(
             world, settlement, terrain_cells, catalog=catalog,
             district_slots=district_slots, city_graph=city_graph,
-            timings=timings,
+            timings=timings, existing_buildings=existing_buildings,
         )
 
     def collect_map_cells(
@@ -114,7 +119,8 @@ class SettlementGeneratorService:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-        catalog:       BuildingCatalog | None = None,
+        *,
+        catalog:       BuildingCatalog,
     ) -> tuple[SettlementLayout, list[MapCell]]:
         layout = self.generate_layout(world, settlement, terrain_cells, catalog=catalog)
         grid_cells   = self.collect_surface_grid_cells(layout)

@@ -3,55 +3,62 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.log.events import (
-    EVENT_RESOLVE_FALLBACK,
-)
 from app.application.worldData.generators.terrain.relief.log.log import (
     relief_info,
-    relief_warning,
 )
-from app.application.worldData.generators.terrain.relief.geom.seededHash import seeded_index
+from app.ids import UidKind, seeded_index
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.terrain.relief.planning.reliefPlan import MountainTemplateInput
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ObjectReliefPickPolicy,
     ReliefContextPickPolicy,
     WorldReliefPickPolicy,
 )
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
-)
 
 @dataclass(frozen=True, slots=True)
 class PickResult:
-    template_uid: str | None
+    template_uid: str
     policy_level: str  # side | object | world | fallback
     mode: ReliefPickMode | None
     reason: str
     fallback_kind: ReliefSideKind | None = None
 
 
-def resolve_picked_template(
-    pick: PickResult,
-    templates_by_uid: Mapping[str, ReliefTemplate],
-) -> ReliefTemplate | None:
-    """Load template body for a pick (RELIEF-T-36).
+def candidates_for_context(
+    templates: Mapping[str, ReliefTemplate | MountainTemplateInput],
+    context: ReliefContext | str,
+) -> list[str]:
+    """Pick candidates — members whose body context matches, UID order (B5)."""
+    ctx = context.value if isinstance(context, ReliefContext) else context
+    return [
+        uid for uid, body in sorted(templates.items())
+        if body.context.value == ctx
+    ]
 
-    Returns ``None`` when uid is missing or body is not in ``templates_by_uid``.
-    Caller owns R21 policy (ribbon skip vs mountain fallback).
-    """
-    uid = pick.template_uid
-    if not uid:
-        return None
-    return templates_by_uid.get(uid)
+
+def resolve_picked_template[T: ReliefTemplate | MountainTemplateInput](
+    pick: PickResult,
+    templates_by_uid: Mapping[str, T],
+    *, resolve_ctx: ResolveContext | None = None,
+) -> T:
+    """Resolve the selected body; missing required bodies are unresolved."""
+    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_templates",))
+    template = templates_by_uid.get(pick.template_uid)
+    if template is None:
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (pick.template_uid,),
+            "selected template body unavailable", code="REF_W_UNAVAILABLE")])
+    return template
 
 
 def merge_pick_policy(
     *,
     context: ReliefContext | str,
-    world: WorldReliefPickPolicy,
+    world: WorldReliefPickPolicy | ReliefContextPickPolicy,
     object_policy: ObjectReliefPickPolicy | None = None,
     side_policy: ObjectReliefPickPolicy | None = None,
 ) -> tuple[ReliefContextPickPolicy, str]:
@@ -68,19 +75,20 @@ def merge_pick_policy(
         obj = object_policy.for_context(ctx)
         if obj is not None:
             return obj, "object"
-    return world.for_context(ctx), "world"
+    return (world if isinstance(world, ReliefContextPickPolicy) else world.for_context(ctx)), "world"
 
 
 def pick_template(
     *,
     context: ReliefContext | str,
-    registry: WorldReliefTemplateRegistry,
-    world_policy: WorldReliefPickPolicy,
+    templates: Mapping[str, ReliefTemplate | MountainTemplateInput],
+    world_policy: WorldReliefPickPolicy | ReliefContextPickPolicy,
     world_seed: str,
     site_id: str,
     occurrence_seq: int = 0,
     object_policy: ObjectReliefPickPolicy | None = None,
     side_policy: ObjectReliefPickPolicy | None = None,
+    resolve_ctx: ResolveContext | None = None,
 ) -> PickResult:
     ctx = context.value if isinstance(context, ReliefContext) else context
     effective, level = merge_pick_policy(
@@ -89,27 +97,15 @@ def pick_template(
         object_policy=object_policy,
         side_policy=side_policy,
     )
-    candidates = registry.entries_for_context(ctx)
+    active = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_pick", ctx, site_id))
+    candidates = candidates_for_context(templates, ctx)
     if not candidates:
-        relief_warning(
-            EVENT_RESOLVE_FALLBACK,
-            context=ctx,
-            mode=effective.mode.value,
-            why="empty_candidates",
-            chosen_fallback=ReliefSideKind.SLOPE.value,
-            policy_level=level,
-        )
-        return PickResult(
-            template_uid=None,
-            policy_level="fallback",
-            mode=effective.mode,
-            reason="empty_candidates",
-            fallback_kind=ReliefSideKind.SLOPE,
-        )
+        reject_unresolved(active, [FieldPathError(active.path_prefix,
+            "no relief template candidates", code="DOMAIN_NO_CANDIDATE")])
 
     if effective.mode == ReliefPickMode.FIXED:
         uid = effective.default_template_uid
-        if uid and any(e.system_template_uid == uid for e in candidates):
+        if uid and uid in candidates:
             result = PickResult(
                 template_uid=uid,
                 policy_level=level,
@@ -125,24 +121,12 @@ def pick_template(
                 site_id=site_id,
             )
             return result
-        relief_warning(
-            EVENT_RESOLVE_FALLBACK,
-            context=ctx,
-            mode="fixed",
-            why=f"missing_uid={uid}",
-            chosen_fallback=candidates[0].system_template_uid,
-            policy_level=level,
-        )
-        return PickResult(
-            template_uid=candidates[0].system_template_uid,
-            policy_level="fallback",
-            mode=effective.mode,
-            reason=f"fixed_uid_missing:{uid}",
-        )
+        reject_unresolved(active, [FieldPathError(active.path_prefix + ("default_template_uid",),
+            f"fixed template unavailable in context: {uid!r}", code="REF_W_UNKNOWN")])
 
     if effective.mode == ReliefPickMode.ROUND_ROBIN:
         idx = occurrence_seq % len(candidates)
-        uid = candidates[idx].system_template_uid
+        uid = candidates[idx]
         relief_info(
             "pick",
             context=ctx,
@@ -161,10 +145,10 @@ def pick_template(
 
     # random
     idx = seeded_index(
-        f"{world_seed}|relief_pick|{ctx}|{site_id}",
-        len(candidates),
+        world_seed, UidKind.RELIEF_PICK, len(candidates),
+        context=ctx, site=site_id,
     )
-    uid = candidates[idx].system_template_uid
+    uid = candidates[idx]
     relief_info(
         "pick",
         context=ctx,

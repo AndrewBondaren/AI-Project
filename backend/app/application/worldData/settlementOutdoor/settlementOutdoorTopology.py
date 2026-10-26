@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from app.application.worldData.locations.locationPayloadAccess import district_payload
+
 import logging
 
-from pydantic import ValidationError
 
 from app.application.jsonValidation.worldRow import district_templates, enabled_building_purposes
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
 )
@@ -18,13 +19,15 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     resolve_settlement_specialization,
     slot_allowed_for_template,
 )
+from app.application.cascade.locationScope import district_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
     is_district_location,
 )
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     unhosted_settlement_types,
     union_required_structures,
 )
@@ -58,12 +61,7 @@ def has_city_settlement_gates(nodes: list[ConnectionNode]) -> bool:
 
 
 def _frozen_topology_slot(row: NamedLocation) -> DistrictTopologySlot | None:
-    if not row.district_topology:
-        return None
-    try:
-        return DistrictTopologySlot.model_validate(row.district_topology)
-    except ValidationError:
-        return None
+    return district_payload(row).district_topology
 
 
 def has_frozen_c23_districts(children: list[NamedLocation]) -> bool:
@@ -155,15 +153,16 @@ def should_skip_topology(
 def load_topology_slots(
     world: World,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     districts: list[NamedLocation],
+    settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot] | None:
-    rows = [child for child in districts if child.district_topology]
+    rows = [child for child in districts if district_payload(child).district_topology is not None]
     if len(rows) != len(districts) or not rows:
         return None
     parsed: list[tuple[DistrictTopologySlot, NamedLocation]] = []
     for row in rows:
-        parsed.append((DistrictTopologySlot.model_validate(row.district_topology), row))
+        parsed.append((district_payload(row).district_topology, row))
     parsed.sort(key=lambda item: item[0].slot_index)
     templates = district_templates(world)
     enabled = enabled_building_purposes(world)
@@ -217,6 +216,17 @@ def load_topology_slots(
             cell_y=wire.cell_y,
             subject_tags=dict(resolved.subject_tags),
             slot_index=wire.slot_index,
+            district_ctx=(
+                district_context(
+                    world,
+                    settlement_ctx,
+                    template,
+                    district=row,
+                    district_uid=row.location_uid,
+                )
+                if settlement_ctx is not None
+                else None
+            ),
         ))
     leftover = unhosted_settlement_types(
         list(resolved.required_types),

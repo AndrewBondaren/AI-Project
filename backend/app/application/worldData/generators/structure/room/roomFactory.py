@@ -6,28 +6,33 @@
 import logging
 from random import Random
 
+from app.application.cascade.locationScope import (
+    empty_location_chain,
+    room_context,
+)
 from app.application.worldData.generators.structure.errors import UnsupportedShapeError
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.locations.structure.room.roomDef import RoomDef
+from app.dataModel.locations.structure.building.levelDef import LevelDef
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.roomSize import RoomSize
-from app.dataModel.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
-from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
-from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
+from app.application.worldData.generators.structure.shape.shapeResolver import SizeShapeResolver
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.spatial.facing import CARDINAL_FACINGS
+from app.application.worldData.generators.structure.shape.shapeType import ShapeType, _V1_SHAPES
+from app.application.worldData.generators.structure.shape.shapes import resolve_stem_wall
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
 _SHAPES_WITHOUT_DEPTH = {ShapeType.SQUARE, ShapeType.CIRCLE, ShapeType.SEMICIRCLE}
 
-_STAIRCASE_PRESETS: dict[str, StaircaseSizePreset] = all_staircase_size_presets()
 
-
-def _resolve_shape(room_def: dict, rng: Random) -> ShapeType:
-    if "shape_type" not in room_def:
-        return SizeShapeResolver.from_size_def(room_def.get("size", {}))
-    raw = room_def["shape_type"]
+def _resolve_shape(room_def: RoomDef, rng: Random) -> ShapeType:
+    if room_def.shape_type is None:
+        return SizeShapeResolver.from_size_def(room_def.size)
+    raw = room_def.shape_type
     chosen = rng.choice(raw) if isinstance(raw, list) else raw
     try:
         st = ShapeType(chosen)
@@ -39,37 +44,17 @@ def _resolve_shape(room_def: dict, rng: Random) -> ShapeType:
 
 
 def _resolve_size(
-    room_def: dict,
+    room_def: RoomDef,
     shape: ShapeType,
     level_z_height: int,
     rng: Random,
     template_z_height: int | None = None,
 ) -> tuple[int, int, int]:
     """Возвращает (width, depth, room_z_height)."""
-    size = room_def["size"]
-    size_type = size.get("size_type")
-
-    if size_type and size_type in _STAIRCASE_PRESETS:
-        sc_preset = _STAIRCASE_PRESETS[size_type]
-        wr = sc_preset.width_range
-        dr = sc_preset.depth_range or sc_preset.width_range
-        zr = [level_z_height, level_z_height]
-    elif size_type:
-        room_size = RoomSize.from_size_type(size_type)
-        if room_size is None:
-            raise ValueError(f"Unknown size_type: {size_type!r}")
-        preset = room_size.to_preset()
-        wr = preset.width_range
-        dr = preset.depth_range
-        # template > preset; room z_range overrides both
-        tz = [template_z_height, template_z_height] if template_z_height else None
-        zr = size.get("z_range") or tz or list(preset.z_range)
-    else:
-        wr = size["width_range"]
-        dr = size.get("depth_range", [3, 3])
-        # template > hardcoded default; room z_range overrides both
-        tz = [template_z_height, template_z_height] if template_z_height else None
-        zr = size.get("z_range") or tz or [3, 3]
+    size = room_def.size
+    wr = size.resolved_width_range
+    dr = size.resolved_depth_range
+    zr = size.height_range(level_z_height, template_z_height)
 
     width = rng.randint(wr[0], wr[1])
     depth = rng.randint(dr[0], dr[1]) if shape not in _SHAPES_WITHOUT_DEPTH else width
@@ -78,21 +63,27 @@ def _resolve_size(
     if room_z > level_z_height:
         logger.warning(
             "Room %r: z_range дало %d, уровень ограничен %d — потолок обрезан",
-            room_def["room_id"], room_z, level_z_height,
+            room_def.room_id, room_z, level_z_height,
         )
         room_z = level_z_height
 
     return width, depth, room_z
 
 
-def _resolve_shape_params(room_def: dict, rng: Random) -> dict:
-    raw = room_def.get("shape_params") or {}
+def _resolve_shape_params(room_def: RoomDef, chosen_shape: ShapeType, rng: Random) -> dict:
+    raw = room_def.shape_params
     params: dict = {}
 
-    if room_def.get("shape_type") in ("l_shape", ["l_shape"]):
-        awr = raw.get("arm_width_range", [2, 3])
-        adr = raw.get("arm_depth_range", [2, 3])
-        corner = raw.get("arm_corner", "any")
+    if chosen_shape is ShapeType.L_SHAPE:
+        if raw is None or raw.arm_width_range is None or raw.arm_depth_range is None:
+            logger.error(
+                "Room '%s': incomplete shape_params for %s — using footprint defaults",
+                room_def.room_id, chosen_shape.value,
+            )
+            return params
+        awr = raw.arm_width_range
+        adr = raw.arm_depth_range
+        corner = raw.arm_corner
         if corner == "any":
             corner = rng.choice(["northeast", "northwest", "southeast", "southwest"])
         params = {
@@ -101,9 +92,15 @@ def _resolve_shape_params(room_def: dict, rng: Random) -> dict:
             "arm_corner": corner,
         }
 
-    elif room_def.get("shape_type") in ("t_shape", ["t_shape"]):
-        swr = raw.get("stem_width_range", [2, 3])
-        wall = raw.get("stem_wall", "any")
+    elif chosen_shape is ShapeType.T_SHAPE:
+        if raw is None or raw.stem_width_range is None:
+            logger.error(
+                "Room '%s': incomplete shape_params for %s — using footprint defaults",
+                room_def.room_id, chosen_shape.value,
+            )
+            return params
+        swr = raw.stem_width_range
+        wall = raw.stem_wall
         if wall == "any":
             wall = rng.choice(list(CARDINAL_FACINGS)).value
         params = {
@@ -115,37 +112,68 @@ def _resolve_shape_params(room_def: dict, rng: Random) -> dict:
 
 
 def instantiate_level_rooms(
-    level_def: dict,
+    level_def: LevelDef,
     template: StructureTemplate,
     level_z_height: int,
     z_offset: int,
     world: World,
     rng: Random,
-    building_tier: str | None = None,
+    *,
+    ctx: LocationContext | None = None,
+    building_uid: str = "room",
     template_z_height: int | None = None,
 ) -> list[_RoomInstance]:
+    ctx = ctx or empty_location_chain(world, ScopeLevel.BUILDING)
     instances: list[_RoomInstance] = []
 
-    for room_def in level_def["rooms"]:
-        room_id = room_def["room_id"]
-        required = room_def["required"]
+    for room_def in level_def.rooms:
+        room_id = room_def.room_id
+        for index, spec in enumerate(room_def.wall_openings):
+            for name, original in spec.substitutions:
+                logger.error(
+                    "Structure '%s' room '%s': wall_openings[%d].%s=%s — auto-resolve",
+                    template.system_name, room_id, index, name, original,
+                )
+        if len(room_def.wall_openings) > 1:
+            logger.error(
+                "Structure '%s' room '%s': wall_openings entries after first ignored (%d)",
+                template.system_name, room_id, len(room_def.wall_openings) - 1,
+            )
+        entry_point = room_def.entry_point
+        back_entry_point = room_def.back_entry_point
+        if (room_def.perimeter_required_explicitly_disabled
+                and (entry_point is not None or back_entry_point is not None)):
+            logger.warning(
+                "Structure '%s' room '%s': perimeter_required=false ignored — "
+                "entry_point/back_entry_point requires perimeter",
+                template.system_name, room_id,
+            )
+        required = room_def.required
 
         # Resolve count
         if required:
-            count = room_def.get("count", 1)
+            count = room_def.count
         else:
-            cr = room_def["count_range"]
+            cr = room_def.count_range
             count = rng.randint(cr[0], cr[1])
 
         shape = _resolve_shape(room_def, rng)
-        shape_params = _resolve_shape_params(room_def, rng)
+        shape_params = _resolve_shape_params(room_def, shape, rng)
+        if shape is ShapeType.T_SHAPE and "stem_wall" in shape_params:
+            # Normalize once per definition, before repeated footprint queries.
+            shape_params["stem_wall"] = resolve_stem_wall(
+                shape_params.get("stem_wall"),
+                context=f"Structure '{template.system_name}' room '{room_id}'",
+            )
         width, depth, room_z = _resolve_size(room_def, shape, level_z_height, rng, template_z_height)
 
-        room_tier = room_def.get("economic_tier")
-        template_tier = None
+        room_ctx = room_context(
+            world, ctx, room_def,
+            room_uid=f"{building_uid}|{room_id}",
+        )
+        room_tier = room_ctx.economic_tier
         wall_mat, floor_mat = resolve_room_materials(
-            world, room_tier, template_tier, rng, room_id=room_id,
-            building_tier=building_tier, template=template,
+            world, room_tier, rng, room_id=room_id,
         )
 
         for idx in range(count):
@@ -158,24 +186,26 @@ def instantiate_level_rooms(
                 width=width,
                 depth=depth,
                 z_height=room_z,
-                display_name=room_def["display_name"] + suffix,
-                room_type=room_def["room_type"],
-                is_public=room_def["is_public"],
-                is_forbidden=room_def["is_forbidden"],
+                display_name=room_def.display_name + suffix,
+                room_type=room_def.room_type,
+                is_public=room_def.is_public,
+                is_forbidden=room_def.is_forbidden,
                 required=required,
                 wall_material=wall_mat,
                 floor_material=floor_mat,
-                economic_tier=room_def.get("economic_tier"),
-                attach_to=room_def.get("attach_to"),
-                attach_wall=room_def.get("attach_wall"),
-                perimeter_required=room_def.get("perimeter_required", False),
-                underground_fallback=room_def.get("underground_fallback", False),
-                entry_point=room_def.get("entry_point"),
-                back_entry_point=room_def.get("back_entry_point"),
+                economic_tier=room_tier,
+                attach_to=room_def.attach_to,
+                attach_wall=room_def.attach_wall,
+                perimeter_required=bool(room_def.perimeter_required
+                                        or entry_point is not None or back_entry_point is not None),
+                underground_fallback=room_def.underground_fallback,
+                entry_point=entry_point,
+                back_entry_point=back_entry_point,
                 shape_params=shape_params,
-                staircase_type=room_def.get("staircase_type"),
-                facing=room_def.get("facing"),
+                staircase_type=room_def.staircase_type,
+                facing=room_def.facing,
+                wall_openings=list(room_def.wall_openings),
             ))
-            logger.info("factory | %r staircase_type=%r", room_id, room_def.get("staircase_type"))
+            logger.info("factory | %r staircase_type=%r", room_id, room_def.staircase_type)
 
     return instances

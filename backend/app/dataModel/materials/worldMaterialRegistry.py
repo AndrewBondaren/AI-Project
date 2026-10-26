@@ -15,6 +15,7 @@ from app.dataModel.registryKey import RegistryKey
 
 class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-MATERIAL"
+    CANONICAL_OVERLAY_ID_FIELD: ClassVar[str] = "system_material"
     """Root POJO for `worlds.material_registry`. Wire shape: JSON array."""
 
     root: list[MaterialRegistryEntry]
@@ -107,6 +108,27 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
         hardness=1,
         density=90,
     ),
+    # Terminal defaults for openings. No construction tag: selecting an
+    # ordinary default must not introduce a random candidate draw.
+    MaterialRegistryEntry(
+        system_material="window_glass", display_name="Оконное стекло",
+        material_category=MaterialCategory.SOLID, tags=["glass"],
+        use_type=["window_glass"], transparent=100.0,
+    ),
+    MaterialRegistryEntry(
+        system_material="porthole_glass", display_name="Стекло иллюминатора",
+        material_category=MaterialCategory.SOLID, tags=["glass"],
+        use_type=["porthole_glass"], transparent=100.0,
+    ),
+    MaterialRegistryEntry(
+        system_material="vent_mesh", display_name="Вентиляционная сетка",
+        material_category=MaterialCategory.SOLID, tags=["metal"],
+        use_type=["vent_mesh"],
+    ),
+    MaterialRegistryEntry(
+        system_material="dirt_road", display_name="Грунтовое покрытие дороги",
+        material_category=MaterialCategory.SOLID, tags=["raw"], use_type=["road"],
+    ),
 )
 
 # tz_locations.md § material_registry — replaces overlapping fixture keys + engine-only.
@@ -171,7 +193,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         density=260,
         structural_strength=0.4,
         corrodible=False,
-        transparent=True,
+        transparent=100.0,
     ),
     MaterialRegistryEntry(
         system_material="water",

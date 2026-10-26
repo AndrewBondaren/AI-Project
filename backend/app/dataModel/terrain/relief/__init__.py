@@ -40,9 +40,6 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.terrain.relief.reliefRoleCase import ReliefRoleCase
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
-    ReliefTemplateRegistryEntry,
-)
 from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition
 from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
     ReliefOntologyEnvelopes,
@@ -59,9 +56,6 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ObjectReliefPickPolicy,
     ReliefContextPickPolicy,
     WorldReliefPickPolicy,
-)
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
-    WorldReliefTemplateRegistry,
 )
 
 __all__ = [
@@ -100,12 +94,10 @@ __all__ = [
     "ReliefSideSpec",
     "ReliefSlopePolicy",
     "ReliefTemplate",
-    "ReliefTemplateRegistryEntry",
     "ReliefTerrainCondition",
     "ReliefTerrainEnvelope",
     "StructureCanal",
     "WorldCanalTemplateRegistry",
     "WorldReliefGradeObstacleScalars",
     "WorldReliefPickPolicy",
-    "WorldReliefTemplateRegistry",
 ]

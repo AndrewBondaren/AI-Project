@@ -31,7 +31,7 @@ from app.application.worldData.render.mapSymbols import (
     paired_height_cell_width,
     symbol_for_role_or_terrain,
 )
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
 
 GradeConsumeIndex = GradeRayIndex | GradeSlotIndex
 

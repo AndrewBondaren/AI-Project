@@ -15,17 +15,17 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
-from app.application.worldData.pack.refine.detailedGradeCatalog import catalog_for_surface
-from app.application.worldData.pack.refine.fineChunkPersist import FineChunkPersist
-from app.application.worldData.pack.refine.fineTileContext import (
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import catalog_for_surface
+from app.application.worldData.pack.refine.fine.fineChunkPersist import FineChunkPersist
+from app.application.worldData.pack.refine.fine.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
 )
 from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.patchStoreService import PatchStoreService
-from app.application.worldData.render.packMapGridRender import PackMapGridRender
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
+from app.application.worldData.render.pack.packMapGridRender import PackMapGridRender
 from app.application.worldData.render.renderPayloads import LEVEL_SURFACE_GRADE, LEVEL_SURFACE_Z
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
@@ -133,7 +133,8 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
         ctx = FineTileContext(
             world=world,
             locations=[],
-            surface_ctx=MagicMock(),
+            surface_bundle=MagicMock(),
+            working=MagicMock(),
             tile_gx=0,
             tile_gy=0,
             fine_bbox=bbox,
@@ -171,6 +172,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
             ),
         )
         pack = persist.finish()
+        writer.save_manifest()  # The test is the operation owner (PC-9).
         services = build_pack_read_services(uid, PatchStoreService(), db_path=db_path)
         payload = PackMapGridRender(services.render).render_wilderness_tile_grid(
             world, 0, 0,
@@ -190,7 +192,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
         uid: str,
     ) -> None:
         pack, payload, sidecar = self._persist_and_render(z_map, uid=uid)
-        self.assertEqual(pack.meter_surface_z, z_map)
+        self.assertEqual(pack.fine_surface_z, z_map)
         self.assertEqual(payload.read_mode, "wilderness_tile_l2")
         self.assertEqual(payload.column_count, len(z_map))
         self.assertEqual(sidecar, expected)

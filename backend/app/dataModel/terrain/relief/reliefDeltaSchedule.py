@@ -32,7 +32,7 @@ class ReliefDeltaInterval:
         )
 
     def coerced_geom(self) -> tuple[ReliefDeltaInterval, str | None]:
-        """Copy with invalid L/θ replaced by fallback θ (C31)."""
+        """Compatibility API: valid knobs unchanged, invalid knobs rejected."""
         length, angle, reason = coerce_geom_knobs(
             self.slope_length_cells, self.target_angle_deg,
         )

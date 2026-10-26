@@ -12,13 +12,14 @@ from app.application.worldData.generators.climate.climateAnchor import (
 )
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+from app.application.worldData.pack.climate import lightFineTileResolve
 from app.application.worldData.pack.climate.climatePackSample import (
     bucket_l2_z_by_light_cell,
     resolve_pack_surface_z,
     sample_pack_climate_at,
 )
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 def _world(**overrides):
@@ -42,7 +43,7 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
             gx=0,
             gy=0,
             side=2,
-            tile_m=1000,
+            tile_macro=1000,
             cells=[
                 WorldMapCellWire(tx=0, ty=0, surface_z=5),
                 WorldMapCellWire(tx=1, ty=0, surface_z=5),
@@ -53,18 +54,18 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             parent_light=parent,
             l2_surface_z={(0, 0): 9},
-            light_m=500,
+            light_span=500,
         )
         self.assertEqual(z, 9)
         z2 = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             parent_light=parent,
@@ -73,7 +74,7 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z3 = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
         )
@@ -83,11 +84,11 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             l2_surface_z={(10, 20): 7, (50, 50): 12, (500, 0): 99},
-            light_m=100,
+            light_span=100,
         )
         self.assertEqual(z, 12)
 
@@ -101,11 +102,11 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
         z = resolve_pack_surface_z(
             xm=0,
             ym=0,
-            tile_m=1000,
+            tile_macro=1000,
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             l2_surface_z=bucket,
-            light_m=100,
+            light_span=100,
         )
         self.assertEqual(z, 12)
 
@@ -118,7 +119,7 @@ class TestLightFineTilePolicy(unittest.TestCase):
 
         world = SimpleNamespace(world_uid="w", fine_cells_per_map_cell=1000)
         with patch(
-            "app.application.worldData.pack.climate.lightFineTileResolve.tile_for_anchor",
+            lightFineTileResolve.__name__ + ".tile_for_anchor",
             return_value=(9, 9),
         ):
             out = resolve_fine_tiles_for_policy(
@@ -155,7 +156,7 @@ class TestSamplePackClimateVolcanicHigh(unittest.TestCase):
             base_temperature_override=35,
         )
 
-        def _wae(_world, zone, z, base_temperature_override=None):
+        def _wae(_world, zone, z, base_temperature_override=None, *, working=None):
             base = base_temperature_override if base_temperature_override is not None else 35
             return round(base - 0.65 * (z / 100)), 5
 
@@ -163,13 +164,13 @@ class TestSamplePackClimateVolcanicHigh(unittest.TestCase):
 
         low = sample_pack_climate_at(
             world, pole, local,
-            xm=0, ym=0, tile_m=1000,
+            xm=0, ym=0, tile_macro=1000,
             l2_surface_z={(0, 0): 0},
             climate=climate,
         )
         high = sample_pack_climate_at(
             world, pole, local,
-            xm=0, ym=0, tile_m=1000,
+            xm=0, ym=0, tile_macro=1000,
             l2_surface_z={(0, 0): 2000},
             climate=climate,
         )
@@ -183,7 +184,7 @@ class TestSamplePackClimateVolcanicHigh(unittest.TestCase):
 
 class TestPackBakeDefaultsFinePolicy(unittest.TestCase):
     def test_defaults_spawn_player_and_full_none(self) -> None:
-        from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+        from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
         d = PackBakeDefaults.canonical_defaults()
         self.assertEqual(d.light_fine_tile_policy, "spawn_player")

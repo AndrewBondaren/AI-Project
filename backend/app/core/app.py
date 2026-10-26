@@ -20,8 +20,10 @@ def make_lifespan(db: Database):
     from app.db.models.world_perk import WorldPerk
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.locationLevel import LocationLevel
-    from app.db.models.locationEntryPoint import LocationEntryPoint
+    from app.db.models.transition import TransitionRow
+    from app.db.models.transitionSide import TransitionSideRow
     from app.db.models.mapCell import MapCell
+    from app.db.models.regionState import RegionStateRow
     from app.db.models.connectionNode import ConnectionNode
     from app.db.models.connectionEdge import ConnectionEdge
     from app.db.models.connectionEdgeCell import ConnectionEdgeCell
@@ -31,19 +33,27 @@ def make_lifespan(db: Database):
     from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
     from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
     from app.db.models.buildingTemplate import BuildingTemplateRow
+    from app.db.models.plotTemplate import PlotTemplateRow
     from app.db.models.structureTemplate import StructureTemplateRow
+    from app.db.models.libraryPack import LibraryPackRow
+    from app.db.models.libraryPackMember import LibraryPackMemberRow
+    from app.db.models.libraryPackDependency import LibraryPackDependencyRow
     from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
     _models = [
         World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog,
-        Race, WorldPerk, NamedLocation, LocationLevel, LocationEntryPoint, MapCell,
+        Race, WorldPerk, NamedLocation, LocationLevel, MapCell, RegionStateRow,
+        TransitionRow, TransitionSideRow,
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
-        State, SessionPending, ReliefTemplateRow, BuildingTemplateRow,
+        State, SessionPending, ReliefTemplateRow, BuildingTemplateRow, PlotTemplateRow,
         ReliefGradeSystemRow, ReliefGradeInstanceRow, StructureTemplateRow,
+        LibraryPackRow, LibraryPackMemberRow, LibraryPackDependencyRow,
     ]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        container = app.state.container
+        container.planning_resources()
         await db.connect()
         await db.apply_migrations()
         await db.validate_schema(_models)
@@ -52,12 +62,21 @@ def make_lifespan(db: Database):
             validate_world_row_relief_obstacle_columns,
         )
         from app.dataModel.terrain.worldTerrainScalars import validate_world_row_terrain_columns
+        from app.dataModel.worldPack.meta.worldGridSettings import validate_world_row_grid_columns
+        from app.dataModel.worldPack.meta.worldPackMetadata import validate_world_row_pack_metadata_columns
+        from app.dataModel.worldPack.meta.worldMapResolutionSettings import validate_world_row_map_resolution_columns
         validate_world_row_climate_columns(World)
         validate_world_row_terrain_columns(World)
+        validate_world_row_grid_columns(World)
+        validate_world_row_pack_metadata_columns(World)
+        validate_world_row_map_resolution_columns(World)
         validate_world_row_relief_obstacle_columns(World)
         await SqlitePendingRepository(db).cleanup_stale()
-        yield
-        await db.disconnect()
+        try:
+            yield
+        finally:
+            container.shutdown_planning()
+            await db.disconnect()
     return lifespan
 
 
@@ -79,6 +98,9 @@ def create_app():
     app = FastAPI(lifespan=make_lifespan(db))
     container = Container(config_manager=config_manager, db=db)
     app.state.container = container
+
+    from app.api.errorMapping import install_error_handlers
+    install_error_handlers(app)
 
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(
@@ -103,6 +125,8 @@ def create_app():
     from app.api.routes.debug import router as debug_router
     from app.api.routes.reliefTemplates import router as relief_templates_router
     from app.api.routes.structureTemplates import router as structure_templates_router
+    from app.api.routes.libraryPacks import router as library_packs_router
+    from app.api.routes.libraryArchives import router as library_archives_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -118,6 +142,8 @@ def create_app():
     app.include_router(debug_router, prefix="/api")
     app.include_router(relief_templates_router, prefix="/api")
     app.include_router(structure_templates_router, prefix="/api")
+    app.include_router(library_archives_router, prefix="/api")
+    app.include_router(library_packs_router, prefix="/api")
 
     return app
 

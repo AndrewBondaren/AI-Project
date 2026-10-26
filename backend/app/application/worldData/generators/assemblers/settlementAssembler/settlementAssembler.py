@@ -1,10 +1,10 @@
 """
 SettlementAssembler — оркестратор генерации поселения.
 
-План реализации по фазам: `.cursor/plans/settlement-assembler.md`
+План реализации по фазам: `.cursor/plans/settlement-assembler-done.md`
 
 Текущий статус (v1):
-  ✅ Фаза A — CitySkeleton, district slots, entry_nodes, city/district connection graph
+  ✅ Фаза A — SettlementSkeleton, district slots, entry_nodes, city/district connection graph
   ✅ Фаза B — semantic-first city edges (material, has_sidewalk, sidewalk_width log)
   ✅ Фаза C — placement (specialization, economic compat, ground_z, required_structures)
   ✅ Фаза E — building cache, area slots, cached layout in StructureAreaAssembler
@@ -14,28 +14,24 @@ SettlementAssembler — оркестратор генерации поселен
 
 ТЗ: docs/tz_assembler_hierarchy.md, tz_city_generation.md, tz_structure_connections.md §5
 """
+from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 import logging
-import random
 import time
 from dataclasses import replace
 
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    CitySkeleton,
-    city_skeleton_from_settlement,
-)
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtAssembler import DistrictAssembler
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import build_layout_cache
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    assemble_building_catalog,
-)
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import (
     plan_settlement_barriers,
 )
+from app.ids import UidKind, entity_rng
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
     resolve_dominant_material,
 )
@@ -43,12 +39,13 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_city_graph_for_slots,
     plan_slots_and_city_graph,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.cascade.locationScope import settlement_context
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
@@ -65,24 +62,25 @@ class SettlementAssembler:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-        catalog:       BuildingCatalog | None = None,
         *,
+        catalog:       BuildingCatalog,
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
         timings: SettlementAssembleTimings | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> SettlementLayout:
         wall0 = time.perf_counter()
-        skeleton = self._build_skeleton(world, settlement)
-        catalog = catalog or assemble_building_catalog(world)
+        ctx = settlement_context(world, settlement)
+        skeleton = self._build_skeleton(world, settlement, ctx)
         logger.info(
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
             settlement.location_uid,
-            settlement.system_city_size,
-            settlement.settlement_density,
+            settlement_payload(settlement).system_city_size,
+            settlement_payload(settlement).settlement_density,
             skeleton.economic_tier,
         )
         logger.info(
-            "CitySkeleton | economic_tier=%s architectural_style=%s dominant_material=%s"
+            "SettlementSkeleton | economic_tier=%s architectural_style=%s dominant_material=%s"
             " settlement_density=%s city_size=%s mood=%s",
             skeleton.economic_tier,
             skeleton.architectural_style,
@@ -92,22 +90,22 @@ class SettlementAssembler:
             skeleton.system_location_mood,
         )
         if district_slots is None:
-            planned_slots, planned_nodes, planned_edges = plan_slots_and_city_graph(
-                world, settlement, skeleton, terrain_cells,
+            topology = plan_slots_and_city_graph(
+                world, settlement, skeleton, terrain_cells, ctx,
             )
-            district_slots = planned_slots
+            district_slots = topology.slots
             if city_graph is None:
-                city_graph = (planned_nodes, planned_edges)
+                city_graph = (topology.nodes, topology.edges)
 
         t = time.perf_counter()
         layout_cache = build_layout_cache(
-            world, skeleton, district_slots, terrain_cells, catalog=catalog,
+            world, skeleton, district_slots, catalog,
             settlement_uid=settlement.location_uid,
         )
         if timings is not None:
             timings.cache_s += time.perf_counter() - t
         logger.info(
-            "SettlementAssembler | building_cache templates=%d names=%s",
+            "SettlementAssembler | building_cache templates=%d uids=%s",
             len(layout_cache),
             layout_cache.keys(),
         )
@@ -121,6 +119,7 @@ class SettlementAssembler:
                 settlement_uid=settlement.location_uid,
                 catalog=catalog,
                 timings=timings,
+                existing_buildings=existing_buildings,
             )
             district_layouts.append(layout)
 
@@ -134,11 +133,11 @@ class SettlementAssembler:
         if timings is not None:
             timings.streets_s += time.perf_counter() - t
         t = time.perf_counter()
-        barrier_cells = self._plan_barriers(world, settlement, skeleton)
+        barrier_cells = self._plan_barriers(world, settlement, skeleton, ctx)
         if timings is not None:
             timings.barriers_s += time.perf_counter() - t
         t = time.perf_counter()
-        occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
+        occupancy_cells = plan_footprint_occupancy_cells(world, settlement, ctx.system_city_size)
         if timings is not None:
             timings.occupancy_s += time.perf_counter() - t
 
@@ -150,7 +149,7 @@ class SettlementAssembler:
             barrier_cells=barrier_cells,
         )
         dominant_material = resolve_dominant_material(
-            world, layout, skeleton, settlement_uid=settlement.location_uid,
+            layout, ctx, settlement_uid=settlement.location_uid,
         )
 
         logger.info(
@@ -169,17 +168,26 @@ class SettlementAssembler:
 
         return replace(layout, dominant_material=dominant_material)
 
-    def _build_skeleton(self, world: World, settlement: NamedLocation) -> CitySkeleton:
-        return city_skeleton_from_settlement(
+    def _build_skeleton(
+        self,
+        world:      World,
+        settlement: NamedLocation,
+        ctx:        LocationContext | None = None,
+    ) -> SettlementSkeleton:
+        ctx = ctx if ctx is not None else settlement_context(world, settlement)
+        return resolved_settlement_skeleton(
             settlement,
-            economic_tier=TierResolver.resolve(world=world, city=settlement),
+            economic_tier=ctx.economic_tier,
+            settlement_density=ctx.settlement_density,
         )
 
     def _plan_barriers(
         self,
         world:      World,
         settlement: NamedLocation,
-        skeleton:   CitySkeleton,
+        skeleton:   SettlementSkeleton,
+        ctx:        LocationContext,
     ) -> list[MapCell]:
-        rng = random.Random(f"{world.world_uid}_{settlement.location_uid}_barriers")
-        return plan_settlement_barriers(world, settlement, skeleton, rng)
+        rng = entity_rng(
+            world.world_uid, UidKind.BARRIER, settlement=settlement.location_uid)
+        return plan_settlement_barriers(world, settlement, skeleton, rng, ctx)

@@ -15,11 +15,11 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.read.packMapHelpers import world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
+from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class PackWorldMapRenderSource:
 
     tiles: list[PackTileLightView]
     pins: LocationsIndexWire
-    tile_size_m: int
+    tile_macro: int
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,7 @@ class WildernessTileRenderSource:
 
     gx: int
     gy: int
-    tile_size_m: int
+    tile_macro: int
     chunks: list[FineTerrainChunkWire]
     chunks_listed: int
     chunks_loaded: int
@@ -147,7 +147,7 @@ class PackRenderReadFacade:
         return PackWorldMapRenderSource(
             tiles=tiles,
             pins=pins,
-            tile_size_m=world_map_cell_span(world),
+            tile_macro=world_map_cell_span(world),
         )
 
     def has_location_terrain(self, world: World, location_uid: str) -> bool:
@@ -278,7 +278,7 @@ class PackRenderReadFacade:
         return WildernessTileRenderSource(
             gx=gx,
             gy=gy,
-            tile_size_m=world_map_cell_span(world),
+            tile_macro=world_map_cell_span(world),
             chunks=chunks,
             chunks_listed=len(listed),
             chunks_loaded=len(chunks),

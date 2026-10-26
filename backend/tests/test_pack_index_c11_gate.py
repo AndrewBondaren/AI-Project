@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, MagicMock
 
+from app.application.worldData.pack.bake import packBakeLog
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_detailed_bake_skip_not_in_index,
     log_pack_settlement_skip_not_in_index,
@@ -29,8 +30,8 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator i
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.worldPack.detailedBakeScope import DetailedBakeRequest
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.bake.detailedBakeScope import DetailedBakeRequest
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -46,7 +47,9 @@ def _city(uid: str, *, map_x: int = 2, map_y: int = 2) -> NamedLocation:
         display_name=uid,
         system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         system_location_subtype="city",
-        system_city_size="medium",
+        location_payload={
+            'system_city_size': "medium",
+        },
         created_at="2026-01-01T00:00:00",
         map_x=map_x,
         map_y=map_y,
@@ -88,7 +91,7 @@ class LocationsIndexReadTests(TestCase):
 
 class PackIndexSkipLogLevelTests(TestCase):
     def test_skip_logs_are_error(self):
-        logger = "app.application.worldData.pack.bake.packBakeLog"
+        logger = packBakeLog.__name__
         with self.assertLogs(logger, level="ERROR") as captured:
             log_pack_detailed_bake_skip_not_in_index(
                 "w1", location_uid="loc-city-amberport-002",
@@ -132,8 +135,7 @@ def _outdoor(
         writer_for=lambda _world: writer,
         facade_for=lambda _uid: facade,
         pack_context_for=MagicMock(),
-        library=MagicMock(),
-        structure_library=MagicMock(list_all=AsyncMock(return_value=[])),
+        snapshot_loader=MagicMock(),
         node_repo=MagicMock(),
         edge_repo=MagicMock(),
     )

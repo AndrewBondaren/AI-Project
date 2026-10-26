@@ -1,0 +1,14 @@
+{
+  "world": {
+    "world_uid": "landcover-mixed",
+    "name": "Landcover: authored and canonical fields",
+    "created_at": "2026-10-18T00:00:00",
+    "terrain_masks": {
+      "default_landcover": {
+        "seed_spacing": 1000,
+        "transition_threshold": 0.6,
+        "claim_noise": {"amplitude": 60}
+      }
+    }
+  }
+}

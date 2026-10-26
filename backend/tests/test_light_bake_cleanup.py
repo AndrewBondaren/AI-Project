@@ -20,16 +20,16 @@ from app.application.worldData.pack.bake.lightGrid.contributors.settlement impor
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
-from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.mapCells.patchStoreService import PatchStoreService
 from app.application.worldData.render.mapGridRenderService import MapGridRenderService
-from app.application.worldData.render.packMapGridRender import PackMapGridRender
+from app.application.worldData.render.pack.packMapGridRender import PackMapGridRender
 from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack import WorldMapCellWire
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
-from app.dataModel.worldPack.worldMapCellsPerTile import (
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.lightSettlementFootprint import LightSettlementFootprintPolicy
+from app.dataModel.worldPack.wire.worldMapCellsPerTile import (
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
 )
@@ -41,7 +41,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.db.models.namedLocation import NamedLocation
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 class TestLightBakeCleanup(unittest.TestCase):
@@ -55,7 +55,7 @@ class TestLightBakeCleanup(unittest.TestCase):
         self.assertNotIn("8.0", src)
         self.assertNotIn("/ 8", src)
 
-    def test_wp10_side_ignores_tile_m(self) -> None:
+    def test_wp10_side_ignores_tile_macro(self) -> None:
         self.assertEqual(resolve_world_map_cells_per_tile(1000), 32)
         self.assertEqual(resolve_world_map_cells_per_tile(3000), 32)
         self.assertEqual(resolve_world_map_side(), 32)
@@ -87,32 +87,16 @@ class TestLightBakeCleanup(unittest.TestCase):
             width=1,
             tile_set=tile_set,
         )
-        pole = MagicMock(spec=ClimatePoleField)
-        hm = SurfaceHeightmap(
-            world_uid="w",
-            bbox=GridBBox(0, 0, 0, 0),
-            surface_z={(0, 0): 0},
-        )
-        surface = SurfaceTerrainContext(
-            pole_field=pole,
-            local_field=ClimateAnchorField(()),
-            coarse_hm=hm,
-            coarse_hydro={
-                (0, 0): MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA),
-            },
-            sparse_meter_hydro={},
-            meter_z_overrides={},
-            coarse_relief_z={(0, 0): 0},
-            coarse_surface_z={(0, 0): 0},
-        )
-        ctx = LightGridBakeContext(
-            world=SimpleNamespace(world_uid="w"),
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            surface_planning=surface,
-        )
+        from tests.planning.consumers.test_wiring import Composition, capture, world
+        from tests.planning.consumers.test_l0_l2 import context
+        source = world(world_map_cells_per_tile=4, z_min=-100, hydrology={"enabled": True,
+            "default_lakes": {"autoresolve": False},
+            "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+            "declared_basins": [{"location_uid": "basin", "kind": "ocean", "floor_z": -10,
+                "footprint": {"kind": "bbox", "x_min": 0, "x_max": 3000, "y_min": 0, "y_max": 3000}}]})
+        composition = Composition()
+        self.addCleanup(composition.service.shutdown)
+        ctx = context(source, composition.prepare(capture(source)), [(0, 0)])
         apply_coarse_open_water(compose, ctx)
         self.assertEqual(
             compose.ensure(0, 0, 1, 1).hydrology_role,
@@ -256,7 +240,9 @@ class TestSettlementContributorPins(unittest.TestCase):
             world_uid=world.world_uid,
             display_name="Town",
             system_location_type="settlement",
-            system_city_size="town",
+            location_payload={
+                'system_city_size': "town",
+            },
             map_x=500,
             map_y=500,
             created_at="2026-01-01T00:00:00Z",

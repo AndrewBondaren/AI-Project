@@ -8,24 +8,25 @@ from unittest import IsolatedAsyncioTestCase
 
 from fastapi import HTTPException
 
+from app.application.jsonValidation import settlementVolumeSeparation
 from app.application.jsonValidation.settlementVolumeSeparation import (
     log_settlement_volume_separation,
 )
-from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.locations.namedLocationService import NamedLocationService
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
-from app.application.worldData.settlementMapOccupancy import (
+from app.application.worldData.locations.settlementMapOccupancy import (
     occupancy_locations,
     pick_occupants,
 )
-from app.dataModel.worldPack.territoryVolume import (
+from app.dataModel.worldPack.wire.territoryVolume import (
     TerritoryVolume,
     empty_inclusive,
     volumes_conflict,
 )
-from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -45,7 +46,9 @@ def _city(uid: str, *, size: str = "medium", map_x: int = 0, map_y: int = 0, map
         display_name=uid,
         system_location_type="settlement",
         system_location_subtype="city",
-        system_city_size=size,
+        location_payload={
+            'system_city_size': size,
+        },
         created_at="2026-01-01T00:00:00",
         map_x=map_x,
         map_y=map_y,
@@ -247,7 +250,7 @@ class TestOccupancyCallers(unittest.TestCase):
 class TestSettlementVolumeLog(unittest.TestCase):
     def setUp(self) -> None:
         self.logger = logging.getLogger(
-            "app.application.jsonValidation.settlementVolumeSeparation",
+            settlementVolumeSeparation.__name__,
         )
         self.handler = _LogCapture()
         self.logger.addHandler(self.handler)
@@ -302,7 +305,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         repo = _LocRepo()
         world = _world()
         svc = NamedLocationService(repo=repo, world_repo=_WorldRepo(world))
-        log = logging.getLogger("app.application.jsonValidation.settlementVolumeSeparation")
+        log = logging.getLogger(settlementVolumeSeparation.__name__)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)
@@ -341,7 +344,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         first = _city("loc-a")
         vol = next(v for _, v in territory_volumes_by_location(world, [first]))
         second_y = vol.y1 + 1 + policy.min_settlement_separation_xy
-        log = logging.getLogger("app.application.jsonValidation.settlementVolumeSeparation")
+        log = logging.getLogger(settlementVolumeSeparation.__name__)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)
@@ -362,7 +365,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         repo = _LocRepo()
         world = _world()
         svc = NamedLocationService(repo=repo, world_repo=_WorldRepo(world))
-        log = logging.getLogger("app.application.jsonValidation.settlementVolumeSeparation")
+        log = logging.getLogger(settlementVolumeSeparation.__name__)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)

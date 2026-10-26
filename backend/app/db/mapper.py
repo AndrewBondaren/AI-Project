@@ -14,7 +14,7 @@ def json_col(
     default: Any = dataclasses.MISSING,
     default_factory: Any = dataclasses.MISSING,
 ) -> Any:
-    """dict-поле: пустой dict → NULL в БД, NULL → {}."""
+    """JSON value keeps its type; SQL NULL hydrates the declared field default."""
     kw: dict[str, Any] = {"metadata": {"db_type": "json"}}
     if default_factory is not dataclasses.MISSING:
         kw["default_factory"] = default_factory
@@ -27,7 +27,7 @@ def json_list_col(
     *,
     default_factory: Any = list,
 ) -> Any:
-    """list JSON: always dump (incl. ``[]``); NULL/``{}`` hydrate → ``[]`` (T-59)."""
+    """JSON list: NULL/historical empty map hydrate to []; invalid wire is preserved."""
     return dataclasses.field(
         default_factory=default_factory,
         metadata={"db_type": "json_list"},
@@ -55,9 +55,9 @@ def _col_name(f: dataclasses.Field) -> str:
 def _serialize(f: dataclasses.Field, value: Any) -> Any:
     db_type = f.metadata.get("db_type")
     if db_type == "json":
-        return json.dumps(value, ensure_ascii=False) if value else None
+        return json.dumps(value, ensure_ascii=False) if value is not None else None
     if db_type == "json_list":
-        return json.dumps(list(value) if value is not None else [], ensure_ascii=False)
+        return json.dumps(value if value is not None else [], ensure_ascii=False)
     if db_type == "json_nullable":
         return json.dumps(value, ensure_ascii=False) if value is not None else None
     if db_type == "bool":
@@ -68,12 +68,18 @@ def _serialize(f: dataclasses.Field, value: Any) -> Any:
 def _deserialize(f: dataclasses.Field, value: Any) -> Any:
     db_type = f.metadata.get("db_type")
     if db_type == "json":
-        return json.loads(value) if value else {}
+        if value is not None:
+            return json.loads(value)
+        if f.default_factory is not dataclasses.MISSING:
+            return f.default_factory()
+        return f.default if f.default is not dataclasses.MISSING else None
     if db_type == "json_list":
-        if not value:
+        if value is None:
             return []
         loaded = json.loads(value)
-        return loaded if isinstance(loaded, list) else []
+        # Only the documented historical empty-map sentinel migrates to [].
+        # Preserve malformed stored values so policy resolution can report them.
+        return [] if loaded == {} else loaded
     if db_type == "json_nullable":
         return json.loads(value) if value is not None else None
     if db_type == "bool":

@@ -1,4 +1,4 @@
-"""Unit tests: climate apply meter→macro, coarse/fine sample API, denser fine bake."""
+"""Unit tests: climate apply fine→macro, coarse/fine sample API, denser fine bake."""
 
 from __future__ import annotations
 
@@ -8,11 +8,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from pydantic import ValidationError
+
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
-from app.dataModel.worldPack.mergeMapCells import MergedCellView
+from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire, ClimateSampleWire
+from app.dataModel.worldPack.wire.mergeMapCells import MergedCellView
 
 
 class TestClimateFieldSampleAt(unittest.TestCase):
@@ -23,7 +25,7 @@ class TestClimateFieldSampleAt(unittest.TestCase):
             origin_y=20,
             width=2,
             height=2,
-            sample_step_m=1,
+            sample_step_fine=1,
             samples=[
                 ClimateSampleWire(temperature_base=1, rainfall=10),
                 ClimateSampleWire(temperature_base=2, rainfall=20),
@@ -35,43 +37,59 @@ class TestClimateFieldSampleAt(unittest.TestCase):
         self.assertEqual(field.sample_macro(11, 21).temperature_base, 4)
         self.assertIsNone(field.sample_macro(9, 20))
         with self.assertRaises(ValueError):
-            field.sample_meters(10, 20)
+            field.sample_fine(10, 20)
 
-    def test_fine_meter_step(self) -> None:
+    def test_fine_cell_step(self) -> None:
         field = ClimateFieldWire(
             climate_status="fine",
             origin_x=3000,
             origin_y=6000,
             width=2,
             height=1,
-            sample_step_m=1500,
+            sample_step_fine=1500,
             samples=[
                 ClimateSampleWire(temperature_base=11, rainfall=1),
                 ClimateSampleWire(temperature_base=22, rainfall=2),
             ],
         )
-        self.assertEqual(field.sample_meters(3000, 6000).temperature_base, 11)
-        self.assertEqual(field.sample_meters(4499, 6000).temperature_base, 11)
-        self.assertEqual(field.sample_meters(4500, 6000).temperature_base, 22)
+        self.assertEqual(field.sample_fine(3000, 6000).temperature_base, 11)
+        self.assertEqual(field.sample_fine(4499, 6000).temperature_base, 11)
+        self.assertEqual(field.sample_fine(4500, 6000).temperature_base, 22)
         with self.assertRaises(ValueError):
             field.sample_macro(1, 1)
 
-    def test_legacy_tier_a_maps_to_coarse(self) -> None:
+    def test_removed_tier_key_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            ClimateFieldWire.model_validate(
+                {
+                    "tier": "A",
+                    "origin_x": 0,
+                    "origin_y": 0,
+                    "width": 1,
+                    "height": 1,
+                    "samples": [{"temperature_base": 1, "rainfall": 2}],
+                },
+            )
+
+    def test_legacy_sample_step_m_key_still_reads(self) -> None:
         field = ClimateFieldWire.model_validate(
             {
-                "tier": "A",
+                "climate_status": "fine",
                 "origin_x": 0,
                 "origin_y": 0,
                 "width": 1,
                 "height": 1,
+                "sample_step_m": 4,
                 "samples": [{"temperature_base": 1, "rainfall": 2}],
             },
         )
-        self.assertEqual(field.climate_status, "coarse")
+        self.assertEqual(field.sample_step_fine, 4)
+        self.assertIn("sample_step_fine", field.model_dump(mode="json"))
+        self.assertNotIn("sample_step_m", field.model_dump(mode="json"))
 
 
-class TestApplyClimateMeterToMacro(unittest.TestCase):
-    def test_apply_climate_converts_meters_to_macro(self) -> None:
+class TestApplyClimateFineToMacro(unittest.TestCase):
+    def test_apply_climate_converts_fine_to_macro(self) -> None:
         field = ClimateFieldWire(
             climate_status="coarse",
             origin_x=12,
@@ -107,7 +125,7 @@ class TestApplyClimatePreferFine(unittest.TestCase):
             origin_y=3000,
             width=1,
             height=1,
-            sample_step_m=3000,
+            sample_step_fine=3000,
             samples=[ClimateSampleWire(temperature_base=99, rainfall=88)],
         )
         ctx = MagicMock()

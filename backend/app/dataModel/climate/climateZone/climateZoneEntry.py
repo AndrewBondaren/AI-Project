@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 
 
 class ClimateZoneEntry(BaseModel):
@@ -13,8 +13,8 @@ class ClimateZoneEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_climate: StrictOnWire[str]
-    base_temperature: DefaultOnWire[int | None] = None
-    typical_elevation_z: DefaultOnWire[int | None] = None
-    base_rainfall: DefaultOnWire[int | None] = None
-    temperature_variance: DefaultOnWire[int | None] = None
-    rainfall_variance: DefaultOnWire[int | None] = None
+    base_temperature: DefaultWhenMissing[int | None] = None
+    typical_elevation_z: DefaultWhenMissing[int | None] = None
+    base_rainfall: DefaultWhenMissing[int | None] = None
+    temperature_variance: DefaultWhenMissing[int | None] = None
+    rainfall_variance: DefaultWhenMissing[int | None] = None

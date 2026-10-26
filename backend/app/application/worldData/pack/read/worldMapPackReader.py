@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.jsonValidation import terrain_system_keys
+from app.application.jsonValidation import terrain
 from app.application.worldData.generators.terrain.terrainZ import subsurface_terrain_at_z
 from app.application.worldData.generators.terrain.resolveWorldMapTerrain import (
     resolve_world_map_terrain,
@@ -11,16 +11,16 @@ from app.application.worldData.generators.terrain.worldMapSettings import n_base
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.layerPriority import MapLayerKind
-from app.dataModel.worldPack.mergeMapCells import (
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
+from app.dataModel.worldPack.wire.mergeMapCells import (
     CellContribution,
     LayerSlice,
     MergedCellView,
     merge_layers,
 )
 from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to_map_cell
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -62,7 +62,8 @@ class WorldMapPackReader:
         cell = next((c for c in cells if c.tx == tx and c.ty == ty), None)
         if cell is None:
             return None
-        terrain_set = terrain_system_keys(world)
+        registry = terrain(world)
+        terrain_set = {entry.system_terrain for entry in registry.root}
         surface_z = cell.surface_z
         depth = n_base(world)
         if z == surface_z:
@@ -78,6 +79,7 @@ class WorldMapPackReader:
                 y=y,
                 z=z,
                 system_terrain=resolve_world_map_terrain(world, cell),
+                region_uid=cell.region_uid,
                 hydrology=hydro,
             )
         if surface_z - depth <= z < surface_z:
@@ -85,7 +87,7 @@ class WorldMapPackReader:
                 x=x,
                 y=y,
                 z=z,
-                system_terrain=subsurface_terrain_at_z(terrain_set),
+                system_terrain=subsurface_terrain_at_z(terrain_set, registry=registry),
             )
         return None
 

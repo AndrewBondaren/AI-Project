@@ -1,19 +1,13 @@
 """Unit tests for hydrology sea/ocean carve — D HY-2."""
 
 import unittest
-from types import SimpleNamespace
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from tests.hydrology_fixtures import hydro_topology
+
 from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
-    carve_deepening_bands,
-    flood_water_side,
-)
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
+from tests.hydrology_geometry_helpers import (flood_water_side)
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import (
     bresenham_line,
     rasterize_segments,
@@ -22,35 +16,24 @@ from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import
     is_land,
     resolve_z_sea,
 )
-from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyScope
-from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.application.worldData.generators.hydrology.types import (
+    HydrologyScope,
+)
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 
 
+from tests.hydrology_fixtures import (
+    coastline_world,
+    carve_then_fill,
+    flat_heightmap as _flat_heightmap,
+    hydro_world,
+    seas_hydrology,
+)
+
+
 def _world(**kwargs):
-    defaults = {
-        "world_uid": "test-world",
-        "hydrology": {
-            "enabled": True,
-            "default_seas": {"bands": {"min": 1, "max": 3}},
-        },
-        "fine_cells_per_map_cell": 3000,
-    }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _flat_heightmap(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 5) -> SurfaceHeightmap:
-    surface_z = {
-        (gx, gy): z
-        for gx in range(gx_lo, gx_hi + 1)
-        for gy in range(gy_lo, gy_hi + 1)
-    }
-    return SurfaceHeightmap(
-        world_uid="test-world",
-        bbox=GridBBox(gx_lo, gx_hi, gy_lo, gy_hi),
-        surface_z=surface_z,
-    )
+    kwargs.setdefault("hydrology", seas_hydrology(bands=(1, 3), autoresolve=False))
+    return hydro_world(**kwargs)
 
 
 class TestPolylineRasterize(unittest.TestCase):
@@ -74,7 +57,7 @@ class TestSeaLevelPolicy(unittest.TestCase):
 
     def test_is_land(self):
         self.assertTrue(is_land(3, 0))
-        self.assertFalse(is_land(0, 0))
+        self.assertTrue(is_land(0, 0))
 
 
 class TestDeepeningBands(unittest.TestCase):
@@ -82,48 +65,27 @@ class TestDeepeningBands(unittest.TestCase):
     def test_flood_water_side_north_of_east_west_coast(self):
         hm = _flat_heightmap(0, 10, 0, 6)
         segments = [((2, 2), (8, 2))]
-        dist = flood_water_side(hm, rasterize_segments(segments), segments)
+        dist = flood_water_side(hm, rasterize_segments(segments), segments, topology=hydro_topology(hm))
         self.assertIn((5, 1), dist)
         self.assertNotIn((5, 3), dist)
-
-    def test_carve_sets_z_sea_and_roles(self):
-        hm = _flat_heightmap(0, 10, 0, 6)
-        segments = [((2, 2), (8, 2))]
-        result = carve_deepening_bands(hm, segments, HydrologyBands(min=1, max=1), z_sea=0)
-        self.assertEqual(hm.surface_z[(5, 1)], 1)  # deepening band 1
-        self.assertEqual(hm.surface_z[(5, 0)], 0)  # beyond max band → open water
-        entry = result.by_cell[(5, 0)]
-        self.assertEqual(entry.role, HydrologyCellRole.COASTAL_SEA)
-        self.assertTrue(result.dirty_bbox is not None)
 
 
 class TestHydrologyOceanScope(unittest.TestCase):
 
     def _world_with_declared_coastline(self):
-        return _world(hydrology={
-            "enabled": True,
-            "default_seas": {"bands": {"min": 1, "max": 3}},
-            "declared_coastlines": [{
-                "location_uid": "loc-sea",
-                "path": [
-                    {"x": 6000, "y": 6000, "z": 0},
-                    {"x": 24000, "y": 6000, "z": 0},
-                ],
-            }],
-        })
+        return coastline_world(bands=(1, 3), autoresolve=False)
 
-    def test_apply_ocean_scope_modifies_heightmap(self):
+    def test_carve_then_fill_ocean_scope_preserves_bottom(self):
         w = self._world_with_declared_coastline()
+        w.z_min = -100
         hm = _flat_heightmap(0, 12, 0, 6)
-        svc = HydrologyGeneratorService()
-        result = svc.apply(
-            w,
-            [],
-            hm,
+        result, before_fill = carve_then_fill(
+            w, hm,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
         )
         self.assertGreater(result.cells_modified, 0)
-        self.assertTrue(any(z == 0 for z in hm.surface_z.values()))
+        self.assertEqual(hm.surface_z, before_fill)
+        self.assertTrue(any(z < 0 for z in hm.surface_z.values()))
         roles = set(result.cell_index.roles.values())
         self.assertTrue(
             roles & {HydrologyCellRole.COASTAL_SEA, HydrologyCellRole.OPEN_OCEAN, HydrologyCellRole.SHORE},

@@ -34,13 +34,13 @@ class TestReliefProfiles(unittest.TestCase):
         sheer = ReliefSideSpec(kind=ReliefSideKind.SHEER, sheer_band_light=1)
         self.assertGreater(
             profile_side_fraction(
-                slope, t=0.3, dist_for_sheer=30.0, outer_m=100.0, light_m=1.0,
+                slope, t=0.3, dist_for_sheer=30.0, outer_m=100.0, light_span=1.0,
             ),
             0.5,
         )
         self.assertEqual(
             profile_side_fraction(
-                sheer, t=0.99, dist_for_sheer=99.5, outer_m=100.0, light_m=1.0,
+                sheer, t=0.99, dist_for_sheer=99.5, outer_m=100.0, light_span=1.0,
             ),
             0.0,
         )

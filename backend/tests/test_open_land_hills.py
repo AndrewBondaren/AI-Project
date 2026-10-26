@@ -4,26 +4,25 @@ SoT: docs/tz_world_pack_storage.md § L2 open-land hills.
 """
 
 from __future__ import annotations
+from tests.planning.consumers.test_wiring import working_fixture
 
 import unittest
 from math import isqrt
 from unittest.mock import MagicMock
 
-from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
 from app.application.worldData.generators.terrain.hills.hillRaster import raster_hill
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    SurfaceTerrainContext,
-)
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.masks.enums.maskDomainId import MaskDomainId
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
-from app.dataModel.worldPack.parentLightTile import ParentLightTile
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 def _square_host(x0: int, x1: int, y0: int, y1: int) -> set[tuple[int, int]]:
@@ -110,8 +109,16 @@ class TestHillRaster(unittest.TestCase):
 class TestPlaceHills(unittest.TestCase):
     def setUp(self) -> None:
         self.masks = WorldTerrainMasks.canonical_defaults()
-        self.plains = self.masks.default_plains.system_terrain
-        self.forest = self.masks.default_forests.system_terrain
+        self.plains = self.masks.default_landcover.fallback_terrain
+        self.forest = self.masks.default_landcover.terrain_policy(WorldTerrainRegistry.forest_terrain_key()).system_terrain
+
+    def _registry(self, plains: HillPolicy, forest: HillPolicy) -> WorldTerrainRegistry:
+        policies = {self.plains: plains, self.forest: forest}
+        return WorldTerrainRegistry([
+            e.model_copy(update={"hills": policies[e.system_terrain]})
+            if e.system_terrain in policies else e
+            for e in WorldTerrainRegistry.canonical_defaults().root
+        ])
 
     def _grid(
         self,
@@ -132,10 +139,7 @@ class TestPlaceHills(unittest.TestCase):
         before = dict(t)
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=8, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=8, radius=2, height=2), HillPolicy(min_spacing=64, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -148,10 +152,7 @@ class TestPlaceHills(unittest.TestCase):
         z, t, hydro = self._grid(12, self.plains)
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=64, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=6, radius=2, height=3),
+            terrain_registry=self._registry(HillPolicy(min_spacing=64, radius=2, height=2), HillPolicy(min_spacing=6, radius=2, height=3)),
             seed=2,
             z_min=0,
             z_max=20,
@@ -167,10 +168,7 @@ class TestPlaceHills(unittest.TestCase):
         policy = HillPolicy(min_spacing=6, radius=2, height=2)
         place_hills(
             z, t, {},
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=policy,
-            forest_hills=policy,
+            terrain_registry=self._registry(policy, policy),
             seed=9,
             z_min=0,
             z_max=20,
@@ -188,10 +186,7 @@ class TestPlaceHills(unittest.TestCase):
         }
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=4, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=4, radius=2, height=2), HillPolicy(min_spacing=64, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -202,10 +197,7 @@ class TestPlaceHills(unittest.TestCase):
         z, t, hydro = self._grid(12, "mountain")
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=4, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=4, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=4, radius=2, height=2), HillPolicy(min_spacing=4, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -217,12 +209,9 @@ class TestPlaceHills(unittest.TestCase):
         spacing = 10
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(
+            terrain_registry=self._registry(HillPolicy(
                 min_spacing=spacing, radius=2, height=2, shapes=("circle",),
-            ),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=1),
+            ), HillPolicy(min_spacing=64, radius=2, height=1)),
             seed=3,
             z_min=0,
             z_max=20,
@@ -237,10 +226,7 @@ class TestPlaceHills(unittest.TestCase):
         z, t, hydro = self._grid(16, self.plains)
         place_hills(
             z, t, hydro,
-            plains_key=self.plains,
-            forest_key=self.forest,
-            plains_hills=HillPolicy(min_spacing=8, radius=2, height=2),
-            forest_hills=HillPolicy(min_spacing=64, radius=2, height=2),
+            terrain_registry=self._registry(HillPolicy(min_spacing=8, radius=2, height=2), HillPolicy(min_spacing=64, radius=2, height=2)),
             seed=1,
             z_min=0,
             z_max=20,
@@ -258,7 +244,7 @@ class TestHillsInTilePrep(unittest.TestCase):
             for ty in range(2) for tx in range(2)
         ]
         parent = ParentLightTile.from_cells(
-            world_uid="w-hills", gx=0, gy=0, side=2, tile_m=16, cells=cells,
+            world_uid="w-hills", gx=0, gy=0, side=2, tile_macro=16, cells=cells,
         )
         w = MagicMock()
         w.world_uid = "w-hills"
@@ -266,25 +252,21 @@ class TestHillsInTilePrep(unittest.TestCase):
         w.seed = 1
         w.z_min = 0
         w.z_max = 20
+        w.world_topology_mode = "planar"
+        w.world_bounds = {"x_min": 0, "y_min": 0, "x_max": 0, "y_max": 0}
         w.terrain_registry = None
         w.terrain_scalars = None
+        w.hydrology = {"enabled": False}
         w.terrain_masks = {
+            "default_landcover": {"seed_spacing": 1000, "autoresolve": False},
             "default_plains": {"hills": {"min_spacing": 8, "radius": 2, "height": 2}},
             "default_forests": {"hills": {"min_spacing": 64, "radius": 2, "height": 2}},
         }
-        ctx = SurfaceTerrainContext(
-            pole_field=MagicMock(),
-            local_field=ClimateAnchorField(()),
-            coarse_hm=MagicMock(),
-            coarse_hydro={},
-            sparse_meter_hydro={},
-            meter_z_overrides={},
-            coarse_relief_z={},
-            coarse_surface_z={},
-        )
+        ctx = frozen_surface_fixture(w, parent)
         state = TerrainBatchOrchestrator(MagicMock()).build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
             refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0),
+            working=working_fixture(w, ctx),
         )
         zs = list(state.heightmap.surface_z.values())
         self.assertGreaterEqual(max(zs), 4)

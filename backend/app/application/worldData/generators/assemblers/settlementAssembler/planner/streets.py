@@ -1,7 +1,7 @@
 import logging
 from random import Random
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -21,7 +21,7 @@ from app.application.worldData.generators.road.blockSize import block_size_for_d
 from app.application.worldData.generators.road.connectionPolicy import (
     sidewalk_of,
 )
-from app.dataModel.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.application.worldData.generators.road.sidewalkWidthResolver import resolve_sidewalk_width
 from app.application.worldData.generators.road.roadTravelResolver import effective_travel_modifier
 from app.application.worldData.generators.road.widthResolver import resolve_width
@@ -31,10 +31,10 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
 )
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -43,13 +43,13 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
-def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
+def _city_has_sidewalk(skeleton: SettlementSkeleton) -> bool:
     """Perimeter/inter-district city roads: sidewalk unless settlement is sparse."""
-    density = DistrictDensity.from_wire(skeleton.settlement_density) or DistrictDensity.default()
+    density = skeleton.settlement_density or DistrictDensity.default()
     return density is not DistrictDensity.SPARSE
 
 
-def _city_road_material(world: World, skeleton: CitySkeleton, rng: Random) -> str:
+def _city_road_material(world: World, skeleton: SettlementSkeleton, rng: Random) -> str:
     return resolve_material(
         world, "road", skeleton.economic_tier, rng, DEFAULT_ROAD_MATERIAL,
     )
@@ -69,7 +69,7 @@ def _make_node(
     node_type_wire = node_type.value if isinstance(node_type, ConnectionNodeType) else node_type
     graph_wire = graph_level.value if isinstance(graph_level, GraphLevel) else graph_level
     return ConnectionNode(
-        node_uid=city_connection_node_uid(settlement_uid, tag, x, y, z),
+        node_uid=city_connection_node_uid(world_uid, settlement_uid, tag, x, y, z),
         x=x, y=y, z=z,
         node_type=node_type_wire,
         graph_level=graph_wire,
@@ -101,7 +101,7 @@ def _connection_type(slot: DistrictSlot) -> str:
 
 def plan_settlement_entries(
     slots:     list[DistrictSlot],
-    skeleton:  CitySkeleton,
+    skeleton:  SettlementSkeleton,
     origin_x:  int,
     origin_y:  int,
     side_m:    int,
@@ -223,7 +223,7 @@ def plan_city_street_grid(
     world_uid:      str,
     world:          World,
     rng:            Random,
-    skeleton:       CitySkeleton,
+    skeleton:       SettlementSkeleton,
     surface:        dict[tuple[int, int], int] | None = None,
     *,
     settlement_uid: str,

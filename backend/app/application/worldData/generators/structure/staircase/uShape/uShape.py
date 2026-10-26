@@ -5,8 +5,10 @@ U-shape staircase.
 from __future__ import annotations
 import logging
 
+from app.ids import UidKind, entity_rng
+
 from app.dataModel.spatial.facing import Facing, parse_facing
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import (
     _stair_cell, _stair_anchor_cell, _stair_floor_cell,
@@ -16,6 +18,7 @@ from app.application.worldData.generators.structure.staircase.base import Stairc
 from app.application.worldData.generators.structure.staircase.uShape.uShapeValidator import (
     UShapeValidator,
 )
+from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing
 from app.application.worldData.generators.structure.staircase.facingHelper import (
     _V_TO_FACING,
 )
@@ -431,6 +434,12 @@ class UShapeBuilder(StaircaseBuilder):
             interior = list(fr_int & to_int) or list(to_int)
             facing = parse_facing(self.to.facing) or Facing.NORTH
 
+        fallback = self.sc_entry.facing or facing
+        facing = resolve_u_shape_facing(
+            self.shaft.get_footprint() if self.shaft is not None else self.to.get_footprint(),
+            self.cells, self.z_top, fallback,
+        )
+
         xs = sorted(x for x, _ in interior)
         ys = sorted(y for _, y in interior)
         ax, ay = min(xs), min(ys)
@@ -458,9 +467,14 @@ class UShapeBuilder(StaircaseBuilder):
                 self.conn_label, prev_anchor,
             )
 
+        staircase_id = self.sc_entry.staircase_id
+        rng = entity_rng(
+            self.world_uid, UidKind.STAIR,
+            building=self.building_uid, staircase=staircase_id, tag="fr_anchor",
+        )
         params = _compute_u_params(ax, ay, w, d, facing, self.z_height, self.conn_label,
                                    prev_fr_anchor=prev_anchor,
-                                   cells=self.cells, z_lo=self.z_lo)
+                                   cells=self.cells, z_lo=self.z_lo, rng=rng)
 
         if params.march_depth < 1:
             raise ValueError(

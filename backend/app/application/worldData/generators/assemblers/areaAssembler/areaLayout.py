@@ -8,6 +8,7 @@ from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
+from app.dataModel.locations.transitions.transition import Transition
 
 
 @dataclass
@@ -30,3 +31,4 @@ class AreaLayout:
     small_layouts:     list[StructureLayout]  = field(default_factory=list)
     connection_nodes:  list[ConnectionNode]   = field(default_factory=list)
     connection_edges:  list[ConnectionEdge]   = field(default_factory=list)
+    transitions:       list[Transition]       = field(default_factory=list)

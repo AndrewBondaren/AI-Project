@@ -8,11 +8,11 @@ from typing import Any
 from app.application.jsonValidation import road_settings
 from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
 from app.dataModel.roads.worldRoadSettings import WorldRoadSettings
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
     primary_or_default,
 )
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 
 _FALLBACK_ROAD = RoadSettingsEntry.fallback()
 

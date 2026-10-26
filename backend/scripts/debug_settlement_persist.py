@@ -6,6 +6,7 @@ Path 2: requires backend on DEBUG_API_URL — start it yourself.
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import sys
 import tempfile
@@ -28,7 +29,7 @@ def _test_world() -> World:
         world_uid="world-persist-smoke",
         name="Persist Smoke",
         created_at="2026-06-26T00:00:00",
-        fine_cells_per_map_cell=3000,
+        fine_cells_per_map_cell=64,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
         ],
@@ -46,13 +47,15 @@ def _test_settlement(world_uid: str) -> NamedLocation:
         display_name="Smokehold",
         system_location_type="city",
         created_at="2026-06-26T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    loc.settlement_density = "medium"
+    loc.location_payload = {**(loc.location_payload or {}), 'settlement_density': "medium"}
     return loc
 
 
@@ -77,27 +80,56 @@ async def test_persist_outdoor_inprocess() -> None:
         await container.world_repository().create(world)
         await container.location_repository().create(settlement)
 
-        generator = SettlementGeneratorService()
-        layout = generator.generate_layout(world, settlement)
+        from app.application.jsonValidation.worldRow import transition_types
+        from app.application.templateLibrary.structureTemplateFsImport import load_structure_stdlib
+        from app.dataModel.libraryPacks.defaultPacks import canonical_member_uid
+        from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+        from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+        from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+        from app.ids import LibraryKind
+        from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import extract_settlement
+        from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import SettlementOutdoorSqlPersist
+        from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+        from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+        from app.application.worldData.pack.io.worldPackReader import WorldPackReader
+        from app.application.worldData.pack.read.locationTerritoryVolumes import territory_volume_for_location
+        from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
 
-        persist = container.settlement_persist_service()
-        result = await persist.persist_outdoor(world, settlement, layout)
-
-        assert result.scopes_applied, f"expected scopes applied, got {result}"
-        assert result.map_cells.succeeded > 0, "expected map cells persisted"
-
-        children = await container.location_repository().get_children(settlement.location_uid)
-        assert len(children) > 0, "expected building locations persisted"
-
-        edges = await container.connection_edge_repository().get_by_world(world.world_uid)
-        city_edges = [e for e in edges if e.graph_level == "city"]
-        district_edges = [e for e in edges if e.graph_level == "district"]
-        assert len(city_edges) > 0, "expected city connection edges"
-        assert len(district_edges) > 0, "expected district connection edges"
-
-        repeat = await persist.persist_outdoor(world, settlement, layout)
-        assert repeat.scopes_skipped, "repeat outdoor persist should skip"
-        assert repeat.buildings.succeeded == 0, "buildings should not duplicate"
+        structures = StructureCatalog(load_structure_stdlib(Path(__file__).resolve().parents[2] / "structures_templates"))
+        catalog = BuildingCatalog.from_entries(
+            {
+                canonical_member_uid(LibraryKind.PLOT_TEMPLATES, plot.system_name): plot
+                for plot in canonical_defaults()
+            },
+            structures=structures,
+        )
+        # The temporary library must contain the templates referenced by generated NLs
+        # (member uids — ``system_template_uid`` on the NL stores them, not names).
+        await db.conn.executemany("INSERT INTO building_templates(template_uid,system_name,display_name,structure_type,data) "
+            "VALUES (?,?,?,?,?)", [(entry.template_uid, entry.body.system_name, entry.body.display_name, "building",
+                                   json.dumps(entry.body.model_dump(mode="json"))) for entry in catalog.entries])
+        await db.conn.commit()
+        layout = SettlementGeneratorService().generate_layout(world, settlement, catalog=catalog)
+        registry = transition_types(world)
+        extracted = extract_settlement(settlement, layout, registry=registry)
+        assert extracted.buildings, "expected building locations"
+        assert extracted.sql_transitions, "expected outer transitions"
+        persist = SettlementOutdoorSqlPersist(db, container.location_repository(), container.location_level_repository(),
+            lambda context: SqliteTransitionRepository(db, context), container.connection_persist_service())
+        paths = WorldPackPaths(Path(tmp) / "pack", world.world_uid)
+        writer = WorldPackWriter(paths)
+        receipt = writer.encode_settlement_structure_tmp(settlement.location_uid, extracted.wire, registry=registry)
+        await persist.persist(extracted)
+        await persist.persist(extracted)
+        writer.publish_settlement_structure(receipt, territory_volume=territory_volume_for_location(world, settlement),
+            packed_district_uids=[row.location_uid for row in extracted.districts], structure_status="complete")
+        repo = SqliteTransitionRepository(db, extracted.transition_context)
+        for item in extracted.sql_transitions:
+            assert await repo.get(item.transition_uid) == item
+        reader = WorldPackReader(paths)
+        for building in extracted.buildings:
+            restored = reader.read_building_interior_transitions(settlement.location_uid, building.location_uid, registry=registry)
+            assert restored.interior_transitions == extracted.pack_by_building[building.location_uid]
     finally:
         if db is not None:
             await db.disconnect()

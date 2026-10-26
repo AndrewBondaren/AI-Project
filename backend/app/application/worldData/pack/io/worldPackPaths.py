@@ -40,6 +40,18 @@ def resolve_pack_root(
     return default
 
 
+def pack_storage_reference(paths: "WorldPackPaths", *, db_path: str | Path,
+                           existing: str | None = None) -> str:
+    """Keep a valid reference; otherwise use the portable managed path or actual root."""
+    if existing and resolve_relative_pack_root(existing, db_path).resolve() == paths.root:
+        return existing
+    portable = (Path(default_worlds_root(db_path).resolve().name) / paths.world_uid / "pack").as_posix()
+    if (WorldPackPaths.from_db_parent(db_path, paths.world_uid).root == paths.root
+            and resolve_relative_pack_root(portable, db_path).resolve() == paths.root):
+        return portable
+    return paths.root.as_posix()
+
+
 class WorldPackPaths:
     """``{pack_root}/`` layout (manifest, tiles/, locations/)."""
 

@@ -9,16 +9,14 @@ from app.application.worldData.generators.hydrology.geom.polygonInterior import 
     point_in_polygon,
     polygon_vertices,
 )
-from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
-    LoadedDeclaredHydrology,
-)
+from app.dataModel.hydrology.planning.hydrologyPlan import DeclaredWaterPaint
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
-    meter_segments_to_light,
+    fine_segments_to_light,
     paint_role,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 
 def _lake_interior_light(
@@ -44,7 +42,7 @@ def _lake_interior_light(
 def apply_declared_basins(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
-    declared: LoadedDeclaredHydrology,
+    declared: DeclaredWaterPaint,
 ) -> dict[str, int]:
     scale = compose.scale
     tile_set = set(ctx.tiles)
@@ -52,8 +50,8 @@ def apply_declared_basins(
     lake_n = 0
     coast_n = 0
 
-    for lake in declared.lake_specs:
-        light_segs = meter_segments_to_light(lake.shoreline_segments, scale)
+    for lake in declared.lakes:
+        light_segs = fine_segments_to_light(list(lake.shoreline_segments), scale)
         shoreline = rasterize_segments(light_segs)
         interior = _lake_interior_light(light_segs, shoreline)
         sn, _ = paint_role(compose, shoreline, WorldMapHydrologyRole.SHORE, tile_set=tile_set)
@@ -61,16 +59,16 @@ def apply_declared_basins(
         shore_n += sn
         lake_n += ln
 
-    if declared.coastline_segments:
-        light_segs = meter_segments_to_light(declared.coastline_segments, scale)
+    for coastline in declared.coastlines:
+        light_segs = fine_segments_to_light(list(coastline.segments), scale)
         shore = rasterize_segments(light_segs)
         cn, _ = paint_role(compose, shore, WorldMapHydrologyRole.SHORE, tile_set=tile_set)
         coast_n += cn
 
     return {
-        "lakes_in": len(declared.lake_specs),
+        "lakes_in": len(declared.lakes),
         "shore_cells": shore_n,
         "lake_cells": lake_n,
         "coast_cells": coast_n,
-        "has_coastline": 1 if declared.coastline_segments else 0,
+        "has_coastline": 1 if declared.coastlines else 0,
     }

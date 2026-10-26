@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -23,7 +23,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
 )
-from app.dataModel.settlement.area.perimeterBarrier import (
+from app.dataModel.locations.settlement.area.perimeterBarrier import (
     PerimeterBarrier,
     resolved_host_sides,
 )
@@ -129,7 +129,7 @@ def _log_barrier(
 
 def shrink_slot_by_settlement_barrier(
     slot: DistrictSlot,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world: World,
     footprint_x0: int,
     footprint_y0: int,

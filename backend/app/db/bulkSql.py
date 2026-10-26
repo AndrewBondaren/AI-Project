@@ -43,3 +43,16 @@ async def executemany_rows(conn, sql: str, objs: Sequence[object]) -> int:
         rc = cur.rowcount
         total += len(batch) if rc is None or rc < 0 else rc
     return total
+
+
+async def upsert_rows(conn, objs: Sequence[object]) -> int:
+    """Update referenced rows in place; never trigger DELETE semantics of REPLACE."""
+    if not objs:
+        return 0
+    first = objs[0]
+    columns, _ = to_row(first)
+    updates = ", ".join(f"{name}=excluded.{name}" for name in columns if name != first.__pk__)
+    sql = (f"INSERT INTO {first.__table__} ({', '.join(columns)}) "
+           f"VALUES ({', '.join('?' for _ in columns)}) "
+           f"ON CONFLICT ({first.__pk__}) DO UPDATE SET {updates}")
+    return await executemany_rows(conn, sql, objs)

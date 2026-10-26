@@ -9,7 +9,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 
 
 class EarthenCanal(BaseModel):
@@ -19,7 +19,7 @@ class EarthenCanal(BaseModel):
 
     kind: Literal["earthen"] = "earthen"
     # Registry provenance when cut came from canal_template_registry / canal_ref
-    system_type: DefaultOnWire[str | None] = None
+    system_type: DefaultWhenMissing[str | None] = None
 
 
 class StructureCanal(BaseModel):
@@ -29,7 +29,7 @@ class StructureCanal(BaseModel):
 
     kind: Literal["structure"] = "structure"
     system_type: StrictOnWire[str]
-    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
 
 
 Canal = Annotated[

@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Callable, TypeVar
 
-from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
+from app.dataModel.worldPack.wire.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.bake.packReadPolicy import PackReadPolicy
 
 T = TypeVar("T")
 

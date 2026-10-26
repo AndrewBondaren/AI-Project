@@ -34,7 +34,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
     packing_warning,
 )
-from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER
+from app.dataModel.locations.settlement.district.requiredStructure import POSITION_CENTER
 
 
 def _pass1_order(tokens: list[PackingToken]) -> list[PackingToken]:

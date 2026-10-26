@@ -3,13 +3,13 @@
 import unittest
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.worldMapPackRenderer import (
+from app.application.worldData.render.pack.worldMapPackRenderer import (
     WorldMapPackRenderer,
     wire_symbol,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
-from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 
 
 class TestWorldMapPackRenderer(unittest.TestCase):
@@ -32,7 +32,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         self.assertEqual(wire_symbol(earth), "_")
 
     def test_wire_grade_symbol_arrows(self):
-        from app.application.worldData.render.worldMapPackRenderer import wire_grade_symbol
+        from app.application.worldData.render.pack.worldMapPackRenderer import wire_grade_symbol
 
         empty = WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains")
         slope = WorldMapCellWire(
@@ -74,7 +74,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
                 ),
             ],
         )
-        renderer = WorldMapPackRenderer([tile], tile_size_m=3000, pins=pins)
+        renderer = WorldMapPackRenderer([tile], tile_macro=3000, pins=pins)
         macro = renderer.render_macro(mark_location=True)
         self.assertIn("@", macro)
         self.assertIn("MACRO AGGREGATE", macro)
@@ -103,7 +103,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             },
         )
         mosaic = WorldMapPackRenderer(
-            [tile], tile_size_m=3000,
+            [tile], tile_macro=3000,
         ).render_light_mask_mosaic(gx0=-1, gy0=0, gx1=0, gy1=0)
         self.assertIn("macro Gx-1..Gx0 Gy0..Gy0", mosaic)
         # left macro-tile unmapped (2 spaces) + right tile "__m" on y=1 / "__" on y=0
@@ -141,7 +141,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             },
         )
         mosaic = WorldMapPackRenderer(
-            [left, right], tile_size_m=3000,
+            [left, right], tile_macro=3000,
         ).render_light_mask_mosaic()
         # y=0: _ r | r _  → "_yy_"
         # y=1: _ _ | _ f  → "___f"
@@ -157,7 +157,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             (1, 1): WorldMapCellWire(tx=1, ty=1, surface_z=7, system_terrain="plains"),
         }
         tile = PackTileLightView(gx=0, gy=0, side=2, cells=cells)
-        renderer = WorldMapPackRenderer([tile], tile_size_m=3000)
+        renderer = WorldMapPackRenderer([tile], tile_macro=3000)
         ascii_h, legend = renderer.render_light_height_mosaic()
         self.assertIn("cell_width=2", ascii_h)
         self.assertIn("| 1 12|", ascii_h)
@@ -183,7 +183,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             ),
         }
         tile = PackTileLightView(gx=0, gy=0, side=2, cells=cells)
-        renderer = WorldMapPackRenderer([tile], tile_size_m=3000)
+        renderer = WorldMapPackRenderer([tile], tile_macro=3000)
         ascii_g, legend = renderer.render_light_grade_mosaic()
         self.assertIn("|┃↙|", ascii_g)
         self.assertIn("|→ |", ascii_g)
@@ -206,7 +206,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             (1, 1): WorldMapCellWire(tx=1, ty=1, surface_z=1, system_terrain="plains"),
         }
         tile = PackTileLightView(gx=0, gy=0, side=2, cells=cells)
-        renderer = WorldMapPackRenderer([tile], tile_size_m=3000)
+        renderer = WorldMapPackRenderer([tile], tile_macro=3000)
         ascii_g, legend = renderer.render_light_grade_mosaic()
         self.assertEqual(ascii_g, "")
         self.assertEqual(legend, "")
@@ -232,7 +232,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         self.assertIn("river_bed", legend)
         self.assertIn("u=city", legend)
         self.assertIn("n=village", legend)
-        self.assertIn("d=dungeon", legend)
+        self.assertIn("c=crypt", legend)
         self.assertIn("g=underground_city", legend)
         self.assertIn("not a location mark", legend)
 
@@ -266,7 +266,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
                 ),
             ],
         )
-        renderer = WorldMapPackRenderer([tile], tile_size_m=3000, pins=pins)
+        renderer = WorldMapPackRenderer([tile], tile_macro=3000, pins=pins)
         light = renderer.render_tile_light_grid(0, 0, mark_location=True)
         self.assertIn("u", light)
         self.assertIn("@", light)
@@ -294,7 +294,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
                 ),
             ],
         )
-        renderer = WorldMapPackRenderer([tile], tile_size_m=3000, pins=pins)
+        renderer = WorldMapPackRenderer([tile], tile_macro=3000, pins=pins)
         light = renderer.render_tile_light_grid(0, 0, mark_location=True)
         self.assertIn("u", light)
         self.assertNotIn("@", light)
@@ -332,16 +332,16 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             ),
         ]
         self.assertEqual(wire_symbol(cell, pins=pins), "n")
-        dungeon = [
+        crypt = [
             LocationsIndexPin(
                 location_uid="d1",
                 map_x=0,
                 map_y=0,
-                system_location_type="settlement",
-                system_location_subtype="dungeon",
+                system_location_type="location_complex",
+                system_location_subtype="crypt",
             ),
         ]
-        self.assertEqual(wire_symbol(cell, pins=dungeon), "d")
+        self.assertEqual(wire_symbol(cell, pins=crypt), "c")
 
 
 if __name__ == "__main__":

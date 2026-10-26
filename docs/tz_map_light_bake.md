@@ -33,7 +33,108 @@ metadata:
 
 ---
 
+## Внешнее предложение: производный лес и поле (НЕ ПРОВЕРЕНО)
+
+**Источник: внешнее архитектурное обсуждение. Статус: не проверено кодом и тестами, не утверждено как контракт.** Подробности: [tz_ideas.md](./tz_ideas.md), ID-14.
+
+Предлагается выводить лес, редколесье, луг, степь и поле из пригодности видов и фактического состояния флоры, а не использовать обязательную лесную маску как причину появления деревьев. Авторский declare задаёт начальное состояние леса, но не защищает его от гибели при симуляции. L0 остаётся сеткой хранения; природные границы могут пересекать её швы. L2 детализирует то же состояние, не сбрасывая сохранённые изменения.
+
+**Перед изменением реализации:** проверить взаимодействие с текущим landcover paint, FL3c, LOD и patch merge. До проверки существующий compose остаётся действующим.
+
 ## Целевое состояние
+
+### Placement priority
+
+**Утверждено мастером 2026-10-08; целевой контракт географических регионов, реализация отдельно.** Применяется к семантическому и абсолютному размещению. Общая runtime/worldEdit политика — [tz_runtime_world_edit_policy.md](./tz_runtime_world_edit_policy.md).
+
+**Уточнение мастера 2026-10-20:** это единый контракт **всех объектов генератора**, а не только географических регионов или landcover. Разрешение размещения выполняет **общий resolver**; доменные генераторы предоставляют свои ограничения и зависимости, но не вводят собственный порядок приоритетов или отдельный resolve. Водные объекты и coastline подчиняются этому же контракту. При переносе контракта из L0 в общий слой этот раздел остаётся ссылкой на единый SoT, а не отдельной реализацией правил.
+
+**Размещение общего механизма (утверждено мастером 2026-10-20):** общий resolver размещения всех объектов генератора находится в `backend/app/application/worldData/placement/`; общие POJO-контракты — в `backend/app/dataModel/placement/`. Общие POJO P1 и resolver P2 реализованы; в P3 готов adapter declared basin/coastline. Подключение к pipeline и остальные adapters ещё не выполнены. Доменные генераторы используют общий resolver через его контракты; отдельный resolver для гидрологии, континентов, районов или другого вида объектов не вводится. Существующий `backend/app/application/worldData/masks/regionPrecedence.py` — локальное сравнение landcover, а не общий resolver размещения.
+
+Coastline задаёт контракт создания воды. **Если воды нет, эффективный приоритет coastline равен `0`, в том числе при явно заданном авторском `placement_specificity`; в лог выдаётся `WarningError`** (решение мастера 2026-10-20). Исходное авторское значение сохраняется в намерении; правило меняет приоритет, используемый общим resolver, а не authored-данные. Диагностика содержит UID coastline и причину понижения и выдаётся один раз на coastline за проход, не на клетку. Это правило не означает молчаливое удаление линии, отказ от создания воды или отдельный гидрологический алгоритм приоритетов. Отсутствие воды проверяется по pre-carve снимку/входным фактам в контексте coastline; её будущий fill не является опорой. Кандидат бассейна строится до общего resolve и сохраняет возможность создания воды с приоритетом 0. Общий typed-вход этого факта описывается P1; циклическая проверка результата будущего fill запрещена.
+
+Авторское поле `placement_specificity` — целочисленный приоритет конкретности намерения разместить объект: большее значение имеет больший приоритет. Порядок для конкурирующих объектов, чьи опоры уже разрешены:
+
+1. `placement_specificity` по убыванию.
+2. Площадь исходного footprint по убыванию: при равной конкретности крупный объект имеет приоритет.
+3. Стабильный `region_uid` по возрастанию в каноническом строковом представлении.
+
+Площадь вычисляется в пространстве мира с учётом topology, до clipping, обрезки и разрешения пересечений; не по количеству L0/L2 клеток или площади bbox. После разрешения конфликта порядок не пересчитывается по изменённой форме. Wire-политика приоритета и общий typed-контракт определены ниже в § Placement P1.
+
+Зависимости размещения имеют порядок «опора → зависимый объект»; priority не позволяет разместить ребёнка до опоры или обойти обязательные ограничения. Разрешённые отношения (покрытие, вложенность, соединение) не являются конфликтом исключительного владения пространством. Приоритет размещения не заменяет terrain merge rank и storage layer priority WP-20.
+
+Resolver выполняет авторазрешение по указанному порядку в пределах заданных ограничений. Сдвиг абсолютного положения без явной политики запрещён. Если допустимого решения нет — runtime пишет WarningError с UID и причиной, возвращает неразрешённый результат без default-подстановок; не вводится reject всего runtime-запуска только из-за конфликта размещения.
+
+Результат не зависит от порядка входных объектов, текущего состава bake-тайлов, порядка чанков или числа workers. Проверки контракта: равная конкретность/разные площади; разная конкретность; равенство с UID tie-break; допустимое пересечение; невозможное размещение без default; перестановка входа и full/partial bake.
+
+#### Placement P1
+
+**PC-6W (2026-10-23):** PlacementBatch/PlacementBatchResult и водные
+WaterPlacementContext/WaterPlacementPreparation требуют snapshot_revision:
+OutputFingerprint (strict 32 bytes; batch JSON transport — hex). Resolver
+переносит revision без пересчёта; water mapper проверяет её вместе с
+world_uid/snapshot_uid и exact prepared equality. Planning provider получает
+revision из exact terrain_base ref; phase UID сохраняет прежнюю формулу.
+Legacy pre-PC-9 caller вычисляет actual surface projection fingerprint общим
+canonical codec; эта compatibility projection не является plan/cache binding.
+ResolveContext.collect_only собирает diagnostics без логирования независимо
+от validate_only. Политика spatial resolve сохраняется; provider возвращает
+факты в immutable envelope, caller публикует их один раз при delivery.
+
+**Решение мастера 2026-10-20 (уточнение B1):** один общий resolver вызывается по мере готовности опор. После base heightmap + готовых anchors, до relief Pass 1.4, выполняется совместный проход подготовленных мировых объектов (вода/горы/поселения и другие конкуренты этого snapshot). Поздние зависимые объекты (устья, hills, districts, rooms и т.д.) используют тот же resolver на явно подготовленном snapshot, с ранее принятыми решениями. Поздний вызов не пересматривает, не перемещает и не вытесняет принятые объекты. Опоры разрешаются прежде зависимых; высокий приоритет ребёнка не изменяет этот порядок. Это заменяет буквальное требование разместить все уровни мира одним вызовом до 1.4. Локальные resolver в доменах не вводятся.
+
+**Решение мастера о specificity:** missing/null в полном intent означает auto и сохраняется как `None`; adapter обязан явно предоставить значение по утверждённому правилу. Нет правила/значения — unresolved, без подстановки 0. Явное значение — строго целое ≥0 без искусственного верхнего предела; bool, строка и дробь недопустимы. Patch missing означает «не менять», patch null — «вернуться к auto». Невалидное authored значение не скрывается auto-значением. Уже утверждённое исключение coastline без воды даёт effective 0 независимо от authored/auto значения; неизвестный факт воды не считается её отсутствием.
+
+**Расположение и сигнатуры данных:** `backend/app/dataModel/placement/`. Это POJO P1, а не реализация алгоритма или миграция consumers P3.
+
+- `PlacementIdentity(world_uid, source_uid, region_uid)`: `source_uid` — существующая доменная identity; `region_uid` — стабильный tie UID в каноническом строковом представлении, подготовленный adapter по профильному контракту. Resolver не генерирует UID, не использует declaration index и не проверяет REF-W заново.
+- `PlacementIntent(identity, mode, shape, dependencies, permitted_overlaps, separations, placement_specificity=None, absolute_movement=forbid)`. `mode: absolute | semantic` обязателен. `shape: RegionShape | None` переиспользует существующие bbox/ellipse/polygon/anchor_radius/corridor + edge_noise. None означает отсутствие authored primitive (например, исходный graph claim), а не пустой или ошибочный footprint; его точную геометрию предоставляет adapter. Authored intent неизменяем и не переписывается при resolve.
+- `PlacementDependency(target_uid, relation)` — обязательная опора; relation `resolved | supported_by | contained_by | connected_to`. UID ссылается на `region_uid` другого intent/принятого решения. `resolved` требует только готового решения, остальные также требуют соответствующего пространственного предиката. Missing/unresolved target и цикл дают unresolved зависимого объекта. Необязательная ссылка не объявляется обязательной dependency.
+- `PlacementOverlap(target_uid, relation)` — явно разрешённое отношение `coverage | containment | connection | embedding | shared_boundary`. Разрешение ограничено named pair и фактическим отношением, а не любым пересечением. Оно симметрично для пары, но не транзитивно. Само наличие parent или dependency не разрешает overlap; `permitted_overlaps` не отменяет обязательные support/containment/clearance constraints.
+- `PlacementSeparation(target_uid, min_xy, min_z)` — явные неотрицательные резервы в fine cells, оба обязательны. Конфликт отсутствует при достаточном горизонтальном **или** вертикальном разделении; перекрывающиеся XY и Z запрещены и при резервах 0. Мировые расстояния/соседи проверяются P2 через topology; никаких raw world offsets/евклида. Shape/clearance интерпретирует общий механизм, профильные геометрические данные готовит adapter.
+- `PlacementFootprint(cells, z_min, z_max)` — непустое множество точных XY клеток рабочей сетки snapshot (world fine для L2/локальных проходов, coarse surface grid для мирового pre-1.4 прохода — решение мастера 2026-10-21), не L0 samples и не packing bbox. Обе Z-границы заданы вместе или обе None (поверхностный footprint без ограниченного Z); интервалы включительные, перевёрнутые запрещены без repair. Неограниченный Z нельзя использовать для обхода volume collision. Для неоднородных по высоте объектов adapter подготавливает отдельные пространственные части с собственными стабильными identity и зависимостями. Локальные layouts переводятся в world fine frame до общего resolve; application CoordinateSpace не копируется в DM.
+- `PlacementCandidate(candidate_uid, preference, footprint)`: adapter предоставляет полный конечный набор геометрически допустимых вариантов, не выбирая победителя среди объектов. preference — строго целое ≥0, меньше предпочтительнее; tie по candidate_uid. Перестановка списка вариантов не меняет выбор. Пустой список означает отсутствие кандидатов и ведёт к unresolved. `absolute_movement=forbid` допускает не более одного варианта в исходной абсолютной позиции; альтернативы абсолютного положения требуют явно заданного `explicit_candidates`. Подготовка фиксированного варианта должна сохранять authored положение, включая anchor frame; это проверяется на границе adapter/P2, не подменяется сдвигом при конфликте. Resolver не придумывает варианты/clip/clamp.
+- `PreparedPlacement(intent, original_area, candidates, auto_specificity, coastline)`: площадь — обязательное положительное конечное число cell² рабочей сетки snapshot, исходная до разрешения пересечений и tile clipping. Для primitive её получает adapter через topology-aware геометрию, для irregular fine-cell claim — геометрическая площадь объединения исходных unit squares (не число L0/L2 samples). Для 3D tie используется XY проекция исходного footprint, не объём. Площадь сохраняется одной для всех вариантов и не пересчитывается по оставшемуся пространству. Auto — строго целое ≥0 или None; применяется только если authored None. Вычисляемое `effective_specificity` остаётся None при неразрешённом auto/неизвестном coastline факте; это не валидное готовое размещение.
+- `CoastlinePlacementFact(snapshot_uid, water_presence, reason)`: enum `present | absent | unknown`, обязательная непустая причина и identity **pre-carve** снимка. Present/absent — входной факт от HY-12, не результат будущего собственного fill. Absent понижает effective priority до 0, сохраняя кандидата и исходный intent. Unknown даёт unresolved. Границы downhill footprint, budgets и water-side готовит водный adapter по HY-12/1; P1 не задаёт неутверждённые размеры/глубины или bbox-default вместо них.
+- `PlacementBatch(world_uid, snapshot_uid, snapshot_revision, phase, topology, objects, accepted)`: phase `pre_relief | dependent`, WorldTopology в единицах рабочей сетки snapshot (coarse для pre-1.4, fine для локальных проходов). `pre_relief` собирает весь конкурирующий candidate universe snapshot до 1.4, без accepted от частично выбранных bake tiles. `dependent` получает готовые accepted как неизменяемые опоры/занятое пространство. World UID, snapshot identity, unique region/candidate IDs и отсутствие self refs проверяются без повторного REF-W. IDs объектов в objects и accepted не пересекаются. Accepted не re-resolve/retry по новым приоритетам. Snapshot включает всё состояние/границы, влияющее на решение; набор выдаваемых bake tiles фильтрует только materialize/output, не prepared input.
+- `ResolvedPlacement(status=resolved, prepared, candidate_uid)`: хранит исходный prepared intent, ровно существующий выбранный candidate и non-null effective priority. `footprint`, `identity`, `original_area`, `effective_specificity` доступны как derived properties без дублируемых изменяемых копий. Spatial predicates ещё должен проверить resolver P2: сам constructor не доказывает отсутствие межобъектного конфликта.
+- `UnresolvedPlacement(status=unresolved, prepared, diagnostics)`: обязательно хотя бы одно unresolved сообщение, нет выбранного footprint. Пустой `PlacementBatchResult.results` — валидная пустая работа, в отличие от unresolved элемента. `PlacementBatchResult(world_uid, snapshot_uid, snapshot_revision, results, diagnostics=())` допускает resolved и unresolved независимых объектов вместе; это не разрешение частичного persist bundle.
+- `PlacementDiagnostic(code, region_uid, related_uids=(), path=(), detail)` — typed spatial факты без logger; codes: missing specificity, missing/failed dependency, dependency cycle, no candidates, spatial conflict, constraint violation, unknown coastline water, coastline priority lowered. Последний — диагностический факт понижения, остальные — причины unresolved. P2 дедуплицирует понижение один раз на coastline за проход с UID/причиной и передаёт факты в существующий `FieldPathError`/`ResolveReport` через `report_issues(ctx, issues)`; runtime пишет WarningError, preview получает тот же доменный результат и report без writes.
+- `ResolvedWaterPlacement(placement, z_water_level, kind, liquid)`: `placement: ResolvedPlacement`, строгий int level, существующий `BasinKind` и `MaterialKey`. `source_uid` и `footprint_cells` — свойства исходного placement, не вторая identity/геометрия. Liquid и level обязательны на resolved границе, без default: их разрешает adapter по hydrology policy. Mapping record → BasinSpec и bathymetry живёт у hydrology consumer; этот POJO не содержит floor profile и не пишет z.
+
+**Wire и локальные инварианты.** Все новые POJO frozen, extra=forbid, вложенные экземпляры повторно валидируются на входе. Обязательные поля — StrictOnWire/StrictEnumOnWire; явно описанные optional defaults применяются только при missing. Null допустим только для shape, specificity, auto_specificity, coastline и пары Z-границ, а не для mode/identity/collections/area/выбранного candidate. Поля с auto/отсутствием данных сохраняют presence через `model_fields_set`; полное разрешение выполняет существующий `resolve_result`, patch — `resolve_patch`, после merge повторная full validation. Patch не является prepared/full объектом и не выполняет spatial resolve. Null collection, malformed geometry или нарушение локального обязательного ограничения дают общий unresolved report без повторной сборки с defaults. Межобъектные missing supports, cycles, геометрические predicates и конфликты разрешает P2, не Pydantic validators, поэтому один конфликт не отклоняет весь batch runtime.
+
+**Уточнение мастера — defaults и проверка редактора.** Nullable не означает optional: shape, dependencies/permitted_overlaps/separations, candidates/auto_specificity/coastline, z_min/z_max и objects/accepted обязательны на полной границе. Adapter явно передаёт None или пустую коллекцию, когда это корректно; отсутствие подготовленных обязательных ограничений не маскируется default=(). Объявлены defaults только для specificity=None (auto), absolute_movement=forbid (действующий запрет неявного сдвига) и служебных полей результата/диагностики (status-дискриминатор, пустые related_uids/path/diagnostics). Liquid/level и геометрические размеры берутся из профильных POJO/политик на adapter границе, не копируются новым числовым default.
+
+Нормализация использует существующий `resolve_model`/`resolve_result`: Pydantic применяет объявленные defaults при missing и проверяет supplied значения, включая null, по типу. Существующий `_log_resolve_transform` пишет INFO с wire/resolved, когда представления различаются; отдельного обхода default-полей, opt-in-флага и дополнительного default-report нет. `ResolveContext.for_import(validate_only=True)` и общий report сохраняют прежнюю обработку ошибок для мастера без writes; domain diagnostics передаются существующим `report_issues`. Patch missing сохраняет прежнее значение и не заполняется defaults, full validation выполняется после merge. Общий JSON resolver этим срезом не меняется.
+
+**Строковые исключения contract-creation:** world_uid/source_uid/region_uid/target_uid/snapshot_uid/candidate_uid и related_uids — opaque entity/snapshot/candidate identities, не registry keys или закрытые kinds. Непустые строгие строки без surrounding whitespace, без UUID-coerce/новой нормализации; стабильное каноническое представление готовит владелец identity. `reason` и diagnostic `detail` — непустой human-readable текст причины; path — существующий формат tuple[str | int, ...]. Enum значения принимают только строковые wire values своего StrEnum. Liquid сохраняет `MaterialKey`, не голую строку; проверка membership остаётся существующему REF-W boundary.
+
+**Контракт вызова P2 (реализован):** `resolve_placements(batch: PlacementBatch, *, ctx: ResolveContext) -> PlacementBatchResult` в `application/worldData/placement/`. Подготовка → один детерминированный общий resolve → typed result/report. Context отдельно от topology/geometry/registries; без carve/fill/persist/lifecycle, другого wire resolver или исправления authored intent. P1 не подключает этот вызов к pipeline; adapters мигрируются срезами P3 по инвентарю.
+
+#### Placement P2
+
+Конкретизация алгоритма над POJO P1; новые authored knobs/defaults не вводятся.
+
+- **Граница входа:** существующий `resolve_model(PlacementBatch, ..., ctx)` проверяет полный snapshot, включая вложенные copied/constructed модели; partial wire context остаётся patch и не запускает spatial pass. Сохраняются missing/explicit-null и исходные authored поля. Повторный REF-W, доменные specs и persist отсутствуют.
+- **Подготовленная геометрия:** сравнение canonical fine cells через `WorldTopology.canonicalize`, без изменения сохранённых кандидатов. В planar выход хотя бы одной клетки за world bounds делает весь вариант недопустимым; clipping нет. Wrapped/sphere aliases сравниваются как одна физическая клетка. Original area остаётся supplied исходной площадью и не выводится из canonical/raster cells. Невалидная геометрия уже принятого решения — повреждённый snapshot/input, не повод забыть препятствие: общий validation error по accepted path. На активном candidate это локальная причина недопустимости варианта.
+- **Ready queue:** обязательные dependencies должны разрешиться до объекта. Среди готовых объектов каждый раз выбирается максимум effective specificity, затем максимум original_area, затем минимальный region_uid. После каждой принятой опоры очередь обновляется; обработка всех roots одним отдельным уровнем до детей запрещена. Варианты объекта пробуются по `(preference, candidate_uid)`, исходный порядок списков не влияет. Пересчёта площади, сдвига, clipping и backtracking по принятым решениям нет. Пустые candidates/неразрешённый auto/unknown water дают typed unresolved. Опоры отсутствуют → missing dependency; опора failed → failed dependency; циклические компоненты → dependency cycle, зависимые от них → failed dependency. Обход графа итеративный, без ограничения глубиной Python recursion.
+- **XY/Z collision:** canonical XY множества пересекаются, а включительные Z-интервалы пересекаются. None/None означает неограниченную Z-проекцию: ею нельзя доказать вертикальное разделение. Достаточное XY или Z разделение снимает collision. `min_z` — число пустых целых уровней между интервалами. Для disjoint XY `min_xy` проверяется минимальной topology distance² между центрами fine cells: расстояние должно быть ≥ `min_xy + 1`; при min_xy=0 достаточно отсутствия общей клетки. Расстояние считает `topologyGeometry.dist2`, не локальная формула. Пересекающиеся клетки не считаются разделёнными при нулевом резерве.
+- **Пространственные dependencies:** `resolved` проверяет только готовность; `contained_by` требует XY subset и включения Z-интервала (bounded container не доказывает включение unbounded child); `supported_by` требует полного XY subset и явных bounded Z у обоих, нижний уровень ребёнка = верхний уровень опоры +1; `connected_to` требует общей XY клетки или cardinal-соседства через `topology.neighbor`, а по Z — пересечения или соприкосновения соседних целых уровней. Неограниченный Z допускает только проекционную связь, но не доказывает физическую поддержку.
+- **Permitted overlap:** запись любой стороны действует только для именованной пары. `coverage` явно разрешает наложение покрытий этой пары; `containment`/`embedding` требуют включения одного footprint в другой по XY/Z. `shared_boundary` и пересекающийся `connection` допускают только общие XY клетки, принадлежащие границам обоих footprint; клетка boundary имеет cardinal-соседа вне своего множества (в planar world edge также boundary). Проверка boundary использует topology, включая швы/полюса. Для непересекающихся connection достаточно геометрической связи из предыдущего пункта. Разрешение overlap не отменяет обязательный dependency predicate или reserve.
+- **Парные ограничения симметричны:** separation проверяется из intent обеих сторон, в том числе из accepted/high-priority объекта при размещении позднего target. Каждая reserve-запись проверяется отдельно; смешивать разные XY/Z альтернативы одной парой максимальных резервов нельзя. Separation/overlap сами по себе не объявляют существование опоры: они применяются к реально размещаемым парам; если target обязателен, он указывается также как dependency. Родительский UID сам по себе не разрешает пересечения. Missing required dependency не заменяется default.
+- **Absolute:** forbidden movement даёт единственный подготовленный вариант, конфликт → unresolved без генерации нового положения. Проверка соответствия единственного candidate authored primitive/anchor/noise/claim — обязанность adapter до prepared boundary; P2 получает точные prepared клетки и не строит вторую геометрию из authored shape. Допустимость topology/constraints этого варианта проверяется в общем pass. Альтернативы пробуются только при явно заданном explicit_candidates или semantic mode.
+- **Результат и диагностика:** results упорядочены по region_uid, accepted не входят в новые results и не меняются. Неудачные попытки вариантов не логируются, если найден допустимый; при отсутствии решения возвращаются стабильные причины с candidate/dependency/rival UID. Batch diagnostics содержат факты неразрешённых объектов и отдельное понижение coastline (один факт на UID за проход, даже при многих cells/variants). Missing water и unknown water различаются; absent принудительно даёт effective 0 и сохраняет authored priority/кандидат.
+- **Runtime/preview:** сам pass не читает policy и даёт одинаковые results/diagnostics. Facade передаёт FieldPathError с code/path/world UID/object UID/reason и related UIDs в существующие `log_issues` (runtime WarningError) либо `report_issues` (validate_only). Это тот же образец, что `masks/regionIdentity.py`; runtime spatial conflict не попадает в блокирующий import error collector и не отклоняет независимые объекты. Preview ничего не пишет. Ошибки wire/повреждённого input snapshot не маскируются как успешный spatial result.
+- **Bake scope:** pass принимает полный candidate universe snapshot, без tiles/chunks/worker count. Full и partial materialize получают один результат, затем выбирают нужные клетки/объекты; partial не означает `ctx.partial` и не исключает конкурента, находящегося вне выводимого tile. Подготовку полного universe обеспечивает caller/P3; resolver не делает скрытое чтение мира, чтобы восстановить отсутствующие inputs.
+
+#### Placement P3 water
+
+Водный adapter находится в `application/worldData/placement/adapters/`. `prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementContext, *, ctx: ResolveContext) -> WaterPlacementPreparation` принимает полный canonical pre-carve snapshot в координатах рабочей сетки (pre-1.4 — coarse surface grid; declared геометрия проецируется fine→coarse на границе caller), z_min, готовые anchor coordinates, явно подготовленные auto-specificity и карты dependencies/permitted_overlaps/separations по source UID. Карты ограничений используют существующие PlacementDependency/PlacementOverlap/PlacementSeparation; отсутствие записи означает явно пустой набор для источника, blanket-разрешения water×water нет. Идентификаторы world/snapshot/source/anchor — непрозрачные строки existing identity-контрактов, новых UID-формул нет. Параметры воды/лимиты берутся из существующих POJO, не дублируются defaults. Missing auto не становится 0; dry coastline использует отдельное правило P1.
+
+Preparation содержит successful prepared entries и явные failures (`source_uid` + FieldPathError); geometry failure не отменяет независимые entries. Ошибки неполного snapshot/дубли UID отклоняют input через существующую валидацию. Runtime preparation facts логируются, validate_only получает те же code/path/reason в report без writes. Общий P2 получает `preparation.objects` вместе с intents других доменов, без отдельного resolve внутри adapter. Нормативная геометрия coastline/лимиты — `tz_terrain_hydrology.md` § Declare. Planar clipping отсутствует; неоднозначный compact ring unresolved.
+
+`resolved_water_placements(preparation, result)` проверяет соответствие world/snapshot и exact prepared input, затем возвращает `ResolvedWaterPlacement` только для resolved entries. Caller сохраняет общий result/unresolved и preparation failures; пустая tuple records не означает успешное размещение всех источников. Floor/rim metadata доступны по исходному source UID; их маппинг в spec принадлежит HY-12/3. Adapter не вызывает carve/fill и не меняет surface_z. Включение в реальный pipeline выполняет HY-12 на границе общего pre-1.4 прохода; готовый adapter сам по себе не означает миграцию legacy materialize.
 
 ### Инвариант
 
@@ -45,7 +146,7 @@ metadata:
 | Слой | Роль |
 |---|---|
 | `SurfaceTerrainContext.coarse_hydro` | planning / L2; **не** SoT L0 mask |
-| `sparse_meter_hydro` / meter carve | fine / L2; **не** write-path L0 |
+| `sparse_fine_hydro` / fine carve | fine / L2; **не** write-path L0 |
 | Один sample на macro `(gx, gy)` на весь tile | **запрещённый** антипаттерн |
 
 ### Extensibility
@@ -94,14 +195,34 @@ pack/bake/worldMapBakeOrchestrator.py   # thin: compose → writer
 
 ## Координаты (контракт)
 
+**PC-0G1 реализован 2026-10-23:** общий frozen
+`GridBBox(x_min:int,x_max:int,y_min:int,y_max:int)` принадлежит
+`dataModel/spatial/grid/gridBBox.py`. Границы sampled extent inclusive.
+Legacy imports из `climatePoleField` и `terrain/types` реэкспортируют тот же
+класс; lazy dependency terrain→climate удалена. `diagonal()` сохраняет
+прежний hypot(max(1,x_max-x_min),max(1,y_max-y_min)); новое правило +1
+в диагональ не вводится. WorldBounds и half-open SurfaceGridRect/FineGridRect
+остаются отдельными контрактами. Приёмка: 68 tests OK и fresh-process
+проверка обоих порядков terrain/climate imports.
+
+**PC-0G2 реализован 2026-10-23:** CoordinateSpace находится в
+`dataModel/spatial/grid/coordinateSpace.py`; GridX/GridY/FineX/FineY/FineZ/
+FineDelta, SurfaceGridCoord/FineGridCoord/SurfaceGridRect/FineGridRect и
+LightCellRef — в `coordinateTypes.py`, там же FineXY=tuple[FineX,FineY].
+Old coordinates/{space,types} и masks/footprint.LightCellRef реэкспортируют
+те же symbols. Enum wire values, frozen/slots semantics и half-open rect
+границы сохранены. Convert/rect/worldTile algorithms и city imports
+не менялись. Приёмка: 69 tests OK; pyright новых shared modules без ошибок;
+fresh import общего spatial/grid не загружает application.
+
 ```text
-tile_m  = fine_cells_per_map_cell
-side    = 32                         # WP-10 v2: константа маски (POJO)
-light_m = tile_m // side             # масштаб light-cell; плывёт с tile мира
+tile_macro = fine_cells_per_map_cell
+side       = 32                          # WP-10 v2: константа маски (POJO)
+light_span = tile_macro // side          # масштаб light-cell; плывёт с tile мира
 
 # Абсолютный light index:
-lx = floor(xm / light_m)
-ly = floor(ym / light_m)
+lx = floor(x_fine / light_span)
+ly = floor(y_fine / light_span)
 
 # Macro-tile + local:
 gx = lx // side,  gy = ly // side
@@ -111,8 +232,8 @@ tx = lx %  side,  ty = ly %  side
 | Ключ | Назначение |
 |---|---|
 | Canvas key | `(gx, gy, tx, ty)` (или absolute `(lx, ly)` + view по tile — эквивалент) |
-| Bresenham / rasterize hydro | **light indices**, не meters и не macro `(gx, gy)` |
-| Центр light cell (climate sample) | `(xm + light_m/2, ym + light_m/2)` |
+| Bresenham / rasterize hydro | **light indices**, не fine cells и не macro `(gx, gy)` |
+| Центр light cell (climate sample) | `(x_fine + light_span/2, y_fine + light_span/2)` |
 
 Cross-ref: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § WP-10 v2. `side` — только через POJO [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) (default **32**); **не** литерал в bake и **не** ∝-формула от `fine_cells_per_map_cell`.
 
@@ -143,7 +264,7 @@ Impl note: pack ASCII default = **light-mask mosaic** (WP-10); frame от `world
 | Persist light cell / `to_wire_tile` | [`WorldMapCellWire`](../backend/app/dataModel/worldPack/worldMapCellWire.py) | Имена полей, defaults, validators — только отсюда |
 | `hydrology_role` / `hydrology_width` | [`WorldMapHydrologyRole`](../backend/app/dataModel/worldPack/hydrologyMaskWire.py), [`HydrologyMaskWire`](../backend/app/dataModel/worldPack/hydrologyMaskWire.py) | Width clamp / `from_wire` — в POJO; merge priority ролей — **метод/helper на enum или POJO**, не `_PRIORITY = {…}` в contributor |
 | Pin index / index file | [`LocationsIndexWire`](../backend/app/dataModel/worldPack/locationsIndexWire.py), [`LocationsIndexPin`](../backend/app/dataModel/worldPack/locationsIndexWire.py) | `location_pin` = index в `locations_index.locations[]` |
-| `side` / WP-10 v2 | [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) | default **32**; optional master override; `light_m = tile_m // side` |
+| `side` / WP-10 v2 | [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) | default **32**; optional master override; `light_span = tile_macro // side` |
 | Bake caps (max tiles, …) | [`PackBakeDefaults`](../backend/app/dataModel/worldPack/packBakeDefaults.py) | Не дублировать в orchestrator |
 | Terrain mask domains (enabled / declare / autoresolve) | target `WorldTerrainMasks` (+ existing [`WorldHydrology`](../backend/app/dataModel/hydrology/worldHydrology.py)) | § **Surface mask domains**; `DefaultOnWire`→DB; `IgnoreOnWire` overrides |
 | Bake knobs (interim) | [`LightLandcoverPolicy`](../backend/app/dataModel/worldPack/lightLandcoverPolicy.py), [`LightRavinePolicy`](../backend/app/dataModel/worldPack/lightRavinePolicy.py), [`LightRoadPaintPolicy`](../backend/app/dataModel/worldPack/lightRoadPaintPolicy.py) | tech debt → fold under `terrain_masks`; гора не из z-band |
@@ -236,12 +357,79 @@ flowchart TB
 | Корень | Домены | Статус |
 |---|---|---|
 | `world.hydrology` | реки / озёра / моря / shore / landforms hydro | уже есть (`WorldHydrology`) |
-| `world.terrain_masks` | mountains / forests / plains / ravines / roads (+ later farmland declare) | **норматив этого §** |
+| `world.terrain_masks` | mountains / landcover (`declared_regions[]`: forest / plains / farmland) / ravines / roads | **норматив этого §** |
 | structure graph (`connection_*`) + policy enable | road | enable в `terrain_masks.default_roads`; geometry — edges |
 | settlement pins / footprint | `MaskDomainId.SETTLEMENT` | L0 Spec→pin/footprint; L2 layout — не mask domain |
-| farmland (later) | новый `MaskDomainId.FARMLAND` | тот же materialize; crops — flora, не маска |
+| farmland | `FarmlandSpec` внутри `MaskDomainId.LANDCOVER` (отдельного `FARMLAND` нет — 2026-10-17) | тот же materialize; crops — flora, не маска |
 
 Не дублировать hydro-флаги вторым деревом: light bake **читает** `world.hydrology.*`. Terrain-типы — отдельный корень с **той же формой category policy**. Не mega-dict доменов: typed fields `default_*` / `declared_*`.
+
+### Landcover cutover 10b (2026-10-18)
+
+**Уточнение по замечанию мастера:** application shim не создаёт собственных
+eligibility rules и не обновляет поля POJO через строковый changes-dict.
+LandcoverTerrainPolicy применяет overrides через typed TerrainRegistryEntry
+API. Legacy rainfall threshold параметризует canonical forest rule реестра,
+сохраняя его fact/op/weight/required. Чтение authored hills presence и wire
+проекция принадлежат dataModel, включая различие omit/null.
+
+TerrainRegistryEntry.fill_roles: tuple[TerrainFillRole, ...] (default пусто)
+и fill_priority: int = 0 задают использование terrain в колонках.
+TerrainFillRole = subsurface | magma; canonical plains имеет subsurface.
+Среди доступных ключей выбирается роль с большим priority, затем ключ по
+возрастанию. Если magma не задана, используется subsurface; если нет ни
+одного доступного subsurface terrain, результат неразрешён, WarningError
+без выбора первого ключа. Terrain names не участвуют в выборе роли.
+Роли принадлежат terrain registry, не terrain_masks; SQL не расширяется.
+
+Единственный домен покрытия — `MaskDomainId.LANDCOVER`; его policy —
+`WorldTerrainMasks.default_landcover: LandcoverRegionsCategoryPolicy`.
+`enabled` выключает и регионы, и фоновый paint; `autoresolve` выключает
+автоматические регионы, оставляя declared и фон. Новая policy содержит
+`fallback_terrain: TerrainKey` (canonical plains), `transition_threshold`
+и параметры генерации. Выбор покрытия использует общий `CoverageResolver`
+с typed climate facts и eligibility реестра; ключи без eligibility не
+становятся автоматическими кандидатами с нулевым score. При отсутствии
+климатического контекста фон берётся из policy, без выбора первого ключа.
+
+Canonical root factory задаёт seed_spacing=1000, max_radius=2250,
+claim_noise={amplitude:125, scale:250}; transition_threshold=1.0.
+Контракт самого `seed_spacing` не изменён: обязательный `int > 0` в явно
+заданной policy; это не fine_cells_per_map_cell (последний >=1000 и кратен
+1000). При отсутствии всего default_landcover применяется canonical root
+factory. При явной policy seed_spacing обязателен, остальные knobs могут
+наследоваться. Частичный claim_noise заполняет только отсутствующие поля.
+Все размеры — fine-клетки, без зависимости от разбиения bake на тайлы.
+Обоснование: шаг 1000 соответствует стандартной стороне макро-тайла;
+cap 2250 покрывает собственный seed-участок при jitter и оставляет запас
+для шума; амплитуда 125 и scale 250 равны 1/8 и 1/4 шага. Cap ограничивает
+распространение seed, но не размер региона после слияния.
+
+Legacy JSON `default_forests`/`default_plains` принимаются только на чтение
+и преобразуются в `default_landcover.terrain_policies` — typed overrides
+по исходному terrain-ключу. У generic LandcoverTerrainPolicy есть
+system_terrain: TerrainKey, enabled/autoresolve, optional min_rainfall и
+hills. `forest_min_rainfall` читается как alias min_rainfall; null legacy
+threshold отклоняется. system_terrain старого default_plains также задаёт
+fallback_terrain. Явные новые поля имеют приоритет над совпавшими alias.
+Сериализация выдаёт только новый корень; второго runtime policy-объекта нет.
+Патчи alias нормализуются до merge, отсутствующие значения сохраняются.
+
+Hills/eligibility разрешаются на world boundary в TerrainRegistryEntry,
+после чего потребители читают реестр. Явные registry hills, включая null,
+приоритетнее alias hills; authored presence учитывается до materialization
+canonical registry rows при импорте. Отсутствие override и явный null
+сохраняют разный смысл после round-trip. Fallback и target keys проходят REF-W.
+
+Три fixtures для проверки этого контракта: world_landcover_default.json
+(минимальный мир), world_landcover_custom.json (все поля terrain_masks,
+landcover policy, вложенных overrides/noise/hills и custom terrain entry
+заданы явно), world_landcover_mixed.json (явные и наследуемые поля, в том
+числе внутри claim_noise). Custom assertions не выводятся из canonical
+defaults; completeness проверяется по schema, а независимость — через
+валидацию с изменёнными defaults. По указанию мастера существующая БД пуста,
+миры генерируются заново: тождество legacy bake-карты не требуется;
+совместимость чтения исходных JSON остаётся обязательной.
 
 ### Шаблон MaskDomain (единственный способ роста)
 
@@ -398,8 +586,7 @@ flowchart LR
 | **mountains** | `MountainSpec` \| `MountainRangeSpec` | FormGeometry→FormRaster→SideFill → footprint (+ fractions) | terrain + KindElevation z | **первый полный plugin**; stub disk/score→paint **удалить** |
 | **ravines** | `RavineSpec` | depression/path → footprint | terrain + drop z | тем же каркасом после гор |
 | **settlement** | `SettlementSpec` (origin, radius_m / size, `location_uid`) | disk / later outline | `location_pin` (index из `locations_index`) | pin→Spec; **не** SQL районов / gates (C23) |
-| **farmland** | `FarmlandSpec` (region) | region fill | terrain key | **новый** `MaskDomainId.FARMLAND` (PR); flora/crops — отдельно ([`tz_flora`](./tz_flora.md)) |
-| **forests / plains** | `ForestSpec` / `PlainSpec` | region / climate | terrain | **отложено**; landcover interim OK до Spec |
+| **landcover** (forests / plains / farmland) | `LandcoverDeclareEntry` (`declared_regions[]`) | `RegionShape` → `RegionRasterizer`; autoresolve seed/claim | terrain (`paint_key`) + `region_uid` | **один** `MaskDomainId.LANDCOVER` (2026-10-17; отдельного `FARMLAND` нет); контракт — § Регионы покрытия; per-cell climate paint — только fallback вне регионов. flora/crops — отдельно ([`tz_flora`](./tz_flora.md)) |
 | **roads** | geometry = structure edges | polyline (+ dilate) | terrain | edges SoT; enable в policy; тот же apply_terrain |
 | **hydrology** | already declared Specs | raster roles | `hydrology_*` (+ bathymetry) | эталон; не переписывать под terrain types |
 
@@ -489,8 +676,8 @@ Anti-smell (обязательно при ревью PR):
 |---|---|---|
 | Q4 | ✅ | см. ridgePlacement |
 | Q5 | ✅ | Один merge path (Q2 + Q4 + Q17) |
-| Q6 | ✅ | `mountains/geom.py` + `light_cell_center_m` в range/SideFill |
-| Q7 | ✅ | SHEER ε = `sheer_band_light * light_m` |
+| Q6 | ✅ | `mountains/geom.py` + `light_cell_center_fine` в range/SideFill |
+| Q7 | ✅ | SHEER ε = `sheer_band_light * light_span` |
 | Q8 | ✅ | Spec `radius_m` / Range `width_m` default ← `MountainsCategoryPolicy.default_radius_m` (factory) |
 | Q12 | ✅ | Range left/right + optional start/end caps (`MountainRangeSides` + `rangeSideFill`) |
 
@@ -525,12 +712,10 @@ NamedLocation(geographic.mountain) → disk paint  # interim; убрать
 | Поддомен | `system_terrain` | Declare SoT (`declared_*[]`) | Autoresolve (enabled, даже без declare) |
 |---|---|---|---|
 | **mountains** | `mountain` (+ summit по kind) | `declared_mountains[]`: `MountainSpec` \| `MountainRangeSpec` | placement → Spec → § Mountain engine |
-| **forests** | `forest` | `declared_forests[]`: `ForestSpec` | region + [`tz_flora`](./tz_flora.md) → paint forest. Hill knobs на `default_forests` — L2; локация перекрывает мир |
-| **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши. Hill knobs на `default_plains` — L2; локация перекрывает мир |
+| **landcover** (`LANDCOVER`; forest / plains / farmland — **один** домен, 2026-10-17) | `paint_key` региона: `current_type` → `entry_type` → policy fallback (`forest`, `plains`, `farmland`, N+1-ключи) | `declared_regions[]`: `LandcoverDeclareEntry` = `ForestSpec` \| `PlainSpec` \| `FarmlandSpec` — § Регионы покрытия | seed-решётка + claim → регионы/саблокации; клетки вне регионов — per-cell fallback. `FORESTS`/`PLAINS` и `default_forests`/`default_plains` — transitional (план шаги 7b/10b); hills — `TerrainRegistryEntry.hills` |
 | **ravines** | `ravine` | `declared_ravines[]`: `RavineSpec` (path / polygon) | депрессии → RavineSpec |
 | **roads** | `road` | geometry = structure edges; enable в `default_roads` | без edges маска пуста; `enabled: false` запрещает paint |
 | **settlement** (mask) | pin / optional terrain later | `SettlementSpec` (или declared list) | pins → Spec → footprint; не L2 assembler; не C23 topology |
-| **farmland** (later) | farmland terrain key | `declared_fields[]`: `FarmlandSpec` | region → mask; crops via flora |
 
 Каждый `*Spec` — POJO домена (поля footprint/knobs свои); materialize → `MaskFootprint` → shared apply (§ MaskDomain materialize).  
 Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в location.
@@ -544,10 +729,10 @@ Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в l
 
 | Gate | Смысл | SoT |
 |---|---|---|
-| **A** | мир **хочет** класс forest | `terrain_masks.default_forests.forest_min_rainfall` (+ enable / declare) |
+| **A** | мир **хочет** класс forest | `TerrainRegistryEntry.eligibility` (+ enable / declare); legacy rainfall читается через alias в `default_landcover.terrain_policies` |
 | **B** | в климате клетки есть eligible **trees** | `FloraSuitabilityIndex.query` ← `tree_registry` ∩ `FloraClimateSuitability` |
 
-`paint forest` = **A ∧ B**. Если A прошло, а B=∅ (все деревья требуют другой rainfall/temp) → **не** красить `forest` (fallback plains), warn в generation log. Запрещены: лес без деревьев, builtin-вид, свой скан реестра в landcover.
+`paint forest` = **A ∧ B** — **для автоматического возникновения леса (autoresolve)**. Если A прошло, а B=∅ (все деревья требуют другой rainfall/temp) → autoresolve **не** красит `forest` (fallback plains), warn в generation log. **Declared/anchor регионы veto не проходят** (2026-10-17): авторский лес ставится как начальное состояние, B=∅ → `declared_without_suitability` warning, paint выполняется; деградация — через state-change. См. § Регионы покрытия › Declaration и suitability. Запрещены: лес без деревьев у autoresolve, builtin-вид, свой скан реестра в landcover.
 
 **Stub (2026-07-17):** flora index **отложен**; сейчас paint только по A. Target после flora: A∧B + type refs.
 
@@ -564,6 +749,149 @@ Target: forest/landcover зовут **тот же** index + FloraGenerator; сп
 `MountainKind` / Form / Sides / Range — **алгоритм materialize внутри** `default_mountains` + entries из `declared_mountains[]`.  
 Те же: `enabled` / declare / autoresolve / `IgnoreOnWire` / merge rank / `paint_system_terrain`.  
 Запрещено: параллельный «mountain pipeline» мимо `WorldTerrainMasks` / `MaskCategoryPolicy`.
+
+### Регионы покрытия (wilderness regions) — целевой контракт (утверждено 2026-10-17)
+
+Декомпозиция реализации — [`.cursor/plans/wilderness-regions-mechanic.md`](../.cursor/plans/wilderness-regions-mechanic.md); здесь — норматив.
+
+**Сущность и домен.** Регион — доменно-нейтральная географическая сущность (shape + declaration + состояние), выше отдельных доменов маски. `WorldTerrainMasks.declared_regions[]` — **одна плоская коллекция** (не `declared_forests`/`declared_plains` по отдельности): конфликты размещения между типами покрытия решаются совместно. `MaskDomainId.LANDCOVER` — единый домен покрытия; `FORESTS`/`PLAINS` — transitional policy-категории до cutover; `default_forests`/`default_plains` остаются fallback-политикой.
+
+#### Spec union (engine, закрытый)
+
+```text
+RegionSpecBase:
+  name: str | None                   # identity declared; обязателен при author-валидации (› Identity)
+  shape: RegionShape                 # координаты — только в shape; origin-полей нет
+  entry_type                         # discriminator
+  density: float = 1.0
+  placement_specificity: int | None  # ge=0; tie-break равного merge_rank (› Пересечения и приоритет)
+  location_uid: str | None           # optional link, как MountainSpec
+ForestSpec   (entry_type="forest")    # состав — tz_flora (› Точки расширения); поля flora нет
+PlainSpec    (entry_type="plains")    # покрытие; рельефная плоскость = elevation_plain (факт elevation)
+FarmlandSpec (entry_type="farmland")  # культура — crops_registry (› Точки расширения); поля crop нет
+LandcoverDeclareEntry = ForestSpec | PlainSpec | FarmlandSpec | …   # discriminated by entry_type
+```
+
+- `entry_type` — закрытый union видов декларации (typed knobs, engine PR).
+- `current_type` — **открытый** N+1 ключ `system_terrain` из `WorldTerrainRegistry`: степь/болото/… без новых Spec-классов.
+- `paint_key` = `current_type` (RegionState) → `entry_type` → policy fallback.
+- `density` — доля заполнения: paint = `contains(x,y)` ∧ seeded-маска (`seeded_u01(…, channel="density", uid, x, y) < density`); «чаща»/состав — семантика флоры.
+- `placement_specificity` — отсутствие (`None`) означает «автор не выразил намерение» и проигрывает любому явному значению, включая `0`; wire default не подставляется. Autoresolve-регионы и саблокации — всегда `None`.
+
+#### RegionShape — resolution-independent геометрия (SoT формы)
+
+```text
+RegionShape = BboxShape | EllipseShape | PolygonShape | AnchorRadiusShape   # kind
+  + edge_noise: {amplitude, scale}   # seeded по uid региона (channel="edge") — органичный край
+```
+
+Координаты — мировая fine-сетка (unrolled); `contains(x,y)` поточечно; растеризация независимо на L0 (`MaskFootprint`) и L2 (fine) — одна shape, два растра; `bbox()` для spatial index; `area()` — площадь геометрического примитива **без** edge_noise (`anchor_radius` → `π·r²`) для tie-break. Seam — через `WorldTopology.canonicalize`; контракт топологии — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Форма мира (`world_topology_mode`; реализация — план `surface-topology`). `AnchorRadiusShape` резолвит именованный anchor в `collect` materializer'а (не в `materialize(spec, scale)`). Author-валидация: `rx/ry>0`, `vertices>=3`, не-самопересечение, `x_min<=x_max` — ошибки, не fallback.
+
+#### Identity
+
+`region_uid` — `entity_uid(world_uid, UidKind.REGION, **keys)`; геометрия, `entry_type`/`current_type`, домен в uid **не входят** — сущность переживает правки и морфинг. Keys по источнику:
+
+| Источник | Key | Примечание |
+|---|---|---|
+| declared | `name` — `strip()` + Unicode NFC, без casefold; `\|` в имени — ошибка валидации | обязателен при author-валидации (`validate_only`); два declared с одним нормализованным именем — ошибка |
+| declared без `name` (runtime) | `bbox_min=(x_min, y_min)` из `shape.bbox()` + `shape_kind=<shape.kind>` (`kind` занят параметром DET-1); для `anchor_radius` — `anchor_uid` | **degraded**: регион красится, в лог WarningError (`FieldPathError` → `log_issues`); сдвиг min-угла = новая сущность |
+| anchor | `anchor_uid` | by design |
+| autoresolve-регион | `region_seed_xy=(x, y)` canonical min seed компоненты | отдельное пространство ключей агрегата |
+| seed-саблокация | `seed_xy=(x, y)` своего seed | UID не зависит от родителя; merge/split меняет parent-ссылку |
+
+**Уникальность (2026-10-18):** регион и саблокация — разные сущности.
+Источники `region_seed_xy` и `seed_xy` различаются в DET-1. До paint collect
+проверяет все UID, включая саблокации; дубликат — диагностируемый отказ
+операции, без молчаливого merge по UID и без случайной пересолки. UID ранее
+baked autoresolve-родителей меняется при re-bake; seed UID саблокаций сохраняются.
+
+Revision — `state_fingerprint(spec_wire)` (`app.ids`), отдельный токен.
+
+#### Autoresolve — поле в мировых координатах
+
+Partial и full bake идентичны (контекст — чистая функция `(x,y)` + world data).
+
+- seed-решётка `(sx, sy)` (не `gx, gy` — alias макро-тайла) + джиттер `seeded_u01(seed_root(world), UidKind.REGION, channel="seed", sx, sy)`; шаг сетки = масштаб региона (knob);
+- каналы рандома `UidKind.REGION` различаются обязательным ключом `channel`: `seed` / `claim` / `edge` / `density` — одинаковые keys дали бы один `Random`;
+- вид seed'а — `CoverageResolver` по контексту (domain fact consumers: climate/hydrology/relief/flora);
+- claim: клетка к seed'у с лучшим `w = f(dist) + seeded-шум` (`channel="claim"`, ключи `seed_xy` кандидата и координаты клетки `x, y`), кап `max_radius`; declared/anchor выигрывают первым звеном precedence (› Пересечения и приоритет) до `merge_rank`; у autoresolve `placement_specificity` — всегда `None`. Уточнение 2026-10-17: `seed_xy` различает шум кандидатов; общий шум только по `(x,y)` сократился бы при сравнении весов и оставил прямую границу;
+- обход соседей решётки — `WorldTopology.neighbor` (шов), не ручной `mod`;
+- соседние seed'ы одного вида сливаются в один регион; каждый seed — **саблокация** со своим uid, адресуемая через `Facing` («Северный/Южный Тёмный лес»); `region_uid` = canonical min `seed_xy`.
+
+#### Пересечения и приоритет
+
+Overlap разрешён (авторское слоение; покрытие — не владение): регионы не сдвигаются и не обрезаются. Конфликт **клетки** решается одной функцией сравнения (L0 и L2 — одна и та же):
+
+```text
+1. declared/anchor           — authored-регион первым; autoresolve — после
+2. merge_rank(current_type)   по убыванию   # TerrainRegistryEntry, разные ключи
+3. placement_specificity      по убыванию   # None ниже любого явного
+4. RegionShape.area()         по убыванию   # площадь покрытия в fine-клетках (инклюзивные границы): bbox 1×1 = 1
+5. region_uid                 по возрастанию (каноническая строка)
+```
+
+Это § Placement priority, применённый на клетке после rank. Отдельного `priority`-поля нет. Equal-rank + разные ключи на одном declared-уровне → исход по п.3–5 **и** WarningError в лог. Саблокации наследуют specificity родителя; child-регион частичного перехода (› Состояние) при равном ранге с родителем получает specificity родителя + 1. Границы — seeded-шум в приграничной зоне (регионы «входят» друг в друга). Клетка в двух регионах — факты входят в контекст обоих. Клетка хранит `region_uid` победителя (› L0/L2).
+
+#### Реестр и CoverageResolver (world data, N+1)
+
+`TerrainRegistryEntry` += `merge_rank`, `eligibility: list[EligibilityRule]` (`{fact, op: gte|lte|in_range|flag, lo/hi, weight, required}`), `inertia` (сопротивление переходу как текущего типа), `hills: HillPolicy | None` (L2 холмы по ключу — см. `tz_world_pack_storage` § L2 open-land hills). Builtin-значения (`road > ravine > mountain > forest > plains`, hills forest/plains) — в canonical defaults реестра, не литералы в application. `CoverageResolver` — scorer: `required` провалено → кандидат отпадает; `score = Σ weightᵢ·satisfactionᵢ` (0..1); `target = argmax` при `score > 0` (нулевой борд не выбирает лексикографический минимум — это unresolved), `strength` → темп прогресса; все отпали или все `score == 0` → WarningError, тип не меняется (без default). Interim eligibility — climate-правила как canonical `eligibility` builtin-ключей с комментарием «цель — rules мира + flora suitability (`flora.*`)».
+
+Состав кандидатов `StateChangeConsumer` (state-change / morph) = `coverage_registry(registry, policy, autoresolve=True)` — тот же фильтр, что L0 autoresolve: `enabled` + `autoresolve` + alias-dedup `terrain_policies` + непустой `eligibility`. Morph-таргеты проходят тот же eligibility-scoring: ключ без `eligibility` или закрытый policy не выбирается автоматикой ни при генерации, ни при state-change (morph→`liquid_body` требует `eligibility` на целевой записи либо отдельного контракта). Сырой реестр мира остаётся источником для type-lookup (`_require_key`) и `inertia` текущего типа.
+
+#### Declaration и suitability
+
+Climate-gate A∧B (§ Forest mask → flora) применяется только к **autoresolve**-кандидатам `CoverageResolver` (B — канал `flora.*` в `eligibility`; до flora-трека — interim climate). **Declared** и **anchor** регионы задают начальное состояние без veto: `current_type = entry_type` независимо от suitability. Если для declared forest B = ∅, bake пишет `landcover | declared_without_suitability | region_uid=… entry_type=forest` (`logger.warning`, тот же sink), paint выполняется. Дальнейшая судьба — `StateChangeConsumer`: пустая suitability входит в контекст как факт, `DeclarationFacts.strength` её компенсирует или нет.
+
+#### L0/L2
+
+L0: materialize → `MaskFootprint` → `apply_terrain_footprint` пишет `system_terrain` (paint_key) **и** `region_uid` победителя (`WorldMapCellWire.region_uid`). L2: `upsample_terrain_from_parent_light` — fallback-фон; region paint поточечно в `build_tile_surface_state` **между upsample и `place_hills`**, `FineTerrainColumnWire.region_uid`; hydro-роли старше landcover (`PRESERVE_HYDROLOGY_ROLES`). `place_hills` видит landcover на момент build чанка; последующая смена типа холмы не убирает (рельеф ≠ покрытие).
+
+#### Состояние и переходы
+
+SoT хранения — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § `WildernessRegionEntry` / § Region state store / § Region state overlay. `RegionState{current_type, pending_target, progress, last_eval_tick, overrides, history[], spec_fingerprint, tombstone}` — таблица `region_states` keyed by `region_uid` (entity-store, **не** WP-20); единый writer — `StateChangeConsumer` (typed `RegionFacts`, не dict). Смена `current_type` достигает клеток через overlay по `region_uid` на read; доменные эффекты морфинга (роль воды, z) — на materialize/refine, не на read. Морфинг — та же сущность/uid; частичный переход — child-регион (саблокация); интенсивность — `overrides`. `elapsed_ticks` — рабочая заглушка-параметр до унифицированной LOD/время механики.
+
+#### Точки расширения (поля не вводятся до владельца)
+
+Контракт шага 10a: `StateChangeConsumer.evaluate(world_uid, RegionEvaluation)`
+вызывается внешним владельцем операции, который сериализует оценки одного
+региона в своём UOW. Автоматический tick/read-триггер не устанавливается.
+`elapsed_ticks >= 0` передаётся явно; `at: str | int` и SQL `updated_at`
+также приходят от caller до появления доменов времени/событий.
+`LandcoverRegionsCategoryPolicy.transition_threshold` — конечный порог
+`0 < threshold <= 1`, canonical default `1.0` (прогресс POJO ограничен 0..1).
+Effective inertia = `inertia(current) + declaration.strength`, если
+`declaration.present`; при target==current прогресс затухает с тем же темпом.
+Смена pending target начинает накопление с нуля. Unresolved scorer сохраняет
+тип и прогресс. Declared revision требует `previous_entry_type`, поскольку
+старый authored тип нельзя восстановить из уже эволюционировавшего current.
+Revision reset не тратит elapsed на новый переход в той же оценке.
+
+Для частичной оценки caller передаёт `SpatialEvaluation` по устойчивым
+lowland-кластерам: seed, Spec с разрешённой геометрией и observation context.
+Каждый кластер оценивается тем же scorer и hysteresis; родитель сохраняет
+тип снаружи. Child UID = DET-1 `entity_uid(world_uid, REGION,
+parent_region_uid=…, seed_xy=…)`, без target/type/time в identity.
+Равный merge rank даёт child specificity `parent+1`; для `parent=None`
+child получает `0` (первое явное значение). Остальные ранги наследуют
+specificity родителя. История и прогресс child сохраняются в entity store;
+Spec не персистится. Caller сохраняет/повторно выводит пространственные
+области при следующих оценках и передаёт возвращённые child-дескрипторы
+в materialize/refine вместе с сигналами. Неполный набор областей не означает
+удаления отсутствующих child; удаление — явный `consumer.tombstone`.
+
+`EvaluationResult.materialize` — typed-сигналы с прежним/новым состоянием,
+Spec и записью terrain registry; отправка в refine принадлежит внешнему
+owner. `TerrainRegistryEntry.morph_hydrology_role` — optional
+`HydrologyCellRole`, сейчас допускается только `LAKE`: N+1 ключ озера
+помечается метаданными, а не сравнением имени ключа. Hydrology materializer
+получает форму для lake role/bed carve; consumer и read-overlay не исполняют
+эффект. Морфинг в море/реку остаётся вне этого контракта.
+
+| Что | Владелец | Статус |
+|---|---|---|
+| состав леса (`ForestSpec` ↔ flora) | [`tz_flora.md`](./tz_flora.md) § ForestComposition (target) | ключ `flora` в wire — unknown key |
+| культура пашни (`FarmlandSpec`) | `crops_registry` в dataModel | ключ `crop` в wire — unknown key |
+| триггер оценки state-change / время | единый LOD/время трек | `elapsed_ticks` параметр |
 
 ### Mountain (engine) — kind / form / sides / range + elevation (утверждено 2026-07-16)
 
@@ -1010,13 +1338,15 @@ Writer: **mountain**. Relief — база.
 При включённых доменах, одна light cell:
 
 ```text
-road > ravine > mountain > forest > plains
+road > ravine > mountain > forest > plains      # builtin-ранги
 ```
+
+**Источник ранга — `TerrainRegistryEntry.merge_rank` (world data, 2026-10-17)**, не домен-писатель: домен — writer, приоритет — у ключа. Builtin-значения выше — canonical defaults реестра; N+1-ключи (степь, болото) получают ранг в своей записи. Ранг читается из разрешённого реестра мира; отсутствующий builtin может использовать запись canonical engine-реестра, отсутствующий N+1-ключ — ошибка контракта без подстановки ранга. Пустая клетка (`system_terrain=None`) не имеет ранга и допускает запись зарегистрированного ключа. При равном ранге внутри landcover — цепочка § Регионы покрытия › Пересечения и приоритет.
 
 | Поле | Merge |
 |---|---|
 | `surface_z` | relief → **mountain поднимает** (формула выше); later writers не понижают гору без своего контракта |
-| `system_terrain` | как таблица приоритета |
+| `system_terrain` | `may_paint_terrain` по `merge_rank` ключа |
 
 (hydro пишет только `hydrology_*`, не затирает terrain; road/ravine **не** красят SEA/LAKE/RIVER.)
 
@@ -1028,7 +1358,7 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 - **Open (blocker):** ~~нет shared MaskDomain materialize~~ — **shipped** (`MaskFootprint` / `run_mask_domain` / Spec→apply) — § **MaskDomain materialize**.  
 - **Mountain plugin:** core ✅ — § **Реализовано vs target**. PassBuilder / topology SoT — [`tz_mountain_architecture.md`](./tz_mountain_architecture.md). Paint follow-ups: ridge noise; kind summit; cap `t`; ущелья / cliff.  
 - ~~**INTERIM Q3-B / Q12 corridor**~~ — closed (FormRaster+SideFill; Range sides).  
-- **Deferred:** forest Spec + flora gate B; farmland `MaskDomainId`; settlement Spec pipeline (сейчас pin disk в contributor); **ravine** / standalone **cliff** builders.  
+- **Deferred:** ~~forest Spec~~ → § Регионы покрытия (план wilderness); flora gate B для autoresolve; ~~farmland `MaskDomainId`~~ — снято, внутри `LANDCOVER`; settlement Spec pipeline (сейчас pin disk в contributor); **ravine** / standalone **cliff** builders.  
 - **Open (2026-07-17):** coarse **relief_objects_z до hydrology** — § Coarse planning ↔ light compose; без этого procedural lakes/rivers на flat z.  
 - ~~Debt: landcover `tundra` as terrain~~ — **fixed** (cold = climate_zone_id; landcover forest|plains).  
 - **Stub:** flora type refs / FloraGenerator — [`tz_flora.md`](./tz_flora.md).  
@@ -1043,9 +1373,8 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | `MaskDomainId` | [`maskDomainId.py`](../backend/app/dataModel/masks/enums/maskDomainId.py) — engine enum доменов |
 | `LightContributorId` | тот же модуль — `contributor.name` |
 | `COMPOSE_CONTRIBUTOR_ORDER` | **единственный** SoT порядка compose |
-| `TERRAIN_MERGE_RANK_HIGH_TO_LOW` | порядок доменов, пишущих `system_terrain` |
-| `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (forests+plains → landcover) |
-| `WorldTerrainMasks.merge_rank_order()` | rank → ключи `system_terrain` из policy |
+| `TerrainRegistryEntry.merge_rank` | единственный SoT ранга terrain-ключа из реестра мира (§ Merge `system_terrain`) |
+| `MASK_DOMAIN_CONTRIBUTOR` | domain → contributor id (`LANDCOVER` → landcover; единственный домен покрытия после 10b) |
 | Корни JSON | typed `default_*` / `declared_*` — не free-form domain map |
 
 **Application**
@@ -1061,12 +1390,12 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 |---|---|---|
 | 1 Base | `relief` | — |
 | 2 Context | `climate` | — |
-| 3 Landcover | `landcover` | `FORESTS`, `PLAINS` |
+| 3 Landcover | `landcover` | `LANDCOVER` (forest / plains / farmland — § Регионы покрытия) |
 | 4 Structural | `mountain` → `ravine` | `MOUNTAINS`, `RAVINES` |
 | 5 Hydro | `hydro` | `HYDROLOGY` |
 | ~~5b Ribbon~~ | ~~`open_land` → `shore`~~ | **removed** (R36u-T-8); grade → detailed **R36v** |
 | 6 Culture | `settlement` → `road` | `SETTLEMENT`, `ROADS` (~~`road_shoulder`~~ **removed**; T-10 later on detailed) |
-| (later) Land-use | `farmland` | `FARMLAND` (новый MaskDomainId) |
+| ~~(later) Land-use~~ | ~~`farmland`~~ | **снято 2026-10-17**: farmland — `FarmlandSpec` внутри `LANDCOVER`, отдельного `FARMLAND` нет |
 | (later) Flora | type refs | — flora TZ |
 
 **Shared paint / materialize**
@@ -1105,8 +1434,8 @@ Wire/POJO SoT — § **Связь с dataModel** выше. Compose **не** ду
 ```text
 LightGridCompose
   side: int
-  tile_m: int
-  light_m: int
+  tile_macro: int
+  light_span: int
   cells: sparse map (gx, gy, tx, ty) → LightGridCell
 
   ensure(gx, gy, tx, ty) → LightGridCell
@@ -1126,7 +1455,7 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 
 1. `relief` — `surface_z` (phase Base)
 2. `climate` — `climate_zone_id` (**обязательно до landcover/flora**; phase Context — не MaskDomain)
-3. `landcover` — plains/forest по climate **если** `terrain_masks.default_forests|plains.enabled` (не biome-as-terrain)
+3. `landcover` — покрытие через общий scorer **если** `terrain_masks.default_landcover.enabled` (не biome-as-terrain)
 4. `flora` — type refs через FloraGenerator — **stub** / later ([`tz_flora`](./tz_flora.md))
 5. `mountain` — declare + autoresolve; target: `system_terrain` **и** `surface_z` (§ Mountain elevation); **сейчас stub**
 6. `ravine` — **если** `default_ravines.enabled`
@@ -1150,6 +1479,17 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 | climate / pole accessors | для `climate` / `landcover` |
 
 ### Coarse planning ↔ light compose — порядок z (утверждено 2026-07-17)
+
+**Уточнение target от 2026-10-22:** [terrain/relief planning](./tz_terrain_generation.md#terrain-relief-hydrology-planning)
+один раз выбирает горы, овраги и геометрию дна водоёмов до гидрологии.
+Речные маршруты могут потребовать второго relief-вызова. L0/L2 получают
+проекции этих решений; MountainContributor/MountainMaskMaterializer.collect
+и RavineContributor при cutover перестают независимо выбирать объекты
+по запрошенным tiles. Template pick выполняется в planning из frozen
+inputs, а не повторно в light compose. Гидрология читает готовые высоты.
+Описанные ниже повторные coarse/light вычисления относятся к legacy
+baseline и не разрешают второй выбор объектов в target. Точные contracts
+и activation ledger фиксируются PC-0; этот текст не отмечает cutover done.
 
 **Проблема smoke:** light `mountain` красит `system_terrain=mountain` без подъёма z; hydrology на coarse видит почти плоский heightmap → peaks/basins/истоки пустые → нет procedural озёр/рек. Море живёт (edge flood), не через prominence.
 
@@ -1175,7 +1515,7 @@ relief → climate → landcover → [flora] → mountain → ravine → hydro �
 | **R3** | Coarse **relief_objects_z до** `HydrologyGeneratorService.apply` — иначе detect peaks/basins/sources слепой |
 | **R4** | Light mountain/ravine: paint + дожим z на light (или sample coarse); **не** единственный writer z для hydro planning |
 | **R5** | Hydro water carve ≠ mountain elevation: hydro углубляет под воду; mountain **поднимает** под маской |
-| **R5b** | Light hydro: paint SEA/LAKE/RIVER **и** bathymetry / bed `surface_z` (≤ `z_sea` для open water). Mask без понижения z на open water — **запрещён**. Relief light читает `coarse_relief_z` (pre-1.4); water z пишет **hydro**, не повторный full mountain rise. SoT форм дна океана: [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § **Ocean bathymetry / Depression forms** (U15 shelf + `DepressionSpec`; domain `default_seas`, не `terrain_masks`) |
+| **R5b** | **Legacy implementation до HY-12/HY-10:** light hydro paint переносит bathymetry/bed `surface_z`, interim stub сохранён до миграции. **Целевой контракт HY-12:** z пишет relief `basinZ`/`riverBedZ`; hydro читает готовое дно и per-body `z_water_level`, fill строго `z < level`. Light переносит физические факты, не выполняет второй carve. Полный L0 band-профиль — отдельный HY-10. SoT: [гидрология](./tz_terrain_hydrology.md#ocean-bathymetry--depression-forms-hy-12). |
 | **R6** | detailed_bake: абсолютные prominence м (`MIN_*_PROMINENCE_M`) ок; **light/coarse:** отдельные пороги (relative / scale к span z) — не те же 25/50 на z∈−1…7 |
 
 **Light hydro — норматив порядка (R5b):**
@@ -1198,7 +1538,7 @@ relief → climate → landcover → [flora] → mountain → ravine → hydro �
 | Full ocean DepressionForm (Ellipse/Corridor + Kind) | ⬜ — см. [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Interim stub → target mapping |
 | HY-BATH-1 | **partial** (stub floor; forms open) |
 
-**Имплементация (порядок слоёв):**
+**Legacy-имплементация до HY-12 (порядок слоёв):**
 
 1. Coarse mountain/ravine z (declare + autoresolve footprint → rise/carve, clamp `z_min..z_max`)
 2. Hydrology на этом heightmap (+ light-scale detect thresholds) + ocean bathymetry (coarse carve / U15)
@@ -1385,7 +1725,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Событие | Ожидание |
 |---|---|
-| `light_compose_start` / `done` | scope tiles, side, light_m |
+| `light_compose_start` / `done` | scope tiles, side, light_span |
 | per-contributor summary | non-default cell counts (hydro roles hist, pins, z hist) |
 | `world_map_tile_write` | hist из **wire после compose**, не macro-only |
 | `world_map_bake_all_flat` | сигнал: compose/hydro не уложили маску |
@@ -1496,3 +1836,92 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | 2026-07-19 | § Координаты: mosaic frame prefer `world_bounds`; MLB-12; sparse bake ≠ форма мира |
 | 2026-07-19 | Compose tile set: light = location tiles, full = весь bounds (контракт мастера); без wilderness bake stage |
 | 2026-07-15 | MLB-8 unit path ✅ via WP-PERF-22 impl |
+
+
+## PC-0 — потребление frozen surface plans (2026-10-23)
+
+**PC-8: DESIGN_ACCEPTED; IMPLEMENTED / VERIFIED, ожидается приёмка мастером (2026-10-23).**
+Норматив [PC-D1 — owning classes/methods/contracts](./tz_terrain_generation.md#pc8-responsibility-boundaries)
+разделяет routes/final planning providers и domain owners: water bodies,
+coarse rivers, fine rivers, authored paint и согласованное final state.
+Provider получает envelopes/checks refs и вызывает assembly API; алгоритмы
+и mutable intermediate buffers остаются внутри domain owners.
+DeclaredWaterPaintProjector.project возвращает готовую immutable geometry;
+HydroContributor выполняет fine→light raster/tile paint без повторного
+разрешения anchors/width/route. HydrologyFactsAssembler сохраняется единым:
+проверки coverage/bed/receiver и сборка final facts делегируют правила ролей
+existing river_bed_roles, не вводят новые решения о воде.
+Серьёзность PlanDiagnostic задаёт producer фактического domain decision;
+HIT/MISS/reporting сохраняют готовый disposition. Внешняя классификация
+по code и HydrologyDiagnosticsAdapter не входят в целевую архитектуру.
+Приёмка PC-8 требует соответствия этой границе; consumer cutover PC-10,
+production registration PC-9A и phase/output contracts остаются прежними.
+
+
+**PC-8 hydrology providers технически проверены, ожидается приёмка мастером (2026-10-23).**
+R4 разделил planning-обвязку и domain owners через constructor DI;
+R5 подтвердил карту восьми классов, сохранение geometry/UID/ref/diagnostics
+на HIT/clear/codec/fresh composition и при смене числа workers.
+Providers118/contracts69/cache20/regression59 OK, pyright valid0/negative42 exact.
+Extended hydrology241/242 — прежний list/tuple failure в test_hydrology_hy12_contract.py:103.
+До приёмки мастером PC-8 не DONE, PC-8C не открыт. Текущее состояние реализации: frozen routes-stage
+сохраняет accepted bodies/unions/open-water и coarse/fine river paths;
+final-stage читает actual river relief без повторного route/placement/carve.
+DeclaredWaterPaint переносит исходные fine lake/coastline segments,
+river fine widths и authored intent anchors в прежнем порядке. Missing
+anchors/invalid geometry дают immutable diagnostic без synthetic path.
+Consumer cutover остаётся PC-10; provider registration — PC-9A.
+
+
+**PC-7 provider готов (2026-10-23):** ReliefPlan.light содержит полный
+base field и sparse absolute mountain z/facing/ravine z из одного
+mountain_layout. Coarse и light используют единственный frozen selection;
+light depression detection видит полный generation extent без новых
+wrap-соседей. Отклонённый terrain color не отменяет height effect.
+Actual contributor cutover остаётся PC-10; текущие consumers не включают
+новый provider автоматически. Existing legacy collector сохраняет свой
+порядок до PC-9, frozen provider получает row-major TerrainPlan cells.
+Вторая фаза RiverReliefPlanProvider также готова: получает accepted
+routes, пишет river beds от pre-river surface без нового relief selection;
+receiver исключается из собственного river profile, overlapping targets
+merge min однократно. Coarse/fine materializers потребляют готовые
+post-river heights; routes/final water providers реализуются в PC-8.
+
+### Surface planning/cache — surface slot vocabulary
+
+**Уточнение PC-6S, DESIGN_CLOSED / implementation DONE (2026-10-23):**
+имена surface dependencies задаёт SurfacePlanSlot(StrEnum) в
+dataModel/surfacePlanning/surfacePlanSlot.py. Exact восемь PC members и
+GEO-расширения — [SurfacePlanSlot — словарь surface pipeline](./tz_terrain_generation.md#surfaceplanslot--словарь-surface-pipeline),
+delivery — GEO-1 §6.33/PC-6S перед PC-7. Existing PlanSlot и dependency
+POJO сохраняются. Providers/composition используют member.value для
+PlanSlot, registration ids и logical dependency error paths; generic
+planning/cache не импортируют surface enum. Поля реальных input schemas
+и порядок phase calls не меняются. Enum не сериализуется вместо прежней
+str: canonical bytes/keys/fingerprints и L0/L2 поведение сохраняются.
+Enum реализован с восемью PC members; providers/domain fixtures переведены.
+Проверки providers55/contracts59, pyright valid0/negative25 и actual
+до/после fingerprints/encoded envelopes подтверждают совместимость.
+
+Полный контракт — [норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0),
+PC-B…PC-F. LightGridBakeContext получает coherent SurfacePlanBundle.
+ReliefContributor читает ReliefPlan.light.base_surface_z; MountainContributor
+читает mountain_layout и готовые light mountain z/facing; RavineContributor
+читает готовые light ravine cells/z. Полный generation extent задаёт
+planning input, ctx.tiles только обрезает delivery. Terrain color проходит
+existing merge helper с frozen terrain_merge; неуспешный color paint не
+запускает selection и не отменяет готовое height effect.
+
+ClimateContributor использует ClimateBasePlan sampler без live World.
+HydroContributor получает final hydrology и DeclaredWaterPaint, сохраняет
+порядок corridors → lake/coastline → coarse open water. Fine→light raster
+и tile paint остаются materialization, выбор объектов/anchors/geometry —
+planning. LightCellRef переносится единственным классом в spatial/grid/
+coordinateTypes.py; old masks/footprint re-exports symbol.
+
+PC-10 переводит названные consumers атомарно; PC-11 использует те же refs
+и persisted parent light. Wire/manifest storage, landcover state writer,
+city/location caches и pack decode cache сохраняют свой scope. Приёмка:
+full/partial equality на пересечении tiles, HIT/MISS/restart equality,
+one mountain selection и absence of double carve. Изменение legacy
+light selection/height-color coupling принимается отдельным baseline delta.

@@ -16,7 +16,7 @@ from app.dataModel.worldPack import (
     resolve_world_map_cells_per_tile,
     settlement_structure_status_for,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.wire.hydrologyMaskWire import WorldMapHydrologyRole
 
 
 class TestWorldMapCellsPerTile(unittest.TestCase):
@@ -51,6 +51,15 @@ class TestWorldMapHydrologyRoleMerge(unittest.TestCase):
 
 
 class TestWorldPackWire(unittest.TestCase):
+
+    def test_building_shell_legacy_has_no_interior_claim(self):
+        from app.dataModel.worldPack.wire.settlementStructureWire import BuildingShellWire
+
+        shell = BuildingShellWire.model_validate({
+            "location_uid": "house", "shell_cells": [{"x": 1, "y": 2, "z": 3}],
+        })
+        self.assertIsNone(shell.interior_transitions)
+        self.assertEqual(BuildingShellWire.model_validate_json(shell.model_dump_json()), shell)
 
     def test_manifest_roundtrip_json(self):
         manifest = WorldPackManifest(

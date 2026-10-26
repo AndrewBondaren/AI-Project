@@ -30,12 +30,13 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
 from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
     open_land_terrain_keys,
 )
+from app.application.worldData.generators.terrain.relief.validate import gradeCellRays
 from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
     leftover_plus_halo,
     validate_grade_cell_empty_rays,
 )
 from app.application.worldData.pack.refine.gradeRimRays import pack_slots_for_persist
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import (
@@ -89,10 +90,10 @@ def _leftover_from_fronts(
 
 
 def _discover_open_land(z: dict[tuple[int, int], int]) -> tuple[FrontGeometry, ...]:
-    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    plains = WorldTerrainMasks.canonical_defaults().default_landcover.fallback_terrain
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
-    surface = MeterGradeSurface(
+    surface = FineGradeSurface(
         surface_z=z,
         surface_terrain={xy: plains for xy in z},
         hydrology=None,
@@ -122,7 +123,7 @@ def _assert_pack_closes_interior(
         present = {ray.facing for ray in slots if ray.cell == cell}
         test.assertEqual(present, set(Facing), cell)
     with patch(
-        "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+        gradeCellRays.__name__ + ".relief_error",
     ) as err:
         n_empty = validate_grade_cell_empty_rays(
             halo, slots, z_height_map=z,
@@ -174,7 +175,7 @@ class TestLockedOneByOneHole(unittest.TestCase):
         slots, halo = pack_slots_for_persist(leftover, z)
         self.assertEqual(halo, ())
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, slots, z_height_map=z,
@@ -231,7 +232,7 @@ class TestLockedCouple(unittest.TestCase):
     def test_same_z_without_couple_is_empty(self) -> None:
         z = {(0, 0): 5, (1, 0): 5}
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             validate_grade_cell_empty_rays(((0, 0), (1, 0)), (), z_height_map=z)
         self.assertEqual(err.call_count, 2)
@@ -242,7 +243,7 @@ class TestLockedCouple(unittest.TestCase):
         halo = ((0, 0), (1, 0))
         rays = couple_rim_rays(halo, leftover, z)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            gradeCellRays.__name__ + ".relief_error",
         ) as err:
             n_empty = validate_grade_cell_empty_rays(
                 halo, rays, z_height_map=z,

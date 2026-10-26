@@ -7,7 +7,7 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-from app.dataModel.annotationPolicy import DefaultEnumOnWire, DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing
 from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicyRule
 from app.dataModel.terrain.relief.enums import CanalObstacleEntity, ReliefPickMode
 
@@ -17,8 +17,8 @@ class ReliefContextPickPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    mode: DefaultEnumOnWire[ReliefPickMode] = ReliefPickMode.RANDOM
-    default_template_uid: DefaultOnWire[str | None] = None
+    mode: DefaultEnumWhenMissing[ReliefPickMode] = ReliefPickMode.RANDOM
+    default_template_uid: DefaultWhenMissing[str | None] = None
 
     @model_validator(mode="after")
     def _fixed_needs_uid(self) -> ReliefContextPickPolicy:
@@ -33,22 +33,22 @@ class WorldReliefPickPolicy(BaseModel):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-RELIEF-PICK"
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    mountain: DefaultOnWire[ReliefContextPickPolicy] = Field(
+    mountain: DefaultWhenMissing[ReliefContextPickPolicy] = Field(
         default_factory=ReliefContextPickPolicy,
     )
-    open_land: DefaultOnWire[ReliefContextPickPolicy] = Field(
+    open_land: DefaultWhenMissing[ReliefContextPickPolicy] = Field(
         default_factory=ReliefContextPickPolicy,
     )
-    shore: DefaultOnWire[ReliefContextPickPolicy] = Field(
+    shore: DefaultWhenMissing[ReliefContextPickPolicy] = Field(
         default_factory=ReliefContextPickPolicy,
     )
-    road_shoulder: DefaultOnWire[ReliefContextPickPolicy] = Field(
+    road_shoulder: DefaultWhenMissing[ReliefContextPickPolicy] = Field(
         default_factory=ReliefContextPickPolicy,
     )
-    ravine: DefaultOnWire[ReliefContextPickPolicy] = Field(
+    ravine: DefaultWhenMissing[ReliefContextPickPolicy] = Field(
         default_factory=ReliefContextPickPolicy,
     )
-    canal_obstacle_policy: DefaultOnWire[list[CanalObstaclePolicyRule]] = Field(
+    canal_obstacle_policy: DefaultWhenMissing[list[CanalObstaclePolicyRule]] = Field(
         default_factory=list,
     )
 
@@ -90,11 +90,11 @@ class ObjectReliefPickPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    mountain: DefaultOnWire[ReliefContextPickPolicy | None] = None
-    open_land: DefaultOnWire[ReliefContextPickPolicy | None] = None
-    shore: DefaultOnWire[ReliefContextPickPolicy | None] = None
-    road_shoulder: DefaultOnWire[ReliefContextPickPolicy | None] = None
-    ravine: DefaultOnWire[ReliefContextPickPolicy | None] = None
+    mountain: DefaultWhenMissing[ReliefContextPickPolicy | None] = None
+    open_land: DefaultWhenMissing[ReliefContextPickPolicy | None] = None
+    shore: DefaultWhenMissing[ReliefContextPickPolicy | None] = None
+    road_shoulder: DefaultWhenMissing[ReliefContextPickPolicy | None] = None
+    ravine: DefaultWhenMissing[ReliefContextPickPolicy | None] = None
 
     def for_context(self, context: str) -> ReliefContextPickPolicy | None:
         return getattr(self, context)

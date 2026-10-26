@@ -14,6 +14,7 @@ from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,20 @@ def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[Re
     return checks
 
 
+def _landcover_checks(normalized: dict[str, Any]) -> list[RefCheck]:
+    policy = normalized.get("terrain_masks", {}).get("default_landcover", {})
+    values = []
+    if "fallback_terrain" in policy:
+        values.append((("terrain_masks", "default_landcover", "fallback_terrain"), policy["fallback_terrain"]))
+    for key, override in policy.get("terrain_policies", {}).items():
+        if "system_terrain" in override:
+            values.append((("terrain_masks", "default_landcover", "terrain_policies", key, "system_terrain"),
+                           override["system_terrain"]))
+    return [RefCheck(ref_kind=RefKind.TERRAIN, schema_id=WorldTerrainMasks.SCHEMA_ID,
+        path=path, value_getter=lambda data, target=value: target,
+        registry_present_key="terrain_registry") for path, value in values]
+
+
 def _nested_dict(root: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any] | None:
     cur: Any = root
     for key in path:
@@ -141,6 +156,15 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
     checks.extend(_shore_ref_checks(hydrology, ("default_shore",)))
     for path in _CATEGORY_SHORE_PATHS:
         checks.extend(_shore_ref_checks(hydrology, path))
+    for category in ("declared_basins", "declared_coastlines", "declared_lakes"):
+        for index, entry in enumerate(hydrology.get(category, [])):
+            checks.append(RefCheck(
+                ref_kind=RefKind.LIQUID,
+                schema_id=WorldHydrology.SCHEMA_ID,
+                path=("hydrology", category, index, "liquid"),
+                value_getter=lambda _data, row=entry: row.get("liquid"),
+                registry_present_key="material_registry",
+            ))
     return checks
 
 
@@ -175,6 +199,42 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Field
                     ),
                     schema_id=WorldHydrology.SCHEMA_ID,
                     code="SHORE_CLASS_UNKNOWN",
+                ),
+            )
+    return errors
+
+
+_DECLARED_WATER_COLLECTIONS = ("declared_basins", "declared_coastlines", "declared_lakes")
+
+
+def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -> list[FieldPathError]:
+    """``location_uid`` must be unique across declared water sources; runtime merges it."""
+    if partial and "hydrology" not in normalized:
+        return []
+    hydrology = normalized.get("hydrology")
+    if not isinstance(hydrology, dict):
+        return []
+
+    seen: dict[str, list[tuple[str, int]]] = {}
+    for category in _DECLARED_WATER_COLLECTIONS:
+        for index, entry in enumerate(hydrology.get(category, [])):
+            if not isinstance(entry, dict):
+                continue
+            uid = entry.get("location_uid")
+            if isinstance(uid, str) and uid:
+                seen.setdefault(uid, []).append((category, index))
+    errors: list[FieldPathError] = []
+    for uid, refs in seen.items():
+        if len(refs) < 2:
+            continue
+        declared_at = ", ".join(f"{category}[{index}]" for category, index in refs)
+        for category, index in refs:
+            errors.append(
+                FieldPathError(
+                    path=("hydrology", category, index),
+                    message=f"duplicate declared water location_uid {uid!r}: declared at {declared_at}",
+                    schema_id=WorldHydrology.SCHEMA_ID,
+                    code="WATER_IDENTITY_DUPLICATE",
                 ),
             )
     return errors
@@ -218,6 +278,7 @@ def validate_ref_w(
         *_climate_scalar_checks(normalized, partial),
         *_hydrology_checks(normalized, partial),
         *_material_tier_checks(normalized, partial),
+        *_landcover_checks(normalized),
     ]
 
     errors: list[FieldPathError] = []
@@ -239,4 +300,5 @@ def validate_ref_w(
         if issue is not None:
             errors.append(issue)
     errors.extend(_shore_class_errors(normalized, partial))
+    errors.extend(_declared_water_identity_errors(normalized, partial))
     return errors

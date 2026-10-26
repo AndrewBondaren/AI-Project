@@ -1,4 +1,4 @@
-"""Hill consumers — plains and forest independently.
+"""Hill consumers — each registered terrain independently.
 
 Helper is ``hillRaster.raster_hill``. This module places origins
 (``min_spacing``) and applies ``Δz``. Does not load world JSON.
@@ -15,6 +15,7 @@ from app.application.worldData.generators.terrain.hills.hillRaster import (
 )
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
 
 def place_hills(
@@ -22,17 +23,14 @@ def place_hills(
     surface_terrain: Mapping[Coord, str],
     l0_hydro: Mapping[Coord, MapCellHydrology] | Set[Coord],
     *,
-    plains_key: str,
-    forest_key: str,
-    plains_hills: HillPolicy,
-    forest_hills: HillPolicy,
+    terrain_registry: WorldTerrainRegistry,
     seed: int,
     z_min: int,
     z_max: int,
 ) -> None:
     """Mutate ``surface_z`` in place. ``system_terrain`` is not written.
 
-    Host = current L2 meters with that consumer's nearest-carry terrain
+    Host = current L2 cells with that consumer's region-painted terrain
     and no L0 hydro role. Skip the whole hill if the footprint does not fit.
     ``z_band`` is not applied here.
     """
@@ -44,26 +42,21 @@ def place_hills(
     else:
         hydro_xy = set(l0_hydro.keys())
     base_z = dict(surface_z)
-    _place_consumer(
-        surface_z,
-        base_z,
-        _host_for(surface_z, surface_terrain, hydro_xy, plains_key),
-        plains_hills,
-        seed=seed,
-        salt=_salt(plains_key),
-        z_min=z_min,
-        z_max=z_max,
-    )
-    _place_consumer(
-        surface_z,
-        base_z,
-        _host_for(surface_z, surface_terrain, hydro_xy, forest_key),
-        forest_hills,
-        seed=seed,
-        salt=_salt(forest_key),
-        z_min=z_min,
-        z_max=z_max,
-    )
+    for key in sorted(set(surface_terrain.values())):
+        entry = terrain_registry.entry_for(key)
+        if entry is None or entry.hills is None:
+            continue
+        _place_consumer(
+            surface_z,
+            base_z,
+            _host_for(surface_z, surface_terrain, hydro_xy, key),
+            entry.hills,
+            seed=seed,
+            salt=_salt(key),
+            z_min=z_min,
+            z_max=z_max,
+        )
+
 
 
 def _host_for(

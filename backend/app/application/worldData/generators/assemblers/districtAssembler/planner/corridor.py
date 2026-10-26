@@ -19,7 +19,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
 )
 from app.application.worldData.generators.road.widthResolver import resolve_width
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
 
 
 def thicken_axis_line(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api.routes.locations import _http_from_outdoor
 from app.application.worldData.pack.io.packBlobWire import (
@@ -27,6 +27,11 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
 from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
     SettlementOutdoorOrchestrator,
 )
+from app.application.worldData.settlementOutdoor import settlementOutdoorPackingJob
+from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import SettlementOutdoorPackingJob
+from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.templateLibrary.templateContracts import WorldTemplateSnapshot
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     packing_queue,
     should_skip_materialize,
@@ -42,15 +47,15 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
+from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.worldPack.settlementStructureWire import (
+from app.dataModel.worldPack.wire.settlementStructureWire import (
     AreaSlotWire,
     AreaStructureWire,
     DistrictStructureWire,
     SettlementStructureWire,
 )
-from app.dataModel.worldPack.worldPackManifest import SettlementStructureEntry
+from app.dataModel.worldPack.meta.worldPackManifest import SettlementStructureEntry
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from pathlib import Path
@@ -89,7 +94,9 @@ def _district_row(
         system_location_type=district_type_entry().system_type,
         created_at="2026-01-01T00:00:00",
         parent_location_uid="set-1",
-        district_topology=freeze.model_dump(mode="json"),
+        location_payload={
+            'district_topology': freeze.model_dump(mode="json"),
+        },
     )
 
 
@@ -107,7 +114,9 @@ def _settlement() -> NamedLocation:
         display_name="Hold",
         system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         system_location_subtype="city",
-        system_city_size="medium",
+        location_payload={
+            'system_city_size': "medium",
+        },
         created_at="2026-01-01T00:00:00",
         map_x=2,
         map_y=2,
@@ -333,6 +342,42 @@ class C24FrameTests(TestCase):
 
 class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
 
+    async def test_generation_error_in_queue_maps_to_422_before_publish(self):
+        world = World(world_uid="w1", name="t", created_at="2026-09-29")
+        facade = MagicMock(get_footprint_terrain=AsyncMock(return_value=[]))
+        writer, sql = MagicMock(), MagicMock()
+        failure = GenerationError("Plot 'plot-1': structure 'structure-1' not found")
+        generator = MagicMock()
+        generator.generate_layout.side_effect = failure
+        snapshot = WorldTemplateSnapshot(
+            world_uid="w1", plots={}, buildings={}, structures={},
+        )
+        job = SettlementOutdoorPackingJob(
+            generator, sql, MagicMock(),
+            MagicMock(load=AsyncMock(return_value=snapshot)),
+            MagicMock(get_by_world=AsyncMock(return_value=[])),
+            MagicMock(get_by_world=AsyncMock(return_value=[])),
+        )
+        module = settlementOutdoorPackingJob.__name__
+        slot = MagicMock()
+        clock = MagicMock()
+        clock.lap.return_value = 0.0
+        with (
+            patch(module + ".territory_volume_for_location", return_value=SimpleNamespace(**_volume())),
+            patch(module + ".load_topology_slots", return_value=[slot]),
+            patch(module + ".city_graph_for_settlement", return_value=([MagicMock()], [])),
+            patch(module + ".slot_for_census_row", return_value=slot),
+            self.assertRaises(SettlementOutdoorError) as ctx,
+        ):
+            await job.run_queue(world, _settlement(), facade, writer, _census(), _census()[:1], clock)
+        self.assertIs(ctx.exception.__cause__, failure)
+        http = _http_from_outdoor(ctx.exception)
+        self.assertEqual(http.status_code, 422)
+        self.assertEqual(http.detail, str(failure))
+        writer.encode_settlement_structure_tmp.assert_not_called()
+        writer.publish_settlement_structure.assert_not_called()
+        sql.persist.assert_not_called()
+
     def _orch(self, *, children: list[NamedLocation], paths: WorldPackPaths):
         world = World(world_uid="w1", name="t", created_at="2026-01-01T00:00:00")
         settlement = _settlement()
@@ -352,8 +397,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
             writer_for=lambda _world: writer,
             facade_for=lambda _uid: facade,
             pack_context_for=MagicMock(),
-            library=MagicMock(),
-            structure_library=MagicMock(list_all=AsyncMock(return_value=[])),
+            snapshot_loader=MagicMock(),
             node_repo=MagicMock(),
             edge_repo=MagicMock(),
         ), settlement
@@ -362,7 +406,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
         with TemporaryDirectory() as tmp:
             paths = WorldPackPaths(Path(tmp), "w1")
             paths.ensure_dirs()
-            from app.dataModel.worldPack.locationsIndexWire import (
+            from app.dataModel.worldPack.wire.locationsIndexWire import (
                 LocationsIndexPin,
                 LocationsIndexWire,
             )
@@ -380,7 +424,7 @@ class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
         with TemporaryDirectory() as tmp:
             paths = WorldPackPaths(Path(tmp), "w1")
             paths.ensure_dirs()
-            from app.dataModel.worldPack.locationsIndexWire import (
+            from app.dataModel.worldPack.wire.locationsIndexWire import (
                 LocationsIndexPin,
                 LocationsIndexWire,
             )

@@ -30,10 +30,7 @@ class NamedLocation:
     owner_uid:                  str | None = None
     system_climate_zone:        str | None = None
     state_uid:                  str | None = None
-    system_city_size:           str | None = None
     system_economic_tier:       str | None = None
-    typical_districts:          list | None = json_nullable_col()
-    system_settlement_specializations: list | None = json_nullable_col()
     is_public:                  bool = bool_col(default=False)
     is_forbidden:               bool = bool_col(default=False)
     is_selectable:              bool = bool_col(default=True)
@@ -42,16 +39,10 @@ class NamedLocation:
     map_z:                      int | None = None
     is_mobile:                  bool = bool_col(default=False)
     system_template_uid:        str | None = None
+    system_structure_template_uid: str | None = None
     parent_wall_material:       str | None = None
     parent_floor_material:      str | None = None
     is_outdoor:                 bool | None = None
     is_sheltered:               bool = bool_col(default=False)
     is_transit:                 bool = bool_col(default=False)
-    architectural_style:        str | None = None
-    dominant_material:          str | None = None
-    settlement_density:         str | None = None
-    frontage_type_order:        list | None = json_nullable_col()
-    plot_counts:                dict | None = json_nullable_col()
-    plot_priority:              dict | None = json_nullable_col()
-    perimeter_barrier:          dict | None = json_nullable_col()
-    district_topology:          dict | None = json_nullable_col()
+    location_payload:           dict | None = json_nullable_col()

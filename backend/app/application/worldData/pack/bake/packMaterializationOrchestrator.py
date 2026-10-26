@@ -5,48 +5,53 @@ L0 only (Job boundaries). Entry/L2 — ``EntryRefineOrchestrator`` /
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 
 import logging
 import time
 from collections.abc import Callable
 
-from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
-from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    require_surface_terrain_context,
-)
-from app.application.worldData.materializationContext import (
+from app.application.jsonValidation.resolve import ResolveContext
+from app.application.planning.service.planningService import PlanWaitControl
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler, to_legacy_context
+from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture, mountain_template_inputs
+from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+
+from app.application.worldData.materialize.persistResult import PersistResult
+from app.application.worldData.materialize.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-from app.application.worldData.loadReliefTemplatesForWorld import (
+from app.application.templateLibrary.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
-from app.application.worldData.persistReliefGrades import persist_relief_grades
+from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
-from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
-from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.entry.entryRefineOrchestrator import EntryRefineOrchestrator
+from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.parallelPolicy import (
+from app.application.worldData.materialize.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )
-from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-from app.dataModel.worldPack.packBakeMode import PackBakeMode
-from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.application.worldData.worldService import WorldService
+from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
+from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
+from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.db.database import Database
+from app.db.repositories.iWorldRepository import IWorldRepository
+from app.db.repositories.iRegionStateRepository import IRegionStateRepository
+from app.application.worldData.regions.regionStateSnapshot import load_region_state_snapshot
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
@@ -69,43 +74,48 @@ class PackMaterializationOrchestrator:
         fine_terrain: FineTerrainRefineOrchestrator | None = None,
         entry: EntryRefineOrchestrator | None = None,
         job_repo: IChunkRefineJobRepository | None = None,
-        world_service: WorldService | None = None,
+        world_repository: IWorldRepository | None = None,
+        db: Database | None = None,
         bake_defaults: PackBakeDefaults | None = None,
         read_context: PackReadContext | None = None,
         read_context_for: Callable[[str], PackReadContext] | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         tile_planner: PackTilePlanner | None = None,
-        relief_library: ReliefTemplateLibraryService | None = None,
+        relief_loader: TemplateSnapshotLoader | None = None,
         relief_grade_repo: IReliefGradeRepository | None = None,
+        region_state_repo: IRegionStateRepository | None = None,
+        planning: SurfacePlanningAssembler | None = None,
+        capture: SurfacePlanningCapture | None = None,
+        publication_guard: SourcePublicationGuard | None = None,
     ) -> None:
+        self._planning, self._capture, self._publication_guard = planning, capture, publication_guard
         self._terrain = terrain
-        self._world_map = world_map or WorldMapBakeOrchestrator()
+        self._world_map = world_map or WorldMapBakeOrchestrator(planning=planning, capture=capture)
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
-        self._world_service = world_service
+        if world_repository is not None and db is None:
+            raise ValueError("pack finalization requires caller database")
+        self._world_repository = world_repository
+        self._db = db
         self._read_context = read_context
         self._read_context_for = read_context_for
-        self._relief_library = relief_library
+        self._relief_loader = relief_loader
         self._relief_grade_repo = relief_grade_repo
+        self._region_state_repo = region_state_repo
         if entry is not None:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
         else:
-            self._climate = climate_bake or ClimatePackBakeOrchestrator(
-                read_context=read_context,
-                bake_defaults=self._defaults,
-            )
-            fine = fine_terrain or FineTerrainRefineOrchestrator(
+            self._entry, self._climate = _default_entry_stack(
                 terrain,
-                relief_library=relief_library,
-                relief_grade_repo=relief_grade_repo,
-            )
-            self._entry = EntryRefineOrchestrator(
-                fine,
+                fine_terrain=fine_terrain,
                 job_repo=job_repo,
-                bake_defaults=self._defaults,
-                climate_bake=self._climate,
                 read_context=read_context,
+                bake_defaults=self._defaults,
+                climate_bake=climate_bake,
+                relief_loader=relief_loader,
+                relief_grade_repo=relief_grade_repo,
+                region_state_repo=region_state_repo,
             )
 
     @property
@@ -113,8 +123,8 @@ class PackMaterializationOrchestrator:
         return self._terrain
 
     @property
-    def relief_library(self) -> ReliefTemplateLibraryService | None:
-        return self._relief_library
+    def relief_loader(self) -> TemplateSnapshotLoader | None:
+        return self._relief_loader
 
     @property
     def relief_grade_repo(self) -> IReliefGradeRepository | None:
@@ -139,7 +149,8 @@ class PackMaterializationOrchestrator:
         max_tiles: int | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
     ) -> MaterializationJobReport:
@@ -154,7 +165,7 @@ class PackMaterializationOrchestrator:
                 max_tiles=max_tiles,
                 nodes=nodes,
                 edges=edges,
-                hydrology_generator=hydrology_generator,
+                wait=wait, resolve_ctx=resolve_ctx,
                 anchor_x=anchor_x,
                 anchor_y=anchor_y,
             )
@@ -169,7 +180,8 @@ class PackMaterializationOrchestrator:
         *,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
     ) -> MaterializationJobReport:
         """full_bake — same L0 pipeline, all macro-tiles in world_bounds / resolved AABB."""
         with generation_world_log(world_uid, mode="full"):
@@ -183,7 +195,7 @@ class PackMaterializationOrchestrator:
                 max_tiles=None,
                 nodes=nodes,
                 edges=edges,
-                hydrology_generator=hydrology_generator,
+                wait=wait, resolve_ctx=resolve_ctx,
             )
 
     async def _materialize_l0_pack(
@@ -198,14 +210,26 @@ class PackMaterializationOrchestrator:
         max_tiles: int | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
+        wait: PlanWaitControl,
+        resolve_ctx: ResolveContext | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
     ) -> MaterializationJobReport:
-        surface_ctx = require_surface_terrain_context(
-            world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=hydrology_generator,
-        )
+        if self._planning is None or self._capture is None:
+            raise ValueError("surface planning dependencies required")
+        request_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext()
+        if request_ctx.validate_only:
+            raise ValueError("validation cannot materialize a pack")
+        relief_templates = await _load_relief_templates(self._relief_loader, world)
+        templates = mountain_template_inputs(relief_templates)
+        captured = self._capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+            mountain_templates=templates, resolve_ctx=request_ctx)
+        prepared = SurfacePlanningEntry(self._planning, self._capture).prepare_captured(
+            captured, world=world, wait=wait, resolve_ctx=request_ctx)
+        if prepared is None:
+            raise ValueError("surface terrain context unavailable")
+        surface_bundle, working = prepared
+        surface_ctx = to_legacy_context(surface_bundle, working=working)
         plan = self._planner.plan(
             world, locations, surface_ctx, scope=scope, max_tiles=max_tiles,
         )
@@ -223,60 +247,48 @@ class PackMaterializationOrchestrator:
         drain = self._defaults.background_drain_per_request
         if self._entry.has_job_repo and drain > 0:
             await self._entry.drain_persisted(
-                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                world_uid, world, locations, writer, mat_ctx, surface_bundle,
                 max_jobs=drain,
+                working=working,
             )
 
         climate_result: PersistResult | None = None
         climate_coarse_samples = 0
         climate_fine_tiles = 0
         climate_result, climate_coarse_samples = await self._climate.bake_coarse(
-            world, surface_ctx, writer, mat_ctx, locations=locations,
+            world, surface_bundle, writer, mat_ctx, locations=locations,
+            working=working,
         )
 
         locations_index = build_locations_index(locations, world)
         writer.write_locations_index(locations_index)
 
-        relief_templates: dict[str, ReliefTemplate] = {}
-        if self._relief_library is not None:
-            relief_templates = await load_relief_templates_for_world(
-                self._relief_library, world,
-            )
-        else:
-            logging.getLogger(__name__).warning(
-                "relief | pack bake: relief_library unbound world=%s — "
-                "mountain/road_shoulder templates not preloaded",
-                world.world_uid,
-            )
+        region_states = await load_region_state_snapshot(self._region_state_repo, world_uid)
 
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
-            surface_ctx=surface_ctx,
+            surface_ctx=surface_ctx, surface_bundle=surface_bundle,
             locations_index=locations_index,
-            nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
+            nodes=nodes, edges=edges, wait=wait,
             bake_mode=bake_mode,
             relief_templates_by_uid=relief_templates,
+            region_state_snapshot=region_states,
+            working=working,
         )
-        if self._relief_grade_repo is not None:
-            n_grades = await persist_relief_grades(
-                self._relief_grade_repo,
-                world_uid=world.world_uid,
-                instances=self._world_map.last_relief_grade_instances,
-                replace_world=False,
-            )
-            logging.getLogger(__name__).info(
-                "relief | persisted grade instances world=%s n=%d",
-                world.world_uid,
-                n_grades,
-            )
+        await _persist_bake_relief_grades(
+            self._relief_grade_repo,
+            world,
+            self._world_map.last_relief_grade_instances,
+        )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
 
         climate_fine_tiles = await self._climate.bake_fine_for_l0_policy(
-            world, surface_ctx, writer, mat_ctx, tiles, locations,
+            world, surface_bundle, writer, mat_ctx, tiles, locations,
             scope=scope,
             anchor_x=anchor_x,
             anchor_y=anchor_y,
+            working=working,
         )
         if climate_fine_tiles and climate_result is not None:
             climate_result = PersistResult.from_counts(
@@ -286,16 +298,21 @@ class PackMaterializationOrchestrator:
         elif climate_fine_tiles:
             climate_result = PersistResult.from_counts(climate_fine_tiles, climate_fine_tiles)
 
-        if self._world_service is not None:
+        if self._world_repository is not None:
             read_ctx = self._read_context
             if read_ctx is None and self._read_context_for is not None:
                 read_ctx = self._read_context_for(world_uid)
-            await finalize_pack_on_world(
-                self._world_service,
-                world,
-                writer,
-                read_context=read_ctx,
-            )
+            assert self._db is not None
+            if self._publication_guard is None:
+                raise ValueError("source publication guard required")
+            async with self._db.transaction_if_needed():
+                current = await self._publication_guard.require_fresh(captured, mode=ResolutionMode.RUNTIME,
+                    mountain_templates=templates, resolve_ctx=request_ctx)
+                writer.recalc_manifest_counters()
+                await finalize_pack_on_world(
+                    self._world_repository, current, writer,
+                    db_path=self._db.path, read_context=read_ctx,
+                )
 
         workers = resolve_terrain_workers(mat_ctx, world)
         elapsed_s = time.perf_counter() - bake_t0
@@ -321,3 +338,70 @@ class PackMaterializationOrchestrator:
             climate_coarse_samples=climate_coarse_samples or None,
             climate_fine_tiles=climate_fine_tiles or None,
         )
+
+
+async def _load_relief_templates(
+    relief_loader: TemplateSnapshotLoader | None,
+    world: World,
+) -> dict[str, ReliefTemplate]:
+    """Unbound loader → warning + empty set; templates are optional inputs."""
+    if relief_loader is None:
+        logging.getLogger(__name__).warning(
+            "relief | pack bake: relief_loader unbound world=%s — "
+            "mountain/road_shoulder templates not preloaded",
+            world.world_uid,
+        )
+        return {}
+    return await load_relief_templates_for_world(relief_loader, world)
+
+
+async def _persist_bake_relief_grades(
+    relief_grade_repo: IReliefGradeRepository | None,
+    world: World,
+    instances,
+) -> None:
+    if relief_grade_repo is None:
+        return
+    n_grades = await persist_relief_grades(
+        relief_grade_repo,
+        world_uid=world.world_uid,
+        instances=instances,
+        replace_world=False,
+    )
+    logging.getLogger(__name__).info(
+        "relief | persisted grade instances world=%s n=%d",
+        world.world_uid,
+        n_grades,
+    )
+
+
+def _default_entry_stack(
+    terrain: TerrainBatchOrchestrator,
+    *,
+    fine_terrain: FineTerrainRefineOrchestrator | None,
+    job_repo: IChunkRefineJobRepository | None,
+    read_context: PackReadContext | None,
+    bake_defaults: PackBakeDefaults,
+    climate_bake: ClimatePackBakeOrchestrator | None,
+    relief_loader: TemplateSnapshotLoader | None,
+    relief_grade_repo: IReliefGradeRepository | None,
+    region_state_repo: IRegionStateRepository | None,
+) -> tuple[EntryRefineOrchestrator, ClimatePackBakeOrchestrator]:
+    """Default refine stack wiring when ``entry`` is not injected."""
+    climate = climate_bake or ClimatePackBakeOrchestrator(
+        read_context=read_context,
+        bake_defaults=bake_defaults,
+    )
+    fine = fine_terrain or FineTerrainRefineOrchestrator(
+        terrain,
+        relief_loader=relief_loader,
+        relief_grade_repo=relief_grade_repo,
+        region_state_repo=region_state_repo,
+    )
+    return EntryRefineOrchestrator(
+        fine,
+        job_repo=job_repo,
+        bake_defaults=bake_defaults,
+        climate_bake=climate,
+        read_context=read_context,
+    ), climate

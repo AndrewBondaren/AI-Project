@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.mapper import json_col
 
 

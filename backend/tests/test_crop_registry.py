@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import ValidationError
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldRow import crops
-from app.application.worldData.buildingTemplateLibraryService import (
-    BuildingTemplateLibraryService,
+from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import (
+    TemplatePreparationError,
+)
+from app.application.templateLibrary.packs.domainAdapters.plot import (
+    PlotBodyPreparation,
 )
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.flora.worldCropsRegistry import WorldCropsRegistry
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.db.models.world import World
 
 
@@ -120,35 +122,39 @@ class CropsRegistryTest(unittest.TestCase):
         generic = _layout("farm", "farm", crop_kind=CropKind.GRAIN)
         orchard = _layout("orchard_1", "farm", crop_kind=CropKind.FRUIT)
         wheat = _layout("wheat_farm_1", "farm", subjects=["wheat"])
+        catalog = BuildingCatalog.from_layouts((generic, orchard, wheat))
         tagged = BuildingCatalog.prefer_subjects(
-            (generic, orchard, wheat), ["wheat"], crop_kinds={CropKind.GRAIN},
+            catalog.entries, ["wheat"], crop_kinds={CropKind.GRAIN},
         )
-        self.assertEqual([row.system_name for row in tagged], ["wheat_farm_1"])
+        self.assertEqual([row.body.system_name for row in tagged], ["wheat_farm_1"])
         by_kind = BuildingCatalog.prefer_subjects(
-            (generic, orchard), ["wheat"], crop_kinds={CropKind.GRAIN},
+            catalog.entries[:2], ["wheat"], crop_kinds={CropKind.GRAIN},
         )
-        self.assertEqual([row.system_name for row in by_kind], ["farm"])
+        self.assertEqual([row.body.system_name for row in by_kind], ["farm"])
 
 
-class FarmTemplateImportTest(unittest.IsolatedAsyncioTestCase):
-    async def test_import_rejects_farm_subject_wrong_kind(self) -> None:
+class FarmTemplateImportTest(unittest.TestCase):
+    def test_import_rejects_farm_subject_wrong_kind(self) -> None:
+        """B7: subject/kind checks live on the plot preparation's world
+        validation — the flat body-import entry point is gone."""
         world = World(
             world_uid="w1",
             name="T",
             created_at="2026-01-01T00:00:00",
         )
-        worlds = MagicMock()
-        worlds.get_by_id = AsyncMock(return_value=world)
-        service = BuildingTemplateLibraryService(repo=MagicMock(), world_service=worlds)
-        result = await service.import_bodies_into_world("w1", [{
-            "system_name": "confused_farm",
-            "structure_type": "farm",
-            "display_name": "Farm",
-            "crop_kind": "grain",
-            "subjects": ["flax"],
-        }])
-        self.assertEqual(result.failed, 1)
-        self.assertIn("CROP_KIND_MISMATCH", result.errors[0].message)
+        with self.assertRaises(TemplatePreparationError) as caught:
+            PlotBodyPreparation().prepare_body(
+                {
+                    "system_name": "confused_farm",
+                    "display_name": "Farm",
+                    "crop_kind": "grain",
+                    "subjects": ["flax"],
+                },
+                local_uid="confused_farm",
+                template_uid="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                world=world,
+            )
+        self.assertIn("CROP_KIND_MISMATCH", str(caught.exception))
 
 
 if __name__ == "__main__":

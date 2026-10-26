@@ -106,7 +106,7 @@ def main() -> None:
     roles: Counter[str] = Counter()
     liquid_body = 0
     liquid_cand = 0
-    meter_orphans = 0
+    fine_orphans = 0
     for c in top_list:
         h = c.get("hydrology") or {}
         if h.get("role"):
@@ -116,7 +116,7 @@ def main() -> None:
         if h.get("liquid_candidate"):
             liquid_cand += 1
         if abs(c["x"]) > 100 or abs(c["y"]) > 100:
-            meter_orphans += 1
+            fine_orphans += 1
 
     print("offline pipeline OK")
     print(f"hydrology cells_modified: {hydro.cells_modified}")
@@ -126,7 +126,7 @@ def main() -> None:
     print(f"grid x: [{min(xs)}, {max(xs)}]  y: [{min(ys)}, {max(ys)}]")
     print(f"hydrology roles: {dict(roles)}")
     print(f"liquid_candidate surface-top: {liquid_cand}")
-    print(f"meter-scale orphan coords: {meter_orphans}")
+    print(f"fine-scale orphan coords: {fine_orphans}")
 
     sea_band = [c for c in top_list if 7 <= c["x"] <= 12 and 0 <= c["y"] <= 3]
     sea_roles = Counter((c.get("hydrology") or {}).get("role") for c in sea_band)

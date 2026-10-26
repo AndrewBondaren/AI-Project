@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
+from app.application.jsonValidation.types import FieldPathError
 
 from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicyRule
 from app.dataModel.terrain.relief.enums import (
@@ -47,6 +49,7 @@ def resolve_canal_obstacle_cut(
     *,
     entity: CanalObstacleEntity | None,
     rules: Sequence[CanalObstaclePolicyRule],
+    resolve_ctx: ResolveContext | None = None,
 ) -> CanalObstacleCut:
     """Match rules; enable false wins; canal_ref must agree among true-rules."""
     if not rules:
@@ -70,8 +73,9 @@ def resolve_canal_obstacle_cut(
     refs = {(r.canal_ref or "").strip() or None for r in matched}
     refs.discard(None)
     if len(refs) > 1:
-        # Conflict — treat as disabled (validate should reject; runtime safe)
-        return CanalObstacleCut(enable=False, canal_ref=None, matched=len(matched))
+        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("canal_obstacle_policy",))
+        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "conflicting enabled canal references",
+                                             code="DOMAIN_CONFLICT")])
     canal_ref = next(iter(refs)) if refs else None
     return CanalObstacleCut(
         enable=True, canal_ref=canal_ref, matched=len(matched),

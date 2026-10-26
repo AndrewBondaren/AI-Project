@@ -54,7 +54,7 @@ class TestBootstrapMacroTiles(unittest.TestCase):
         self.assertEqual(len(tiles), 2)
         self.assertIn((0, 0), tiles)
 
-    def test_meter_hydro_adds_tile(self):
+    def test_fine_hydro_adds_tile(self):
         world = _world(hydrology={"enabled": False})
         sparse = {(7500, 4500): object()}
         tiles = bootstrap_macro_tiles(world, [], {}, sparse, max_tiles=None)

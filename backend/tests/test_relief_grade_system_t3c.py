@@ -7,16 +7,16 @@ import unittest
 from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     make_grade_system_uid,
 )
-from app.application.worldData.gradeInstanceMerge import merge_grade_instances
-from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
-from app.application.worldData.pack.refine.detailedGradeCatalog import (
+from app.application.worldData.relief.gradeInstanceMerge import merge_grade_instances
+from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
+from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import (
     TileFaceCatalog,
     build_tile_face_catalog,
 )
-from app.application.worldData.pack.refine.detailedGradeDiscover import discover_and_paint
-from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
-from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
-from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.pack.refine.detailed.detailedGradeDiscover import discover_and_paint
+from app.application.worldData.pack.refine.fine.fineTileContext import VertexSlotSeam
+from app.application.templateLibrary.reliefTemplateLibraryService import relief_template_uid
+from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext, ReliefSideKind
@@ -27,7 +27,7 @@ from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.db.models.world import World
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
-_PLAINS = _MASKS.default_plains.system_terrain
+_PLAINS = _MASKS.default_landcover.fallback_terrain
 _ROAD = _MASKS.default_roads.system_terrain
 
 
@@ -103,11 +103,6 @@ def _world(world_uid: str, tpl_uid: str, context: ReliefContext) -> World:
         world_uid=world_uid,
         name="W",
         created_at="2026-01-01T00:00:00Z",
-        relief_template_registry=[{
-            "system_template_uid": tpl_uid,
-            "context": context.value,
-            "display_template_name": "T",
-        }],
         relief_pick_policy={
             context.value: {"mode": "fixed", "default_template_uid": tpl_uid},
         },

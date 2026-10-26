@@ -1,0 +1,65 @@
+"""Fine terrain chunk column-run wire inside zstd blobs."""
+
+from __future__ import annotations
+
+from typing import ClassVar
+
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+from app.dataModel.spatial.facing import Facing, coerce_facing_wire
+
+
+class FineTerrainZRun(BaseModel):
+    """Contiguous z band with constant terrain/material registry keys."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    z0: int
+    z1: int
+    system_terrain: str
+    system_material: str | None = None
+
+    def cells(self) -> list[tuple[int, int, int]]:
+        z_lo, z_hi = min(self.z0, self.z1), max(self.z0, self.z1)
+        return [(0, 0, z) for z in range(z_lo, z_hi + 1)]
+
+
+class FineTerrainColumnWire(BaseModel):
+    """One fine column (lx, ly) with z-runs."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    lx: int
+    ly: int
+    runs: list[FineTerrainZRun]
+    system_facing: Facing | None = None
+    """Column-level uphill cache (tz_terrain_relief R16); not per-run."""
+    system_grade_uid: str | None = None
+    """Ref → ReliefGradeInstance (R24 / PAR-G7/G10); omit if column not in grade."""
+    region_uid: str | None = None
+    """Winning coverage region uid (tz_map_light_bake § Регионы покрытия › L0/L2)."""
+
+    @field_validator("system_facing", mode="before")
+    @classmethod
+    def _parse_facing(cls, value: object) -> Facing | None:
+        return coerce_facing_wire(value)
+
+
+class FineTerrainChunkWire(BaseModel):
+    """Fine terrain chunk payload — default 32×32 m columns."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-FINE-TERRAIN-CHUNK-WIRE"
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    cx: int
+    cy: int
+    chunk_columns: int
+    columns: list[FineTerrainColumnWire]
+
+    @field_validator("chunk_columns")
+    @classmethod
+    def _positive_chunk(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("chunk_columns must be >= 1")
+        return value

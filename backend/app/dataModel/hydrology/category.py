@@ -5,7 +5,8 @@ from __future__ import annotations
 from pydantic import ConfigDict, Field
 
 from app.dataModel.hydrology.bands import HydrologyBands
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing
+from app.dataModel.constrainedField import constrained_field
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 
 
@@ -14,4 +15,5 @@ class HydrologyCategoryPolicy(MaskCategoryPolicy):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    bands: DefaultOnWire[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=5))
+    bands: DefaultWhenMissing[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=5))
+    placement_specificity: DefaultWhenMissing[int] = constrained_field(default=0, greater_equals=0)
