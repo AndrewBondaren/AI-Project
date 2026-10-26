@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import Any
 
-from app.application.worldData.materialize.terrainParallelLog import current_cpu_core
+from app.application.worldData.materialize.terrain.terrainParallelLog import current_cpu_core
 
 logger = logging.getLogger("app.relief")
 

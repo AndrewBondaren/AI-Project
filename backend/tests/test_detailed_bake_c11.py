@@ -11,7 +11,7 @@ from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
-from app.application.worldData.materialize.persistResult import PersistResult
+from app.application.worldData.materialize.shared.persistResult import PersistResult
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     SettlementOutdoorExtractError,
 )
@@ -20,7 +20,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
     SettlementOutdoorError,
 )
 from app.application.worldData.materialize import worldSurfaceMaterializationOrchestrator
-from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
+from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (

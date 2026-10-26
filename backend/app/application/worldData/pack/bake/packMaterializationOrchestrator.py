@@ -18,8 +18,8 @@ from app.application.worldData.planning.composition.surfacePlanningCapture impor
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
-from app.application.worldData.materialize.persistResult import PersistResult
-from app.application.worldData.materialize.materializationContext import (
+from app.application.worldData.materialize.shared.persistResult import PersistResult
+from app.application.worldData.materialize.surface.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
@@ -37,7 +37,7 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.materialize.parallelPolicy import (
+from app.application.worldData.materialize.shared.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )
@@ -47,7 +47,7 @@ from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.bake.packTilePlan import PackTilePlanScope
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.db.database import Database
 from app.db.repositories.iWorldRepository import IWorldRepository
 from app.db.repositories.iRegionStateRepository import IRegionStateRepository

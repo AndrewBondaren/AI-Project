@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.pack.read.mapCellToFineTerrainWire import (
     cells_to_fine_terrain_chunk,
 )

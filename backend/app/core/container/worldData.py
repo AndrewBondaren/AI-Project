@@ -33,9 +33,9 @@ from app.application.worldData.locations.namedLocationService import NamedLocati
 from app.application.worldData.mapCells.mapCellService import MapCellService
 from app.application.worldData.mapCells.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.application.worldData.mapCells.patchStoreService import PatchStoreService
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.application.worldData.materialize.climateBatchOrchestrator import ClimateBatchOrchestrator
-from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.climate.climateBatchOrchestrator import ClimateBatchOrchestrator
+from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.application.worldData.persist.connectionPersistService import ConnectionPersistService

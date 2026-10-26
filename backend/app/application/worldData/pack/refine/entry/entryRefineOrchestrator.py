@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
-from app.application.worldData.materialize.persistResult import PersistResult
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.shared.persistResult import PersistResult
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_drain_persisted_done,

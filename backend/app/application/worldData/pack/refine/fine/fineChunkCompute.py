@@ -22,7 +22,7 @@ from app.application.worldData.pack.refine.fine.fineTileContext import (
     VertexSlotSeam,
 )
 from app.application.worldData.pack.refine.fineGradeSurface import Coord
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 
 
 def rect_heightmap_from_overlay(

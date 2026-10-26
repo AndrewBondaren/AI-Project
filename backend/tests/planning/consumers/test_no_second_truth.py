@@ -128,7 +128,7 @@ class L2BoundaryTests(unittest.TestCase):
             "pack/refine/fine/fineTileContext.py", "pack/refine/fine/fineChunkCompute.py",
             "pack/refine/fine/fineTerrainRefineOrchestrator.py", "pack/refine/entry/entryRefineOrchestrator.py",
             "pack/refine/chunks/chunkRefineWorker.py", "generators/terrain/landcover/finePaint.py",
-            "pack/climate/climatePackBakeOrchestrator.py", "materialize/terrainBatchOrchestrator.py")
+            "pack/climate/climatePackBakeOrchestrator.py", "materialize/terrain/terrainBatchOrchestrator.py")
         for path in paths:
             text = (root / path).read_text(encoding="utf-8")
             with self.subTest(path=path):
@@ -150,13 +150,13 @@ class L2BoundaryTests(unittest.TestCase):
 
     def test_terrain_batch_has_single_l2_zone(self):
         import inspect
-        module = APP / "application/worldData/materialize/terrainBatchOrchestrator.py"
+        module = APP / "application/worldData/materialize/terrain/terrainBatchOrchestrator.py"
         text = module.read_text(encoding="utf-8")
         for removed in ("map_cells", "MapCellService", "save_z_slice", "generate_z_slice",
                 "plan_bootstrap_tiles", "prepare_surface_terrain_context", "run_pole_resolve_pass",
                 "SurfacePlanningEntry", "SurfacePlanningAssembler", "SurfacePlanningCapture",
                 "planning.composition", "ImportResult", "PlanWaitControl"):
             self.assertNotIn(removed, text)
-        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
         params = list(inspect.signature(TerrainBatchOrchestrator.__init__).parameters)
         self.assertEqual(params, ["self", "generator"])

@@ -10,7 +10,7 @@ from app.application.worldData.pack.refine.fine import fineChunkRunner, fineTile
 from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.fine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.db.models.mapCell import MapCell
 
 

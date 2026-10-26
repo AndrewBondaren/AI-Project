@@ -63,7 +63,7 @@ from app.application.worldData.pack.refine.fineGradeSurface import (
     apply_grade_uids,
     fine_grade_cell_blocked,
 )
-from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry

@@ -266,7 +266,7 @@ def frozen_surface_fixture(source, parent=None, *, bbox=None):
 
 class L2Tests(unittest.TestCase):
     def setUp(self):
-        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
         self.c = Composition()
         self.addCleanup(self.c.service.shutdown)
         self.source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=2),
@@ -398,8 +398,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         from app.application.worldData.generators.climate.materialize.climateWorkingFields import ClimateWorkingFields
         from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
         from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
-        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
-        from app.application.worldData.materialize.materializationContext import MaterializationContext
+        from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
         from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
         from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
         from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -445,8 +445,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
     async def test_detailed_entry_and_queue_reuse_bundle_and_persist_identical_columns(self):
         import tempfile
         from pathlib import Path
-        from app.application.worldData.materialize.materializationContext import MaterializationContext
-        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
+        from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
         from app.application.worldData.generators.terrain.types import ColumnRect
         from app.application.worldData.pack.bake.detailedBakeRefine import refine_detailed_tiles
         from app.application.worldData.pack.bake.detailedBakeScope import DetailedScopePlan
@@ -514,7 +514,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_climate_bundle_preserves_coarse_and_fine_wire_baseline(self):
-        from app.application.worldData.materialize.materializationContext import MaterializationContext
+        from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
         from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
         from app.application.worldData.pack.climate.climateCoarseBake import build_climate_coarse_wire, build_climate_tile_wire, sample_climate_tile_ty_rows
         from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile

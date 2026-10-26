@@ -14,10 +14,10 @@ from functools import partial
 
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 
-from app.application.worldData.materialize.chunkComputePool import ChunkComputePool
+from app.application.worldData.materialize.shared.chunkComputePool import ChunkComputePool
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import log_pack_l2_formation_done
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fine.fineChunkCompute import compute_rect
@@ -26,7 +26,7 @@ from app.application.worldData.pack.refine.fine.fineGradeCatalog import emit_fin
 from app.application.worldData.pack.refine.fine.fineRefineResult import FineRefineResult
 from app.application.worldData.pack.refine.fine.fineTileContext import ChunkComputeResult
 from app.application.worldData.pack.refine.fine.fineTilePrep import prepare_fine_tile
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.bake.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume

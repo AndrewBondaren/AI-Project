@@ -12,8 +12,8 @@ from pydantic import ValidationError
 
 from app.application.worldData.generators.terrain.landcover.collect import resolve_collected
 from app.application.worldData.generators.terrain.landcover.types import AnchoredRegion, StateSnapshotEntry
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.bake.wildernessRegionIndex import build_region_index

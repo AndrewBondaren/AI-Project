@@ -35,7 +35,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator i
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     is_settlement_outdoor_target,
 )
-from app.application.worldData.materialize.materializationContext import (
+from app.application.worldData.materialize.surface.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )

@@ -7,16 +7,16 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.application.worldData.materialize.chunkComputePool import ChunkComputePool, split_contiguous_batches
+from app.application.worldData.materialize.shared.chunkComputePool import ChunkComputePool, split_contiguous_batches
 from app.application.worldData.generators.assemblers.climateAssembler.passes.cellWeatherPass import (
     run_cell_weather_pass,
 )
-from app.application.worldData.materialize.materializationContext import (
+from app.application.worldData.materialize.surface.materializationContext import (
     MaterializationContext,
     resolve_insert_only,
     resolve_materialization_context,
 )
-from app.application.worldData.materialize.parallelPolicy import (
+from app.application.worldData.materialize.shared.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )

@@ -13,7 +13,7 @@ from app.application.worldData.planning.composition.surfacePlanningEntry import 
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 
-from app.application.worldData.materialize.loadingProgress import (
+from app.application.worldData.materialize.surface.loadingProgress import (
     LoadingPhase,
     LoadingProgressSnapshot,
     LocalGridLoading,

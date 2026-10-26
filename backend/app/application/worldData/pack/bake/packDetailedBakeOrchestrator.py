@@ -18,7 +18,7 @@ from app.application.worldData.planning.contracts.surfacePlanBundle import Surfa
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.detailedBakeRefine import (
     DetailedRefineAggregate,
     persist_detailed_grades,
@@ -38,9 +38,9 @@ from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
 )
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
-from app.application.worldData.materialize.persistResult import PersistResult
+from app.application.worldData.materialize.shared.persistResult import PersistResult
 from app.application.templateLibrary.templateSnapshotLoader import TemplateSnapshotLoader
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.bake.detailedBakeScope import (

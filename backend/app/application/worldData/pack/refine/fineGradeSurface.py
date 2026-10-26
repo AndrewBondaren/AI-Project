@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.facing import Facing

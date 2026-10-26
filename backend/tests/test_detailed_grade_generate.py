@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from app.application.worldData.pack.refine.detailed.detailedGradeGenerate import generate_detailed_grade
 from app.application.worldData.pack.refine.fineGradeSurface import FineGradeSurface
-from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
@@ -52,7 +52,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         self.assertEqual(result.grade_instances, ())
 
     def test_build_tile_surface_state_no_grade_from_parent(self) -> None:
-        from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+        from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
         from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
         from app.dataModel.worldPack.wire.worldMapCellWire import WorldMapCellWire
 

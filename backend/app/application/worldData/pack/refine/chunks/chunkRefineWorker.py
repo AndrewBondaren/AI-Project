@@ -7,7 +7,7 @@ from collections.abc import Mapping
 
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.ids import runtime_uid
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.pack.refine.chunks.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending

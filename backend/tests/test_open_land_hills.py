@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
 from app.application.worldData.generators.terrain.hills.hillRaster import raster_hill
 from tests.planning.consumers.test_l0_l2 import frozen_surface_fixture
-from app.application.worldData.materialize.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.masks.enums.maskDomainId import MaskDomainId

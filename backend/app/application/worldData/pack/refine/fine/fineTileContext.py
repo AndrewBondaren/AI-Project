@@ -15,7 +15,7 @@ from app.application.worldData.planning.contracts.surfaceWorkingMaps import Surf
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.detailed.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.fineGradeSurface import Coord
-from app.application.worldData.materialize.terrainBatchOrchestrator import TileSurfaceState
+from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate

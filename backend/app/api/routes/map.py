@@ -27,7 +27,7 @@ from app.application.worldData.regions.regionStateSnapshot import (
     load_region_state_snapshot,
 )
 from app.application.worldData.pack.refine.entry.entryAnchorTracker import ANCHOR_KINDS, parse_anchor_kind
-from app.application.worldData.materialize.materializationContext import resolve_materialization_context
+from app.application.worldData.materialize.surface.materializationContext import resolve_materialization_context
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log

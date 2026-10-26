@@ -81,7 +81,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "dumpLog",
             ),
             (
-                "app.application.worldData.materialize.terrainParallelLog",
+                "app.application.worldData.materialize.terrain.terrainParallelLog",
                 "terrain",
                 "terrainParallelLog",
             ),

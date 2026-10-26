@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
-from app.application.worldData.materialize.worldSurfaceMaterializationOrchestrator import (
+from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
 )
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture

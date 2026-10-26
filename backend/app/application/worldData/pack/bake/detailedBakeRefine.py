@@ -19,14 +19,14 @@ from app.application.worldData.planning.contracts.surfacePlanBundle import Surfa
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
-from app.application.worldData.materialize.materializationContext import MaterializationContext
+from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.detailedBakeScope import DetailedScopePlan
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
-from app.application.worldData.materialize.persistResult import PersistResult
+from app.application.worldData.materialize.shared.persistResult import PersistResult
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
