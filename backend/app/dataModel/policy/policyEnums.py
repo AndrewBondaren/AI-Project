@@ -58,3 +58,12 @@ class PolicyIssueReason(StrEnum):
     FAILED_SUPPORT = "failed_support"
     DEPENDENCY_CYCLE = "dependency_cycle"
     RULE_NO_MATCH = "rule_no_match"
+
+
+class PolicySupportState(StrEnum):
+    ACCEPTED = "accepted"
+    PENDING = "pending"
+    DISABLED = "disabled"
+    MISSING = "missing"
+    FAILED = "failed"
+    CYCLE = "cycle"

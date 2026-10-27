@@ -50,6 +50,18 @@ Topological seams и aliases нормализует WorldTopology; seam не с�
 
 ### Общая policy GEO-1
 
+G0-PE bindings: PolicySource[M](model,instance,path) связывает frozen POJO с
+его типом; PolicyInputs.models хранит уникальные source model bindings,
+PolicyFacts добавляет tuple PolicySupportFact(uid,state,issues). Support state
+— ACCEPTED/PENDING/DISABLED/MISSING/FAILED/CYCLE; это наблюдения caller,
+не очередь. Binding path использует existing открытый field path tuple[str|int,...].
+Schema validation всех переданных POJO предшествует gates; отсутствующий
+referenced source становится Unknown только на нужной стадии. Computed
+ObjectAdmissionFacts не принимается от caller. Resume проверяет форму positive
+waiting decision; spec/source/revision identity удерживает caller/session.
+Исходные issues и fallback/terminal provenance возвращаются в decision для
+existing report_issues/emitter caller, без нового logger или production switch.
+
 G0-PT declaration transport: PolicyRule[B,R].domain_reason переносит domain
 reason независимо от common DisableEffect.reason. ObjectAdmissionFacts.effective_priority
 — derived FactValue[Specificity] общего executor после PRIORITY selection;

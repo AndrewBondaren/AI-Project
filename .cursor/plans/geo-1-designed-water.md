@@ -9590,6 +9590,26 @@ Done: definitions можно объявлять из разных доменов
 Цель: разрешать приоритеты и domain-defined cases одним механизмом.
 ТЗ: G0 и §6.8-B/C.
 Файлы: application/policy/policyResolver.py и shared tests.
+Уточнение реализации G0-PE (2026-10-27): общий dataModel/policy/policyBindings.py
+владеет PolicySource[M] (проверяемые model/instance/path), PolicyInputs,
+PolicyFacts и PolicySupportFact; PolicySupportState в policyEnums.py различает
+accepted/pending/disabled/missing/failed/cycle. Это наблюдения caller, не scheduler.
+Source model уникален в binding; FieldRef выбирает его по типу. Malformed POJO
+проверяется до gates; отсутствующий referenced binding даёт Unknown на нужной
+стадии. ObjectAdmissionFacts разрешён только как computed input executor.
+application/policy/{policyRead,policyStages,policyResolution,policyResolver}.py
+(5 файлов с init): чтение/AND predicates; сопоставление стадии/precedence;
+priority/fallback/result assembly; public staged facade соответственно.
+Карта application-классов: PolicyReader/ConditionResult → policyRead.py,
+StageResult/PolicyProblem → policyStages.py, request-local PolicyResolution
+→ policyResolution.py, PolicyResolver → policyResolver.py. Первые records
+— промежуточные результаты исполнения; они не создают второго SoT.
+Все перечисленные классы — общий policy домен, dataModel хранит frozen данные,
+application исполняет. dataModel/policy: 8 → 9 файлов; contracts tests: 2 → 3
+(test_policy_resolver.py). WARN по dataModel выдан. Bindings/resume revision
+проверяет caller/session по §6.16-A; resolver проверяет waiting/positive/op tag.
+Диагностика возвращается в decision для existing report_issues/emitter caller;
+исполнитель не создаёт logger и не подключается к production до G10-A.
 Контракт: PolicyResolver.resolve(spec, sources, facts, mode=ResolutionMode, resume=None) → PolicyDecision,
 rule precedence отдельно от object priority, unknown/waiting явно.
 Object SUPPORT resume и operation binding — точный контракт §6.16-A;
@@ -9601,6 +9621,12 @@ writers без повторного domain resolve/override; существую�
 geometry/scoring/material executors не дублируются (§6.8-C3).
 Done: domain definitions не имеют своего resolve/evaluate; runtime
 fallback логируется существующим emitter/facade по §6.12, без нового logger.
+
+G0-PE IMPLEMENTED/VERIFIED (2026-10-27), isolated до G10-A.
+Проверка: contracts 41/41, cascade/placement regressions 77/77;
+positive typing 226 файлов без ошибок, negative 85/85 (baseline 80 + 5),
+без лишних/пропущенных diagnostics. SUPPORT resume сохраняет priority/provenance;
+production wiring и session revision binding остаются у своих следующих шагов.
 
 ### G0-P — общая семантика priority=0 в placement P2
 Цель: применять отсутствие создания при 0 одинаково ко всем доменам.

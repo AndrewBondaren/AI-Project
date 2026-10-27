@@ -373,3 +373,17 @@ def invalid_behavior_decision(value: ObjectAdmissionDecision[OtherPolicyMode, Po
 def invalid_policy_result_mutation(value: ObjectAdmissionDecision[PolicyMode, PolicyReasonKind]) -> None:
     value.behavior = PolicyMode.SECOND  # EXPECT: reportAttributeAccessIssue
     value.effective_priority = 0  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.policy.policyResolver import PolicyResolver
+from app.dataModel.policy.policyBindings import PolicyFacts as PolicyObservations, PolicyInputs, PolicySource
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+
+
+def invalid_policy_execution(settings: PolicySettings, defaults: PolicyDefaults,
+    value_spec: ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind],
+    prior: ObjectAdmissionDecision[PolicyMode, PolicyReasonKind]) -> None:
+    PolicySource[PolicySettings](PolicySettings, defaults, ())  # EXPECT: reportArgumentType
+    PolicySource[PolicySettings](PolicyDefaults, settings, ())  # EXPECT: reportArgumentType
+    PolicyResolver().resolve(value_spec, PolicyInputs(), PolicyObservations(), mode=ResolutionMode.RUNTIME, resume=prior)  # EXPECT: reportArgumentType
+    PolicyResolver().resolve(value_spec, PolicyInputs(), PolicyObservations(), mode="runtime")  # EXPECT: reportCallIssue; EXPECT: reportArgumentType

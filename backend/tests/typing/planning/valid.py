@@ -450,3 +450,23 @@ def valid_policy_covariance(admission: ObjectAdmissionDecision[PolicyMode, Polic
 
 def valid_fact_covariance(known: KnownFact[PolicyMode]) -> KnownFact[Enum]:
     return known
+
+
+from app.application.policy.policyResolver import PolicyResolver
+from app.dataModel.policy.policyBindings import PolicyFacts as PolicyObservations, PolicyInputs, PolicySource
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+
+
+def valid_policy_execution(settings: PolicySettings, defaults: PolicyDefaults, observed: PolicyFacts,
+    admission_spec: ObjectAdmissionPolicySpec[PolicyMode, PolicyReasonKind],
+    value_spec: ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind],
+    prior: ObjectAdmissionDecision[PolicyMode, PolicyReasonKind]) -> None:
+    sources = PolicyInputs(models=(PolicySource[PolicySettings](PolicySettings, settings, ("settings",)),
+        PolicySource[PolicyDefaults](PolicyDefaults, defaults, ("defaults",))))
+    facts = PolicyObservations(models=(PolicySource[PolicyFacts](PolicyFacts, observed, ("facts",)),))
+    assert_type(PolicyResolver().resolve(admission_spec, sources, facts, mode=ResolutionMode.RUNTIME),
+        ObjectAdmissionDecision[PolicyMode, PolicyReasonKind])
+    assert_type(PolicyResolver().resolve(value_spec, sources, facts, mode=ResolutionMode.VALIDATE_ONLY),
+        ValueSelectionDecision[PolicyMode, PolicyReasonKind])
+    assert_type(PolicyResolver().resolve(admission_spec, sources, facts, mode=ResolutionMode.RUNTIME, resume=prior),
+        ObjectAdmissionDecision[PolicyMode, PolicyReasonKind])
