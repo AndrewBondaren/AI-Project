@@ -136,6 +136,20 @@ flowchart TB
 | WP-6 | `world_snapshots` хранит `pack_content_hash` + patch revision, **не** дублирует L2 blob |
 | WP-7 | Determinism: world + seed + pack_version → идентичный bake |
 
+**Целевое уточнение (мастер, 2026-10-27):** bake (`light`/`full`/`detailed`)
+поставляет мир **одним pack**; опубликованный pack заморожен — blobs
+content-addressed, manifest immutable и адресуется hash, файлы не
+перезаписываются (`os.replace` по координатному пути — legacy). Snapshot не
+пишет pack: мутации тиков — patches, читаемые поверх (WP-4, WP-6). До
+публикации pack новые blobs — staged artifacts, недостижимые из
+опубликованного состояния; их пишет доменная операция materialization через
+staging port, а не generator и не Snapshot. Граница — старт gameplay (проверка DAG): до старта
+`light` → `full` → `detailed` дописывают один pack новыми версиями manifest;
+после старта всё — full_bake поверх light, detailed, runtime L2 (WP-13, lazy
+refine), правки локаций — уходит в snapshot, pack игры не меняется. WP-2 «только `WorldPackWriter`»
+этим пересматривается на contract freeze. Норматив —
+[`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации».
+
 ---
 
 ## Продуктовые идеи (утверждено)
@@ -559,6 +573,8 @@ Pack (`world_map.zst`, wilderness chunks, `location_terrain`) = **immutable snap
 | мастерский **новый pack version** (смена генератора / seed, WP-7) | путать smoke-rebake генератора с взрывом в игре |
 
 Skip `complete` (WP-12) остаётся **resume** incomplete L2. Invalidate+перепечь pack — рычаг мастера/offline (версия мира), не runtime mod.
+
+**Rebake — только до старта gameplay и для dev-fixtures** (решение мастера 2026-10-27). После старта gameplay перепечки нет: запечённое остаётся, допустимо только расширение — новые тайлы/локации на wilderness без patches, patch в snapshot; rebase цепочки на другой pack отвергнут ([`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Правила модели pack + overlay», п. 6, 12).
 
 SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Локальная модификация. DAG: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) `modify_terrain` ⬜.
 
@@ -1271,7 +1287,7 @@ chunk_refine_jobs (
 
 #### Stale L0 / regen (WP-22, утверждено)
 
-Master rebake light pack → `l0_parent_hash` L2 ≠ текущий `world_map.zst`. Политика **A (skip + anchor-outward)**:
+Master rebake light pack (только до старта gameplay / dev-fixtures — оговорка «Rebake» выше) → `l0_parent_hash` L2 ≠ текущий `world_map.zst`. Политика **A (skip + anchor-outward)**:
 
 ```mermaid
 flowchart LR

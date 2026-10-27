@@ -6,6 +6,21 @@
 Заменяет [архивный WS](world-state-crud-transition.md), а не продолжает его
 central CRUD/class map и последовательность WS-1…WS-5.
 
+## 0. Базовая политика runtime/worldEdit
+
+SoT: [`docs/tz_runtime_world_edit_policy.md`](../../docs/tz_runtime_world_edit_policy.md).
+
+- Один доменный resolver для import/runtime и worldEdit; patches и snapshot
+  не вводят своего policy engine, отдельного worldEdit mode/endpoint/pipeline.
+- `validate_only=true` — тот же DAG pipeline без публикации pack, commit
+  Snapshot и staging, меняющего мир; не write с rollback.
+- Правка мира мастером после старта gameplay — patch в snapshot тем же
+  pipeline (`docs/tz_world_snapshot.md` § «Staged artifacts и точки публикации»).
+- Неразрешимый результат — WarningError через доменный log sink, без default
+  вместо ошибки и без ложного успеха; worldEdit получает ту же диагностику.
+- Consumers, unresolved-результат, reason/action и проверки двух режимов
+  фиксируются в доменных пунктах плана при приёмке.
+
 ## 1. Общая архитектура — главное и критическое требование
 
 **Каждый пункт плана, контракт и будущая реализация обязаны соответствовать
@@ -92,8 +107,9 @@ Snapshot. Snapshot — единственный владелец примене�
 как самостоятельный вход применения исключён. Доменные алгоритмы, сбор
 набора и запуск materialization не переносятся в Snapshot.
 
-GEN DAG обязателен: production вызывается через DAG; debug API — инструмент
-разработчика, вызывающий те же стабильные доменные интерфейсы. Product
+GEN DAG обязателен: production вызывается через DAG; debug API — тонкий
+инструмент разработчика, вызывающий тот же граф DAG (своего порядка стадий
+не держит). Product
 CRUD/import нельзя объявить debug-входом для обхода этой границы.
 Существующий Gate: DAG G1–G5 не снимается.
 Конкретный связанный **план**, а не только ТЗ —
@@ -111,7 +127,7 @@ CRUD и не получает спрятанный pipeline через validate/
 | Владелец | Ответственность |
 |---|---|
 | DAG | Когда вызвать read/изменение/materialization; порядок доменных операций; сбор PatchSet |
-| Debug API | Тонкий developer entry к тем же domain API; сбор набора своего сценария |
+| Debug API | Тонкий developer entry: вызывает тот же граф DAG; своего порядка стадий/сбора не держит |
 | Domain read | Данные и domain-owned результаты, missing/fallback/merged/raw semantics; обращение к своей инфраструктуре |
 | Domain change/planning | Реализация write-free create/update/delete: смысл изменения, validation, подготовленный typed результат, зависимости и invalidation; запуск по вызову DAG/debug |
 | Domain patch | Подготовка typed patch без изменения состояния; реализация доменного поведения, вызываемая только Snapshot при применении |
@@ -453,7 +469,8 @@ retention переиспользуются по смыслу с проверко
 протокол изменения SQL pointer/latest через UPDATE требует пересмотра под
 append-only commit; он не является утверждённым механизмом нового плана.
 Snapshot должен закрепить согласованный набор SQL/pack версий без перезаписи
-старого состояния. Способ concurrency/CAS/определения head — открытый контракт.
+старого состояния. Concurrency/head: один CAS-указатель мира `(pack_hash, snapshot_head)`
+(решение B-3, `docs/tz_world_snapshot.md` п. 8).
 Одного SQL BEGIN для атомарности SQL+files недостаточно.
 
 ## 7. Что ещё определить до реализации
@@ -520,10 +537,15 @@ CRUD вызовы. При ошибке Snapshot недопустим опубл�
 
 ### 7.2. Первичная materialization: обязательная сверка light_bake/full_bake
 
-**Первый bake не является исключением** из domain preparation → PatchSet →
-Snapshot apply. Для SQL и pack действует тот же append-only/history contract,
-что для последующих изменений. Bootstrap нельзя завершить прямой записью
-с последующим добавлением snapshot истории.
+**Первый bake — job DAG** с domain materialization через staging и
+публикацией pack (решение мастера 2026-10-27; не Snapshot apply). Для SQL и
+pack действует append-only contract; bootstrap нельзя завершить прямой
+записью мимо staging/публикации. Когда запускать bake (в т.ч. auto bake
+мира без pack), решает DAG; `POST pack/bake` — caller того же job; gameplay
+без опубликованного базового pack не стартует. Встраивание — GEN-DAG-1;
+до него `POST pack/bake` — legacy. **B-2 открыт и блокирует приёмку плана:**
+legacy route держит оркестрацию стадий (L0 → C23, finalize/публикация) вне
+DAG; план не закрывается, пока bake job не встроен в DAG по GEN-DAG-1.
 
 Сохраняются существующие product contracts (`tz_world_pack_storage.md`
 § Bake modes / Job boundaries и `tz_map_light_bake.md`):
@@ -565,6 +587,20 @@ Snapshot apply. Для SQL и pack действует тот же append-only/hi
    retry и отсутствие публикации до Snapshot. Предыдущие состояния остаются
    читаемыми. GEN-DAG-1 per-node и Patch per-class gates обязательны.
 
+**Решено мастером 2026-10-27 (п.2, п.4, п.5):** bake поставляет мир одним
+замороженным pack; snapshot = patches тиков поверх pack, pack не
+перезаписывает. Формулировка п.5 «initial bake … под Snapshot-owned
+lifecycle» этим заменена: публикация bake — активация pack, не snapshot.
+Staged blobs/SQL rows пишет доменная операция materialization через staging
+port; Patch несёт hash-ref; L0 → C23 через «опубликованное + staged refs
+job». Норматив — `docs/tz_world_snapshot.md` § «Staged artifacts и точки
+публикации» (там же: граница — старт gameplay: до него bake дописывает
+один pack, после — вся материализация и правки уходят в snapshot; overlay
+без replay тиков; LOD-независимые patches; перепечки нет — только расширение: новые тайлы/локации на wilderness без patches). Новая игра продолжает цепочку world-snapshot. Один активный timeline на мир → один overlay; attach к другой ветке — пересборка overlay от keyframe (DAG). B-3, M-1, M-2,
+keyframe, rebase (отвергнут), объём snapshot (dedupe по hash) решены там же
+(п. 8–13). Схема `world_snapshots` — `docs/project_data_storage_tz.md`, пороги
+keyframe — реализация; открытых вопросов ТЗ нет, приёмку блокирует B-2.
+
 Проверенные несовместимые existing paths: `pack/bake/l0/packMaterializationOrchestrator.py`
 вызывает WorldPackWriter, `_persist_bake_relief_grades` и PackBakePublisher;
 `pack/bake/finalize/packBakeFinalize.py` сохраняет manifest до repo.update(world);
@@ -584,13 +620,30 @@ DB-модели и имена existing services не заменяют архит
 1. Проработать и принять каждый архитектурный пункт §1–6 отдельно, закрывая
    относящиеся к нему вопросы §7; только документы. Открытый вопрос поведения
    интерфейса не переносится в concrete implementation.
-2. После приёмки — inventory переиспользуемых domain POJO/ports и точный
-   contract freeze: поля, результаты, диагностика, revisions и atomicity.
+2. После приёмки — inventory переиспользуемых domain POJO/ports и contract
+   freeze **ядра домена патчей**: Patch/PatchSet (только данные, M-1), порт
+   `DomainSectionHandler` и реестр секций (M-2), вход Snapshot
+   `apply(PatchSet)`, typed artifact ref, staging port, CAS-указатель мира
+   `(pack_hash, snapshot_head)` (B-3); поля, результаты, диагностика, atomicity.
 3. Подготовить implementation map: каждый класс → domain/layer → точный файл,
    направления зависимостей, folder composition/counts, existing backend binding.
-4. Согласовать отдельные проверяемые implementation шаги, зависимости на
-   source-versioning и snapshot storage, тесты и условия runtime exposure.
-5. Реализация по одному согласованному шагу с проверкой критического §1.
+4. Реализация ядра по слоям (решение мастера 2026-10-27): типы → shared infra
+   (content-addressed staging adapter, lease, CAS-указатель мира) → Snapshot
+   apply/commit → реестр секций в Container → первый доменный handler. Ядро —
+   единственный владелец staging и CAS-указателя; world-source-versioning их
+   переиспользует, второй механизм не вводится. Ядро не ждёт source-versioning
+   и внешней DAG-интеграции.
+5. §6 — привязка ревизий patch/snapshot после контрактов identity/revision
+   world-source-versioning (его шаги 2–3).
+6. Перевод существующих writer'ов на commit Snapshot / публикацию pack по
+   inventory: `MapCellService`, `SettlementPersistService`,
+   `ConnectionPersistService`, `region_states`/`StateChangeConsumer`
+   (wilderness 9a/10a), write boundary entity-lifecycle L3. Новый прямой
+   writer мимо Snapshot противоречит §1 и расширяет долг миграции.
+7. Закрытие плана — после устранения B-2 (bake job встроен в DAG); это
+   внешняя зависимость, не шаг этого плана.
+
+Каждый implementation шаг — отдельно согласованный, с проверкой критического §1.
 
 Критерии отдельной архитектурной приёмки:
 

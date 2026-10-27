@@ -28,6 +28,14 @@ Patch хранит историчность перехода для SQL и pack:
 Формат истории и append-only publication/head contract ещё согласуются;
 прежняя SQL write реализация этим не объявляется совместимой.
 
+**Staged artifacts и pack (мастер, 2026-10-27):** bake поставляет мир одним
+замороженным pack; snapshot хранит patches тиков, которые читаются поверх
+pack и его не перезаписывают. Объёмные результаты до публикации — staged
+artifacts/rows, недостижимые из опубликованного состояния; их пишет доменная
+операция materialization через staging port. Patch несёт content-hash ref,
+не путь. Норматив — [`tz_world_snapshot.md`](./tz_world_snapshot.md)
+§ «Staged artifacts и точки публикации».
+
 **Владение двумя фазами (мастер, 2026-10-27):** домен реализует как
 write-free CRUD preparation, так и запись своих SQL/pack данных. Подготовку
 инициирует DAG/debug API; применение и запись инициирует только Snapshot.
@@ -47,7 +55,7 @@ Snapshot вызывает domain storage contract, не реализуя его 
 | `map_cell_patches` (SQL) | Таблица применённых дельт cells-домена | Один **доменный patch-формат**, не система; может стать persist-целью patches |
 | `pending_patches` / `PatchApplier` (engine) | Ephemeral копии node_results LLM-фазы | Не patch-система; кандидат на удаление/замещение |
 | `SessionSnapshot` | Resume пайплайна чата | Не modification snapshot |
-| `WorldSnapshot` blob | Полный слепок состояния на ход | Commit-артефакт — **приёмник** patch set, не патч |
+| `WorldSnapshot` | Дельта тика поверх базового pack (patch set + refs), не полный слепок | Commit-артефакт — **приёмник** patch set, не патч |
 
 ---
 
@@ -118,7 +126,7 @@ flowchart LR
 - Patch set секционирован по доменам (`sections`); Snapshot вызывает domain implementations при применении секций; доменный payload не интерпретируется общим кодом.
 - Порядок патчей внутри секции — ответственность домена; порядок секций — явная доменная зависимость; инфраструктура не переупорядочивает.
 - Compose/merge полей (кто перекрывает чьё поле) — собственность домена-владельца поля, не generic-кода.
-- Патчи — не источник состояния при restore: blob snapshot **authoritative**; patch set внутри snapshot — audit/diff/regen-вход (закрывает deferred «incremental vs full» из `tz_world_snapshot`).
+- Состояние при restore = базовый pack + overlay patches цепочки (keyframe + дельты); отдельного authoritative blob мира нет (2026-10-27, [`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации»). Patches — часть authoritative состояния.
 
 ## Контракт (черновик)
 
@@ -273,7 +281,7 @@ Selective cell delta сохраняет Keep/SetValue/ResetOverride и неза�
 | Владелец позиции игрока | **решено**: позиция — свойство привязки `player↔world`, владелец — **session** (world blob, секция «active session»). Player state = memory + intrinsic (stats, inventory); placement в него не входит |
 | Точка входа при attach: spawn-анкор целевой ветки vs reconcile координат | открыт (зависит от владельца позиции) |
 | Атомарность commit пары цепочек при сбое одной стороны | открыт |
-| Версионирование формата патчей (читаемость старых snapshot) | открыт — мягкая деградация, пока blob authoritative |
+| Версионирование формата патчей (читаемость старых snapshot) | открыт — patches входят в authoritative состояние, поэтому старые форматы обязаны читаться; деградации через blob нет |
 
 ### Timelines: нет cross-timeline sync
 
@@ -282,6 +290,7 @@ Selective cell delta сохраняет Keep/SetValue/ResetOverride и неза�
 - **Между ветками перемещается только игрок** — через свою `player_snapshots` цепочку (memory + intrinsic идут с ним).
 - **Ветки не синхронизируются и не симулируются в фоне**: продвигается только тот таймлайн, где находится игрок. Заброшенная ветка заморожена на точке ухода.
 - Время таймлайн-локальное (свой `turn_id`); общих часов между ветками нет.
+- Активный timeline у мира один (2026-10-27): один активный overlay; переход в другую ветку пересобирает overlay от keyframe ([`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Правила модели pack + overlay»).
 - `attach` в ранний snapshot другой ветки — та же операция session-домена, цель просто в другой ветке.
 - Следствие: изменения, которые игрок внёс в старой ветке, никуда не распространяются — они остаются историей ветки и memory игрока.
 
