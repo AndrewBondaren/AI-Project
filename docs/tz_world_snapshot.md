@@ -78,6 +78,14 @@ materialization, впервые полученного после создани
   поверх light, detailed_bake, runtime L2 WP-13/lazy refine, материализация
   добавленных/изменённых локаций) и любая правка мира — patch/результат
   в snapshot, читаемый поверх pack.
+- **Bake — job DAG.** Когда и где запускать bake (в т.ч. auto bake мира без
+  pack), решает DAG. `POST pack/bake?mode=…` — тонкий caller того же job.
+  Gate старта gameplay (DAG): без опубликованного базового pack gameplay не
+  стартует; источник pack не важен (auto, мастер, attach готового). Первый
+  snapshot ссылается на этот pack. Ограничения WP-14 (≤30 s от spawn, без
+  blocking bake на spawn) — контракт, который DAG обязан соблюдать.
+  Встраивание в DAG — GEN-DAG-1 (scope bootstrap/bake); до него существующий
+  `POST pack/bake` — legacy, новая архитектура через него не строится.
 - **Snapshot = историческая модификация мира по тикам.** Snapshot ссылается
   на базовый pack по hash (WP-6 `pack_content_hash`) и фиксирует patch set
   тика; объёмные результаты — staged artifacts по ссылке из snapshot.

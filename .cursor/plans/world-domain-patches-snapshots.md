@@ -535,10 +535,13 @@ CRUD вызовы. При ошибке Snapshot недопустим опубл�
 
 ### 7.2. Первичная materialization: обязательная сверка light_bake/full_bake
 
-**Первый bake не является исключением** из domain preparation → PatchSet →
-Snapshot apply. Для SQL и pack действует тот же append-only/history contract,
-что для последующих изменений. Bootstrap нельзя завершить прямой записью
-с последующим добавлением snapshot истории.
+**Первый bake — job DAG** с domain materialization через staging и
+публикацией pack (решение мастера 2026-10-27; не Snapshot apply). Для SQL и
+pack действует append-only contract; bootstrap нельзя завершить прямой
+записью мимо staging/публикации. Когда запускать bake (в т.ч. auto bake
+мира без pack), решает DAG; `POST pack/bake` — caller того же job; gameplay
+без опубликованного базового pack не стартует. Встраивание — GEN-DAG-1;
+до него `POST pack/bake` — legacy (закрывает B-2).
 
 Сохраняются существующие product contracts (`tz_world_pack_storage.md`
 § Bake modes / Job boundaries и `tz_map_light_bake.md`):
