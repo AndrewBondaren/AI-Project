@@ -27,6 +27,23 @@ CRUD принадлежит домену; Patch используется для 
 архитектурного требования. До устранения дефекта не принимаются затронутый
 класс, шаг и план целиком; остальные успешные проверки этот отказ не перекрывают.
 
+**Критический запрет обхода Snapshot:** Patch не записывает мутацию напрямую
+в БД или опубликованное состояние, в том числе через вызов существующего
+CRUD writer, repository, callback или вложенного сервиса. Подготовка и кэш
+не должны изменять authoritative state. Физическая запись доменной реализацией
+допустима только как делегированный этап применения, которым владеет Snapshot,
+без самостоятельного commit. Схема «сначала CRUD сохранил, потом Snapshot
+записал историю» нарушает этот gate; version stamp сам по себе её не исправляет.
+
+**Неизменяемое добавляемое состояние (мастер, 2026-10-27):** изменение
+SQL-данных состояния создаёт новые записи/версии, изменение pack — новые
+immutable артефакты. Существующие исторические записи и pack не
+перезаписываются. Delete доменного объекта отражается новым историческим
+изменением/маркером удаления, а не физическим удалением прежнего состояния.
+Patch хранит историчность перехода для SQL и pack; Snapshot оборачивает
+набор patches и единственный применяет его как согласованное состояние.
+Конкретные format/storage/commit механизмы ещё требуют приёмки.
+
 ```text
 DAG → domain.read(query) → типизированный доменный результат
 DAG → domain.patch(change) → подготовленный patch без изменения состояния
@@ -61,6 +78,13 @@ GEN DAG обязателен: production вызывается через DAG; de
 разработчика, вызывающий те же стабильные доменные интерфейсы. Product
 CRUD/import нельзя объявить debug-входом для обхода этой границы.
 Существующий Gate: DAG G1–G5 не снимается.
+Конкретный связанный **план**, а не только ТЗ —
+[GEN-DAG-1](gen-dag-1-post-geo-ws.md). Межстадийное управление (выбор,
+порядок, зависимости, scope, planning/materialization) принадлежит DAG.
+CRUD и его реализация принадлежат генераторному домену. Patch не заменяет
+CRUD и не получает спрятанный pipeline через validate/build_result или
+вложенный сервис. Внутренние вычисления одной атомарной доменной операции
+допустимы; обёртка над несколькими независимыми стадиями — нет.
 
 ## 2. Ответственности и потоки
 
@@ -71,11 +95,12 @@ CRUD/import нельзя объявить debug-входом для обхода
 | DAG | Когда вызвать read/изменение/materialization; порядок доменных операций; сбор PatchSet |
 | Debug API | Тонкий developer entry к тем же domain API; сбор набора своего сценария |
 | Domain read | Данные и domain-owned результаты, missing/fallback/merged/raw semantics; обращение к своей инфраструктуре |
-| Domain change/planning | Смысл изменения, validation, данные планировки, зависимости и invalidation |
+| Domain change/planning | Реализация write-free create/update/delete: смысл изменения, validation, подготовленный typed результат, зависимости и invalidation; запуск по вызову DAG/debug |
 | Domain patch | Подготовка typed patch без изменения состояния; реализация доменного поведения, вызываемая только Snapshot при применении |
 | Generator/materializer | Pure compute из актуальных prepared inputs; domain output для последующего сохранения |
 | Snapshot lifecycle | Единственный владелец применения PatchSet; сохранение результирующего состояния и общей истории; immutable identity/lineage |
-| Domain storage / snapshot storage | Физическое хранение за соответствующими портами; кодирование/DB/file операции вне общего контракта |
+| Domain storage | Реализация записи своих SQL/pack данных; запускается только Snapshot при применении подготовленного результата |
+| Snapshot storage | Собственное хранение общей snapshot metadata/истории за storage-портом; не реализует SQL/pack запись доменов |
 
 Read не запускает generate/refine. Изменение metadata/planning само по себе
 не запускает materialization. Домен определяет актуальность/инвалидацию
@@ -85,6 +110,44 @@ Snapshot save сохраняет уже имеющиеся результаты,
 Владелец применения закреплён: только Snapshot. Точный atomicity/commit
 protocol согласуется в §7. Prepared patch нельзя объявить уже применённым,
 а запись отдельного домена — атомарным commit всего набора/хода.
+
+### 2.1. Две фазы: домен владеет реализацией, но не инициирует их
+
+Согласовано мастером: **домен реализует подготовку модификации и физическое
+сохранение своих данных в SQL/pack. Самостоятельно фазы не инициирует и
+не переключает.** Domain CRUD и storage logic не переносятся в Patch,
+Snapshot или DAG.
+
+| Фаза | Кто инициирует | Что реализует домен | Результат |
+|---|---|---|---|
+| Подготовка | DAG / debug API по публичному domain CRUD контракту | Read/validation и расчёт create/update/delete в рамках выбранной операции, без записи состояния | Typed prepared domain result или явный отказ/конфликт |
+| Применение/сохранение | Только Snapshot при применении PatchSet | Проверка применимости и добавление подготовленных SQL-версий/pack-артефактов через свой storage контракт | Typed результат записи и references для согласованного состояния/истории |
+
+Create подготавливает новый объект с предусловием отсутствия; update —
+переход от исходной версии; delete — историческое логическое удаление.
+Конкретные request/result типы принадлежат домену и семантике операции.
+Подготовка не вызывает запись автоматически; доменная запись не вызывает
+свою подготовку повторно, не запускает соседние стадии и не коммитит весь
+PatchSet самостоятельно. Конкретный commit/publication protocol ещё открыт.
+
+```text
+DAG/debug → domain CRUD preparation → prepared domain result
+         → domain Patch → PatchSet (возможен временный кэш)
+         → Snapshot → domain storage implementation → SQL/pack новые версии
+                    → согласованное состояние и общая история
+```
+
+Patch принимает подготовленный typed результат и описывает его исторический
+переход. Он не вызывает изменяющий CRUD повторно и не содержит repository,
+writer callback/SQL-команду или самостоятельный commit. Snapshot вызывает
+доменные контракты применения/записи, но не воспроизводит mapping, SQL,
+pack layout или бизнес-логику домена. Реализация хранения остаётся целиком
+у владельца домена; Snapshot владеет моментом её вызова и согласованностью
+набора. Собственная snapshot history storage отделена от domain persistence.
+
+Критическая приёмка для каждого Patch/пути: подготовка без изменений SQL/pack;
+запись инициирована Snapshot и делегирована домену; отсутствуют автоматический
+переход между фазами, самостоятельный commit и повтор бизнес-операции.
 
 ## 3. Patch и PatchSet по доменам
 
@@ -201,7 +264,39 @@ resume после restart или необходимость включать tra
 Evidence должно адресовать каждый класс по имени и сценарию. Общий
 contract-test допустим как переиспользуемый механизм, но он должен быть
 исполнен для каждого класса; один smoke на домен не заменяет эту проверку.
+При этом прослеживается фактическая цепочка вложенных вызовов класса:
+типизация и functional pass не оправдывают скрытую межстадийную оркестрацию.
+Это дополняет независимость от CRUD; per-node приёмка GEN-DAG-1 остаётся
+отдельным обязательным gate будущей DAG-интеграции и этим аудитом не закрывается.
 Классы/тесты ещё не созданы: это обязательная будущая приёмка, не выполненный test.
+
+### 3.5. Историчность patch для SQL и pack
+
+Patch должен описывать типизированный исторический переход: identity
+изменяемого объекта/части состояния, исходную версию/отсутствие, доменную
+модификацию и новую версию/результат. Для materialization сохраняются
+удерживаемые ссылки на соответствующие immutable pack-артефакты и их
+dependencies. Наличие SQL-данных и pack — разные storage representations
+одной истории, а не два независимых механизма изменений.
+
+История должна сохранять различие create/update/delete, исходного отсутствия
+и удаления. Полные before/after bodies либо ссылки на удерживаемые версии
+выбираются после архитектуры; одной ссылки на mutable latest недостаточно.
+Старая версия должна оставаться доступной для выбранного snapshot.
+
+Это требование к данным patch, не право patch писать историю самостоятельно.
+PatchSet может держать подготовленные результаты в кэше. Snapshot принимает
+набор, проверяет применимость и через storage-контракты добавляет новые SQL
+версии/pack-артефакты и фиксирует их совместное состояние/историю. Старый
+snapshot и его данные остаются неизменными. Хранение immutable ссылок не
+означает обязательного копирования всего pack для каждой операции.
+
+Приёмка каждого класса Patch включает сохранность прежнего SQL/pack
+состояния после изменения и наличие достаточной истории перехода.
+Прямые UPDATE/DELETE старого состояния, in-place pack rewrite или история,
+ссылающаяся только на latest, блокируют приёмку. Возможный отдельный prune/GC
+не является доменным delete; его политика хранения согласуется отдельно и
+не даёт мутации права потерять удерживаемую историю.
 
 ## 4. Snapshot по доменам
 
@@ -277,7 +372,9 @@ design 2026-10-24. Его реализация ещё не готова; нал�
 Обязательное переиспользование:
 
 - В phase 0 черновые правки сохраняют правила source versioning: revision
-  accounting ещё не вводится. В phase 1 семантическое изменение source
+  accounting ещё не вводится, но прежнее разрешение свободных SQL UPDATE
+  не переносится в новый append-only state contract. Представление черновой
+  истории требует согласования. В phase 1 семантическое изменение source
   создаёт новую revision независимо от in-flight. Label-only change не
   означает новую semantic revision; новая identity на каждую версию не создаётся.
 - Snapshot закрепляет source revision set и удерживает нужные тела.
@@ -298,8 +395,12 @@ design 2026-10-24. Его реализация ещё не готова; нал�
 
 Конкретные patch preconditions, stamps и snapshot revision-set binding
 согласуются до реализации. Правила capture-finalize, publication, CAS и
-retention берутся из source-versioning; координатор применения набора должен
-быть с ними согласован. Одного SQL BEGIN для атомарности SQL+files недостаточно.
+retention переиспользуются по смыслу с проверкой совместимости. Прежний
+протокол изменения SQL pointer/latest через UPDATE требует пересмотра под
+append-only commit; он не является утверждённым механизмом нового плана.
+Snapshot должен закрепить согласованный набор SQL/pack версий без перезаписи
+старого состояния. Способ concurrency/CAS/определения head — открытый контракт.
+Одного SQL BEGIN для атомарности SQL+files недостаточно.
 
 ## 7. Что ещё определить до реализации
 
@@ -316,7 +417,110 @@ retention берутся из source-versioning; координатор прим
 5. **Existing callers:** domain-by-domain read/write inventory, переход CRUD/
    import к разрешённым entry points, совместимость и Gate: DAG.
 6. **Storage contracts:** domain section serialization и snapshot persistence,
-   restore полнота, удержание references; storage-формат после архитектуры.
+   append-only SQL/pack, история переходов в patch, restore полнота и удержание
+   references; storage-формат после архитектуры. Пересмотреть mutable latest/
+   pointer из source-versioning без введения второго versioning механизма.
+
+### 7.1. Проверка текущих CRUD-контрактов (2026-10-27)
+
+Статическая проверка перечисленных путей, не полный аудит всех доменов и
+не runtime/test evidence. Пути ниже относительно `backend/app/`.
+
+| Проверенный путь | Текущее поведение |
+|---|---|
+| application/worldData/registries/worldService.py: create/update/delete/import_from_json | Валидирует и непосредственно вызывает repository writes; import использует upsert; Snapshot не участвует |
+| application/worldData/locations/namedLocationService.py: create/update/delete/import_from_json | Непосредственно вызывает repo.create/update/delete/upsert; подготовка и запись не разделены публичным контрактом |
+| application/worldData/mapCells/mapCellService.py: import_from_json/clear/save_generated/save_settlement_surface/save_pass | Запись/удаление SQL patches через repository; это persist methods, не подготовка будущего Patch |
+| application/worldData/mapCells/patchStoreService.py: upsert_patch | Непосредственный repo.upsert(MapCell); имя patch не означает реализацию нового интерфейса Patch |
+| application/worldData/regions/stateChange/consumer.py: evaluate/tombstone | Расчёт результата и repository write в существующей операции; не write-free preparation |
+| db/repositories/sqlite/base.py: insert/save/upsert/delete | Выполняет SQL; вне существующей transaction самостоятельно коммитит; наличие transaction не доказывает Snapshot ownership |
+| application/worldData/generators/terrain/terrainGeneratorService.py и generators/hydrology/hydrologyGeneratorService.py (тот же worldData namespace) | Проверенные public compute methods возвращают вычисленные результаты без repository writes; это не полный будущий domain CRUD контракт |
+
+В проверенных цепочках нет вызова общего snapshot apply. Генераторный CRUD
+из GEN-DAG-1 — целевая архитектурная boundary; существующие service/repository
+методы не объявляются автоматически готовым контрактом для нового пути.
+Их прямой вызов из Patch.validate/build_result приведёт к запрещённой записи
+до Snapshot и должен блокировать приёмку каждого такого класса.
+
+Object source versioning сейчас описано в world-source-versioning.md;
+runtime `SourceObjectId/SourceRevision` и общий `WorldSnapshotService` поиском
+в backend/app не обнаружены. Есть schema world_snapshots и отдельная проверка
+SurfacePlanningView/StateViewRevision в planning/guards/sourceRevision.py;
+это не реализация общего object revision store и snapshot commit lifecycle.
+Engine repair/PatchApplier меняет node_results/status, не заменяет этот механизм.
+
+До contract freeze необходимо определить и проверить отдельно:
+
+- write-free подготовку модификации и получение typed результата;
+- внутреннюю storage-запись только под Snapshot-owned apply/commit lifecycle;
+- ограничения на independent commits и доступность старых write entry points;
+- согласованность результирующего состояния, source revisions и snapshot history
+  при отказе/отмене. Одна ambient SQL transaction не является правом обхода Snapshot.
+
+Критическая проверка каждого Patch дополняется отсутствием SQL/domain-state
+мутации при подготовке/validation/cache без Snapshot, включая все вложенные
+CRUD вызовы. При ошибке Snapshot недопустим опубликованный результат без
+соответствующего зафиксированного состояния/истории по согласованному протоколу.
+Конкретные механизмы ещё не выбраны и не реализованы; legacy paths не исправлены
+этим документом. Код в рамках данного аудита не изменялся.
+
+### 7.2. Первичная materialization: обязательная сверка light_bake/full_bake
+
+**Первый bake не является исключением** из domain preparation → PatchSet →
+Snapshot apply. Для SQL и pack действует тот же append-only/history contract,
+что для последующих изменений. Bootstrap нельзя завершить прямой записью
+с последующим добавлением snapshot истории.
+
+Сохраняются существующие product contracts (`tz_world_pack_storage.md`
+§ Bake modes / Job boundaries и `tz_map_light_bake.md`):
+
+| Режим | Подготовленный результат | Что не включается |
+|---|---|---|
+| light_bake | Общий L0 compose на named_locations ∪ declared hydro tiles, locations_index и climate coarse; прочие климатические результаты только по existing policy | L2, C23 topology, C11 packing, entry job |
+| full_bake | Тот же L0 compose на весь world_bounds со швом мира; затем обязательный C23 plan_topology — второй шаг того же product job | L2, C11/settlement geometry, entry job |
+
+Межстадийный порядок L0 → C23 задаёт DAG по GEN-DAG-1; это не основание
+спрятать две стадии в Patch, Snapshot или generator CRUD. Локальные алгоритмы
+одной стадии остаются в домене. Partial light pack допустим; вход игрока
+не должен получить новую обязательную зависимость от полного full_bake.
+
+До architecture/contract freeze отдельно согласовать:
+
+1. **Исходное состояние:** от какого captured source/revision set строится
+   первая materialization; как представлены исходно отсутствующие SQL/pack
+   результаты и base snapshot. Наличие исходных world/location metadata не
+   означает наличие предыдущей materialization; fake base не создаётся.
+2. **Передача между стадиями:** как следующий шаг читает подготовленный L0
+   из PatchSet cache/рабочего представления, если он ещё не опубликован.
+   Для C23 нельзя предварительно публиковать L0 в обход Snapshot только
+   ради чтения существующим методом. Domain input contract должен быть явным.
+3. **Граница применения:** один commit всего light/full job либо явно
+   согласованные промежуточные snapshots/checkpoints. Product full complete
+   требует C23; промежуточный L0 нельзя объявить завершённым full_bake.
+   Вопрос числа snapshot commits ещё открыт, а не решён названием режима.
+4. **Bulk-результаты:** typed patches/results для batch/scope и immutable
+   артефактов; не обязательный отдельный patch/CRUD-вызов на каждую клетку.
+   Владение domain storage и per-class проверки независимости сохраняются.
+5. **Публикация:** initial bake тоже сохраняет SQL версии, pack manifest,
+   артефакты и историю только под Snapshot-owned lifecycle. Full после light
+   создаёт следующее состояние со ссылками на удерживаемые части, не стирает
+   старый pack. Долгая подготовка отделена от короткого commit; source pins
+   и staging lifetime должны покрывать весь согласованный сценарий.
+6. **Приёмка:** first light, first full, light→full, partial light, source edit
+   во время bake, отказ после L0/до C23 и между SQL/pack/history шагами,
+   retry и отсутствие публикации до Snapshot. Предыдущие состояния остаются
+   читаемыми. GEN-DAG-1 per-node и Patch per-class gates обязательны.
+
+Проверенные несовместимые existing paths: `pack/bake/l0/packMaterializationOrchestrator.py`
+вызывает WorldPackWriter, `_persist_bake_relief_grades` и PackBakePublisher;
+`pack/bake/finalize/packBakeFinalize.py` сохраняет manifest до repo.update(world);
+`pack/io/worldPackWriter.py` пишет по целевым путям, включая os.replace.
+Пути относительно application/worldData/. Эти механизмы сейчас не являются
+Snapshot-owned append-only publication. Это вход migration inventory, не
+разрешение переписать их в текущем документальном шаге или считать проблему решённой.
+
+Согласование этого раздела — prerequisite implementation новых patch/snapshot
+контрактов для первичного мира. Locked bake scope и DAG wiring сейчас не меняются.
 
 Эти вопросы нельзя оставить разработчику «решить по месту». Concrete SQL,
 DB-модели и имена existing services не заменяют архитектурного решения.
@@ -360,6 +564,15 @@ DB-модели и имена existing services не заменяют архит
 - `docs/tz_world_snapshot.md`: immutable история, domain sections, authoritative state.
 - `docs/tz_world_generation_dag.md`, `.cursor/rules/dag-generator-interface.mdc`:
   stable domain interfaces, production/debug separation, Gate: DAG.
+- [GEN-DAG-1](gen-dag-1-post-geo-ws.md): двусторонняя независимость
+  DAG/генератора, CRUD в домене, отсутствие скрытой межстадийной оркестрации
+  и приёмка фактической цепочки каждой ноды. Интеграция отложена до принятия
+  GEO-1 + WS и отдельного разрешения мастера. Упоминания patcher в его
+  integration step требуют синхронизации с текущим решением «применяет только
+  Snapshot» при contract freeze; самостоятельный apply entry не вводится.
+- `docs/tz_world_pack_storage.md` § Bake modes / Job boundaries и
+  `docs/tz_map_light_bake.md`: первичные light/full результаты и C23 порядок;
+  обязательная сверка snapshot lifecycle — §7.2 этого плана.
 - `world-source-versioning.md`: revisions/capture/retention/publication.
 - PC-11: domain application read-owner, operation-wide region state inputs,
   WP-20 fallback/overlay, отсутствие IO в workers и hidden materialization.

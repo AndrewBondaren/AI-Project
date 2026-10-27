@@ -201,6 +201,15 @@ service. Existing immutable/authoritative state semantics сохраняются
 журнал patches сам по себе не заменяет данные состояния при restore.
 Границы commit операции/набора/snapshot ещё определяются архитектурой.
 
+Уточнение мастера 2026-10-27: состояние SQL и pack добавляется новыми
+immutable версиями; исторические записи/артефакты не перезаписываются при
+модификации. Patch хранит историчность изменения обеих storage representations.
+Snapshot оборачивает набор patches и единственный применяет его, фиксируя
+согласованный набор версий. Source-versioning mutable latest/pointer и
+черновые свободные UPDATE требуют пересмотра; append-only commit protocol
+пока не выбран. Журнал операций и доступные версии состояния сохраняют
+разные роли; история не может ссылаться только на изменяемый latest.
+
 Pure generators получают готовые inputs и возвращают domain output;
 не читают БД/WS, не формируют patches и не сохраняют snapshots.
 Materialization — явная отдельная операция из актуального плана;

@@ -2003,13 +2003,14 @@ world-source-versioning OCC заменяется revision-set stamp; этот т
 не реализует. Settlement publication остаётся отдельным долгом.
 
 Статус: PC-9A принят; PC-9 caller/DI/publication ownership и PC-10 реализованы
-и проверены. **PC-11 IMPLEMENTED / VERIFIED, responsibility gate PASS
-(2026-10-27), ожидается приёмка PC-11.8 мастером.** Повторная проверка семи
+и проверены. **PC-11 DONE / ACCEPTED (2026-10-27), переход к PC-12
+разрешён мастером.** Повторная проверка семи
 review находок подтверждает domain owners, один request capture/prepare,
 domain-owned projections, отсутствие generator→pack и legacy fact chain.
 Existing parent-light/UOW guards и read без materialization сохранены.
-Evidence — PC-11.8 в delivery SoT; DONE PC-11 и снятие блокировки PC-12
-требуют приёмки мастером. Snapshot runtime остаётся отдельным треком.
+Evidence — PC-11.8 в delivery SoT. PC-12 IMPLEMENTED / VERIFIED (2026-10-27):
+production-root/cache/revision приёмка пройдена; ожидается приёмка мастером,
+основной GEO-1 не активирован. Snapshot runtime остаётся отдельным треком.
 Delivery SoT — [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md),
 §6.25–6.33 и §7 PC-11. Карта PC-11.1 сначала фиксирует домен, владельца,
 ответственность и точный путь; только затем закрываются пробелы на стыках.

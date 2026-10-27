@@ -7267,13 +7267,10 @@ MountainContributor поимённо переведены на frozen inputs.
 
 **PC-11 — L2 consumer cutover и исправление архитектурных границ.**
 
-**IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-27),
-ожидается приёмка PC-11.8 мастером.** Прежняя DONE-пометка, снятая
-2026-10-24, не восстанавливается автоматически: PC-11.1…PC-11.7 реализованы,
-повторная функциональная и архитектурная проверка PC-11.8 приведена ниже.
-Нерешённых нарушений семи review находок не обнаружено; PC-12 остаётся
-заблокирован до приёмки мастером. Исторический design gate PC-11.1 закрыт
-согласованной class map и caller ledger, приведёнными в соответствующем подпункте.
+**DONE / ACCEPTED (2026-10-27): мастер разрешил переход к PC-12 («Далее»).**
+PC-11.1…PC-11.8 закрыты; семь review находок проверены повторно, evidence ниже.
+Блокировка PC-12 снята. Исторический design gate PC-11.1 закрыт
+согласованной class map и caller ledger соответствующего подпункта.
 
 **Историческое evidence функционального cutover (не архитектурный DONE).**
 
@@ -9021,8 +9018,7 @@ Done: production legacy context/projector отсутствует, все callers
   единый typed input; нет outline-only fallback или пустых compatibility entry.
 
 **PC-11.8 — повторная функциональная и архитектурная проверка PC-11.**
-Статус: **IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-27), готов к приёмке мастера.**
-PC-11 DONE и разрешение PC-12 требуют приёмки мастером; PC-12 не начинался.
+Статус: **DONE / ACCEPTED (2026-10-27), переход к PC-12 разрешён мастером («Далее»).**
 
 Повторная проверка семи review находок (новое evidence, не прежние 448 tests):
 
@@ -9184,7 +9180,11 @@ Done: все семь находок закрыты evidence и приняты �
   опираться на них.
 
 **PC-12 — приёмка входного блока (без новых domain algorithms).**
-**BLOCKED BY PC-11.1…PC-11.8:** не начинать до их закрытия и приёмки PC-11.
+**IMPLEMENTED / VERIFIED (2026-10-27), готов к приёмке мастера; PC-11 принят.**
+Production Container acceptance в existing test_wiring: 8 namespaces → один backend, HIT без build, edit без invalidation → точная downstream closure, clear/restart и workers=1/4 → одинаковые envelopes.
+Проверки §6.27 (`PYTHONPATH=backend;backend/tests`, `.venv/Scripts/python.exe -m unittest`): planning discover — 292 OK, cache discover — 21 OK, пять mandatory + parent-light/fine-parallel/outline/landcover/state/climate/entry regressions — 182 OK; compileall и diff --check — OK. Async suites выполнены вне sandbox по причине socketpair из PC-11.8.
+Pyright valid — 212 files, 0 errors/warnings; negative exact — 65 diagnostics, missing/unexpected=0. Cases §6.22 покрыты existing suites + новым production-root case; TTL=None по frozen policy.
+Baseline delta нет; production/городские/локационные caches не менялись, новых modules нет (consumers6→6, WARN выдан). Основной GEO-1 не начинался: требуется отдельная команда мастера после приёмки PC-12.
 Цель: доказать production wiring и отсутствие второго SoT.
 Файлы: acceptance tests/evidence с composition root/providers/consumers;
 test modules группировать в tests/cache и tests/planning/{contracts,

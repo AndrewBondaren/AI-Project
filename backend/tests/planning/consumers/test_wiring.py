@@ -87,6 +87,52 @@ class WiringTests(unittest.TestCase):
             with self.assertRaises(PlanWaitCancelled):
                 assemblers[0].prepare(self.view, wait=RequestPlanWait.unbounded())
 
+    def test_production_domains_share_backend_and_rebuild_after_clear_restart_and_edit(self):
+        from app.core.appSettings import app_settings
+        from app.core.container import Container
+        from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
+        from app.dataModel.surfacePlanning.surfacePlanBindings import PC_SURFACE_BINDINGS
+
+        source = world()
+        outputs = []
+        for workers in (1, 4):
+            resources = PlanningRuntimeSettings(
+                cache=CachePolicy(max_retained_bytes=10000000, max_entry_bytes=5000000),
+                execution=PlanningExecutionPolicy(max_workers=workers, max_pending_builds=8))
+            with self.subTest(workers=workers), patch.object(app_settings, "planning", resources):
+                container = Container(None, None)
+                self.addCleanup(container.shutdown_planning)
+                entry = container.surface_planning_entry()
+                backend = container.planning_memory_cache()
+                registry = container.plan_registry()
+                with patch.object(backend, "put", wraps=backend.put) as puts:
+                    first, _ = entry.require_plan_inputs(source, [], wait=Wait())
+                self.assertEqual({str(call.args[0].key.contract.id) for call in puts.call_args_list},
+                    {str(binding.cache_id) for binding in PC_SURFACE_BINDINGS})
+                self.assertEqual(puts.call_count, 8)
+                self.assertGreater(backend.retained_bytes, 0)
+                with patch.object(registry, "build", wraps=registry.build) as builds:
+                    hit, _ = entry.require_plan_inputs(source, [], wait=Wait())
+                builds.assert_not_called()
+                self.assertEqual(first, hit)
+                # No invalidation: authoritative input revision must select new keys.
+                edited_source = replace(source, hydrology={"enabled": False,
+                    "default_rivers": {"channel_depth_cells": 7}})
+                with patch.object(registry, "build", wraps=registry.build) as builds:
+                    edited, _ = entry.require_plan_inputs(edited_source, [], wait=Wait())
+                self.assertEqual([str(call.args[0].metadata.id) for call in builds.call_args_list],
+                    ["surface.pc." + slot for slot in
+                        ("hydrology_routes", "river_relief", "hydrology", "climate_local")])
+                self.assertNotEqual(first.view_revision, edited.view_revision)
+                backend.clear()
+                self.assertEqual(backend.retained_bytes, 0)
+                rebuilt, _ = entry.require_plan_inputs(source, [], wait=Wait())
+                self.assertEqual(first, rebuilt)
+                outputs.append(first)
+                container.shutdown_planning()
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(outputs[0], outputs[1])
+
     def test_entry_requires_wait_and_retains_no_extent_semantics(self):
         source = world(world_bounds=None)
         entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
