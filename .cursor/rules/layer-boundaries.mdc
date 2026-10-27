@@ -22,7 +22,9 @@ Persist — **не** в генераторе. Target: запись только 
 - Только HTTP: validate → service/repo → response DTO.
 - ❌ генерация мира, сбор LLM context, engine passes, дублирование логики из `application/`.
 
-Debug routes — тоже тонкая оболочка над сервисом, не второй движок.
+Debug routes — тоже тонкая оболочка над сервисом, не второй движок; для
+оркестрации мира (bake, PatchSet → Snapshot) debug route вызывает тот же
+граф DAG, своего порядка стадий не держит.
 
 ## Boundary-адаптеры: только граница, не домен
 
