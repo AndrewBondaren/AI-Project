@@ -28,6 +28,13 @@ Patch хранит историчность перехода для SQL и pack:
 Формат истории и append-only publication/head contract ещё согласуются;
 прежняя SQL write реализация этим не объявляется совместимой.
 
+**Staged artifacts (мастер, 2026-10-27):** объёмные результаты
+materialization до commit — недостижимые из head staged artifacts/rows;
+их пишет доменная операция materialization через staging port по вызову
+DAG/debug API. Patch несёт content-hash ref, не путь; commit Snapshot —
+единственная точка, делающая их достижимыми. Норматив —
+[`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точка commit».
+
 **Владение двумя фазами (мастер, 2026-10-27):** домен реализует как
 write-free CRUD preparation, так и запись своих SQL/pack данных. Подготовку
 инициирует DAG/debug API; применение и запись инициирует только Snapshot.

@@ -57,6 +57,64 @@ materialization, впервые полученного после создани
 решением до реализации; сохранение только уже материализованных данных
 без данных планирования мутаций ему не соответствует.
 
+## Staged artifacts и точка commit (решение мастера, 2026-10-27)
+
+Закрывает вопрос записи объёмных результатов до commit Snapshot
+([план](../.cursor/plans/world-domain-patches-snapshots.md) §3.3, §7.2).
+
+**Authoritative state — только достижимое из head snapshot:**
+`snapshot → manifest@hash → blobs@hash` и SQL-версии, связанные с этим
+snapshot. Запрет «подготовка не изменяет authoritative state» означает:
+подготовка не создаёт **достижимого** состояния. Недостижимая запись
+staged-данных этот запрет не нарушает и не является применением patch.
+
+| Категория результата | Где до commit | Кто пишет |
+|---|---|---|
+| Небольшие typed результаты (planning/metadata, locations_index) | Память PatchSet (кэш §3.3 плана) | — |
+| Объёмные immutable blobs (L0/climate tiles, L2 chunks) | Staged artifact: content-addressed blob, недостижимый из head | Доменная операция materialization через доменный staging port |
+| Производные SQL-строки (relief grades, дельты клеток) | Staged rows с `artifact_id`, невидимые читателям до commit | Та же доменная операция через staging port |
+
+Правила:
+
+1. **Инициатор staging** — доменная операция materialization (application
+   слой) по вызову DAG/debug API. Generator/worker остаются pure и IO не
+   делают. Snapshot staging не инициирует и materialization не запускает.
+2. **Ссылка, не путь.** Операция возвращает typed ref на staged artifact
+   (kind, format, content_hash, nbytes) без файлового пути; Patch несёт этот
+   ref. Смена storage layout/backend не меняет Patch (план §3.4).
+   Имя и поля типа фиксируются на contract freeze.
+3. **Snapshot apply** проверяет существование и content_hash каждого ref
+   (результат в кэше не подменён) → вызывает доменный publish refs
+   (включение в immutable manifest; content-addressed blobs не перемещаются)
+   → одной короткой SQL-транзакцией фиксирует SQL-версии, видимость staged
+   rows и snapshot record. **Эта транзакция — единственная точка commit**;
+   до неё staged данные недостижимы для чтения состояния.
+4. **Передача между стадиями** (L0 → C23): следующая стадия читает через
+   доменный read с рабочим представлением «head + staged refs из PatchSet».
+   Предварительная публикация L0 в обход Snapshot не требуется и запрещена.
+5. **Отказ, отмена, retry.** Staged данные удерживаются lease по
+   `operation_id` (holder без TTL, как в world-source-versioning). Без commit
+   они — мусор для GC. Retry с тем же `operation_id` идемпотентен и
+   возвращает прежний outcome. GC live-set = достижимое из snapshots ∪
+   активные staging leases.
+6. **Pack, целевое состояние:** content-addressed blobs + immutable
+   manifest@hash вместо записи по координатным путям с `os.replace` поверх
+   опубликованного файла ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)
+   § Инварианты). Текущие `WorldPackWriter._atomic_write`,
+   `publish_settlement_structure`, `save_manifest` и
+   `finalize_pack_on_world` несовместимы — вход migration inventory,
+   этим решением не исправлены.
+7. **Переиспользование:** протокол staging/holder/GC/idempotent retry берётся
+   из [world-source-versioning](../.cursor/plans/world-source-versioning.md)
+   (STAGE/STAGE-SQL, holder handoff); второй механизм не вводится.
+   Связь точки commit Snapshot с CAS-активацией и владельцем commit source
+   revision этим пунктом не решена.
+
+**Открыто:** lazy L2 refine — один snapshot на запрос refine либо
+накопление staged refs в PatchSet хода.
+
+Конкретные типы, порты, файлы и DDL не выбраны; реализация не разрешена.
+
 ## Обязательное разделение ответственности — gate каждого шага WS
 
 **Критическое требование мастера (2026-10-26): разделение ответственности
@@ -473,6 +531,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 |---|---|
 | 2026-06 | Initial TZ — единый `WorldSnapshotService`; disambiguation от climate field cache |
 | 2026-10 | Две цепочки: `world_snapshots` + `player_snapshots` (player отделён для export/import и time travel); patch set хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
+| 2026-10-27 | Staged artifacts и единственная точка commit Snapshot; authoritative = достижимое из head; pack target content-addressed |
 
 ---
 

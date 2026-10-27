@@ -127,6 +127,15 @@ flowchart TB
 | WP-6 | `world_snapshots` хранит `pack_content_hash` + patch revision, **не** дублирует L2 blob |
 | WP-7 | Determinism: world + seed + pack_version → идентичный bake |
 
+**Целевое уточнение (мастер, 2026-10-27):** pack append-only — blobs
+content-addressed, manifest immutable и адресуется hash; опубликованный файл
+не перезаписывается (`os.replace` по координатному пути — legacy).
+До commit Snapshot новые blobs — staged artifacts, недостижимые из head;
+их пишет доменная операция materialization через staging port, а не
+generator и не Snapshot. WP-2 «только `WorldPackWriter`» этим пересматривается
+на contract freeze. Норматив — [`tz_world_snapshot.md`](./tz_world_snapshot.md)
+§ «Staged artifacts и точка commit».
+
 ---
 
 ## Продуктовые идеи (утверждено)

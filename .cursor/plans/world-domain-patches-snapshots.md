@@ -565,6 +565,13 @@ Snapshot apply. Для SQL и pack действует тот же append-only/hi
    retry и отсутствие публикации до Snapshot. Предыдущие состояния остаются
    читаемыми. GEN-DAG-1 per-node и Patch per-class gates обязательны.
 
+**Решено мастером 2026-10-27 (п.2, п.4, п.5 частично):** staged artifacts —
+недостижимые из head content-addressed blobs и staged SQL rows пишет доменная
+операция materialization через staging port; Patch несёт hash-ref; commit
+Snapshot — единственная точка достижимости; L0 → C23 через «head + staged
+refs». Норматив — `docs/tz_world_snapshot.md` § «Staged artifacts и точка
+commit». Открыто: lazy L2 refine — snapshot на запрос либо накопление в ходе.
+
 Проверенные несовместимые existing paths: `pack/bake/l0/packMaterializationOrchestrator.py`
 вызывает WorldPackWriter, `_persist_bake_relief_grades` и PackBakePublisher;
 `pack/bake/finalize/packBakeFinalize.py` сохраняет manifest до repo.update(world);
