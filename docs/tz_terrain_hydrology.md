@@ -9,6 +9,53 @@ metadata:
 > **Статус 2026-10-21:** HY-12 шаги 1–4 реализованы: declare/placement → relief basin carve → компоненты, spill/physical union, strict fill, classify и dry shore. Профильная регрессия — 344 tests OK; offline world_test_004 подтверждает уровни/UID через wrapped-шов и детерминизм. Реки (шаг 5), финальная cleanup/HTTP-приёмка (шаг 6), W/L runtime/history/persist и HY-10 остаются открытыми.
 > **Связь:** дополняет [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Terrain layers п.3; **не** заменяет climate liquid overlay.
 
+## GEO-1 — designed water и граница HY-12
+
+**G0 target, 2026-10-27; production switch только G10-A.**
+До switch действуют existing HY-12/baseline declare/placement и old policy
+defaults. В частности, приведённые ниже baseline zero-priority coastline
+и category autoresolve defaults не являются target GEO-1 правилами.
+Полный норматив — [GEO-1](./tz_terrain_generation.md#geo-1--нормативный-контракт-designed-water).
+
+Source settings живут в existing world.hydrology и body/category generation
+POJO; physical resolved WaterBody не является источником authored overrides.
+WorldHydrology.enabled=False — абсолютный запрет; autoresolve=False для
+допущенной гидрологии выбирает DECLARED_ONLY, True — AUTORESOLVE.
+HydrologyExecutionMode (DISABLED/DECLARED_ONLY/AUTORESOLVE) — computed domain
+enum, отдельный от общего ResolutionMode и от cascade scope.
+Domain definition связывает enabled с ObjectAdmissionPolicyDefinition,
+общий PolicyResolver выбирает execution mode; generator/adapter не повторяет
+bool gates и не реализует свой resolve. Value-selection mode не требует
+placement priority; object admission/strategy — отдельная operation.
+
+В G10-A HydrologySeasPolicy и HydrologyLakesPolicy читают POJO default
+placement_specificity=1; authored 0 остаётся DISABLED. Terminal priority=0
+общий, без duplicate auto/effective priority и without-water special case
+в PreparedPlacement. Water source и dependent shoreline boundary имеют разные
+typed purpose; отсутствующий/failed support не является dry/disabled.
+Settings None наследует по ROOT/WORLD/CATEGORY/WATER_BODY; terminal defaults
+water_fraction=0.60, autoresolve=False, strategy=continental_noise.
+
+Design использует terrain-owned region extent и pre-hydrology facts,
+общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
+превращаются в BasinSpec, применяемый existing relief writer ровно один раз.
+SeaLevelPolicy/default_water_level, declared per-body z_water_level,
+strict fill z<level, spill/merge и derived shore остаются HY-12 owners.
+Generated floor — абсолютный Z, depth — Z cells, coverage budget — fine²;
+нельзя смешивать noise score, elevation и coarse/fine площади.
+Final source→physical-body mapping учитывает merge/split/dry; dependent
+boundary не выбирает произвольный body/уровень по source UID.
+
+Shore coating читает typed substrate evidence и decision общего policy:
+unknown обязательного материала — issue, не fabricated sand/stone.
+Runtime применяет только declared fallback с сохранением issue/provenance
+и WarningError через existing sink; validate_only не материализует fallback.
+Generated ocean design не переносит mountain generation в plate strategy.
+Natural-only classify сохраняется; конкурирующее old sea/ocean discovery
+из post-carve surface удаляется в том же G10-A switch.
+Fine river search/manifest pre-river base — отдельный HY-RIV-1 R1/R2 gate,
+не coarse fallback и не deliverable GEO-1.
+
 ## Утверждено (2026-06)
 
 | # | Решение |

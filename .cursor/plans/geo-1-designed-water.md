@@ -9180,11 +9180,11 @@ Done: все семь находок закрыты evidence и приняты �
   опираться на них.
 
 **PC-12 — приёмка входного блока (без новых domain algorithms).**
-**IMPLEMENTED / VERIFIED (2026-10-27), готов к приёмке мастера; PC-11 принят.**
+**DONE / ACCEPTED (2026-10-27): мастер разрешил следующий шаг GEO-1 («Далее»).**
 Production Container acceptance в existing test_wiring: 8 namespaces → один backend, HIT без build, edit без invalidation → точная downstream closure, clear/restart и workers=1/4 → одинаковые envelopes.
 Проверки §6.27 (`PYTHONPATH=backend;backend/tests`, `.venv/Scripts/python.exe -m unittest`): planning discover — 292 OK, cache discover — 21 OK, пять mandatory + parent-light/fine-parallel/outline/landcover/state/climate/entry regressions — 182 OK; compileall и diff --check — OK. Async suites выполнены вне sandbox по причине socketpair из PC-11.8.
 Pyright valid — 212 files, 0 errors/warnings; negative exact — 65 diagnostics, missing/unexpected=0. Cases §6.22 покрыты existing suites + новым production-root case; TTL=None по frozen policy.
-Baseline delta нет; production/городские/локационные caches не менялись, новых modules нет (consumers6→6, WARN выдан). Основной GEO-1 не начинался: требуется отдельная команда мастера после приёмки PC-12.
+Baseline delta нет; production/городские/локационные caches не менялись, новых modules нет (consumers6→6, WARN выдан). Переход к нормативному G0 разрешён мастером; activation остаётся G10-A.
 Цель: доказать production wiring и отсутствие второго SoT.
 Файлы: acceptance tests/evidence с composition root/providers/consumers;
 test modules группировать в tests/cache и tests/planning/{contracts,
@@ -9205,6 +9205,9 @@ GAP-SOURCE/FIELD/AREA/SURFACE/OUTCOME нового designed-water target.
 cache и не переопределяет общий planning API внутри terrain.
 
 ### G0 — нормативный контракт
+Статус: **IMPLEMENTED / VERIFIED (2026-10-27), готов к приёмке мастера.**
+Синхронизированы tz_terrain_generation/cascade_context/map_light_bake/terrain_hydrology: settings/units/owners, общий policy/zero, priority defaults=1 и единый G10-A switch; baseline до switch явно отделён.
+Проверка: сверка с §4/§5.4/§6.8–6.9/§6.29-A…M, локальные ссылки и diff --check. Только документы; production defaults/код не менялись, baseline delta нет. G0-A/G0-S/G0-PT не выполнялись этим шагом.
 Цель: закрепить решения и закрыть Q перед кодом.
 ТЗ: tz_cascade_context §2–4; tz_map_light_bake §Placement P1/P2/P3;
 tz_terrain_hydrology §Declare, SeaLevelPolicy, Procedural sea;

@@ -8,6 +8,123 @@ metadata:
 
 > **Архитектура нод:** terrain-ноды пишут в `state.terrain_context: TerrainContext`. См. `tz_engine_node_context.md`.
 
+## GEO-1 — нормативный контракт designed water
+
+**G0, 2026-10-27: target для основной GEO-1, до G10-A не активирован.**
+Действующий production baseline использует принятый PC planning/cache.
+Ранние G0-PT…G9-S создают и проверяют isolated contracts/helpers;
+единственный production switch — G10-A. Подготовительный PC не объявляет
+реализованными designed water, общий snapshot runtime или fine river search.
+Delivery SoT: [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md),
+§5.4 (owners), §6.8–6.9 (policy), §6.20 (lifecycle), §6.29-A…M (exact schemas).
+
+### Настройки, область и единицы GEO-1
+
+Authoritative authored settings находятся только в existing
+`world.hydrology`: `generation: WorldWaterGenerationSettings`, category
+settings и body `generation: BodyWaterGenerationSettings`. Новых SQL/world
+scalar копий нет. Общая схема `WaterGenerationSettings` содержит:
+
+- `water_fraction`: nullable finite float в [0,1], bool недопустим;
+- `autoresolve`: nullable StrictBool;
+- `strategy`: nullable DesignedWaterStrategyKind, закрытый enum
+  `authored_region / continental_noise / plate / plate_noise`.
+
+Все authored defaults — None через DefaultWhenMissing. Это наследование,
+а не unresolved error и не concrete default. Terminal `WaterGenerationDefaults`
+даёт water_fraction=0.60, autoresolve=False, strategy=continental_noise.
+Defaults читаются из POJO через существующий cascade/FieldRef;
+ручные or-цепочки и повторный resolve у consumer запрещены.
+Ось ROOT→WORLD→CATEGORY→WATER_BODY, category SEA/OCEAN/LAKE;
+INLAND_SEA использует SEA, реки в эту ось не добавляются.
+Точная карта каналов — [каскад GEO-1](./tz_cascade_context.md#geo-1--водная-ось-каскада).
+
+Область генерации принадлежит terrain: TerrainRegionsSnapshot и выбранный
+TerrainRegionExtent, а не bbox текущего materialization request.
+Coverage/union/budget измеряются в world-fine XY cells и fine²;
+coarse/fine coordinates имеют разные типы. XY масштаб — через готовый
+SurfaceGridSettings, Z — FineZ/world Z cells; noise score не является Z.
+Topological seams и aliases нормализует WorldTopology; seam не создаёт
+вторую площадь или identity. Exact coverage — fine-cell spans/union,
+не число L0 samples и не bbox area.
+
+### Общая policy GEO-1
+
+`dataModel/policy/` владеет frozen specs/rules/effects/decisions и общей
+ObjectAdmissionPolicyDefinition; `application/policy/PolicyResolver` —
+единственный исполнитель. Domain definitions объявляют bindings/cases,
+facts providers возвращают typed observations; они не решают admission,
+effective priority, fallback или execution mode повторно.
+Общий engine не исполняет cascade, geometry, material comparison или scoring.
+
+Predicate refs переиспользуют прямой typed FieldRef на frozen BaseModel
+с extra=forbid и instance revalidation. DirectValueRef читает scalar;
+FactValueRef читает KnownFact / WaitingFact / UnknownFact. KnownFact(None)
+не равен Unknown. Conditions — AND из Equal/InSet/IsPresent, OR — отдельные
+rules; нет raw DSL, nested selector или consumer lambda predicates.
+RulePrecedence — strict nonnegative int, отдельный от placement Specificity.
+Стадии: ABSOLUTE_GATE → PRIORITY → SUPPORT → BEHAVIOR; более высокий
+precedence побеждает, несовместимые equal-precedence selections дают
+RULE_CONFLICT, не выбор по имени. Rule id стабилизирует diagnostics.
+
+PolicyOperation разделяет OBJECT_ADMISSION и VALUE_SELECTION.
+ObjectAdmissionPolicySpec требует authored/domain/terminal priority refs;
+authored non-None побеждает выбранный domain default, затем terminal 0.
+Абсолютный запрет/применимый enabled=False либо effective priority=0
+дают DISABLED; domain rule не может отменить zero-disable. В G10-A defaults
+HydrologySeasPolicy/HydrologyLakesPolicy.placement_specificity становятся 1;
+явный 0 сохраняется. До G10-A old production defaults остаются 0.
+ValueSelectionPolicySpec не имеет priority refs, пропускает PRIORITY;
+он выбирает behavior, не отключается от неприменимого terminal priority.
+
+PolicyDecision[B:Enum,R:Enum] разделяет behavior и domain reason, несёт
+operation/state, effective_priority, behavior, reasons, waiting_supports,
+provenance и issues. READY object требует priority>0; READY value требует
+behavior и priority=None. WAITING_SUPPORT требует supports, UNRESOLVED —
+issues. Unknown обязательного факта не становится False/0/DISABLED.
+Объявленный runtime fallback сохраняет issue/provenance; validate_only
+остаётся unresolved. Provenance различает AUTHORED/DOMAIN_DEFAULT/
+TERMINAL_DEFAULT/RULE/FALLBACK. Exact records/effects/fallback matrix —
+[§6.29-C](../.cursor/plans/geo-1-designed-water.md#c-общий-rule-engine-конечная-схема-и-truth-table).
+
+### Planning и доставка GEO-1
+
+Поток: capture coherent source view → cascade → policy → region coverage
+и общий WaterCoverageBudget → strategy field/draft → общий preparer →
+один P2 placement batch → BasinSpec → existing relief writer → HY-12 fill
+→ source-to-physical-body mapping → dependent boundaries → shore coating.
+Authored coverage учитывается union ровно один раз; auto budget не меняет
+authored constraints. Процедурный source не требует fake geometry/area
+для admission. Disabled объект не попадает в ready queue, не резервирует
+пространство и не создаёт spec/carve. Supports обслуживает существующая
+DependencyQueue, без второго scheduler и без повторного cascade/RNG.
+
+Стратегия формирует поле/профиль, не отдельные placement priority или Z writer.
+plate_noise = clamp(P + detail_weight*N,-1,1); нулевой detail даёт plate.
+Общий threshold/preparer выбирает coverage с deterministic tie-break,
+создаёт typed draft и metadata; exact field formulas/knobs — §6.29-F.
+Depth/floor/bands и waterline подчиняются existing HY-12 контракту;
+physical body после merge/spill не становится authored settings source.
+Surface coating получает typed substrate facts и готовый policy decision,
+не переписывает неизвестный материал скрытым default.
+
+Layout/revision строятся до materialization. Edit перепланирует affected
+dependency closure; L0/L2 по запросу читают coherent refs одного capture.
+Полный extent определяет планировку, tile/LOD ограничивает delivery.
+Cache — rebuildable immutable projection: HIT/MISS/clear/restart/worker count
+не меняют identity/geometry; cache не определяет latest source state.
+Parent light остаётся persisted L0 SoT, publication проверяет existing UOW
+revision guard. Нет eager bake после edit, replay snapshot history ради
+одного ответа или нового world snapshot/patch service внутри генераторов.
+HY-RIV-1 R1/R2 остаётся отдельным gated track без coarse fallback.
+
+Приёмка: typed source/FieldRef/enum pairs, runtime/preview parity,
+zero/disabled/waiting/unknown, production default→policy→P2, clear/restart,
+same-plan L0/L2/full/partial, seams и deterministic identities, no double
+carve, declared/auto union budget, body merge/split/dry mapping и real
+WarningError sink. Exact planned suites — GEO-1 §6.29-L; до создания
+новых modules их runtime/typecheck не объявляется выполненным.
+
 ## Назначение
 
 `TerrainGeneratorService` — **pure utility** (без репозиториев, без async).  
@@ -2008,9 +2125,9 @@ world-source-versioning OCC заменяется revision-set stamp; этот т
 review находок подтверждает domain owners, один request capture/prepare,
 domain-owned projections, отсутствие generator→pack и legacy fact chain.
 Existing parent-light/UOW guards и read без materialization сохранены.
-Evidence — PC-11.8 в delivery SoT. PC-12 IMPLEMENTED / VERIFIED (2026-10-27):
-production-root/cache/revision приёмка пройдена; ожидается приёмка мастером,
-основной GEO-1 не активирован. Snapshot runtime остаётся отдельным треком.
+Evidence — PC-11.8 в delivery SoT. PC-12 DONE / ACCEPTED (2026-10-27):
+мастер разрешил переход к GEO-1; production activation остаётся G10-A.
+Snapshot runtime остаётся отдельным треком.
 Delivery SoT — [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md),
 §6.25–6.33 и §7 PC-11. Карта PC-11.1 сначала фиксирует домен, владельца,
 ответственность и точный путь; только затем закрываются пробелы на стыках.

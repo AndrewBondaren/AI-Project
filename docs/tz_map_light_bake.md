@@ -45,6 +45,10 @@ metadata:
 
 ### Placement priority
 
+**Статус:** нижеследующий existing placement/coastline контракт описывает
+baseline до G10-A. Target GEO-1 priority=0 и source/boundary semantics
+заданы в § «GEO-1 — общий policy и placement»; частичная activation запрещена.
+
 **Утверждено мастером 2026-10-08; целевой контракт географических регионов, реализация отдельно.** Применяется к семантическому и абсолютному размещению. Общая runtime/worldEdit политика — [tz_runtime_world_edit_policy.md](./tz_runtime_world_edit_policy.md).
 
 **Уточнение мастера 2026-10-20:** это единый контракт **всех объектов генератора**, а не только географических регионов или landcover. Разрешение размещения выполняет **общий resolver**; доменные генераторы предоставляют свои ограничения и зависимости, но не вводят собственный порядок приоритетов или отдельный resolve. Водные объекты и coastline подчиняются этому же контракту. При переносе контракта из L0 в общий слой этот раздел остаётся ссылкой на единый SoT, а не отдельной реализацией правил.
@@ -135,6 +139,37 @@ ResolveContext.collect_only собирает diagnostics без логирова
 Preparation содержит successful prepared entries и явные failures (`source_uid` + FieldPathError); geometry failure не отменяет независимые entries. Ошибки неполного snapshot/дубли UID отклоняют input через существующую валидацию. Runtime preparation facts логируются, validate_only получает те же code/path/reason в report без writes. Общий P2 получает `preparation.objects` вместе с intents других доменов, без отдельного resolve внутри adapter. Нормативная геометрия coastline/лимиты — `tz_terrain_hydrology.md` § Declare. Planar clipping отсутствует; неоднозначный compact ring unresolved.
 
 `resolved_water_placements(preparation, result)` проверяет соответствие world/snapshot и exact prepared input, затем возвращает `ResolvedWaterPlacement` только для resolved entries. Caller сохраняет общий result/unresolved и preparation failures; пустая tuple records не означает успешное размещение всех источников. Floor/rim metadata доступны по исходному source UID; их маппинг в spec принадлежит HY-12/3. Adapter не вызывает carve/fill и не меняет surface_z. Включение в реальный pipeline выполняет HY-12 на границе общего pre-1.4 прохода; готовый adapter сам по себе не означает миграцию legacy materialize.
+
+### GEO-1 — общий policy и placement
+
+**G0 target, 2026-10-27; activation только G10-A.** Общая policy definition
+объявляет запрет создания, единый PolicyResolver исполняет его, P2 обеспечивает
+non-creation. Эффективный placement priority=0 означает DISABLED для любого
+домена: без queue reservation, accepted geometry, BasinSpec/carve. Authored
+значение сохраняется; None/unknown не подменяются 0. RulePrecedence и
+placement_specificity — разные оси. Каскад, geometry gates, terrain merge
+rank и WP-20 layer priority остаются у своих owners.
+
+Порядок positive-ready конкурентов остаётся specificity↓, original area↓,
+stable region_uid↑; supports должны быть разрешены раньше ребёнка.
+Object admission начинается с typed identity/header без fake geometry.
+Итоги P2 различают RESOLVED/DISABLED/UNRESOLVED и сохраняют identity;
+общий DependencyQueue обслуживает supports, не отдельный policy scheduler.
+
+Coastline-source и dependent boundary — разные purpose. Source участвует
+в общем design/placement; его будущий fill не является pre-carve support.
+Boundary-without-water задаётся domain facts/definition и общим решением
+DISABLED, а не повторным WaterPresence if в adapter/effective property.
+До G10-A действует baseline выше; G5-CP готовит isolated target contracts.
+
+В G10-A одновременно меняются seas/lakes POJO priority defaults 0→1,
+source exports/normalize и все затронутые policy consumers. Explicit authored
+0 остаётся выключением; consumer не подставляет 1 ради совместимости.
+L0 compose и L2 потребляют один coherent план из общего planning service,
+delivery scope не меняет решения; L2 parent light — persisted pack blob.
+Полный норматив — [GEO-1](./tz_terrain_generation.md#geo-1--нормативный-контракт-designed-water),
+exact policy/outcome contracts — delivery plan §6.29-C/D/J; G0-PT/G0-PE/G0-P
+не включают новый zero gate на старых production inputs.
 
 ### Инвариант
 

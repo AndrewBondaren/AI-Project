@@ -1,5 +1,45 @@
 # ТЗ: каскадный резолв параметров локаций — `LocationContext`
 
+## GEO-1 — водная ось каскада
+
+**G0 target, 2026-10-27; production activation только G10-A.**
+WaterGenerationContext использует existing extend и общие cascade contracts,
+с отдельной осью ROOT/WORLD/CATEGORY/WATER_BODY. LocationContext и его
+существующие consumers сохраняют API. Нового water-only resolver нет.
+
+WaterGenerationSettings задаёт общую nullable схему трёх VALUE channels:
+WATER_FRACTION (finite float [0,1], bool запрещён), WATER_AUTORESOLVE
+(StrictBool), WATER_STRATEGY (DesignedWaterStrategyKind). World/Category/Body
+подтипы сохраняют None и объявляют свои scope tags; terminal POJO defaults:
+0.60 / False / continental_noise. FieldRef выбирает непосредственное поле
+embedded settings instance, переданного caller; nested selectors и копии
+значений в persisted DTO запрещены.
+
+Единственные authored пути:
+- WORLD: world.hydrology.generation.{water_fraction,autoresolve,strategy};
+- CATEGORY SEA/OCEAN: default_seas.sea_generation / ocean_generation;
+- CATEGORY LAKE: default_lakes.generation; INLAND_SEA использует SEA;
+- WATER_BODY: declared_basins/coastlines/lakes[].generation и typed settings
+  процедурного source. Реки в эту ось не добавляются.
+
+Для каждого параметра одна linked-field карта defaults→world→category→body.
+Absent scope явно наследует; body siblings получают независимые parent
+contexts. Explicit 0/False не теряются; missing patch не меняет поле,
+null возвращает наследование. WorldHydrology.enabled — отдельный StrictBool
+hard gate: child autoresolve=True не включает root enabled=False.
+
+Legacy normalize по presence: autoresolve_coastal_sea/open_ocean →
+default_seas.sea_generation/ocean_generation.autoresolve;
+default_lakes.autoresolve → default_lakes.generation.autoresolve.
+Absent legacy key не создаёт True; equal old/new принимается с удалением old,
+conflict — GENERATION_SETTINGS_CONFLICT. New export/удаление old paths
+включаются атомарно в G10-A. Domain defaults placement_specificity не являются
+cascade RulePrecedence; policy читает уже resolved channels.
+Полный норматив: [GEO-1](./tz_terrain_generation.md#geo-1--нормативный-контракт-designed-water),
+exact channel/source map — delivery plan §6.29-A, implementation G1/G2/G2-P/G3.
+
+## Действующий контракт локаций
+
 **A0, 2026-10-14:** [библиотеки доменов §2](tz_domain_template_libraries.md)
 подготавливают plot/building/structure POJO и валидируют overrides. Для
 объявленных cascade полей authored None остаётся наследованием; библиотеки
