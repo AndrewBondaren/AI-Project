@@ -541,7 +541,9 @@ pack действует append-only contract; bootstrap нельзя завер�
 записью мимо staging/публикации. Когда запускать bake (в т.ч. auto bake
 мира без pack), решает DAG; `POST pack/bake` — caller того же job; gameplay
 без опубликованного базового pack не стартует. Встраивание — GEN-DAG-1;
-до него `POST pack/bake` — legacy (закрывает B-2).
+до него `POST pack/bake` — legacy. **B-2 открыт и блокирует приёмку плана:**
+legacy route держит оркестрацию стадий (L0 → C23, finalize/публикация) вне
+DAG; план не закрывается, пока bake job не встроен в DAG по GEN-DAG-1.
 
 Сохраняются существующие product contracts (`tz_world_pack_storage.md`
 § Bake modes / Job boundaries и `tz_map_light_bake.md`):
