@@ -12,8 +12,8 @@ metadata:
 
 | Принцип | Смысл |
 |---|---|
-| **Единый сервис** | Один `WorldSnapshotService` отвечает за capture / restore / branch / delete |
-| **Полный слепок на ход** | После **каждого хода** мир **целиком** сохраняется в `world_snapshots`; набор доменных патчей хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
+| **Единый сервис** | Один `WorldSnapshotService` отвечает за commit тика / read / restore / branch |
+| **Дельта на тик** | Snapshot тика = patch set поверх базового pack (+ периодический keyframe), **не** полный слепок мира; § «Staged artifacts и точки публикации», [`tz_patch_system.md`](./tz_patch_system.md) |
 | **Потребители** | Climate LOD, terrain regen, lazy sim, time travel, debug replay — **читают восстановленное состояние**, не делают свой ad-hoc snapshot |
 | **Не маска** | Snapshot — **состояние мира** (данные + сессия), не boolean mask и не один derived field |
 | **Игрок — отдельная цепочка** | Состояние игрока живёт в параллельной `player_snapshots`, синхронизированной по `turn_id` — export/import и time travel без привязки к world blob |
@@ -352,8 +352,10 @@ application/worldSnapshot/worldSnapshotService.py. Это одна реализ�
 |---|---|---|
 | IWorldSnapshotCrud.create → WorldSnapshotService.create | SnapshotCreate → SnapshotRef | Начальный immutable snapshot из согласованных доменных данных |
 | IWorldSnapshotCrud.read → WorldSnapshotService.read | SnapshotQuery → SnapshotReadResult | Metadata/scoped read выбранного состояния, без генерации отсутствующих данных |
-| IWorldSnapshotCrud.update → WorldSnapshotService.update | SnapshotUpdate(base_ref, typed_changes) → SnapshotRef | Новое immutable состояние; исходный snapshot сохраняется |
-| IWorldSnapshotCrud.delete → WorldSnapshotService.delete | SnapshotDelete(base_ref, typed_targets) → SnapshotRef | Логическое удаление данных в новом состоянии; не физическое удаление истории |
+
+**Superseded (2026-10-27):** `update`/`delete` убраны — это второй вход изменения рядом с
+`apply(PatchSet)`. Новое состояние (в т.ч. логическое удаление) — только commit PatchSet
+тика; § «Staged artifacts и точки публикации».
 
 Snapshot identity/query/mutation/result DTO — dataModel/worldSnapshot/;
 payload/patch типы и операции над ними принадлежат соответствующим доменам.
@@ -424,7 +426,7 @@ flowchart TB
   DB -->|restore| DBG
 ```
 
-**Инвариант:** модули **не** пишут свои parallel «snapshot файлы». Нужное состояние — в БД до capture; capture сериализует **согласованный срез**; restore гидратирует БД (или in-memory view) для следующего хода.
+**Инвариант:** модули **не** пишут свои parallel «snapshot файлы». Нужное состояние — в БД до capture; capture сериализует **согласованный срез**; restore выбирает точку цепочки — базовый pack + overlay на тик (keyframe + дельты); БД не перезаписывается (§ «Staged artifacts и точки публикации»).
 
 ---
 
@@ -473,7 +475,7 @@ class WorldSnapshotService:
         """После commit хода: read DB → compress → insert world_snapshots."""
 
     async def restore(self, snapshot_id: str) -> None:
-        """Verify checksum → deserialize → hydrate DB (transaction)."""
+        """Verify checksum → select base pack + overlay at tick (keyframe + deltas); no DB overwrite."""
 
     async def list_timeline(self, timeline_id: str) -> list[WorldSnapshotMeta]: ...
 
@@ -485,7 +487,11 @@ class WorldSnapshotService:
 
 ---
 
-## Состав blob v1 (target)
+## Состав blob v1 (legacy)
+
+**Superseded (2026-10-27):** полный blob мира не хранится. Snapshot = ссылка на
+базовый pack + patch set тика (+ keyframe); § «Staged artifacts и точки публикации», WP-6. Таблица ниже —
+инвентарь доменов, которые должны покрываться pack + overlay, а не состав blob.
 
 Схема хранения — [`project_data_storage_tz.md`](./project_data_storage_tz.md):
 
@@ -500,7 +506,7 @@ class WorldSnapshotService:
 | `location_states`, `location_weather`, `location_resources` | ✅ | far-zone LOD state |
 | NPC + `character_sheet` + needs/goals | ✅ | NPC — часть мира; **игрок — в `player_snapshots`**, см. ниже |
 | Active session + chat pointers | ✅ | messages могут оставаться отдельно — TBD |
-| Patch set хода | ✅ | дельта изменений хода — audit/diff/regen вход ([`tz_patch_system.md`](./tz_patch_system.md)); blob остаётся authoritative для restore |
+| Patch set хода | ✅ | дельта изменений хода — audit/diff/regen вход ([`tz_patch_system.md`](./tz_patch_system.md)); входит в authoritative состояние (pack + overlay) |
 | **`SurfaceClimateField`** (optional derived) | ⬜ v2 | либо в blob, либо rebuild из map_cells + poles при restore |
 | Engine `snapshot_store` (chat pipeline) | ❌ | ephemeral; не world snapshot |
 
@@ -559,6 +565,8 @@ Target: materialization run **один раз** → persist → capture; сле�
 
 ## Порядок работ
 
+**Архив:** WS-0…WS-4 заменены планом [world-domain-patches-snapshots](../.cursor/plans/world-domain-patches-snapshots.md).
+
 | Фаза | Scope |
 |---|---|
 | **WS-0** | Repository + schema migration если нужно |
@@ -568,7 +576,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 | **WS-3** | Regen diff + TR-2 unblocked |
 | **WS-4** | Time travel UI + branch API |
 
-**Не блокирует:** D HY hydrology, eager climate v2 — они пишут в БД как сейчас; snapshot **накладывается** поверх persist cycle.
+**Не блокирует:** D HY hydrology, eager climate v2 — legacy запись в БД до cutover. Целевая модель: запись только через публикацию pack или commit Snapshot; отдельного persist cycle рядом со snapshot нет (§ «Staged artifacts и точки публикации»).
 
 ---
 
@@ -590,6 +598,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 |---|---|
 | 2026-06 | Initial TZ — единый `WorldSnapshotService`; disambiguation от climate field cache |
 | 2026-10 | Две цепочки: `world_snapshots` + `player_snapshots` (player отделён для export/import и time travel); patch set хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
+| 2026-10-27 | Чистка legacy: убраны полный слепок на ход, hydrate DB при restore, `IWorldSnapshotCrud.update/delete`, persist cycle под snapshot; blob v1 → legacy |
 | 2026-10-27 | Staged artifacts; bake → один замороженный pack, snapshot = patches тиков поверх pack; pack target content-addressed |
 
 ---

@@ -15,7 +15,7 @@ alwaysApply: true
 - ❌ сбор LLM prompt, `display_name` для narration, выбор что игрок «видит» в чате
 - ❌ вызов LLM, orchestration других генераторов «заодно» (кроме явного assembler в своей иерархии)
 
-Persist — **не** в генераторе; `MapCellService` / `SettlementPersistService` / `ConnectionPersistService` (см. TZ § persist cycle).
+Persist — **не** в генераторе. Target: запись только через доменный storage в lifecycle публикации pack или commit Snapshot (`docs/tz_world_snapshot.md` § «Staged artifacts и точки публикации»). `MapCellService` / `SettlementPersistService` / `ConnectionPersistService` — legacy persist до cutover; новый код не добавляет в них прямую запись.
 
 ## API (`api/routes/`)
 
@@ -55,8 +55,8 @@ Severity/disposition — решение **producer'а** в ветке домен
 | LLM payload, scene context | **DAG** / `application/engine` nodes |
 | Chat turn, patches, resolver | `application/chat` |
 | Оркестрация фаз мира | DAG (не generator facade) |
-| Terrain/climate persist scopes | `MapCellService` — `tz_terrain_generation.md` § Persist cycle |
-| Settlement/connections persist | `SettlementPersistService`, `ConnectionPersistService` — `tz_city_generation.md` §11.5 |
+| Terrain/climate persist scopes | Target: доменный storage в lifecycle pack/Snapshot; legacy `MapCellService` — `tz_terrain_generation.md` § Persist cycle |
+| Settlement/connections persist | Target: доменный storage в lifecycle pack/Snapshot; legacy `SettlementPersistService`, `ConnectionPersistService` — `tz_city_generation.md` §11.5 |
 | CRUD мира, settings | routes → services → repos |
 
 При изменениях: если задача «прокинуть в LLM» или «собрать UX для игрока» — **не** в генератор и **не** в route.

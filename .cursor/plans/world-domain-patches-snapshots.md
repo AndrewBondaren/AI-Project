@@ -6,6 +6,21 @@
 Заменяет [архивный WS](world-state-crud-transition.md), а не продолжает его
 central CRUD/class map и последовательность WS-1…WS-5.
 
+## 0. Базовая политика runtime/worldEdit
+
+SoT: [`docs/tz_runtime_world_edit_policy.md`](../../docs/tz_runtime_world_edit_policy.md).
+
+- Один доменный resolver для import/runtime и worldEdit; patches и snapshot
+  не вводят своего policy engine, отдельного worldEdit mode/endpoint/pipeline.
+- `validate_only=true` — тот же DAG pipeline без публикации pack, commit
+  Snapshot и staging, меняющего мир; не write с rollback.
+- Правка мира мастером после старта gameplay — patch в snapshot тем же
+  pipeline (`docs/tz_world_snapshot.md` § «Staged artifacts и точки публикации»).
+- Неразрешимый результат — WarningError через доменный log sink, без default
+  вместо ошибки и без ложного успеха; worldEdit получает ту же диагностику.
+- Consumers, unresolved-результат, reason/action и проверки двух режимов
+  фиксируются в доменных пунктах плана при приёмке.
+
 ## 1. Общая архитектура — главное и критическое требование
 
 **Каждый пункт плана, контракт и будущая реализация обязаны соответствовать

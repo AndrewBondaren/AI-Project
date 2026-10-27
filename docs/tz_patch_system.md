@@ -55,7 +55,7 @@ Snapshot вызывает domain storage contract, не реализуя его 
 | `map_cell_patches` (SQL) | Таблица применённых дельт cells-домена | Один **доменный patch-формат**, не система; может стать persist-целью patches |
 | `pending_patches` / `PatchApplier` (engine) | Ephemeral копии node_results LLM-фазы | Не patch-система; кандидат на удаление/замещение |
 | `SessionSnapshot` | Resume пайплайна чата | Не modification snapshot |
-| `WorldSnapshot` blob | Полный слепок состояния на ход | Commit-артефакт — **приёмник** patch set, не патч |
+| `WorldSnapshot` | Дельта тика поверх базового pack (patch set + refs), не полный слепок | Commit-артефакт — **приёмник** patch set, не патч |
 
 ---
 
@@ -126,7 +126,7 @@ flowchart LR
 - Patch set секционирован по доменам (`sections`); Snapshot вызывает domain implementations при применении секций; доменный payload не интерпретируется общим кодом.
 - Порядок патчей внутри секции — ответственность домена; порядок секций — явная доменная зависимость; инфраструктура не переупорядочивает.
 - Compose/merge полей (кто перекрывает чьё поле) — собственность домена-владельца поля, не generic-кода.
-- Патчи — не источник состояния при restore: blob snapshot **authoritative**; patch set внутри snapshot — audit/diff/regen-вход (закрывает deferred «incremental vs full» из `tz_world_snapshot`).
+- Состояние при restore = базовый pack + overlay patches цепочки (keyframe + дельты); отдельного authoritative blob мира нет (2026-10-27, [`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации»). Patches — часть authoritative состояния.
 
 ## Контракт (черновик)
 
@@ -281,7 +281,7 @@ Selective cell delta сохраняет Keep/SetValue/ResetOverride и неза�
 | Владелец позиции игрока | **решено**: позиция — свойство привязки `player↔world`, владелец — **session** (world blob, секция «active session»). Player state = memory + intrinsic (stats, inventory); placement в него не входит |
 | Точка входа при attach: spawn-анкор целевой ветки vs reconcile координат | открыт (зависит от владельца позиции) |
 | Атомарность commit пары цепочек при сбое одной стороны | открыт |
-| Версионирование формата патчей (читаемость старых snapshot) | открыт — мягкая деградация, пока blob authoritative |
+| Версионирование формата патчей (читаемость старых snapshot) | открыт — patches входят в authoritative состояние, поэтому старые форматы обязаны читаться; деградации через blob нет |
 
 ### Timelines: нет cross-timeline sync
 
