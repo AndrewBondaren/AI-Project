@@ -107,8 +107,9 @@ Snapshot. Snapshot — единственный владелец примене�
 как самостоятельный вход применения исключён. Доменные алгоритмы, сбор
 набора и запуск materialization не переносятся в Snapshot.
 
-GEN DAG обязателен: production вызывается через DAG; debug API — инструмент
-разработчика, вызывающий те же стабильные доменные интерфейсы. Product
+GEN DAG обязателен: production вызывается через DAG; debug API — тонкий
+инструмент разработчика, вызывающий тот же граф DAG (своего порядка стадий
+не держит). Product
 CRUD/import нельзя объявить debug-входом для обхода этой границы.
 Существующий Gate: DAG G1–G5 не снимается.
 Конкретный связанный **план**, а не только ТЗ —
@@ -126,7 +127,7 @@ CRUD и не получает спрятанный pipeline через validate/
 | Владелец | Ответственность |
 |---|---|
 | DAG | Когда вызвать read/изменение/materialization; порядок доменных операций; сбор PatchSet |
-| Debug API | Тонкий developer entry к тем же domain API; сбор набора своего сценария |
+| Debug API | Тонкий developer entry: вызывает тот же граф DAG; своего порядка стадий/сбора не держит |
 | Domain read | Данные и domain-owned результаты, missing/fallback/merged/raw semantics; обращение к своей инфраструктуре |
 | Domain change/planning | Реализация write-free create/update/delete: смысл изменения, validation, подготовленный typed результат, зависимости и invalidation; запуск по вызову DAG/debug |
 | Domain patch | Подготовка typed patch без изменения состояния; реализация доменного поведения, вызываемая только Snapshot при применении |
