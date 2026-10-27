@@ -1,3 +1,19 @@
+# Архив отменённой схемы общего World State CRUD
+
+Статус: SUPERSEDED, 2026-10-27. **Не план реализации и не действующие
+архитектурные требования.** Актуальное решение —
+[новый план](world-domain-patches-snapshots.md): DAG вызывает domain.read/patch
+напрямую; контракты принадлежат доменам; WS не маршрутизирует чтение и
+не обращается к БД. Snapshot сохраняет patch-операции всех доменов.
+
+Прежние WorldStateService/IWorldStateRead, WS adapters, DB-bound context и
+WorldStateUnitOfWork отменены. Наблюдения о существующих SQL/типах ниже —
+только инвентаризация; отдельные доменные требования требуют сверки с ТЗ.
+Никакие прежние DTO/paths/WS-1…WS-5 отсюда не исполняются автоматически.
+
+<details>
+<summary>Архив прежнего проекта и его ревью</summary>
+
 # World State CRUD — capabilities, фасады и атомарность
 
 Статус: OPEN / архитектура WS-0A детализирована для приёмки (2026-10-25).
@@ -8,9 +24,25 @@ Freeze review 2026-10-26: адресные решения девяти заме�
 Мастер попросил вынести вопросы capabilities и атомарности отдельно.
 Это фиксация требований и целевой схемы для приёмки; код не разрешён,
 порядок implementation steps WS-1…WS-5 автоматически не меняется.
-Нормативная детализация — §7–13 ниже: она заменяет предварительные
-формулировки §2–6 при расхождении. Архитектурные решения записаны, но
+Рабочая детализация для приёмки — §7–13 ниже: она заменяет предварительные
+формулировки §2–6 при расхождении. **§2–6 — исторический эскиз, не отдельный
+backlog**; в частности, LiquidCellMutationHandler и старая цепочка dispatch
+оттуда не реализуются. Архитектурные варианты записаны, но
 приёмка мастером и реализация ещё не выполнены.
+
+Подготовка полного WS-0 (2026-10-27) —
+[контрактный ledger](world-state-crud-ws0-freeze.md): exact existing bindings,
+query/delta proposal, SQL masks и caller audit. Дополнительные gaps D1–D4
+не закрываются прежними девятью design-ответами §13; WS-0A остаётся OPEN.
+Дополнительное условие мастера 2026-10-27: WS согласуется с GEN DAG;
+обязательные границы stable generator API, production/debug entry и запрет
+ослаблять DAG gate зафиксированы в WS-0 ledger §1.1. D3 предложение
+переобъявить master authoring/import debug-входами снято как несовместимое.
+Порядок мастера (2026-10-27): архитектура WS-0/WS-0A принимается до выбора
+конкретных реализаций. Existing classes/repositories — вход инвентаризации,
+не основание автоматически закрепить их модели/сигнатуры в public contracts.
+Результат пересмотра последовательности и архитектуры — transition §8.
+До закрытия R3–R8 class/method map ниже не является полным freeze.
 
 ## Обязательный gate приёмки каждого шага
 
@@ -191,7 +223,7 @@ Existing gaps, не считать готовой реализацией сце�
 После приёмки WS-0A обновить исходные WS-1/WS-2 class/method/file ledger;
 не выполнять сразу весь переход и не помечать WS-0 DONE этой записью.
 
-## 7. WS-0A — окончательная карта архитектурных обязанностей для приёмки
+## 7. WS-0A — проект карты архитектурных обязанностей для приёмки
 
 Архитектурная единица — одна typed операция над состоянием, а не generic
 table CRUD и не новый snapshot. Одна shared реализация состоит из query и
@@ -201,7 +233,8 @@ mutation фасадов; backend capability не обязана совпадат
 с подготовленным доменным изменением, а не придуманная модель жидкости.
 
 Полные target пути относительно backend/app/. Существующие методы помечены
-existing, остальные target. Перечень классов этого шага замкнут: helper с чужой
+existing, остальные target. Перечень — кандидат implementation map; его
+полнота проверяется после приёмки архитектуры (transition §8). Helper с чужой
 responsibility в facade/adapter запрещён независимо от числа строк.
 
 | Класс | Домен/слой и точный файл | Ответственность / допустимые зависимости |
@@ -273,8 +306,10 @@ repository → storage adapter → handler → WorldCellAdapter → mutation fac
 WorldReadContextProvider.resolve(world_uid) вызывает WorldService.get_by_id;
 только existing WorldDataNotFoundError отображается в typed WorldNotFound,
 storage/validation errors пробрасываются. ResolvedWorldReadContext содержит
-world: World и проверенный world_uid; это application DTO, допустим existing
-DB model import, без repository dependency в public dataModel query DTO.
+world: World и проверенный world_uid в текущем implementation-эскизе.
+Это не принятое исключение для public contracts: внутренний adapter context
+и публичный metadata payload нужно разделить при D1; импорт DB rows в
+contracts WS-1 не разрешается автоматически. Public dataModel без DB imports.
 WorldStateQueryFacade.read резолвит context один раз и передаёт его всем
 subreads этой query; внутри batch get_cells world повторно не загружается.
 WorldMetadataAdapter для world query использует context.world, а не читает
@@ -550,6 +585,9 @@ fluid handler, симуляции соседей или volume schema в support
 
 ## 11. Переход классов и композиция
 
+0. До WS-1: инвентаризация WS-0 → архитектура WS-0A → приёмка архитектуры
+   → полный DTO/binding freeze WS-0. Открытые R3–R8 transition §8 не решаются
+   при написании ports/adapters.
 1. WS-1: capabilities/DTO/UOW ports. Все contracts frozen до writer coding.
 2. WS-2a: query facade/adapters + WorldStateService.read над existing backends;
    read не зависит от незавершённого writer или snapshot.
@@ -565,7 +603,10 @@ fluid handler, симуляции соседей или volume schema в support
 5. WS-3/WS-4: перевод callers с явным capability/session по основному ledger;
    затем WS-5 удаление legacy wrappers после исполняемой parity-проверки.
 
-WS-2a/b/c — предлагаемая детализация исходного WS-2, подлежит приёмке вместе
+WS-2a/b/c — предлагаемая детализация исходного WS-2; WS-2 не дополнительный
+самостоятельный implementation шаг. Read dependency WS-3 — WS-1 + WS-2a;
+writer dependency — WS-1 → WS-2b → WS-2c, live wiring после entry gate.
+Порядок независимых заходов подлежит приёмке вместе
 с этой картой. Не выполнять три подшага за один заход. Root method map
 основного transition плана приведён к этой карте; другие dependencies PC-11
 не меняются молча.
@@ -585,7 +626,8 @@ mutations — выделенные leaf, не additions в переполнен�
 ## 12. Архитектурная приёмка WS-0A
 
 Проверить отдельно от numerical baseline:
-- read-only adapter не реализует writer, generator consumer не получает writer;
+- read-only adapter не реализует writer; pure generator не получает ни reader,
+  ни writer, только подготовленные inputs от application owner;
 - public facade/adapter не импортирует domain kernels или private buffers;
 - unsupported/refused не дают частичной записи, raw и merged read различаются;
 - root commit единственный; join другого DB/root отвергается;
@@ -644,3 +686,5 @@ Typing targets: `pyright -p backend/tests/worldState/typing/pyright.valid.json`
 объявляют соответствующие runtime fixes существующими и не снимают WS-0
 gate полного command/query/error/caller ledger. Конкретные DTO variants
 и тестовые команды связываются с этими решениями до implementation.
+
+</details>

@@ -269,6 +269,23 @@ def frozen_surface_fixture(source, parent=None, *, bbox=None):
 
 
 class L2Tests(unittest.TestCase):
+    def test_detailed_scope_skips_complete_tiles_and_requires_persisted_l0(self):
+        from app.application.worldData.pack.bake.detailed.detailedBakeScope import wilderness_tiles
+        from app.dataModel.worldPack.meta.worldPackManifest import TileManifestEntry, WorldPackManifest
+        writer = Mock()
+        writer.manifest = WorldPackManifest(world_uid="scope", tiles=[
+            TileManifestEntry(gx=2, gy=0, world_map_path="two.zst", wilderness_refine_status="partial"),
+            TileManifestEntry(gx=0, gy=0, world_map_path="zero.zst", wilderness_refine_status="complete"),
+            TileManifestEntry(gx=1, gy=0, world_map_path="one.zst"),
+            TileManifestEntry(gx=3, gy=0),
+        ])
+        self.assertEqual(wilderness_tiles(writer, max_tiles=0), [(1, 0), (2, 0)])
+        self.assertEqual(wilderness_tiles(writer, max_tiles=1), [(1, 0)])
+        self.assertEqual(wilderness_tiles(writer, max_tiles=1, tile_gx=0, tile_gy=0), [])
+        self.assertEqual(wilderness_tiles(writer, max_tiles=1, tile_gx=2, tile_gy=0), [(2, 0)])
+        with self.assertRaisesRegex(ValueError, "no L0"):
+            wilderness_tiles(writer, max_tiles=1, tile_gx=3, tile_gy=0)
+
     def setUp(self):
         from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
         self.c = Composition()
@@ -388,6 +405,55 @@ class L2Tests(unittest.TestCase):
 
 
 class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_one_state_read_per_multitile_operation_and_fresh_next_drain_request(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from app.application.worldData.pack.bake.l0.packMaterializationOrchestrator import PackMaterializationOrchestrator
+        from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
+        from app.db.repositories.iRegionStateRepository import IRegionStateRepository
+
+        class ComputeBoundary(Exception):
+            pass
+
+        source = world(world_bounds=dict(x_min=0, x_max=2, y_min=0, y_max=0))
+        c = Composition()
+        self.addCleanup(c.service.shutdown)
+        repo = AsyncMock(spec=IRegionStateRepository)
+        repo.get_by_world.return_value = []
+        drain, planner, l0, climate = MagicMock(), MagicMock(), MagicMock(), MagicMock()
+        drain.has_job_repo = True
+        drain.drain_persisted = AsyncMock()
+        climate.bake_coarse = AsyncMock(return_value=(None, 0))
+        tiles = [(0, 0), (1, 0), (2, 0)]
+        planner.plan.return_value.tile_tuples.return_value = tiles
+        planner.plan.return_value.cap_applied = None
+        l0.bake_tiles.side_effect = ComputeBoundary
+        owner = PackMaterializationOrchestrator(world_map=l0, publisher=None,
+            entry=drain, climate_bake=climate, tile_planner=planner, region_state_repo=repo,
+            bake_defaults=PackBakeDefaults(background_drain_per_request=1),
+            planning=c.assembler, capture=SurfacePlanningCapture())
+        snapshots = []
+        original = SurfacePlanningEntry.capture_view
+        with patch.object(SurfacePlanningEntry, "capture_view", autospec=True, side_effect=original) as captures:
+            for operation in (1, 2):
+                with self.assertRaises(ComputeBoundary):
+                    await owner.materialize_light_pack(source.world_uid, source, [], MagicMock(),
+                        MaterializationContext(1), wait=Wait(), max_tiles=3)
+                self.assertEqual(repo.get_by_world.await_count, operation)
+                self.assertEqual(captures.call_count, operation)
+                self.assertEqual(l0.bake_tiles.call_args.args[3], tiles)
+                kwargs = l0.bake_tiles.call_args.kwargs
+                snapshot = kwargs["region_state_snapshot"]
+                snapshots.append(snapshot)
+                self.assertIs(drain.drain_persisted.call_args.kwargs["region_state_snapshot"], snapshot)
+                self.assertIs(drain.drain_persisted.call_args.kwargs["working"], kwargs["working"])
+                self.assertEqual(kwargs["bake_mode"], "light")
+        self.assertIsNot(snapshots[0], snapshots[1])
+        repo.upsert.assert_not_called()
+        repo.upsert_bulk.assert_not_called()
+
     async def test_unknown_default_profile_uses_frozen_fallback_without_alias_reresolve(self):
         """Accepted PC-11.2b delta: missing key cannot adopt a live alias override."""
         from app.application.worldData.pack.climate.climateCoarseBake import build_climate_coarse_wire
@@ -463,7 +529,9 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(wires[0], wires[1])
             self.assertEqual((climate_factory.call_count, terrain_factory.call_count, hydro_factory.call_count), (1, 1, 1))
             self.assertEqual(facts_factory.call_count, 1)
-            self.assertIs(working.landcover.topology, view.water_placement.topology)
+            # Geometry is a world input, not owned by the water plan/object identity.
+            self.assertEqual(working.landcover.topology.mode, view.water_placement.topology.mode)
+            self.assertEqual(working.landcover.topology.bounds, view.water_placement.topology.bounds)
             self.assertIs(working.landcover.grid, view.terrain_base.grid)
             self.assertIs(working.landcover.context.climate, working.climate)
             self.assertIs(working.landcover.context.terrain, working.terrain)
@@ -523,15 +591,18 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         rect = ColumnRect(0, 1, 0, 1)
         plan = DetailedScopePlan([(0, 0)], lambda gx, gy: [rect], [], "background", None, None)
         mat = MaterializationContext(1)
+        from types import MappingProxyType
+        snapshot = MappingProxyType({})
         with tempfile.TemporaryDirectory() as tmp:
             paths = WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid)
             writer = WorldPackWriter(paths)
             WorldMapBakeOrchestrator().bake_tiles(source, [], writer, [(0, 0)],
-                surface_bundle=bundle, wait=Wait(), region_state_snapshot={}, working=working)
+                surface_bundle=bundle, wait=Wait(), region_state_snapshot=snapshot, working=working)
             with patch.object(c.assembler, "prepare", side_effect=AssertionError("second planning")), patch(
                     "app.application.worldData.planning.composition.surfacePlanningCapture.SurfacePlanningCapture.capture",
-                    side_effect=AssertionError("second capture")):
-                detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan, region_state_snapshot={}, working=working)
+                    side_effect=AssertionError("second capture")), patch.object(
+                    terrain, "build_tile_surface_state", wraps=terrain.build_tile_surface_state) as surfaces:
+                detailed = await refine_detailed_tiles(runner, source, [], writer, mat, bundle, plan, region_state_snapshot=snapshot, working=working)
                 # Compare the decoded wire: the writer may choose a codec filename per layout.
                 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
                 reader = WorldPackReader(paths)
@@ -539,17 +610,23 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(expected.columns)
                 # Cold writer forces parent decode from the baked blob.
                 cold = WorldPackWriter(paths)
-                result = await refiner.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, region_state_snapshot={}, working=working)
+                result = await refiner.refine_queued_chunk(source, [], cold, mat, bundle, 0, 0, 0, 0, region_state_snapshot=snapshot, working=working)
                 self.assertEqual(result.fine_surface_z, detailed.fine_surface_z)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 await entry.refine_from_entry(source.world_uid, source, [], cold, mat, bundle,
                     kind="session_start", anchor_x=0, anchor_y=0,
-                    region_state_snapshot={}, working=working)
+                    region_state_snapshot=snapshot, working=working)
+                self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
+                from app.application.worldData.pack.refine.pathHeading import PathHeading
+                path_chunks = await scene_path.refine_path_corridor(source, [], cold, 0, 0,
+                    mat, bundle, 0, 0, heading=PathHeading(1, 0), depth_tiles=1,
+                    region_state_snapshot=snapshot, working=working)
+                self.assertGreater(path_chunks, 0)
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 queue = ChunkRefineQueue()
                 queue.enqueue_chunk(0, 0, 0, 0, anchor_x=0, anchor_y=0, chunk_columns=2, tile_macro=2)
                 worker = ChunkRefineWorker(refiner)
-                self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue, region_state_snapshot={}, working=working), (1, 0))
+                self.assertEqual(await worker.drain_queue(source.world_uid, source, [], cold, mat, bundle, queue, region_state_snapshot=snapshot, working=working), (1, 0))
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
                 from types import SimpleNamespace
                 from unittest.mock import AsyncMock
@@ -559,9 +636,14 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
                 jobs.mark_complete = AsyncMock()
                 persisted = ChunkRefineWorker(refiner, job_repo=jobs)
                 self.assertEqual(await persisted.drain_persisted(source.world_uid, source, [], cold,
-                    mat, bundle, region_state_snapshot={}, max_jobs=1, working=working), 1)
+                    mat, bundle, region_state_snapshot=snapshot, max_jobs=1, working=working), 1)
                 jobs.mark_complete.assert_awaited_once_with("persisted-job")
                 self.assertEqual(reader.read_wilderness_chunk(0, 0, 0, 0), expected)
+                self.assertGreaterEqual(surfaces.call_count, 6)
+                for call in surfaces.call_args_list:
+                    self.assertIs(call.args[2], bundle)
+                    self.assertIs(call.kwargs["working"], working)
+                    self.assertIs(call.kwargs["region_state_snapshot"], snapshot)
 
 
     async def test_climate_bundle_preserves_coarse_and_fine_wire_baseline(self):

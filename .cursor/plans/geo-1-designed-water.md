@@ -7267,14 +7267,13 @@ MountainContributor поимённо переведены на frozen inputs.
 
 **PC-11 — L2 consumer cutover и исправление архитектурных границ.**
 
-**REOPENED / NOT DONE (2026-10-24, по решению мастера).**
-Функциональный cutover реализован, но архитектурная приёмка не пройдена.
-Прежняя DONE-пометка снята. Обязательный остаток — PC-11.1…PC-11.8 ниже;
-PC-12 заблокирован до их реализации и приёмки. Тесты и локальные review fixes
-не закрывают смешение ответственности и двойные transitional contracts.
-Новая структура подпунктов фиксирует scope исправлений, но не разрешает код:
-PC-11.1 — открытый design gate; зависимые подпункты нельзя исполнять до
-согласования точных контрактов, class map, путей и caller ledger.
+**IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-27),
+ожидается приёмка PC-11.8 мастером.** Прежняя DONE-пометка, снятая
+2026-10-24, не восстанавливается автоматически: PC-11.1…PC-11.7 реализованы,
+повторная функциональная и архитектурная проверка PC-11.8 приведена ниже.
+Нерешённых нарушений семи review находок не обнаружено; PC-12 остаётся
+заблокирован до приёмки мастером. Исторический design gate PC-11.1 закрыт
+согласованной class map и caller ledger, приведёнными в соответствующем подпункте.
 
 **Историческое evidence функционального cutover (не архитектурный DONE).**
 
@@ -9022,6 +9021,88 @@ Done: production legacy context/projector отсутствует, все callers
   единый typed input; нет outline-only fallback или пустых compatibility entry.
 
 **PC-11.8 — повторная функциональная и архитектурная проверка PC-11.**
+Статус: **IMPLEMENTED / VERIFIED, responsibility gate PASS (2026-10-27), готов к приёмке мастера.**
+PC-11 DONE и разрешение PC-12 требуют приёмки мастером; PC-12 не начинался.
+
+Повторная проверка семи review находок (новое evidence, не прежние 448 tests):
+
+| Находка | Фактический owner / проверенный контракт | Evidence |
+|---|---|---|
+| TerrainBatch смешивает L0/CRUD/L2 | materialize/terrain/TerrainBatchOrchestrator: только L2 surface и chunk generation; L0 и publication у operation owners | test_terrain_batch_has_single_l2_zone; parent-light/fine-parallel/C11 regressions |
+| self-capture и dead surface_ctx | SurfacePlanningEntry: один capture/prepare; refine-chain получает готовые refs | multitile request counter; real detailed/scene/path/queue/persisted-drain test с запретом повторного capture/prepare |
+| misplaced require helper | require_plan_inputs в planning/composition/SurfacePlanningEntry; lower callers без entry/planning | test_refine_transits_have_no_legacy_context_or_planning_entry; actual owners добавлены в typing include |
+| generator → pack.bake | landcover collect/materializer/fine paint, raster и outline используют domain inputs; pack runner/apply остаются в pack | transitive import test, включая relative/TYPE_CHECKING/package initializers; L0/fine/outline regressions |
+| domain operations / world maps в adapter | ClimateWorkingFields/TerrainWorkingFields/HydrologyWorkingFields — единственные domain factories; contributor только передаёт working/state refs | production L0 + 3 L2 tiles + serial/parallel climate: factories=(1,1,1), observations=1; tile indexes readonly |
+| dual fact input | FactConsumerContext(cells,climate,terrain,hydrology), None=unknown; legacy symbols/shims отсутствуют | structural fields/import/usages checks; facts/state-change/outline regressions; negative typing |
+| три bundle→working projector | composition связывает готовые domain views; LandcoverObservations владеет facts_at; DTO SurfaceWorkingMaps только refs | HIT получает новые request views; concurrent climate memo/failure retry/isolation; request projection counts |
+
+Проверены тела операций, а не только imports: domain factories строят readonly
+maps/индексы и climate accessor memo; entry только связывает результаты.
+Landcover loaders/collect владеют source merge/identity/coverage/raster;
+pack contributor/runner/apply владеют canvas/footprint writes. Callback
+facts_at → typed factConsumers не планирует и не пишет; state mapping не
+приобретает lifecycle. TerrainBatch потребляет tile-indexed outputs и persisted
+parent light, сохраняет fine recipe; не повторяет selection/placement.
+
+Дополнены existing tests, новых modules нет:
+- No-eager-materialize: реальный capture/prepare на MISS/HIT/edit с запретом
+  L0 bake, L2 surface/refine и pack writes/publication.
+- Gameplay read: metadata → chunk_exists → existing fine → merged read;
+  соседняя клетка без L2 использует L0, patch имеет приоритет. Capture/prepare,
+  refine и writes запрещены; bytes всех pack files до/после совпадают.
+- Outline: existing absent membership/present/stale/NoExtent branches, один
+  prepare/state read и свежий state при planning HIT. TODO(snapshot) проверяется
+  до membership early return, со ссылкой на WS-план §7; в write entry TODO нет.
+- Lifetime: один capture/state load на operation с 3 tiles, общий snapshot и
+  working ref для внутреннего drain и L0; следующий operation/drain получает
+  новый load. Real detailed/scene/непустой path/queued/persisted drains передают
+  те же bundle/working/readonly state refs до TerrainBatch и дают тот же wire.
+  FineChunkRunner не импортирует state repositories/loader и не читает state.
+- Detailed scope сохраняет complete-tile skip, stable order/cap и explicit
+  requested tile; без persisted L0 — ошибка. Incremental chunk skip не добавлен.
+  Topology проверяется по mode/bounds как world input, не identity с water plan.
+
+Команды из корня (`$env:PYTHONPATH='backend;backend/tests'`):
+- `.venv/Scripts/python.exe -m unittest discover -s backend/tests/planning -p 'test_*.py'`
+  — 290 OK; после final scope case consumers повторно проверены отдельно,
+  итоговый состав planning: consumers84/providers129/contracts71/encoding7.
+- `.venv/Scripts/python.exe -m unittest discover -s backend/tests/planning/consumers -p 'test_*.py'`
+  — final consumers84 OK (30.929s); дополнительный focused real path/ref test — OK.
+- `.venv/Scripts/python.exe -m unittest discover -s backend/tests/cache -p 'test_*.py'`
+  — 21 OK. Encoding7 включены в общий planning discover (не tests/encoding).
+- `.venv/Scripts/python.exe -m unittest test_water_placement_pass test_relief_objects_z test_hydrology_hy12_rivers test_pack_bake_modes test_detailed_bake_c11 test_parent_light_refine test_pack_fine_terrain_refine_parallel test_wilderness_region_index test_landcover_materializer test_landcover_contributor test_landcover_fine_paint test_landcover_cutover test_region_state_change test_region_state_contract test_region_fact_consumers test_pack_climate_sample test_pack_climate_parallel test_pack_climate_apply test_pack_wp13_entry_first test_map_cell_query_facade test_pack_fine_terrain_read_facade test_pack_bake_finalize test_light_grid_compose test_light_bake_cleanup test_declared_region_edit`
+  — 225 OK. Итого final состав 537 tests, повторные запуски не суммируются.
+- `node_modules/.bin/pyright.cmd --project backend/tests/typing/planning/pyrightconfig.valid.json --outputjson`
+  — 212 files, 0 errors/warnings. Шесть stale include paths заменены четырьмя
+  actual owners; ещё два owner paths уже были в include, дублей не добавлено.
+- Та же команда с `pyrightconfig.invalid.json`: 65 diagnostics на 63 EXPECT
+  строках; exact multiset(file,line,rule,multiplicity), missing/unexpected=0.
+  Nonzero pyright ожидаем; JSON диагностики проверены отдельно от exit code.
+- `python -m compileall -q backend/tests/planning/consumers` и
+  `git -c core.whitespace=cr-at-eol diff --check` — OK.
+
+Sandbox async-запуски остановлены: faulthandler показал зависание Windows
+asyncio в socket._fallback_socketpair/accept при создании event loop.
+Зачтены только успешно завершённые повторные unittest-запуски вне sandbox.
+Ошибочный discover tests/encoding (фактический путь planning/encoding)
+не засчитан; encoding реально выполнены общим planning discover.
+
+Baseline delta этого шага **нет**. Принятая PC-11.2b delta unknown climate
+profile (frozen fallback 12 вместо live alias 42) сохранена отдельным case;
+PC-10 deltas не переоцениваются. HIT/MISS/clear/restart/reverse order,
+canonical revision/ref vectors, stale UOW rejection и parent-light disk SoT — OK.
+Новых production files/изменений algorithms, RNG, schemas и defaults нет.
+Folder counts: consumers6→6 (WARN в чат), typing5→5, composition5,
+domain working leaves2, region inputs2, terrain materialize3, fine chunk5.
+Проверенные production classes: TerrainBatch160, SurfacePlanningEntry67,
+ClimateWorking31/TerrainWorking6/HydrologyWorking28, LandcoverObservations27,
+LandcoverMaterializer60, LandcoverContributor13, WildernessRegionRead33,
+EntryRefine249, FineChunkRunner102 строк; все <300.
+Existing domain landcover8 и pack/read22 не расширялись и не правились.
+WS §7 integration freeze сверён: existing read backend не стал вторым CRUD,
+snapshot API/lookup/history replay не добавлены; будущие existence/freshness
+семантики не заявлены реализованными. DAG/SQL/backend-start/коммитов нет.
+
 Зависимости: принятые PC-11.1…11.7.
 Цель: разрешить возврат DONE только после закрытия семи review находок.
 ТЗ: перечисленные разделы PC-11.1; настоящий план §6.20/§6.27/§6.31-F.

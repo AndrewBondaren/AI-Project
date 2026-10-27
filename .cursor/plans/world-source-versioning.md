@@ -9,6 +9,13 @@
 `geo-1-designed-water.md` PC-9 для части «что делать при конкурентной
 правке источника». Общий механизм, не привязан к GEO-1.
 
+Связь с patches/snapshots (2026-10-27):
+[новый архитектурный план](world-domain-patches-snapshots.md) §6 переиспользует
+этот design revisions/capture/retention/publication. Домен владеет read/patch;
+snapshot закрепляет source revision set. Второй revision-механизм и центральный
+WS CRUD не вводятся. Это связь design-планов, не evidence реализации и не
+автоматическое расширение source versioning на все runtime patches.
+
 ## Проблема
 
 Мир — связка ссылок на объекты N+1 (реестры, шаблоны, библиотеки) +

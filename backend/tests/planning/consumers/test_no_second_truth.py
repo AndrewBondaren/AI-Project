@@ -1,6 +1,7 @@
 """PC-9 keeps generic planning neutral and publication at operation boundaries."""
 
 import ast
+from contextlib import ExitStack
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -12,6 +13,52 @@ APP = Path(__file__).resolve().parents[3] / "app"
 
 
 class BoundaryTests(unittest.TestCase):
+    def test_preparing_metadata_never_materializes_any_lod_on_miss_hit_or_edit(self):
+        from dataclasses import replace
+        from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+        from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+        from tests.planning.consumers.test_wiring import Wait
+
+        c = Composition()
+        self.addCleanup(c.service.shutdown)
+        entry = SurfacePlanningEntry(c.assembler, SurfacePlanningCapture())
+        source = world()
+        with ExitStack() as stack:
+            for target in (
+                "pack.bake.l0.worldMapBakeOrchestrator.WorldMapBakeOrchestrator.bake_tiles",
+                "materialize.terrain.terrainBatchOrchestrator.TerrainBatchOrchestrator.build_tile_surface_state",
+                "pack.refine.fine.chunk.fineChunkRunner.FineChunkRunner.refine_rects",
+                "pack.io.worldPackWriter.WorldPackWriter.write_world_map_tile",
+                "pack.io.worldPackWriter.WorldPackWriter.write_wilderness_chunk",
+                "pack.io.worldPackWriter.WorldPackWriter.save_manifest",
+            ):
+                stack.enter_context(patch("app.application.worldData." + target,
+                    side_effect=AssertionError("metadata preparation materialized: " + target)))
+            first, first_working = entry.require_plan_inputs(source, [], wait=Wait())
+            hit, hit_working = entry.require_plan_inputs(source, [], wait=Wait())
+            edited, _ = entry.require_plan_inputs(replace(source, z_max=60), [], wait=Wait())
+        self.assertEqual(first, hit)
+        self.assertIsNot(first_working, hit_working)
+        self.assertNotEqual(first.view_revision, edited.view_revision)
+
+    def test_snapshot_todo_belongs_to_outline_read_boundary_and_runner_has_no_state_io(self):
+        root = APP / "application/worldData"
+        outline = (root / "pack/read/wildernessRegionReadService.py").read_text(encoding="utf-8")
+        self.assertLess(outline.index("TODO(snapshot)"), outline.index("if self.get_snapshot"))
+        self.assertIn("world-state-crud-transition.md, section 7", outline)
+        entry = (root / "pack/refine/entry/entryRefineOrchestrator.py").read_text(encoding="utf-8")
+        self.assertNotIn("TODO(snapshot)", entry)
+        runner = ast.parse((root / "pack/refine/fine/chunk/fineChunkRunner.py").read_text(encoding="utf-8"))
+        for node in ast.walk(runner):
+            if isinstance(node, ast.ImportFrom):
+                self.assertNotIn("repositories", node.module or "")
+                self.assertNotIn("regionStateSnapshot", node.module or "")
+            if isinstance(node, ast.Call):
+                name = node.func.attr if isinstance(node.func, ast.Attribute) else (
+                    node.func.id if isinstance(node.func, ast.Name) else "")
+                self.assertNotIn(name, {"load_region_state_snapshot", "get_by_world", "get_many",
+                    "require_plan_inputs", "capture_view", "prepare_captured"})
+
     def test_surface_observations_have_one_typed_channel_and_no_production_legacy_symbols(self):
         from dataclasses import fields
         from app.application.worldData.regions.factConsumers.context import FactConsumerContext
@@ -191,6 +238,70 @@ class BoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GameplayReadBoundaryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_metadata_then_existing_layers_then_merge_without_planning_or_writes(self):
+        from tempfile import TemporaryDirectory
+        from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+        from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+        from app.application.worldData.pack.read.packReadServices import build_pack_read_services
+        from app.application.worldData.mapCells.patchStoreService import PatchStoreService
+        from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
+        from app.dataModel.worldPack import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun, WorldMapCellWire
+        from app.dataModel.worldPack.wire.mergeMapCells import CellContribution
+        from app.dataModel.worldPack.bake.layerPriority import MapLayerKind
+
+        source = world(fine_cells_per_map_cell=2, terrain_chunk_columns=1)
+        with TemporaryDirectory() as tmp:
+            db_path = str(Path(tmp) / "read.db")
+            writer = WorldPackWriter(WorldPackPaths.from_db_parent(db_path, source.world_uid))
+            writer.write_world_map_tile(0, 0,
+                [WorldMapCellWire(tx=x, ty=0, surface_z=0, system_terrain="plains") for x in range(2)],
+                cells_per_side=2)
+            writer.write_wilderness_chunk(0, 0, FineTerrainChunkWire(cx=0, cy=0, chunk_columns=1,
+                columns=[FineTerrainColumnWire(lx=0, ly=0,
+                    runs=[FineTerrainZRun(z0=0, z1=0, system_terrain="forest")])]), refine_role="scene")
+            writer.save_manifest()
+            services = build_pack_read_services(source.world_uid, PatchStoreService(), db_path=db_path)
+            reader = services.context.reader_for(source)
+            before = {path: path.read_bytes() for path in writer.paths.root.rglob("*") if path.is_file()}
+            events = []
+
+            def record(label, fn):
+                def call(*args, **kwargs):
+                    events.append(label)
+                    return fn(*args, **kwargs)
+                return call
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(MapCellQueryFacade, "_chunk_refine_role",
+                    side_effect=record("metadata", MapCellQueryFacade._chunk_refine_role)))
+                stack.enter_context(patch.object(reader, "chunk_exists", side_effect=record("exists", reader.chunk_exists)))
+                stack.enter_context(patch.object(reader, "read_wilderness_chunk",
+                    side_effect=record("fine", reader.read_wilderness_chunk)))
+                stack.enter_context(patch.object(services.gameplay, "merge_layer_batches",
+                    wraps=services.gameplay.merge_layer_batches))
+                for target in (
+                    "planning.composition.surfacePlanningEntry.SurfacePlanningEntry.require_plan_inputs",
+                    "planning.composition.surfacePlanningCapture.SurfacePlanningCapture.capture",
+                    "pack.refine.fine.chunk.fineChunkRunner.FineChunkRunner.refine_rects",
+                    "pack.io.worldPackWriter.WorldPackWriter.write_wilderness_chunk",
+                    "pack.io.worldPackWriter.WorldPackWriter.write_world_map_tile",
+                    "pack.io.worldPackWriter.WorldPackWriter.save_manifest",
+                ):
+                    stack.enter_context(patch("app.application.worldData." + target,
+                        side_effect=AssertionError("read invoked write/planning: " + target)))
+                views = await services.gameplay.get_cells(source, {(0, 0, 0): None, (1, 0, 0): None})
+                self.assertEqual(events, ["metadata", "exists", "fine", "metadata", "exists"])
+                self.assertEqual([view.system_terrain for view in views], ["forest", "plains"])
+                self.assertEqual([view.source_layer for view in views], [MapLayerKind.PLAYER_SCENE, MapLayerKind.WORLD_MAP])
+                services.gameplay.merge_layer_batches.assert_awaited_once()
+                patched = await services.gameplay.get_cell(source, 0, 0, 0,
+                    patch=CellContribution(x=0, y=0, z=0, system_terrain="swamp"))
+                self.assertEqual(patched.system_terrain, "swamp")
+                self.assertEqual(patched.source_layer, MapLayerKind.PATCH)
+            self.assertEqual(before, {path: path.read_bytes() for path in writer.paths.root.rglob("*") if path.is_file()})
 
 
 class L2BoundaryTests(unittest.TestCase):

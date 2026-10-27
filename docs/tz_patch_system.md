@@ -10,13 +10,13 @@ metadata:
 
 **Patch System** — общая инфраструктура движка для **всех изменений состояния**: мир (cells, regions, structures, …), игрок, сессия. Отдельный механизм — **не часть генератора и не часть конкретного домена**.
 
-Мотивация: только домен знает семантику своих изменений, поэтому патч формирует реализация домена — patcher при этом может корректно обрабатывать набор патчей хода.
+Мотивация: только домен знает семантику своих изменений, поэтому патч готовит реализация домена, а применяет подготовленные patches только Snapshot.
 
 | Принцип | Смысл |
 |---|---|
 | **Patch = интерфейс** | Домен получает параметры изменения в своих терминах → **реализация домена** формирует `Patch` |
 | **Один механизм на все состояния** | cells, region_states, player stats/inventory/history — один контракт, разные доменные реализации |
-| **Patch set на ход** | За ход накапливается набор патчей, **секционированный по доменам** (не плоский blob) → применяется к рабочему состоянию → фиксируется в snapshot как дельта хода |
+| **Patch set на ход** | За ход накапливается набор патчей, **секционированный по доменам** (не плоский blob) → передаётся Snapshot → только Snapshot применяет набор и фиксирует состояние/операции |
 | **Rollback = branch, не discard** | Откаченные snapshot'ы не удаляются — ссылаются на ветку в другом временном отрезке (`parent_snapshot_id`, `ON DELETE RESTRICT`) |
 
 **Статус:** target design ⬜
@@ -52,9 +52,15 @@ metadata:
 
 Контракт Patch/PatchSet сохраняется. **Сбор патчей и формирование patch set
 разрешены только DAG и debug API.** Доменная patch implementation формирует
-отдельный typed patch из доменного результата; общий patcher получает уже
-собранный набор и делегирует применение секций доменным обработчикам.
-Patcher и snapshot service не присваивают себе сбор патчей хода.
+отдельный typed patch из доменного результата без изменения состояния.
+Только Snapshot применяет собранный набор, вызывая доменные реализации
+поведения, и сохраняет результирующее состояние/историю. Самостоятельного
+общего patcher как второго входа применения нет. Snapshot набор не собирает.
+
+PatchSet может временно кэшировать подготовленные результаты для передачи
+в Snapshot. Кэш не является применением patch или зафиксированным состоянием;
+владение, lifetime, соответствие patch/revisions и освобождение ресурсов
+определяются общим контрактом до реализации.
 
 Генератор возвращает доменный output. Он не формирует и не собирает patches,
 не вызывает patcher/snapshot CRUD и не пишет через патчи напрямую в
@@ -68,7 +74,7 @@ snapshots. Запись инициируется через debug API либо D
 в рамках WS, создаёт критическую архитектурную ошибку. Исключений для
 internal/debug/import/batch callers нет.** Это проверяется на каждом
 шаге WS по writer/caller ledger и фактическим calls/imports: разрешённый
-entry → координация → доменный handler → storage. Вызовы storage внутри
+entry → подготовка/сбор PatchSet → Snapshot apply → domain implementation → storage. Вызовы storage внутри
 этого сценария допустимы; самостоятельный альтернативный вход — нет.
 Затронутый шаг не принимается при наличии обхода; весь WS не завершается,
 пока остаётся хотя бы один обход в его scope. Проверка не откладывается
@@ -78,42 +84,49 @@ entry → координация → доменный handler → storage. Вы�
 
 ```mermaid
 flowchart LR
-  subgraph producer[Производители]
-    GEN[generators — pure, доменный output]
-    GM[gameplay / worldEdit / events]
-  end
-
-  subgraph domain[Домен]
-    A[domain patch impl<br>параметры → Patch]
-  end
-
-  subgraph infra[Patch infra — движок]
-    PS[patcher<br>apply patch set → working state]
-  end
-
-  SNAP[Snapshot<br>blob + patch set дельты хода]
-
-  ENTRY[debug API / DAG — application entry]
-  DAG[DAG или debug API — сбор patch set]
-  GEN -->|доменный output| ENTRY
-  GM -->|параметры изменения| ENTRY
-  ENTRY --> A
-  A -->|Patch| DAG
-  DAG -->|собранный patch set| PS
-  PS -->|результат применения| SNAP
-  DAG -->|журнал patch set| SNAP
+  GEN[Generator: domain output] --> ENTRY[DAG / debug API]
+  ENTRY --> DOMAIN[Domain: подготовка Patch без записи]
+  DOMAIN --> ENTRY
+  ENTRY --> SET[PatchSet: patches и временный кэш результатов]
+  SET --> SNAP[Snapshot: единственный владелец применения]
+  SNAP --> BEHAVIOUR[Domain implementation: поведение Patch]
+  BEHAVIOUR --> SNAP
+  SNAP --> STORE[Результирующее состояние и история]
 ```
 
 **Инварианты:**
 
 - **Snapshot immutable**: записанный snapshot никогда не мутируется. Любое изменение состояния — новый узел; «откат»/re-simulation — новая ветка, не правка существующей. Нарушение = баг хранилища (checksum это ловит).
 - Patch — immutable, typed (Pydantic); не SQL-строка и не `MapCell`.
-- Patch set секционирован по доменам (`sections`); patcher — диспетчер секций в доменные impl, а не универсальный интерпретатор payload.
+- Patch set секционирован по доменам (`sections`); Snapshot вызывает domain implementations при применении секций; доменный payload не интерпретируется общим кодом.
 - Порядок патчей внутри секции — ответственность домена; порядок секций — явная доменная зависимость; инфраструктура не переупорядочивает.
 - Compose/merge полей (кто перекрывает чьё поле) — собственность домена-владельца поля, не generic-кода.
 - Патчи — не источник состояния при restore: blob snapshot **authoritative**; patch set внутри snapshot — audit/diff/regen-вход (закрывает deferred «incremental vs full» из `tz_world_snapshot`).
 
 ## Контракт (черновик)
+
+Уточнение мастера 2026-10-27: **интерфейс Patch — общий поведенческий
+контракт, передаваемый доменам на реализацию.** Схема полей ниже сама по себе
+не определяет этот интерфейс. До реализации необходимо согласовать смысл
+адресата/изменения, предусловия, validation, этапы применения/сохранения,
+результаты, отказы, повторное применение, зависимости/effects и передачу
+данных в snapshot. Общая семантика принадлежит интерфейсу, доменная логика
+её выполнения — домену. Критерии отдельной приёмки —
+[новый план, §3 и §8](../.cursor/plans/world-domain-patches-snapshots.md).
+
+**Критическая приёмка каждого класса Patch (мастер, 2026-10-27):** при
+изменении доменного CRUD с сохранением публичного контракта модификации
+класс Patch, его типы/payload/format version не меняются. CRUD и сопоставление
+модификации с физическими записями принадлежат домену. Проверка обязательна
+для каждого конкретного класса, не только базового интерфейса или одного
+patch на домен. Сценарий и evidence — новый план §3.4. Интерфейс требует
+строгой связки domain/семантика/target/inputs/change/result от реализации.
+Провал этой проверки означает дефект реализации. До его устранения и
+повторной успешной проверки не принимаются затронутый шаг и план целиком;
+отложенный долг или ослабление критерия не заменяют исправление.
+
+Схема ниже — исторический эскиз состава данных, не типизированный контракт
+к реализации: bare domain string/raw payload не удовлетворяют этому требованию.
 
 ```python
 class Patch(BaseModel):  # frozen
@@ -130,7 +143,7 @@ class PatchSet(BaseModel):  # дельта одного хода
 
 **Зачем секции:** плоский набор патчей из всех систем (климат, экономика, NPC, флора, война, политика, ресурсы) — неконтролируемый blob. Секция = владение:
 
-- **apply** — patcher диспетчит каждую секцию в patch impl её домена, а не разбирает чужие payload;
+- **apply** — только Snapshot вызывает patch impl соответствующего домена; самостоятельного domain apply entry нет;
 - **валидация** — домен проверяет только свою секцию;
 - **diff/diff на restore** — «что изменилось в climate между N и N−1» читается без разбора всего набора;
 - **аудит/диагностика** — патч всегда адресуем доменом, orphaned payload невозможен.
@@ -142,47 +155,42 @@ class PatchSet(BaseModel):  # дельта одного хода
 | Слой | Делает | Не делает |
 |---|---|---|
 | generator | доменный output | patch, snapshot, SQL |
-| domain patch impl | output/params → `Patch` | применение чужих патчей |
+| domain patch impl | подготовка Patch без записи; поведение своего patch по вызову Snapshot | самостоятельное применение, чужие доменные правила |
 | DAG | сбор патчей и формирование patch set хода | доменная семантика payload, физическое хранение snapshot |
 | debug API | внешний application-вход сценария записи, сбор патчей и формирование patch set | генераторная логика, доменная семантика payload |
-| patcher (infra) | apply готового patch set через доменные обработчики | сбор патчей хода, доменная семантика |
-| snapshot service | serialize / commit / restore / branch | генерация, LLM payload |
+| snapshot service | единственный apply PatchSet через domain implementations; состояние/история, serialize / commit / restore / branch | сбор набора, генерация, доменные алгоритмы, LLM payload |
 
 См. правило `layer-boundaries.mdc` — persist и LLM не в генераторе; patch-система расширяет это до всех изменений состояния.
 
-### World State CRUD: capabilities и atomic command (design 2026-10-25)
+### Доменное чтение, patches и WS (решение мастера, 2026-10-27)
 
-Целевая общая application boundary принадлежит worldState, вне generators.
-WorldStateService делегирует WorldStateQueryFacade.read и
-WorldStateMutationFacade.create/update/delete. Read/create/update/delete —
-отдельные capabilities; read-only backend не реализует always-fail writer.
-Unsupported operation, запрет домена/прав и storage failure — разные исходы.
-Query читает existing merged state/metadata без скрытого materialize.
+DAG напрямую вызывает read и patch соответствующего домена. Контракт
+чтения принадлежит домену; WS не задаёт общий read-контракт, не оборачивает
+и не маршрутизирует domain.read. Прямой доступ WS к БД запрещён.
+Прежние central CRUD, WS DB adapters и WorldStateUnitOfWork отменены.
 
-Атомарность охватывает целую typed domain command, не один repository метод.
-Mutation facade открывает WorldStateUnitOfWork.transaction или явно
-присоединяется через WorldMutationSession; один root владеет commit/rollback.
-Handlers делегируют existing domain validators/writers, не коммитят отдельно.
-Joined failure помечает root rollback-only даже при перехвате caller'ом.
-SQL transaction не объявляется atomic publish для pack files.
+Доменная patch implementation готовит изменение metadata/planning либо
+результат materialization без записи состояния. Она реализует доменные
+правила поведения patch, вызываемые только Snapshot при применении.
+Generator возвращает domain output и сам patches не формирует/не применяет.
 
-Selective cell patch различает Keep/SetValue/ResetOverride; незатронутые
-override сохраняются, scoped delete не удаляет base pack cell. Generic
-INSERT OR REPLACE не является реализацией этого контракта. Fine_cell жидкости
-— контрольный сценарий atomic/selective update, не готовая fluid model;
-surface MapCellHydrology не расширяется попутно до runtime volume.
-Точные class/method/path/port и matrix —
-[WS-0A](../.cursor/plans/world-state-crud-capabilities-uow.md) §7–13.
-Уточнение freeze review 2026-10-26: is_structural поддерживается в existing
-structural-OR семантике (SetTrue/Reset, не false override); остальные legacy
-payload columns вне первого mutable whitelist сохраняются. Удаление пустой
-строки проверяет полный persistence payload, не read has_data. NOT NULL
-поля вставляются из model/policy defaults. Ambient без session отклоняется
-типизированно до BEGIN. Два семейства SQL-writer допустимы по selective
-field last-committed-write-wins; live whole-row replace запрещает rollout
-нового writer, а не объявляется безопасным из-за SQL lock. Точные masks,
-predicate, class/method bindings и acceptance cases — WS-0A §10–13.
-Статус design для приёмки; snapshot runtime и код реализации вне этой записи.
+Только DAG/debug API собирают PatchSet. Он может временно кэшировать
+результат для передачи в Snapshot. Только Snapshot применяет patches и
+сохраняет состояние/операции всех доменов; набор он не собирает, доменные
+алгоритмы не воспроизводит и materialization не запускает.
+
+Атомарность domain mutation, набора/хода и snapshot commit должна быть
+определена архитектурой до реализации. Самостоятельные частичные commits
+не доказывают атомарность сценария; SQL transaction не равна file publication.
+Конкретные coordinator/UOW классы сейчас не выбираются.
+
+Selective cell delta сохраняет Keep/SetValue/ResetOverride и незатронутые
+поля, reset не удаляет base pack cell. Эти правила принадлежат cell-домену,
+не общему WS storage adapter. Runtime fluid model этим не вводится.
+
+[Актуальный новый план](../.cursor/plans/world-domain-patches-snapshots.md).
+Прежний world-state-crud-transition.md помечен ARCHIVED / SUPERSEDED.
+Прежние WS-0A/ledger — архив, не действующий контракт общего CRUD.
 
 ---
 

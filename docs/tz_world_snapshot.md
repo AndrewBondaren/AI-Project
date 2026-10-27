@@ -72,9 +72,12 @@ debug API либо DAG на application границе. Формирование
 patches принадлежит доменным patch implementations; **только DAG и debug
 API имеют право собирать патчи в patch set** (уточнение мастера, 2026-10-27).
 Debug API может собирать набор самостоятельно, без обязательного вызова DAG.
-Patcher применяет готовый набор через доменные
-handlers. Snapshot service сохраняет переданные данные и историю, не
-собирает патчи. Эти границы также проверяются на каждом шаге WS.
+**Применяет patches только Snapshot** (уточнение мастера, 2026-10-27).
+Домен готовит patch без записи; DAG/debug собирает набор. PatchSet может
+временно кэшировать результаты для передачи в Snapshot. Snapshot вызывает
+доменные реализации поведения при применении и сохраняет состояние/историю;
+сам набор не собирает. Отдельного patcher как самостоятельного apply entry нет.
+Эти границы также проверяются на каждом архитектурном пункте и шаге.
 
 **Критический запрет обхода для всех доменов (решение мастера,
 2026-10-26): если хотя бы один домен в любом пути записи состояния,
@@ -104,17 +107,19 @@ Evidence каждого шага должно содержать проверк�
   изменение; история snapshots и её хранение ей не принадлежат.
 - WorldSnapshotService владеет lifecycle истории: идентичностью,
   неизменяемостью, связями и ветвлением snapshots, координацией их сохранения
-  и чтения. Он сохраняет данные планирования и уже имеющиеся результаты
-  materialization через контракты, не планирует мутации, не исполняет их
-  доменные правила и не запускает materialization ради сохранения.
+  и чтения. Только он применяет PatchSet через доменные реализации поведения
+  и сохраняет данные планирования/имеющиеся результаты materialization.
+  Сам доменные алгоритмы не реализует, мутации не планирует и materialization
+  ради сохранения не запускает.
 - Serializer/deserializer владеют кодированием формата; repository —
   физическим хранением через storage-порты.
 - Application coordinator сценария связывает вызовы соответствующих
   владельцев и передачу данных. Координация snapshot lifecycle внутри
   snapshot service не означает владение планированием и materialization.
-- WorldStateService владеет общим доступом к состоянию через typed ports,
-  делегирует доменную семантику владельцам и не становится генератором,
-  snapshot lifecycle service или дополнительным хранилищем.
+- Домен владеет собственными read/patch contracts и реализациями.
+  DAG вызывает их напрямую. WS не задаёт общий domain read contract,
+  не оборачивает и не маршрутизирует чтение, напрямую не обращается к БД.
+  Snapshot сохраняет patch-операции всех доменов и связанные данные состояния.
 
 В результате **каждого шага** обязательно фиксируются: затронутые
 классы/методы и их единственные обязанности; публичные typed contracts и
@@ -167,8 +172,8 @@ matching geometry → existing RegionOutlineStaleError. Вычисление к�
 не создаёт и не публикует L0/L2. Gameplay read сохраняет WP-20 merge/fallback,
 без capture/prepare на каждую клетку. EntryRefineOrchestrator.refine_from_entry
 и materialize_pack_* — отдельные explicit write операции; read TODO им не
-назначается. При WS cutover он переносится к общему application read-owner
-по caller ledger. Будущий порядок snapshot lookup и missing semantics
+назначается. При согласованном cutover он остаётся у соответствующего доменного
+application read-owner по caller ledger; общий WS read-owner не создаётся. Будущий порядок snapshot lookup и missing semantics
 остаются предметом отдельного WS/snapshot design. Заглушки,
 новые snapshot API и фиктивная existence-проверка в PC-11 не создаются.
 
@@ -177,32 +182,36 @@ matching geometry → existing RegionOutlineStaleError. Вычисление к�
 
 ### Общий World State CRUD и snapshot lifecycle
 
-Решение мастера 2026-10-25: общий интерфейс состояния мира и его реализация
-принадлежат платформенному домену **worldState**, вне generators:
-IWorldStateCrud / WorldStateService. IWorldStateRead — read-only capability
-того же service instance; домены terrain/climate/landcover и другие генераторы
-являются потребителями этого контракта либо подготовленных через него DTO.
-В compute kernels/worker loops IO не встраивается; application boundary
-получает typed metadata/data до pure generation.
+**Актуальное решение мастера, 2026-10-27:** прежняя схема центрального
+WorldStateService/IWorldStateRead отменена. Контракты чтения принадлежат
+доменам: DAG вызывает domain.read напрямую и получает доменный результат.
+WS не определяет эти read-контракты, не оборачивает их и не маршрутизирует
+вызовы. Прямой доступ WS к БД запрещён, включая WS storage adapters/UOW.
 
-Existing WorldService, NamedLocationService, MapCellService, MapCellQueryFacade,
-PatchStoreService и region-state owner подключаются через typed adapters к
-общей реализации. Их доменные algorithms, merge/fallback и atomic writes не
-переносятся в WorldStateService. Read не вызывает materialization. Общий CRUD
-текущего состояния реализуется без ожидания snapshot runtime и не создаёт
-параллельного state store.
+DAG вызывает подготовку patch соответствующего домена без записи состояния.
+Только DAG/debug API собирают PatchSet; он может временно кэшировать
+результаты metadata/planning/materialization для передачи в Snapshot.
+Только Snapshot применяет patches, вызывая доменные реализации поведения,
+и сохраняет результирующее состояние и историю. Обязательного промежуточного
+WS CRUD и самостоятельного patcher apply entry на этом пути нет.
 
-WorldSnapshotService отвечает только за историю/immutable snapshot lifecycle;
-будущий snapshot backend подключается к общему worldState contract. Snapshot
-не владеет текущим CRUD terrain/climate/regions. Полная карта классов, методов,
-путей и перехода WS-0…WS-5 —
-[world-state-crud-transition](../.cursor/plans/world-state-crud-transition.md).
-План пока DESIGN ДЛЯ ПРИЁМКИ; код/полный DTO freeze им не разрешены.
-Архитектура query/mutation фасадов, независимых CRUD capabilities, backend
-ports и UOW детализирована в
-[WS-0A](../.cursor/plans/world-state-crud-capabilities-uow.md) §7–13.
-Эта общая реализация работает с текущим состоянием; snapshot lifecycle не
-внедряется ради её реализации и не становится владельцем domain mutation.
+Snapshot сохраняет patch-операции всех доменов и соответствующие данные
+состояния. Это общая история изменений, без переноса domain logic в snapshot
+service. Existing immutable/authoritative state semantics сохраняются;
+журнал patches сам по себе не заменяет данные состояния при restore.
+Границы commit операции/набора/snapshot ещё определяются архитектурой.
+
+Pure generators получают готовые inputs и возвращают domain output;
+не читают БД/WS, не формируют patches и не сохраняют snapshots.
+Materialization — явная отдельная операция из актуального плана;
+read и snapshot save не запускают её неявно. Production/debug boundaries
+и Gate: DAG сохраняются по tz_world_generation_dag.md.
+
+[Актуальный новый план](../.cursor/plans/world-domain-patches-snapshots.md)
+заменяет архивный world-state-crud-transition.md и прежнюю central CRUD схему.
+Capabilities/UOW и WS-0 ledger также сохранены как архив
+инвентаризации; старые class map и WS-1…WS-5 не являются implementation plan.
+Сначала архитектура и её приёмка, затем конкретные реализации.
 
 ### Домен snapshot CRUD и методы (design для приёмки, 2026-10-25)
 
@@ -238,7 +247,7 @@ base_ref; conflict/branch policy фиксируется до реализаци�
 head нет. GC/prune удерживаемой истории не является CRUD delete.
 
 WorldSnapshotService владеет lineage/refs, согласованностью сохранения и scoped
-чтением. Доменные handlers проверяют/применяют свои typed changes; serializer
+чтением. Только snapshot lifecycle вызывает доменные handlers для своих typed changes; serializer
 кодирует, repository сохраняет. Сервис не импортирует hydrology jobs/buffers,
 terrain placement, climate scorer/tier kernel и не выполняет LOD/materialize.
 Planning/pack views — потребители/производные, не реализации snapshot CRUD.
