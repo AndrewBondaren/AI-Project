@@ -1,6 +1,7 @@
 {
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
+    "../../../app/dataModel/policy",
     "../../../app/application/cancellation/requestPlanWait.py",
     "../../../app/application/cache",
     "../../../app/application/planning",

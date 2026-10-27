@@ -669,6 +669,19 @@ Target: materialization run **один раз** → persist → capture; сле�
 
 ## PC-0 — surface source view и будущий snapshot adapter (2026-10-23)
 
+**G0-S, 2026-10-27:** immutable generation view не является snapshot истории.
+Phase UID, StateViewRevision, artifact PlanRef и authoritative SourceRevision/
+snapshot identity различаются. Geo capture получает prepared source closure
+на domain caller boundary; pure providers/samplers не выполняют restore/SQL/
+Patch Store IO. Exact payload/canonicalization — [G0-S seam](./tz_terrain_generation.md#geo-1-g0-s--source-revision-и-snapshot-seam).
+Равные prepared inputs текущего и будущего restored источника должны давать
+равные derived plans; это acceptance будущего adapter, не evidence его наличия.
+Выбор as-of/pinned source set, holder/retention, branch provenance и Snapshot-owned
+apply/append-only publication остаются у [действующего внешнего плана](../.cursor/plans/world-domain-patches-snapshots.md),
+§6–7.2, с переиспользованием source-versioning. SourceVersion/branch metadata
+не синтезируются из cache key, pack mtime или turn number. Старый WS CRUD
+архивирован; G0-S не вводит заменяющий его central read contract или локальный store.
+
 [Норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0) фиксирует
 StateViewRevision как SHA-256 canonical source projection. До общего
 WorldSnapshot runtime caller передаёт world/locations и loaded mountain

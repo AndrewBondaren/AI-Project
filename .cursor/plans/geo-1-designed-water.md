@@ -710,6 +710,9 @@ application/planning, application/cache и domain providers) размещают�
   writer остаётся в application. Spatial profile расширение только G9.
 - `policy/{policySpec,policyEnums,policyDecision,objectAdmissionPolicyDefinition}.py`:
   общие rules, effects, decisions, admission definition (§6.8).
+- `cascade/runtimeContext.py::CascadeRuntimeContext[AxisT]` — общий transient
+  BaseModel runtime-контракт G1, без water/location параметров; конкретные
+  LocationContext/WaterGenerationContext сохраняют свои оси и поля (§6.16-A).
 - `hydrology/generation/{waterGenerationSettings,waterGenerationDefaults,generationContext}.py`:
   base/world/body settings, terminal defaults, resolved context (§5.2-A/B).
   Scope-specific settings размещаются в generation/waterGenerationSettings.py,
@@ -717,7 +720,7 @@ application/planning, application/cache и domain providers) размещают�
 - `hydrology/enums/planning/waterGenerationScope.py`: новая ось WaterGenerationScope;
   `hydrology/enums/planning/hydrologyExecutionMode.py`: доменный generation behavior enum;
   `hydrology/enums/planning/coastlinePurpose.py`: source/boundary enum.
-  Existing HydrologyScope при переносе использует отдельный файл §6.8-D;
+  Existing HydrologyScope уже перенесён PC-1H в enums/planning/hydrologyScope.py;
   эти enum не заменяют друг друга.
 - `hydrology/policy/hydrologyPolicyDefinition.py`: доменные declarations;
   `hydrology/policy/hydrologyGenerationDecision.py`: typed specialization
@@ -770,8 +773,10 @@ producers/consumers каждого файла указаны в соответс
 - `worldData/generators/terrain/relief/surfaceCoatingSupport.py`:
   факты поверхности. Здесь нет surfaceCoatingPolicyDefinition: definition
   размещается только в указанном выше dataModel namespace.
-- `worldData/generators/terrain/passes/surfaceTerrainContext.py`:
-  compatibility re-export/delegation после PC-9; не coordinator и не store.
+- `worldData/planning/composition/surfacePlanningEntry.py::SurfacePlanningEntry`:
+  existing request boundary после PC-11.7: capture_view → prepare_captured,
+  связывает domain working views; old surfaceTerrainContext/to_legacy_context
+  удалены, в GEO-1 не восстанавливаются.
 - `worldData/planning/composition/surfacePlanningAssembler.py::
   SurfacePlanningAssembler.prepare`: единственный world surface
   cross-domain assembler, получает domain plans через PlanningService.
@@ -783,10 +788,10 @@ producers/consumers каждого файла указаны в соответс
   authoritative state view по §6.28/§6.29-M; не перечитывает БД на consumer.
 - `worldData/planning/contracts/surfacePlanBundle.py::SurfacePlanBundle`:
   immutable aggregate typed plan refs/envelopes; exact поля — §6.25.
-- `worldData/planning/contracts/surfacePlanningView.py::SurfaceTerrainContext`:
-  перенесённое единственное определение legacy view с прежними public
-  полями; mutable рабочие данные, если нужны старым callers, выдаются
-  отдельной копией, не ссылкой внутрь cached plan. Нового SoT нет.
+- `worldData/planning/contracts/{surfacePlanningView,surfaceWorkingMaps}.py`:
+  existing frozen SurfacePlanningView и request-local SurfaceWorkingMaps.
+  GeoSurfacePlanningView/GeoSurfacePlanBundle имеют собственные typed поля
+  §6.29-M/§6.31-E, без legacy projection/cast.
 - `worldData/generators/hydrology/placement/waterPlacementPass.py`:
   existing transitional caller и общий batch invocation; routing preparation
   переносится в designPreparation на G8, не появляются два активных пути.
@@ -794,7 +799,7 @@ producers/consumers каждого файла указаны в соответс
   `worldData/generators/terrain/reliefObjects/bathymetry/{basinSpec,
   floorProfile,basinZ}.py`: existing mapping/spec/profile/единственный writer.
   После PC-1R application basinSpec.py — re-export общего domain contract;
-  actual перенос пока не выполнен. Расширение профиля — GAP-FIELD/G9,
+  перенос выполнен PC-1R. Расширение профиля — GAP-FIELD/G9,
   без второго spec/writer.
 
 **A. Композиция designedWater по ответственностям.**
@@ -1659,7 +1664,8 @@ cascade/RNG/materialize уже разрешённых значений. Exact pr
   migration inventory, их перевод не объявлять выполненным этим планом.
 - Coverage: [EligibilityRule](../../backend/app/dataModel/terrain/eligibilityRule.py:13)
   задаёт rules, [CoverageResolver](../../backend/app/application/worldData/regions/coverageResolver.py:21)
-  централизует predicates/scoring. При этом fact пока str, а missing
+  централизует predicates/scoring (actual entry — module function resolve,
+  не класс CoverageResolver). При этом fact пока str, а missing
   value считается failed/zero; это не target typed unknown-семантика
   общего policy. Не использовать его как новый policy resolver без
   отдельного контракта совместимости. Scoring остаётся одним алгоритмом.
@@ -1704,11 +1710,10 @@ enabled=False → DISABLED независимо от autoresolve; hydrology defi
 Только общий PolicyResolver определяет сработавший case/итоговый mode.
 Consumers switch по enum готового decision, не повторяют исходные bool.
 
-Existing `HydrologyScope` сейчас объявлен в application generators/types.py.
-Если он нужен POJO категории/контексту — перенести **этот же** enum в
-dataModel/hydrology/enums/planning/hydrologyScope.py с сохранением значений и
-совместимым application re-export, не создавать второй enum с тем же
-смыслом. Scope (выбор категории выполнения), cascade level и execution
+Existing `HydrologyScope` уже перенесён PC-1H в
+dataModel/hydrology/enums/planning/hydrologyScope.py; application types.py
+реэкспортирует тот же symbol. Новый enum с тем же смыслом не создавать.
+Scope (выбор категории выполнения), cascade level и execution
 mode — три разных enum, не смешивать их и не передавать голые str.
 
 **E. Wire граница.**
@@ -2152,31 +2157,99 @@ pre-relief/pre-river views — производные immutable вычислит
 world snapshot_id, turn_id, patch revision или checksum.
 
 **Одна граница подготовки входа.** После подготовительного PC-блока
-владелец формирования согласованного generation input —
-`application/worldData/planning/composition/surfacePlanningAssembler.py::
-SurfacePlanningAssembler.prepare`. Старый prepare_surface_terrain_context
-делегирует сюда, не делает вторую сборку. Assembler получает состояние и зависимости,
-фиксирует view/revision один раз на запуск и передаёт их extent provider,
-strategy preparation, policy facts и placement. Consumers не перечитывают
-текущую БД/Patch Store и не вычисляют независимые версии того же входа.
-Подготовка snapshot не запускает capture/commit/SQL из generators.
-Exact immutable input/revision payload и зависимости caller замораживаются
-в G0-S до G3-R/G8/G10; это оставшаяся часть GAP-SNAPSHOT.
+request owner — planning/composition/surfacePlanningEntry.py::SurfacePlanningEntry,
+pure projection — surfacePlanningCapture.py::SurfacePlanningCapture,
+сборка фаз — surfacePlanningAssembler.py::SurfacePlanningAssembler.
+Все три пути относительно application/worldData/. Existing методы
+capture_view/prepare_captured вызывают capture/prepare; GEO target методы
+capture_geo_view/prepare_geo_captured/require_geo_plan_inputs вызывают
+capture_geo/prepare_geo по §6.16-A. Legacy context/projector удалён PC-11.7,
+не делегирует и не восстанавливается. Caller получает coherent world/locations,
+region states/claims и loaded library members до capture; workers/providers
+не читают live World/SQL/Patch Store и не захватывают новую view.
+Assembler получает frozen view, не authoritative store и не capture callback.
+
+**G0-S: exact ready source closure (target GEO schema).**
+GeoSurfacePlanningView находится в planning/contracts/surfacePlanningView.py,
+не наследует invariant baseline payload поля. Required fields:
+kind=READY, world_uid:EntityUid, revision:StateViewRevision,
+climate_base:ClimateBaseInput, terrain_base:TerrainBaseInput,
+region_input:TerrainRegionPlanningInput, water_placement:GeoWaterPlacementInput,
+relief:ReliefPlanInput, hydrology:GeoHydrologyPlanInput,
+river_relief:RiverReliefInput, hydrology_final:HydrologyFinalInput,
+climate_local:ClimateLocalInput, boundary_input:CoastlineBoundaryInput,
+surface_support:SurfaceSupportInput, coating_input:CoatingPlanInput,
+capture_diagnostics:tuple[PlanDiagnostic,...]. Exact domain fields — §6.28,
+§6.29-M/§6.31-E; это authored inputs, не results policy/placement/fill.
+World bounds/topology/grid/z bounds согласованы между I, required refs
+проверены до build; ordered source collections не превращаются в set.
+
+SurfacePlanningCapture.capture_geo(world:World,locations:Sequence[NamedLocation],*,
+mode:ResolutionMode,region_states:tuple[RegionState,...],
+relief_templates:tuple[tuple[EntityUid,ReliefTemplate],...],
+region_claims:tuple[RegionGeometryInput,...],
+mountain_templates:tuple[MountainTemplateInput,...],
+resolve_ctx:ResolveContext) → GeoSurfacePlanningView|NoExtentSurfacePlanningView.
+Все дополнительные sources required: caller явно передаёт empty tuple для
+отсутствующей коллекции, не получает synthetic fallback при failed read.
+Membership/member UID и actual template body, states/tombstones/fingerprint,
+coverage/owner_ref claims входят в соответствующие immutable inputs.
+mode должен совпадать с ctx.validate_only. NoExtent сохраняет existing
+kind/world_uid/revision/diagnostics: prepare_geo возвращает None, require
+выдаёт existing unavailable error; fake topology/geometry/provider builds нет.
 
 До платформенного cutover источник — согласованные typed inputs текущего
 caller. После него тот же projection boundary получает восстановленное
 состояние/working state и метаданные по общему snapshot/patch контракту.
-Меняется получение input и provenance/revision, а не algorithms стратегий,
-policy engine, placement или relief writer. Общая платформа располагается
-по своему ТЗ: application/worldSnapshot; terrain views остаются в своих
-доменных dataModel namespaces. GEO-1 не назначает папку/новую схему общей
-Patch System и не вводит её draft domain:str/sections:dict в свои consumers.
+Меняется получение input и operation provenance, не domain I/algorithms.
+Актуальный внешний план — world-domain-patches-snapshots.md §6–7.2;
+world-state-crud-transition.md архивирован, его central read/CRUD contract
+не вводится. Domain read/patch implementation владеет своими результатами,
+Snapshot инициирует применение и согласованный commit. Concrete revision-set/
+holder/storage/apply API остаётся внешним freeze; GEO-1 не выдумывает tokens,
+не реализует source-version store или локальный snapshot service.
 
-**Revision и cache.** Локальный fingerprint описывает только фактические
-входы вычисления, не историю состояния. Переиспользовать
-`app.ids.state_fingerprint` как hash-примитив; exact канонический payload,
-версия алгоритма и упорядочивание наборов задаются G0-S. Identity, content
-revision и будущая ссылка provenance на общий world snapshot различаются.
+**Revision и cache — одна existing реализация.** StateViewRevision,
+InputFingerprint и OutputFingerprint — разные existing 32-byte nominal types.
+Для READY Geo view input tuple P имеет ровно следующий порядок:
+(climate_base,terrain_base,region_input,water_placement,relief,hydrology,
+river_relief,hydrology_final,climate_local,boundary_input,surface_support,coating_input).
+S(P) — tuple declared model fields (name,value) каждого I, кроме fields
+с metadata SourceFieldRole.EXECUTION_POLICY. revision =
+StateViewRevision(digest((world_uid,S(P)),GEO_SURFACE_MANIFEST)); digest —
+application/encoding/canonicalCodec.py (SHA-256 canonical TLV v1).
+GEO_SURFACE_MANIFEST — binding declaration в existing planning/encoding/
+surfaceManifest.py с registered Geo types; не отдельный encoder.
+Existing NoExtent projection остаётся (climate_base,climate_local), без
+придуманной ready view. Baseline PC revision/vectors не переписываются.
+ResolutionMode исключён из source revision по field metadata, но включён
+в actual request I/input fingerprint; ClimatePoleMode — authored input,
+не execution policy. Display labels/current_tick/timestamps и request-local
+capture diagnostics не попадают в planning source revision. Различия None/0/False,
+source identity, declared geometry, semantic policy/registry/default values,
+claim refs, region state и template membership/body сохраняются.
+
+Canonicalization по существующему codec: declared record field order,
+set/frozenset по encoded bytes; unordered unique-key registries/anchors/template
+rows/claims/states сортируются по canonical UID/key, grid rows по (y,x), light
+по (gy,gx,ty,tx). Ordered paths, manual climate poles и first-match sequences
+сохраняют порядок; их перестановка не называется equivalent. Duplicate keys,
+nonfinite values, wrong enum/type/space и неканоничные refs rejected.
+Не использовать repr/pickle/Python hash или JSON app.ids.state_fingerprint
+вместо frozen codec. UID/seed helpers app.ids сохраняют свой existing scope.
+
+Artifact formulas остаются в application/planning/service/planFingerprints.py:
+F_in=digest((contract_id,schema_version,algorithm_version,world_uid,scope,I,deps));
+F_out=digest((payload,deps,diagnostics)); cache_item_key=digest(PlanKey).
+deps — unique tuple, sorted by slot, с exact PlanRef.key/output_fingerprint;
+I сохраняет execution policy. Schema/algorithm берутся из registered handle:
+PC=1/1, изменённые GEO I/T=2/1, unchanged handles переиспользуются (§6.31-E).
+View revision не заменяет per-artifact closure: unrelated edit допускает HIT
+неизменного upstream. SourceRevision(seq+content_hash) внешнего revision store
+и snapshot/parent identity — provenance/state binding, не эти fingerprints.
+Равные effective inputs разных pinned sets могут использовать один derived
+artifact; authoritative revision set/branch provenance не теряется и не
+выводится из равенства cache entry. Сам cache current pointer не хранит.
 Нельзя считать одинаковый world/phase UID, turn number или pack hash
 достаточным cache key при изменённых settings/patches/region states.
 Внешние snapshot/patch tokens после cutover поступают от их владельца,
@@ -2185,14 +2258,32 @@ revision и будущая ссылка provenance на общий world snapsho
 cache (mtime_ns,size) из WP Read path сохраняет свой контракт; terrain
 input fingerprint не заменяет его и не объявляется pack content hash.
 
-**Patch граница.** По tz_patch_system generator возвращает доменный output;
-domain patch implementation преобразует output/params в immutable typed
-Patch. Общий patcher диспетчит доменные sections с явными dependencies;
-семантика apply/merge принадлежит домену-владельцу полей. GEO-1 не выпускает
-patch из стратегии и не вводит универсальный interpreter для чужих payload.
-Snapshot service выполняет commit/restore/branch; записанный snapshot
-immutable. При restore authoritative blob/state и pack reference,
-а patch log — audit/diff/regen вход, не замена authoritative restore.
+**Invalidation/publication.** Edit сначала меняет authoritative input;
+новый capture строит expected keys независимо от доставки evict event.
+Affected closure следует declared deps: upstream reused, downstream replan;
+clear/eviction/restart не меняет UID/seed/geometry. Wrong world/scope/schema/
+phase/dependency ref/output digest не становится HIT/empty domain fallback.
+Tuple payloads/read-only working projections не позволяют одному consumer
+изменить ответ следующего. L0/L2 запрашиваются из coherent bundle, их tile/LOD
+не меняет world layout и не создаёт eager materialization после edit.
+
+Existing PC guard sourcePublication.py::SourcePublicationGuard.require_fresh
+перечитывает world/locations и re-capture в caller publication UOW;
+sourceRevision.py::require_current_source сравнивает world_uid+StateViewRevision.
+Это текущая baseline stale-write rejection, не будущий append-only Snapshot
+commit protocol. Он сохраняется до отдельного external cutover; capture
+не заявляет SQL snapshot isolation всех current источников. Current guard
+не перечитывает template repository: operation-wide loaded projections и
+membership coherence остаются обязанностью caller. Pinning/GC/историческая
+публикация и concurrent edit semantics замещаются source-versioning + новым
+snapshot-планом, не ещё одним terrain guard/локальным latest pointer.
+
+**Patch граница.** Generator возвращает typed domain output; domain patch
+implementation подготавливает изменение, только Snapshot инициирует apply.
+Диспетчеризация/append-only SQL/pack/history commit закрепляются внешним
+планом; общий patcher из старого текста не является отдельным apply entry.
+При restore authoritative state и удержанные pack refs восстанавливаются
+владельцами доменов; patch history не требует replay всего мира ради view.
 Pack immutable, gameplay Patch Store overlay сохраняет precedence WP-20;
 bake не перезаписывает gameplay edits. Изменение read/write путей —
 отдельный согласованный cutover, не побочное действие GEO-1.
@@ -2210,6 +2301,8 @@ placements; изменение значимого effective input меняет r
 Разные branches не смешивают provenance/изменяемое состояние. Проверка
 в GEO-1 на typed prepared inputs без требования работающего future service;
 реальные capture/restore/branch/patch commit проверяет платформенный трек.
+Initial light/full, L0→C23 unpublished inputs, staging и commit границы —
+external §7.2; G0-S не объявляет existing WorldPackWriter append-only/Snapshot-owned.
 Preview не пишет state/patch/snapshot. В генераторах нет собственного
 snapshot storage, patch log, SQL commit или зависимости от player chain.
 
@@ -2239,10 +2332,17 @@ CATEGORY, generic context compatibility); implementation — G1/G2/G3
 (GAP-CASCADE DESIGN_CLOSED).
 
 **J02. Caller input → frozen view/revision/topology.**
-Producer/join owner после PC-9: application/worldData/planning/composition/
-surfacePlanningAssembler.py::SurfacePlanningAssembler.prepare,
-после base heightmap, до water pass. Existing terrain/passes/
-surfaceTerrainContext.py::prepare_surface_terrain_context — compatibility вход.
+Existing request owner: planning/composition/surfacePlanningEntry.py::
+SurfacePlanningEntry.capture_view/prepare_captured; pure capture —
+surfacePlanningCapture.py::SurfacePlanningCapture.capture, phase assembly —
+surfacePlanningAssembler.py::SurfacePlanningAssembler.prepare. После PC-11.7
+SurfaceTerrainContext/prepare_surface_terrain_context/to_legacy_context удалены.
+TARGET capture_geo/prepare_geo в тех же Capture/Assembler; request owner —
+SurfacePlanningEntry, Geo view не проходит через baseline API/cast.
+Target методы entry: capture_geo_view делегирует capture_geo с required inputs
+§6.29-M; prepare_geo_captured делегирует prepare_geo и связывает working views
+существующими domain factories; require_geo_plan_inputs выполняет эту пару один
+раз и возвращает (GeoSurfacePlanBundle,SurfaceWorkingMaps), без нового projector.
 Consumer: terrain/regions/regionExtent.py::prepare_terrain_regions,
 hydrology/placement/waterPlacementPass.py::run_water_placement_pass и
 design preparation. Все получают один согласованный input revision,
@@ -2313,9 +2413,13 @@ input/draft не импортируют application
 WaterPlacementPreparation: application preparer только возвращает его.
 
 **J07. Подготовка всех sources → один общий placement batch.**
-Producer: J06 и сохранённые J03 geometry-free admissions; join owner —
-SurfacePlanningAssembler.prepare через run_water_placement_pass, после G8 preparation
-делегируется prepare_designed_water. Единственный executor:
+Producer: J06 и сохранённые J03 geometry-free admissions. Existing PC chain:
+SurfacePlanningAssembler.prepare → terrain/planning/waterPlacementPlanProvider.py::
+WaterPlacementPlanProvider.build → hydrology/placement/waterPlacementPass.py::
+run_prepared_water_placement → resolve_placements. Free run_water_placement_pass —
+legacy/script boundary, не production join owner. TARGET geo build в том же
+waterPlacementPlanProvider.py делегирует prepare_designed_water (G8), а
+prepare_geo только связывает envelopes через PlanningService. Единственный executor:
 application/worldData/placement/resolver.py::resolve_placements(batch, ctx).
 DataModel batch/result — dataModel/placement/{batch,result}.py.
 При объединении обязательно совпадение world/input revision/phase,
@@ -2346,6 +2450,9 @@ records, hydrology) → list[BasinSpec]. Current metadata lookup использ�
 entry.source.location_uid и record.source_uid; TARGET связывает их явным
 source identity contract, не предполагает любой auto source NamedLocation.
 Metadata kind/liquid/level/profile относятся к тому же принятому placement.
+Actual PC writer chain: ReliefPlanProvider.build → _coarse_relief → apply_basin_z
+в terrain/relief/planning/reliefPlanProvider.py и bathymetry/basinZ.py;
+mountain/ravine effects уже применены до basin writer.
 Consumer: terrain/reliefObjects/bathymetry/basinZ.py::apply_basin_z(
 heightmap, specs, topology, reserved=...) после apply_relief_objects_z.
 Writer получает selected footprint, профиль, уровень и mountain reservations;
@@ -2355,8 +2462,10 @@ Union geometry/height keys в working-grid units; fine-cell название
 существующего placement alias не разрешает ошибочно пересчитать координаты.
 
 **J10. Тот же BasinSpec + post-relief terrain → physical water facts.**
-Existing consumer: hydrology/hydrologyGeneratorService.py::
-HydrologyGeneratorService.apply(..., basin_specs=..., topology=..., ctx=...).
+Existing PC consumer: hydrology/planning/hydrologyPlanProvider.py::
+HydrologyRoutesPlanProvider.build → planning/assembly/hydrologyRoutesAssembler.py::
+HydrologyRoutesAssembler.assemble → hydrology/water/planning/waterBodyPlanner.py::
+WaterBodyPlanner.plan. HydrologyGeneratorService.apply — отдельный legacy caller.
 Те же specs передаются из water pass и writer, не реконструируются по
 post-carve minima. Схождение: hydrology/waterBodyAssembler.py::
 assemble_water_bodies(heightmap, specs, topology, policy, ...)
@@ -2375,9 +2484,9 @@ AttachedCoastlinePreparer.prepare_boundary, затем общий dependent P2.
 WaterBody/PhysicalWaterUnion mapping, wet cells/уровень одной revision.
 Source UID не считается physical body UID. Контракт: §6.29-G (SourceBodyMapping, typed boundary result);
 production dependent caller/storage — G5-C3/G10
-(GAP-BOUNDARY DESIGN_CLOSED). Existing SurfaceTerrainContext не
-экспортирует water_bodies/physical_unions; их локальное наличие в
-HydrologyResult не является доставкой этому consumer.
+(GAP-BOUNDARY DESIGN_CLOSED). Existing PC HydrologyPlan уже несёт
+water_bodies/physical_unions через routes/final envelopes, но ещё не
+source_mapping и boundary plan; legacy context для их доставки не создаётся.
 
 **J12. Hydrology role + terrain/material facts → shore surface decision.**
 Producers: J10 SHORE/body/level; terrain/relief/surfaceCoatingSupport.py::
@@ -2408,9 +2517,10 @@ Join owner: ResolveContext/ResolveReport исходного caller; одинак
 передаётся policy/preparation/P2/hydrology и validation counterpart.
 Если request ctx не предоставлен, root caller создаёт его один раз;
 downstream не получают None для создания собственных независимых reports.
-Existing surfaceTerrainContext сейчас вызывает run_water_placement_pass
-без ctx, хотя hydro.apply получает resolve_ctx: target передаёт
-`ctx=resolve_ctx` также в water pass, не создаёт отдельный silent report.
+Existing PC providers создают collect_only contexts и возвращают typed
+diagnostics; SurfacePlanningEntry/assembler report boundary воспроизводит их
+на HIT/MISS. Legacy surfaceTerrainContext удалён; GEO providers сохраняют
+этот reporting contract, не захватывают caller ctx в cached payload.
 Эмиттер — application/jsonValidation/resolve.py::report_issues/log_issues
 по §6.12. Обязательная runtime запись при applied fallback ровно одна;
 validate_only не материализует и не логирует runtime fallback.
@@ -2426,6 +2536,172 @@ Selected intent имеет dependency на receiver и использует об
 GAP-PHASE — EXTERNAL_GATE HY-RIV-1: handoff types и запрет coarse
 fallback заданы §6.29-K; lifecycle/base/pack delivery — внешний track.
 Это interface отдельного HY-RIV-1, а не реализуемый в GEO-1 producer.
+
+#### A. G0-A: замороженные runtime seams после PC-12 (2026-10-27)
+
+Это нормативное уточнение class/method map, не отчёт об имплементации.
+EXISTING paths сверены с кодом; TARGET создаётся только owning G-step,
+production consumers переключаются вместе в G10-A. J01–J15 и §6.29 задают
+payload schemas; настоящая запись уточняет runtime seams и removal ledger.
+
+**Общий cascade runtime (G1, J01).** Новый dataModel/cascade/runtimeContext.py
+содержит frozen BaseModel CascadeRuntimeContext[AxisT:ScopeAxis]: level,
+provenance и existing transient _world/_links/_scope_path/_node_results/
+_default_sources. Scope-specific значения/provenance типизируются своей осью;
+heterogeneous node results остаются private runtime state, не wire/cache.
+LocationContext в dataModel/locations/context/locationContext.py наследует
+общий контракт с ScopeLevel; его root(world,default_sources=...) и public
+поля сохраняются. WaterGenerationContext в hydrology/generation/generationContext.py
+наследует его с WaterGenerationScope. Defaults/links snapshots копируются при
+extend; siblings не разделяют изменяемые node-results/provenance.
+Existing application/cascade/contextResolver.py::{extend,scope_sequence,_check_level}
+получают общий контекст, extend сохраняет concrete CtxT на входе/выходе.
+_check_bindings(type(ctx)) и cascadeGraph проверяют только параметры данного
+контекста/оси. Location-only import-time _check_bindings(LocationContext)
+не заменяет runtime проверку water модели. Link/EmptyLink и runtimeChain.bind_chain
+переиспользуются; новые water-only resolver/bind_chain не создаются.
+Economic materialize/fold bindings сохраняются, water VALUE channels их не вызывают.
+
+**SUPPORT resume (G0-PE/G0-P, J03/J07).** Уточнение API общего executor:
+PolicyResolver.resolve(spec,sources,facts,*,mode,resume=None).
+resume имеет typed ObjectAdmissionDecision[B,R]|None; допустим только для
+той же object-operation/spec/source revision, state=WAITING_SUPPORT и уже
+resolved positive priority. При resume ABSOLUTE_GATE/PRIORITY не исполняются
+повторно: сохраняются effective priority/provenance, обновляются только
+SUPPORT facts, затем при готовности выполняется BEHAVIOR. Другой capture,
+operation или отсутствие positive priority — contract error, не fallback.
+Binding callback создаётся один раз на PlacementSession.start и удерживает
+те же frozen spec/source instances и batch.snapshot_revision. Session проверяет
+header identity по своему batch, callback не перепривязывается к свежим inputs;
+guard этой operation binding принадлежит caller/session, не generic cache.
+Value-selection overload не принимает resume. Это тот же staged engine,
+не domain evaluation и не отдельный support scheduler.
+PlacementSession.start(batch,*,reevaluate_support) получает request-local
+callback с контрактом (PlacementHeader,tuple[PlacementOutcomeRef,...]) →
+ObjectAdmissionDecision[Enum,Enum]. Callback связан prepare_designed_water
+с frozen spec/sources/prior decision и domain facts provider; вызывает только
+PolicyResolver.resolve(...,resume=prior). Session не импортирует hydrology.
+После DependencyQueue.settle callback вызывается для новых ready dependents;
+missing/failed/cycle и disabled causes обрабатываются по §6.29-C/D. Original
+world/settings, cascade и RNG не перечитываются. Новую ready порцию целиком
+prepare/submit до следующего heap step; geometry/exclusion — check_candidate.
+
+**Production decision/removal ledger (C3).** Все пути относительно backend/app:
+- placement: existing dataModel/placement/prepared.py::effective_specificity,
+  application/worldData/placement/resolver.py::_PlacementPass._preflight и
+  dependencies.py::DependencyQueue.{_enqueue,settle,fail_cycles}; target
+  ObjectAdmissionDecision + lifecycle/session.py::PlacementSession → existing
+  queue/constraints.check_candidate. G0-P isolated; old auto_specificity/
+  CoastlinePlacementFact/WaterPresence priority branch удаляются в G10-A,
+  geometry check и positive ordering сохраняются.
+- water prepare: terrain/planning/waterPlacementPlanProvider.py::build и
+  hydrology/placement/waterPlacementPass.py::{run_prepared_water_placement,
+  _auto_specificity}; target GeoWaterPlacementInput/GeoWaterPlacementPlan,
+  build_geo в том же WaterPlacementPlanProvider → designPreparation.prepare_designed_water
+  → один PlacementSession/P2. G8 готовит transport; G10-A переключает binding,
+  legacy run_water_placement_pass не остаётся вторым active production path.
+- water fill: hydrology/water/planning/waterBodyPlanner.py::{plan,_select_specs}
+  содержит current enabled/category/autoresolve gates; тот же legacy набор есть
+  в HydrologyGeneratorService.apply. HydrologyPolicyDefinition + facts → общий
+  value-selection HydrologyGenerationDecision; Geo routes wrapper в existing
+  hydrologyPlanProvider.py::GeoHydrologyRoutesPlanProvider.build передаёт решение
+  domain assembler/planner. В G10-A оба затронутых caller path читают decision;
+  повторные bool gates и competing designed sea discovery удаляются, existing
+  waterBodyAssembler.assemble_water_bodies → water/waterMaterialize.materialize_water
+  сохраняют fill/classify/merge. Они не выбирают generation policy.
+- masks: actual runner pack/bake/lightGrid/maskDomains/runMaskDomain.py::run_mask_domain,
+  source collector masks/collection/defaultCollect.py::default_collect. Для
+  затронутых water wrappers gate — готовый policy decision (G10-A), не второй
+  category_enabled/autoresolve if. Landcover/mountain/ravine/roads и их current
+  collector policy остаются вне миграции; общая масочная lifecycle не дублируется.
+- shore: terrain/passes/columnFillPass.py::run_column_fill сейчас отдельно
+  вызывает shoreProfile.apply_shore_surface и пишет shore_material; L0 counterpart —
+  pack/bake/lightGrid/contributors/hydro/{declaredBasins,coarseOpenWater,raster}.py,
+  entry HydroContributor.apply. TARGET SurfaceCoatingSupportProvider/CoatingPlanProvider
+  в terrain/relief/surfaceCoatingSupport.py → общий PolicyResolver → CoatingPlan.
+  G9-ST/G9-S готовят facts/decision, G10-A оба L0/L2 caller применяют готовые
+  terrain/material targets без local allow/default/unknown overrides. SHORE/body/level
+  остаются hydro facts, не зависят от разрешения coating.
+- соседние механизмы: cascade/contextResolver.extend сохраняет inheritance;
+  worldData/regions/coverageResolver.py::resolve сохраняет
+  EligibilityRule scoring; economy/materialPolicies/{defaultMaterialPolicy,
+  materialPolicyConsumer}.py::{default_material_policy,MaterialPolicyConsumer.decide}
+  сохраняют economic selection/comparison. Их перевод на общий policy — внешний
+  migration scope; G0-PE не объявляет их уже мигрированными и не копирует scoring.
+
+**Остальные named joins.** Source union/metadata — §6.29-B в hydrology/sources/
+{proceduralWaterSource,waterDesignSource,waterSourceMetadata}.py; J05 передаёт его
+strategy factory, J08 mapper читает uniform outcome.identity (G0-P/G8/G10-A).
+Fill mapping producer — water/waterMaterialize.py::materialize_water; routes
+сохраняет его, GeoHydrologyFinalPlanProvider переносит без повторного fill
+(§6.31-E). Existing HydrologyFactsAssembler.assemble уже переносит bodies/unions.
+AttachedCoastlineAdapter.build в placement/adapters/coastline/attachedCoastline.py
+получает CoastlineBoundaryInput и exact final GeoHydrologyPlan ref, вызывает
+AttachedCoastlinePreparer.prepare_boundary → dependent P2 → CoastlineBoundaryPlan;
+SurfacePlanningAssembler.prepare_geo доставляет envelope L0/L2 (G5-C3/G10).
+Empty accepted mapping=dry, missing entry=contract error; body UID не source UID.
+
+**Validation и publication joins (G9-S/G10-A).** Existing WorldBundleService._prepare_bundle
+в application/worldBundle/worldBundleService.py вызывает handler.validate_section
+и затем проверяет ctx.errors; LocationsSectionHandler в entity/sections.py сейчас
+только валидирует _from_wire results. TARGET transient draft сохраняет эти typed
+NamedLocation и library bodies, не парсит их вторым raw consumer; после всех
+section validations injected SurfacePlanValidator.validate(view,bundle,ctx=...)
+делает pure aggregate check до ctx.errors, без DB/Pack fallback.
+Standalone existing application/worldData/registries/worldService.py::{create,
+_update,import_from_json,edit_region} сходятся у _save/row preview. TARGET
+planning/validation/worldSurfaceValidationOrchestrator.py::WorldSurfaceValidationOrchestrator.validate
+— async entry (world,*,ctx)->None: один coherent repository/UOW read locations
+для edited world, тот же capture/validator до save/reconcile; validate_only
+ветка edit_region тоже проходит check до return. prepare_import остаётся pure.
+Bundle/standalone не запускают repository aggregate check у каждого _save.
+Existing WorldCopyImport.run пишет world → libraries → entity rows в одной
+DB transaction; final library member_map известна только после common writer.
+Поэтому source preflight не выдаётся за проверку уже remapped target draft.
+TARGET WorldBundleService._prepare_bundle возвращает existing normalized bundle
+transport вместе с validated source receipt; import_bundle передаёт receipt
+required keyword surface_draft в WorldCopyImport.run. После выбора target UID
+run входит в WorldSurfaceValidationOrchestrator.bundle_write_scope(target_world_uid,
+source_draft) ВНУТРИ существующей DB transaction и до world handler import.
+Это request-local async context manager, сбрасываемый в finally.
+WorldService._save внутри scope сверяет target world UID, откладывает aggregate
+check до конца bundle и не читает incomplete location store. После library
+member remap/всех entity imports выход scope выполняет тот же validate для
+coherent final target world/locations/members внутри UOW ДО commit; mismatch
+или validation failure откатывает world/library/entity записи вместе.
+Policy-required/failure unwind не коммитит и не публикует receipt успешного target.
+Source preview и final copied target — разные revisions/compute runs; final
+capture не происходит на каждом row/cell. Вне scope standalone validate читает
+coherent locations и выполняется до save/reconcile. Public skip_validation bool нет.
+Receipt — frozen application record ValidatedSurfaceDraft(view:GeoSurfacePlanningView,
+bundle:GeoSurfacePlanBundle|None) в target planning/validation/surfacePlanValidator.py;
+world UID/revision читаются из view, не хранятся вторым значением. Создаётся
+только после успешного validate, не сериализуется в JSON/Pack/cache.
+Source receipt получается из той же section preparation, сохраняющей typed
+world/locations/library draft, без нового raw schema parser. bundle_write_scope
+принимает только validated source receipt и target UID операции; final validation
+не использует source UID refs как доказательство target revision. Это application
+operation scope, не snapshot API/новый store.
+Container wiring — core/container/{worldData,worldBundle}.py. Runtime diagnostics
+идут existing assembler/report_issues/log_issues boundary; publication остаётся
+SourcePublicationGuard, а не PolicyResolver/CacheService. Snapshot/restored-source
+seam — G0-S, shared CRUD — внешний WS track; HY-RIV-1 R1/R2 — внешний phase gate.
+
+**Folder map/counts на G0-A.** Новых modules сейчас нет. Planned leaves с init:
+dataModel/policy=5; application/policy=2; dataModel/cascade 4→5 (runtimeContext);
+hydrology/generation=5, hydrology/policy=3, hydrology/enums/planning 2→5,
+hydrology/planning 2→3 (sourceBodyMapping); terrain/regions=5,
+terrain/relief/surfaceCoating=4 (включая surfaceSupportInput); placement/lifecycle=4;
+application placement/lifecycle=2, adapters/coastline=2, planning/validation=3,
+terrain/regions=3 (regionExtent/coverageMeasure), terrain/relief 1→2 (support);
+materials/enums 2→3. designedWater leaves — дерево §5.4-A (не более 4).
+Existing roots не расширяются: dataModel hydrology20/relief23/placement7,
+application placement6/adapters6/registries9/worldBundle12, core/container9,
+hydro contributors6, planning/composition5/contracts4. WARN выдан; новые helpers
+только у named owner/leaf, __init__ без исполнения и скрытых aliases.
+Common terminal PlacementPolicyDefaults (placement_specificity=0) принадлежит
+dataModel/policy/objectAdmissionPolicyDefinition.py; definition связывает его
+поле через FieldRef, не копирует default в adapter/engine.
 
 **Обязательные проверки схождения до кода:**
 - У каждого Jnn один named join owner; нет двух независимых источников
@@ -4126,6 +4402,13 @@ placement identity и physical identity не смешиваются.
   SelectBehaviorEffect[B:Enum](value:B). Rule generic binding сохраняет
   T expected values/B behavior enum; смешение enum domains отвергается.
 - PolicyRule: id, stage, precedence, conditions, effect — required.
+  Уточнение G0-PT (2026-10-27): PolicyRule[B,R].domain_reason:R|None=None
+  переносит domain explanation §6.8-B/PolicyReason[R]; DisableEffect.reason
+  остаётся common enum. ObjectAdmissionFacts.effective_priority:FactValue[Specificity]
+  в objectAdmissionPolicyDefinition.py — transient computed fact общего executor
+  после PRIORITY selection, не authored/второй priority. Caller не подставляет его;
+  общий zero rule ссылается на этот POJO через FactValueRef. Bindings/definitions
+  только объявляют refs/rules, resolution остаётся G0-PE.
   PolicySpec: rules tuple с unique ids, authored_priority_ref,
   domain_priority_ref, terminal_priority_ref, expected_behavior_type.
   Source instances привязывает typed application binding; FieldRef
@@ -4997,6 +5280,8 @@ view; source revision/fingerprints включают их actual values/member UI
 Geo view также имеет river_relief:RiverReliefInput и
 hydrology_final:HydrologyFinalInput; capture_geo получает required
 mountain_templates:tuple[MountainTemplateInput,...] по §6.31-E.
+Полный return type capture_geo — GeoSurfacePlanningView|NoExtentSurfacePlanningView
+по G0-S §6.15; NoExtent не подменяется constructed READY input.
 capture_geo заполняет coating_input из тех же authored shore/
 default_shore settings с membership check по контракту ниже; его
 actual values входят в revision/fingerprint наравне с остальными
@@ -5132,8 +5417,9 @@ surface_support:PlanEnvelope[SurfaceSupportPlan],coating:PlanEnvelope[CoatingPla
 Нет subclass override invariant PlanEnvelope[T] полей baseline bundle.
 SurfacePlanningAssembler.prepare_geo(view:GeoSurfacePlanningView,*,
 wait:PlanWaitControl)->GeoSurfacePlanBundle|None; baseline prepare API
-не принимает Geo view через cast. to_legacy_context имеет typed overloads
-на оба bundle и создаёт copies только legacy eight-field view.
+не принимает Geo view через cast. После PC-11.7 legacy context/projector удалён;
+GEO request entry связывает domain working views из typed Geo refs,
+не восстанавливает to_legacy_context или eight-field compatibility transport.
 Geo input/output registry pairs: GeoWaterPlacementInput→GeoWaterPlacementPlan,
 GeoHydrologyPlanInput→GeoHydrologyPlan, TerrainRegionPlanningInput→TerrainRegionPlan,
 CoastlineBoundaryInput→CoastlineBoundaryPlan,
@@ -9205,7 +9491,7 @@ GAP-SOURCE/FIELD/AREA/SURFACE/OUTCOME нового designed-water target.
 cache и не переопределяет общий planning API внутри terrain.
 
 ### G0 — нормативный контракт
-Статус: **IMPLEMENTED / VERIFIED (2026-10-27), готов к приёмке мастера.**
+Статус: **DONE / ACCEPTED (2026-10-27), мастер разрешил G0-A («Далее»).**
 Синхронизированы tz_terrain_generation/cascade_context/map_light_bake/terrain_hydrology: settings/units/owners, общий policy/zero, priority defaults=1 и единый G10-A switch; baseline до switch явно отделён.
 Проверка: сверка с §4/§5.4/§6.8–6.9/§6.29-A…M, локальные ссылки и diff --check. Только документы; production defaults/код не менялись, baseline delta нет. G0-A/G0-S/G0-PT не выполнялись этим шагом.
 Цель: закрепить решения и закрыть Q перед кодом.
@@ -9220,6 +9506,9 @@ Done: все входные решения явно записаны, нет н�
 в target POJO владельцев seas/lakes; production изменение только G10-A.
 
 ### G0-A — фиксация архитектурных стыков и decision call sites
+Статус: **DONE / ACCEPTED (2026-10-27), мастер разрешил G0-S («Далее»).**
+Актуализированы class map/J01–J15 после PC-12; нормативный §6.16-A фиксирует cascade runtime, SUPPORT resume, validation draft/UOW seam и removal owners, включая WaterBodyPlanner. Код не менялся.
+Проверка: AST existing paths/methods, новые target leaf counts, ссылки и diff --check; placeholders на проверенных seams закрыты. G0-S остаётся отдельным шагом, HY-RIV-1/WS — внешними треками.
 Цель: убрать архитектурные placeholders до создания новых contracts.
 ТЗ: G0, §5.4, §6.8-C3, закрываемые записи §6.13.
 Артефакт: нормативные contracts и ledger в документации/плане; это
@@ -9243,6 +9532,9 @@ Done: ledger проверяем по реальным production call sites, п�
 нового модуля однозначен, необходимые contracts согласованы.
 
 ### G0-S — общая planning revision и граница будущего snapshot/patch cutover
+Статус: **IMPLEMENTED / VERIFIED (2026-10-27), готов к приёмке мастера.**
+В §6.15 заморожены Geo view/capture closure, TLV source/artifact fingerprints, canonical order, dependency invalidation и current/future publication seam; нормативы terrain/patch/snapshot/pack синхронизированы с действующим внешним snapshot-планом.
+Проверки: 23 existing revision/codec/capture tests OK; ссылки, AST owners и diff --check. Это design freeze, не реализация Geo capture/restore adapter или snapshot/append-only runtime; future-source equivalence остаётся executable acceptance следующих code steps. Код/SQL/UID формулы не менялись.
 Цель: определить change-sensitive generation input без локальной системы
 world snapshots и подготовить замену источника общим platform contract.
 ТЗ: GEO-1 §6.15, tz_patch_system §Архитектура/Границы слоёв,
@@ -9251,10 +9543,12 @@ tz_world_pack_storage WP-1…WP-7 и Read path.
 Артефакт до кода: exact typed view/revision payload, canonicalization,
 producer/consumer signatures/пути в карте G0-A и invalidation semantics.
 Target owner: application/worldData/planning/composition/surfacePlanningAssembler.py::
-SurfacePlanningAssembler.prepare. Existing terrain/passes/surfaceTerrainContext.py::
-prepare_surface_terrain_context — compatibility seam PC-9;
-hydrology/placement/waterPlacementPass.py,
-app.ids.state_fingerprint; доменные snapshot contracts §5.4/§6.3.
+SurfacePlanningAssembler.prepare_geo; request owner SurfacePlanningEntry,
+capture — SurfacePlanningCapture.capture_geo. Legacy terrain/passes/surfaceTerrainContext.py
+и prepare_surface_terrain_context удалены PC-11.7 и не восстанавливаются;
+hydrology/placement/waterPlacementPass.py; fingerprints — existing
+application/encoding/canonicalCodec.py и application/planning/service/planFingerprints.py,
+не JSON app.ids.state_fingerprint; доменные view contracts §5.4/§6.3/§6.15.
 Контракт: single capture of inputs per compute run; stable identity отдельно
 от content revision; будущий adapter общего restored state подключается
 на caller boundary. Platform service/patch schemas не реализуются в GEO-1.
@@ -9282,8 +9576,10 @@ Done: definitions можно объявлять из разных доменов
 Цель: разрешать приоритеты и domain-defined cases одним механизмом.
 ТЗ: G0 и §6.8-B/C.
 Файлы: application/policy/policyResolver.py и shared tests.
-Контракт: PolicyResolver.resolve(spec, sources, facts, mode=ResolutionMode) → PolicyDecision,
+Контракт: PolicyResolver.resolve(spec, sources, facts, mode=ResolutionMode, resume=None) → PolicyDecision,
 rule precedence отдельно от object priority, unknown/waiting явно.
+Object SUPPORT resume и operation binding — точный контракт §6.16-A;
+повторные cascade/priority/RNG и второй support executor запрещены.
 Проверка: разные domains/defaults, case conflicts, hard forbid,
 required supports, одинаковый preview/runtime result, без domain imports.
 Production acceptance: решение потребляется затронутыми adapters и
@@ -9329,7 +9625,10 @@ isolated V2 semantics проверены; production default changes и export s
 ### G1 — общий контекст каскада для водной оси
 Цель: использовать существующий extend на новом typed контексте.
 ТЗ: tz_cascade_context §2–4 + дополнение G0.
-Файлы: dataModel/hydrology/enums/planning/waterGenerationScope.py (новая ось),
+Файлы: dataModel/cascade/runtimeContext.py (CascadeRuntimeContext[AxisT]),
+existing locations/context/locationContext.py и application/cascade/contextResolver.py
+(один runtime с сохранением concrete context type по §6.16-A);
+dataModel/hydrology/enums/planning/waterGenerationScope.py (новая ось),
 dataModel/hydrology/generation/generationContext.py (WaterGenerationContext);
 dataModel/cascade и application/cascade (общий context runtime contract
 и адаптация existing engine к новой оси по §5.4, без копии resolver).
