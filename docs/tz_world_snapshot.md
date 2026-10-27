@@ -219,6 +219,14 @@ materialization, впервые полученного после создани
     light) — staged blobs по content hash, общие между timelines и играми
     (dedupe); snapshot хранит refs. Детерминированный пересчёт при чтении
     вместо хранения не используется.
+14. **Предусловия patch.** Ядро задаёт слот «ожидаемая версия цели»;
+    заполнение — ревизии source-versioning. Несовпадение — явный исход
+    «конфликт», не исключение.
+15. **Только Snapshot — полноценный commit.** PatchSet — носитель, не
+    единица commit; частичного commit секций нет. Набор фиксируется
+    commit Snapshot целиком либо не фиксируется.
+16. **Отложено:** контракт результата apply/effects со стороны DAG — до
+    перехода DAG на pydantic.
 
 **Не ответственность этого ТЗ:** схема `world_snapshots`
 (`timeline_id`/`turn_id`) — [`project_data_storage_tz.md`](./project_data_storage_tz.md)
