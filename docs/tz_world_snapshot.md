@@ -188,18 +188,20 @@ materialization, впервые полученного после создани
    `publish_settlement_structure`, `save_manifest` и
    `finalize_pack_on_world` несовместимы — вход migration inventory,
    этим решением не исправлены.
-7. **Переиспользование:** протокол staging/holder/GC/idempotent retry берётся
-   из [world-source-versioning](../.cursor/plans/world-source-versioning.md)
-   (STAGE/STAGE-SQL, holder handoff); второй механизм не вводится.
+7. **Владелец — ядро домена патчей** (решение мастера 2026-10-27): протокол
+   staging/holder/GC/idempotent retry — общая инфраструктура ядра;
+   [world-source-versioning](../.cursor/plans/world-source-versioning.md)
+   (STAGE/STAGE-SQL, holder handoff) его переиспользует; второй механизм не
+   вводится.
 
 **Решения мастера 2026-10-27** (B-3, M-1, M-2, keyframe, rebase, объём):
 
 8. **B-3. Один CAS-указатель мира `(pack_hash, snapshot_head)`.** Активация
    pack и commit тика — две операции этого указателя; обе вызывает DAG.
    Активация pack тем же CAS атомарно проверяет «gameplay не стартовал» —
-   гонка «bake дописывает pack ↔ старт игры» закрыта. Механизм по смыслу тот
-   же, что CAS-активация source revision (п. 7); совместимость проверяется
-   при реализации.
+   гонка «bake дописывает pack ↔ старт игры» закрыта. Указатель принадлежит
+   ядру домена патчей (п. 7); CAS-активация world-source-versioning
+   (`activation_seq`) использует его же — второй указатель не вводится.
 9. **M-1. Patch — только данные.** Frozen typed тип в dataModel домена;
    apply и merge (компакция overlay) — доменная application-реализация,
    которую вызывает Snapshot. Patch не знает storage.

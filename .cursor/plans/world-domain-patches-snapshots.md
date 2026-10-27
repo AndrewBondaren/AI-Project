@@ -620,13 +620,30 @@ DB-модели и имена existing services не заменяют архит
 1. Проработать и принять каждый архитектурный пункт §1–6 отдельно, закрывая
    относящиеся к нему вопросы §7; только документы. Открытый вопрос поведения
    интерфейса не переносится в concrete implementation.
-2. После приёмки — inventory переиспользуемых domain POJO/ports и точный
-   contract freeze: поля, результаты, диагностика, revisions и atomicity.
+2. После приёмки — inventory переиспользуемых domain POJO/ports и contract
+   freeze **ядра домена патчей**: Patch/PatchSet (только данные, M-1), порт
+   `DomainSectionHandler` и реестр секций (M-2), вход Snapshot
+   `apply(PatchSet)`, typed artifact ref, staging port, CAS-указатель мира
+   `(pack_hash, snapshot_head)` (B-3); поля, результаты, диагностика, atomicity.
 3. Подготовить implementation map: каждый класс → domain/layer → точный файл,
    направления зависимостей, folder composition/counts, existing backend binding.
-4. Согласовать отдельные проверяемые implementation шаги, зависимости на
-   source-versioning и snapshot storage, тесты и условия runtime exposure.
-5. Реализация по одному согласованному шагу с проверкой критического §1.
+4. Реализация ядра по слоям (решение мастера 2026-10-27): типы → shared infra
+   (content-addressed staging adapter, lease, CAS-указатель мира) → Snapshot
+   apply/commit → реестр секций в Container → первый доменный handler. Ядро —
+   единственный владелец staging и CAS-указателя; world-source-versioning их
+   переиспользует, второй механизм не вводится. Ядро не ждёт source-versioning
+   и внешней DAG-интеграции.
+5. §6 — привязка ревизий patch/snapshot после контрактов identity/revision
+   world-source-versioning (его шаги 2–3).
+6. Перевод существующих writer'ов на commit Snapshot / публикацию pack по
+   inventory: `MapCellService`, `SettlementPersistService`,
+   `ConnectionPersistService`, `region_states`/`StateChangeConsumer`
+   (wilderness 9a/10a), write boundary entity-lifecycle L3. Новый прямой
+   writer мимо Snapshot противоречит §1 и расширяет долг миграции.
+7. Закрытие плана — после устранения B-2 (bake job встроен в DAG); это
+   внешняя зависимость, не шаг этого плана.
+
+Каждый implementation шаг — отдельно согласованный, с проверкой критического §1.
 
 Критерии отдельной архитектурной приёмки:
 
