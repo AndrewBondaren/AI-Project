@@ -134,10 +134,10 @@ content-addressed, manifest immutable и адресуется hash, файлы �
 пишет pack: мутации тиков — patches, читаемые поверх (WP-4, WP-6). До
 публикации pack новые blobs — staged artifacts, недостижимые из
 опубликованного состояния; их пишет доменная операция materialization через
-staging port, а не generator и не Snapshot. Runtime L2 (WP-13, lazy refine) дописывается
-новой версией manifest того же pack (append-only), не snapshot. `light` → `full` — переход
-одного pack той же схемой. Правки локаций после `full` — patch в snapshot, не
-перепечка pack. WP-2 «только `WorldPackWriter`»
+staging port, а не generator и не Snapshot. Граница — старт gameplay (проверка DAG): до старта
+`light` → `full` → `detailed` дописывают один pack новыми версиями manifest;
+после старта всё — full_bake поверх light, detailed, runtime L2 (WP-13, lazy
+refine), правки локаций — уходит в snapshot, pack игры не меняется. WP-2 «только `WorldPackWriter`»
 этим пересматривается на contract freeze. Норматив —
 [`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации».
 
