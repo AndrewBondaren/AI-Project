@@ -57,22 +57,38 @@ materialization, впервые полученного после создани
 решением до реализации; сохранение только уже материализованных данных
 без данных планирования мутаций ему не соответствует.
 
-## Staged artifacts и точка commit (решение мастера, 2026-10-27)
+## Staged artifacts и точки публикации (решение мастера, 2026-10-27)
 
-Закрывает вопрос записи объёмных результатов до commit Snapshot
+Закрывает вопрос записи объёмных результатов до публикации
 ([план](../.cursor/plans/world-domain-patches-snapshots.md) §3.3, §7.2).
 
-**Authoritative state — только достижимое из head snapshot:**
-`snapshot → manifest@hash → blobs@hash` и SQL-версии, связанные с этим
-snapshot. Запрет «подготовка не изменяет authoritative state» означает:
-подготовка не создаёт **достижимого** состояния. Недостижимая запись
-staged-данных этот запрет не нарушает и не является применением patch.
+### Pack и snapshot — разные сущности
 
-| Категория результата | Где до commit | Кто пишет |
+- **Материализация мира = pack.** Bake (`light`/`full`/`detailed`) поставляет
+  результат **одним pack** (immutable manifest@hash), в первую очередь при
+  первой материализации. Опубликованный pack **заморожен**: ни snapshot, ни
+  мутация его не перезаписывают. Результат `detailed_bake` остаётся в pack
+  как был.
+- **Snapshot = историческая модификация мира по тикам.** Snapshot не
+  материализует мир и не пишет pack: он ссылается на базовый pack по hash
+  (WP-6 `pack_content_hash`) и фиксирует patch set тика.
+- **Чтение состояния = базовый pack + patches цепочки snapshot поверх.**
+  Мутация только читается сверху (overlay), не переписывает pack.
+- Bake не создаёт snapshot; genesis-snapshot для bake не нужен.
+
+**Authoritative state — только опубликованное:** pack, достижимый как
+`manifest@hash → blobs@hash`, и snapshot-цепочка с её SQL-версиями.
+Запрет «подготовка не изменяет authoritative state» означает: подготовка не
+создаёт **опубликованного** состояния. Недостижимая запись staged-данных
+этот запрет не нарушает.
+
+### Staged artifacts
+
+| Категория результата | Где до публикации | Кто пишет |
 |---|---|---|
-| Небольшие typed результаты (planning/metadata, locations_index) | Память PatchSet (кэш §3.3 плана) | — |
-| Объёмные immutable blobs (L0/climate tiles, L2 chunks) | Staged artifact: content-addressed blob, недостижимый из head | Доменная операция materialization через доменный staging port |
-| Производные SQL-строки (relief grades, дельты клеток) | Staged rows с `artifact_id`, невидимые читателям до commit | Та же доменная операция через staging port |
+| Небольшие typed результаты (planning/metadata, locations_index) | Память PatchSet / job (кэш §3.3 плана) | — |
+| Объёмные immutable blobs (L0/climate tiles, L2 chunks) | Staged artifact: content-addressed blob, недостижимый из опубликованного состояния | Доменная операция materialization через доменный staging port |
+| Производные SQL-строки (relief grades, дельты клеток) | Staged rows с `artifact_id`, невидимые читателям до публикации | Та же доменная операция через staging port |
 
 Правила:
 
@@ -80,23 +96,25 @@ staged-данных этот запрет не нарушает и не явля
    слой) по вызову DAG/debug API. Generator/worker остаются pure и IO не
    делают. Snapshot staging не инициирует и materialization не запускает.
 2. **Ссылка, не путь.** Операция возвращает typed ref на staged artifact
-   (kind, format, content_hash, nbytes) без файлового пути; Patch несёт этот
-   ref. Смена storage layout/backend не меняет Patch (план §3.4).
-   Имя и поля типа фиксируются на contract freeze.
-3. **Snapshot apply** проверяет существование и content_hash каждого ref
-   (результат в кэше не подменён) → вызывает доменный publish refs
-   (включение в immutable manifest; content-addressed blobs не перемещаются)
-   → одной короткой SQL-транзакцией фиксирует SQL-версии, видимость staged
-   rows и snapshot record. **Эта транзакция — единственная точка commit**;
-   до неё staged данные недостижимы для чтения состояния.
-4. **Передача между стадиями** (L0 → C23): следующая стадия читает через
-   доменный read с рабочим представлением «head + staged refs из PatchSet».
-   Предварительная публикация L0 в обход Snapshot не требуется и запрещена.
+   (kind, format, content_hash, nbytes) без файлового пути; Patch/результат
+   job несёт этот ref. Смена storage layout/backend не меняет Patch
+   (план §3.4). Имя и поля типа фиксируются на contract freeze.
+3. **Две точки публикации:**
+   - **bake** — публикация pack целиком: проверка существования и
+     content_hash каждого ref → immutable manifest@hash → активация pack
+     мира. До неё ничего из job недостижимо; частичный pack из прерванного
+     job не публикуется;
+   - **тик** — commit Snapshot: проверка refs → одна короткая
+     SQL-транзакция (patch set, SQL-версии, snapshot record со ссылкой на
+     базовый pack). Pack при этом не меняется.
+4. **Передача между стадиями job** (L0 → C23): следующая стадия читает через
+   доменный read с рабочим представлением «опубликованное + staged refs
+   текущего job». Предварительная публикация L0 запрещена.
 5. **Отказ, отмена, retry.** Staged данные удерживаются lease по
-   `operation_id` (holder без TTL, как в world-source-versioning). Без commit
-   они — мусор для GC. Retry с тем же `operation_id` идемпотентен и
-   возвращает прежний outcome. GC live-set = достижимое из snapshots ∪
-   активные staging leases.
+   `operation_id` (holder без TTL, как в world-source-versioning). Без
+   публикации они — мусор для GC. Retry/resume с тем же `operation_id`
+   идемпотентен и переиспользует staged результаты. GC live-set =
+   опубликованные packs, на которые ссылаются snapshots ∪ активные leases.
 6. **Pack, целевое состояние:** content-addressed blobs + immutable
    manifest@hash вместо записи по координатным путям с `os.replace` поверх
    опубликованного файла ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)
@@ -107,11 +125,15 @@ staged-данных этот запрет не нарушает и не явля
 7. **Переиспользование:** протокол staging/holder/GC/idempotent retry берётся
    из [world-source-versioning](../.cursor/plans/world-source-versioning.md)
    (STAGE/STAGE-SQL, holder handoff); второй механизм не вводится.
-   Связь точки commit Snapshot с CAS-активацией и владельцем commit source
-   revision этим пунктом не решена.
+   Владелец активации pack и связь с CAS-активацией source revision этим
+   пунктом не решены.
 
-**Открыто:** lazy L2 refine — один snapshot на запрос refine либо
-накопление staged refs в PatchSet хода.
+**Открыто:**
+- light → full: full поставляет новый pack целиком (общие L0 blobs по hash)
+  или light — промежуточное состояние одного pack;
+- runtime L2 (WP-13 entry refine, lazy refine): дополнение pack новой
+  версией manifest либо иной канал; snapshot его не материализует;
+- `world_snapshots.timeline_id`/`turn_id` и привязка первого тика к pack.
 
 Конкретные типы, порты, файлы и DDL не выбраны; реализация не разрешена.
 
@@ -531,7 +553,7 @@ Target: materialization run **один раз** → persist → capture; сле�
 |---|---|
 | 2026-06 | Initial TZ — единый `WorldSnapshotService`; disambiguation от climate field cache |
 | 2026-10 | Две цепочки: `world_snapshots` + `player_snapshots` (player отделён для export/import и time travel); patch set хода фиксируется как дельта snapshot ([`tz_patch_system.md`](./tz_patch_system.md)) |
-| 2026-10-27 | Staged artifacts и единственная точка commit Snapshot; authoritative = достижимое из head; pack target content-addressed |
+| 2026-10-27 | Staged artifacts; bake → один замороженный pack, snapshot = patches тиков поверх pack; pack target content-addressed |
 
 ---
 
