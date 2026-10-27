@@ -9687,6 +9687,19 @@ Production constructors/defaults/zero behavior сохранены; провер�
 реальных category defaults через active pipeline остаётся acceptance G10-A.
 
 ### G1 — общий контекст каскада для водной оси
+Уточнение G1: generationContext.py на этом шаге задаёт water runtime/root,
+его domain fields/production channel declarations добавляются G2/G2-P.
+Bool/float VALUE channels WORLD→CATEGORY→WATER_BODY проверяются isolated
+в tests/geo1/contracts/test_cascade_runtime.py (contracts 4 → 5 файлов).
+CascadeRuntimeContext переносит private runtime snapshots без Any/cast полей;
+provenance сохраняет существующий public dict, параметризованный осью.
+extend сохраняет concrete CtxT; стирание параметра оси допустимо только на
+generic bound application-функций, не в public fields конкретных контекстов.
+Verifier ограничивает сбор nodes параметрами проверяемого context model;
+unrelated loaded domains не создают ложные duplicate/axis ошибки.
+Новые папки generation (2 файла с init) / planning enums (2 → 3),
+cascade dataModel (4 → 5); existing application/cascade и locations/context
+не расширяются новыми файлами.
 Цель: использовать существующий extend на новом typed контексте.
 ТЗ: tz_cascade_context §2–4 + дополнение G0.
 Файлы: dataModel/cascade/runtimeContext.py (CascadeRuntimeContext[AxisT]),

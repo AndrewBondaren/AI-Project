@@ -55,6 +55,8 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
     nodes: dict[tuple[Cascade, CascadeNode], CascadeChannel] = {}
     for model in _source_models():
         for field, channel in _channels_of(model):
+            if channel.param not in params:
+                continue
             if channel.level is RepeatScope.EVERY_TAG:
                 continue
             key = (channel.param, CascadeNode(model, field, channel.level))

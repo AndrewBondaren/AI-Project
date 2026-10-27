@@ -14,6 +14,7 @@ caller bug, never a silent skip.
 
 from functools import lru_cache
 from random import Random
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -37,8 +38,12 @@ from app.dataModel.cascade.cascadeGraph import (
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     ChannelKind,
+    ScopeAxis,
 )
+from app.dataModel.cascade.runtimeContext import CascadeRuntimeContext
 from app.dataModel.locations.context.locationContext import LocationContext
+
+CtxT = TypeVar("CtxT", bound=CascadeRuntimeContext)
 
 
 @lru_cache
@@ -52,11 +57,17 @@ def _cascade_fields(model: type[BaseModel]) -> tuple[tuple[str, Cascade], ...]:
     )
 
 
-def scope_sequence(ctx: LocationContext):
+def scope_sequence(ctx: CascadeRuntimeContext) -> tuple[ScopeAxis, ...]:
     """Declared scope path shared by the resolver and empty-scope callers."""
-    return ctx._scope_path or ordered_scopes(
-        tuple(param for _, param in _cascade_fields(type(ctx))), ctx.level,
+    params = tuple(param for _, param in _cascade_fields(type(ctx)))
+    if any(param.axis is not type(ctx.level) for param in params):
+        raise ValueError("cascade context parameter is on a foreign axis")
+    path = ctx._scope_path or ordered_scopes(
+        params, ctx.level,
     )
+    if any(type(level) is not type(ctx.level) for level in path):
+        raise ValueError("cascade context scope path is on a foreign axis")
+    return path
 
 
 # Resolver bindings — the single place where names declared on
@@ -91,8 +102,8 @@ _check_bindings(LocationContext)
 
 
 def extend(
-    ctx: LocationContext, *links: Link, rng: Random | None = None,
-) -> LocationContext:
+    ctx: CtxT, *links: Link, rng: Random | None = None,
+) -> CtxT:
     """Add one scope level of links; return a new resolved context."""
     fields = _cascade_fields(type(ctx))
     _check_bindings(type(ctx))
@@ -103,7 +114,7 @@ def extend(
         if link.obj is None:
             continue
         check_link(level, link.obj)
-        objects.append(link.obj)
+        objects.append(link.obj.model_copy(deep=True))
 
     stored = dict(ctx._links)
     stored[level] = tuple(objects)
@@ -165,6 +176,7 @@ def extend(
     new_ctx._links = stored
     new_ctx._scope_path = path
     new_ctx._node_results = node_results
+    new_ctx._default_sources = tuple(source.model_copy(deep=True) for source in ctx._default_sources)
     log_scope_resolve(
         level=level.value,
         objects=[type(obj).__name__ for obj in objects],
@@ -224,7 +236,7 @@ def _resolve_default(param: Cascade, sources: tuple[BaseModel, ...]):
     return value
 
 
-def _check_level(ctx: LocationContext, links: tuple[Link, ...], path):
+def _check_level(ctx: CascadeRuntimeContext, links: tuple[Link, ...], path: tuple[ScopeAxis, ...]) -> ScopeAxis:
     """All links carry exactly one scope level, strictly below
     ``ctx.level`` and adjacent to it on the same axis."""
     levels = {link.level for link in links}
