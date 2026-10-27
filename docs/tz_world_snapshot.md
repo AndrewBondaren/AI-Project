@@ -139,6 +139,8 @@ materialization, впервые полученного после создани
    или новые локации поверх wilderness, где не было patches; после старта
    gameplay это patch в snapshot. Новый pack вместо живого не создаётся;
    цепочка snapshot навсегда привязана к своему pack по hash (п. 12).
+   Rebake (смена seed/генератора, пересборка fixtures) допустим только до
+   старта gameplay и для dev-fixtures (`tz_world_pack_storage.md` § Rebake).
 
 **Authoritative state — только опубликованное:** pack, достижимый как
 `manifest@hash → blobs@hash`, и snapshot-цепочка с её SQL-версиями.
