@@ -321,9 +321,14 @@ from app.dataModel.cascade.cascadeSpec import FieldRef
 from app.dataModel.policy.objectAdmissionPolicyDefinition import EnabledGate
 from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, ValueSelectionDecision
 from app.dataModel.policy.policyEnums import PolicyOperation, PolicyRuleId, PolicyStage, RulePrecedence
+from app.dataModel.policy.policyReferences import (
+    DirectValueRef, FactValueRef, PriorityValueRef,
+)
+from app.dataModel.policy.policyRules import (
+    Equal, PolicyRule, SelectBehaviorEffect,
+)
 from app.dataModel.policy.policySpec import (
-    DirectValueRef, Equal, FactValueRef, ObjectAdmissionPolicySpec, PolicyRule,
-    PriorityValueRef, SelectBehaviorEffect, ValueSelectionPolicySpec,
+    ObjectAdmissionPolicySpec, ValueSelectionPolicySpec,
 )
 
 

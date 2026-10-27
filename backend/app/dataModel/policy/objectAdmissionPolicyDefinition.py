@@ -11,10 +11,14 @@ from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.policyEnums import (
     PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyRuleId, PolicyStage, RulePrecedence,
 )
-from app.dataModel.policy.policySpec import (
-    DirectValueRef, DisableEffect, Equal, FactValue, FactValueRef, ObjectAdmissionPolicySpec,
-    PolicyFallback, PolicyReference, PolicyRule, PriorityReference,
+from app.dataModel.policy.policyFacts import FactValue
+from app.dataModel.policy.policyReferences import (
+    DirectValueRef, FactValueRef, PolicyReference, PriorityReference,
 )
+from app.dataModel.policy.policyRules import (
+    DisableEffect, Equal, PolicyFallback, PolicyRule,
+)
+from app.dataModel.policy.policySpec import ObjectAdmissionPolicySpec
 
 
 B = TypeVar("B", bound=Enum)

@@ -708,7 +708,8 @@ application/planning, application/cache и domain providers) размещают�
 - `terrain/relief/bathymetry/basinSpec.py::BasinSpec`: перенесённый existing
   pure contract PC-1R; application старый путь — re-export, единственный
   writer остаётся в application. Spatial profile расширение только G9.
-- `policy/{policySpec,policyEnums,policyDecision,objectAdmissionPolicyDefinition}.py`:
+- `policy/{policySpec,policyFacts,policyReferences,policyRules,policyEnums,
+  policyDecision,objectAdmissionPolicyDefinition}.py`:
   общие rules, effects, decisions, admission definition (§6.8).
 - `cascade/runtimeContext.py::CascadeRuntimeContext[AxisT]` — общий transient
   BaseModel runtime-контракт G1, без water/location параметров; конкретные
@@ -1504,7 +1505,8 @@ Domain facts providers остаются в application соответствую�
 обязательны для G0-PT/G0-PE и дальнейшего wiring; coding agent не
 выбирает альтернативное расположение по месту реализации.
 
-- `dataModel/policy/policySpec.py::PolicySpec` и `PolicyRule` — frozen
+- `dataModel/policy/policySpec.py::PolicySpec` и
+  `dataModel/policy/policyRules.py::PolicyRule` — frozen
   декларации rules: typed condition, effect, явный rule precedence,
   stable identity/reason и источник значения. Правила — engine-owned
   типизированные декларации, не произвольный wire DSL или eval-код.
@@ -4381,7 +4383,8 @@ placement identity и physical identity не смешиваются.
 
 #### C. Общий rule engine: конечная схема и truth table
 
-В existing target dataModel/policy/{policySpec,policyEnums,policyDecision}.py:
+В target dataModel/policy/{policySpec,policyFacts,policyReferences,policyRules,
+policyEnums,policyDecision}.py:
 - PolicyStage enum: ABSOLUTE_GATE / PRIORITY / SUPPORT / BEHAVIOR.
 - PolicyRuleId — opaque nonempty identifier; RulePrecedence — strict
   nonnegative int, отдельный тип от Specificity.
@@ -9561,9 +9564,20 @@ Prerequisite для G3-R/G8/G10 и downstream fine snapshot delivery.
 ### G0-PT — typed контракты общего policy
 Цель: описать policy cases/effects/results независимо от hydrology.
 ТЗ: G0, общий placement policy раздел, §6.8.
-Файлы: dataModel/policy/{policySpec,policyEnums,policyDecision,
-objectAdmissionPolicyDefinition}.py;
+Файлы: dataModel/policy/{policySpec,policyEnums,policyDecision,policyFacts,
+policyReferences,policyRules,objectAdmissionPolicyDefinition}.py;
 typed FieldRef reuse после проверки import boundaries.
+Уточнение композиции, согласовано командой «Вынеси» (2026-10-27):
+в общем dataModel/policy факты KnownFact/WaitingFact/UnknownFact/FactValue
+и проверка immutable values принадлежат policyFacts.py; typed refs и их
+протоколы — policyReferences.py; predicates/effects/PolicyRule/PolicyFallback
+— policyRules.py; policySpec.py оставляет обе спецификации и их проверку.
+Зависимости: facts → references → rules → spec; все остаются в dataModel,
+исполнение не добавляется. Обновить все импорты без compatibility re-export.
+Папка: 5 → 8 файлов с init (WARN выдан); проверка — существующие runtime
+contracts, positive typing и точное совпадение negative diagnostics.
+Композиция выполнена: policySpec 384 → 68 строк; contracts 14/14,
+positive typing 220 файлов без ошибок; negative 80/80 без лишних/пропусков.
 Контракт: §6.8-B/C, без raw DSL/dict conditions, domain enum в engine
 и дублирования authoritative priority.
 Проверка: типизация rules/effects/FieldRef, конфликты деклараций,

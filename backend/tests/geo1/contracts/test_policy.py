@@ -20,11 +20,17 @@ from app.dataModel.policy.policyEnums import (
     FactState, PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyOrigin,
     PolicyRuleId, PolicyStage, PolicyState, RulePrecedence,
 )
+from app.dataModel.policy.policyReferences import (
+    DirectValueRef, FactValueRef, PriorityValueRef,
+)
+from app.dataModel.policy.policyRules import (
+    DisableEffect, Equal, InSet, IsPresent, PolicyFallback, PolicyRule, RequireSupportEffect, SelectBehaviorEffect, SelectPriorityDefaultEffect,
+)
+from app.dataModel.policy.policyFacts import (
+    FactValue, KnownFact, UnknownFact, WaitingFact,
+)
 from app.dataModel.policy.policySpec import (
-    DirectValueRef, DisableEffect, Equal, FactValue, FactValueRef, InSet, IsPresent,
-    KnownFact, ObjectAdmissionPolicySpec, PolicyFallback, PolicyRule, PriorityValueRef,
-    RequireSupportEffect, SelectBehaviorEffect, SelectPriorityDefaultEffect,
-    UnknownFact, ValueSelectionPolicySpec, WaitingFact,
+    ObjectAdmissionPolicySpec, ValueSelectionPolicySpec,
 )
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
