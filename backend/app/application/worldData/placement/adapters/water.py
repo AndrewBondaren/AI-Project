@@ -239,7 +239,7 @@ def resolved_water_placements(preparation: WaterPlacementPreparation,
     if (result.world_uid != preparation.world_uid or result.snapshot_uid != preparation.snapshot_uid
             or result.snapshot_revision != preparation.snapshot_revision):
         raise ValueError("water preparation and common result must refer to the same world/snapshot/revision")
-    outcomes = {outcome.prepared.intent.identity.region_uid: outcome for outcome in result.results}
+    outcomes = {outcome.identity.region_uid: outcome for outcome in result.results}
     records = []
     for entry in preparation.entries:
         uid = entry.prepared.intent.identity.region_uid

@@ -387,3 +387,18 @@ def invalid_policy_execution(settings: PolicySettings, defaults: PolicyDefaults,
     PolicySource[PolicySettings](PolicyDefaults, settings, ())  # EXPECT: reportArgumentType
     PolicyResolver().resolve(value_spec, PolicyInputs(), PolicyObservations(), mode=ResolutionMode.RUNTIME, resume=prior)  # EXPECT: reportArgumentType
     PolicyResolver().resolve(value_spec, PolicyInputs(), PolicyObservations(), mode="runtime")  # EXPECT: reportCallIssue; EXPECT: reportArgumentType
+
+
+from app.application.worldData.placement.lifecycle.session import PlacementSession
+from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+from app.dataModel.placement.lifecycle.header import PlacementHeader
+from app.dataModel.placement.prepared import PreparedPlacement
+from app.dataModel.placement.result import PlacementOutcomeV2
+
+
+def invalid_lifecycle_operation(header: PlacementHeader,
+    value: ValueSelectionDecision[PolicyMode, PolicyReasonKind], session: PlacementSession,
+    legacy: PreparedPlacement, outcome: PlacementOutcomeV2) -> None:
+    PlacementAdmissionInput(header=header, decision=value)  # EXPECT: reportArgumentType
+    session.submit(legacy)  # EXPECT: reportArgumentType
+    outcome.prepared  # EXPECT: reportAttributeAccessIssue

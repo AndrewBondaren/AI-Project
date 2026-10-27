@@ -6,12 +6,12 @@ from app.application.worldData.placement.diagnostics import diagnostic
 from app.application.worldData.placement.geometry import PlacementGeometry
 from app.dataModel.placement import (
     DependencyRelation, OverlapRelation, PlacementCandidate, PlacementDiagnostic, PlacementIssueCode,
-    PreparedPlacement, ResolvedPlacement,
 )
+from app.dataModel.placement.lifecycle.header import PreparedGeometry, ResolvedGeometry
 
 
 def _dependency_satisfied(relation: DependencyRelation, candidate: PlacementCandidate,
-                          target: ResolvedPlacement, geometry: PlacementGeometry) -> bool:
+                          target: ResolvedGeometry, geometry: PlacementGeometry) -> bool:
     match relation:
         case DependencyRelation.RESOLVED:
             return True
@@ -24,8 +24,8 @@ def _dependency_satisfied(relation: DependencyRelation, candidate: PlacementCand
     raise ValueError(f"unsupported dependency relation: {relation}")
 
 
-def _overlap_permitted(obj: PreparedPlacement, candidate: PlacementCandidate,
-                       target: ResolvedPlacement, geometry: PlacementGeometry) -> bool:
+def _overlap_permitted(obj: PreparedGeometry, candidate: PlacementCandidate,
+                       target: ResolvedGeometry, geometry: PlacementGeometry) -> bool:
     uid, target_uid = obj.intent.identity.region_uid, target.identity.region_uid
     relations = {rule.relation for rule in obj.intent.permitted_overlaps if rule.target_uid == target_uid}
     relations.update(rule.relation for rule in target.prepared.intent.permitted_overlaps if rule.target_uid == uid)
@@ -43,8 +43,8 @@ def _overlap_permitted(obj: PreparedPlacement, candidate: PlacementCandidate,
     return False
 
 
-def check_candidate(obj: PreparedPlacement, candidate: PlacementCandidate,
-                    placed: Mapping[str, ResolvedPlacement], geometry: PlacementGeometry) -> tuple[PlacementDiagnostic, ...]:
+def check_candidate(obj: PreparedGeometry, candidate: PlacementCandidate,
+                    placed: Mapping[str, ResolvedGeometry], geometry: PlacementGeometry) -> tuple[PlacementDiagnostic, ...]:
     path = ("candidates", candidate.candidate_uid, "footprint")
     if geometry.canonical_cells(candidate.footprint) is None:
         return (diagnostic(obj, PlacementIssueCode.CONSTRAINT_VIOLATION,

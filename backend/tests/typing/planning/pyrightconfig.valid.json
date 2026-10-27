@@ -1,6 +1,13 @@
 {
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
+    "../../../app/application/worldData/placement/lifecycle",
+    "../../../app/application/worldData/placement/dependencies.py",
+    "../../../app/application/worldData/placement/constraints.py",
+    "../../../app/application/worldData/placement/resolver.py",
+    "../../../app/application/worldData/placement/diagnostics.py",
+    "../../../app/application/worldData/placement/adapters/water.py",
+    "../../../app/dataModel/placement",
     "../../../app/application/policy",
     "../../../app/dataModel/policy",
     "../../../app/application/cancellation/requestPlanWait.py",

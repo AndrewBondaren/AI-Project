@@ -9629,6 +9629,24 @@ positive typing 226 файлов без ошибок, negative 85/85 (baseline 8
 production wiring и session revision binding остаются у своих следующих шагов.
 
 ### G0-P — общая семантика priority=0 в placement P2
+Уточнение G0-P по §6.29-J: существующие constructors/root exports сохраняют
+baseline; target variants PreparedPlacementV2 (prepared.py), PlacementBatchV2
+(batch.py), ResolvedPlacementV2/DisabledPlacement/UnresolvedPlacementV2,
+PlacementOutcomeV2/PlacementBatchResultV2 (result.py) используются isolated.
+Новые lifecycle/{header,admission,causal}.py владеют PlacementHeader,
+PlacementAdmissionInput и PlacementOutcomeRef/PlacementOutcomeStatus (4 с init).
+Application lifecycle/{session,outcomes}.py (3 с init) — PlacementSession
+(порядок prepare/submit/step), terminal/cause construction соответственно.
+Existing DependencyQueue получает deferred preparation API для этой session;
+graph/heap/check_candidate остаются общими. Structural geometry protocols
+в lifecycle/header.py связывают existing и V2 prepared/resolved contracts.
+Root placement imports становятся lazy с теми же именами: это разрывает
+цикл placement.common → policy → placement без изменения production schema.
+Текущие папки 7/6 файлов (WARN выдан), новые подпапки 4/3.
+Integration fix policyResolution.py: выбранный priority-default rule сохраняет
+domain_reason также при результате 0; dry explanation не теряется в placement.
+Тесты: geo1/contracts/test_placement_lifecycle.py (contracts 3 → 4 файла),
+existing typing/planning cases/config; новые модели не экспортируются из root.
 Цель: применять отсутствие создания при 0 одинаково ко всем доменам.
 ТЗ: tz_map_light_bake §Placement priority/P1/P2 и синхронизация G0;
 tz_terrain_hydrology §Coastline priority ссылается на общий SoT.
@@ -9661,6 +9679,12 @@ coastline creation заменено, positive ordering и accepted immutability
 placement outcome, explicit 0 сохранён, invalid не получает fallback.
 Done: ноль трактуется общим P2, не hydrology filter;
 isolated V2 semantics проверены; production default changes и export switch только G10-A.
+
+G0-P IMPLEMENTED/VERIFIED (2026-10-27), isolated до G10-A.
+Contracts 62/62; existing placement/water suites 108/108 (world_test_004 включён).
+Positive typing 245 файлов без ошибок; negative 88/88 (85 + 3), без лишних/пропусков.
+Production constructors/defaults/zero behavior сохранены; проверка изменения
+реальных category defaults через active pipeline остаётся acceptance G10-A.
 
 ### G1 — общий контекст каскада для водной оси
 Цель: использовать существующий extend на новом typed контексте.

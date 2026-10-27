@@ -70,6 +70,9 @@ class _PlacementPass:
                 self.placed[uid] = outcome
             self.queue.settle({uid: outcome})
         results = tuple(self.queue.outcomes[uid] for uid in sorted(self.objects))
+        if any(not isinstance(r, (ResolvedPlacement, UnresolvedPlacement)) for r in results):
+            raise ValueError("legacy placement pass received V2 outcome")
+        results = tuple(r for r in results if isinstance(r, (ResolvedPlacement, UnresolvedPlacement)))
         issues = [*self.notices, *(issue for obj in results if isinstance(obj, UnresolvedPlacement)
                                   for issue in obj.diagnostics)]
         issues.sort(key=lambda item: (item.region_uid, item.code.value, item.path, item.related_uids, item.detail))

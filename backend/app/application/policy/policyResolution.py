@@ -98,6 +98,8 @@ class PolicyResolution(Generic[B, R]):
                 return stopped
             choices = selection_rules(defaults)
             self.provenance.extend(rule_provenance(r) for r in choices)
+            self.reasons.extend(PolicyReason[R](domain_reason=r.domain_reason,
+                common_reason=PolicyDisableReason.DOMAIN_RULE) for r in choices if r.domain_reason is not None)
             refs = tuple(r.effect.ref for r in choices if isinstance(r.effect, SelectPriorityDefaultEffect))
             selected = tuple(reader.read(r) for r in refs)
             unknowns = tuple(v.issue for v in selected if isinstance(v, UnknownFact))

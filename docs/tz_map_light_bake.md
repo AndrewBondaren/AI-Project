@@ -142,6 +142,17 @@ Preparation содержит successful prepared entries и явные failures 
 
 ### GEO-1 — общий policy и placement
 
+G0-P (2026-10-27) реализован isolated: PlacementHeader/PlacementAdmissionInput
+доступны до geometry; PlacementSession использует существующие DependencyQueue
+и check_candidate. PreparedPlacementV2/PlacementBatchV2 и outcomes/result V2
+не заменяют production constructors до G10-A. Нулевой decision даёт DisabledPlacement
+без footprint/area, required disabled support — SUPPORT_DISABLED, failed/missing/cycle
+доминируют как unresolved; causes содержат ссылки на все терминальные опоры.
+Положительные ready portions целиком prepare/submit перед следующим heap step.
+SUPPORT callback связан caller с теми же spec/sources/revision, сохраняет выбранные
+priority/reasons/provenance. Нормальный zero-disable не добавляет validation issue;
+ошибки fallback остаются в decision и идут через existing diagnostics emitter.
+
 **G0 target, 2026-10-27; activation только G10-A.** Общая policy definition
 объявляет запрет создания, единый PolicyResolver исполняет его, P2 обеспечивает
 non-creation. Эффективный placement priority=0 означает DISABLED для любого

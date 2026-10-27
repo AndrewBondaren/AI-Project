@@ -10,6 +10,8 @@ from app.dataModel.placement.prepared import PreparedPlacement
 from app.dataModel.placement.result import ResolvedPlacement
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.planning.identity.planKey import OutputFingerprint
+from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+from app.dataModel.placement.result import ResolvedPlacementV2
 
 
 class PlacementBatch(PlacementModel):
@@ -40,4 +42,26 @@ class PlacementBatch(PlacementModel):
                     raise ValueError("coastline must be prepared on the pre_relief snapshot")
                 if obj.coastline.snapshot_uid != self.snapshot_uid:
                     raise ValueError("coastline fact must identify the pre-carve batch snapshot")
+        return self
+
+
+class PlacementBatchV2(PlacementModel):
+    model_config = PlacementBatch.model_config
+    world_uid: PlacementUid
+    snapshot_uid: PlacementUid
+    snapshot_revision: OutputFingerprint = Field(strict=True, min_length=32, max_length=32)
+    phase: PlacementPhase
+    topology: WorldTopology
+    objects: tuple[PlacementAdmissionInput, ...]
+    accepted: tuple[ResolvedPlacementV2, ...]
+
+    @model_validator(mode="after")
+    def consistent_snapshot(self) -> Self:
+        if self.phase is PlacementPhase.PRE_RELIEF and self.accepted:
+            raise ValueError("pre_relief requires one joint input")
+        identities = [o.header.identity for o in self.objects] + [o.identity for o in self.accepted]
+        if any(i.world_uid != self.world_uid for i in identities):
+            raise ValueError("placement inputs must belong to batch world")
+        if len({i.region_uid for i in identities}) != len(identities):
+            raise ValueError("duplicate region_uid across objects and accepted placements")
         return self

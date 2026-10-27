@@ -2,17 +2,19 @@
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues
 from app.application.jsonValidation.types import FieldPathError
-from app.dataModel.placement import PlacementBatchResult, PlacementDiagnostic, PlacementIssueCode, PreparedPlacement
+from app.dataModel.placement import PlacementBatchResult, PlacementDiagnostic, PlacementIssueCode
+from app.dataModel.placement.lifecycle.header import PlacementHeader, PreparedGeometry
+from app.dataModel.placement.result import PlacementBatchResultV2
 
 
-def diagnostic(obj: PreparedPlacement, code: PlacementIssueCode, detail: str, *,
+def diagnostic(obj: PreparedGeometry | PlacementHeader, code: PlacementIssueCode, detail: str, *,
                path: tuple[str | int, ...], related: tuple[str, ...] = ()) -> PlacementDiagnostic:
-    uid = obj.intent.identity.region_uid
+    uid = obj.identity.region_uid if isinstance(obj, PlacementHeader) else obj.intent.identity.region_uid
     return PlacementDiagnostic(code=code, region_uid=uid, related_uids=tuple(sorted(set(related))),
                                path=("objects", uid, *path), detail=detail)
 
 
-def emit_diagnostics(result: PlacementBatchResult, ctx: ResolveContext) -> None:
+def emit_diagnostics(result: PlacementBatchResult | PlacementBatchResultV2, ctx: ResolveContext) -> None:
     issues = [FieldPathError(
         path=ctx.path_prefix + item.path, schema_id=ctx.schema_id, code=item.code.value,
         message=(f"placement | world_uid={result.world_uid} snapshot_uid={result.snapshot_uid} "
