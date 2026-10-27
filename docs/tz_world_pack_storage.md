@@ -135,7 +135,9 @@ content-addressed, manifest immutable и адресуется hash, файлы �
 публикации pack новые blobs — staged artifacts, недостижимые из
 опубликованного состояния; их пишет доменная операция materialization через
 staging port, а не generator и не Snapshot. Runtime L2 (WP-13, lazy refine) дописывается
-новой версией manifest того же pack (append-only), не snapshot. WP-2 «только `WorldPackWriter`»
+новой версией manifest того же pack (append-only), не snapshot. `light` → `full` — переход
+одного pack той же схемой. Правки локаций после `full` — patch в snapshot, не
+перепечка pack. WP-2 «только `WorldPackWriter`»
 этим пересматривается на contract freeze. Норматив —
 [`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации».
 

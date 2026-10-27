@@ -573,8 +573,9 @@ Staged blobs/SQL rows пишет доменная операция materializati
 port; Patch несёт hash-ref; L0 → C23 через «опубликованное + staged refs
 job». Норматив — `docs/tz_world_snapshot.md` § «Staged artifacts и точки
 публикации» (там же: overlay без replay тиков, runtime L2 — новая версия
-manifest, LOD-независимые patches, rebake = новый pack). Открыто: light →
-full, keyframe/rebase, владелец активации pack (B-3).
+manifest, LOD-независимые patches, light → full — один pack, правки после
+full — patch в snapshot, rebake = новый pack). Открыто: материализация
+сущностей из patch, keyframe/rebase, владелец активации pack (B-3).
 
 Проверенные несовместимые existing paths: `pack/bake/l0/packMaterializationOrchestrator.py`
 вызывает WorldPackWriter, `_persist_bake_relief_grades` и PackBakePublisher;
