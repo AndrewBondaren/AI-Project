@@ -311,6 +311,18 @@ Selective cell delta сохраняет Keep/SetValue/ResetOverride и неза�
 
 ## PC-0 — planning cache и публикация изменений (2026-10-23)
 
+**G0-S, 2026-10-27:** нижеследующий publication guard — current PC baseline,
+не готовый target append-only/Snapshot-owned commit. Для GEO-1 заморожен
+[input/revision seam](./tz_terrain_generation.md#geo-1-g0-s--source-revision-и-snapshot-seam):
+caller передаёт coherent typed closure; cache/strategy не читает Patch Store,
+не назначает source revisions и не применяет patches. Planning digest описывает
+effective inputs, отдельно от SourceRevision и pinned snapshot revision set.
+Future adapter меняет origin/provenance, сохраняя domain I/codec/ref contracts.
+Применение инициирует только Snapshot по действующему
+[внешнему плану](../.cursor/plans/world-domain-patches-snapshots.md), §6–7.2;
+старый центральный WS CRUD/самостоятельный общий patcher не возвращаются.
+Concrete capture/apply/staging/commit contracts того трека не реализуются G0-S.
+
 [Норматив PC-0](./tz_terrain_generation.md#surface-planning-cache-pc0):
 planning cache содержит только derived immutable envelopes. Edit сначала
 меняет authoritative domain inputs, затем replan affected dependency closure;

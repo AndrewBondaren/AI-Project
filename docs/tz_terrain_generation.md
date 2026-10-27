@@ -50,6 +50,14 @@ Topological seams и aliases нормализует WorldTopology; seam не с�
 
 ### Общая policy GEO-1
 
+G0-PT declaration transport: PolicyRule[B,R].domain_reason переносит domain
+reason независимо от common DisableEffect.reason. ObjectAdmissionFacts.effective_priority
+— derived FactValue[Specificity] общего executor после PRIORITY selection;
+это не authored setting и не независимо разрешаемый priority. Zero rule читает
+его через typed FactValueRef. PolicyRuleId — opaque nonempty textual identifier,
+не registry reference; PolicyProvenance.source_path — existing открытый field path
+tuple[str|int,...]. Эти строки являются идентификатором/путём, не type/kind DSL.
+
 `dataModel/policy/` владеет frozen specs/rules/effects/decisions и общей
 ObjectAdmissionPolicyDefinition; `application/policy/PolicyResolver` —
 единственный исполнитель. Domain definitions объявляют bindings/cases,
@@ -86,6 +94,85 @@ issues. Unknown обязательного факта не становится 
 остаётся unresolved. Provenance различает AUTHORED/DOMAIN_DEFAULT/
 TERMINAL_DEFAULT/RULE/FALLBACK. Exact records/effects/fallback matrix —
 [§6.29-C](../.cursor/plans/geo-1-designed-water.md#c-общий-rule-engine-конечная-схема-и-truth-table).
+
+### Архитектурные стыки GEO-1 (G0-A)
+
+Actual PC chain после PC-12: SurfacePlanningEntry.capture_view/prepare_captured
+→ SurfacePlanningAssembler.prepare → domain providers. WaterPlacementPlanProvider.build
+вызывает run_prepared_water_placement; HydrologyRoutesPlanProvider →
+HydrologyRoutesAssembler → WaterBodyPlanner.plan. Legacy free water pass и
+HydrologyGeneratorService.apply не считаются production join owners.
+SurfaceTerrainContext/prepare_surface_terrain_context/to_legacy_context
+удалены PC-11.7; Geo capture/prepare и working views не восстанавливают их.
+
+G0-A freeze расширяет object overload PolicyResolver.resolve keyword `resume`:
+только положительное WAITING_SUPPORT решение той же request binding;
+ABSOLUTE_GATE/PRIORITY и cascade/RNG повторно не исполняются.
+PlacementSession.start получает typed reevaluate_support callback, связанный
+с теми же spec/sources/revision и prior decision. После existing
+DependencyQueue.settle проверяются SUPPORT facts готовых детей, вся новая
+ready порция prepare/submit предшествует следующему heap step. Spatial
+constraints остаются у check_candidate; второго scheduler/executor нет.
+Value-selection overload resume не принимает.
+
+Aggregate validator — planning/validation/surfacePlanValidator.py::
+SurfacePlanValidator.validate(view,bundle,*,ctx)->None. Bundle hook:
+WorldBundleService._prepare_bundle после section validations и до ctx.errors,
+из typed transient world/locations/library draft без repository fallback.
+WorldBundleService передаёт source ValidatedSurfaceDraft в WorldCopyImport.run.
+Тот входит в WorldSurfaceValidationOrchestrator.bundle_write_scope(target UID,
+source receipt) внутри existing transaction: _save не проверяет incomplete
+location store; после world/library/entity imports и окончательного member remap
+scope проверяет coherent final target через тот же validator до commit.
+Final failure откатывает весь bundle; source preflight не считается проверкой
+другой target revision. Scope сбрасывается в finally; public skip-validation
+flag нет. Вне bundle scope standalone create/update/import/edit_region
+проходят WorldSurfaceValidationOrchestrator.validate(world,*,ctx) до save/
+reconcile/validate-only return; coherent locations читает owning repository/UOW.
+WorldService.prepare_import сохраняет pure row validation.
+
+Exact owners, production decision/removal sites, counts новых leaves и
+внешние migration boundaries — [G0-A seams](../.cursor/plans/geo-1-designed-water.md#a-g0-a-замороженные-runtime-seams-после-pc-12-2026-10-27).
+Activation только G10-A. Landcover/roads/economic material policies и
+EligibilityRule scoring не объявляются мигрированными в GEO-1; их engines
+не копируются в общий policy. Snapshot/WS CRUD и HY-RIV-1 R1/R2 остаются
+внешними треками с frozen input/ref handoff.
+
+### GEO-1 G0-S — source revision и snapshot seam
+
+Request boundary — SurfacePlanningEntry; pure SurfacePlanningCapture.capture_geo
+получает world/locations и required tuples region_states/claims, relief/member
+bodies и mountain templates одного caller read/draft view. GeoSurfacePlanningView
+содержит authored typed inputs всех фаз; providers не перечитывают SQL/Patch Store.
+NoExtent сохраняет existing None/error contract, без fake topology/plan.
+Exact field list, capture signature и source tuple order — [G0-S](../.cursor/plans/geo-1-designed-water.md#615-snapshot-совместимость-с-общей-системой-патчей).
+
+StateViewRevision — digest source projection, исключающей EXECUTION_POLICY
+fields и request capture diagnostics. ResolutionMode меняет request fingerprint,
+но не authoritative projection revision; authored ClimatePoleMode остаётся входом.
+UID/seed, semantic settings/defaults/registry values, geometry, region states,
+claim refs и template membership/body учитываются. UI labels/ticks/timestamps — нет.
+Unordered unique-key sources канонизируются; ordered paths/manual poles/first-match
+sequences сохраняют порядок. Explicit None/0/False не теряют authored смысл.
+
+Используется existing canonical TLV v1/SHA-256 и planFingerprints: source revision,
+per-artifact input fingerprint и output fingerprint — разные 32-byte nominal
+types. JSON state_fingerprint/repr/Python hash их не заменяют. Exact dependency
+refs, schema/algorithm и typed I определяют cache key; UI edit допускает upstream
+HIT, semantic edit перепланирует только affected closure даже без evict event.
+Cache clear/restart не меняет план; source-object revision и snapshot/parent identity
+внешней истории не заменяются planning digest.
+
+Current PC SourcePublicationGuard — baseline stale-write rejection в caller UOW,
+не source pinning и не Snapshot-owned append-only commit. Template repository
+он не перечитывает; историческая изоляция/currency внешних sources не объявлена
+реализованной. Future domain read adapter доставляет тот же typed closure;
+одинаковые prepared inputs дают те же refs/геометрию независимо от origin.
+Действующий внешний план — [доменное чтение, patches и snapshots](../.cursor/plans/world-domain-patches-snapshots.md),
+§6–7.2; прежний WS CRUD архивирован. Snapshot инициирует apply, домены владеют
+данными и patch implementation. GEO-1 не создаёт новые revision-set/restore APIs,
+snapshot store, per-cell IO или replay всей истории. Initial light/full/C23
+unpublished handoff/commit protocol и HY-RIV-1 fine base остаются внешними gates.
 
 ### Planning и доставка GEO-1
 

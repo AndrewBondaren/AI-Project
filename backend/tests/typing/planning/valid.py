@@ -360,3 +360,85 @@ def valid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY,
     assert_type(working.climate.profile_for_key(zone), ClimateZoneProfile)
     assert_type(working.terrain.relief_z, Mapping[tuple[int, int], int])
     return working.climate.sample_pole(gx, gy)
+
+
+from enum import Enum
+from pydantic import BaseModel, ConfigDict, StrictBool
+from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.placement.common import Specificity
+from app.dataModel.policy.objectAdmissionPolicyDefinition import (
+    EnabledGate, ObjectAdmissionBindings, ObjectAdmissionPolicyDefinition, PlacementPolicyDefaults,
+)
+from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, PolicyDecision, ValueSelectionDecision
+from app.dataModel.policy.policyEnums import PolicyOperation, PolicyRuleId, PolicyStage, RulePrecedence
+from app.dataModel.policy.policySpec import (
+    DirectValueRef, Equal, FactValue, FactValueRef, InSet, IsPresent, KnownFact,
+    ObjectAdmissionPolicySpec, PolicyRule, PriorityValueRef, SelectBehaviorEffect, ValueSelectionPolicySpec,
+)
+
+
+class PolicyMode(StrEnum):
+    FIRST = "first"
+    SECOND = "second"
+
+
+class OtherPolicyMode(StrEnum):
+    OTHER = "other"
+
+
+class PolicyReasonKind(StrEnum):
+    DECLARED = "declared"
+
+
+class OtherPolicyReason(StrEnum):
+    OTHER = "other"
+
+
+class PolicySettings(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
+    enabled: StrictBool
+    priority: Specificity | None
+    mode: PolicyMode
+
+
+class PolicyDefaults(BaseModel):
+    model_config = PolicySettings.model_config
+    priority: Specificity
+
+
+class PolicyFacts(BaseModel):
+    model_config = PolicySettings.model_config
+    flag: FactValue[bool]
+
+
+def valid_policy_definitions() -> ObjectAdmissionPolicySpec[PolicyMode, PolicyReasonKind]:
+    enabled = DirectValueRef[PolicySettings, bool](FieldRef(lambda: PolicySettings, lambda s: s.enabled))
+    mode = DirectValueRef[PolicySettings, PolicyMode](FieldRef(lambda: PolicySettings, lambda s: s.mode))
+    fact = FactValueRef[PolicyFacts, bool](FieldRef(lambda: PolicyFacts, lambda f: f.flag))
+    rule = PolicyRule[PolicyMode, PolicyReasonKind](id=PolicyRuleId("mode"), stage=PolicyStage.BEHAVIOR,
+        precedence=RulePrecedence(1), conditions=(Equal(fact, True), InSet(mode, frozenset({PolicyMode.FIRST})),
+            IsPresent(fact)), effect=SelectBehaviorEffect(PolicyMode.FIRST), domain_reason=PolicyReasonKind.DECLARED)
+    authored = PriorityValueRef[PolicySettings](FieldRef(lambda: PolicySettings, lambda s: s.priority))
+    domain = PriorityValueRef[PolicyDefaults](FieldRef(lambda: PolicyDefaults, lambda s: s.priority))
+    terminal = PriorityValueRef[PlacementPolicyDefaults](FieldRef(lambda: PlacementPolicyDefaults, lambda s: s.placement_specificity))
+    spec = ObjectAdmissionPolicyDefinition.build(ObjectAdmissionBindings[PolicyMode, PolicyReasonKind](
+        enabled_gates=(EnabledGate(enabled),), authored_priority_ref=authored,
+        domain_priority_ref=domain, terminal_priority_ref=terminal,
+        expected_behavior_type=PolicyMode, rules=(rule,)))
+    assert_type(spec, ObjectAdmissionPolicySpec[PolicyMode, PolicyReasonKind])
+    assert_type(ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind](
+        operation=PolicyOperation.VALUE_SELECTION, rules=(rule,), expected_behavior_type=PolicyMode,
+        fallback_rules=()), ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind])
+    return spec
+
+
+def valid_policy_covariance(admission: ObjectAdmissionDecision[PolicyMode, PolicyReasonKind],
+    selection: ValueSelectionDecision[PolicyMode, PolicyReasonKind]) -> PolicyDecision[Enum, Enum]:
+    generic: PolicyDecision[Enum, Enum] = admission
+    generic = selection
+    assert_type(admission.require_behavior(), PolicyMode)
+    return generic
+
+
+def valid_fact_covariance(known: KnownFact[PolicyMode]) -> KnownFact[Enum]:
+    return known

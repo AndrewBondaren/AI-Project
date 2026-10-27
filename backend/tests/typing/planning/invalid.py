@@ -312,3 +312,59 @@ def invalid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY) -
     working.hydrology.fine_z_for_tile(gx, gy)[(gx, gy)] = 1  # EXPECT: reportIndexIssue
     working.climate = working.climate  # EXPECT: reportAttributeAccessIssue
     working.climate.sample_pole(1, 2)  # EXPECT: reportArgumentType (2)
+
+
+from tests.typing.planning.valid import (
+    OtherPolicyMode, OtherPolicyReason, PolicyDefaults, PolicyFacts, PolicyMode, PolicyReasonKind, PolicySettings,
+)
+from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.policy.objectAdmissionPolicyDefinition import EnabledGate
+from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, ValueSelectionDecision
+from app.dataModel.policy.policyEnums import PolicyOperation, PolicyRuleId, PolicyStage, RulePrecedence
+from app.dataModel.policy.policySpec import (
+    DirectValueRef, Equal, FactValueRef, ObjectAdmissionPolicySpec, PolicyRule,
+    PriorityValueRef, SelectBehaviorEffect, ValueSelectionPolicySpec,
+)
+
+
+def invalid_policy_field_pairs(flag: DirectValueRef[PolicySettings, bool],
+    fact: FactValueRef[PolicyFacts, bool], mode: DirectValueRef[PolicySettings, PolicyMode]) -> None:
+    Equal[PolicySettings, bool](flag, 1)  # EXPECT: reportArgumentType
+    Equal[PolicySettings, PolicyMode](mode, OtherPolicyMode.OTHER)  # EXPECT: reportArgumentType
+    FactValueRef[PolicySettings, bool](FieldRef(lambda: PolicySettings, lambda s: s.enabled))  # EXPECT: reportArgumentType
+    DirectValueRef[PolicyFacts, bool](FieldRef(lambda: PolicyFacts, lambda f: f.flag))  # EXPECT: reportArgumentType
+    PriorityValueRef[PolicySettings](FieldRef(lambda: PolicySettings, lambda s: s.mode))  # EXPECT: reportArgumentType
+    EnabledGate[PolicySettings](mode)  # EXPECT: reportArgumentType
+
+
+def invalid_policy_rule_domains() -> None:
+    PolicyRule[PolicyMode, PolicyReasonKind](id=PolicyRuleId("foreign"), stage=PolicyStage.BEHAVIOR,
+        precedence=RulePrecedence(1), conditions=(), effect=SelectBehaviorEffect(OtherPolicyMode.OTHER))  # EXPECT: reportArgumentType
+    PolicyRule[PolicyMode, PolicyReasonKind](id=PolicyRuleId("reason"), stage=PolicyStage.BEHAVIOR,
+        precedence=RulePrecedence(1), conditions=(), effect=SelectBehaviorEffect(PolicyMode.FIRST),
+        domain_reason=OtherPolicyReason.OTHER)  # EXPECT: reportArgumentType
+    PolicyRule[PolicyMode, PolicyReasonKind](id=PolicyRuleId("priority"), stage=PolicyStage.BEHAVIOR,
+        precedence=1, conditions=(), effect=SelectBehaviorEffect(PolicyMode.FIRST))  # EXPECT: reportArgumentType
+
+
+def invalid_policy_operations(priority: PriorityValueRef[PolicyDefaults]) -> None:
+    ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind](operation=PolicyOperation.VALUE_SELECTION,
+        rules=(), expected_behavior_type=PolicyMode, fallback_rules=(), authored_priority_ref=priority)  # EXPECT: reportCallIssue
+    ObjectAdmissionPolicySpec[PolicyMode, PolicyReasonKind](operation=PolicyOperation.VALUE_SELECTION,  # EXPECT: reportArgumentType
+        rules=(), authored_priority_ref=priority, domain_priority_ref=priority, terminal_priority_ref=priority,
+        expected_behavior_type=PolicyMode, fallback_rules=())
+
+
+def invalid_selection_as_admission(value: ValueSelectionDecision[PolicyMode, PolicyReasonKind]
+    ) -> ObjectAdmissionDecision[PolicyMode, PolicyReasonKind]:
+    return value  # EXPECT: reportReturnType
+
+
+def invalid_behavior_decision(value: ObjectAdmissionDecision[OtherPolicyMode, PolicyReasonKind]
+    ) -> ObjectAdmissionDecision[PolicyMode, PolicyReasonKind]:
+    return value  # EXPECT: reportReturnType
+
+
+def invalid_policy_result_mutation(value: ObjectAdmissionDecision[PolicyMode, PolicyReasonKind]) -> None:
+    value.behavior = PolicyMode.SECOND  # EXPECT: reportAttributeAccessIssue
+    value.effective_priority = 0  # EXPECT: reportAttributeAccessIssue

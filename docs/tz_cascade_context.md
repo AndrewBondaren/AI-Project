@@ -40,6 +40,24 @@ exact channel/source map — delivery plan §6.29-A, implementation G1/G2/G2-P/G
 
 ## Действующий контракт локаций
 
+### GEO-1 G0-A — общий runtime-контракт (target G1)
+
+`dataModel/cascade/runtimeContext.py::CascadeRuntimeContext[AxisT]` — общий
+frozen BaseModel без domain параметров. Владеет level/provenance и transient
+_world/_links/_scope_path/_node_results/_default_sources. Это runtime state,
+не serialized snapshot и не persisted settings. LocationContext наследует его
+с ScopeLevel, сохраняя public поля и root(world,default_sources=...);
+WaterGenerationContext — с WaterGenerationScope.
+
+`application/cascade/contextResolver.py::{extend,scope_sequence,_check_level}`
+используют общий runtime; extend принимает и возвращает тот же concrete CtxT.
+Graph/verifier проверяют axis контекста, включая явные empty scopes.
+Existing Link/EmptyLink и runtimeChain.bind_chain остаются единственными.
+Новый контекст не приводится к LocationContext через cast; siblings получают
+раздельные snapshots links/results/provenance. Economic materialize/fold
+bindings сохраняются; водные VALUE channels их не вызывают.
+Точный caller/migration ledger — [G0-A seams](../.cursor/plans/geo-1-designed-water.md#a-g0-a-замороженные-runtime-seams-после-pc-12-2026-10-27).
+
 **A0, 2026-10-14:** [библиотеки доменов §2](tz_domain_template_libraries.md)
 подготавливают plot/building/structure POJO и валидируют overrides. Для
 объявленных cascade полей authored None остаётся наследованием; библиотеки

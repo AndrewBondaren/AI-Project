@@ -10,6 +10,15 @@ metadata:
 
 ## Назначение
 
+**GEO-1 G0-S (target, 2026-10-27):** planning input revision не равна pack
+content hash или manifest cache stamp `(mtime_ns,size)`. L0/L2 доставляются
+из coherent typed refs; parent light остаётся persisted L0 SoT, не live compose.
+Current publication guard не объявляется Snapshot-owned append-only commit.
+Future source pinning, staged L0→C23 handoff и snapshot/SQL/pack/history commit
+замораживаются внешним [snapshot-планом §7.2](../.cursor/plans/world-domain-patches-snapshots.md#72-первичная-materialization-обязательная-сверка-light_bakefull_bake),
+без early publish ради чтения следующей стадией. Это boundary будущего cutover,
+не изменение storage/runtime в GEO-1 G0-S; [input/ref contract](./tz_terrain_generation.md#geo-1-g0-s--source-revision-и-snapshot-seam).
+
 Зафиксировать **целевую архитектуру хранения** procedural мира и переход с монолитной таблицы `map_cells`.
 
 **Цели продукта:**
