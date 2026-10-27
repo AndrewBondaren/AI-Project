@@ -598,7 +598,8 @@ job». Норматив — `docs/tz_world_snapshot.md` § «Staged artifacts и
 один pack, после — вся материализация и правки уходят в snapshot; overlay
 без replay тиков; LOD-независимые patches; перепечки нет — только расширение: новые тайлы/локации на wilderness без patches). Новая игра продолжает цепочку world-snapshot. Один активный timeline на мир → один overlay; attach к другой ветке — пересборка overlay от keyframe (DAG). B-3, M-1, M-2,
 keyframe, rebase (отвергнут), объём snapshot (dedupe по hash) решены там же
-(п. 8–13). Открыто: `timeline_id`/`turn_id`, пороги keyframe.
+(п. 8–13). Схема `world_snapshots` — `docs/project_data_storage_tz.md`, пороги
+keyframe — реализация; открытых вопросов ТЗ нет, приёмку блокирует B-2.
 
 Проверенные несовместимые existing paths: `pack/bake/l0/packMaterializationOrchestrator.py`
 вызывает WorldPackWriter, `_persist_bake_relief_grades` и PackBakePublisher;

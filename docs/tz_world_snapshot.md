@@ -218,9 +218,11 @@ materialization, впервые полученного после создани
     (dedupe); snapshot хранит refs. Детерминированный пересчёт при чтении
     вместо хранения не используется.
 
-**Открыто:**
-- `world_snapshots.timeline_id`/`turn_id` и привязка первого тика к pack;
-- пороги keyframe.
+**Не ответственность этого ТЗ:** схема `world_snapshots`
+(`timeline_id`/`turn_id`) — [`project_data_storage_tz.md`](./project_data_storage_tz.md)
+и `0001_initial.sql`; здесь только инвариант «snapshot ссылается на pack по
+hash, первый snapshot — первый тик после старта gameplay». Пороги keyframe —
+параметр реализации (п. 11).
 
 Конкретные типы, порты, файлы и DDL не выбраны; реализация не разрешена.
 
