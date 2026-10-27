@@ -136,7 +136,7 @@ materialization, впервые полученного после создани
 6. **Перепечь мира = новый pack** — явное действие мастера, не путь правки.
    Существующие цепочки snapshot остаются привязанными к своему pack по hash;
    pack не удаляется, пока на него есть ссылки. Перенос цепочки на новый pack
-   — явный rebase, не неявная замена.
+   (rebase) пока запрещён — см. п. 12 ниже.
 
 **Authoritative state — только опубликованное:** pack, достижимый как
 `manifest@hash → blobs@hash`, и snapshot-цепочка с её SQL-версиями.
@@ -187,14 +187,36 @@ materialization, впервые полученного после создани
 7. **Переиспользование:** протокол staging/holder/GC/idempotent retry берётся
    из [world-source-versioning](../.cursor/plans/world-source-versioning.md)
    (STAGE/STAGE-SQL, holder handoff); второй механизм не вводится.
-   Владелец активации pack и связь с CAS-активацией source revision этим
-   пунктом не решены.
+
+**Решения мастера 2026-10-27** (B-3, M-1, M-2, keyframe, rebase, объём):
+
+8. **B-3. Один CAS-указатель мира `(pack_hash, snapshot_head)`.** Активация
+   pack и commit тика — две операции этого указателя; обе вызывает DAG.
+   Активация pack тем же CAS атомарно проверяет «gameplay не стартовал» —
+   гонка «bake дописывает pack ↔ старт игры» закрыта. Механизм по смыслу тот
+   же, что CAS-активация source revision (п. 7); совместимость проверяется
+   при реализации.
+9. **M-1. Patch — только данные.** Frozen typed тип в dataModel домена;
+   apply и merge (компакция overlay) — доменная application-реализация,
+   которую вызывает Snapshot. Patch не знает storage.
+10. **M-2. Явный реестр секций** в composition root (Container):
+    `section_key → DomainSectionHandler`. worldSnapshot зависит только от
+    порта; авторегистрация через import side effects запрещена.
+11. **Keyframe** — по объёму накопленных дельт и по событиям (старт gameplay,
+    точка ветвления, конец сессии). Триггер — DAG; merge секций — домены через
+    реестр п. 10; вне hot path commit. Пороги — при реализации.
+12. **Rebase запрещён** (пока). Цепочка живёт на своём базовом pack;
+    явный rebase — отложенное расширение.
+13. **Объём snapshot.** Материализация после старта (full_bake/L2 поверх
+    light) — staged blobs по content hash, общие между timelines и играми
+    (dedupe); snapshot хранит refs. Детерминированный пересчёт при чтении
+    вместо хранения не используется.
 
 **Открыто:**
-- объём snapshot при материализации после старта (full_bake/L2 поверх
-  light) — dedupe blobs по hash между timelines;
-- контракт keyframe (период; триггер — DAG, merge секций — домены) и протокол rebase;
-- `world_snapshots.timeline_id`/`turn_id` и привязка первого тика к pack.
+- `world_snapshots.timeline_id`/`turn_id` и привязка первого тика к pack;
+- пороги keyframe;
+- новая игра после перепечки: новый pack при живой цепочке на старом —
+  новая world-цепочка или запрет до rebase.
 
 Конкретные типы, порты, файлы и DDL не выбраны; реализация не разрешена.
 
