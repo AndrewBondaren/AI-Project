@@ -565,6 +565,8 @@ Pack (`world_map.zst`, wilderness chunks, `location_terrain`) = **immutable snap
 
 Skip `complete` (WP-12) остаётся **resume** incomplete L2. Invalidate+перепечь pack — рычаг мастера/offline (версия мира), не runtime mod.
 
+**Rebake — только до старта gameplay и для dev-fixtures** (решение мастера 2026-10-27). После старта gameplay перепечки нет: запечённое остаётся, допустимо только расширение — новые тайлы/локации на wilderness без patches, patch в snapshot; rebase цепочки на другой pack отвергнут ([`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Правила модели pack + overlay», п. 6, 12).
+
 SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Локальная модификация. DAG: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) `modify_terrain` ⬜.
 
 **Не путать:**
@@ -1276,7 +1278,7 @@ chunk_refine_jobs (
 
 #### Stale L0 / regen (WP-22, утверждено)
 
-Master rebake light pack → `l0_parent_hash` L2 ≠ текущий `world_map.zst`. Политика **A (skip + anchor-outward)**:
+Master rebake light pack (только до старта gameplay / dev-fixtures — оговорка «Rebake» выше) → `l0_parent_hash` L2 ≠ текущий `world_map.zst`. Политика **A (skip + anchor-outward)**:
 
 ```mermaid
 flowchart LR
