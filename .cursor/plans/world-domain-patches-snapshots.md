@@ -574,8 +574,8 @@ port; Patch несёт hash-ref; L0 → C23 через «опубликован�
 job». Норматив — `docs/tz_world_snapshot.md` § «Staged artifacts и точки
 публикации» (там же: граница — старт gameplay: до него bake дописывает
 один pack, после — вся материализация и правки уходят в snapshot; overlay
-без replay тиков; LOD-независимые patches; rebake = новый pack). Открыто:
-новая игра на мире с идущей игрой, keyframe/rebase, владелец активации pack
+без replay тиков; LOD-независимые patches; rebake = новый pack). Новая игра продолжает цепочку world-snapshot. Открыто:
+keyframe/rebase, владелец активации pack
 (B-3).
 
 Проверенные несовместимые existing paths: `pack/bake/l0/packMaterializationOrchestrator.py`
