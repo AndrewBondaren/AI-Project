@@ -1,5 +1,10 @@
 {
   "include": [
+    "backend/app/dataModel/cascade/runtimeContext.py",
+    "backend/app/dataModel/cascade/cascadeVerify.py",
+    "backend/app/dataModel/hydrology/generation/generationContext.py",
+    "backend/app/dataModel/hydrology/enums/planning/waterGenerationScope.py",
+    "backend/app/application/cascade/contextResolver.py",
     "backend/app/dataModel/cascade/cascadeSpec.py",
     "backend/app/dataModel/locations/context/cascadeParams.py",
     "backend/app/dataModel/locations/namedLocation/bundleNamedLocation.py",

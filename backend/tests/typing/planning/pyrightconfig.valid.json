@@ -1,6 +1,13 @@
 {
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
+    "../../../app/dataModel/locations/context/locationContext.py",
+    "../../../app/application/worldData/generators/utils/materialResolver.py",
+    "../../../app/application/cascade/contextResolver.py",
+    "../../../app/dataModel/cascade/runtimeContext.py",
+    "../../../app/dataModel/cascade/cascadeVerify.py",
+    "../../../app/dataModel/hydrology/generation",
+    "../../../app/dataModel/hydrology/enums/planning/waterGenerationScope.py",
     "../../../app/application/worldData/placement/lifecycle",
     "../../../app/application/worldData/placement/dependencies.py",
     "../../../app/application/worldData/placement/constraints.py",

@@ -12,6 +12,29 @@ from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 
+from app.application.cascade.cascadeLink import EmptyLink
+from app.application.cascade.contextResolver import extend
+from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope
+from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
+from app.dataModel.locations.context.locationContext import LocationContext
+
+
+class SpecializedWaterContext(WaterGenerationContext):
+    marker: int = 1
+
+
+def valid_concrete_contexts(location: LocationContext, water: WaterGenerationContext,
+                            specialized: SpecializedWaterContext) -> None:
+    assert_type(LocationContext.root(object()), LocationContext)
+    assert_type(WaterGenerationContext.root(object()), WaterGenerationContext)
+    assert_type(SpecializedWaterContext.root(object()), SpecializedWaterContext)
+    assert_type(extend(location, EmptyLink(ScopeLevel.SETTLEMENT)), LocationContext)
+    assert_type(extend(water, EmptyLink(WaterGenerationScope.WORLD)), WaterGenerationContext)
+    assert_type(extend(specialized, EmptyLink(WaterGenerationScope.WORLD)), SpecializedWaterContext)
+    assert_type(water.level, WaterGenerationScope)
+    assert_type(water.provenance, dict[str, tuple[WaterGenerationScope, str]])
+    assert_type(location.provenance, dict[str, tuple[ScopeLevel, str]])
+
 
 district_density = FieldRef(lambda: DistrictTemplateEntry, lambda pojo: pojo.density)
 assert_type(district_density, FieldRef[DistrictTemplateEntry, DistrictDensity | None])

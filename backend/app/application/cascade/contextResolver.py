@@ -13,6 +13,7 @@ caller bug, never a silent skip.
 """
 
 from functools import lru_cache
+from copy import deepcopy
 from random import Random
 from typing import TypeVar
 
@@ -116,12 +117,13 @@ def extend(
         check_link(level, link.obj)
         objects.append(link.obj.model_copy(deep=True))
 
-    stored = dict(ctx._links)
+    stored = {scope: tuple(obj.model_copy(deep=True) for obj in sources)
+              for scope, sources in ctx._links.items()}
     stored[level] = tuple(objects)
-    node_results = dict(ctx._node_results)
+    node_results = {key: (deepcopy(value), source) for key, (value, source) in ctx._node_results.items()}
 
     provenance = dict(ctx.provenance)
-    update = {"level": level}
+    update: dict[str, object] = {"level": level}
     params: dict[str, tuple] = {}
 
     def _resolve_field(name: str, param: Cascade) -> None:
@@ -157,6 +159,8 @@ def extend(
                         policy=param.default,
                         value=value,
                     )
+        if source is None:
+            raise ValueError(f"{param.field}: resolved value has no provenance")
         update[name] = value
         provenance[name] = source
         params[name] = (value, inherited_source, source)

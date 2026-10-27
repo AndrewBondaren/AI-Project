@@ -9700,6 +9700,8 @@ unrelated loaded domains не создают ложные duplicate/axis оши�
 Новые папки generation (2 файла с init) / planning enums (2 → 3),
 cascade dataModel (4 → 5); existing application/cascade и locations/context
 не расширяются новыми файлами.
+Existing materialResolver.py::fold_dominant_material принимает opaque runtime
+world и проверяет World на своей domain boundary; алгоритм fold не меняется.
 Цель: использовать существующий extend на новом typed контексте.
 ТЗ: tz_cascade_context §2–4 + дополнение G0.
 Файлы: dataModel/cascade/runtimeContext.py (CascadeRuntimeContext[AxisT]),
@@ -9714,6 +9716,12 @@ resolver; urban LocationContext сохраняет свой действующи
 Проверка: существующие cascade baseline/migration tests, новая ось,
 world-level channel, scalar bool/float, independent body contexts,
 contract verifier и typecheck:cascade. Done: оба домена на одном механизме.
+
+G1 IMPLEMENTED/VERIFIED (2026-10-27). Runtime contracts 73/73, existing
+cascade/context regressions 119/119; planning positive typing 253 файлов — 0 ошибок.
+Cascade negatives 8/8 (4 + 4); полный typecheck:cascade сохраняет 16 baseline
+ошибок worldLocationTypeRegistry, подтверждён тот же список по HEAD config (delta 0).
+Водные source fields/channel wiring остаются G2/G2-P, activation — G10-A.
 
 ### G2 — настройки мира
 Цель: ввести authored world channels и terminal default POJO.

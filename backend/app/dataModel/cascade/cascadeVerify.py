@@ -27,6 +27,7 @@ from app.dataModel.cascade.cascadeSpec import (
     ChannelKind,
     DefaultPolicy,
     RepeatScope,
+    ScopeAxis,
 )
 
 
@@ -51,6 +52,12 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
         for meta in info.metadata
         if isinstance(meta, Cascade)
     }
+    level = context_model.model_fields.get("level")
+    axis = level.annotation if level is not None else None
+    if isinstance(axis, type) and issubclass(axis, ScopeAxis):
+        for param in params:
+            if param.axis is not axis:
+                errors.append(f"param field='{param.field}': context parameter is on a foreign axis")
     # (param, node) -> channel ; node = CascadeNode with resolved model
     nodes: dict[tuple[Cascade, CascadeNode], CascadeChannel] = {}
     for model in _source_models():

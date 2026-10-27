@@ -95,7 +95,7 @@ def resolve_material(
 
 
 def fold_dominant_material(
-    world:    World,
+    world:    object | None,
     objects,
     resolved: dict,
 ) -> str:
@@ -103,7 +103,7 @@ def fold_dominant_material(
     cascade-migration M10): tier → material_registry pick between the
     authored chain and the canonical default. Per-param stream over
     ``UidKind.CASCADE``, never shared with tier materialize (§4)."""
-    if world is None:
+    if not isinstance(world, World):
         raise ValueError("dominant_material: fold requires world")
     scope_uid = next(
         (obj.location_uid for obj in objects

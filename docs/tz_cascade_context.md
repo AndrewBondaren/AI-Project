@@ -42,6 +42,11 @@ exact channel/source map — delivery plan §6.29-A, implementation G1/G2/G2-P/G
 
 ### GEO-1 G0-A — общий runtime-контракт (target G1)
 
+G1 runtime реализован (2026-10-27): общий base context, отдельная water axis
+и root, concrete return type общего extend, независимые snapshots links,
+node results/default sources. Водные settings/production VALUE declarations
+добавляются в G2/G2-P; здесь bool/float channels проверены isolated.
+
 `dataModel/cascade/runtimeContext.py::CascadeRuntimeContext[AxisT]` — общий
 frozen BaseModel без domain параметров. Владеет level/provenance и transient
 _world/_links/_scope_path/_node_results/_default_sources. Это runtime state,
