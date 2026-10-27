@@ -55,10 +55,14 @@ class ProbeSource(BaseModel):
         CascadeChannel(PAYLOAD, Scope.WATER_BODY, below=CascadeLink(PAYLOAD_REF, Scope.CATEGORY))] = None
 
 
-class ProbeWaterContext(WaterGenerationContext):
+class ProbeWaterContext(CascadeRuntimeContext[Scope]):
     flag: Annotated[bool | None, FLAG] = None
     fraction: Annotated[float | None, FRACTION] = None
     payload: Annotated[list[str] | None, PAYLOAD] = None
+
+    @classmethod
+    def root(cls, world, *, default_sources=()):
+        return cls.at_root(Scope.ROOT, world, default_sources=default_sources)
 
 
 def root(defaults=None):

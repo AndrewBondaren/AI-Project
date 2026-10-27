@@ -12,9 +12,10 @@ Whole-graph verification lives in ``cascadeVerify``
 
 from types import UnionType
 from dataclasses import dataclass
-from typing import Any, Union, get_args, get_origin, cast
+from typing import Annotated, Any, Union, get_args, get_origin, cast
 
 from pydantic import BaseModel
+from typing_extensions import TypeAliasType
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.cascade.cascadeSpec import (
@@ -115,7 +116,7 @@ def check_link(level: ScopeAxis, obj: object) -> None:
     """Type-bound link contract — the object's type must declare a
     channel for ``level``. No isinstance table: a new POJO becomes a
     valid link by annotating a field."""
-    if not cascade_channels(type(obj), level=level):
+    if not isinstance(obj, BaseModel) or not cascade_channels(type(obj), level=level):
         raise TypeError(
             f"{type(obj).__name__} declares no cascade channel "
             f"for level {level.value}"
@@ -136,10 +137,14 @@ def _source_models() -> set[type[BaseModel]]:
 
 
 def _resolve_alias(annotation: object) -> object:
-    """Peel PEP 695 ``TypeAliasType`` (e.g. ``EconomyTierKey``)."""
-    while type(annotation).__name__ == "TypeAliasType":
-        annotation = annotation.__value__
-    return annotation
+    """Compare base types through aliases and constraints, also inside unions."""
+    while True:
+        if isinstance(annotation, TypeAliasType):
+            annotation = annotation.__value__
+        elif get_origin(annotation) is Annotated:
+            annotation = get_args(annotation)[0]
+        else:
+            return annotation
 
 
 def _union_args(annotation: object) -> tuple[object, ...]:
@@ -307,6 +312,8 @@ def ordered_chain(
                      for level in reversed(scope_path[1:]) if level in expected)
     chain_nodes: dict[CascadeNode, CascadeChannel] = {}
     for model, field, channel in channels:
+        if not isinstance(channel.level, ScopeAxis):
+            raise ValueError("non-repeated cascade channel requires a scope axis")
         link = CascadeNode(model, field, channel.level)
         chain_nodes.setdefault(link, channel)
     edges, errors = _declared_edges(chain_nodes)

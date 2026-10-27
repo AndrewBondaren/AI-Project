@@ -9690,7 +9690,7 @@ Production constructors/defaults/zero behavior сохранены; провер�
 Уточнение G1: generationContext.py на этом шаге задаёт water runtime/root,
 его domain fields/production channel declarations добавляются G2/G2-P.
 Bool/float VALUE channels WORLD→CATEGORY→WATER_BODY проверяются isolated
-в tests/geo1/contracts/test_cascade_runtime.py (contracts 4 → 5 файлов).
+в tests/geo1/contracts/cascade/test_runtime.py (перенос при композиции G2).
 CascadeRuntimeContext переносит private runtime snapshots без Any/cast полей;
 provenance сохраняет существующий public dict, параметризованный осью.
 extend сохраняет concrete CtxT; стирание параметра оси допустимо только на
@@ -9724,6 +9724,20 @@ Cascade negatives 8/8 (4 + 4); полный typecheck:cascade сохраняет
 Водные source fields/channel wiring остаются G2/G2-P, activation — G10-A.
 
 ### G2 — настройки мира
+Уточнение G2 по §6.29-J: active WorldHydrology/import/export не меняются.
+dataModel/terrain/designedWater/{__init__,strategyKind}.py владеет enum;
+hydrology/generation/waterGenerationDefaults.py — WaterFraction constraint,
+WaterGenerationDefaults и canonical_defaults; waterGenerationSettings.py —
+базовая nullable схема, три Cascade declarations и WORLD/CATEGORY/BODY
+prototype types/typed FieldRef edges. Полный leaf graph объявляется вместе
+для проверки common verifier; legacy normalization/category owner wiring —
+G2-P, source owner wiring — G3/G10-A. generationContext.py получает три
+resolved fields и canonical terminal POJO на root, если default_sources=None;
+явный tuple источников сохраняет caller injection, root ничего не resolve.
+Common cascadeGraph.py unwrap nullable constrained VALUE aliases по base type.
+Папка generation: 2 → 4 файла; designedWater: 2. Tests contracts: 5 → 4,
+cascade/{__init__,test_runtime,test_settings}.py: 3 — G1 fixture переносится
+и наследует общий base с водной осью, чтобы не дублировать G2 declarations.
 Цель: ввести authored world channels и terminal default POJO.
 ТЗ: раздел GEO-1 из G0 и tz_cascade_context §3–4.
 Файлы: dataModel/hydrology/worldHydrology.py; общий WaterGenerationSettings;

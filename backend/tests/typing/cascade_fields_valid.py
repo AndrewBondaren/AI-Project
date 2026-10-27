@@ -12,7 +12,7 @@ from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 
-from app.application.cascade.cascadeLink import EmptyLink
+from app.application.cascade.cascadeLink import EmptyLink, Link
 from app.application.cascade.contextResolver import extend
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
@@ -34,6 +34,25 @@ def valid_concrete_contexts(location: LocationContext, water: WaterGenerationCon
     assert_type(water.level, WaterGenerationScope)
     assert_type(water.provenance, dict[str, tuple[WaterGenerationScope, str]])
     assert_type(location.provenance, dict[str, tuple[ScopeLevel, str]])
+
+
+from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction
+from app.dataModel.hydrology.generation.waterGenerationSettings import (
+    WorldWaterGenerationSettings, CategoryWaterGenerationSettings, BodyWaterGenerationSettings,
+)
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
+
+
+def valid_water_channels(source: WorldWaterGenerationSettings, context: WaterGenerationContext) -> None:
+    fraction = FieldRef(lambda: WorldWaterGenerationSettings, lambda s: s.water_fraction)
+    assert_type(fraction, FieldRef[WorldWaterGenerationSettings, WaterFraction | None])
+    assert_type(source.autoresolve, bool | None)
+    assert_type(source.strategy, DesignedWaterStrategyKind | None)
+    assert_type(context.water_fraction, WaterFraction | None)
+    assert_type(context.autoresolve, bool | None)
+    assert_type(context.strategy, DesignedWaterStrategyKind | None)
+    assert_type(extend(context, Link(WaterGenerationScope.CATEGORY, CategoryWaterGenerationSettings())), WaterGenerationContext)
+    BodyWaterGenerationSettings(autoresolve=False, water_fraction=0.0, strategy=DesignedWaterStrategyKind.PLATE)
 
 
 district_density = FieldRef(lambda: DistrictTemplateEntry, lambda pojo: pojo.density)

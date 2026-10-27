@@ -1,6 +1,8 @@
 {
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
+    "../../../app/dataModel/cascade/cascadeGraph.py",
+    "../../../app/dataModel/terrain/designedWater",
     "../../../app/dataModel/locations/context/locationContext.py",
     "../../../app/application/worldData/generators/utils/materialResolver.py",
     "../../../app/application/cascade/contextResolver.py",

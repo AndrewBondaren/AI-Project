@@ -31,6 +31,18 @@ def invalid_concrete_context_return(water: WaterGenerationContext) -> LocationCo
     return extend(water, EmptyLink(WaterGenerationScope.WORLD))  # expect: reportReturnType
 
 
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, BodyWaterGenerationSettings
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
+
+
+def invalid_water_settings(source: WorldWaterGenerationSettings) -> None:
+    WorldWaterGenerationSettings(autoresolve=1)  # expect: reportArgumentType
+    BodyWaterGenerationSettings(strategy=ScopeLevel.WORLD)  # expect: reportArgumentType
+    WorldWaterGenerationSettings(strategy="plate")  # expect: reportArgumentType
+    source.autoresolve = False  # expect: reportAttributeAccessIssue
+    ref: FieldRef[WorldWaterGenerationSettings, DesignedWaterStrategyKind | None] = FieldRef(lambda: WorldWaterGenerationSettings, lambda s: s.autoresolve)  # expect: reportAssignmentType
+
+
 missing = FieldRef(lambda: Source, lambda pojo: pojo.missing)  # expect: reportAttributeAccessIssue
 self_missing = FieldRef(lambda: Later, lambda pojo: pojo.missing)  # expect: reportAttributeAccessIssue
 
