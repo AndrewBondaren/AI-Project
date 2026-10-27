@@ -1,5 +1,7 @@
 # Implementation Roadmap — terrain · hydrology · climate · snapshot
 
+> **Актуализация 2026-10-27:** последовательность WS-0…WS-4 ниже является исторической и не задаёт действующие gates/implementation. Архивный `.cursor/plans/world-state-crud-transition.md` заменён архитектурным планом [«Доменное чтение, patches и snapshots»](world-domain-patches-snapshots.md). Все зависимости от WS-1/WS-1b/WS-3 и этапы P4/P5/TR-2 подлежат повторному согласованию по новому плану; считать их автоматически разблокированными нельзя.
+
 > **Статус:** active · **Следующий шаг:** **D HY-0**  
 > **Обновлено:** 2026-06  
 > **Не трогаем сейчас:** cave graph / U12, lazy sim LS-T*, engine DAG nodes, U13 LLM naming
