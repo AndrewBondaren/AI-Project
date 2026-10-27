@@ -597,7 +597,7 @@ job». Норматив — `docs/tz_world_snapshot.md` § «Staged artifacts и
 публикации» (там же: граница — старт gameplay: до него bake дописывает
 один pack, после — вся материализация и правки уходят в snapshot; overlay
 без replay тиков; LOD-независимые patches; rebake = новый pack). Новая игра продолжает цепочку world-snapshot. Один активный timeline на мир → один overlay; attach к другой ветке — пересборка overlay от keyframe (DAG). B-3, M-1, M-2,
-keyframe, rebase (запрещён), объём snapshot (dedupe по hash) решены там же
+keyframe, rebase (отвергнут), объём snapshot (dedupe по hash) решены там же
 (п. 8–13). Открыто: `timeline_id`/`turn_id`, пороги keyframe, новая игра
 после перепечки.
 
