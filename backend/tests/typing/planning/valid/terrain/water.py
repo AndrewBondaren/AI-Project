@@ -25,6 +25,9 @@ from app.dataModel.terrain.designedWater.draft import (
 )
 from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation
+from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageBudgetPolicy import WaterCoverageBudgetPolicy
+from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, FineArea, WaterCoverageBudget
+from app.dataModel.terrain.regions.terrainRegionExtent import TerrainRegionExtent
 
 
 def valid_water_contracts(source: WaterDesignSource, metadata: WaterSourceMetadata,
@@ -71,3 +74,14 @@ def valid_strategy_boundary(input: WaterDesignInput, draft: WaterDesignDraft,
     assert_type(factory.get(input.strategy), DesignedWaterStrategy)
     assert_type(factory.get(input.strategy).design(input), WaterDesignDraft)
     assert_type(input.validate_draft(draft), WaterDesignDraft)
+
+
+def valid_budget_boundary(policy: WaterCoverageBudgetPolicy, extent: TerrainRegionExtent,
+                          context: ResolvedWaterGenerationContext,
+                          requests: tuple[BodyCoverageRequest, ...],
+                          authored: FineArea, available: FineArea) -> WaterCoverageBudget:
+    budget = policy.calculate(extent, context, requests,
+        authored_union_fine2=authored, available_auto_area_fine2=available)
+    assert_type(budget, WaterCoverageBudget)
+    assert_type(budget.allocations, tuple[BodyCoverageAllocation, ...])
+    return budget

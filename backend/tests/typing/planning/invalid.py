@@ -502,3 +502,19 @@ def invalid_strategy_boundary(authored: AuthoredWaterDesignInput, noise: NoiseWa
     wrong_input: NoiseWaterDesignInput = authored  # EXPECT: reportAssignmentType
     noise.seed_root = "changed"  # EXPECT: reportAttributeAccessIssue
     BodyCoverageAllocation(source_uid="source", generation_region_uid="region", requested_fine2=GridX(2), allocated_fine2=1.5)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageBudgetPolicy import WaterCoverageBudgetPolicy
+from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest
+from app.dataModel.terrain.regions.terrainRegionExtent import TerrainRegionExtent
+from app.dataModel.spatial.grid.gridBBox import GridBBox
+
+
+def invalid_budget_boundary(policy: WaterCoverageBudgetPolicy, extent: TerrainRegionExtent,
+                            context: ResolvedWaterGenerationContext, runtime: WaterGenerationContext,
+                            requests: tuple[BodyCoverageRequest, ...], bbox: GridBBox) -> None:
+    policy.calculate(bbox, context, requests, authored_union_fine2=0, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
+    policy.calculate(extent, runtime, requests, authored_union_fine2=0, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
+    policy.calculate(extent, context, list(requests), authored_union_fine2=0, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
+    policy.calculate(extent, context, ({"source_uid": "a"},), authored_union_fine2=0, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
+    policy.calculate(extent, context, requests, authored_union_fine2=0.5, available_auto_area_fine2=1)  # EXPECT: reportArgumentType

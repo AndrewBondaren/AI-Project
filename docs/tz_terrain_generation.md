@@ -257,6 +257,19 @@ draft/spec boundary, где доступны footprint/level. Canonical coarse c
 описывает world-fine field, поэтому field record не угадывает scale по индексу.
 Depth/floor/bands и waterline подчиняются existing HY-12 контракту;
 physical body после merge/spill не становится authored settings source.
+G4-P: WaterCoverageBudgetPolicy.calculate принимает TerrainRegionExtent,
+world-scope ResolvedWaterGenerationContext и tuple[BodyCoverageRequest,...].
+authored_union_fine2 и available_auto_area_fine2 — готовые strict nonnegative
+fine² меры от terrain coverage; policy не измеряет geometry и не запускает cascade.
+World target и body requests округляются half-up от canonical Decimal fraction;
+residual=max(0,target-authored_union). Общий cap=min(residual,available_auto_area)
+распределяется пропорционально requests, не выше каждого request; integer остаток
+выдаётся largest-remainder с tie по source_uid. Нулевой request получает ноль,
+нулевая сумма не создаёт искусственных весов. Authored union выше target сохраняется.
+Результат — WaterCoverageBudget с typed BodyCoverageAllocation, sorted по source_uid;
+raw mappings/lists и рабочий runtime context на этой границе не принимаются.
+Стратегия, admission, геометрические конфликты, threshold и post-fill перерасчёт
+не входят в обязанности budget policy.
 Surface coating получает typed substrate facts и готовый policy decision,
 не переписывает неизвестный материал скрытым default.
 

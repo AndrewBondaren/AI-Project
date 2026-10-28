@@ -415,7 +415,7 @@ generation_area_fine2 из результата, без своего shape.area(
 **D. Бюджет покрытия — одна pure policy для всех стратегий.**
 `terrain/designedWater/coverage/waterCoverageBudgetPolicy.py::WaterCoverageBudgetPolicy`
 с единственным public методом `calculate(world_extent: TerrainRegionExtent,
-world_context: WaterGenerationContext, body_requests: tuple[BodyCoverageRequest,...],
+world_context: ResolvedWaterGenerationContext, body_requests: tuple[BodyCoverageRequest,...],
 *, authored_union_fine2: int, available_auto_area_fine2: int) -> WaterCoverageBudget`.
 Frozen result type `WaterCoverageBudget` объявляется в
 dataModel/terrain/designedWater/coverage/budget.py (шаг G4):
@@ -9982,9 +9982,18 @@ production wiring не менялись. Composition: dataModel root4, coverage2
 Контракт: calculate(world_extent, world_context, body_requests,
 *, authored_union_fine2, available_auto_area_fine2) по §5.2-D/§6.29-E;
 площади от геометрического владельца, authored union учитывается один раз.
+world_context — immutable ResolvedWaterGenerationContext уровня WORLD по G4-I;
+extent/requests — existing typed records, площади — existing strict FineArea.
 Проверка: 0/60/100%, превышение authored над целью, overlapping declares,
 несовпадающие единицы — ошибка; никаких writes/resolve/candidates.
 Done: алгоритмы не рассчитывают свои бюджеты или defaults доли воды.
+
+G4-P IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+Pure typed policy: exact Decimal half-up, общий union cap, largest-remainder
+с tie по source_uid; geometry/cascade/admission/placement/wiring не выполняются.
+GEO-1 251/251 (+13), positive Pyright — 0 ошибок, negative planning129/129 (+5).
+Composition: application coverage2, tests/geo1/coverage2; raw records и runtime
+context отклоняются, shared region measures валидируются без пересчёта geometry.
 
 ### G4-C — общий preparer draft → placement candidates
 Цель: единый порог/constraint boundary после любой стратегии.
