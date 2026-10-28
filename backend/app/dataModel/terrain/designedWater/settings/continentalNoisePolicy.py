@@ -10,4 +10,3 @@ class ContinentalNoisePolicy(BaseModel, frozen=True):
     octaves: StrictInt = Field(default=4, ge=1, le=16)
     lacunarity: StrictFloat = Field(default=2.0, gt=1, allow_inf_nan=False)
     persistence: StrictFloat = Field(default=0.5, ge=0, le=1, allow_inf_nan=False)
-    score_bits: StrictInt = Field(default=24, ge=8, le=30)

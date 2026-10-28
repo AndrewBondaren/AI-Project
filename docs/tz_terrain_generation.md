@@ -239,6 +239,22 @@ prepared entries/candidates; exact field formulas/knobs — §6.29-F.
 Factory связывает effective enum с четырьмя явно переданными implementations;
 не выбирает defaults и не выполняет cascade/policy. Согласованная граница:
 [G4 supplement](../.cursor/plans/geo-1-strategy-boundary-contract.md).
+G4-C: DesignedWaterPlacementPreparer.prepare(input,draft,*,selection_policy)
+возвращает immutable WaterDesignPreparation (candidates/original_area в явно
+заданном world coordinate_space, grid, metadata/ref, floor/profile, notices).
+Общий WaterFieldSelectionPolicy владеет score_bits=24 (strict int8..30);
+noise policy/recipe его не хранят. Wet score=half-up((1-field)/2*(2^bits-1)).
+Пригодны только coarse клетки, полностью покрытые RegionCoverage; точную
+fine² intersection area измеряет terrain RegionCoverageMeasure.
+Порядок (-score,canonical y,x); выбирается prefix с минимальной ошибкой
+к allocated_fine2, равная ошибка выбирает меньший prefix. Shortfall явен;
+пустой выбор даёт domain failure, без фиктивной положительной original_area.
+Authored footprints и floor/profile сохраняются без threshold/повторного
+rasterize в исходном world space. Fine→coarse projection/collapse — adapter G8.
+G4-C не создаёт admission/header/priority/outcomes. G8 связывает geometry result
+с готовым admission и заменяет water adapter contract вместе со всеми callers,
+без второго water V2 transport. Metadata consumer basinSpecFactory переводится
+в G8; accepted profile→BasinSpec/terrain writer — G9.
 G4: WaterDesignInput — union по effective strategy с BodyCoverageAllocation,
 actual pre_hydrology envelope и exact RegionCoverage. validate_draft(input result)
 на input проверяет metadata/recipe identity, один sample на canonical coarse

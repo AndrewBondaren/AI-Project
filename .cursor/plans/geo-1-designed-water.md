@@ -476,13 +476,13 @@ arguments authored_region/continental_noise/plate/plate_noise по G4 supplement
 
 **H. Подготовка candidates — одна для всех стратегий.**
 `preparation/placementPreparation.py::DesignedWaterPlacementPreparer.prepare(input,
-draft) -> WaterPlacementPreparation` — общий region/constraint boundary,
-порог target water fraction, геометрия candidates и metadata для factory.
-Использовать существующий WaterPlacementPreparation либо расширить его
-typed entry; не создавать параллельный ResolvedWaterPlacement.
-Для authored geometry делегирует existing water adapter helpers;
+draft, *, selection_policy) -> WaterDesignPreparation` — общий region/constraint
+boundary: allocated budget→prefix geometry, metadata/ref и floor/profile.
+Это immutable geometry result до admission binding, не water adapter transport.
+Единственный WaterPlacementPreparation переводится вместе с callers в G8.
+Authored geometry сохраняет native world space без rasterize;
 для field draft выбирает порог один раз с deterministic ties.
-На выходе PreparedPlacement, но **не** ResolvedPlacement.
+На выходе PlacementCandidate; PreparedPlacement с готовым decision собирает G8.
 Общий admission decision до design обязателен (§6.8-C/C3); DISABLED
 не передаётся в design/preparer. Домен не реализует свою проверку нуля.
 P2 потребляет authoritative decision и обеспечивает non-creation,
@@ -2415,16 +2415,19 @@ Producers: четыре design(input) → WaterDesignDraft; noise/plate build
 и composer combine → ContinentalField. Contracts находятся в
 dataModel/terrain/designedWater/{input,draft}.py и fields/field.py.
 Схождение: terrain/designedWater/preparation/placementPreparation.py::
-DesignedWaterPlacementPreparer.prepare(input, draft) → WaterPlacementPreparation.
-TARGET preparation переносит source metadata/profile и все policy admission
+DesignedWaterPlacementPreparer.prepare(input, draft, *, selection_policy)
+→ WaterDesignPreparation по согласованному G4-C supplement.
+G4-C возвращает geometry/candidates, metadata/profile; G8 связывает этот
+результат с admission в единственный WaterPlacementPreparation.
+TARGET water preparation переносит source metadata/profile и все policy admission
 inputs, включая disabled без geometry; его entries остаются prepared,
 не resolved. EXISTING waterTypes.py::PreparedWaterEntry ограничен тремя
 declared sources и scalar floor_z; WaterPlacementPreparation содержит
-entries/failures/notices и не содержит revision/disabled payload.
+entries/failures/notices и snapshot_revision, но не early disabled payload.
 Контракты расширений source/profile/admission transport — §6.29-B/F/D
 и §6.28; implementation — G4-C/G8/G0-P (все DESIGN_CLOSED). DataModel
-input/draft не импортируют application
-WaterPlacementPreparation: application preparer только возвращает его.
+input/draft/result не импортируют application WaterPlacementPreparation:
+G4-C возвращает dataModel WaterDesignPreparation; adapter transport собирает G8.
 
 **J07. Подготовка всех sources → один общий placement batch.**
 Producer: J06 и сохранённые J03 geometry-free admissions. Existing PC chain:
@@ -4673,7 +4676,9 @@ report, без изменения гор/авторских объектов.
 
 Точные числовые defaults в owning POJO, не application literals:
 ContinentalNoisePolicy: length_fraction=0.18 (>0), octaves=4 (1..16),
-lacunarity=2.0 (>1), persistence=0.5 (0..1), score_bits=24 (8..30).
+lacunarity=2.0 (>1), persistence=0.5 (0..1).
+WaterFieldSelectionPolicy: score_bits=24 (8..30), общий для всех field strategies;
+не является noise recipe parameter (согласовано G4-C).
 PlateGenerationPolicy: plate_count=12 (>0), blend_length_fraction=0.12
 (>0). FieldCompositionPolicy: operator=ADD_CLAMP enum,
 detail_weight=0.20 (0..1). Для tiny world effective plate_count=min(count,
@@ -5236,7 +5241,8 @@ seas:HydrologySeasPolicy,lakes:HydrologyLakesPolicy,
 sources:tuple[WaterDesignSource,...],anchors:tuple[WaterAnchorInput,...],
 topology:WorldTopology,grid:SurfaceGridSettings,z_min:FineZ,z_max:FineZ,
 liquid_keys:frozenset[MaterialKey],noise_policy:ContinentalNoisePolicy,
-plate_policy:PlateGenerationPolicy,composition_policy:FieldCompositionPolicy).
+plate_policy:PlateGenerationPolicy,composition_policy:FieldCompositionPolicy,
+selection_policy:WaterFieldSelectionPolicy).
 Regions приходят ready dependency `terrain_regions`, не из hidden World.
 Domain provider вычисляет cascade/admission/budget/design из этих I/refs;
 capture не делает это до cache lookup. Metadata source-path внутри
@@ -9996,16 +10002,28 @@ Composition: application coverage2, tests/geo1/coverage2; raw records и runtime
 context отклоняются, shared region measures валидируются без пересчёта geometry.
 
 ### G4-C — общий preparer draft → placement candidates
+Уточнение [контракта](./geo-1-placement-preparation-contract.md) APPROVED
+2026-10-28 («Ок»): geometry result G4-C, единый adapter cutover G8,
+accepted profile→spec/writer G9. Параллельный water V2 transport не вводить.
 Цель: единый порог/constraint boundary после любой стратегии.
 ТЗ: GEO-1 G0, §5.2-H, tz_map_light_bake §Placement P1/P2.
 Файлы: terrain/designedWater/preparation/placementPreparation.py;
-application/worldData/placement/adapters/waterTypes.py и water.py,
-water shape helpers; typed metadata/source/profile расширения по J06/J08.
-Контракт: prepare(input, draft) → WaterPlacementPreparation;
-finite candidates, immutable original_area, metadata для existing factory.
+dataModel/terrain/designedWater/preparation/result.py (+init),
+settings/fieldSelectionPolicy.py; existing continentalNoisePolicy.py,
+terrain/regions/coverageMeasure.py. Adapter types — owning G8, не G4-C.
+Контракт: prepare(input, draft, *, selection_policy) → WaterDesignPreparation;
+finite candidates, immutable original_area, metadata/profile для adapter G8.
 Проверка: общий threshold один раз, ties детерминированы, authored
 constraints сохраняются, нет resolve_placements/z-write в preparer.
 Done: ни одна стратегия не имеет своего placement/post-fill threshold.
+
+G4-C IMPLEMENTED/VERIFIED (2026-10-28), geometry stage до adapter G8.
+Typed WaterDesignPreparation + explicit selection policy; score_bits перенесён
+из noise. Exact weights — RegionCoverageMeasure; prefix/shortfall/empty failure,
+native authored geometry/profile сохранены. Admission/P2/z-write не добавлялись.
+GEO-1 273/273 (+22), existing placement/water/factory67/67 (world_test_004),
+positive Pyright — 0 ошибок, negative planning137/137 (+8). Composition:
+dataModel preparation2/settings5, application preparation2, tests preparation4.
 
 ### G5 — authored region strategy
 Цель: провести authored input через общий strategy boundary.
@@ -10121,6 +10139,9 @@ water_source из transitional caller G5-C2.
 Контракт: общий batch, source metadata, accepted dependencies; авто-настройки
 разрешены до strategy call; J01–J09 §6.16, один revision и request ctx,
 early admission transport без geometry, никакого budget/input цикла.
+По G4-C supplement: заменить единственный water adapter contract вместе
+с callers/ResolvedWaterPlacement и metadata consumer basinSpecFactory;
+удалить переведённый старый путь, без параллельных water V2 records.
 Проверка: конкуренты/overlap/dependencies,
 dry coastline, full/partial одинаковый prepared universe, preview без writes.
 Done: нет отдельного resolve для plate/noise/authored.
@@ -10136,6 +10157,8 @@ basinSpec.py остаётся re-export. Расширение того же spec
 Проверка: replay/idempotence, пересечения, горные reservations,
 floor < level, clamp/invalid-input правила из G0.
 Done: field не теряется при преобразовании в scalar BasinSpec.
+Metadata/scalar consumer migration — G8; здесь перенос accepted profile
+в единственный spec/writer, без потери profile и без повторного выбора bands.
 
 ### G9-ST — immutable источники доказательств surface support
 Цель: typed template/material/region source closure для facts provider.

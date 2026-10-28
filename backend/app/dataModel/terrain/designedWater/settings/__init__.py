@@ -1,1 +1,1 @@
-"""Resolved algorithm policies; nullable authored leaf inheritance belongs to cascade."""
+"""Resolved generation/selection policies; authored leaf inheritance belongs to cascade."""

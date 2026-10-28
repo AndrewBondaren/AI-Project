@@ -28,6 +28,10 @@ from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllo
 from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageBudgetPolicy import WaterCoverageBudgetPolicy
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, FineArea, WaterCoverageBudget
 from app.dataModel.terrain.regions.terrainRegionExtent import TerrainRegionExtent
+from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
+from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+from app.dataModel.placement.prepared import PlacementCandidate
 
 
 def valid_water_contracts(source: WaterDesignSource, metadata: WaterSourceMetadata,
@@ -85,3 +89,13 @@ def valid_budget_boundary(policy: WaterCoverageBudgetPolicy, extent: TerrainRegi
     assert_type(budget, WaterCoverageBudget)
     assert_type(budget.allocations, tuple[BodyCoverageAllocation, ...])
     return budget
+
+
+def valid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: WaterDesignInput,
+                            draft: WaterDesignDraft, selection: WaterFieldSelectionPolicy) -> WaterDesignPreparation:
+    result = preparer.prepare(input, draft, selection_policy=selection)
+    assert_type(result, WaterDesignPreparation)
+    assert_type(result.candidates, tuple[PlacementCandidate, ...])
+    assert_type(result.metadata, WaterSourceMetadata)
+    assert_type(result.floor_profile, BasinFloorProfile | None)
+    return result

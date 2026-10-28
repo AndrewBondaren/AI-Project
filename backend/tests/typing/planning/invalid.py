@@ -518,3 +518,23 @@ def invalid_budget_boundary(policy: WaterCoverageBudgetPolicy, extent: TerrainRe
     policy.calculate(extent, context, list(requests), authored_union_fine2=0, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
     policy.calculate(extent, context, ({"source_uid": "a"},), authored_union_fine2=0, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
     policy.calculate(extent, context, requests, authored_union_fine2=0.5, available_auto_area_fine2=1)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
+from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import ContinentalNoisePolicy
+from app.dataModel.placement.prepared import PreparedPlacementV2
+
+
+def invalid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: NoiseWaterDesignInput,
+                              draft: ProceduralWaterDesignDraft, selection: WaterFieldSelectionPolicy,
+                              result: WaterDesignPreparation) -> None:
+    preparer.prepare(input, draft)  # EXPECT: reportCallIssue
+    preparer.prepare(input, draft, selection_policy=ContinentalNoisePolicy())  # EXPECT: reportArgumentType
+    preparer.prepare(input, draft, selection_policy={"score_bits": 24})  # EXPECT: reportArgumentType
+    preparer.prepare({"source": "source"}, draft, selection_policy=selection)  # EXPECT: reportArgumentType
+    prepared: PreparedPlacementV2 = result  # EXPECT: reportAssignmentType
+    result.decision  # EXPECT: reportAttributeAccessIssue
+    result.original_area = 3.0  # EXPECT: reportAttributeAccessIssue
+    input.field_policy.noise_policy.score_bits  # EXPECT: reportAttributeAccessIssue

@@ -1,10 +1,12 @@
 """Interval algebra; result identity is always supplied by the caller (G3-R contract)."""
 
 from collections.abc import Iterable, Iterator
+from bisect import bisect_left
 from heapq import merge
 
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.spatial.grid.coordinateTypes import FineX
+from app.dataModel.spatial.grid.coordinateTypes import FineX, SurfaceGridCoord
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan, RegionCoverage
 
 
@@ -22,6 +24,21 @@ class RegionCoverageMeasure:
     @staticmethod
     def area(coverage: RegionCoverage) -> int:
         return sum(span.x1 - span.x0 for span in coverage.spans)
+
+    @staticmethod
+    def coarse_cell_areas(coverage: RegionCoverage, cells: tuple[SurfaceGridCoord, ...],
+                          grid: SurfaceGridSettings) -> tuple[int, ...]:
+        """Exact fine² intersections, in caller cell order; no shape rasterization."""
+        spans = coverage.spans
+        rows = tuple(span.y for span in spans)
+        side = grid.fine_span
+        areas: list[int] = []
+        for cell in cells:
+            x0, y0 = cell.gx * side, cell.gy * side
+            start, end = bisect_left(rows, y0), bisect_left(rows, y0 + side)
+            areas.append(sum(max(0, min(spans[i].x1, x0 + side) - max(spans[i].x0, x0))
+                             for i in range(start, end)))
+        return tuple(areas)
 
     @staticmethod
     def union(coverages: tuple[RegionCoverage, ...], *, region_uid: EntityUid) -> RegionCoverage:

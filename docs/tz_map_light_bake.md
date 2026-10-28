@@ -134,6 +134,17 @@ ResolveContext.collect_only собирает diagnostics без логирова
 
 #### Placement P3 water
 
+GEO-1 G4-C предоставляет предыдущую стадию: typed WaterDesignPreparation
+(geometry candidates, coordinate_space/grid, original_area, metadata/ref,
+floor/profile/notices), без header/admission/outcome. Общий field threshold
+принимает явный WaterFieldSelectionPolicy и allocated fine² budget;
+полные coarse клетки измеряются terrain RegionCoverageMeasure. Authored
+geometry сохраняет native world space без повторной rasterization.
+Admission binding, projection/collapse и замена единственного water adapter
+вместе с callers относятся к G8; accepted profile→spec/writer — к G9.
+Параллельный water V2 transport и union old/new контракты не вводятся.
+Следующий абзац описывает существующий adapter до этой замены.
+
 Водный adapter находится в `application/worldData/placement/adapters/`. `prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementContext, *, ctx: ResolveContext) -> WaterPlacementPreparation` принимает полный canonical pre-carve snapshot в координатах рабочей сетки (pre-1.4 — coarse surface grid; declared геометрия проецируется fine→coarse на границе caller), z_min, готовые anchor coordinates, явно подготовленные auto-specificity и карты dependencies/permitted_overlaps/separations по source UID. Карты ограничений используют существующие PlacementDependency/PlacementOverlap/PlacementSeparation; отсутствие записи означает явно пустой набор для источника, blanket-разрешения water×water нет. Идентификаторы world/snapshot/source/anchor — непрозрачные строки existing identity-контрактов, новых UID-формул нет. Параметры воды/лимиты берутся из существующих POJO, не дублируются defaults. Missing auto не становится 0; dry coastline использует отдельное правило P1.
 
 Preparation содержит successful prepared entries и явные failures (`source_uid` + FieldPathError); geometry failure не отменяет независимые entries. Ошибки неполного snapshot/дубли UID отклоняют input через существующую валидацию. Runtime preparation facts логируются, validate_only получает те же code/path/reason в report без writes. Общий P2 получает `preparation.objects` вместе с intents других доменов, без отдельного resolve внутри adapter. Нормативная геометрия coastline/лимиты — `tz_terrain_hydrology.md` § Declare. Planar clipping отсутствует; неоднозначный compact ring unresolved.

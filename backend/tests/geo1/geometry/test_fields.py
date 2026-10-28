@@ -13,6 +13,7 @@ from app.dataModel.terrain.designedWater.fields.field import (
 from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import ContinentalNoisePolicy
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
 from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionPolicy
+from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.topology.worldBounds import WorldBounds
@@ -27,12 +28,15 @@ def noise_recipe():
 class FieldContractTests(TestCase):
     def test_resolved_policies_have_exact_defaults_and_no_cascade_execution(self):
         self.assertEqual(ContinentalNoisePolicy().model_dump(), dict(length_fraction=0.18, octaves=4,
-            lacunarity=2.0, persistence=0.5, score_bits=24))
+            lacunarity=2.0, persistence=0.5))
+        self.assertEqual(WaterFieldSelectionPolicy().score_bits, 24)
         self.assertEqual(PlateGenerationPolicy().model_dump(), dict(plate_count=12, blend_length_fraction=0.12))
         self.assertEqual(FieldCompositionPolicy().detail_weight, 0.2)
         for model, bad in ((ContinentalNoisePolicy, ({"length_fraction": 0}, {"octaves": True},
                 {"octaves": 17}, {"lacunarity": 1}, {"persistence": -0.1}, {"persistence": 1.1},
-                {"score_bits": 7}, {"score_bits": 31}, {"octaves": "4"})),
+                {"score_bits": 24}, {"octaves": "4"})),
+                (WaterFieldSelectionPolicy, ({"score_bits": 7}, {"score_bits": 31},
+                    {"score_bits": True}, {"score_bits": 24.0}, {"score_bits": "24"})),
                 (PlateGenerationPolicy, ({"plate_count": 0}, {"plate_count": True}, {"blend_length_fraction": 0})),
                 (FieldCompositionPolicy, ({"operator": "add_clamp"}, {"detail_weight": -1}, {"detail_weight": 1.1}))):
             for raw in bad:
