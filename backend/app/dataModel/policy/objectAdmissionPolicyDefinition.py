@@ -8,8 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.cascade.cascadeSpec import FieldRef
 from app.dataModel.placement.common import Specificity
+from app.dataModel.policy.declarations.policyDeclaration import DeclarationDefaults, PolicyOwner, validate_policy_owner
+from app.dataModel.policy.declarations.policyIdentity import CommonPolicyOwner, RuleIdentity, RuleKind, make_rule_id
 from app.dataModel.policy.policyEnums import (
-    PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyRuleId, PolicyStage, RulePrecedence,
+    PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyStage,
 )
 from app.dataModel.policy.policyFacts import FactValue
 from app.dataModel.policy.policyReferences import (
@@ -75,12 +77,13 @@ class ObjectAdmissionBindings(Generic[B, R]):
     expected_behavior_type: type[B]
     rules: tuple[PolicyRule[B, R], ...] = ()
     fallback_rules: tuple[PolicyFallback[B], ...] = ()
+    owner: type[PolicyOwner] = CommonPolicyOwner
 
 
 class ObjectAdmissionPolicyDefinition:
     @staticmethod
     def _enabled_rules(gates: tuple[EnabledGateDeclaration, ...],
-                       rules: tuple[PolicyRule[B, R], ...]) -> tuple[PolicyRule[B, R], ...]:
+                       rules: tuple[PolicyRule[B, R], ...], owner: type[PolicyOwner]) -> tuple[PolicyRule[B, R], ...]:
         if not isinstance(gates, tuple):
             raise ValueError("enabled gates require tuple")
         gates_rules: list[PolicyRule[B, R]] = []
@@ -92,25 +95,27 @@ class ObjectAdmissionPolicyDefinition:
             if _plain(bound.model.model_fields[bound.field].annotation) is not bool:
                 raise ValueError("enabled gate requires strict bool field")
             gates_rules.append(PolicyRule(
-                id=PolicyRuleId(f"admission.enabled.{bound.model.__module__}.{bound.model.__qualname__}.{bound.field}"),
-                stage=PolicyStage.ABSOLUTE_GATE, precedence=RulePrecedence(0),
+                id=make_rule_id(RuleIdentity(owner=owner, kind=RuleKind.ENABLED, field=bound)),
+                stage=PolicyStage.ABSOLUTE_GATE, precedence=DeclarationDefaults().precedence,
                 conditions=(Equal(ref, False),), effect=DisableEffect(PolicyDisableReason.ENABLED_FALSE)))
-        return tuple(gates_rules) + rules
+        return tuple(sorted(gates_rules, key=lambda rule: rule.id)) + rules
 
     @staticmethod
     def bind_value_selection(spec: ValueSelectionPolicySpec[B, R], *,
-                             enabled_gates: tuple[EnabledGateDeclaration, ...]) -> ValueSelectionPolicySpec[B, R]:
+                             enabled_gates: tuple[EnabledGateDeclaration, ...],
+                             owner: type[PolicyOwner] = CommonPolicyOwner) -> ValueSelectionPolicySpec[B, R]:
         """Reuse the absolute enabled gate without introducing placement priority."""
         if not isinstance(spec, ValueSelectionPolicySpec):
             raise ValueError("enabled value binding requires value-selection spec")
-        return replace(spec, rules=ObjectAdmissionPolicyDefinition._enabled_rules(enabled_gates, spec.rules))
+        validate_policy_owner(owner)
+        return replace(spec, rules=ObjectAdmissionPolicyDefinition._enabled_rules(enabled_gates, spec.rules, owner))
 
     @staticmethod
     def build(bindings: ObjectAdmissionBindings[B, R]) -> ObjectAdmissionPolicySpec[B, R]:
-        rules = list(ObjectAdmissionPolicyDefinition._enabled_rules(bindings.enabled_gates, bindings.rules))
+        rules = list(ObjectAdmissionPolicyDefinition._enabled_rules(bindings.enabled_gates, bindings.rules, bindings.owner))
         zero = FactValueRef(FieldRef(lambda: ObjectAdmissionFacts, lambda facts: facts.effective_priority))
-        rules.append(PolicyRule(id=PolicyRuleId("admission.zero_priority"),
-            stage=PolicyStage.PRIORITY, precedence=RulePrecedence(0),
+        rules.append(PolicyRule(id=make_rule_id(RuleIdentity(owner=bindings.owner, kind=RuleKind.ZERO_PRIORITY)),
+            stage=PolicyStage.PRIORITY, precedence=DeclarationDefaults().precedence,
             conditions=(Equal(zero, 0),), effect=DisableEffect(PolicyDisableReason.ZERO_PRIORITY)))
         reasons = {fallback.reason for fallback in bindings.fallback_rules}
         fallbacks = bindings.fallback_rules

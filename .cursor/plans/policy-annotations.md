@@ -1,6 +1,6 @@
 # Policy annotations — план реализации
 
-Статус: согласован мастером 2026-10-28; P1 сдан, следующий шаг P2.
+Статус: согласован мастером 2026-10-28; P1–P2 сданы, следующий шаг P3.
 Дата: 2026-10-28. Нормативный проект: [tz_policy](../../docs/tz_policy.md).
 Основание: обсуждение повторов G2-G, включая bool cases и PolicyRuleId.
 
@@ -121,6 +121,8 @@ Existing planning config уже включает policy рекурсивно; о
 ТЗ: tz_policy §3–4, §6.
 Файлы: application/policy/declarations/* (3 по карте);
 dataModel/policy/declarations/policyIdentity.py (детерминированный serializer);
+policyDeclaration.py (общий nominal-owner guard), policyReferences.py (общий
+wire-alias-aware fact detection для verifier и существующих wrappers);
 dataModel/policy/objectAdmissionPolicyDefinition.py и при необходимости
 policyRules.py/policySpec.py для сохранения transport validation;
 tests/geo1/declarations/{test_compiler,test_identity}.py;
@@ -132,6 +134,13 @@ object/value overloads; общий enabled/zero owner один. No execution in 
 и lifecycle tests с backend/tests в sys.path; typing positive/negative.
 Done: две независимые domain fixtures дают те же decisions одним resolver;
 permutations/type collisions/unknown/waiting/zero/conflict покрыты.
+
+P2 IMPLEMENTED/VERIFIED (2026-10-28). Общие compiler/verifier и ID serializer готовы;
+common enabled/zero rules переведены на тот же identity builder. Domain migration — P3.
+GEO-1 157/157 (+25 P2), positive typing 271 файл — 0 ошибок;
+negatives planning 101/101 (+4), cascade 16/16; full cascade-check — 16 baseline registry errors, delta 0.
+Проверены alias metadata, inherited binding ambiguity, hash-seed/permutation identity,
+unknown/waiting/fallback, authored zero и support resume без повторного resolution.
 
 ### P3 — hydrology authoring migration
 

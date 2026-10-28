@@ -536,3 +536,13 @@ def valid_policy_declarations(priority: PriorityValueRef[PolicyDefaults]) -> Non
         conditions=(), effect=SelectBehaviorEffect(PolicyMode.FIRST))
     ValuePolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner, behavior_type=PolicyMode,
         reason_type=PolicyReasonKind, cases=(compound,))
+
+
+from app.application.policy.declarations.compiler import compile_value_policy, compile_admission_policy
+
+
+def valid_policy_compilation(admission: AdmissionPolicy[PolicyMode, PolicyReasonKind]) -> None:
+    assert_type(compile_value_policy(VALUE_DECLARATION, (PolicySettings,)),
+        ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind])
+    assert_type(compile_admission_policy(admission, (PolicySettings, PolicyDefaults, PlacementPolicyDefaults)),
+        ObjectAdmissionPolicySpec[PolicyMode, PolicyReasonKind])

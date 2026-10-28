@@ -21,6 +21,8 @@ from app.dataModel.hydrology.generation.waterGenerationSettings import (
 )
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
 from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HydrologyPolicyDefinition
+from app.dataModel.cascade.cascadeGraph import BoundField
+from app.dataModel.policy.declarations.policyIdentity import CommonPolicyOwner, RuleIdentity, RuleKind, make_rule_id
 from app.dataModel.policy.policyBindings import PolicyFacts, PolicyInputs, PolicySource
 from app.dataModel.policy.policyEnums import PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyState
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -89,7 +91,8 @@ class HydrologyGenerationTests(TestCase):
         self.assertIs(result.require_behavior(), Mode.DISABLED)
         self.assertFalse(result.issues)
         self.assertEqual(result.reasons[0].common_reason, PolicyDisableReason.ENABLED_FALSE)
-        self.assertTrue(result.provenance[0].rule_id.startswith("admission.enabled."))
+        self.assertEqual(result.provenance[0].rule_id, make_rule_id(RuleIdentity(
+            owner=CommonPolicyOwner, kind=RuleKind.ENABLED, field=BoundField(WorldHydrologyGenerationFields, "enabled"))))
 
     def test_unresolved_root_context_is_not_a_false_autoresolve(self):
         root = WorldHydrologyGenerationFields()
@@ -130,7 +133,9 @@ class HydrologyGenerationTests(TestCase):
         self.assertIs(spec.operation, PolicyOperation.VALUE_SELECTION)
         self.assertFalse(hasattr(spec, "terminal_priority_ref"))
         self.assertEqual(len(spec.rules), 3)
-        self.assertEqual(sum(rule.id.startswith("admission.enabled.") for rule in spec.rules), 1)
+        enabled_id = make_rule_id(RuleIdentity(owner=CommonPolicyOwner, kind=RuleKind.ENABLED,
+                                             field=BoundField(WorldHydrologyGenerationFields, "enabled")))
+        self.assertEqual(sum(rule.id == enabled_id for rule in spec.rules), 1)
         class Foreign(StrEnum):
             DISABLED = "disabled"
         with self.assertRaises(ValueError):

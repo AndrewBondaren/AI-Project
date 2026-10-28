@@ -427,3 +427,14 @@ def invalid_policy_declarations() -> None:
     ValuePolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner, behavior_type=OtherPolicyMode, reason_type=PolicyReasonKind)  # EXPECT: reportArgumentType
     SelectByValue[bool, PolicyMode, PolicyReasonKind](VALUE_DECLARATION, [])  # EXPECT: reportArgumentType
     PolicyCaseDeclaration[PolicyMode, PolicyReasonKind](key=PolicyMode.FIRST, conditions=(), effect=SelectBehaviorEffect(OtherPolicyMode.OTHER))  # EXPECT: reportArgumentType
+
+
+from app.application.policy.declarations.compiler import compile_value_policy, compile_admission_policy
+from app.dataModel.policy.declarations.policyDeclaration import AdmissionPolicy
+
+
+def invalid_policy_compilation(admission: AdmissionPolicy[PolicyMode, PolicyReasonKind]) -> None:
+    compile_admission_policy(VALUE_DECLARATION, ())  # EXPECT: reportArgumentType
+    compile_value_policy(admission, ())  # EXPECT: reportArgumentType
+    compile_value_policy(VALUE_DECLARATION, (PolicySettings(enabled=True, priority=0, mode=PolicyMode.FIRST),))  # EXPECT: reportArgumentType
+    compile_value_policy(VALUE_DECLARATION, [PolicySettings])  # EXPECT: reportArgumentType

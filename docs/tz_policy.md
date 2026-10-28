@@ -1,7 +1,7 @@
 # ТЗ: декларации общего policy через аннотации
 
-Статус: контракт согласован 2026-10-28; P1 common declarations реализован и проверен.
-Compilation, ID serialization и domain migration выполняются следующими шагами P2–P3.
+Статус: контракт согласован 2026-10-28; P1 declarations и P2 compiler/verifier/ID
+serialization реализованы и проверены. Hydrology authoring migration остаётся P3.
 Этот документ задаёт целевой authoring layer над существующими PolicySpec и
 PolicyResolver. До его внедрения действует текущий контракт
 [GEO-1](./tz_terrain_generation.md#общая-policy-geo-1).

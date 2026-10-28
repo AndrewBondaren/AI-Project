@@ -9,6 +9,7 @@ import unittest
 from pydantic import BaseModel, ConfigDict, StrictBool, TypeAdapter, ValidationError
 
 from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.policy.declarations.policyIdentity import CommonPolicyOwner, RuleIdentity, RuleKind, make_rule_id
 from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.objectAdmissionPolicyDefinition import (
     EnabledGate, ObjectAdmissionBindings, ObjectAdmissionFacts, ObjectAdmissionPolicyDefinition, PlacementPolicyDefaults,
@@ -199,7 +200,8 @@ class DeclarationTests(unittest.TestCase):
         self.assertIs(spec.authored_priority_ref, AUTHORED)
         self.assertIs(spec.domain_priority_ref, DOMAIN)
         self.assertEqual(PlacementPolicyDefaults.canonical_defaults().placement_specificity, 0)
-        zero = next(rule for rule in spec.rules if rule.id == "admission.zero_priority")
+        zero_id = make_rule_id(RuleIdentity(owner=CommonPolicyOwner, kind=RuleKind.ZERO_PRIORITY))
+        zero = next(rule for rule in spec.rules if rule.id == zero_id)
         self.assertIs(zero.conditions[0].reference.bound_field.model, ObjectAdmissionFacts)
         self.assertEqual(zero.conditions[0].expected, 0)
         self.assertEqual(zero.effect.reason, PolicyDisableReason.ZERO_PRIORITY)

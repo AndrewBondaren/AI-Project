@@ -20,6 +20,11 @@ class PolicyOwner:
     """Nominal identity; independent policies can share the same output enum."""
 
 
+def validate_policy_owner(owner: type[PolicyOwner]) -> None:
+    if not isinstance(owner, type) or not issubclass(owner, PolicyOwner) or owner is PolicyOwner:
+        raise ValueError("policy requires nominal PolicyOwner subtype")
+
+
 class DeclarationDefaults(BaseModel, frozen=True):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True,
                               revalidate_instances="always", validate_default=True)
@@ -36,8 +41,7 @@ class _PolicyDeclaration(Generic[B, R]):
     default_precedence: RulePrecedence = field(default_factory=lambda: DeclarationDefaults().precedence)
 
     def __post_init__(self) -> None:
-        if not isinstance(self.owner, type) or not issubclass(self.owner, PolicyOwner) or self.owner is PolicyOwner:
-            raise ValueError("policy requires nominal PolicyOwner subtype")
+        validate_policy_owner(self.owner)
         for enum_type in (self.behavior_type, self.reason_type):
             if not isinstance(enum_type, type) or not issubclass(enum_type, Enum):
                 raise ValueError("policy requires behavior and reason enum types")

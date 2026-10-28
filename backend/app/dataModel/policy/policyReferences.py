@@ -27,6 +27,7 @@ def _field(ref: object) -> BoundField:
 
 
 def _fact_value_type(annotation: object) -> object:
+    annotation = unwrap_wire_type(annotation)
     if get_origin(annotation) is FactValue:
         return get_args(annotation)[0]
     if get_origin(annotation) is Annotated:
@@ -47,6 +48,12 @@ def _plain(annotation: object) -> object:
     return annotation
 
 
+def _is_fact_annotation(annotation: object) -> bool:
+    annotation = _plain(annotation)
+    return get_origin(annotation) is FactValue or any(
+        isinstance(member, type) and issubclass(member, KnownFact) for member in get_args(annotation))
+
+
 class PolicyReference(Protocol):
     @property
     def bound_field(self) -> BoundField: ...
@@ -63,8 +70,7 @@ class DirectValueRef(Generic[M, T]):
         bound = _field(self.field)
         annotation = bound.model.model_fields[bound.field].annotation
         # FactValue must enter through its distinct, statically checked wrapper.
-        if get_origin(annotation) is FactValue or any(
-                isinstance(member, type) and issubclass(member, KnownFact) for member in get_args(annotation)):
+        if _is_fact_annotation(annotation):
             raise ValueError("FactValue source requires FactValueRef")
 
     @property
