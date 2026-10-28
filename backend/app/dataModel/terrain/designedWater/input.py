@@ -22,6 +22,7 @@ from app.dataModel.terrain.designedWater.draft import (
     AuthoredWaterDesignDraft, ProceduralWaterDesignDraft, WaterDesignDraft,
 )
 from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe
+from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import WaterDesignConstraints
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterSource
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
@@ -62,6 +63,7 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
     grid: SurfaceGridSettings
     pre_hydrology: PlanEnvelope[TerrainPlan]
     region_coverage: RegionCoverage
+    constraints: WaterDesignConstraints | None = None
 
     @property
     def pre_hydrology_ref(self) -> PlanRef:
@@ -85,6 +87,16 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
         elif isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)):
             if not isinstance(source, (ProceduralSource, CoastlineWaterSource)):
                 raise ValueError("procedural strategy requires a procedural or coastline water source")
+        constraints = self.constraints
+        if isinstance(self, AuthoredWaterDesignInput) and constraints is not None:
+            raise ValueError("authored input already carries its geometry")
+        if isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)) and isinstance(source, CoastlineWaterSource) and constraints is None:
+            raise ValueError("procedural coastline requires captured terrain constraints")
+        if constraints is not None:
+            if constraints.source != source or constraints.pre_hydrology_ref != self.pre_hydrology_ref or constraints.grid != self.grid:
+                raise ValueError("constraints must match full source, terrain revision and grid")
+            if any(self.topology.canonicalize(*cell) != cell for cell in constraints.allowed_cells):
+                raise ValueError("constraints require canonical coarse coordinates")
         value = source.value
         uid = source.value.source_uid if isinstance(source, ProceduralSource) else source.value.location_uid
         if uid != metadata.source_uid or source.kind != metadata.source_kind or value.liquid != metadata.liquid:

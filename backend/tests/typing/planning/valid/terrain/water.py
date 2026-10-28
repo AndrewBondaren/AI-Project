@@ -147,3 +147,16 @@ def valid_generic_sources(coast: NoiseWaterDesignInput[CoastlineWaterSource],
     assert_type(implementation.design(plate), WaterDesignDraft)
     assert_type(implementation.design(mixed), WaterDesignDraft)
     assert_type(implementation.design(authored), WaterDesignDraft)
+
+
+from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import WaterDesignConstraints
+from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer
+
+
+def valid_coastline_constraints(request: AuthoredWaterGeometryRequest,
+                               input: NoiseWaterDesignInput[CoastlineWaterSource]) -> None:
+    captured = CoastlineConstraintPreparer().prepare(request)
+    assert_type(captured, WaterDesignConstraints)
+    assert_type(captured.allowed_cells, frozenset[Coord])
+    assert_type(captured.required_cells, frozenset[Coord])
+    assert_type(input.constraints, WaterDesignConstraints | None)

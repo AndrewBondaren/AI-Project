@@ -20,6 +20,15 @@ from app.dataModel.terrain.designedWater.input import (
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, ProceduralSource
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose
 import warnings
+from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import WaterDesignConstraints
+
+
+def constraints_for(input, source):
+    if not isinstance(source, CoastlineWaterSource):
+        return None
+    cells = frozenset((c.gx,c.gy) for c,_ in input.pre_hydrology.payload.surface_z)
+    return WaterDesignConstraints(source=source, pre_hydrology_ref=input.pre_hydrology_ref,
+        grid=input.grid, allowed_cells=cells, required_cells=frozenset({min(cells)}), notices=())
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.validation.immutableValue import validate_immutable
 from tests.geo1.contracts.strategies.fixtures import inputs, draft_for
@@ -131,7 +140,7 @@ class StrategyInputTests(TestCase):
             for source, owner in ((base.source, ProceduralSource), (coast, CoastlineWaterSource)):
                 with self.subTest(strategy=strategy, source=owner):
                     value = model[owner].model_validate(dict(base) | {
-                        "source": source, "metadata": base.metadata.model_copy(update={"source_kind": source.kind})})
+                        "source": source, "constraints": constraints_for(base,source), "metadata": base.metadata.model_copy(update={"source_kind": source.kind})})
                     self.assertIsInstance(value, WaterDesignInput)
                     self.assertIsInstance(value.source, owner)
                     self.assertEqual(value.source, source)
@@ -146,7 +155,7 @@ class StrategyInputTests(TestCase):
         base = inputs()
         coast = CoastlineWaterSource(value=DeclaredCoastline(location_uid="source", kind=BasinKind.SEA,
             path=(HydrologyWaypoint(x=-4,y=4), HydrologyWaypoint(x=-3,y=4))))
-        data = dict(base) | {"source": coast, "metadata": base.metadata.model_copy(update={"source_kind": coast.kind})}
+        data = dict(base) | {"source": coast, "constraints": constraints_for(base,coast), "metadata": base.metadata.model_copy(update={"source_kind": coast.kind})}
         with self.assertRaises(ValidationError):
             NoiseWaterDesignInput[ProceduralSource].model_validate(data)
         value = NoiseWaterDesignInput[CoastlineWaterSource].model_validate(data)
@@ -203,7 +212,7 @@ class StrategyInputTests(TestCase):
         base = inputs()
         coast = CoastlineWaterSource(value=DeclaredCoastline(location_uid="source", kind=BasinKind.SEA,
             path=(HydrologyWaypoint(x=-4,y=4), HydrologyWaypoint(x=-3,y=4))))
-        data = dict(base) | {"source": coast, "metadata": base.metadata.model_copy(update={"source_kind": coast.kind})}
+        data = dict(base) | {"source": coast, "constraints": constraints_for(base,coast), "metadata": base.metadata.model_copy(update={"source_kind": coast.kind})}
         for update in ({"field_policy": inputs(Strategy.PLATE).field_policy},
                        {"context": base.context.model_copy(update={"strategy": Strategy.PLATE})}):
             with self.assertRaises(ValidationError):

@@ -597,3 +597,18 @@ def invalid_generic_water_inputs(coast: NoiseWaterDesignInput[CoastlineWaterSour
     wrong_source: ProceduralSource = coast.source  # EXPECT: reportAssignmentType
     wrong_specialization: NoiseWaterDesignInput[ProceduralSource] = coast  # EXPECT: reportAssignmentType
     wrong_base: WaterDesignInput[CoastlineWaterSource] = procedural  # EXPECT: reportAssignmentType
+
+
+from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import WaterDesignConstraints
+from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer
+
+
+from app.dataModel.topology.worldTopology import Coord
+
+
+def invalid_coastline_constraints(value: WaterDesignConstraints, input: NoiseWaterDesignInput) -> None:
+    CoastlineConstraintPreparer().prepare({})  # EXPECT: reportArgumentType
+    CoastlineConstraintPreparer().prepare(input)  # EXPECT: reportArgumentType
+    value.required_cells = frozenset()  # EXPECT: reportAttributeAccessIssue
+    wrong_allowed: list[Coord] = value.allowed_cells  # EXPECT: reportAssignmentType
+    wrong_constraints: WaterDesignConstraints = input.constraints  # EXPECT: reportAssignmentType

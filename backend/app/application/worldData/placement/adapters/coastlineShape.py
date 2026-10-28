@@ -57,14 +57,22 @@ def ring_sides(polygon: PolygonShape, source_uid: str, context: WaterGeometryVie
     return inside, outside
 
 
-def coastline_cells(entry: DeclaredCoastline, context: WaterGeometryView,
-                    policy: HydrologySeasPolicy, *, seed_root: EntityUid) -> tuple[frozenset[Coord], bool]:
+def coastline_segments(entry: DeclaredCoastline) -> tuple[tuple[Coord, Coord], ...]:
+    """One source of segment assembly for the water claim and terrain constraints."""
     points = [(point.x, point.y) for point in entry.path]
     if points[0] == points[-1]:
         points.pop()
     segments = list(zip(points, points[1:]))
     if entry.closed:
         segments.append((points[-1], points[0]))
+    return tuple(segments)
+
+
+def coastline_cells(entry: DeclaredCoastline, context: WaterGeometryView,
+                    policy: HydrologySeasPolicy, *, seed_root: EntityUid) -> tuple[frozenset[Coord], bool]:
+    segments = list(coastline_segments(entry))
+    points = [a for a, _ in segments]
+    if entry.closed:
         try:
             polygon = PolygonShape(vertices=tuple(points))
         except ValidationError as error:

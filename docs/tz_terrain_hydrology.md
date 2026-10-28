@@ -104,6 +104,20 @@ ProceduralWaterDesignDraft описывает алгоритм результа�
 PROCEDURAL и COASTLINE source_kind с сохранением исходной metadata.
 Этот контракт не реализует применение coastline constraints и adapter wiring.
 
+G5-C2-K: WaterDesignConstraints — derived terrain-owned canonical coarse
+allowed/required masks, bound к actual full source, terrain ref и grid.
+CoastlineConstraintPreparer переиспользует existing G5 water-side geometry:
+allowed сохраняет water_side/caps; required содержит водную полосу в
+8-neighborhood authored rasterized line. У каждой клетки линии должен быть
+доступный сосед водной стороны; иначе explicit constraint diagnostic.
+Procedural coastline input требует этот captured result. Общий preparer
+включает required целиком, проверяет allocation/полную region coverage и
+ранжирует remaining allowed клетки единственным G4-C prefix. Budget меньше
+required площади — CONSTRAINT_CONFLICT, без сдвига/обрезки линии. Terrain
+constraints не читают hydro presence, не исполняют policy и не пишут relief.
+Authored geometry использует свою прежнюю ветку. Actual source/path/ref/grid
+проверяются на совпадение. Production adapter/join остаётся G5-C2/G8.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.

@@ -10155,10 +10155,64 @@ procedural draft сохраняет coastline-origin metadata. Consumers обн�
 Проверено: GEO-1 345/345 (+7), с warnings-as-errors; positive Pyright0,
 negative160/160 (+7). Constraints execution/adapter G5-C2 не активированы.
 
+### G5-C2-K — coastline field constraints (DONE 2026-10-29)
+Явная команда пользователя «делай» после generic закрывает следующий срез:
+применение coastline constraints, без преждевременного production join G8.
+ТЗ: GEO-1 §5.3-A/C, §6.29-B/L/M; tz_terrain_hydrology §GEO-1.
+Точная карта owners до кода:
+- dataModel/terrain/designedWater/geometry/waterDesignConstraints.py:
+  WaterDesignConstraints — frozen strict derived terrain mask, source:
+  WaterDesignSource (actual normalized source), pre_hydrology_ref:PlanRef,
+  grid:SurfaceGridSettings, allowed_cells:frozenset[Coord],
+  required_cells:frozenset[Coord], notices:tuple[FieldPathError,...].
+  Координаты canonical WORLD_SURFACE_GRID; required subset allowed, обе
+  коллекции непусты. Derived result, не persisted source/accepted placement.
+- application/worldData/generators/terrain/designedWater/preparation/
+  coastlineConstraintPreparer.py::CoastlineConstraintPreparer.prepare(
+  request:AuthoredWaterGeometryRequest)->WaterDesignConstraints.
+  Только CoastlineWaterSource; existing G5 geometry вычисляется один раз.
+  allowed — existing water-side claim/caps. Required — allowed клетки в
+  8-neighborhood authored rasterized line (через topology canonicalize).
+  Каждый rasterized line cell должен иметь water-side neighbor, иначе
+  geometry diagnostic; boundary purpose и projection collapse отклоняются.
+  Absolute source/path не меняются, hydro presence/admission не вычисляются.
+- existing placement/adapters/coastlineShape.py::coastline_segments — typed
+  export уже существующей segment assembly для общего использования.
+  Не дублировать water-side/flood/centroid алгоритмы в terrain preparer.
+- existing WaterDesignInput[S] в input.py получает optional constraints;
+  procedural coastline требует constraints, authored inputs используют свою
+  готовую geometry. Валидировать full source equality, ref, grid, canonical
+  coords. Не выдумывать геометрию для недостающего constraints input.
+- existing DesignedWaterPlacementPreparer (placementPreparation.py) только
+  общий mask/prefix consumer. Required клетки включаются целиком; их fine²
+  площадь должна помещаться в allocation и полную region coverage. Остальные
+  allowed полные клетки выбираются существующим signed-score quantization/
+  deterministic prefix. При нехватке required budget — CONSTRAINT_CONFLICT;
+  при capacity shortfall — прежний notice. Allowed mask не является budget,
+  priority или support. Без constraints прежняя selection семантика сохраняется.
+- existing strategyKind.py: WaterDesignIssueCode.CONSTRAINT_CONFLICT.
+- tests/geo1/preparation/test_coastline_constraints.py; existing generic input
+  tests/typing fixtures обновить для required ready constraints.
+Composition: dataModel geometry2→3, application preparation2→3,
+placement/adapters6→6 (WARN), tests preparation4→5; roots без additions.
+Проверки: open/closed, interior/exterior, dry terrain, span/negative/seams,
+source/ref/grid mismatch, immutable/strict, required budget conflict,
+land-side high score exclusion, strip preservation, unavailable partial region,
+no writes/no policy/no fake support; generic + Geo1 + positive/negative typing.
+Done: constraint producer и consumer проверены как один typed contract;
+G5-C2 adapter/join/auto policy activation — дальнейшая часть G5-C2/G8.
+
+Итог G5-C2-K: typed producer + captured constraints + единственный общий
+mask/prefix consumer; no live World/hydro support/policy/Z writes.
+Проверено: GEO-1 361/361 (+16), water adapter/factory/wire47/47,
+positive Pyright0, negative165/165 (+5), warnings-as-errors, diff-check.
+Authored geometry/carve/production callers не переключались; adapter/join
+с готовыми region/budget/context/admission остаётся дальнейшей частью G5-C2.
+
 ### G5-C2 — coastline как источник body generation
 Входной аудит 2026-10-28: DESIGN BLOCKER, код G5-C2 не начат.
 Уточнение 2026-10-29: type blocker закрыт G5-C2-G; нижеследующее —
-исходный аудит. Применение coastline constraints и caller join остаются открытыми.
+исходный аудит. Constraints реализованы G5-C2-K; adapter/caller join остаются открытыми.
 G4 implemented input.py допускает CoastlineWaterSource только в
 AuthoredWaterDesignInput; Noise/Plate/PlateNoiseWaterDesignInput.source
 ограничены ProceduralSource. Их field recipes/общий G4-C preparer не несут

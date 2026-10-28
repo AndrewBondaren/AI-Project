@@ -55,25 +55,41 @@ class DesignedWaterPlacementPreparer:
             coordinates = tuple(c for c, _ in draft.field.samples)
             areas = RegionCoverageMeasure.coarse_cell_areas(input.region_coverage, coordinates, input.grid)
             full_area = input.grid.fine_span ** 2
-            ranked = sorted(((coord, _wet_score(value, policy.score_bits), area)
-                for (coord, value), area in zip(draft.field.samples, areas) if area == full_area),
-                key=lambda item: (-item[1], item[0].gy, item[0].gx))
+            constraints = input.constraints
+            allowed = constraints.allowed_cells if constraints is not None else None
+            required = constraints.required_cells if constraints is not None else frozenset()
+            full_cells = frozenset((coord.gx, coord.gy) for coord, area in zip(coordinates, areas) if area == full_area)
             allocated = input.budget.allocated_fine2
-            best, selected_area, cumulative, error = 0, 0, 0, allocated
+            required_area = len(required) * full_area
+            if not required <= full_cells or required_area > allocated:
+                raise PlanBuildFailure((FieldPathError(input.metadata.source_path,
+                    f"required coastline strip cannot fit region/budget; required_fine2={required_area}, allocated_fine2={allocated}",
+                    code=WaterDesignIssueCode.CONSTRAINT_CONFLICT.value),))
+            # One prefix selection: captured hard constraints fix the required
+            # strip; the same quantized ordering chooses all remaining cells.
+            ranked = sorted(((coord, _wet_score(value, policy.score_bits), area)
+                for (coord, value), area in zip(draft.field.samples, areas)
+                if area == full_area and (coord.gx, coord.gy) not in required
+                and (allowed is None or (coord.gx, coord.gy) in allowed)),
+                key=lambda item: (-item[1], item[0].gy, item[0].gx))
+            best, selected_area, cumulative, error = 0, required_area, required_area, abs(required_area - allocated)
             for count, (_, _, weight) in enumerate(ranked, 1):
                 cumulative += weight
                 difference = abs(cumulative - allocated)
                 if difference < error:
                     best, selected_area, error = count, cumulative, difference
-            cells: frozenset[Coord] = frozenset((coord.gx, coord.gy) for coord, _, _ in ranked[:best])
+            cells: frozenset[Coord] = required | frozenset((coord.gx, coord.gy) for coord, _, _ in ranked[:best])
+            if constraints is not None:
+                notices = constraints.notices
+            capacity = (len(ranked) + len(required)) * full_area
             space = CoordinateSpace.WORLD_SURFACE_GRID
             if not cells:
                 raise PlanBuildFailure((FieldPathError(input.metadata.source_path,
-                    f"empty water prefix; allocated_fine2={allocated}, capacity_fine2={len(ranked) * full_area}",
+                    f"empty water prefix; allocated_fine2={allocated}, capacity_fine2={capacity}",
                     code=WaterDesignIssueCode.EMPTY_GENERATION_TARGET.value),))
             if selected_area < allocated:
-                notices = (FieldPathError(input.metadata.source_path,
-                    f"water coverage shortfall; allocated_fine2={allocated}, selected_fine2={selected_area}, capacity_fine2={len(ranked) * full_area}",
+                notices += (FieldPathError(input.metadata.source_path,
+                    f"water coverage shortfall; allocated_fine2={allocated}, selected_fine2={selected_area}, capacity_fine2={capacity}",
                     code=WaterDesignIssueCode.COVERAGE_SHORTFALL.value),)
 
         candidate = PlacementCandidate(candidate_uid=input.metadata.source_uid, preference=0,
