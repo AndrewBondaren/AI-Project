@@ -24,6 +24,16 @@ BodyWaterGenerationSettings; isolated composition с тремя existing Declare
 сохраняет location_uid, authored geometry/floor и existing validators. Поле
 generation подключается к active source owners только в G10-A; новый persisted
 source settings object или отдельный body resolver не вводится.
+G4-S добавляет body-only generation_region_uid:EntityUid|None (не cascade
+channel) и isolated ProceduralWaterSource с required source_uid,
+generation_region_uid, BasinKind и MaterialKey. Дублирование region binding
+в generation процедурного source запрещено даже при равных UID.
+WaterDesignSource — derived union wrappers существующих basin/lake/coastline
+и procedural source; WaterSourceMetadata несёт готовые uid/kind/liquid/level,
+bands, source_path и positive default_depth. Mapper выполняется вне моделей.
+До G5-C1 coastline сохраняет current water_source semantics; G5-C1 вводит
+purpose и исключает BODY_BOUNDARY из source wrapper. Новая persisted
+коллекция и подключение generation к active Declared* — только G10-A.
 WorldHydrology.enabled=False — абсолютный запрет; autoresolve=False для
 допущенной гидрологии выбирает DECLARED_ONLY, True — AUTORESOLVE.
 HydrologyExecutionMode (DISABLED/DECLARED_ONLY/AUTORESOLVE) — computed domain

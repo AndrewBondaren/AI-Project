@@ -232,8 +232,20 @@ DependencyQueue, без второго scheduler и без повторного 
 
 Стратегия формирует поле/профиль, не отдельные placement priority или Z writer.
 plate_noise = clamp(P + detail_weight*N,-1,1); нулевой detail даёт plate.
-Общий threshold/preparer выбирает coverage с deterministic tie-break,
-создаёт typed draft и metadata; exact field formulas/knobs — §6.29-F.
+Стратегия возвращает typed draft: authored footprints либо procedural
+ContinentalField со signed samples [-1,1] и recipe. Общий threshold/preparer
+однократно quantize/select coverage с deterministic tie-break и создаёт
+prepared entries/candidates; exact field formulas/knobs — §6.29-F.
+Factory связывает effective enum с четырьмя явно переданными implementations;
+не выбирает defaults и не выполняет cascade/policy. Согласованная граница:
+[G4 supplement](../.cursor/plans/geo-1-strategy-boundary-contract.md).
+G4-S предоставляет только immutable source/metadata, resolved algorithm
+policies, recipe/field и floor-profile records. Они валидируют собственные
+инварианты, не выполняют sampling/threshold/placement/z-write. Sampled profile
+проверяет unique row-major cells; coverage и z<waterline проверяются owning
+draft/spec boundary, где доступны footprint/level. Canonical coarse coordinates
+поля проверяет G4 input boundary с actual topology/grid; recipe topology
+описывает world-fine field, поэтому field record не угадывает scale по индексу.
 Depth/floor/bands и waterline подчиняются existing HY-12 контракту;
 physical body после merge/spill не становится authored settings source.
 Surface coating получает typed substrate facts и готовый policy decision,

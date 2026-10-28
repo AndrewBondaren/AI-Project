@@ -11,6 +11,7 @@
     "../../../app/dataModel/cascade/runtimeContext.py",
     "../../../app/dataModel/cascade/cascadeVerify.py",
     "../../../app/dataModel/hydrology/generation",
+    "../../../app/dataModel/hydrology/sources",
     "../../../app/dataModel/hydrology/policy",
     "../../../app/dataModel/hydrology/enums/planning/waterGenerationScope.py",
     "../../../app/application/worldData/placement/lifecycle",

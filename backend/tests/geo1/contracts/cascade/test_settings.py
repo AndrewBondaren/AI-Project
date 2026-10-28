@@ -36,14 +36,16 @@ def world_context(settings=None, *, defaults=None):
 
 
 class WaterGenerationSettingsTests(TestCase):
-    def test_all_source_models_have_the_same_nullable_fields(self):
+    def test_source_models_share_nullable_cascade_fields_with_body_only_binding(self):
         for model in MODELS:
             empty = model()
             explicit = model(water_fraction=None, autoresolve=None, strategy=None)
-            self.assertEqual(set(model.model_fields), {"water_fraction", "autoresolve", "strategy"})
+            shared = {"water_fraction", "autoresolve", "strategy"}
+            expected = shared | ({"generation_region_uid"} if model is BodyWaterGenerationSettings else set())
+            self.assertEqual(set(model.model_fields), expected)
             self.assertEqual(empty.model_dump(), dict.fromkeys(model.model_fields))
             self.assertEqual(empty.model_fields_set, set())
-            self.assertEqual(explicit.model_fields_set, set(model.model_fields))
+            self.assertEqual(explicit.model_fields_set, shared)
             self.assertEqual(model.model_validate_json(empty.model_dump_json()), empty)
 
     def test_missing_null_zero_and_false_survive_shared_wire_roundtrip(self):

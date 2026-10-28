@@ -566,3 +566,31 @@ def valid_region_extent(world: RasterWorld, inputs: TerrainRegionPlanningInput, 
     assert_type(require_terrain_region(plan.snapshot, world_uid=world.world_uid, snapshot_uid="snapshot", region_uid="body"), TerrainRegionExtent)
     assert_type(RegionCoverageMeasure.union((coverage,), region_uid="result"), RegionCoverage)
     assert_type(coverage.spans[0].x0, FineX)
+
+
+from app.dataModel.hydrology.sources.proceduralWaterSource import ProceduralWaterSource
+from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSource, WaterDesignSourceKind
+from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetadata
+from app.dataModel.terrain.designedWater.fields.field import ContinentalField, NoiseRecipe, PlateRecipe, PlateNoiseRecipe
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
+from app.dataModel.terrain.relief.bathymetry.floorProfile import BasinFloorProfile, FieldFloorProfile, FloorProfileKind
+
+
+def valid_water_contracts(source: WaterDesignSource, metadata: WaterSourceMetadata,
+                          field: ContinentalField, profile: BasinFloorProfile) -> None:
+    if source.kind is WaterDesignSourceKind.PROCEDURAL:
+        assert_type(source.value, ProceduralWaterSource)
+    if field.recipe.strategy is Strategy.CONTINENTAL_NOISE:
+        assert_type(field.recipe, NoiseRecipe)
+    elif field.recipe.strategy is Strategy.PLATE:
+        assert_type(field.recipe, PlateRecipe)
+    else:
+        assert_type(field.recipe, PlateNoiseRecipe)
+    assert_type(field.samples[0][0], SurfaceGridCoord)
+    assert_type(field.samples[0][1], float)
+    assert_type(metadata.level, FineZ)
+    if profile.kind is FloorProfileKind.FIELD:
+        assert_type(profile, FieldFloorProfile)
+        assert_type(profile.z_min, FineZ)
+    else:
+        assert_type(profile.samples[0][0], Coord)

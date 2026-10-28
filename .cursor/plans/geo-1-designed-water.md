@@ -341,8 +341,9 @@ autoresolve и не меняет общего запрета создания п
   потом один общий water-fraction threshold/preparation. Не объединять
   две независимо вырезанные карты воды и не выполнять два placement pass.
 
-Согласованный принцип композиции: общий normalized wetness score в [0,1],
-большее значение предпочитает воду. Plate — базовая структура; noise —
+Согласованный принцип композиции: signed continental field в [-1,1];
+G4-C единожды преобразует его в quantized wet score по §6.29-F,
+большее значение score предпочитает воду. Plate — базовая структура; noise —
 нуле-средняя детализация с ограниченной амплитудой из typed POJO.
 Точная нормализация/формула/амплитуда закреплены §6.29-F
 (clamp(P + detail_weight*N,-1,1), defaults в owning POJO); недопустимо
@@ -468,6 +469,8 @@ composition_policy) -> ContinentalField`.
 **G. Dispatch — без policy semantics.**
 `strategies/strategyFactory.py::DesignedWaterStrategyFactory.get(kind)
 -> DesignedWaterStrategy` — единственная enum→implementation таблица.
+Четыре implementation передаются обязательными именованными constructor
+arguments authored_region/continental_noise/plate/plate_noise по G4 supplement.
 Она не резолвит settings, не выбирает алгоритм по размеру bake tile,
 не хранит дубли defaults. Unknown kind — typed error, без noise fallback.
 
@@ -2846,7 +2849,8 @@ Authored location reference сохраняется отдельно, не явл
 J06/J09.**
 [floor_profile_z](../../backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/floorProfile.py:11)
 из scalar floor_z, boundary distance, bands и kind строит текущий рельеф.
-ContinentalField — поле wetness score; оно не является ни floor_z,
+ContinentalField — signed continental samples [-1,1]; wet score вычисляет
+общий preparer по §6.29-F/G4 supplement. Поле не является ни floor_z,
 ни уже готовой картой высот. Даже совпавшие семь constructor fields
 BasinSpec не доказывают сохранение generated profile.
 Причина: новый output содержит пространственную информацию, отсутствующую
@@ -5327,9 +5331,11 @@ implicit source не создаётся; это domain-declared admission behavi
 WaterDesignInput из L обязательно содержит actual immutable
 pre_hydrology:PlanEnvelope[TerrainPlan] и region_coverage:RegionCoverage,
 а не один непригодный для sampling opaque ref. pre_hydrology_ref —
-computed property envelope.ref. Strategy draft возвращает geometry
-footprints:tuple[frozenset[Coord],...], coordinate_space, metadata/profile;
-existing PlacementCandidate создаёт общий G4-C preparer один раз.
+computed property envelope.ref. По согласованному G4 supplement authored
+draft возвращает footprints:tuple[frozenset[Coord],...], coordinate_space,
+metadata/profile; procedural draft возвращает ContinentalField с recipe,
+metadata/profile и без footprints. Threshold/выбор procedural footprints
+и existing PlacementCandidate выполняет общий G4-C preparer один раз.
 PlacementIdentity.region_uid — per-object identity existing adapter,
 не generation_region_uid: несколько тел могут использовать один регион.
 Для auto coarse candidate разрешена только полная cell внутри region
@@ -9905,7 +9911,27 @@ GEO-1 192/192 (+22), location/cascade 52/52, rasterizer 18/18; positive typing 2
 Negatives planning 107/107 (+4), cascade 19/19; full cascade-check — 16 baseline registry errors, delta 0.
 §6.3/§6.29-E приведены к согласованным signatures; следующий шаг — G4.
 
+### G4-S — dataModel prerequisites стратегий
+Согласован 2026-10-28 по [уточнению G4](./geo-1-strategy-boundary-contract.md).
+Цель: source/metadata, resolved field policies, recipes/field и floor profile
+до input/output/protocol. ТЗ: §6.29-B/F/L/M и tz_terrain_generation §Planning
+и доставка GEO-1. Точные файлы/контракты/проверки — supplement, раздел G4-S.
+Source/body region binding не является cascade-параметром; ни одна модель
+не выполняет policy, threshold, placement, sampling или запись высот.
+Composition: sources 4, settings 4, fields 2, bathymetry 2→3 файла;
+tests/contracts/sources 2 и tests/geometry 3, roots не расширяются.
+G4-S IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+GEO-1 209/209 (+17), location/cascade/rasterizer 70/70; positive typing
+291 файл — 0 ошибок; negatives planning 113/113 (+6), cascade 19/19.
+dataModel→application imports отсутствуют в 11 новых модулях; active
+sources/capture/BasinSpec/writer не переключены. Следующий шаг — G4.
+
 ### G4 — абстракция стратегий
+Контракт уточнён согласованным [supplement](./geo-1-strategy-boundary-contract.md).
+Prerequisites — G4-S. Procedural draft несёт поле без footprints;
+threshold и procedural footprints создаёт G4-C. Factory получает четыре
+обязательных implementation через constructor DI; production binding G10-A.
+
 Цель: единый typed preparation interface без spatial resolve/z-write.
 ТЗ: GEO-1 и tz_map_light_bake §Placement P1/P2.
 Файлы: dataModel/terrain/designedWater/{strategyKind,input,draft}.py,

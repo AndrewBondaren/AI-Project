@@ -12,6 +12,7 @@ from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGen
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction, WaterGenerationDefaults
 from app.dataModel.hydrology.generation.legacySettings import normalize_seas_generation, normalize_lakes_generation
 from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HYDROLOGY_ENABLED
+from app.dataModel.identity.uid import EntityUid
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
 WATER_FRACTION = Cascade("water_fraction", DefaultPolicy.CANONICAL_DEFAULT, Scope,
@@ -59,6 +60,9 @@ class CategoryWaterGenerationSettings(WaterGenerationSettings, frozen=True):
 
 
 class BodyWaterGenerationSettings(WaterGenerationSettings, frozen=True):
+    # Source binding, not an inherited generation parameter.
+    generation_region_uid: DefaultWhenMissing[EntityUid | None] = None
+
     water_fraction: Annotated[DefaultWhenMissing[WaterFraction | None], CascadeChannel(WATER_FRACTION, Scope.WATER_BODY,
         below=CascadeLink(_CATEGORY_FRACTION, Scope.CATEGORY))] = None
     autoresolve: Annotated[DefaultWhenMissing[StrictBool | None], CascadeChannel(WATER_AUTORESOLVE, Scope.WATER_BODY,

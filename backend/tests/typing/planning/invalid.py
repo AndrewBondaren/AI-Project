@@ -461,3 +461,24 @@ def invalid_region_extent(world: RasterWorld, snapshot: TerrainRegionsSnapshot, 
     RegionCoverageMeasure.union((coverage,))  # EXPECT: reportCallIssue
     prepare_terrain_regions(world, snapshot_uid="snapshot", world_region_uid="world", inputs=snapshot)  # EXPECT: reportArgumentType
     snapshot.world_uid = "other"  # EXPECT: reportAttributeAccessIssue
+
+
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+from app.dataModel.hydrology.declaredLake import DeclaredLake
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, ProceduralSource
+from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe
+from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
+from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionPolicy
+from app.dataModel.terrain.relief.bathymetry.floorProfile import FieldFloorProfile
+from app.dataModel.spatial.grid.coordinateTypes import FineZ
+from app.dataModel.topology.worldTopology import WorldTopology
+
+
+def invalid_water_contracts(lake: DeclaredLake, basin: DeclaredBasin, topology: WorldTopology,
+                            recipe: NoiseRecipe, profile: FieldFloorProfile) -> None:
+    AuthoredBasinSource(value=lake)  # EXPECT: reportArgumentType
+    ProceduralSource(value=basin)  # EXPECT: reportArgumentType
+    NoiseRecipe(seed_root="world", topology=topology, noise_policy=PlateGenerationPolicy())  # EXPECT: reportArgumentType
+    FieldCompositionPolicy(operator="add_clamp")  # EXPECT: reportArgumentType
+    FieldFloorProfile(recipe=recipe, level=GridX(0), depth=10, z_min=FineZ(-20))  # EXPECT: reportArgumentType
+    profile.z_min = FineZ(-30)  # EXPECT: reportAttributeAccessIssue
