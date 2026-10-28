@@ -62,9 +62,7 @@ from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverReliefPlan, RiverBedRecord
 from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, HydrologyRoutesPlan, RiverRoute
-from tests.typing.planning.valid import (
-    ClimateInput, ClimatePayload, HydroInput, HydroPayload, build_climate, require_climate, require_grid_x,
-)
+from tests.typing.planning.valid.infrastructure import ClimateInput, ClimatePayload, HydroInput, HydroPayload, build_climate, require_climate, require_grid_x
 
 
 def invalid_cache_entry(key: CacheKey[PlanEnvelope[HydroPayload]], envelope: PlanEnvelope[ClimatePayload]) -> None:
@@ -314,9 +312,7 @@ def invalid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY) -
     working.climate.sample_pole(1, 2)  # EXPECT: reportArgumentType (2)
 
 
-from tests.typing.planning.valid import (
-    OtherPolicyMode, OtherPolicyReason, PolicyDefaults, PolicyFacts, PolicyMode, PolicyReasonKind, PolicySettings,
-)
+from tests.typing.planning.valid.policy import OtherPolicyMode, OtherPolicyReason, PolicyDefaults, PolicyFacts, PolicyMode, PolicyReasonKind, PolicySettings
 from app.dataModel.cascade.cascadeSpec import FieldRef
 from app.dataModel.policy.objectAdmissionPolicyDefinition import EnabledGate
 from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, ValueSelectionDecision
@@ -416,7 +412,7 @@ def invalid_hydrology_generation(decision: HydrologyGenerationDecision) -> None:
 from app.dataModel.policy.declarations.fieldPolicy import SelectByValue, ValueCase
 from app.dataModel.policy.declarations.policyDeclaration import ValuePolicy
 from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration
-from tests.typing.planning.valid import DeclarationOwner, VALUE_DECLARATION
+from tests.typing.planning.valid.policy import DeclarationOwner, VALUE_DECLARATION
 
 
 def invalid_policy_declarations() -> None:

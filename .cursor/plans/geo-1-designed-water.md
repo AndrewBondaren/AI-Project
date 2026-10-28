@@ -3981,7 +3981,7 @@ roots новые файлы не добавляются. Application provider/co
   test_pack_bake_modes.py, test_detailed_bake_c11.py.
 - Type checks: новый `backend/tests/typing/planning/pyrightconfig.valid.json` наследует existing
   pyrightconfig.cascade.json и включает только новые contracts/providers
-  и `backend/tests/typing/planning/valid.py`.
+  и `backend/tests/typing/planning/valid/` (тематические positive contracts).
   `npx --no-install pyright --project backend/tests/typing/planning/pyrightconfig.valid.json` — exit 0.
   Executable prerequisite проверяется отдельно: 2026-10-23 local
   node_modules/.bin/pyright.cmd доступен, version 1.1.414. Наличие npx
@@ -9925,6 +9925,9 @@ GEO-1 209/209 (+17), location/cascade/rasterizer 70/70; positive typing
 291 файл — 0 ошибок; negatives planning 113/113 (+6), cascade 19/19.
 dataModel→application imports отсутствуют в 11 новых модулях; active
 sources/capture/BasinSpec/writer не переключены. Следующий шаг — G4.
+По замечанию о размере valid.py выполнена [композиция positive fixtures](./planning-positive-typing-composition-done.md):
+61 декларация/74 assert_type сохранены, positive typing 302 файла / 0 ошибок;
+negative planning/cascade остаются 113/19. G4 ещё не выполнялся.
 
 ### G4 — абстракция стратегий
 Контракт уточнён согласованным [supplement](./geo-1-strategy-boundary-contract.md).
