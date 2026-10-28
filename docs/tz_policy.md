@@ -1,10 +1,10 @@
 # ТЗ: декларации общего policy через аннотации
 
-Статус: контракт согласован 2026-10-28; P1 declarations, P2 compiler/verifier/ID
-serialization и P3 hydrology authoring migration реализованы и проверены.
-Финальная сверка consumer boundaries и документации остаётся P4.
-Этот документ задаёт целевой authoring layer над существующими PolicySpec и
-PolicyResolver. До его внедрения действует текущий контракт
+Статус: контракт реализован; hydrology authoring использует аннотации,
+общий compiler/verifier и ID serializer. Production activation — GEO-1 G10-A.
+Реализация и итоговые проверки: [policy-annotations-done](../.cursor/plans/policy-annotations-done.md).
+Этот документ задаёт общий authoring layer над существующими PolicySpec и
+PolicyResolver; operation/execution-контракт согласован с
 [GEO-1](./tz_terrain_generation.md#общая-policy-geo-1).
 
 ## 1. Владение и поток данных
@@ -13,8 +13,10 @@ PolicyResolver. До его внедрения действует текущий
 Общий compiler переводит metadata в existing ObjectAdmissionPolicySpec или
 ValueSelectionPolicySpec; общий PolicyResolver исполняет spec.
 
-Поток: authored POJO → существующий cascade → resolved POJO/context →
-typed PolicySource bindings → compilation из типов → PolicyResolver → decision.
+Подготовка spec: domain descriptor + metadata явного набора source types →
+общий compiler → immutable PolicySpec, независимо от source instances.
+Исполнение: authored POJO → существующий cascade → resolved POJO/context →
+typed PolicySource bindings → PolicyResolver с подготовленным spec → decision.
 Compilation не читает значения instances, не выполняет cascade, predicates,
 fallback, RNG, geometry или scheduling. Spec неизменяем и может переиспользоваться
 для одинакового набора типов; исходные instances передаются resolver отдельно.
@@ -182,8 +184,14 @@ Runtime fallback объявляется отдельно по existing PolicyFal
 Hydrology owner/descriptor, enabled metadata и два typed value cases принадлежат
 existing dataModel/hydrology/policy/hydrologyPolicyDefinition.py. Этот модуль
 не импортирует settings/context: они импортируют готовые metadata из него.
-WaterGenerationContext.autoresolve получает SelectByValue;
-WorldHydrologyGenerationFields.enabled получает EnabledFor.
+HYDROLOGY_GENERATION_POLICY — ValuePolicy[HydrologyExecutionMode,WaterPolicyReason]
+с nominal owner HydrologyGenerationPolicy. HYDROLOGY_ENABLED прикреплён к
+WorldHydrologyGenerationFields.enabled; HYDROLOGY_AUTORESOLVE — к
+WaterGenerationContext.autoresolve вместе с existing WATER_AUTORESOLVE cascade.
+Один вызов application/policy/declarations/compiler.py::compile_value_policy
+получает этот descriptor и tuple (WorldHydrologyGenerationFields,
+WaterGenerationContext); существующий PolicyResolver принимает полученный spec,
+typed sources и PolicyFacts. Domain factory для ручной сборки spec удалена.
 Получается одно объявление False→DECLARED_ONLY, True→AUTORESOLVE и
 disabled_behavior=DISABLED без domain PolicyRuleId/Equal/effect builders.
 
@@ -192,7 +200,12 @@ Existing category channels и terminal False не меняются. Python-mode 
 Production world owners/import/export переключаются только GEO-1 G10-A.
 
 Будущие G5-CP и G9-S используют этот же declaration/compiler API. Их
-domain predicates/default values остаются в своих доменах. Existing masks
+domain predicates/default values остаются в своих доменах. G5-CP declarations
+размещаются в hydrology/policy/hydrologyPlacementPolicy.py отдельно от generation
+metadata: compound FieldRef на source POJO не должен создавать обратный import
+generation settings/context в hydrologyPolicyDefinition.py. G9-S объявляет
+terrain-owned ValuePolicy и cases в surfaceCoatingPolicyDefinition.py.
+Existing masks
 default_collect и economy default_material_policy пока не потребляют общий
 PolicyResolver; их перевод требует отдельного consumer migration inventory
 и не объявляется выполненным добавлением аннотаций.
@@ -208,3 +221,43 @@ ID, field/owner rename меняет ID; bool/int и foreign enum не сталк
 Metadata не попадает в JSON settings. New positive/negative typing покрывает
 constructor constants вне Annotated и rejection неверной field attachment.
 Все existing policy/lifecycle tests сохраняют runtime semantics.
+
+## 7. Фактические потребители и границы переключения
+
+Сверено по backend/app 2026-10-28. Authoring/compilation готовы; это не
+утверждение о завершённой миграции production генераторов.
+
+- Hydrology generation: descriptor и две field annotations из §5 реализованы.
+  Compiler/resolver binding исполняется в tests/geo1/contracts/test_hydrology_generation.py
+  и проверяется typing fixtures. В backend/app production вызова compiler пока нет;
+  G10-A привязывает те же модели к coherent source view и передаёт decision дальше.
+- Common object admission: compiler вызывает existing ObjectAdmissionPolicyDefinition;
+  enabled/zero identity использует тот же make_rule_id. V2 PlacementSession и
+  lifecycle/outcomes потребляют ObjectAdmissionDecision, не исходные enabled/autoresolve.
+  При SUPPORT resume caller удерживает тот же spec/sources/revision. Старый
+  placement/resolver.py::_PlacementPass._preflight остаётся legacy path; его
+  coastline rule удаляется при G5-CP/G10-A, не исполняется поверх V2 decision.
+- Legacy hydrology: HydrologyGeneratorService.apply и WaterBodyPlanner.plan/_select_specs
+  ещё читают root/category enabled и legacy autoresolve flags. Эти пути пока
+  не получают новый execution decision. G10-A заменяет затронутые water gates
+  чтением готового mode; scope/category selection остаются отдельной осью.
+  Новый gate нельзя добавить перед существующим bool-проходом, сохранив второй
+  независимый выбор поведения после resolver. Rivers/landforms не переводятся
+  на water generation channel этой задачей.
+- Masks: source collector masks/collection/defaultCollect.py::default_collect
+  читает policy.autoresolve, а pack/bake/lightGrid/maskDomains/runMaskDomain.py
+  проверяет category_enabled. Затронутые water wrappers переключаются в G10-A;
+  landcover/mountain/ravine/roads сохраняют свои контракты до отдельной миграции.
+- Economy: defaultMaterialPolicy.py::default_material_policy по economic band
+  выбирает MIN/MAX strength до существующего material comparison. Это отдельный
+  будущий VALUE_SELECTION consumer, не реализованный compiler consumer сейчас.
+  Сам material comparison не переносится в policy engine.
+- Terrain coating G9-S: будущие terrain facts + domain declaration →
+  compile_value_policy → общий PolicyResolver → CoatingPlan. Unknown/fallback
+  и emitter contract остаются прежними; private terrain resolve не вводится.
+
+Проверка backend/app не обнаружила ручных domain PolicyRule/PolicyRuleId builders
+после migration: низкоуровневые builders остались в common compiler/admission,
+а ручные specs — в contract/typing tests. PolicyRuleId конструирует только
+policyIdentity.make_rule_id. Production codec/revision registration остаётся
+обязательством owning GEO-1 activation; диагностический ID не заменяет revision.

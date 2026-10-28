@@ -53,14 +53,18 @@ Production policies, MaskCategoryPolicy и rivers до G10-A сохраняют 
 Полный норматив: [GEO-1](./tz_terrain_generation.md#geo-1--нормативный-контракт-designed-water),
 exact channel/source map — delivery plan §6.29-A, implementation G1/G2/G2-P/G3.
 
-G2-G: reusable WorldHydrologyGenerationFields объявляет строгий enabled и
-embedded world generation для будущего owner. HydrologyPolicyDefinition
-получает root POJO и resolved WaterGenerationContext через прямые FieldRef;
-общий PolicyResolver выбирает DISABLED/DECLARED_ONLY/AUTORESOLVE. Enabled
-подключается через ObjectAdmissionPolicyDefinition.bind_value_selection,
-без priority refs и без повторного bool gate после decision. Missing/null
+G2-G / policy annotations: reusable WorldHydrologyGenerationFields объявляет
+строгий enabled и embedded world generation для будущего owner. На enabled
+прикреплён HYDROLOGY_ENABLED, на resolved WaterGenerationContext.autoresolve —
+HYDROLOGY_AUTORESOLVE вместе с WATER_AUTORESOLVE. Обе metadata ссылаются на один
+HYDROLOGY_GENERATION_POLICY; автор не повторяет policy cases на WORLD/CATEGORY/BODY.
+Общий compile_value_policy получает descriptor и эти два source types,
+создаёт spec с generated IDs и common enabled gate без priority refs.
+Общий PolicyResolver выбирает DISABLED/DECLARED_ONLY/AUTORESOLVE; после decision
+потребитель не повторяет bool gate. Missing/null
 autoresolve наследуют через extend; неразрешённый root context не считается
 False и даёт RULE_NO_MATCH. Active owner schemas переключаются в G10-A.
+Норматив authoring/identity и точный migration inventory — [tz_policy](./tz_policy.md).
 
 ## Действующий контракт локаций
 

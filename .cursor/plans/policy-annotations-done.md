@@ -1,10 +1,10 @@
-# Policy annotations — план реализации
+# Policy annotations — DONE
 
-Статус: согласован мастером 2026-10-28; P1–P3 сданы, следующий шаг P4.
+Статус: COMPLETE, P0–P4 сданы 2026-10-28. Production activation остаётся GEO-1 G10-A.
 Дата: 2026-10-28. Нормативный проект: [tz_policy](../../docs/tz_policy.md).
 Основание: обсуждение повторов G2-G, включая bool cases и PolicyRuleId.
 
-## Инвентарь текущего дерева
+## Инвентарь на старте (историческая карта)
 
 1. `dataModel/hydrology/policy/hydrologyPolicyDefinition.py`: единственная
    доменная definition нового policy API в backend/app; два одинаково устроенных
@@ -176,6 +176,13 @@ Cold import в обоих порядках, JSON/schema и decision round-trip �
 typing baseline delta; no changes в JSON/SQL/export/production defaults.
 Done: один authoring path, один compiler и один executor; inventory явно
 отделяет migrated hydrology от ещё не мигрированных masks/economy.
+
+P4 IMPLEMENTED/VERIFIED (2026-10-28). Удалены ссылки на старую domain factory;
+current consumer/gate inventory закреплён в tz_policy §7. G5-CP использует отдельный
+hydrologyPlacementPolicy.py (3→4 файла) без цикла generation metadata; G9-S — общий compiler.
+GEO-1 160/160 + location/cascade 52/52; positive typing 271 файл — 0 ошибок;
+negatives planning 103/103, cascade 16/16; full cascade-check — 16 baseline registry errors, delta 0.
+Новых дыр приёмки не выявлено; P4 меняет только документы, не JSON/SQL/code/defaults.
 
 ## Baseline и ограничения
 

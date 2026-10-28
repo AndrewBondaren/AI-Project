@@ -1524,12 +1524,14 @@ Domain facts providers остаются в application соответствую�
   Он не импортирует hydrology/terrain policy implementations. Generic
   conditions ссылаются на непосредственные POJO поля через typed FieldRef
   (переиспользовать примитив после проверки зависимостей), не field: str.
-- `dataModel/hydrology/policy/hydrologyPolicyDefinition.py::
-  HydrologyPolicyDefinition.build(settings) -> PolicySpec` — объявляет
-  привязку общего admission spec к enabled, cases autoresolve,
-  source-vs-boundary и domain default values. Семантику отключения
-  повторно не объявляет.
-  Метод build собирает описание; не выбирает сработавшее правило.
+- `dataModel/hydrology/policy/hydrologyPolicyDefinition.py` объявляет
+  HYDROLOGY_GENERATION_POLICY и field metadata enabled/autoresolve;
+  `hydrologyPlacementPolicy.py` (G5-CP) — отдельный placement descriptor/cases,
+  source-vs-boundary и domain defaults, без обратного импорта source models
+  в generation metadata. Общие `application/policy/declarations/compiler.py::
+  compile_value_policy/compile_admission_policy` создают existing specs из
+  descriptor и явного tuple source types. Compilation не выбирает case;
+  семантику отключения исполняет один resolver.
 - `application/worldData/generators/hydrology/policy/hydrologyPolicyFacts.py::
   collect_hydrology_policy_facts(source, snapshot) -> HydrologyPolicyFacts`
   — typed purpose/category/water-support facts. Можно вычислять водную
@@ -2357,7 +2359,9 @@ implementation — G0-S (GAP-SNAPSHOT DESIGN_CLOSED для GEO-1).
 **J03. Cascade + domain definition + facts → общее policy decision.**
 Producers: J01 WaterGenerationContext;
 dataModel/policy/objectAdmissionPolicyDefinition.py::build(bindings);
-dataModel/hydrology/policy/hydrologyPolicyDefinition.py::build(settings);
+dataModel/hydrology/policy/hydrologyPolicyDefinition.py::HYDROLOGY_GENERATION_POLICY;
+application/policy/declarations/compiler.py::compile_value_policy/compile_admission_policy
+(descriptor, explicit source types); placement descriptor — hydrologyPlacementPolicy.py (G5-CP);
 hydrology/policy/hydrologyPolicyFacts.py::collect_hydrology_policy_facts.
 Единственное схождение rules/facts — application/policy/policyResolver.py::
 PolicyResolver.resolve(spec, sources, facts, mode=ResolutionMode) → PolicyDecision.
@@ -2604,7 +2608,8 @@ prepare/submit до следующего heap step; geometry/exclusion — check
   legacy run_water_placement_pass не остаётся вторым active production path.
 - water fill: hydrology/water/planning/waterBodyPlanner.py::{plan,_select_specs}
   содержит current enabled/category/autoresolve gates; тот же legacy набор есть
-  в HydrologyGeneratorService.apply. HydrologyPolicyDefinition + facts → общий
+  в HydrologyGeneratorService.apply. Domain descriptor/field metadata → общий
+  compiler → spec; spec + typed sources/facts → общий
   value-selection HydrologyGenerationDecision; Geo routes wrapper в existing
   hydrologyPlanProvider.py::GeoHydrologyRoutesPlanProvider.build передаёт решение
   domain assembler/planner. В G10-A оба затронутых caller path читают decision;
@@ -9792,9 +9797,9 @@ production annotations/defaults сохранены. Следующий шаг �
 
 ### G2-G — декларации hydrology enabled/autoresolve behavior
 Follow-up по обсуждению 2026-10-28: общий authoring layer через annotations,
-generated rule IDs и migration G2-G описаны в [policy-annotations](./policy-annotations.md)
-и [tz_policy](../../docs/tz_policy.md), согласованы 2026-10-28. Это отдельный
-план; следующие шаги GEO-1 и production gate G10-A автоматически не меняются.
+generated rule IDs и migration G2-G реализованы в [policy-annotations-done](./policy-annotations-done.md)
+по [tz_policy](../../docs/tz_policy.md), согласованы 2026-10-28. Production gate
+G10-A сохраняется; будущие G5-CP/G9-S используют общий declaration/compiler API.
 Уточнение G2-G: isolated до G10-A, как G2/G2-P. Root fields объявляются
 reusable WorldHydrologyGenerationFields в existing waterGenerationSettings.py;
 active WorldHydrology и category owners не переключаются. Category channels
@@ -9802,7 +9807,9 @@ active WorldHydrology и category owners не переключаются. Catego
 HydrologyExecutionMode — enums/planning/hydrologyExecutionMode.py;
 WaterPolicyReason и HydrologyGenerationDecision (value alias) —
 hydrology/policy/hydrologyGenerationDecision.py; generation cases —
-hydrology/policy/hydrologyPolicyDefinition.py::HydrologyPolicyDefinition.generation.
+hydrology/policy/hydrologyPolicyDefinition.py::HYDROLOGY_GENERATION_POLICY
+и HYDROLOGY_ENABLED/HYDROLOGY_AUTORESOLVE, прикреплённые к source/resolved полям.
+Общий compile_value_policy создаёт value spec с generated IDs, без domain factory.
 Общий ObjectAdmissionPolicyDefinition.bind_value_selection переиспользует
 те же enabled rules без PRIORITY stage; ValueSelectionPolicySpec.disabled_behavior
 задаёт enum для доказанного DisableEffect. PolicyResolution.stop исполняет
@@ -9926,10 +9933,14 @@ body-boundary не попадает в body source merge. Done: варианты
 ### G5-CP — hydrology placement cases и facts
 Цель: описать source/boundary domain behavior для общего policy engine.
 ТЗ: G0, §5.3, §6.8-F. Вход: purpose enum G5-C1 и engine G0-PE.
-Файлы: dataModel/hydrology/policy/hydrologyPolicyDefinition.py (placement cases);
+Файлы: dataModel/hydrology/policy/hydrologyPlacementPolicy.py (placement descriptor/cases;
+отдельно от generation metadata, hydrology/policy 3 → 4 файла);
 application/worldData/generators/hydrology/policy/hydrologyPolicyFacts.py;
 water preparation policy spec binding.
-Контракт: домен задаёт defaults/cases и typed water-support facts;
+Контракт: домен задаёт AdmissionPolicy/PolicyCaseDeclaration, defaults и typed
+water-support facts; общий compile_admission_policy создаёт existing spec.
+Field-local rules задаются metadata, compound rules используют typed FieldRef;
+ни один domain case не задаёт ручной строковый PolicyRuleId.
 PolicyResolver вычисляет effective priority/admission, без water if в P2.
 Проверка: одинаковый engine для generic/водного случая, water_source
 не требует будущей воды, boundary missing support disabled/waiting,
@@ -10048,8 +10059,9 @@ material/recipe доказательства не подменяется consume
 tz_terrain_relief §Граница слоёв; HY-7 после синхронизации G0.
 Файлы: dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py (SurfaceCoatingFacts);
 terrain/relief/surfaceCoatingSupport.py (typed facts provider);
-dataModel/terrain/relief/surfaceCoating/surfaceCoatingPolicyDefinition.py (definition → PolicySpec:
-unknown/cases §6.11 разрешает общий PolicyResolver, не provider);
+dataModel/terrain/relief/surfaceCoating/surfaceCoatingPolicyDefinition.py (terrain-owned
+ValuePolicy/PolicyCaseDeclaration + field metadata → общий compile_value_policy → PolicySpec;
+unknown/cases §6.11 разрешает общий PolicyResolver, не compiler/provider);
 terrain/passes/columnFillPass.py;
 hydrology/shore/shoreProfile.py (снятие чужой ответственности);
 L0/L2 consumers по трассировке. Контракт: §6.1, terrain provider,
@@ -10073,6 +10085,10 @@ placement resolver/prepared/dependency queue, HydrologyGeneratorService,
 Контракт: одновременно positive defaults/new channels/source dispatch/
 common admission/one placement/floor writer/final mapping; старые gates
 удаляются. Versions меняются; old envelopes не маскируются под новые.
+Owning policies подключают существующие metadata/descriptor; production caller
+компилирует spec по explicit source types и передаёт typed instances resolver.
+Повторное чтение enabled/autoresolve после execution decision запрещено;
+точный remaining legacy gate inventory — tz_policy §7.
 Prerequisites — полный список §6.29-J, включая G9-ST и isolated G9-S.
 Проверка: geo1/integration test_activation.py + test_revisions.py и
 existing regressions §6.27; declare priority=None не исчезает из-за old0,
