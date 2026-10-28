@@ -5,6 +5,81 @@
 G4-I и G4 IMPLEMENTED/VERIFIED; production binding остаётся G10-A.
 Дата: 2026-10-28. Основной шаг: [G4](./geo-1-designed-water.md#g4--абстракция-стратегий).
 
+## G5 — незамкнутый authored geometry input
+
+Статус: G5 IMPLEMENTED/VERIFIED 2026-10-28 после APPROVED («Давай»).
+ТЗ: tz_terrain_generation §Planning и доставка GEO-1;
+tz_terrain_hydrology §Declare; main §5.2-E/§6.29-B/M.
+
+Входной аудит G5 показал:
+- shape_cells требует ready anchors для AnchorRadiusShape;
+- open coastline_cells требует actual seas max_area/max_extent limits;
+- helpers принимают snapshot и geometry в одной рабочей сетке, но G4 source
+  имеет fine geometry, а pre_hydrology — coarse surface;
+- lake_level определяется по уже построенной shoreline geometry. Metadata.level
+  требуется до design, поэтому его нельзя вычислить внутри strategy с подменой
+  готовой metadata либо повторно растеризовать ту же геометрию в G8 mapper.
+
+Рекомендуемый шов: однократная authored geometry preparation до metadata/design.
+Существующие geometry algorithms сохраняются; не строить fine-world heightmap,
+не передавать WorldHydrology/raw dict, не подставлять seas defaults в strategy.
+
+Точные новые records — dataModel/terrain/designedWater/geometry/
+authoredGeometry.py (+__init__, всего2):
+AuthoredWaterGeometryRequest: source (три existing authored wrappers),
+pre_hydrology:PlanEnvelope[TerrainPlan], topology:WorldTopology,
+grid:SurfaceGridSettings, seed_root:EntityUid,
+anchors:tuple[WaterAnchorInput,...], seas:HydrologySeasPolicy, z_min:FineZ.
+Все поля required, frozen/strict/extra=forbid/revalidation; legacy seas POJO
+revalidate через actual fields. Seas используется только для geometry limits;
+admission/cascade/priority остаются у своих владельцев.
+AuthoredWaterGeometry: source_uid:EntityUid, pre_hydrology_ref:PlanRef,
+coordinate_space:CoordinateSpace, footprints:tuple[frozenset[Coord],...],
+rim_level:FineZ|None, z_min:FineZ, notices:tuple[FieldPathError,...].
+Geometry output в WORLD_SURFACE_GRID после existing fine→coarse projection;
+collapse/degenerate/cap остаются явными existing domain issues.
+
+Existing application/worldData/placement/adapters/water.py получает
+prepare_authored_water_geometry(request)->AuthoredWaterGeometry.
+Это source projection + существующие shape/lake/coastline helpers; без
+PreparedPlacement/P2/admission/floor write. Ready anchors явно проецируются.
+Existing hydrology/placement/projectDeclaredHydrology.py предоставляет
+typed single-source projection; не собирать временный WorldHydrology.
+Geometry helpers получают seed_root явно: не подменять actual world_uid seed'ом.
+Existing callers обновляются вместе с helper signatures, без параллельного API.
+В existing waterTypes.py: WaterGeometryView — structural Protocol только
+topology/surface_z/anchors; AuthoredGeometryView — frozen application working
+view этих полей. Это локальный geometry buffer, не второй transport и не
+source settings. Существующий WaterPlacementContext соответствует Protocol.
+Комментарии на records/geometry-field и пояснения в ТЗ обязательны по просьбе мастера.
+
+AuthoredWaterDesignInput получает обязательное geometry:AuthoredWaterGeometry;
+проверяет source/ref identity и metadata.level==rim_level у lake.
+AuthoredRegionStrategy.design использует этот готовый geometry, сохраняет
+metadata и authored basin floor; для lake/coastline scalar floor берётся из
+готовых level/default_depth. Floor проверяется по geometry.z_min; authored
+floor не изменяется молча и невозможное дно не получает скрытый clamp.
+Процедурный input/strategy protocol/factory не меняются.
+
+G8 после READY admission вызывает geometry preparation один раз, затем
+строит metadata (lake level из geometry.rim_level), complete design input,
+design draft и общий G4-C preparer. Profile/spec/writer остаются G9.
+Нет циклической зависимости metadata↔design и повторной rasterization.
+
+До реализации синхронизировать G5/G8 и ТЗ. Composition: geometry2,
+strategies3→4, adapters6→6 (WARN, новые flat files не добавляются),
+hydrology/placement3→3. Новые тесты — отдельная tests/geo1/authored/.
+Проверки: basin/anchor/lake/open+closed coast, typed source projection и
+collapse, same snapshot/space/seed, rim metadata coherence, no hidden defaults,
+no writes/resolve, exact profile/geometry transport и existing adapter regression.
+
+G5 выполнен: GEO-1 295/295 (+22), existing placement/water/factory67/67,
+positive Pyright — 0 ошибок, negative planning144/144 (+7).
+Records/geometry-field пояснены в docstrings/comments и ТЗ; explicit seed,
+single-source projection и geometry result переиспользуются без rerasterize.
+Actual legacy seas fields revalidate strict (включая bool→float), helpers
+включены в positive typing. G8/G9/G10-A не переключались.
+
 ## Обнаруженные расхождения
 
 1. §5.2-E/H, J06 и G6/G7 требуют field draft и единственный threshold в

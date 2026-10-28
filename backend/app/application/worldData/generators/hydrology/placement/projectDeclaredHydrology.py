@@ -4,17 +4,33 @@ from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues
 from app.application.jsonValidation.types import FieldPathError
-from app.application.worldData.generators.coordinates.convert import fine_to_grid_xy
 from app.application.worldData.placement.adapters.waterTypes import WaterPreparationCode
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 
 
-def _project_waypoints(waypoints: tuple[HydrologyWaypoint, ...], map_cell: int) -> list[HydrologyWaypoint]:
-    return [
-        waypoint.model_copy(update=dict(zip(("x", "y"), fine_to_grid_xy(waypoint.x, waypoint.y, map_cell))))
-        for waypoint in waypoints
-    ]
+def _project_waypoints(waypoints: tuple[HydrologyWaypoint, ...], map_cell: int) -> tuple[HydrologyWaypoint, ...]:
+    return tuple(HydrologyWaypoint(x=point.x // map_cell, y=point.y // map_cell, z=point.z) for point in waypoints)
+
+
+def project_water_source[S: DeclaredBasin | DeclaredCoastline | DeclaredLake](source: S, map_cell: int) -> S:
+    """Typed single-source projection shared by G5 and the existing caller.
+
+    Only this serialization boundary rebuilds legacy POJOs. No temporary
+    WorldHydrology is needed to project one captured authored source.
+    """
+    if not isinstance(source, (DeclaredBasin, DeclaredCoastline, DeclaredLake)):
+        raise TypeError("source projection requires a typed authored water source")
+    if type(map_cell) is not int or map_cell <= 0:
+        raise ValueError("source projection requires a positive integer fine span")
+    if isinstance(source, DeclaredBasin):
+        return type(source).model_validate(source.model_dump() | {"footprint": source.footprint.projected(map_cell)})
+    if isinstance(source, DeclaredCoastline):
+        return type(source).model_validate(source.model_dump() | {"path": _project_waypoints(source.path, map_cell)})
+    return type(source).model_validate(source.model_dump() | {"shoreline": _project_waypoints(source.shoreline, map_cell)})
 
 
 def _collapse_issue(ctx: ResolveContext, world_uid: str, collection: str, index: int,
@@ -34,9 +50,7 @@ def project_declared_hydrology(hydrology: WorldHydrology, map_cell: int, *, ctx:
     basins = []
     for index, basin in enumerate(hydrology.declared_basins):
         try:
-            footprint = basin.footprint.projected(map_cell)
-            basin = type(basin).model_validate(
-                basin.model_dump() | {"footprint": footprint.model_dump()})
+            basin = project_water_source(basin, map_cell)
         except (ValidationError, ValueError) as error:
             issues.append(_collapse_issue(ctx, world_uid, "declared_basins", index,
                                           basin.location_uid, error))
@@ -44,14 +58,11 @@ def project_declared_hydrology(hydrology: WorldHydrology, map_cell: int, *, ctx:
         basins.append(basin)
     update: dict = {"declared_basins": basins}
 
-    for collection, field in (("declared_coastlines", "path"), ("declared_lakes", "shoreline")):
+    for collection, members in (("declared_coastlines", hydrology.declared_coastlines), ("declared_lakes", hydrology.declared_lakes)):
         projected = []
-        for index, entry in enumerate(getattr(hydrology, collection)):
+        for index, entry in enumerate(members):
             try:
-                dump = entry.model_dump()
-                dump[field] = [waypoint.model_dump()
-                               for waypoint in _project_waypoints(getattr(entry, field), map_cell)]
-                entry = type(entry).model_validate(dump)
+                entry = project_water_source(entry, map_cell)
             except (ValidationError, ValueError) as error:
                 issues.append(_collapse_issue(ctx, world_uid, collection, index,
                                               entry.location_uid, error))

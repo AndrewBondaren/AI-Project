@@ -32,6 +32,11 @@ from app.application.worldData.generators.terrain.designedWater.preparation.plac
 from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.placement.prepared import PlacementCandidate
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterGeometryRequest
+from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
+from app.application.worldData.generators.terrain.designedWater.strategies.authoredRegionStrategy import AuthoredRegionStrategy
+from app.application.worldData.generators.hydrology.placement.projectDeclaredHydrology import project_water_source
+from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 
 
 def valid_water_contracts(source: WaterDesignSource, metadata: WaterSourceMetadata,
@@ -99,3 +104,13 @@ def valid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: Wat
     assert_type(result.metadata, WaterSourceMetadata)
     assert_type(result.floor_profile, BasinFloorProfile | None)
     return result
+
+
+def valid_authored_boundary(request: AuthoredWaterGeometryRequest, input: AuthoredWaterDesignInput,
+                            basin: DeclaredBasin) -> AuthoredWaterDesignDraft:
+    assert_type(prepare_authored_water_geometry(request), AuthoredWaterGeometry)
+    assert_type(input.geometry, AuthoredWaterGeometry)
+    assert_type(project_water_source(basin, 2), DeclaredBasin)
+    implementation: DesignedWaterStrategy = AuthoredRegionStrategy()
+    assert_type(implementation.design(input), AuthoredWaterDesignDraft)
+    return AuthoredRegionStrategy().design(input)

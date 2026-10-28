@@ -8,7 +8,8 @@ from pydantic import ValidationError
 
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
 from app.application.worldData.generators.hydrology.shore.waterSideFootprint import CoastlineWaterSide
-from app.application.worldData.placement.adapters.waterTypes import WaterGeometryError, WaterPlacementContext
+from app.application.worldData.placement.adapters.waterTypes import WaterGeometryError, WaterGeometryView
+from app.dataModel.identity.uid import EntityUid
 from app.application.worldData.placement.adapters.waterShape import shape_cells
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.enums.waterSide import WaterSide
@@ -22,17 +23,20 @@ def cell_neighbors(topology: WorldTopology, cell: Coord):
     return iter(geometry.canonical_neighbors4(topology, cell))
 
 
-def ring_barrier(context: WaterPlacementContext,
+def ring_barrier(context: WaterGeometryView,
                  segments: list[tuple[Coord, Coord]]) -> set[Coord]:
-    barrier = {context.topology.canonicalize(*cell) for cell in rasterize_segments(segments)}
-    if None in barrier:
-        raise WaterGeometryError("ring extends outside planar world")
+    barrier: set[Coord] = set()
+    for cell in rasterize_segments(segments):
+        canonical = context.topology.canonicalize(*cell)
+        if canonical is None:
+            raise WaterGeometryError("ring extends outside planar world")
+        barrier.add(canonical)
     return barrier
 
 
-def ring_sides(polygon: PolygonShape, source_uid: str, context: WaterPlacementContext,
-               barrier: set[Coord]) -> tuple[set[Coord], set[Coord]]:
-    inside = set(shape_cells(polygon, source_uid, context)[0]) - barrier
+def ring_sides(polygon: PolygonShape, source_uid: str, context: WaterGeometryView,
+               barrier: set[Coord], *, seed_root: EntityUid) -> tuple[set[Coord], set[Coord]]:
+    inside = set(shape_cells(polygon, source_uid, context, seed_root=seed_root)[0]) - barrier
     outside = set(context.surface_z) - barrier - inside
     # Every complementary component must have one consistent side. A
     # nonseparating ring must never acquire a bbox-derived interior on a torus.
@@ -53,8 +57,8 @@ def ring_sides(polygon: PolygonShape, source_uid: str, context: WaterPlacementCo
     return inside, outside
 
 
-def coastline_cells(entry: DeclaredCoastline, context: WaterPlacementContext,
-                    policy: HydrologySeasPolicy) -> tuple[frozenset[Coord], bool]:
+def coastline_cells(entry: DeclaredCoastline, context: WaterGeometryView,
+                    policy: HydrologySeasPolicy, *, seed_root: EntityUid) -> tuple[frozenset[Coord], bool]:
     points = [(point.x, point.y) for point in entry.path]
     if points[0] == points[-1]:
         points.pop()
@@ -62,11 +66,11 @@ def coastline_cells(entry: DeclaredCoastline, context: WaterPlacementContext,
     if entry.closed:
         segments.append((points[-1], points[0]))
         try:
-            polygon = PolygonShape(vertices=points)
+            polygon = PolygonShape(vertices=tuple(points))
         except ValidationError as error:
             raise WaterGeometryError(f"invalid coastline ring: {error.errors()[0]['msg']}") from error
         inside, outside = ring_sides(polygon, entry.location_uid, context,
-                                     ring_barrier(context, segments))
+                                     ring_barrier(context, segments), seed_root=seed_root)
         if not inside or not outside:
             raise WaterGeometryError("ring does not separate an interior and exterior; declare an explicit basin")
         return frozenset(inside if entry.water_side == WaterSide.INTERIOR else outside), False

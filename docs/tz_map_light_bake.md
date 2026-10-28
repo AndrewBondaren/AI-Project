@@ -134,6 +134,14 @@ ResolveContext.collect_only собирает diagnostics без логирова
 
 #### Placement P3 water
 
+G5 source geometry boundary: AuthoredWaterGeometryRequest (captured immutable
+inputs после READY) → prepare_authored_water_geometry → AuthoredWaterGeometry
+(footprints, coarse space, terrain ref, lake rim level, z_min, notices).
+Metadata и AuthoredWaterDesignInput.geometry используют этот единый результат;
+strategy/G4-C не повторяют geometry helpers. Ни один из этих объектов не
+является admission или placement outcome. Roles и поля описаны отдельно
+в tz_terrain_generation §Объекты G5; generic P2 и floor writer остаются G8/G9.
+
 GEO-1 G4-C предоставляет предыдущую стадию: typed WaterDesignPreparation
 (geometry candidates, coordinate_space/grid, original_area, metadata/ref,
 floor/profile/notices), без header/admission/outcome. Общий field threshold

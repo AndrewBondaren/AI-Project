@@ -20,6 +20,7 @@ from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllo
 from app.dataModel.terrain.designedWater.draft import AuthoredWaterDesignDraft, ProceduralWaterDesignDraft
 from app.dataModel.terrain.designedWater.fields.field import ContinentalField, NoiseRecipe, PlateRecipe, PlateNoiseRecipe
 from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
 from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import ContinentalNoisePolicy
 from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionPolicy
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
@@ -56,7 +57,9 @@ def inputs(strategy=Strategy.CONTINENTAL_NOISE):
             bbox=GridBBox(-1, 0, 1, 1), surface_z=((SurfaceGridCoord(-1, 1), 3), (SurfaceGridCoord(0, 1), 5)))),
         region_coverage=RegionCoverage(region_uid="region", spans=tuple(CoverageSpan(y=y, x0=-4, x1=0) for y in range(4, 8))))
     if strategy is Strategy.AUTHORED_REGION:
-        return AuthoredWaterDesignInput(**raw)
+        return AuthoredWaterDesignInput(**raw, geometry=AuthoredWaterGeometry(source_uid="source",
+            pre_hydrology_ref=ref, coordinate_space=CoordinateSpace.WORLD_FINE_GRID,
+            footprints=(frozenset({(-4, 4), (-3, 4)}),), rim_level=None, z_min=-20, notices=()))
     common = dict(seed_root="seed", topology=fine_topology(topology, grid.fine_span))
     if strategy is Strategy.CONTINENTAL_NOISE:
         return NoiseWaterDesignInput(**raw, field_policy=NoiseRecipe(**common, noise_policy=ContinentalNoisePolicy()))

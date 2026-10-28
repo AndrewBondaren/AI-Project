@@ -100,7 +100,8 @@ class StrategyInputTests(TestCase):
             path=(HydrologyWaypoint(x=-4, y=4), HydrologyWaypoint(x=-3, y=5))))
         for source, kind in ((lake, BasinKind.LAKE), (coast, BasinKind.SEA)):
             metadata = value.metadata.model_copy(update={"source_kind": source.kind, "body_kind": kind})
-            ready = ADAPTER.validate_python(value.model_copy(update={"source": source, "metadata": metadata}))
+            geometry = value.geometry.model_copy(update={"rim_level": metadata.level if isinstance(source, AuthoredLakeSource) else None})
+            ready = ADAPTER.validate_python(value.model_copy(update={"source": source, "metadata": metadata, "geometry": geometry}))
             self.assertEqual(ready.source, source)
             self.assertEqual(ADAPTER.validate_json(ADAPTER.dump_json(ready)), ready)
 

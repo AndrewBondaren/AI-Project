@@ -5159,6 +5159,9 @@ budget:BodyCoverageAllocation, pre_hydrology_ref:PlanRef,
 seed_root:EntityUid, topology:WorldTopology, grid:SurfaceGridSettings,
 field_policy:WaterFieldRecipe у ProceduralWaterDesignInput. AuthoredWaterDesignInput
 не имеет field_policy; это отдельный variant, не invalid procedural recipe.
+По G5 authored variant обязательно содержит geometry:AuthoredWaterGeometry
+от однократной source geometry preparation до metadata; lake level сверяется
+с geometry.rim_level. Вход strategy не содержит raw anchors/working context.
 WaterDesignInput union discriminator — effective strategy enum из policy decision.
 Common fields дополнены actual pre_hydrology envelope и region_coverage по M.
 Draft output — geometry footprints/profile/metadata по M; PlacementCandidate
@@ -10026,16 +10029,30 @@ positive Pyright — 0 ошибок, negative planning137/137 (+8). Composition:
 dataModel preparation2/settings5, application preparation2, tests preparation4.
 
 ### G5 — authored region strategy
+[G5 boundary supplement](./geo-1-strategy-boundary-contract.md#g5--незамкнутый-authored-geometry-input)
+APPROVED 2026-10-28 («Давай»): typed geometry request/result до metadata,
+обязательное geometry-поле authored input; пояснения объектов в коде/ТЗ.
+Defaults/working WorldHydrology внутри strategy и реконструкция fine
+heightmap из coarse surface запрещены.
 Цель: провести authored input через общий strategy boundary.
 ТЗ: GEO-1 и tz_terrain_hydrology §Declare.
 Файлы: terrain/designedWater/strategies/authoredRegionStrategy.py,
-existing water adapter boundary.
+dataModel/terrain/designedWater/geometry/authoredGeometry.py (+init),
+existing input.py, water adapter/geometry helpers и projectDeclaredHydrology.py.
 Контракт: существующие RegionShape/placement types, source metadata;
 заданные geometry/floor не меняются без согласованного autoresolve правила.
 Проверка: declared basin/lake/coastline regression и constraints.
 Coastline здесь работает по нынешнему контракту — разделение purpose
 вводится в G5-C1, ожидания для coastline уточняются в G5-C1/G5-CP.
 Done: authored strategy реализует общий контракт без второго carve.
+
+G5 IMPLEMENTED/VERIFIED (2026-10-28): AuthoredWaterGeometryRequest/result,
+required input.geometry, typed single-source projection и explicit helper seed;
+strategy сохраняет geometry/metadata/floor без rasterize/clamp/WorldHydrology.
+Роли объектов выделены комментариями в коде и ТЗ по просьбе мастера.
+GEO-1 295/295 (+22), existing placement/water/factory67/67 (world_test_004),
+positive Pyright — 0 ошибок, negative planning144/144 (+7).
+Composition: geometry2, strategies4, adapters6 (WARN), authored tests5.
 
 ### G5-C1 — typed source/boundary purpose coastline
 Цель: сделать два поведения явными в source contract до алгоритмов.
@@ -10139,6 +10156,8 @@ water_source из transitional caller G5-C2.
 Контракт: общий batch, source metadata, accepted dependencies; авто-настройки
 разрешены до strategy call; J01–J09 §6.16, один revision и request ctx,
 early admission transport без geometry, никакого budget/input цикла.
+Authored после READY: geometry request→однократный geometry result→metadata
+(lake level из rim_level)→authored input.geometry→design; helpers не дублируются.
 По G4-C supplement: заменить единственный water adapter contract вместе
 с callers/ResolvedWaterPlacement и metadata consumer basinSpecFactory;
 удалить переведённый старый путь, без параллельных water V2 records.

@@ -21,6 +21,7 @@ from app.dataModel.terrain.designedWater.draft import (
     AuthoredWaterDesignDraft, ProceduralWaterDesignDraft, WaterDesignDraft,
 )
 from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
@@ -109,6 +110,10 @@ class _WaterDesignInput(BaseModel, frozen=True):
         if isinstance(self, AuthoredWaterDesignInput):
             if not isinstance(draft, AuthoredWaterDesignDraft):
                 raise ValueError("authored strategy requires authored geometry")
+            if (draft.coordinate_space != self.geometry.coordinate_space or
+                    frozenset(c for part in draft.footprints for c in part) !=
+                    frozenset(c for part in self.geometry.footprints for c in part)):
+                raise ValueError("authored draft must preserve the prepared source geometry")
             if isinstance(self.source, AuthoredBasinSource) and draft.floor_z != self.source.value.floor_z:
                 raise ValueError("authored basin floor must be preserved")
             topology = self.topology if draft.coordinate_space is CoordinateSpace.WORLD_SURFACE_GRID else fine_topology(self.topology, self.grid.fine_span)
@@ -131,6 +136,24 @@ class _WaterDesignInput(BaseModel, frozen=True):
 class AuthoredWaterDesignInput(_WaterDesignInput, frozen=True):
     strategy: Literal[Strategy.AUTHORED_REGION] = Strategy.AUTHORED_REGION
     source: Annotated[AuthoredBasinSource | AuthoredLakeSource | CoastlineWaterSource, Field(discriminator="kind")]
+    # G5 geometry was computed once before metadata (lake rim level depends on
+    # its footprint). G8 binds this immutable result; strategy never rerasterizes.
+    geometry: AuthoredWaterGeometry
+
+    @model_validator(mode="after")
+    def coherent_authored_geometry(self) -> Self:
+        geometry = self.geometry
+        if geometry.source_uid != self.metadata.source_uid or geometry.pre_hydrology_ref != self.pre_hydrology_ref:
+            raise ValueError("authored geometry must match source and terrain revision")
+        topology = self.topology if geometry.coordinate_space is CoordinateSpace.WORLD_SURFACE_GRID else fine_topology(self.topology, self.grid.fine_span)
+        if any(topology.canonicalize(*c) != c for part in geometry.footprints for c in part):
+            raise ValueError("authored geometry coordinates must be canonical")
+        if isinstance(self.source, AuthoredLakeSource):
+            if geometry.rim_level != self.metadata.level:
+                raise ValueError("lake metadata must use the computed geometry rim level")
+        elif geometry.rim_level is not None:
+            raise ValueError("only lake geometry carries a rim level")
+        return self
 
 
 class NoiseWaterDesignInput(_WaterDesignInput, frozen=True):

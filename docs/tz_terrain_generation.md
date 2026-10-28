@@ -220,6 +220,38 @@ unpublished handoff/commit protocol и HY-RIV-1 fine base остаются вн�
 
 ### Planning и доставка GEO-1
 
+#### Объекты G5: authored geometry до metadata/design
+
+`AuthoredWaterGeometryRequest` — immutable **запрос одной подготовки геометрии**,
+dataModel/terrain/designedWater/geometry/authoredGeometry.py. G8 создаёт его
+после READY admission: source и anchors в fine coordinates, реальный coarse
+pre_hydrology envelope, topology/grid, явный seed_root, existing seas geometry
+limits и z_min. Все поля обязательны; World/SQL/Pack или defaults внутри strategy
+не читаются. Поля seas enabled/autoresolve/priority geometry helper не разрешает.
+
+`AuthoredWaterGeometry` — immutable **результат этой подготовки**, в том же
+dataModel module. Producer — prepare_authored_water_geometry в water adapter:
+typed single-source fine→coarse projection и existing shape/lake/coastline helpers.
+Result содержит source_uid, pre_hydrology_ref, coordinate_space, footprints,
+rim_level, z_min и notices. Текущий producer выдаёт WORLD_SURFACE_GRID без
+создания fine-world heightmap. Lake rim_level измеряется по actual coarse
+terrain у footprint; прочие source kinds оставляют его None. Collapse/degenerate/
+cap явны, clipping planar geometry и второй spatial resolver запрещены.
+
+`AuthoredWaterDesignInput.geometry` — обязательная **ссылка на готовый результат**.
+G8 сначала получает geometry, затем строит metadata.level озера из rim_level,
+проверяет source/ref identity и передаёт тот же geometry в design. Это устраняет
+цикл metadata↔geometry. AuthoredRegionStrategy не растеризует повторно: сохраняет
+footprints/space/metadata, explicit basin floor, либо level-default_depth для
+lake/coastline. Невозможный floor относительно z_min — domain failure без clamp.
+G4-C сохраняет geometry/profile/notices; admission/P2 принадлежат G8, writer — G9.
+
+Request→geometry→metadata/input→draft→candidates — стадии одного pipeline,
+не параллельный water V2 transport. Geometry view helper'ов содержит только
+topology/surface/anchors. Seed передаётся явно, world_uid им не подменяется.
+
+#### Остальной planning contract
+
 Поток: capture coherent source view → cascade → policy → region coverage
 и общий WaterCoverageBudget → strategy field/draft → общий preparer →
 один P2 placement batch → BasinSpec → existing relief writer → HY-12 fill

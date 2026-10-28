@@ -49,6 +49,8 @@ class DesignedWaterPlacementPreparer:
         if isinstance(draft, AuthoredWaterDesignDraft):
             cells = frozenset(c for footprint in draft.footprints for c in footprint)
             space = draft.coordinate_space
+            if isinstance(input, AuthoredWaterDesignInput):
+                notices = input.geometry.notices
         else:
             coordinates = tuple(c for c, _ in draft.field.samples)
             areas = RegionCoverageMeasure.coarse_cell_areas(input.region_coverage, coordinates, input.grid)

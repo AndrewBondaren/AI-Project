@@ -136,6 +136,8 @@ class WaterPreparationTests(TestCase):
         input = inputs(Strategy.AUTHORED_REGION)
         draft = draft_for(input).model_copy(update={"coordinate_space": Space.WORLD_SURFACE_GRID,
             "footprints": (frozenset({(-1, 1), (0, 1)}),)})
+        input = input.model_copy(update={"geometry": input.geometry.model_copy(update={
+            "coordinate_space": draft.coordinate_space, "footprints": draft.footprints})})
         result = self.prepare(input, draft)
         self.assertEqual(result.coordinate_space, Space.WORLD_SURFACE_GRID)
         self.assertEqual(self.cells(result), frozenset({(-1, 1), (0, 1)}))

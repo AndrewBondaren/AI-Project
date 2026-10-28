@@ -2,16 +2,18 @@
 
 from dataclasses import replace
 from itertools import groupby
+from types import MappingProxyType
 
 from app.application.jsonValidation.resolve import (
     ResolveContext, log_issues, reject_unresolved, report_issues, resolve_model,
 )
 from app.application.jsonValidation.types import FieldPathError
+from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.placement.adapters.coastlineShape import coastline_cells
 from app.application.worldData.placement.adapters.lakeShape import lake_cells, lake_level
 from app.application.worldData.placement.adapters.waterShape import shape_cells
 from app.application.worldData.placement.adapters.waterTypes import (
-    PreparedWaterEntry, WaterGeometryError, WaterPlacementContext, WaterPlacementPreparation,
+    AuthoredGeometryView, PreparedWaterEntry, WaterGeometryError, WaterPlacementContext, WaterPlacementPreparation,
     WaterPreparationCode, WaterPreparationFailure,
 )
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
@@ -19,12 +21,75 @@ from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, CoastlineWaterSource
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+from app.dataModel.spatial.grid.coordinateTypes import FineZ
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterGeometryRequest
 from app.dataModel.placement import (
     CoastlinePlacementFact, PlacementBatchResult, PlacementCandidate, PlacementFootprint,
     PlacementIdentity, PlacementIntent, PlacementMode, PreparedPlacement, ResolvedPlacement,
     ResolvedWaterPlacement, WaterPresence,
 )
 from app.dataModel.topology.worldTopology import WorldTopology
+from app.ids import seed_root
+
+
+def prepare_authored_water_geometry(request: AuthoredWaterGeometryRequest) -> AuthoredWaterGeometry:
+    """G5: compute source geometry once, before G8 constructs metadata.
+
+    The result supplies lake rim level to the metadata mapper and the same
+    footprint to AuthoredRegionStrategy. This stage neither binds admission
+    nor creates a PreparedPlacement; field/floor writers are not called.
+    """
+    # The legacy hydrology placement package eagerly exports its full pass.
+    # Defer this existing leaf import to avoid its adapter import cycle.
+    from app.application.worldData.generators.hydrology.placement.projectDeclaredHydrology import project_water_source
+
+    if not isinstance(request, AuthoredWaterGeometryRequest):
+        raise TypeError("authored geometry requires a typed request")
+    try:
+        request = AuthoredWaterGeometryRequest.model_validate(request, strict=True)
+    except ValueError as error:
+        raise PlanBuildFailure((FieldPathError(("authored_geometry",), str(error), code=WaterPreparationCode.SNAPSHOT.value),)) from error
+    uid = request.source.value.location_uid
+    notices: list[FieldPathError] = []
+    try:
+        source = project_water_source(request.source.value, request.grid.fine_span)
+        anchors = {}
+        for anchor in request.anchors:
+            point = request.topology.canonicalize(anchor.position[0] // request.grid.fine_span,
+                                                   anchor.position[1] // request.grid.fine_span)
+            if point is None:
+                raise WaterGeometryError(f"anchor {anchor.source_uid} is outside the planar world")
+            anchors[anchor.source_uid] = point
+        view = AuthoredGeometryView(topology=request.topology, anchors=MappingProxyType(anchors),
+            surface_z=MappingProxyType({(c.gx, c.gy): z for c, z in request.pre_hydrology.payload.surface_z}))
+        rim = None
+        if isinstance(request.source, AuthoredBasinSource):
+            if not isinstance(source, DeclaredBasin):
+                raise WaterGeometryError("projected basin source kind changed")
+            cells, _ = shape_cells(source.footprint, uid, view, seed_root=request.seed_root)
+        elif isinstance(request.source, CoastlineWaterSource):
+            if not isinstance(source, DeclaredCoastline):
+                raise WaterGeometryError("projected coastline source kind changed")
+            cells, capped = coastline_cells(source, view, request.seas, seed_root=request.seed_root)
+            if capped:
+                notices.append(FieldPathError(("authored_geometry", uid), "coastline reached geometry cap",
+                    code=WaterPreparationCode.CAP_REACHED.value))
+        else:
+            if not isinstance(source, DeclaredLake):
+                raise WaterGeometryError("projected lake source kind changed")
+            cells, degenerate = lake_cells(source, view, seed_root=request.seed_root)
+            rim = FineZ(lake_level(cells, view))
+            if degenerate:
+                notices.append(FieldPathError(("authored_geometry", uid), "degenerate lake ring uses its contour",
+                    code=WaterPreparationCode.DEGENERATE_RING.value))
+    except ValueError as error:
+        raise PlanBuildFailure((FieldPathError(("authored_geometry", uid), str(error),
+            code=WaterPreparationCode.GEOMETRY.value),)) from error
+    return AuthoredWaterGeometry(source_uid=uid, pre_hydrology_ref=request.pre_hydrology.ref,
+        coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, footprints=(cells,), rim_level=rim,
+        z_min=request.z_min, notices=tuple(notices))
 
 
 def _context_issue(context: WaterPlacementContext, ctx: ResolveContext, reason: str) -> FieldPathError:
@@ -83,15 +148,15 @@ def _source_cells(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
     uid = source.location_uid
     try:
         if isinstance(source, DeclaredBasin):
-            return shape_cells(source.footprint, uid, context)
+            return shape_cells(source.footprint, uid, context, seed_root=seed_root(context))
         if isinstance(source, DeclaredCoastline):
-            cells, capped = coastline_cells(source, context, hydrology.default_seas)
+            cells, capped = coastline_cells(source, context, hydrology.default_seas, seed_root=seed_root(context))
             # Area of this original fine-unit-square claim, before competition.
             if capped:
                 notices.append(_source_issue(context, ctx, uid, WaterPreparationCode.CAP_REACHED,
                                       "coastline expansion reached hard area/extent budget"))
         else:
-            cells, degenerate = lake_cells(source, context)
+            cells, degenerate = lake_cells(source, context, seed_root=seed_root(context))
             if degenerate:
                 notices.append(_source_issue(context, ctx, uid, WaterPreparationCode.DEGENERATE_RING,
                                        "shoreline has no interior; lake footprint is the contour itself"))

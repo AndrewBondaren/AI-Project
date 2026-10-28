@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Protocol
 
 from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
@@ -30,6 +31,26 @@ class WaterPreparationCode(StrEnum):
 
 class WaterGeometryError(ValueError):
     """An invalid source cannot supply a geometric placement candidate."""
+
+
+class WaterGeometryView(Protocol):
+    """Geometry reads only these fields; placement/admission state stays outside."""
+
+    @property
+    def topology(self) -> WorldTopology: ...
+    @property
+    def surface_z(self) -> Mapping[Coord, int]: ...
+    @property
+    def anchors(self) -> Mapping[str, Coord]: ...
+
+
+@dataclass(frozen=True)
+class AuthoredGeometryView:
+    """Local working view of a validated G5 request, never a cached transport."""
+
+    topology: WorldTopology
+    surface_z: Mapping[Coord, int]
+    anchors: Mapping[str, Coord]
 
 
 @dataclass(frozen=True)

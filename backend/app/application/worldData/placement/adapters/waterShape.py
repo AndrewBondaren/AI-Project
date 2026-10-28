@@ -3,13 +3,14 @@
 from functools import partial
 
 from app.application.worldData.masks.regionRasterNoise import boundary_depth, smooth_field
-from app.application.worldData.placement.adapters.waterTypes import WaterGeometryError, WaterPlacementContext
+from app.application.worldData.placement.adapters.waterTypes import WaterGeometryError, WaterGeometryView
+from app.dataModel.identity.uid import EntityUid
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, EllipseShape, RegionShape
-from app.ids import RegionRngChannel, UidKind, seed_rng, seed_root
+from app.ids import RegionRngChannel, UidKind, seed_rng
 
 
 def shape_cells(shape: RegionShape, source_uid: str,
-                context: WaterPlacementContext) -> tuple[frozenset[tuple[int, int]], float]:
+                context: WaterGeometryView, *, seed_root: EntityUid) -> tuple[frozenset[tuple[int, int]], float]:
     area = shape.area()
     if isinstance(shape, AnchorRadiusShape):
         anchor = context.anchors.get(shape.anchor_uid)
@@ -21,7 +22,7 @@ def shape_cells(shape: RegionShape, source_uid: str,
     edge = shape.edge_noise
     noise = None
     if edge is not None and edge.amplitude:
-        sample = partial(seed_rng, seed_root(context), UidKind.REGION,
+        sample = partial(seed_rng, seed_root, UidKind.REGION,
                          channel=RegionRngChannel.EDGE, uid=source_uid)
         noise = smooth_field(lambda **keys: sample(**keys).random(), edge.scale, topology)
     x0, y0, x1, y1 = shape.bbox()
@@ -33,7 +34,7 @@ def shape_cells(shape: RegionShape, source_uid: str,
             canonical = topology.canonicalize(x, y)
             if canonical is None:
                 raise WaterGeometryError("authored footprint extends outside planar world; clipping is forbidden")
-            if noise is None or boundary_depth(shape, x, y) >= edge.amplitude * noise(*canonical):
+            if noise is None or edge is None or boundary_depth(shape, x, y) >= edge.amplitude * noise(*canonical):
                 cells.add(canonical)
     if not cells:
         raise WaterGeometryError("footprint has no fine cells")
