@@ -5,10 +5,10 @@
 **Связанные планы:** `gen-dag-1-post-geo-ws.md`, `world-domain-patches-snapshots.md`.
 
 ## Цель
-Собрать все HTTP, WebSocket, SSE и debug endpoints и транспортную адаптацию в `backend/app/api/`. Не перемещать туда публичные Python API доменов, CRUD, алгоритмы, планирование или оркестрацию. Не создавать новую архитектуру исполнения.
+Собрать все HTTP, WebSocket, SSE и debug endpoints и их маршрутную транспортную адаптацию в `backend/app/api/`. Не перемещать туда публичные Python API доменов, CRUD, алгоритмы, планирование или оркестрацию. Не создавать новую архитектуру исполнения.
 
 ## Обязательные границы
-- Transport endpoints, маршруты, transport DTO, HTTP exception mapping и привязка transport dependencies принадлежат `backend/app/api/`. Composition root вправе подключать роутеры.
+- Transport endpoints, маршруты, transport DTO, HTTP exception mapping и привязка зависимостей конкретных маршрутов принадлежат `backend/app/api/`. Исключение для инфраструктурного composition root и middleware определено ниже.
 - Application, DAG, генераторы и домены не должны зависеть от FastAPI/Starlette, HTTPException или `app.api` схем. Доменные ошибки переводятся в HTTP на транспортной границе.
 - Route — тонкий адаптер: разбор запроса, транспортная валидация, вызов публичного контракта, адаптация ответа и ошибок. Никаких доменных алгоритмов, скрытых pipeline, прямых записей в storage или самостоятельного PatchSet/Snapshot orchestration.
 - Debug API сохраняется как диагностический интерфейс. Его вызовы должны повторять production-семантику публичных операций, а в DAG-сценариях — путь DAG. Нормативная граница DAG определяется GEN-DAG-1, а не API-1.
@@ -24,7 +24,7 @@
 6. **Приёмка:** повторный полный аудит; сравнение endpoint/protocol contracts до/после; проверка отсутствия циклов, дублей и доменных операций в routes; аудит реальных цепочек вызовов. Зелёные тесты не заменяют архитектурное ревью.
 
 ## Definition of Done
-- Все transport endpoints backend находятся в `backend/app/api/` (исключения требуют явного утверждения).
+- Все transport endpoints backend находятся в `backend/app/api/`; инфраструктурные исключения ниже не дают права определять endpoints вне `api/`.
 - Нет transport-specific зависимостей из application/domain слоёв и нет оркестрации мира внутри маршрутов.
 - Внешние контракты сохранены или изменения явно согласованы.
 - Для каждого выявленного нарушения имеется решение и проверенная цепочка вызовов.
@@ -39,12 +39,21 @@ API-1 не блокирует GEO-1 или GEN-DAG-1 целиком. Не мен
 
 | Файл / область | Наблюдение | Решение для API-1 |
 | --- | --- | --- |
-| `backend/app/core/app.py` | **Подтверждено:** создаёт `FastAPI`, регистрирует routers, middleware/CORS и обработчики HTTP; одновременно владеет инфраструктурным lifespan, DB и container bootstrap | **Кандидат на разделение.** Перенести transport-specific factory/wiring в `backend/app/api/`, сохранить инфраструктурную инициализацию у надлежащего владельца; проверить импортные зависимости, ASGI entrypoint и совместимость |
+| `backend/app/core/app.py` | Создаёт `FastAPI`, подключает routers, middleware/CORS и инфраструктурный lifespan | **Допустимое исключение (composition root)**, если только собирает приложение и подключает API-маршруты, но не определяет собственные endpoints и не содержит бизнес-операций. Не переносить механически |
 | `backend/app/api/routes/*` | Найденные объявления `APIRouter` находятся в целевом каталоге | Оставить; проверить толщину handlers и наличие скрытой оркестрации |
 | `backend/app/api/routes/chat.py` | Найден `StreamingResponse` в транспортном слое | Расположение корректно; дополнительно проверить SSE semantics |
 | `backend/app/application/worldData/errors.py`, `worldBundle/errors.py`, `templateLibrary/packs/errors.py` | Упоминания FastAPI в комментариях; фактически обычные Python-исключения | **Не нарушение**, не переносить |
 | `backend/app/application/templateLibrary/reliefTemplateLibraryService.py`, `structureTemplateLibraryService.py` | Поиск отметил упоминания FastAPI, но выборочно прочитанные фрагменты не выявили transport imports | Не объявлять нарушением без дальнейшей проверки |
 
-**Промежуточный итог:** 1 подтверждённый кандидат на изменение границы — `core/app.py`; 0 найденных `APIRouter` вне `api/`. Это **не** утверждение, что других нарушений нет.
+**Промежуточный итог (уточнён):** 0 подтверждённых нарушений расположения endpoints по проверенной выборке; `core/app.py` — допустимое инфраструктурное исключение при соблюдении ограничений ниже; 0 найденных `APIRouter` вне `api/`. Это **не** утверждение, что других нарушений нет.
 
-**Обязательная следующая проверка до имплементации:** инвентаризировать все импорты `fastapi`, `starlette`, `app.api` вне `api/`; определения HTTP/WebSocket/SSE endpoints, middleware и registration sites; выяснить, что в `core/app.py` является транспортом, а что инфраструктурным bootstrap. Составить полную карту `current → target` и отдельно согласовать перенос `core/app.py` без переноса доменной инициализации в API.
+**Обязательная следующая проверка до имплементации:** инвентаризировать все импорты `fastapi`, `starlette`, `app.api` вне `api/`; определения HTTP/WebSocket/SSE endpoints, middleware и registration sites; выяснить, что в `core/app.py` является транспортом, а что инфраструктурным bootstrap. Составить полную карту `current → target`; отдельно проверить, что `core/app.py` не определяет endpoints и не выполняет доменные операции. Само наличие FastAPI в composition root не является нарушением.
+
+
+## Явные инфраструктурные исключения из правила размещения
+
+1. **Composition root:** `backend/app/core/app.py` вправе создавать экземпляр `FastAPI`, подключать роутеры из `app.api`, middleware, CORS, обработчики ошибок, lifecycle/DI и инфраструктурный bootstrap. Это сборка приложения, а не определение transport endpoints. Исключение действует только пока здесь **нет** декораторов endpoints, доменных алгоритмов, самостоятельных CRUD/pipeline или orchestration policy. Сам факт импорта `FastAPI` и `app.api.routes` из composition root допустим.
+2. **Инфраструктурный HTTP middleware:** `backend/app/core/logMiddleware.py` (`RequestLoggingMiddleware`) вправе оставаться в `core/`, хотя использует `starlette.middleware.base.BaseHTTPMiddleware` и `Request`: его назначение — сквозное логирование запросов, статуса, времени, ошибок и корреляционного `request_id`. Middleware не должен объявлять endpoints, реализовывать доменные операции или обходить публичные контракты. Инфраструктурная зависимость от Starlette здесь не является обратной зависимостью домена.
+3. **Граница исключений:** они применяются только к composition root и cross-cutting transport infrastructure, **не** к `application/`, `dataModel/`, генераторам, DAG и доменным сервисам. Новые исключения требуют отдельного обоснования; наличие `FastAPI` или `Request` в произвольном модуле само по себе исключением не становится.
+
+**Коррекция ревизии:** прежняя классификация `core/app.py` как подтверждённого нарушения и `core/logMiddleware.py` как обязательного кандидата на перенос отменена. Их следует проверять на соблюдение описанных границ, а не перемещать по одному лишь пути файла.
