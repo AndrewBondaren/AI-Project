@@ -556,3 +556,14 @@ def invalid_authored_boundary(request: AuthoredWaterGeometryRequest, geometry: A
     geometry.rim_level = FineZ(0)  # EXPECT: reportAttributeAccessIssue
     shape_cells(basin.footprint, "source", context)  # EXPECT: reportCallIssue
     wrong_projection: DeclaredLake = project_water_source(basin, 2)  # EXPECT: reportAssignmentType
+
+
+from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose, DeclaredCoastline
+from app.dataModel.hydrology.enums.basinKind import BasinKind
+
+
+def invalid_coastline_purpose(value: DeclaredCoastline) -> None:
+    DeclaredCoastline(location_uid="line", kind=BasinKind.SEA, purpose="water_source")  # EXPECT: reportArgumentType
+    DeclaredCoastline(location_uid="line", kind=BasinKind.SEA, purpose=CoastlinePurpose.BODY_BOUNDARY, target_source_uid=1)  # EXPECT: reportArgumentType
+    wrong_purpose: CoastlinePurpose = BasinKind.SEA  # EXPECT: reportAssignmentType
+    value.is_water_source = True  # EXPECT: reportAttributeAccessIssue

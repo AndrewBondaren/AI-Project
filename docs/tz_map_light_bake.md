@@ -134,6 +134,14 @@ ResolveContext.collect_only собирает diagnostics без логирова
 
 #### Placement P3 water
 
+G5-C1: purpose WATER_SOURCE/BODY_BOUNDARY задан в DeclaredCoastline, default
+только для отсутствующего поля — WATER_SOURCE. Boundary требует strict
+target_source_uid; source не принимает связь target. Body-source wrapper,
+merge/load и body-presence guards используют is_water_source. Boundary остаётся
+в исходных декларациях и не получает body spec/carve или body projection.
+Наличие и состояние водной опоры разрешаются G5-CP/G5-C3, без подмены source
+identity physical body UID и без выбора «ближайшей» воды в wire validator.
+
 G5 source geometry boundary: AuthoredWaterGeometryRequest (captured immutable
 inputs после READY) → prepare_authored_water_geometry → AuthoredWaterGeometry
 (footprints, coarse space, terrain ref, lake rim level, z_min, notices).

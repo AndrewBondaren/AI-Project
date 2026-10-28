@@ -65,7 +65,7 @@ class HydrologyGeneratorService:
         seas = bool(active & {HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN})
         lakes = HydrologyScope.LAKES in active
         if seas or lakes:
-            if basin_specs is None and (policy.declared_basins or policy.declared_coastlines or policy.declared_lakes):
+            if basin_specs is None and (policy.declared_basins or any(c.is_water_source for c in policy.declared_coastlines) or policy.declared_lakes):
                 water_issue(ctx, world.world_uid, "declared water requires resolved post-carve BasinSpec input",
                             "WATER_PLACEMENT_REQUIRED", disposition=PlanDiagnosticDisposition.ERROR)
             specs = [spec for spec in (basin_specs or ())

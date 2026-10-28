@@ -257,7 +257,8 @@ def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementC
          for category, members in (("declared_basins", hydrology.declared_basins),
                                    ("declared_coastlines", hydrology.declared_coastlines),
                                    ("declared_lakes", hydrology.declared_lakes))
-         for index, source in enumerate(members)],
+         for index, source in enumerate(members)
+         if not isinstance(source, DeclaredCoastline) or source.is_water_source],
         key=lambda item: item[2].location_uid)
     for uid, group in groupby(tagged, key=lambda item: item[2].location_uid):
         members = list(group)

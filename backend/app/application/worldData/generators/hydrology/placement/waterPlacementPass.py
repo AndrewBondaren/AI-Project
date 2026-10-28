@@ -104,7 +104,7 @@ def run_water_placement_pass(world: World, locations: list[NamedLocation], heigh
                              *, ctx: ResolveContext | None = None) -> WaterPlacementPassResult | None:
     ctx = ctx or ResolveContext()
     pojo = hydrology(world)
-    sources = [*pojo.declared_basins, *pojo.declared_coastlines, *pojo.declared_lakes]
+    sources = [*pojo.declared_basins, *(c for c in pojo.declared_coastlines if c.is_water_source), *pojo.declared_lakes]
     if not is_hydrology_enabled(world) or not sources:
         return None
     topology = resolve_hydrology_topology(world, heightmap, locations=locations)

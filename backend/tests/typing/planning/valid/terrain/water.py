@@ -37,6 +37,8 @@ from app.application.worldData.placement.adapters.water import prepare_authored_
 from app.application.worldData.generators.terrain.designedWater.strategies.authoredRegionStrategy import AuthoredRegionStrategy
 from app.application.worldData.generators.hydrology.placement.projectDeclaredHydrology import project_water_source
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
+from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose, DeclaredCoastline
+from app.dataModel.identity.uid import EntityUid
 
 
 def valid_water_contracts(source: WaterDesignSource, metadata: WaterSourceMetadata,
@@ -114,3 +116,9 @@ def valid_authored_boundary(request: AuthoredWaterGeometryRequest, input: Author
     implementation: DesignedWaterStrategy = AuthoredRegionStrategy()
     assert_type(implementation.design(input), AuthoredWaterDesignDraft)
     return AuthoredRegionStrategy().design(input)
+
+
+def valid_coastline_purpose(value: DeclaredCoastline) -> None:
+    assert_type(value.purpose, CoastlinePurpose)
+    assert_type(value.target_source_uid, EntityUid | None)
+    assert_type(value.is_water_source, bool)

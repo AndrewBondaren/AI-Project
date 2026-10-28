@@ -31,9 +31,21 @@ generation_region_uid, BasinKind и MaterialKey. Дублирование region
 WaterDesignSource — derived union wrappers существующих basin/lake/coastline
 и procedural source; WaterSourceMetadata несёт готовые uid/kind/liquid/level,
 bands, source_path и positive default_depth. Mapper выполняется вне моделей.
-До G5-C1 coastline сохраняет current water_source semantics; G5-C1 вводит
-purpose и исключает BODY_BOUNDARY из source wrapper. Новая persisted
-коллекция и подключение generation к active Declared* — только G10-A.
+G5-C1: DeclaredCoastline.purpose использует CoastlinePurpose (enum рядом с POJO):
+WATER_SOURCE="water_source" по DefaultEnumWhenMissing для отсутствующего поля,
+BODY_BOUNDARY="body_boundary" требует target_source_uid:EntityUid.
+Water source не принимает непустой target; None означает отсутствие связи.
+Явный null/неизвестное значение purpose не заменяется default. Target — strict
+nonempty opaque source UID, без trim/coercion, не physical WaterBody UID lookup.
+Разрешение существования/допустимости target выполняют G5-CP/G5-C3 по actual
+source/placement/final-body facts; этот шаг проверяет wire форму и комбинации.
+Existing kind/liquid/path/closed/water_side contracts сохраняются.
+is_water_source — единая structural classification property, без terrain query,
+admission или priority rules. BODY_BOUNDARY исключён из source wrapper, body
+merge и legacy body load/guards; bulk body projection не меняет его absolute
+path. В persisted declared_coastlines boundary сохраняется до dependent стадии.
+Новая persisted коллекция не вводится; подключение generation к active
+Declared* — только G10-A.
 WorldHydrology.enabled=False — абсолютный запрет; autoresolve=False для
 допущенной гидрологии выбирает DECLARED_ONLY, True — AUTORESOLVE.
 HydrologyExecutionMode (DISABLED/DECLARED_ONLY/AUTORESOLVE) — computed domain
@@ -642,7 +654,7 @@ Pure facade — `generators/hydrology/hydrologyGeneratorService.py`: поряд�
 
 Целевой вход — resolved placement и post-carve heightmap; выход — физические факты тела/клеток. `waterBodyAssembler` делегирует в `water/`: один механизм для моря, океана и озера. Legacy line→paint/flood удалён в HY-12/6; HY-6 water-side геометрия остаётся входом rim, HY-11 topology geometry сохраняется.
 
-Coastline создаёт намерение водоёма с явным `kind`/`liquid`. Открытая линия получает bounded downhill footprint на pre-carve z и относительные лимиты политики; петля — topology-aware interior/exterior по `water_side`. Алгоритмы и POJO описаны в § Declare: бассейн, озеро и coastline.
+Coastline с purpose `water_source` создаёт намерение водоёма с явным `kind`/`liquid`. Открытая линия получает bounded downhill footprint на pre-carve z и относительные лимиты политики; петля — topology-aware interior/exterior по `water_side`. `body_boundary` не создаёт водоём и передаётся dependent стадии по `target_source_uid`. Алгоритмы и POJO описаны в § Declare: бассейн, озеро и coastline.
 
 Owning-сегмент, проекция `t`, нормаль `n(K)` и `(C-K)·n(K)>0` вычисляются в одном unrolled-кадре через доменные `nearest_on_segment`/`centroid`. При равном расстоянии — max dot, затем стабильный порядок `(y,x)` и сегментов. Seeds, water-side и rim используют ту же нормаль; raw adjacency, локальный wrap и евклид на канонических мировых координатах запрещены.
 
@@ -1271,7 +1283,7 @@ mountain depth не меняются.
 
 `WorldHydrology` расширяется `declared_basins: DefaultWhenMissing[list[DeclaredBasin]] = []` (factory) и `default_water_level: DefaultWhenMissing[int] = 0`. `BasinKind` — отдельный enum `sea/ocean/inland_sea/lake`; `WaterSide` — `interior/exterior`. Bare str для kind/liquid не вводится: liquid использует существующий `MaterialKey`; строковые UID — осознанные непрозрачные ссылки, разрешаемые существующим import/remap-контрактом.
 
-**`DeclaredCoastline`** сохраняет `location_uid` и `path: list[HydrologyWaypoint]`, расширяется обязательным `kind: BasinKind`, `liquid: MaterialKey` с default water, `closed: bool = False`, `water_side: WaterSide | None = None`. `closed=True` требует явного water_side. Невырожденная открытая линия содержит >=2 различных точек; петля >=3, повтор первой точки не обязателен. Waypoints — существующий fine-контракт; поле waypoint.z не подменяет уровень всего водоёма.
+**`DeclaredCoastline`** сохраняет `location_uid` и `path: tuple[HydrologyWaypoint,...]` (JSON array), обязательный `kind: BasinKind`, `liquid: MaterialKey` с default water, `closed: bool = False`, `water_side: WaterSide | None = None`. G5-C1 добавляет typed `purpose: CoastlinePurpose` и `target_source_uid: EntityUid | None`. Отсутствующий purpose означает `water_source`; `body_boundary` требует target, а source не принимает target. Это разные роли одной декларации, не два persisted списка. Target указывает source identity, а не physical body и не spatial lookup. `closed=True` по-прежнему требует явного water_side. Невырожденная открытая линия содержит >=2 различных точек; петля >=3, повтор первой точки не обязателен. Waypoints — существующий fine-контракт; поле waypoint.z не подменяет уровень всего водоёма.
 
 **Открытая линия:** P3 adapter строит bounded downhill footprint на pre-carve снимке. Seeds — водная сторона HY-6; BFS идёт через доменную 4-смежность. Допустимая клетка удовлетворяет `z < resolved_level` **или** остаётся внутри extent-бюджета от owning-сегмента, причём hard area/extent caps действуют в обоих случаях. Все смещения считаются в одном unrolled-кадре; на шве используются доменные образы. Детерминированный frontier `(distance,y,x)` исключает зависимость от порядка входных записей. `edge_noise` деформирует границу до hard caps, если задан существующим spatial-контекстом.
 

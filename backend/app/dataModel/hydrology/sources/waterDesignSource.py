@@ -52,10 +52,17 @@ class AuthoredLakeSource(_SourceWrapper, frozen=True):
 
 
 class CoastlineWaterSource(_SourceWrapper, frozen=True):
-    """Current coastline is a water source; purpose exclusion is added at G5-C1."""
+    """Body-producing line only; dependent boundaries use their own G5-C3 stage."""
 
     kind: Literal[WaterDesignSourceKind.COASTLINE] = WaterDesignSourceKind.COASTLINE
     value: DeclaredCoastline
+
+    @field_validator("value")
+    @classmethod
+    def require_water_source(cls, value: DeclaredCoastline) -> DeclaredCoastline:
+        if not value.is_water_source:
+            raise ValueError("body_boundary cannot be a water design source")
+        return value
 
 
 class ProceduralSource(_SourceWrapper, frozen=True):

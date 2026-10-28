@@ -24,6 +24,8 @@ def project_water_source[S: DeclaredBasin | DeclaredCoastline | DeclaredLake](so
     """
     if not isinstance(source, (DeclaredBasin, DeclaredCoastline, DeclaredLake)):
         raise TypeError("source projection requires a typed authored water source")
+    if isinstance(source, DeclaredCoastline) and not source.is_water_source:
+        raise ValueError("body_boundary belongs to dependent preparation, not water source projection")
     if type(map_cell) is not int or map_cell <= 0:
         raise ValueError("source projection requires a positive integer fine span")
     if isinstance(source, DeclaredBasin):
@@ -61,6 +63,11 @@ def project_declared_hydrology(hydrology: WorldHydrology, map_cell: int, *, ctx:
     for collection, members in (("declared_coastlines", hydrology.declared_coastlines), ("declared_lakes", hydrology.declared_lakes)):
         projected = []
         for index, entry in enumerate(members):
+            if isinstance(entry, DeclaredCoastline) and not entry.is_water_source:
+                # Boundary path stays authored for its dependent phase; this is
+                # the body projection pass, not a boundary geometry producer.
+                projected.append(entry)
+                continue
             try:
                 entry = project_water_source(entry, map_cell)
             except (ValidationError, ValueError) as error:

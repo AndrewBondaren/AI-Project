@@ -49,6 +49,7 @@ from app.dataModel.materials.enums.materialCategory import MaterialCategory as _
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry as _MWorldEconomyTierRegistry
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry as _MEconomyTierEntry
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline as _MDeclaredCoastline
+from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose as _MCoastlinePurpose
 from app.dataModel.hydrology.enums.waterSide import WaterSide as _MWaterSide
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint as _MHydrologyWaypoint
 from app.dataModel.hydrology.declaredLake import DeclaredLake as _MDeclaredLake
@@ -328,6 +329,7 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (163, _MIntentRiverPaint, CanonicalTypeKind.RECORD),
     (164, _MPlanEnvelope[_MHydrologyPlan], CanonicalTypeKind.RECORD),
     (165, _MHydrologyPlan, CanonicalTypeKind.RECORD),
+    (166, _MCoastlinePurpose, CanonicalTypeKind.ENUM),
 )))
 
 

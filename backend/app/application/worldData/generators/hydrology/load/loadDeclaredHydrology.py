@@ -117,7 +117,7 @@ def load_declared_hydrology(
 ) -> LoadedDeclaredHydrology:
     """Read POJO declare from world; segments mode → edges at import (A3 hybrid)."""
     pojo = read_hydrology(world)
-    coastlines = _coerce_declared_coastlines(list(pojo.declared_coastlines))
+    coastlines = [entry for entry in _coerce_declared_coastlines(list(pojo.declared_coastlines)) if entry.is_water_source]
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
     rivers = _coerce_declared_rivers(list(pojo.declared_rivers))
     basins = [_coerce_pojo(DeclaredBasin, entry) for entry in pojo.declared_basins]
@@ -144,6 +144,8 @@ def load_prepared_declared_hydrology(
     """Convert validated declarations with the same geometry order and identities."""
     coastline_specs: list[CoastlineSpec] = []
     for entry in coastlines:
+        if not entry.is_water_source:
+            continue
         segments = _path_to_segments(list(entry.path), closed=entry.closed)
         if not segments:
             continue

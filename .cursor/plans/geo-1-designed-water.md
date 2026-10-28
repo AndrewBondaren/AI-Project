@@ -548,9 +548,9 @@ liquid и path определяют вход будущего бассейна. 
 ТЗ, не утверждение, что код уже различает режимы.
 
 **Wire/POJO discriminant.** Расширить DeclaredCoastline:
-- `purpose: CoastlinePurpose` — новый закрытый enum в dataModel/hydrology,
+- `purpose: CoastlinePurpose` — закрытый enum в existing dataModel/hydrology/declaredCoastline.py,
   `water_source | body_boundary`; это не PlacementMode absolute/semantic.
-- `target_source_uid: str | None` — opaque ссылка на source identity
+- `target_source_uid: EntityUid | None` — existing strict opaque UID для source identity
   водоёма для body_boundary, не spatial lookup по ближайшей воде.
 DefaultEnumWhenMissing для purpose — water_source, поскольку нынешняя модель
 обозначает именно источник body intent. body_boundary требует явный target;
@@ -10061,9 +10061,25 @@ tz_map_light_bake §Placement P1/P2 после sync G0.
 Файлы: DeclaredCoastline, CoastlinePurpose enum, existing waterTypes/source
 classification и wire validator. Контракт: water_source/body_boundary,
 target_source_uid и их несовместимые комбинации; source vs physical UID.
+Enum размещается рядом с POJO в declaredCoastline.py (root20→20, enums10→10).
+Единственная classification property is_water_source используется wrapper,
+water adapter merge, declared loader и existing body-presence guards. Bulk body
+projection сохраняет boundary без fine→coarse изменения. Wire validation —
+existing POJO resolver, без отдельного validator. Новый enum зарегистрировать
+в existing planning/encoding/surfaceManifest.py для typed canonical encoding.
+Target existence/admission/final-body mapping — owning G5-CP/G5-C3, не REF-W
+по physical WaterBody registry или неполному набору declared sources.
 Проверка: legacy declaration → water_source, enum/refs/required target,
 body-boundary не попадает в body source merge. Done: варианты различимы
 без чтения current terrain/угадывания по наличию воды.
+
+G5-C1 IMPLEMENTED/VERIFIED (2026-10-28): typed purpose/target, existing wire
+resolver и единая is_water_source classification; boundary исключён из body
+wrapper/merge/load/guards, absolute path сохранён для dependent стадии.
+CoastlinePurpose зарегистрирован в canonical manifest; нового persisted списка нет.
+GEO-1 310/310 (+15), existing placement/water/wire80/80 (world_test_004),
+positive Pyright — 0 ошибок, negative planning148/148 (+4).
+Composition: hydrology20/enums10/adapters6/load9 неизменны, tests coastline3.
 
 ### G5-CP — hydrology placement cases и facts
 Цель: описать source/boundary domain behavior для общего policy engine.
