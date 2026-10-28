@@ -28,14 +28,15 @@ def _density(root: str, ctx: RegionRasterContext, coord: Coord) -> bool:
     ) < density)
 
 
-def _membership(shape: RegionShape, root: str, ctx: RegionRasterContext,
-                topology: WorldTopology) -> Callable[[Point, Coord], bool]:
+def geometry_membership(shape: RegionShape, root: str, region_uid: str,
+                        topology: WorldTopology) -> Callable[[Point, Coord], bool]:
+    """Shared geometry before paint density; exact integer-index sampling."""
     edge = shape.edge_noise
     noise = None
     if edge is not None and edge.amplitude:
         def sample(**keys: int) -> float:
             return seed_rng(root, UidKind.REGION, channel=RegionRngChannel.EDGE,
-                            uid=ctx.region_uid, **keys).random()
+                            uid=region_uid, **keys).random()
         noise = smooth_field(sample, edge.scale, topology)
 
     def contains(raw: Point, canonical: Coord) -> bool:
@@ -43,9 +44,15 @@ def _membership(shape: RegionShape, root: str, ctx: RegionRasterContext,
             return False
         if noise is not None and edge is not None and boundary_depth(shape, *raw) < edge.amplitude * noise(*canonical):
             return False
-        return _density(root, ctx, canonical)
+        return True
 
     return contains
+
+
+def _membership(shape: RegionShape, root: str, ctx: RegionRasterContext,
+                topology: WorldTopology) -> Callable[[Point, Coord], bool]:
+    geometry = geometry_membership(shape, root, ctx.region_uid, topology)
+    return lambda raw, canonical: geometry(raw, canonical) and _density(root, ctx, canonical)
 
 
 def _fine_samples(bbox: Bounds, topology: WorldTopology) -> Iterator[tuple[Point, Coord]]:

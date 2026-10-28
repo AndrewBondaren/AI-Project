@@ -406,7 +406,8 @@ Cascade не исполняет admission, а PolicyResolver не повторя
 
 **C. Размер области — terrain, не water policy.**
 `terrain/regions/regionExtent.py::prepare_terrain_regions(...)`
-возвращает TerrainRegionsSnapshot по §6.3. Этот provider не выбирает
+возвращает TerrainRegionPlan(snapshot, coverages) по §6.3 и согласованному
+G3-R supplement. Этот provider не выбирает
 стратегию и не определяет placement specificity. Водный preparer читает
 generation_area_fine2 из результата, без своего shape.area()/bbox fallback.
 
@@ -1115,9 +1116,10 @@ API сейчас нет.
 - RegionShape.area() и WorldBounds.width/height — существующие примитивы
   реализации, не готовый terrain-domain API для потребителя.
 
-**Новый provider (планируемый, сейчас отсутствует):**
+**Terrain provider (реализуется isolated в G3-R):**
 `backend/app/application/worldData/generators/terrain/regions/regionExtent.py`
-— `prepare_terrain_regions(...) -> TerrainRegionsSnapshot`.
+— `prepare_terrain_regions(world: RasterWorld, *, snapshot_uid, world_region_uid,
+inputs: TerrainRegionPlanningInput) -> TerrainRegionPlan`.
 Вход: world/snapshot identity, resolved topology, масштаб coarse→fine,
 фиксированные world_bounds, полные region intents и готовые anchors.
 Переиспользовать PlacementIntent/RegionShape, без нового геометрического
@@ -1134,6 +1136,9 @@ unresolved, не площадь по wet cells. Input частичного auto 
   frozen `TerrainRegionsSnapshot(world_uid, snapshot_uid, world_region,
   regions)`, где world_region: TerrainRegionExtent | None,
   regions: tuple[TerrainRegionExtent, ...].
+  Frozen TerrainRegionPlan содержит snapshot и соответствующие canonical coverages;
+  area каждого extent совпадает с мерой его coverage. Возвращается один plan,
+  а потребителям water/budget передаётся plan.snapshot вместе с нужной coverage.
 
 Это полная площадь области генерации до tile clipping, не bbox
 нерегулярной формы, не количество L0 samples и не площадь готовой воды.
@@ -1141,9 +1146,9 @@ unresolved, не площадь по wet cells. Input частичного auto 
 UID берутся из переданных identity; новый неоговорённый UID mint запрещён.
 Source→region binding передаётся явно, не угадывается гидрологией.
 
-**Шов caller/callee:** SurfacePlanningAssembler.prepare после PC-9 получает topology
+**Target шов caller/callee (activation только G10-A):** SurfacePlanningAssembler.prepare получает topology
 на существующей boundary resolveHydrologyTopology, вызывает terrain
-provider и передаёт результат обязательным keyword
+provider и передаёт plan.snapshot обязательным keyword
 `regions: TerrainRegionsSnapshot` в run_water_placement_pass и подготовку
 DesignedWaterStrategy. В water pass передаётся та же topology.
 Provider pure: не вызывает hydrology, не пишет surface_z и не выполняет
@@ -2376,7 +2381,7 @@ READY должен иметь однозначную стадию; readiness б�
 выдать за уже удовлетворённые spatial constraints.
 
 **J04. Region extent + declared union + context → WaterCoverageBudget.**
-Producer extent: prepare_terrain_regions → TerrainRegionsSnapshot;
+Producer extent: prepare_terrain_regions → TerrainRegionPlan → plan.snapshot;
 prepare_designed_water выбирает TerrainRegionExtent по generation region UID.
 Declared coverage union предоставляет terrain/spatial geometry owner,
 не hydrology. Схождение: terrain/designedWater/coverage/
@@ -4590,8 +4595,10 @@ Spans canonical, sorted(y,x0), disjoint/non-adjacent в одной row, clipped
 world bounds; seam пересекающий интервал разбивается. Area=sum(x1-x0),
 единица fine_cells². area/union/intersection/subtract принадлежат
 `application/.../terrain/regions/coverageMeasure.py::RegionCoverageMeasure`,
-API `area(coverage)->int`, `union(tuple[RegionCoverage,...])->RegionCoverage`,
-`intersection(a,b)`, `subtract(a,b)` с линейным merge row intervals.
+API `area(coverage)->int`, `union(tuple[RegionCoverage,...], *, region_uid)->RegionCoverage`,
+`intersection(a,b, *, region_uid)`, `subtract(a,b, *, region_uid)` с merge row intervals.
+Result UID всегда явно предоставляет caller, включая empty union; implicit mint
+и выбор UID первого operand запрещены согласованным G3-R supplement.
 Hydrology/budget не вычисляют площадь bbox/полигона независимо.
 
 RegionExtent provider использует тот же membership predicate, что
@@ -9838,6 +9845,17 @@ Contracts 115/115; positive typing 263 файлов — 0 ошибок; negative
 Production owners/defaults не переключены; следующий шаг — G3.
 
 ### G3 — overrides водоёма
+Уточнение G3 по §6.29-J: contracts-only, без active Declared* annotations/export
+и без нового source-family facade. Existing waterGenerationSettings.py получает
+BodyGenerationFields — reusable frozen owner field generation с factory
+BodyWaterGenerationSettings. Уже объявленные BODY→CATEGORY→WORLD FieldRef edges
+переиспользуются без новых CascadeChannel nodes. Basin/coastline/lake composition
+проверяется isolated test subclasses existing owners в
+tests/geo1/contracts/cascade/test_body_generation.py через общий resolve_model/
+resolve_patch, без собственного normalizer/resolver. Тот же embedded settings
+служит procedural caller; его source union остаётся последующим контрактом.
+Папки generation 5→5, cascade tests 4→5; новые production файлы не создаются.
+Owner wiring и source constructors/import/export входят только в G10-A.
 Цель: добавить один reusable POJO и body channels для существующих inputs.
 ТЗ: GEO-1, tz_terrain_hydrology §Declare, tz_cascade_context §2–4.
 Файлы: dataModel/hydrology source POJO; shared generation overrides;
@@ -9846,7 +9864,19 @@ typed FieldRef links к world channels; source identity сохраняется.
 Проверка: все примеры §4.3, три source типа, provenance, explicit False/0,
 preview/runtime parity. Done: потребители не резолвят параметры вручную.
 
+G3 IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+BodyGenerationFields переиспользует готовые BODY channels; три source compositions,
+§4.3, provenance/0/False, shared import/patch и preview/runtime parity проверены.
+GEO-1 170/170 (+10), location/cascade 52/52; positive typing 271 файл — 0 ошибок.
+Negatives planning 103/103, cascade 19/19 (+3); full cascade-check — 16 baseline registry errors, delta 0.
+Active Declared*/WorldHydrology/schema/exports не менялись; следующий шаг — G3-R.
+
 ### G3-R — площадь области генерации от домена региона
+Входной аудит 2026-10-28: §6.3 и поздний §6.29-M задают разные return types
+prepare_terrain_regions (snapshot vs plan с coverages); §6.29-E не задаёт
+region_uid результата mixed-UID coverage algebra. Предложение точных signatures,
+owning paths и contracts-only границы — [G3-R contract](./geo-1-region-extent-contract-done.md),
+согласован 2026-10-28. Return type и coverage identity ниже уточняются этим supplement.
 Цель: предоставить потребителям готовый размер региона через его домен.
 ТЗ: GEO-1 из G0, tz_terrain_generation §generate-surface,
 tz_map_light_bake §Placement P1 и coordinate units.
@@ -9857,15 +9887,23 @@ hydrology/placement/waterPlacementPass.py (передача typed input).
 Target caller wiring: application/worldData/planning/composition/
 surfacePlanningAssembler.py и terrain provider; old surfaceTerrainContext
 не расширяется новой orchestration, его shim contract сохраняется.
-Контракт: §6.3 — prepare_terrain_regions возвращает TerrainRegionsSnapshot
+Контракт: §6.3 + согласованный supplement — prepare_terrain_regions возвращает
+TerrainRegionPlan(snapshot:TerrainRegionsSnapshot, coverages)
 до water placement; generation_area_fine2 отдаёт домен рельефа.
 Не изменять SurfaceHeightmap и не брать площадь из downstream ReliefFacts.
 Проверка: irregular region, seam, full/partial parity и отсутствие
 локального bbox/shape/cell-count fallback у consumers; coarse→fine² scale,
 world/snapshot identity, missing region — явный unresolved, неизменность
 surface_z и различие generation area/placement original_area.
-Done: один terrain provider возвращает typed extent до водного прохода;
+Done: один terrain provider возвращает typed extent/coverage до водного прохода;
 водные consumers принимают его без самостоятельного расчёта размера.
+
+G3-R IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+TerrainRegionPlan + exact span algebra, общий geometry predicate без density,
+anchor/claim input и identity/missing-region guard готовы; active assembler/water pass не переключены.
+GEO-1 192/192 (+22), location/cascade 52/52, rasterizer 18/18; positive typing 280 файлов — 0 ошибок.
+Negatives planning 107/107 (+4), cascade 19/19; full cascade-check — 16 baseline registry errors, delta 0.
+§6.3/§6.29-E приведены к согласованным signatures; следующий шаг — G4.
 
 ### G4 — абстракция стратегий
 Цель: единый typed preparation interface без spatial resolve/z-write.

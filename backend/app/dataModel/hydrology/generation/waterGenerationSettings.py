@@ -75,6 +75,13 @@ class WorldHydrologyGenerationFields(BaseModel, frozen=True):
     generation: DefaultWhenMissing[WorldWaterGenerationSettings] = Field(default_factory=WorldWaterGenerationSettings)
 
 
+class BodyGenerationFields(BaseModel, frozen=True):
+    """Reusable body owner field; active Declared* owners switch only at G10-A."""
+
+    model_config = WaterGenerationSettings.model_config
+    generation: DefaultWhenMissing[BodyWaterGenerationSettings] = Field(default_factory=BodyWaterGenerationSettings)
+
+
 class SeasGenerationFields(BaseModel, frozen=True):
     """Reusable fields for the future sea owner; no legacy fields in the schema."""
 

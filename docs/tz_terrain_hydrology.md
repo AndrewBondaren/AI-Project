@@ -19,6 +19,11 @@ defaults. В частности, приведённые ниже baseline zero-p
 
 Source settings живут в existing world.hydrology и body/category generation
 POJO; physical resolved WaterBody не является источником authored overrides.
+G3 contracts-only: reusable BodyGenerationFields содержит embedded
+BodyWaterGenerationSettings; isolated composition с тремя existing Declared*
+сохраняет location_uid, authored geometry/floor и existing validators. Поле
+generation подключается к active source owners только в G10-A; новый persisted
+source settings object или отдельный body resolver не вводится.
 WorldHydrology.enabled=False — абсолютный запрет; autoresolve=False для
 допущенной гидрологии выбирает DECLARED_ONLY, True — AUTORESOLVE.
 HydrologyExecutionMode (DISABLED/DECLARED_ONLY/AUTORESOLVE) — computed domain

@@ -446,3 +446,18 @@ from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HYDROLOGY_G
 def invalid_hydrology_metadata() -> None:
     SelectByValue[bool, OtherPolicyMode, WaterPolicyReason](HYDROLOGY_GENERATION_POLICY, ())  # EXPECT: reportArgumentType
     foreign: ValueSelectionPolicySpec[OtherPolicyMode, WaterPolicyReason] = compile_value_policy(HYDROLOGY_GENERATION_POLICY, ())  # EXPECT: reportAssignmentType
+
+
+from app.application.worldData.generators.terrain.regions.coverageMeasure import RegionCoverageMeasure
+from app.application.worldData.generators.terrain.regions.regionExtent import prepare_terrain_regions
+from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan, RegionCoverage
+from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, GridX
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionsSnapshot
+from app.application.worldData.masks.regionRasterContext import RasterWorld
+
+
+def invalid_region_extent(world: RasterWorld, snapshot: TerrainRegionsSnapshot, coverage: RegionCoverage) -> None:
+    CoverageSpan(y=FineY(0), x0=GridX(0), x1=FineX(1))  # EXPECT: reportArgumentType
+    RegionCoverageMeasure.union((coverage,))  # EXPECT: reportCallIssue
+    prepare_terrain_regions(world, snapshot_uid="snapshot", world_region_uid="world", inputs=snapshot)  # EXPECT: reportArgumentType
+    snapshot.world_uid = "other"  # EXPECT: reportAttributeAccessIssue

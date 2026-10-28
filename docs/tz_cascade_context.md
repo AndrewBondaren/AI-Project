@@ -66,6 +66,15 @@ autoresolve наследуют через extend; неразрешённый roo
 False и даёт RULE_NO_MATCH. Active owner schemas переключаются в G10-A.
 Норматив authoring/identity и точный migration inventory — [tz_policy](./tz_policy.md).
 
+G3 (isolated до G10-A): BodyGenerationFields в existing waterGenerationSettings.py
+объявляет один embedded generation: BodyWaterGenerationSettings с factory.
+Три будущих source owners (DeclaredBasin/Coastline/Lake) переиспользуют это поле;
+процедурный caller передаёт тот же settings POJO. Link(WATER_BODY, owner.generation)
+использует непосредственные BODY→CATEGORY→WORLD FieldRef edges без nested selector
+или проекции значений. Missing/empty сохраняют nullable channels, explicit 0/False
+остаются overrides. Импорт/preview/runtime и patch используют общий POJO resolver;
+active Declared*/WorldHydrology annotations/export до G10-A не меняются.
+
 ## Действующий контракт локаций
 
 ### GEO-1 G0-A — общий runtime-контракт (target G1)

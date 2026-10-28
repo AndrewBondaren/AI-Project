@@ -39,7 +39,7 @@ def valid_concrete_contexts(location: LocationContext, water: WaterGenerationCon
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction
 from app.dataModel.hydrology.generation.waterGenerationSettings import (
     WorldWaterGenerationSettings, CategoryWaterGenerationSettings, BodyWaterGenerationSettings,
-    SeasGenerationFields, LakesGenerationFields,
+    SeasGenerationFields, LakesGenerationFields, BodyGenerationFields,
 )
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
@@ -62,6 +62,15 @@ def valid_category_owner_fields(seas: SeasGenerationFields, lakes: LakesGenerati
     assert_type(lakes.generation, CategoryWaterGenerationSettings)
     SeasGenerationFields(sea_generation=CategoryWaterGenerationSettings(autoresolve=False))
     LakesGenerationFields(generation=CategoryWaterGenerationSettings(water_fraction=0.0))
+
+
+def valid_body_owner_field(source: BodyGenerationFields, context: WaterGenerationContext) -> None:
+    assert_type(source.generation, BodyWaterGenerationSettings)
+    assert_type(source.generation.autoresolve, bool | None)
+    fraction = FieldRef(lambda: BodyWaterGenerationSettings, lambda settings: settings.water_fraction)
+    assert_type(fraction, FieldRef[BodyWaterGenerationSettings, WaterFraction | None])
+    BodyGenerationFields(generation=BodyWaterGenerationSettings(water_fraction=0.0, autoresolve=False))
+    assert_type(extend(context, Link(WaterGenerationScope.WATER_BODY, source.generation)), WaterGenerationContext)
 
 
 district_density = FieldRef(lambda: DistrictTemplateEntry, lambda pojo: pojo.density)

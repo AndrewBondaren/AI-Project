@@ -48,6 +48,16 @@ Topological seams и aliases нормализует WorldTopology; seam не с�
 вторую площадь или identity. Exact coverage — fine-cell spans/union,
 не число L0 samples и не bbox area.
 
+G3-R предоставляет pure prepare_terrain_regions → TerrainRegionPlan(snapshot,
+coverages). TerrainRegionExtent хранит strict nonnegative generation_area_fine2;
+canonical CoverageSpan интервалы half-open, площадь дискретная до paint density.
+Geometry membership общий с RegionRasterizer; bbox/ellipse/polygon/corridor,
+ready anchors и claim coverage измеряются без fine-world array. Union,
+intersection/subtract требуют явный result region_uid. Missing region и
+world/snapshot mismatch дают typed PlanBuildFailure через require_terrain_region.
+Отсутствие declared fixed bounds сохраняет world_region=None; AABB fallback нет.
+Новый API пока contracts-only; active assembler/water pass/codec switch — G10-A.
+
 ### Общая policy GEO-1
 
 Общий согласованный authoring-контракт через аннотации и generated rule identity:
