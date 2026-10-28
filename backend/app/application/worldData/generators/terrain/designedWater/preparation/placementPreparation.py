@@ -11,7 +11,7 @@ from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.terrain.designedWater.draft import AuthoredWaterDesignDraft, ProceduralWaterDesignDraft, WaterDesignDraft
 from app.dataModel.terrain.designedWater.fields.field import ContinentalFieldValue
 from app.dataModel.terrain.designedWater.input import (
-    AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput, WaterDesignInput,
+    AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput, WaterStrategyInput,
 )
 from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
@@ -19,7 +19,7 @@ from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCod
 from app.dataModel.topology.worldTopology import Coord
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
-_INPUT = TypeAdapter(WaterDesignInput)
+_INPUT = TypeAdapter(WaterStrategyInput)
 
 
 def _wet_score(value: ContinentalFieldValue, bits: int) -> int:
@@ -28,7 +28,7 @@ def _wet_score(value: ContinentalFieldValue, bits: int) -> int:
 
 
 class DesignedWaterPlacementPreparer:
-    def prepare(self, input: WaterDesignInput, draft: WaterDesignDraft, *,
+    def prepare(self, input: WaterStrategyInput, draft: WaterDesignDraft, *,
                 selection_policy: WaterFieldSelectionPolicy) -> WaterDesignPreparation:
         """Return geometry for G8; never bind admission or invoke spatial competition."""
         if not isinstance(input, (AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)):

@@ -70,8 +70,9 @@ class ProceduralWaterDesignDraft(_WaterDesignDraft, frozen=True):
 
     @model_validator(mode="after")
     def matching_field_floor(self) -> Self:
-        if self.metadata.source_kind is not WaterDesignSourceKind.PROCEDURAL:
-            raise ValueError("procedural draft requires procedural source metadata")
+        # Result shape follows the algorithm; the source retains its own origin.
+        if self.metadata.source_kind not in (WaterDesignSourceKind.PROCEDURAL, WaterDesignSourceKind.COASTLINE):
+            raise ValueError("procedural draft requires procedural or coastline source metadata")
         profile = self.floor_profile
         if profile.recipe != self.field.recipe or profile.level != self.metadata.level:
             raise ValueError("field floor must use the same recipe and water level")

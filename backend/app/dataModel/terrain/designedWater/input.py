@@ -1,6 +1,7 @@
 """Resolved strategy boundary; validation only, without policy or spatial resolution."""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Generic, Literal, Self
+from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -21,7 +22,7 @@ from app.dataModel.terrain.designedWater.draft import (
     AuthoredWaterDesignDraft, ProceduralWaterDesignDraft, WaterDesignDraft,
 )
 from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterSource
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
@@ -33,12 +34,25 @@ from app.dataModel.validation.immutableValue import validate_immutable
 
 _DRAFT = TypeAdapter(WaterDesignDraft)
 
+# Source identity and strategy are independent axes. Defaults preserve the full
+# allowed source union at unspecialized call sites, never an implicit Any.
+type ProceduralWaterDesignSource = Annotated[ProceduralSource | CoastlineWaterSource, Field(discriminator="kind")]
+SourceT = TypeVar("SourceT", bound=WaterDesignSource, default=WaterDesignSource, covariant=True)
+AuthoredSourceT = TypeVar("AuthoredSourceT", bound=AuthoredWaterSource, default=AuthoredWaterSource, covariant=True)
+ProceduralSourceT = TypeVar("ProceduralSourceT", bound=ProceduralWaterDesignSource,
+                            default=ProceduralWaterDesignSource, covariant=True)
 
-class _WaterDesignInput(BaseModel, frozen=True):
+
+class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
+    """Common ready inputs, preserving the caller's exact source type.
+
+    Consumers dispatch through WaterStrategyInput, whose concrete variants also
+    validate source compatibility at runtime; TypeVar bounds alone are static.
+    """
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 
     strategy: Strategy
-    source: WaterDesignSource
+    source: Annotated[SourceT, Field(discriminator="kind")]
     metadata: WaterSourceMetadata
     context: ResolvedWaterGenerationContext
     region: TerrainRegionExtent
@@ -61,6 +75,16 @@ class _WaterDesignInput(BaseModel, frozen=True):
     @model_validator(mode="after")
     def coherent_inputs(self) -> Self:
         source, metadata = self.source, self.metadata
+        if not isinstance(source, (AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource, ProceduralSource)):
+            raise ValueError("water input requires a supported typed water source")
+        # Runtime validation remains authoritative even if callers explicitly
+        # parameterize a generic with a source outside its static bound.
+        if isinstance(self, AuthoredWaterDesignInput):
+            if not isinstance(source, (AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource)):
+                raise ValueError("authored strategy requires an authored water source")
+        elif isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)):
+            if not isinstance(source, (ProceduralSource, CoastlineWaterSource)):
+                raise ValueError("procedural strategy requires a procedural or coastline water source")
         value = source.value
         uid = source.value.source_uid if isinstance(source, ProceduralSource) else source.value.location_uid
         if uid != metadata.source_uid or source.kind != metadata.source_kind or value.liquid != metadata.liquid:
@@ -133,9 +157,8 @@ class _WaterDesignInput(BaseModel, frozen=True):
         return draft
 
 
-class AuthoredWaterDesignInput(_WaterDesignInput, frozen=True):
+class AuthoredWaterDesignInput(WaterDesignInput[AuthoredSourceT], Generic[AuthoredSourceT], frozen=True):
     strategy: Literal[Strategy.AUTHORED_REGION] = Strategy.AUTHORED_REGION
-    source: Annotated[AuthoredBasinSource | AuthoredLakeSource | CoastlineWaterSource, Field(discriminator="kind")]
     # G5 geometry was computed once before metadata (lake rim level depends on
     # its footprint). G8 binds this immutable result; strategy never rerasterizes.
     geometry: AuthoredWaterGeometry
@@ -156,25 +179,24 @@ class AuthoredWaterDesignInput(_WaterDesignInput, frozen=True):
         return self
 
 
-class NoiseWaterDesignInput(_WaterDesignInput, frozen=True):
+class NoiseWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
     strategy: Literal[Strategy.CONTINENTAL_NOISE] = Strategy.CONTINENTAL_NOISE
-    source: ProceduralSource
     field_policy: NoiseRecipe
 
 
-class PlateWaterDesignInput(_WaterDesignInput, frozen=True):
+class PlateWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
     strategy: Literal[Strategy.PLATE] = Strategy.PLATE
-    source: ProceduralSource
     field_policy: PlateRecipe
 
 
-class PlateNoiseWaterDesignInput(_WaterDesignInput, frozen=True):
+class PlateNoiseWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
     strategy: Literal[Strategy.PLATE_NOISE] = Strategy.PLATE_NOISE
-    source: ProceduralSource
     field_policy: PlateNoiseRecipe
 
 
-type WaterDesignInput = Annotated[
+# One closed strategy transport for validation and dispatch. Specialized inputs
+# enter this same union; there is no second serialization or execution path.
+type WaterStrategyInput = Annotated[
     AuthoredWaterDesignInput | NoiseWaterDesignInput | PlateWaterDesignInput | PlateNoiseWaterDesignInput,
     Field(discriminator="strategy"),
 ]

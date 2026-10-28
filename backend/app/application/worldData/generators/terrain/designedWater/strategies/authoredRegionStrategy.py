@@ -5,13 +5,13 @@ from app.application.worldData.placement.adapters.waterTypes import WaterPrepara
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.terrain.designedWater.draft import AuthoredWaterDesignDraft
-from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput, WaterDesignInput
+from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput, WaterStrategyInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 class AuthoredRegionStrategy:
-    def design(self, input: WaterDesignInput) -> AuthoredWaterDesignDraft:
+    def design(self, input: WaterStrategyInput) -> AuthoredWaterDesignDraft:
         if not isinstance(input, AuthoredWaterDesignInput):
             raise PlanBuildFailure((FieldPathError(("strategy",), "authored strategy requires authored input",
                 code=WaterDesignIssueCode.INVALID_STRATEGY.value),))

@@ -92,6 +92,18 @@ typed purpose; отсутствующий/failed support не является d
 Settings None наследует по ROOT/WORLD/CATEGORY/WATER_BODY; terminal defaults
 water_fraction=0.60, autoresolve=False, strategy=continental_noise.
 
+G5-C2-G: terrain/designedWater/input.py владеет generic WaterDesignInput[S]
+с общими ready inputs. AuthoredWaterDesignInput[S] допускает существующие
+basin/lake/coastline источники, Noise/Plate/PlateNoiseWaterDesignInput[S] —
+ProceduralSource либо CoastlineWaterSource. Допустимость проверяется bounds
+статически и валидаторами runtime, включая десериализацию/специализации.
+Source identity/path сохраняются. WaterStrategyInput — закрытый union
+специализаций по strategy; generic base не используется вместо dispatch
+validation. Recipes остаются строго связаны с соответствующим strategy.
+ProceduralWaterDesignDraft описывает алгоритм результата, поэтому допускает
+PROCEDURAL и COASTLINE source_kind с сохранением исходной metadata.
+Этот контракт не реализует применение coastline constraints и adapter wiring.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.

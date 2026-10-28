@@ -13,12 +13,18 @@ from app.dataModel.hydrology.sources.waterDesignSource import AuthoredLakeSource
 from app.dataModel.planning.identity.planKey import RegionPlanScope
 from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
-from app.dataModel.terrain.designedWater.input import WaterDesignInput
+from app.dataModel.terrain.designedWater.input import (
+    WaterDesignInput, WaterStrategyInput, AuthoredWaterDesignInput, NoiseWaterDesignInput,
+    PlateWaterDesignInput, PlateNoiseWaterDesignInput,
+)
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, ProceduralSource
+from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose
+import warnings
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.validation.immutableValue import validate_immutable
 from tests.geo1.contracts.strategies.fixtures import inputs, draft_for
 
-ADAPTER = TypeAdapter(WaterDesignInput)
+ADAPTER = TypeAdapter(WaterStrategyInput)
 
 
 class StrategyInputTests(TestCase):
@@ -113,3 +119,92 @@ class StrategyInputTests(TestCase):
                          value.pre_hydrology.model_copy(update={"payload": value.pre_hydrology.payload.model_copy(update={"surface_z": ()})})):
             with self.assertRaises(ValidationError):
                 ADAPTER.validate_python(value.model_copy(update={"pre_hydrology": envelope}))
+
+
+    def test_procedural_specializations_preserve_exact_sources(self):
+        for strategy, model in ((Strategy.CONTINENTAL_NOISE, NoiseWaterDesignInput),
+                                (Strategy.PLATE, PlateWaterDesignInput),
+                                (Strategy.PLATE_NOISE, PlateNoiseWaterDesignInput)):
+            base = inputs(strategy)
+            coast = CoastlineWaterSource(value=DeclaredCoastline(location_uid="source", kind=BasinKind.SEA,
+                path=(HydrologyWaypoint(x=-4,y=4), HydrologyWaypoint(x=-3,y=4))))
+            for source, owner in ((base.source, ProceduralSource), (coast, CoastlineWaterSource)):
+                with self.subTest(strategy=strategy, source=owner):
+                    value = model[owner].model_validate(dict(base) | {
+                        "source": source, "metadata": base.metadata.model_copy(update={"source_kind": source.kind})})
+                    self.assertIsInstance(value, WaterDesignInput)
+                    self.assertIsInstance(value.source, owner)
+                    self.assertEqual(value.source, source)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("error")
+                        restored = ADAPTER.validate_json(ADAPTER.dump_json(value))
+                    self.assertEqual(restored, value)
+                    self.assertIsInstance(restored.source, owner)
+                    self.assertEqual(value.validate_draft(draft_for(value)), draft_for(value))
+
+    def test_exact_specialization_rejects_otherwise_supported_source(self):
+        base = inputs()
+        coast = CoastlineWaterSource(value=DeclaredCoastline(location_uid="source", kind=BasinKind.SEA,
+            path=(HydrologyWaypoint(x=-4,y=4), HydrologyWaypoint(x=-3,y=4))))
+        data = dict(base) | {"source": coast, "metadata": base.metadata.model_copy(update={"source_kind": coast.kind})}
+        with self.assertRaises(ValidationError):
+            NoiseWaterDesignInput[ProceduralSource].model_validate(data)
+        value = NoiseWaterDesignInput[CoastlineWaterSource].model_validate(data)
+        with self.assertRaises(ValidationError):
+            NoiseWaterDesignInput[ProceduralSource].model_validate(value)
+        with self.assertRaises(ValidationError):
+            NoiseWaterDesignInput[CoastlineWaterSource].model_validate_json(base.model_dump_json())
+
+    def test_typevar_bounds_are_also_enforced_for_runtime_source_values(self):
+        authored = inputs(Strategy.AUTHORED_REGION)
+        for strategy, model in ((Strategy.CONTINENTAL_NOISE, NoiseWaterDesignInput),
+                                (Strategy.PLATE, PlateWaterDesignInput),
+                                (Strategy.PLATE_NOISE, PlateNoiseWaterDesignInput)):
+            base = inputs(strategy)
+            data = dict(base) | {"source": authored.source,
+                "metadata": base.metadata.model_copy(update={"source_kind": authored.source.kind})}
+            with self.subTest(strategy=strategy), self.assertRaises(ValidationError):
+                model[AuthoredBasinSource].model_validate(data)
+        procedural = inputs().source
+        data = dict(authored) | {"source": procedural,
+            "metadata": authored.metadata.model_copy(update={"source_kind": procedural.kind})}
+        with self.assertRaises(ValidationError):
+            AuthoredWaterDesignInput[ProceduralSource].model_validate(data)
+
+    def test_generic_authored_source_retains_geometry_checks(self):
+        base = inputs(Strategy.AUTHORED_REGION)
+        value = AuthoredWaterDesignInput[AuthoredBasinSource].model_validate(dict(base))
+        self.assertEqual(value.source, base.source)
+        self.assertEqual(ADAPTER.validate_json(ADAPTER.dump_json(value)), value)
+        with self.assertRaises(ValidationError):
+            AuthoredWaterDesignInput[AuthoredBasinSource].model_validate(value.model_copy(update={
+                "geometry": value.geometry.model_copy(update={"source_uid": "other"})}))
+
+    def test_specialized_copy_and_wire_revalidate_source_identity(self):
+        base = inputs()
+        value = NoiseWaterDesignInput[ProceduralSource].model_validate(dict(base))
+        invalid = value.model_copy(update={"source": value.source.model_copy(update={
+            "value": value.source.value.model_copy(update={"source_uid": "other"})})})
+        with self.assertRaises(ValidationError):
+            ADAPTER.validate_python(invalid)
+        with self.assertRaises(ValidationError):
+            ADAPTER.validate_json(invalid.model_dump_json())
+
+    def test_specialized_coastline_rejects_boundary_purpose(self):
+        base = inputs()
+        boundary = DeclaredCoastline(location_uid="source", kind=BasinKind.SEA,
+            purpose=CoastlinePurpose.BODY_BOUNDARY, target_source_uid="target",
+            path=(HydrologyWaypoint(x=-4,y=4), HydrologyWaypoint(x=-3,y=4)))
+        with self.assertRaises(ValidationError):
+            NoiseWaterDesignInput[CoastlineWaterSource].model_validate(dict(base) | {
+                "source": {"kind": "coastline", "value": boundary}})
+
+    def test_generic_coastline_recipe_and_context_remain_strategy_specific(self):
+        base = inputs()
+        coast = CoastlineWaterSource(value=DeclaredCoastline(location_uid="source", kind=BasinKind.SEA,
+            path=(HydrologyWaypoint(x=-4,y=4), HydrologyWaypoint(x=-3,y=4))))
+        data = dict(base) | {"source": coast, "metadata": base.metadata.model_copy(update={"source_kind": coast.kind})}
+        for update in ({"field_policy": inputs(Strategy.PLATE).field_policy},
+                       {"context": base.context.model_copy(update={"strategy": Strategy.PLATE})}):
+            with self.assertRaises(ValidationError):
+                NoiseWaterDesignInput[CoastlineWaterSource].model_validate(data | update)

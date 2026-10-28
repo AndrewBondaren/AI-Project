@@ -3,8 +3,8 @@
 from typing import Protocol
 
 from app.dataModel.terrain.designedWater.draft import WaterDesignDraft
-from app.dataModel.terrain.designedWater.input import WaterDesignInput
+from app.dataModel.terrain.designedWater.input import WaterStrategyInput
 
 
 class DesignedWaterStrategy(Protocol):
-    def design(self, input: WaterDesignInput) -> WaterDesignDraft: ...
+    def design(self, input: WaterStrategyInput) -> WaterDesignDraft: ...

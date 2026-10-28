@@ -18,7 +18,7 @@ from app.dataModel.topology.worldTopology import Coord
 from app.application.worldData.generators.terrain.designedWater.strategies.strategy import DesignedWaterStrategy
 from app.application.worldData.generators.terrain.designedWater.strategies.strategyFactory import DesignedWaterStrategyFactory
 from app.dataModel.terrain.designedWater.input import (
-    WaterDesignInput, AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput,
+    WaterStrategyInput, AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput,
 )
 from app.dataModel.terrain.designedWater.draft import (
     WaterDesignDraft, WaterDesignDraftKind, AuthoredWaterDesignDraft, ProceduralWaterDesignDraft,
@@ -61,7 +61,7 @@ def valid_water_contracts(source: WaterDesignSource, metadata: WaterSourceMetada
         assert_type(profile.samples[0][0], Coord)
 
 
-def valid_strategy_boundary(input: WaterDesignInput, draft: WaterDesignDraft,
+def valid_strategy_boundary(input: WaterStrategyInput, draft: WaterDesignDraft,
                             implementation: DesignedWaterStrategy) -> None:
     assert_type(input.context, ResolvedWaterGenerationContext)
     assert_type(input.budget, BodyCoverageAllocation)
@@ -98,7 +98,7 @@ def valid_budget_boundary(policy: WaterCoverageBudgetPolicy, extent: TerrainRegi
     return budget
 
 
-def valid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: WaterDesignInput,
+def valid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: WaterStrategyInput,
                             draft: WaterDesignDraft, selection: WaterFieldSelectionPolicy) -> WaterDesignPreparation:
     result = preparer.prepare(input, draft, selection_policy=selection)
     assert_type(result, WaterDesignPreparation)
@@ -122,3 +122,28 @@ def valid_coastline_purpose(value: DeclaredCoastline) -> None:
     assert_type(value.purpose, CoastlinePurpose)
     assert_type(value.target_source_uid, EntityUid | None)
     assert_type(value.is_water_source, bool)
+
+
+from app.dataModel.terrain.designedWater.input import WaterDesignInput
+from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource, ProceduralSource, AuthoredBasinSource
+
+
+def valid_generic_sources(coast: NoiseWaterDesignInput[CoastlineWaterSource],
+                          procedural: NoiseWaterDesignInput[ProceduralSource],
+                          plate: PlateWaterDesignInput[CoastlineWaterSource],
+                          mixed: PlateNoiseWaterDesignInput[CoastlineWaterSource],
+                          authored: AuthoredWaterDesignInput[AuthoredBasinSource],
+                          implementation: DesignedWaterStrategy) -> None:
+    assert_type(coast.source, CoastlineWaterSource)
+    assert_type(procedural.source, ProceduralSource)
+    assert_type(plate.source, CoastlineWaterSource)
+    assert_type(mixed.source, CoastlineWaterSource)
+    assert_type(authored.source, AuthoredBasinSource)
+    common: WaterDesignInput[CoastlineWaterSource] = coast
+    assert_type(common.source, CoastlineWaterSource)
+    accepted: WaterStrategyInput = coast
+    assert_type(implementation.design(accepted), WaterDesignDraft)
+    assert_type(implementation.design(procedural), WaterDesignDraft)
+    assert_type(implementation.design(plate), WaterDesignDraft)
+    assert_type(implementation.design(mixed), WaterDesignDraft)
+    assert_type(implementation.design(authored), WaterDesignDraft)

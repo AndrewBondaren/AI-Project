@@ -582,3 +582,18 @@ def invalid_water_policy_inputs(snapshot: HydrologyPolicySnapshot) -> None:
     SourceBodyMappingEntry(source_uid="source", body_uids=["body"])  # EXPECT: reportArgumentType
     snapshot.world_uid = "other"  # EXPECT: reportAttributeAccessIssue
     bind_hydrology_placement_policy({}, HydrologySeasPolicy(), HydrologyPlacementGateInputs(world_enabled=True, category_enabled=True), HydrologyPlacementBehaviorInputs(strategy=DesignedWaterStrategyKind.PLATE), snapshot, source_path=(), category_path=())  # EXPECT: reportArgumentType
+
+
+from app.dataModel.terrain.designedWater.input import WaterDesignInput, PlateNoiseWaterDesignInput
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, CoastlineWaterSource
+
+
+def invalid_generic_water_inputs(coast: NoiseWaterDesignInput[CoastlineWaterSource],
+                                 procedural: NoiseWaterDesignInput[ProceduralSource]) -> None:
+    bad_noise: NoiseWaterDesignInput[AuthoredBasinSource]  # EXPECT: reportInvalidTypeArguments
+    bad_plate: PlateWaterDesignInput[AuthoredBasinSource]  # EXPECT: reportInvalidTypeArguments
+    bad_mixed: PlateNoiseWaterDesignInput[AuthoredBasinSource]  # EXPECT: reportInvalidTypeArguments
+    bad_authored: AuthoredWaterDesignInput[ProceduralSource]  # EXPECT: reportInvalidTypeArguments
+    wrong_source: ProceduralSource = coast.source  # EXPECT: reportAssignmentType
+    wrong_specialization: NoiseWaterDesignInput[ProceduralSource] = coast  # EXPECT: reportAssignmentType
+    wrong_base: WaterDesignInput[CoastlineWaterSource] = procedural  # EXPECT: reportAssignmentType

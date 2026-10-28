@@ -10117,7 +10117,86 @@ Actual category default0/values, authored0/terminal0, wet/dry/unknown/support,
 world/ref coherence, deep immutability и runtime issue/provenance покрыты.
 SourceBodyMapping — контракт final fill; production producer этим шагом не заявлен.
 
+### G5-C2-G — generic source contract (DONE 2026-10-29)
+Согласовано пользователем: «давай generic». Отдельный проверяемый срез
+G5-C2 до adapter wiring; input type blocker устраняется, линия как terrain
+constraint и activation не объявляются реализованными.
+ТЗ: tz_terrain_generation GEO-1 §5.3-A, main §6.29-B/L/M;
+tz_terrain_hydrology §GEO-1. До кода синхронизировать generic contract.
+Связанный owner: dataModel terrain/designedWater/draft.py —
+ProceduralWaterDesignDraft принимает PROCEDURAL и COASTLINE source_kind;
+форма результата описывает алгоритм, не происхождение source. Поле metadata
+сохраняется целиком, recipe/floor invariants не меняются.
+Owner/layer/path: dataModel terrain/designedWater/input.py — общий
+WaterDesignInput[S], authored/noise/plate/plate_noise generic subclasses.
+Допустимые source: authored — existing AuthoredWaterSource; procedural
+strategies — ProceduralSource | CoastlineWaterSource. TypeVar bounds и defaults
+явные, без Any; source kind discriminator сохраняется при специализации.
+WaterStrategyInput — closed runtime union этих же четырёх variants с явными
+полными source unions. Это один transport, прежние consumers обновляются
+вместе; отдельный V2 input не вводится. Typed source сохраняет identity и
+path, no synthetic ProceduralSource. Strategy/recipe и geometry validators
+остаются; общий generic base не заменяет runtime union validation.
+Application consumers: existing terrain/designedWater/strategies/{strategy,
+authoredRegionStrategy}.py, preparation/placementPreparation.py — принимают
+WaterStrategyInput, не исполняют новую policy и не меняют preparation semantics.
+Tests: existing tests/geo1/contracts/strategies/test_input.py (5 files остаются5),
+existing typing/planning/valid/terrain/water.py и invalid.py; typing config
+уже включает owning input/consumers. Новые файлы/папки не добавляются.
+Проверки: специализации сохраняют source type/path; valid procedural и coastline
+для трёх algorithms; source/strategy bounds static и runtime (включая явное
+недопустимое generic parameterization), invalid recipe и body_boundary;
+round-trip closed union; copied/cross-specialization instances revalidated;
+GEO-1 regression и positive/negative Pyright. Done: generic контракт проверен,
+G5-C2 adapter/constraints остаются отдельным шагом.
+
+Итог: WaterDesignInput[S] + bounded generic variants + один WaterStrategyInput;
+procedural draft сохраняет coastline-origin metadata. Consumers обновлены.
+Проверено: GEO-1 345/345 (+7), с warnings-as-errors; positive Pyright0,
+negative160/160 (+7). Constraints execution/adapter G5-C2 не активированы.
+
 ### G5-C2 — coastline как источник body generation
+Входной аудит 2026-10-28: DESIGN BLOCKER, код G5-C2 не начат.
+Уточнение 2026-10-29: type blocker закрыт G5-C2-G; нижеследующее —
+исходный аудит. Применение coastline constraints и caller join остаются открытыми.
+G4 implemented input.py допускает CoastlineWaterSource только в
+AuthoredWaterDesignInput; Noise/Plate/PlateNoiseWaterDesignInput.source
+ограничены ProceduralSource. Их field recipes/общий G4-C preparer не несут
+coastline constraints. Поэтому literal signature §5.3-A ещё не замкнута:
+нельзя передать исходный coastline в procedural strategy, не потеряв его
+path/identity или не подменив его искусственным ProceduralSource.
+Наличие существующего authored helper для open line не делает его
+процедурным strategy input и не доказывает правило autoresolve=False
+для неполной геометрии. Existing G5 helper не исполняет эту policy.
+Также run_water_placement_pass имеет только legacy World/location/heightmap
+входы и не получает captured region/budget/resolved context/admission;
+подключение нового adapter туда без input join продублирует будущий G8.
+
+Предложение на согласование перед кодом (не новый V2 путь):
+1. Сохранить исходный CoastlineWaterSource в существующих procedural
+   variants input.py; field constraints имеют terrain-owned typed контракт,
+   который явно сохраняет authored path/closed/water_side и identity/ref.
+   Семантику исполнения ограничений закрепить перед G6/G7/G4-C cutover;
+   одного расширения source union недостаточно.
+2. CoastlineWaterSourceAdapter в уже заданном application terrain path
+   только связывает готовые inputs. Admission/header — existing
+   PlacementAdmissionInput, context — ResolvedWaterGenerationContext,
+   snapshot — PlanEnvelope[TerrainPlan], topology/grid — existing types;
+   actual metadata/geometry/recipe должны поступать через явные typed
+   зависимости. Budget/cascade/policy resolution/relief writer не дублировать.
+3. Уточнить complete authored geometry vs incomplete procedural coastline:
+   authored ветка сохраняется при autoresolve=False, неполная линия не
+   расширяется в полный basin в обход False. Не объявлять любую open line
+   полностью authored только потому, что legacy helper умеет её расширять.
+4. Transitional caller должен получить тот же captured join, который G8
+   затем переместит в designPreparation.py. До этого нельзя объявлять
+   production wiring или подменять недостающие данные defaults/raw dict.
+Нужное решение: подтвердить сохранение coastline как procedural source с
+явными terrain constraints и уточнение prerequisite G5-C2 до adapter wiring.
+Точные поля/владельцы нового constraints contract и его producer/consumer
+подлежат фиксации и согласованию; этот аудит не разрешает выбирать их
+молча при написании кода.
+
 Цель: сохранить autoresolve моря/океана по authored линии.
 ТЗ: GEO-1 §5.3-A/C, общий priority contract §6.5.
 Файлы: terrain/designedWater/preparation/coastlineWaterSourceAdapter.py;
