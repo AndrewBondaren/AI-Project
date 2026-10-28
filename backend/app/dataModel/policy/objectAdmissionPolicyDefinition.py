@@ -1,6 +1,6 @@
 """Common admission declarations; there is no policy execution in this module."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Generic, Literal, Protocol, TypeVar
 
@@ -13,12 +13,12 @@ from app.dataModel.policy.policyEnums import (
 )
 from app.dataModel.policy.policyFacts import FactValue
 from app.dataModel.policy.policyReferences import (
-    DirectValueRef, FactValueRef, PolicyReference, PriorityReference,
+    DirectValueRef, FactValueRef, PolicyReference, PriorityReference, _plain,
 )
 from app.dataModel.policy.policyRules import (
     DisableEffect, Equal, PolicyFallback, PolicyRule,
 )
-from app.dataModel.policy.policySpec import ObjectAdmissionPolicySpec
+from app.dataModel.policy.policySpec import ObjectAdmissionPolicySpec, ValueSelectionPolicySpec
 
 
 B = TypeVar("B", bound=Enum)
@@ -58,7 +58,7 @@ class EnabledGate(Generic[M]):
         if not isinstance(self.reference, DirectValueRef):
             raise ValueError("enabled gate requires direct boolean FieldRef")
         bound = self.reference.bound_field
-        if bound.model.model_fields[bound.field].annotation is not bool:
+        if _plain(bound.model.model_fields[bound.field].annotation) is not bool:
             raise ValueError("enabled gate requires boolean field")
 
     @property
@@ -79,21 +79,35 @@ class ObjectAdmissionBindings(Generic[B, R]):
 
 class ObjectAdmissionPolicyDefinition:
     @staticmethod
-    def build(bindings: ObjectAdmissionBindings[B, R]) -> ObjectAdmissionPolicySpec[B, R]:
-        if not isinstance(bindings.enabled_gates, tuple):
+    def _enabled_rules(gates: tuple[EnabledGateDeclaration, ...],
+                       rules: tuple[PolicyRule[B, R], ...]) -> tuple[PolicyRule[B, R], ...]:
+        if not isinstance(gates, tuple):
             raise ValueError("enabled gates require tuple")
-        rules: list[PolicyRule[B, R]] = []
-        for gate in bindings.enabled_gates:
+        gates_rules: list[PolicyRule[B, R]] = []
+        for gate in gates:
             if not isinstance(gate, EnabledGate):
                 raise ValueError("enabled gates require typed EnabledGate bindings")
             ref = gate.reference
             bound = ref.bound_field
-            if bound.model.model_fields[bound.field].annotation is not bool:
+            if _plain(bound.model.model_fields[bound.field].annotation) is not bool:
                 raise ValueError("enabled gate requires strict bool field")
-            rules.append(PolicyRule(
+            gates_rules.append(PolicyRule(
                 id=PolicyRuleId(f"admission.enabled.{bound.model.__module__}.{bound.model.__qualname__}.{bound.field}"),
                 stage=PolicyStage.ABSOLUTE_GATE, precedence=RulePrecedence(0),
                 conditions=(Equal(ref, False),), effect=DisableEffect(PolicyDisableReason.ENABLED_FALSE)))
+        return tuple(gates_rules) + rules
+
+    @staticmethod
+    def bind_value_selection(spec: ValueSelectionPolicySpec[B, R], *,
+                             enabled_gates: tuple[EnabledGateDeclaration, ...]) -> ValueSelectionPolicySpec[B, R]:
+        """Reuse the absolute enabled gate without introducing placement priority."""
+        if not isinstance(spec, ValueSelectionPolicySpec):
+            raise ValueError("enabled value binding requires value-selection spec")
+        return replace(spec, rules=ObjectAdmissionPolicyDefinition._enabled_rules(enabled_gates, spec.rules))
+
+    @staticmethod
+    def build(bindings: ObjectAdmissionBindings[B, R]) -> ObjectAdmissionPolicySpec[B, R]:
+        rules = list(ObjectAdmissionPolicyDefinition._enabled_rules(bindings.enabled_gates, bindings.rules))
         zero = FactValueRef(FieldRef(lambda: ObjectAdmissionFacts, lambda facts: facts.effective_priority))
         rules.append(PolicyRule(id=PolicyRuleId("admission.zero_priority"),
             stage=PolicyStage.PRIORITY, precedence=RulePrecedence(0),
@@ -103,7 +117,7 @@ class ObjectAdmissionPolicyDefinition:
         if PolicyIssueReason.UNKNOWN_FACT not in reasons:
             fallbacks += (PolicyFallback(reason=PolicyIssueReason.UNKNOWN_FACT, behavior=None, disable_object=True),)
         return ObjectAdmissionPolicySpec(operation=PolicyOperation.OBJECT_ADMISSION,
-            rules=tuple(rules) + bindings.rules,
+            rules=tuple(rules),
             authored_priority_ref=bindings.authored_priority_ref,
             domain_priority_ref=bindings.domain_priority_ref,
             terminal_priority_ref=bindings.terminal_priority_ref,

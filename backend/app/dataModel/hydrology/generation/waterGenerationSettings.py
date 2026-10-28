@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing
 from app.dataModel.cascade.cascadeSpec import (
@@ -10,6 +10,7 @@ from app.dataModel.cascade.cascadeSpec import (
 )
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction, WaterGenerationDefaults
+from app.dataModel.hydrology.generation.legacySettings import normalize_seas_generation, normalize_lakes_generation
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
 WATER_FRACTION = Cascade("water_fraction", DefaultPolicy.CANONICAL_DEFAULT, Scope,
@@ -63,3 +64,36 @@ class BodyWaterGenerationSettings(WaterGenerationSettings, frozen=True):
         below=CascadeLink(_CATEGORY_AUTORESOLVE, Scope.CATEGORY))] = None
     strategy: Annotated[DefaultEnumWhenMissing[DesignedWaterStrategyKind | None], CascadeChannel(WATER_STRATEGY, Scope.WATER_BODY,
         below=CascadeLink(_CATEGORY_STRATEGY, Scope.CATEGORY))] = None
+
+
+class WorldHydrologyGenerationFields(BaseModel, frozen=True):
+    """Future root owner fields; active WorldHydrology switches at G10-A."""
+
+    model_config = WaterGenerationSettings.model_config
+    enabled: DefaultWhenMissing[StrictBool] = True
+    generation: DefaultWhenMissing[WorldWaterGenerationSettings] = Field(default_factory=WorldWaterGenerationSettings)
+
+
+class SeasGenerationFields(BaseModel, frozen=True):
+    """Reusable fields for the future sea owner; no legacy fields in the schema."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
+    sea_generation: DefaultWhenMissing[CategoryWaterGenerationSettings] = Field(default_factory=CategoryWaterGenerationSettings)
+    ocean_generation: DefaultWhenMissing[CategoryWaterGenerationSettings] = Field(default_factory=CategoryWaterGenerationSettings)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_generation(cls, value: object) -> object:
+        return normalize_seas_generation(value)
+
+
+class LakesGenerationFields(BaseModel, frozen=True):
+    """Reusable lake owner field; rivers retain their existing category policy."""
+
+    model_config = SeasGenerationFields.model_config
+    generation: DefaultWhenMissing[CategoryWaterGenerationSettings] = Field(default_factory=CategoryWaterGenerationSettings)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_generation(cls, value: object) -> object:
+        return normalize_lakes_generation(value)

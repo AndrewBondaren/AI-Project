@@ -43,6 +43,15 @@ def invalid_water_settings(source: WorldWaterGenerationSettings) -> None:
     ref: FieldRef[WorldWaterGenerationSettings, DesignedWaterStrategyKind | None] = FieldRef(lambda: WorldWaterGenerationSettings, lambda s: s.autoresolve)  # expect: reportAssignmentType
 
 
+from app.dataModel.hydrology.generation.waterGenerationSettings import SeasGenerationFields, LakesGenerationFields
+
+
+def invalid_category_owner_fields(source: SeasGenerationFields) -> None:
+    SeasGenerationFields(sea_generation=WorldWaterGenerationSettings())  # expect: reportArgumentType
+    LakesGenerationFields(generation=True)  # expect: reportArgumentType
+    source.sea_generation = source.ocean_generation  # expect: reportAttributeAccessIssue
+
+
 missing = FieldRef(lambda: Source, lambda pojo: pojo.missing)  # expect: reportAttributeAccessIssue
 self_missing = FieldRef(lambda: Later, lambda pojo: pojo.missing)  # expect: reportAttributeAccessIssue
 

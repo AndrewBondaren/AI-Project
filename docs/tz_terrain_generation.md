@@ -50,6 +50,10 @@ Topological seams и aliases нормализует WorldTopology; seam не с�
 
 ### Общая policy GEO-1
 
+Общий согласованный authoring-контракт через аннотации и generated rule identity:
+[tz_policy](./tz_policy.md). Внедрение выполняется по policy-annotations; existing
+PolicySpec/PolicyResolver остаются действующим execution-контрактом.
+
 G0-PE bindings: PolicySource[M](model,instance,path) связывает frozen POJO с
 его типом; PolicyInputs.models хранит уникальные source model bindings,
 PolicyFacts добавляет tuple PolicySupportFact(uid,state,issues). Support state
@@ -96,6 +100,18 @@ HydrologySeasPolicy/HydrologyLakesPolicy.placement_specificity становят�
 явный 0 сохраняется. До G10-A old production defaults остаются 0.
 ValueSelectionPolicySpec не имеет priority refs, пропускает PRIORITY;
 он выбирает behavior, не отключается от неприменимого terminal priority.
+G2-G: ObjectAdmissionPolicyDefinition.bind_value_selection подключает общие
+enabled rules к value spec, без priority refs/zero rule. Optional
+ValueSelectionPolicySpec.disabled_behavior имеет тот же enum, что behavior;
+общий executor возвращает его при доказанном DisableEffect, сохраняя
+DISABLED state и gate reason/provenance. Ошибки/no-match этим значением
+не маскируются; их runtime fallback объявляется отдельно.
+HydrologyPolicyDefinition.generation объявляет DISABLED для hard gate и
+DECLARED_ONLY/AUTORESOLVE для resolved False/True. HydrologyGenerationDecision
+— ValueSelectionDecision[HydrologyExecutionMode,WaterPolicyReason].
+До G10-A root fields изолированы в WorldHydrologyGenerationFields:
+enabled: DefaultWhenMissing[StrictBool]=True, generation: WorldWaterGenerationSettings.
+Existing production WorldHydrology/category owner schemas остаются прежними.
 
 PolicyDecision[B:Enum,R:Enum] разделяет behavior и domain reason, несёт
 operation/state, effective_priority, behavior, reasons, waiting_supports,

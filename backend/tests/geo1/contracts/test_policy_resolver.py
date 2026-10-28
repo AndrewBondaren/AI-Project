@@ -103,6 +103,23 @@ def support(uid, state):
 
 
 class PolicyResolverTests(TestCase):
+    def test_value_selection_reuses_enabled_gate_with_its_own_disabled_behavior(self):
+        spec = ObjectAdmissionPolicyDefinition.bind_value_selection(
+            ValueSelectionPolicySpec[OtherAction, Reason](operation=PolicyOperation.VALUE_SELECTION,
+                rules=(PolicyRule(id=PolicyRuleId("other.keep"), stage=PolicyStage.BEHAVIOR,
+                    precedence=RulePrecedence(0), conditions=(), effect=SelectBehaviorEffect(OtherAction.KEEP)),),
+                expected_behavior_type=OtherAction, fallback_rules=(), disabled_behavior=OtherAction.KEEP),
+            enabled_gates=(EnabledGate(ENABLED),))
+        result = self.resolve(spec, sources(Settings(enabled=False)))
+        self.assertIs(result.state, PolicyState.DISABLED)
+        self.assertIs(result.require_behavior(), OtherAction.KEEP)
+        self.assertIsNone(result.effective_priority)
+        self.assertEqual(result.reasons[0].common_reason, PolicyDisableReason.ENABLED_FALSE)
+        self.assertIsNone(self.resolve(replace(spec, disabled_behavior=None), sources(Settings(enabled=False))).behavior)
+        result = self.resolve(spec, sources(Settings(priority=0)))
+        self.assertIs(result.state, PolicyState.READY)
+        self.assertIs(result.require_behavior(), OtherAction.KEEP)
+
     def resolve(self, spec=None, inputs=None, observations=None, mode=ResolutionMode.VALIDATE_ONLY, **kwargs):
         return PolicyResolver().resolve(spec or admission(), inputs or sources(),
             observations or facts(), mode=mode, **kwargs)

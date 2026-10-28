@@ -453,8 +453,23 @@ def valid_fact_covariance(known: KnownFact[PolicyMode]) -> KnownFact[Enum]:
 
 
 from app.application.policy.policyResolver import PolicyResolver
+from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
+from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldHydrologyGenerationFields
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
+from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HydrologyPolicyDefinition
 from app.dataModel.policy.policyBindings import PolicyFacts as PolicyObservations, PolicyInputs, PolicySource
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+
+
+def valid_hydrology_generation(root: WorldHydrologyGenerationFields, context: WaterGenerationContext) -> None:
+    sources = PolicyInputs(models=(PolicySource(WorldHydrologyGenerationFields, root, ("hydrology",)),
+        PolicySource(WaterGenerationContext, context, ("resolved",))))
+    decision = PolicyResolver().resolve(HydrologyPolicyDefinition.generation(), sources, PolicyObservations(),
+        mode=ResolutionMode.VALIDATE_ONLY)
+    assert_type(decision, ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason])
+    typed: HydrologyGenerationDecision = decision
+    assert_type(typed.require_behavior(), HydrologyExecutionMode)
 
 
 def valid_policy_execution(settings: PolicySettings, defaults: PolicyDefaults, observed: PolicyFacts,
@@ -489,3 +504,35 @@ def valid_placement_lifecycle(batch: PlacementBatchV2, header: PlacementHeader,
     session.submit(prepared)
     assert_type(session.step(), PlacementOutcomeV2 | None)
     assert_type(session.finish(), PlacementBatchResultV2)
+
+
+from app.dataModel.policy.declarations.policyDeclaration import ValuePolicy, AdmissionPolicy, PolicyOwner
+from app.dataModel.policy.declarations.fieldPolicy import EnabledFor, SelectByValue, ValueCase
+from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration
+
+
+class DeclarationOwner(PolicyOwner):
+    pass
+
+
+VALUE_DECLARATION = ValuePolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner,
+    behavior_type=PolicyMode, reason_type=PolicyReasonKind)
+VALUE_CASE = ValueCase[bool, PolicyMode, PolicyReasonKind](when=False, behavior=PolicyMode.FIRST,
+    reason=PolicyReasonKind.DECLARED)
+VALUE_METADATA = SelectByValue[bool, PolicyMode, PolicyReasonKind](VALUE_DECLARATION, (VALUE_CASE,))
+VALUE_GATE = EnabledFor[PolicyMode, PolicyReasonKind](VALUE_DECLARATION)
+
+
+def valid_policy_declarations(priority: PriorityValueRef[PolicyDefaults]) -> None:
+    assert_type(VALUE_METADATA.cases[0].when, bool)
+    assert_type(VALUE_METADATA.cases[0].behavior, PolicyMode)
+    assert_type(VALUE_METADATA.cases[0].reason, PolicyReasonKind | None)
+    assert_type(VALUE_GATE.policy, ValuePolicy[PolicyMode, PolicyReasonKind] | AdmissionPolicy[PolicyMode, PolicyReasonKind])
+    admission = AdmissionPolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner,
+        behavior_type=PolicyMode, reason_type=PolicyReasonKind, authored_priority_ref=priority,
+        domain_priority_ref=priority, terminal_priority_ref=priority)
+    assert_type(admission, AdmissionPolicy[PolicyMode, PolicyReasonKind])
+    compound = PolicyCaseDeclaration[PolicyMode, PolicyReasonKind](key=PolicyReasonKind.DECLARED,
+        conditions=(), effect=SelectBehaviorEffect(PolicyMode.FIRST))
+    ValuePolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner, behavior_type=PolicyMode,
+        reason_type=PolicyReasonKind, cases=(compound,))

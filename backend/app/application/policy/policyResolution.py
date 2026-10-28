@@ -16,7 +16,7 @@ from app.dataModel.policy.policyEnums import (
 )
 from app.dataModel.policy.policyFacts import KnownFact, UnknownFact, WaitingFact
 from app.dataModel.policy.policyRules import DisableEffect, PolicyRule, RequireSupportEffect, SelectPriorityDefaultEffect
-from app.dataModel.policy.policySpec import ObjectAdmissionPolicySpec, PolicySpec
+from app.dataModel.policy.policySpec import ObjectAdmissionPolicySpec, PolicySpec, ValueSelectionPolicySpec
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 B = TypeVar("B", bound=Enum)
@@ -67,7 +67,8 @@ class PolicyResolution(Generic[B, R]):
                 if isinstance(rule.effect, DisableEffect):
                     self.reasons.append(PolicyReason[R](domain_reason=rule.domain_reason, common_reason=rule.effect.reason))
                     self.provenance.append(rule_provenance(rule))
-            return self.decision(PolicyState.DISABLED)
+            behavior = self.spec.disabled_behavior if isinstance(self.spec, ValueSelectionPolicySpec) else None
+            return self.decision(PolicyState.DISABLED, behavior=behavior)
         self.provenance.extend(rule_provenance(r) for r in result.matched if isinstance(r.effect, RequireSupportEffect))
         if result.disabled_supports:
             self.reasons.append(PolicyReason[R](domain_reason=None, common_reason=PolicyDisableReason.SUPPORT_DISABLED))

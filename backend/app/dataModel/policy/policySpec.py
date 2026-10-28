@@ -56,6 +56,7 @@ class ValueSelectionPolicySpec(Generic[B, R]):
     rules: tuple[PolicyRule[B, R], ...]
     expected_behavior_type: type[B]
     fallback_rules: tuple[PolicyFallback[B], ...]
+    disabled_behavior: B | None = None
 
     def __post_init__(self) -> None:
         if self.operation is not PolicyOperation.VALUE_SELECTION:
@@ -63,6 +64,8 @@ class ValueSelectionPolicySpec(Generic[B, R]):
         if any(rule.stage is PolicyStage.PRIORITY for rule in self.rules):
             raise ValueError("value selection has no priority stage")
         _spec(self.rules, self.fallback_rules, self.expected_behavior_type)
+        if self.disabled_behavior is not None and type(self.disabled_behavior) is not self.expected_behavior_type:
+            raise ValueError("foreign disabled behavior enum")
 
 
 PolicySpec: TypeAlias = Union[ObjectAdmissionPolicySpec[B, R], ValueSelectionPolicySpec[B, R]]

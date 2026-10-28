@@ -9750,7 +9750,26 @@ None-наследование без persisted копий,
 отсутствие scalar/SQL копий; composed source binding без nested FieldRef;
 generic cascade contract. Done: мир даёт resolved context из одного объекта.
 
+G2 IMPLEMENTED/VERIFIED (2026-10-27), isolated до G10-A.
+Contracts 90/90; cascade/context regressions 119/119, water/placement/template 79/79.
+Positive typing 258 файлов — 0 ошибок; cascade negatives 13/13 (8 + 5).
+Общий typecheck:cascade сохраняет 16 прежних ошибок worldLocationTypeRegistry.
+Active WorldHydrology/schema/defaults не переключены; следующий шаг — G2-P.
+
 ### G2-P — category channels и legacy normalization contract
+Уточнение G2-P: waterGenerationSettings.py добавляет SeasGenerationFields
+(sea_generation/ocean_generation) и LakesGenerationFields (generation) —
+frozen reusable base POJO для будущих owning policies, не persisted копии.
+Их before validators делегируют normalize_seas_generation/normalize_lakes_generation
+в legacySettings.py; raw dict разрешён только на этой wire boundary, без Any/cast.
+Legacy old bool проверяется строго (null/числа/строки invalid); nullable new
+autoresolve сохраняет None. Presence/equality проверяются без bool-coercion.
+Unrelated wire keys сохраняются; typed nested POJO проверяется до нормализации.
+Папка generation 4 → 5 файлов; cascade tests 3 → 4 (test_legacy.py).
+Production owner annotations, rivers и MaskCategoryPolicy не меняются.
+Full POJO validation вызывает before-validator; partial patch сначала
+канонизируется тем же pure helper, затем resolve_patch валидирует только
+переданные canonical fields. Общий patch engine/model-invariant policy не меняется.
 Цель: подготовить single-owner SEA/OCEAN/LAKE channels по §6.29-A.
 ТЗ: tz_json_validation §Field policy, tz_cascade_context §2–4, GEO-1 G0.
 Файлы: hydrology/generation/{waterGenerationSettings,legacySettings}.py;
@@ -9765,7 +9784,33 @@ conflicting paths, round-trip без двух persisted копий.
 Done: typed channel contracts готовы; старые consumers не получают None
 вместо прежнего bool до единого switch.
 
+G2-P IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+Contracts 105/105, water/placement/template regressions 79/79; positive typing 259 файлов — 0 ошибок.
+Cascade negatives 16/16 (13 + 3), planning negatives 88/88; общий cascade-check — 16 прежних registry errors.
+Old/new presence, strict bool, explicit new null, conflict code и canonical round-trip проверены;
+production annotations/defaults сохранены. Следующий шаг — G2-G.
+
 ### G2-G — декларации hydrology enabled/autoresolve behavior
+Follow-up по обсуждению 2026-10-28: общий authoring layer через annotations,
+generated rule IDs и migration G2-G описаны в [policy-annotations](./policy-annotations.md)
+и [tz_policy](../../docs/tz_policy.md), согласованы 2026-10-28. Это отдельный
+план; следующие шаги GEO-1 и production gate G10-A автоматически не меняются.
+Уточнение G2-G: isolated до G10-A, как G2/G2-P. Root fields объявляются
+reusable WorldHydrologyGenerationFields в existing waterGenerationSettings.py;
+active WorldHydrology и category owners не переключаются. Category channels
+используют уже объявленные SeasGenerationFields/LakesGenerationFields.
+HydrologyExecutionMode — enums/planning/hydrologyExecutionMode.py;
+WaterPolicyReason и HydrologyGenerationDecision (value alias) —
+hydrology/policy/hydrologyGenerationDecision.py; generation cases —
+hydrology/policy/hydrologyPolicyDefinition.py::HydrologyPolicyDefinition.generation.
+Общий ObjectAdmissionPolicyDefinition.bind_value_selection переиспользует
+те же enabled rules без PRIORITY stage; ValueSelectionPolicySpec.disabled_behavior
+задаёт enum для доказанного DisableEffect. PolicyResolution.stop исполняет
+эту общую декларацию; no-match/invalid input остаются unresolved без fallback.
+Это не регистрация ObjectAdmissionPolicySpec как VALUE_SELECTION.
+Новые папки: hydrology/policy 3 файла с init; enums/planning 3 → 4;
+generation остаётся 5, contracts 4 → 5; common policy остаётся 9,
+application/policy остаётся 5. Новые файлы включаются в planning typing suite.
 Цель: выразить принятые gates через POJO/enum и общий policy engine.
 ТЗ: G0, Q-AUTO-GATES, §6.8-D/E.
 Файлы: WorldHydrology/WaterGenerationSettings и category source POJO;
@@ -9778,6 +9823,12 @@ PolicyResolver выбирает DISABLED/DECLARED_ONLY/AUTORESOLVE.
 Проверка: root off + body true, world/category/body overrides,
 missing/null, StrictBool/enum invalid, no raw wire, no second and/or gate.
 Done: execution mode выводится общим resolver, не local hydrology resolve.
+
+G2-G IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+Contracts 115/115; positive typing 263 файлов — 0 ошибок; negatives planning 90/90, cascade 16/16.
+231 regression tests passed; existing CoarseFixtureAcceptance setup broken: coarse_snapshot
+не получает planning/capture/wait (test/helper совпадают с HEAD). Общий cascade-check — 16 прежних registry errors.
+Production owners/defaults не переключены; следующий шаг — G3.
 
 ### G3 — overrides водоёма
 Цель: добавить один reusable POJO и body channels для существующих inputs.

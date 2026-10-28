@@ -6,6 +6,7 @@ from typing import Annotated, Generic, Literal, Protocol, TypeAlias, TypeVar, Un
 from pydantic import BaseModel, TypeAdapter
 from typing_extensions import TypeAliasType
 
+from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.cascade.cascadeGraph import BoundField, bind_field
 from app.dataModel.cascade.cascadeSpec import FieldRef
 from app.dataModel.placement.common import Specificity
@@ -38,6 +39,7 @@ def _fact_value_type(annotation: object) -> object:
 
 
 def _plain(annotation: object) -> object:
+    annotation = unwrap_wire_type(annotation)
     if isinstance(annotation, TypeAliasType):
         return _plain(annotation.__value__)
     if get_origin(annotation) is Annotated:

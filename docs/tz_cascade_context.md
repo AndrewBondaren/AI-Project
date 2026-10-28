@@ -2,6 +2,12 @@
 
 ## GEO-1 — водная ось каскада
 
+G2 leaf contracts реализованы isolated (2026-10-27): nullable settings,
+WORLD/CATEGORY/BODY VALUE graph, terminal defaults 0.60 / False /
+continental_noise и revalidated WaterGenerationContext. Root только захватывает
+canonical defaults (или явные default_sources); resolve выполняет общий extend.
+Production WorldHydrology/import/export переключаются единым шагом G10-A.
+
 **G0 target, 2026-10-27; production activation только G10-A.**
 WaterGenerationContext использует existing extend и общие cascade contracts,
 с отдельной осью ROOT/WORLD/CATEGORY/WATER_BODY. LocationContext и его
@@ -35,8 +41,26 @@ Absent legacy key не создаёт True; equal old/new принимается
 conflict — GENERATION_SETTINGS_CONFLICT. New export/удаление old paths
 включаются атомарно в G10-A. Domain defaults placement_specificity не являются
 cascade RulePrecedence; policy читает уже resolved channels.
+
+G2-P (2026-10-28): SeasGenerationFields/LakesGenerationFields объявляют
+canonical category fields для будущих owning policies. Before-validator
+использует legacySettings pure normalizer; absent old key не заполняется,
+old bool строгий (legacy null invalid), new autoresolve=None наследует.
+Равные old/new bool принимаются с удалением old; разные дают
+GENERATION_SETTINGS_CONFLICT. Partial legacy patch сначала канонизируется
+тем же helper, затем проверяется resolve_patch без model defaults/invariants.
+Production policies, MaskCategoryPolicy и rivers до G10-A сохраняют baseline.
 Полный норматив: [GEO-1](./tz_terrain_generation.md#geo-1--нормативный-контракт-designed-water),
 exact channel/source map — delivery plan §6.29-A, implementation G1/G2/G2-P/G3.
+
+G2-G: reusable WorldHydrologyGenerationFields объявляет строгий enabled и
+embedded world generation для будущего owner. HydrologyPolicyDefinition
+получает root POJO и resolved WaterGenerationContext через прямые FieldRef;
+общий PolicyResolver выбирает DISABLED/DECLARED_ONLY/AUTORESOLVE. Enabled
+подключается через ObjectAdmissionPolicyDefinition.bind_value_selection,
+без priority refs и без повторного bool gate после decision. Missing/null
+autoresolve наследуют через extend; неразрешённый root context не считается
+False и даёт RULE_NO_MATCH. Active owner schemas переключаются в G10-A.
 
 ## Действующий контракт локаций
 

@@ -402,3 +402,28 @@ def invalid_lifecycle_operation(header: PlacementHeader,
     PlacementAdmissionInput(header=header, decision=value)  # EXPECT: reportArgumentType
     session.submit(legacy)  # EXPECT: reportArgumentType
     outcome.prepared  # EXPECT: reportAttributeAccessIssue
+
+
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
+from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
+
+
+def invalid_hydrology_generation(decision: HydrologyGenerationDecision) -> None:
+    mode: HydrologyExecutionMode = True  # EXPECT: reportAssignmentType
+    admission: ObjectAdmissionDecision[HydrologyExecutionMode, WaterPolicyReason] = decision  # EXPECT: reportAssignmentType
+
+
+from app.dataModel.policy.declarations.fieldPolicy import SelectByValue, ValueCase
+from app.dataModel.policy.declarations.policyDeclaration import ValuePolicy
+from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration
+from tests.typing.planning.valid import DeclarationOwner, VALUE_DECLARATION
+
+
+def invalid_policy_declarations() -> None:
+    ValueCase[bool, PolicyMode, PolicyReasonKind](when=False, behavior=OtherPolicyMode.OTHER)  # EXPECT: reportArgumentType
+    ValueCase[bool, PolicyMode, PolicyReasonKind](when=False, behavior=PolicyMode.FIRST, reason=OtherPolicyReason.OTHER)  # EXPECT: reportArgumentType
+    ValueCase[bool, PolicyMode, PolicyReasonKind](when="false", behavior=PolicyMode.FIRST)  # EXPECT: reportArgumentType
+    ValueCase[list[int], PolicyMode, PolicyReasonKind](when=[], behavior=PolicyMode.FIRST)  # EXPECT: reportInvalidTypeArguments
+    ValuePolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner, behavior_type=OtherPolicyMode, reason_type=PolicyReasonKind)  # EXPECT: reportArgumentType
+    SelectByValue[bool, PolicyMode, PolicyReasonKind](VALUE_DECLARATION, [])  # EXPECT: reportArgumentType
+    PolicyCaseDeclaration[PolicyMode, PolicyReasonKind](key=PolicyMode.FIRST, conditions=(), effect=SelectBehaviorEffect(OtherPolicyMode.OTHER))  # EXPECT: reportArgumentType
