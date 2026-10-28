@@ -567,3 +567,18 @@ def invalid_coastline_purpose(value: DeclaredCoastline) -> None:
     DeclaredCoastline(location_uid="line", kind=BasinKind.SEA, purpose=CoastlinePurpose.BODY_BOUNDARY, target_source_uid=1)  # EXPECT: reportArgumentType
     wrong_purpose: CoastlinePurpose = BasinKind.SEA  # EXPECT: reportAssignmentType
     value.is_water_source = True  # EXPECT: reportAttributeAccessIssue
+
+
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
+from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import HydrologyPlacementGateInputs, HydrologyPlacementBehaviorInputs, HydrologyPolicySnapshot
+from app.application.worldData.generators.hydrology.policy.hydrologyPlacementBinding import bind_hydrology_placement_policy
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMappingEntry
+from app.dataModel.hydrology.seas import HydrologySeasPolicy
+
+
+def invalid_water_policy_inputs(snapshot: HydrologyPolicySnapshot) -> None:
+    HydrologyPlacementGateInputs(world_enabled=True)  # EXPECT: reportCallIssue
+    HydrologyPlacementBehaviorInputs(strategy=BasinKind.SEA)  # EXPECT: reportArgumentType
+    SourceBodyMappingEntry(source_uid="source", body_uids=["body"])  # EXPECT: reportArgumentType
+    snapshot.world_uid = "other"  # EXPECT: reportAttributeAccessIssue
+    bind_hydrology_placement_policy({}, HydrologySeasPolicy(), HydrologyPlacementGateInputs(world_enabled=True, category_enabled=True), HydrologyPlacementBehaviorInputs(strategy=DesignedWaterStrategyKind.PLATE), snapshot, source_path=(), category_path=())  # EXPECT: reportArgumentType

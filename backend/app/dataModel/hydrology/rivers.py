@@ -29,6 +29,9 @@ class RiverTypeClassify(BaseModel):
 class HydrologyRiversPolicy(HydrologyCategoryPolicy):
     """default_rivers + type_classify."""
 
+    # River priority retains its baseline contract; water sources use placement owners.
+    placement_specificity: DefaultWhenMissing[int] = constrained_field(default=0, greater_equals=0)
+
     channel_depth_cells: DefaultWhenMissing[int] = constrained_field(default=3, greater=0, strict=True)
     mouth_search_radius_fine: DefaultWhenMissing[int] = constrained_field(default=200, greater_equals=0, strict=True)
     max_path_cells: DefaultWhenMissing[int] = constrained_field(default=128, greater_equals=2, strict=True)

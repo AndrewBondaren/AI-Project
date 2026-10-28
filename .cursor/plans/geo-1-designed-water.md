@@ -10082,12 +10082,23 @@ positive Pyright — 0 ошибок, negative planning148/148 (+4).
 Composition: hydrology20/enums10/adapters6/load9 неизменны, tests coastline3.
 
 ### G5-CP — hydrology placement cases и facts
+Входной аудит 2026-10-28: live source/category POJO не проходят existing
+Policy FieldRef admission; coast/lake не имеют authored priority поля,
+source→physical mapping/support snapshot ещё не определены в коде.
+Согласовано [уточнение](./geo-1-strategy-boundary-contract.md#g5-cp--уточнение-policy-sources-и-support-snapshot),
+DONE 2026-10-28, согласовано «Ок». Не ослаблять generic validator,
+не копировать default1 и не выводить source mapping по равенству UID.
 Цель: описать source/boundary domain behavior для общего policy engine.
 ТЗ: G0, §5.3, §6.8-F. Вход: purpose enum G5-C1 и engine G0-PE.
 Файлы: dataModel/hydrology/policy/hydrologyPlacementPolicy.py (placement descriptor/cases;
 отдельно от generation metadata, hydrology/policy 3 → 4 файла);
-application/worldData/generators/hydrology/policy/hydrologyPolicyFacts.py;
-water preparation policy spec binding.
+application/worldData/generators/hydrology/policy/{__init__,hydrologyPolicyFacts,hydrologyPlacementBinding}.py;
+dataModel/hydrology/placement/{__init__,placementFields}.py;
+dataModel/hydrology/planning/sourceBodyMapping.py;
+existing declaredBasin/declaredCoastline/declaredLake/sources/proceduralWaterSource,
+seas/lakes/category/rivers — single field owners, baseline rivers сохранён;
+tests/geo1/placement_policy/{__init__,fixtures,test_placement_policy}.py;
+typing/planning valid/policy.py, invalid.py, pyrightconfig.valid.json.
 Контракт: домен задаёт AdmissionPolicy/PolicyCaseDeclaration, defaults и typed
 water-support facts; общий compile_admission_policy создаёт existing spec.
 Field-local rules задаются metadata, compound rules используют typed FieldRef;
@@ -10096,7 +10107,15 @@ PolicyResolver вычисляет effective priority/admission, без water if 
 Проверка: одинаковый engine для generic/водного случая, water_source
 не требует будущей воды, boundary missing support disabled/waiting,
 authored 0 не переписан, domain default не заменён общим литералом 1.
-Done: adapters передают spec/facts, не принимают отдельное policy решение.
+Done: typed binding отдаёт compiled spec/inputs/facts existing PolicyResolver;
+source/boundary adapters подключаются в G5-C2/G5-C3/G8, production switch G10-A.
+Target support case отдельно компилируется без field metadata и объединяется
+с main spec: descriptor identity и generic validator не ослаблены.
+Проверено: GEO-1 338/338 (+28), existing placement/water/factory80/80
+(offline world_test_004), positive Pyright0, negative153/153 (+5).
+Actual category default0/values, authored0/terminal0, wet/dry/unknown/support,
+world/ref coherence, deep immutability и runtime issue/provenance покрыты.
+SourceBodyMapping — контракт final fill; production producer этим шагом не заявлен.
 
 ### G5-C2 — coastline как источник body generation
 Цель: сохранить autoresolve моря/океана по authored линии.

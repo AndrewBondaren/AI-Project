@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from app.dataModel.hydrology.placement.placementFields import WaterSourcePlacementFields
 from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing, StrictOnWire
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.enums.basinKind import BasinKind
@@ -22,10 +23,10 @@ class CoastlinePurpose(StrEnum):
     BODY_BOUNDARY = "body_boundary"
 
 
-class DeclaredCoastline(BaseModel):
+class DeclaredCoastline(WaterSourcePlacementFields):
     """One authored line with explicit source/boundary purpose, never a body ID."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, strict=False, revalidate_instances="never")
 
     location_uid: StrictOnWire[str]
     purpose: DefaultEnumWhenMissing[CoastlinePurpose] = CoastlinePurpose.WATER_SOURCE

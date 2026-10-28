@@ -55,6 +55,35 @@ Domain definition связывает enabled с ObjectAdmissionPolicyDefinition,
 bool gates и не реализует свой resolve. Value-selection mode не требует
 placement priority; object admission/strategy — отдельная operation.
 
+G5-CP: WaterSourcePlacementFields (hydrology/placement/placementFields.py)
+владеет nullable authored placement_specificity для basin/coastline/lake/procedural;
+WaterCategoryPlacementFields — nullable category priority, default0 до G10-A.
+None категории наследует общий terminal0. Общие bands остаются в category.py,
+прежний priority рек принадлежит rivers.py с прежним default0.
+Readonly policy projections этих же owners получают actual значения явно.
+HydrologyPlacementGateInputs содержит required world_enabled/category_enabled;
+HydrologyPlacementBehaviorInputs — required resolved strategy. Metadata EnabledFor
+и SelectByValue компилируются общим compiler; решение принимает PolicyResolver.
+HydrologyPolicySnapshot — captured world_uid, supports, hydrology envelope,
+SourceBodyMapping и mapping_hydrology_ref; все поля required, отсутствие evidence
+передаётся None. Mapping связан с тем же world/ref; empty entry — authoritative
+source dry, отсутствующая accepted entry — unknown. Mapping владеет final fill,
+не policy provider. G5-CP добавляет контракт, production producer подключается позже.
+HydrologyPolicyFacts наблюдает purpose/category/target_has_water: source получает
+Known(None), boundary читает explicit mapping и actual liquid cells физических
+body UID. Совпадение source UID с body UID не является mapping. Pending/failed/
+missing/disabled support обрабатывает общий resolver; unknown evidence не dry.
+Domain policy содержит enum case keys и typed predicates; target UID связывается
+только с RequireSupportEffect. Application hydrologyPolicyFacts только собирает
+факты, hydrologyPlacementBinding только связывает inputs и компилирует spec.
+Ни один из этих объектов не выполняет admission/placement или live World lookup.
+
+G5-CP implementation clarification: field metadata сохраняет identity основного
+placement descriptor. Target-bound compound support case компилируется отдельно
+с explicit priority/facts models (без field metadata); его RequireSupport rule
+добавляется к основному compiled spec. Оба используют compile_admission_policy;
+verifier identity checks и executor не меняются, rule IDs создаёт compiler.
+
 В G10-A HydrologySeasPolicy и HydrologyLakesPolicy читают POJO default
 placement_specificity=1; authored 0 остаётся DISABLED. Terminal priority=0
 общий, без duplicate auto/effective priority и without-water special case

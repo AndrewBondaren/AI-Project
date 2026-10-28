@@ -2,29 +2,27 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from pydantic import ConfigDict, model_validator
 
-from pydantic import BaseModel, ConfigDict, model_validator
-
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.hydrology.placement.placementFields import WaterSourcePlacementFields
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
-from app.dataModel.constrainedField import constrained_field
 from app.dataModel.hydrology.bands import HydrologyBands
 from app.dataModel.hydrology.enums.basinKind import BasinKind
-from app.dataModel.materials.worldMaterialRegistry import MaterialKey
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey, WorldMaterialRegistry
 from app.dataModel.spatial.regionShape import RegionShape
 
 
-class DeclaredBasin(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+class DeclaredBasin(WaterSourcePlacementFields):
+    model_config = ConfigDict(extra="ignore", frozen=True, strict=False, revalidate_instances="never")
 
     location_uid: StrictOnWire[str]
     footprint: StrictOnWire[RegionShape]
     kind: StrictOnWire[BasinKind]
-    liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]] = "water"
+    liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]] = RegistryKey[WorldMaterialRegistry]("water")
     floor_z: StrictOnWire[int]
     z_water_level: DefaultWhenMissing[int | None] = None
     rim: DefaultWhenMissing[HydrologyBands | None] = None
-    placement_specificity: DefaultWhenMissing[Annotated[int, constrained_field(greater_equals=0)] | None] = None
 
     def validate_water_level(self, default_water_level: int) -> None:
         level = self.z_water_level if self.z_water_level is not None else default_water_level

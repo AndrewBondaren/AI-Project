@@ -166,3 +166,20 @@ def valid_policy_compilation(admission: AdmissionPolicy[PolicyMode, PolicyReason
         ValueSelectionPolicySpec[PolicyMode, PolicyReasonKind])
     assert_type(compile_admission_policy(admission, (PolicySettings, PolicyDefaults, PlacementPolicyDefaults)),
         ObjectAdmissionPolicySpec[PolicyMode, PolicyReasonKind])
+
+
+from app.application.worldData.generators.hydrology.policy.hydrologyPlacementBinding import bind_hydrology_placement_policy, HydrologyPlacementBinding
+from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import WaterPlacementPolicySource, HydrologyPolicySnapshot, HydrologyPlacementGateInputs, HydrologyPlacementBehaviorInputs
+from app.dataModel.hydrology.seas import HydrologySeasPolicy
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
+
+
+def valid_water_placement_policy(source: WaterPlacementPolicySource, snapshot: HydrologyPolicySnapshot,
+                                 category: HydrologySeasPolicy,
+                                 gates: HydrologyPlacementGateInputs,
+                                 behavior: HydrologyPlacementBehaviorInputs) -> None:
+    binding = bind_hydrology_placement_policy(source, category, gates, behavior, snapshot,
+        source_path=("hydrology", "sources", 0), category_path=("hydrology", "default_seas"))
+    assert_type(binding, HydrologyPlacementBinding)
+    assert_type(PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
+        mode=ResolutionMode.VALIDATE_ONLY), ObjectAdmissionDecision[DesignedWaterStrategyKind, WaterPolicyReason])

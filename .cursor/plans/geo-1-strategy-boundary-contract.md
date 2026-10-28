@@ -82,6 +82,91 @@ Actual legacy seas fields revalidate strict (включая bool→float), helpe
 
 ## Обнаруженные расхождения
 
+### G5-CP — уточнение policy sources и support snapshot
+
+Статус: APPROVED 2026-10-28, согласовано пользователем «Ок»; G5-CP DONE.
+ТЗ: tz_policy §2–5; tz_terrain_generation §Planning;
+tz_terrain_hydrology §GEO-1; main §6.8-F/§6.9/§6.29-C/G.
+
+Проверенные блокеры G5-CP:
+1. PriorityValueRef(FieldRef(HydrologySeasPolicy.placement_specificity))
+   отклонён existing validator: frozen/extra=forbid/revalidate_instances=always
+   обязательны. Existing seas/lakes/source POJO этому не соответствуют;
+   DeclaredCoastline/DeclaredLake вообще не имеют authored priority поля.
+2. Domain default сейчас0, а не1. Число1 нельзя вводить в descriptor/facts
+   как исправление отсутствующего binding; owning default switch остаётся G10-A.
+3. HydrologyPlan не содержит source_mapping; SourceBodyMapping ещё не создан.
+   declared_basin_uid/location_uid физического WaterBody не заменяют many-to-many
+   mapping после merge/split. Из них нельзя выводить water support source UID.
+
+Согласованное замыкание входит в контракт G5-CP, без второго policy engine:
+
+**Владельцы scalar priority.** Новый
+dataModel/hydrology/placement/placementFields.py (+__init__,2 файла):
+WaterSourcePlacementFields — единственный owner nullable placement_specificity
+(default None); WaterCategoryPlacementFields — owner category placement_specificity
+(existing default0 до G10-A). Frozen/strict/forbid/revalidation.
+Category priority nullable (None означает наследование terminal0), default остаётся0.
+HydrologyCategoryPolicy (category.py) оставляет общие bands; прежнее поле
+рек механически переносится в HydrologyRiversPolicy (rivers.py), без смены поведения.
+Existing basin/coastline/lake/procedural sources наследуют source поле;
+seas/lakes — category поле. Старые объявления тех же полей удаляются,
+не создаются вторая default table или persisted settings blob.
+Readonly scalar projections для PolicySource используют эти же owning classes,
+но получают actual значения normalized source/category POJO явно. Отсутствие
+или invalid значение не исправляется default'ом проекции. Изменение actual
+category value обязано менять decision без изменения descriptor/engine.
+Root/category enabled и resolved strategy передаются typed required inputs;
+field-local cases/gates объявляются metadata, а не ручным PolicyRuleId.
+Точные модели в hydrologyPlacementPolicy.py:
+HydrologyPlacementGateInputs(world_enabled:StrictBool, category_enabled:StrictBool)
+с EnabledFor на обоих полях; HydrologyPlacementBehaviorInputs(strategy:
+DesignedWaterStrategyKind) с SelectByValue по enum. Поля required, без defaults;
+это derived inputs от captured owners/resolved context, не persisted настройки.
+Descriptor ссылается на priority owning classes, поэтому определяется до
+gate/behavior metadata и не создаёт source-model import cycle.
+Общий FieldRef validator не ослабляется ради legacy POJO.
+
+**Support snapshot.** Новый prescribed main §6.29-G
+dataModel/hydrology/planning/sourceBodyMapping.py: SourceBodyMappingEntry
+(source_uid, sorted unique body_uids) и SourceBodyMapping(entries sorted unique).
+Пустая entry означает authoritative dry source; отсутствующая entry accepted
+source — неизвестный required input, не dry.
+В hydrology/policy/hydrologyPlacementPolicy.py определить HydrologyPolicySnapshot
+с world identity, typed PolicySupportFact observations, optional actual
+PlanEnvelope[HydrologyPlan], source mapping и explicit binding к тому же ref.
+Поля required: world_uid:EntityUid, supports:tuple[PolicySupportFact,...],
+hydrology:PlanEnvelope[HydrologyPlan]|None, source_mapping:SourceBodyMapping|None,
+mapping_hydrology_ref:PlanRef|None. None означает отсутствие supplied evidence,
+не отсутствие воды. HydrologyPolicyFacts содержит purpose:CoastlinePurpose,
+category:WaterGenerationCategory, target_has_water:FactValue[bool|None].
+Для water_source последний факт Known(None), не выдуманный Known(True).
+Нет live World/SQL/Pack, opaque object/callback или независимого revision lifecycle.
+Actual producer mapping остаётся final fill/materialize owning стадии;
+G5-CP tests используют явные typed snapshots, production activation не заявляется.
+
+**Декларации и исполнение.** hydrologyPlacementPolicy.py владеет AdmissionPolicy,
+enum case keys, compound FieldRef predicates, HydrologyPolicyFacts и typed
+source/boundary observations. Water source не получает выдуманной воды/опоры.
+Boundary требует explicit target support; pending/disabled/failed/missing
+наблюдения передаются существующим generic support механизмам. Wet/dry факт
+берётся из mapping и actual final hydrology; unknown не заменяется False.
+Target UID структурно связывается с RequireSupportEffect, а не вшивается в
+строковый rule ID и не выбирается поиском ближайшей воды.
+
+Application hydrology/policy/hydrologyPolicyFacts.py реализует только collect;
+новый hydrology/policy/hydrologyPlacementBinding.py связывает typed inputs и
+compile_admission_policy. Он не исполняет policy. Единственный executor —
+existing PolicyResolver; existing P2/session читает decision.
+
+Перед кодом синхронизировать G5-CP source-owner изменения и ТЗ, включая
+точные readonly enabled/strategy inputs. Проверки: actual domain default
+mutation, authored0, terminal0, source без support, boundary wet/dry/pending/
+missing/failed/disabled, reference coherence, preview/runtime parity, no raw
+wiring/UID inference. G5-C2/G5-C3/G8/G10-A сохраняют своё wiring/activation.
+Composition: hydrology/placement2, hydrology/policy3→4, planning2→3,
+application hydrology/policy3 файла (init/facts/binding); existing roots без additions.
+
 1. §5.2-E/H, J06 и G6/G7 требуют field draft и единственный threshold в
    G4-C. §6.29-M требует от strategy draft уже готовые footprints. Для
    procedural strategy это переносит threshold до общего preparer либо
@@ -351,3 +436,19 @@ Composition: cascade/generation по5, validation2, resolved tests2, valid5.
 такого результата — расширение tz_cascade_context и изменение G4 input.context,
 поэтому требовалось отдельное согласование; оно получено 2026-10-28 («Далее»).
 Соответствие WS-инвариантам само по себе не заменяет расширение cascade ТЗ.
+
+G5-CP binding result: HydrologyPlacementBinding (frozen dataclass), application
+hydrology/policy/hydrologyPlacementBinding.py: spec + PolicyInputs + PolicyFacts;
+producer bind_hydrology_placement_policy, consumer existing PolicyResolver caller.
+WaterPlacementPolicySource = WaterDesignSource | DeclaredCoastline, dataModel
+hydrology/policy/hydrologyPlacementPolicy.py; normalized typed source input only.
+
+G5-CP implementation clarification: field metadata сохраняет identity основного
+placement descriptor. Target-bound compound support case компилируется отдельно
+с explicit priority/facts models (без field metadata); его RequireSupport rule
+добавляется к основному compiled spec. Оба используют compile_admission_policy;
+verifier identity checks и executor не меняются, rule IDs создаёт compiler.
+
+G5-CP выполнен: GEO-1 338/338 (+28), existing placement/water/factory80/80,
+positive Pyright0, negative153/153 (+5). Captured typed binding и facts;
+final-fill mapping producer/adapter activation остаются следующим owning шагам.
