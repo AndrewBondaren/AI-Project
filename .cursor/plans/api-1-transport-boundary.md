@@ -31,3 +31,20 @@
 
 ## Ограничения
 API-1 не блокирует GEO-1 или GEN-DAG-1 целиком. Не менять GEO-1, DAG, доменный CRUD, PatchSet/Snapshot lifecycle или генераторные алгоритмы в рамках переноса. Реализация только после аудита, согласования реестра и отдельного разрешения мастера.
+
+
+## Предварительная ревизия кода (2026-10-29; не полный аудит)
+
+**Метод:** GitHub code search по `APIRouter`, `FastAPI`, `HTTPException`, `WebSocket`, `StreamingResponse` в `backend/app/` и выборочное чтение подозрительных файлов. Результаты поиска не доказывают полноту: динамическая регистрация, импорты, SSE, middleware и все фактические call chains ещё не проверены.
+
+| Файл / область | Наблюдение | Решение для API-1 |
+| --- | --- | --- |
+| `backend/app/core/app.py` | **Подтверждено:** создаёт `FastAPI`, регистрирует routers, middleware/CORS и обработчики HTTP; одновременно владеет инфраструктурным lifespan, DB и container bootstrap | **Кандидат на разделение.** Перенести transport-specific factory/wiring в `backend/app/api/`, сохранить инфраструктурную инициализацию у надлежащего владельца; проверить импортные зависимости, ASGI entrypoint и совместимость |
+| `backend/app/api/routes/*` | Найденные объявления `APIRouter` находятся в целевом каталоге | Оставить; проверить толщину handlers и наличие скрытой оркестрации |
+| `backend/app/api/routes/chat.py` | Найден `StreamingResponse` в транспортном слое | Расположение корректно; дополнительно проверить SSE semantics |
+| `backend/app/application/worldData/errors.py`, `worldBundle/errors.py`, `templateLibrary/packs/errors.py` | Упоминания FastAPI в комментариях; фактически обычные Python-исключения | **Не нарушение**, не переносить |
+| `backend/app/application/templateLibrary/reliefTemplateLibraryService.py`, `structureTemplateLibraryService.py` | Поиск отметил упоминания FastAPI, но выборочно прочитанные фрагменты не выявили transport imports | Не объявлять нарушением без дальнейшей проверки |
+
+**Промежуточный итог:** 1 подтверждённый кандидат на изменение границы — `core/app.py`; 0 найденных `APIRouter` вне `api/`. Это **не** утверждение, что других нарушений нет.
+
+**Обязательная следующая проверка до имплементации:** инвентаризировать все импорты `fastapi`, `starlette`, `app.api` вне `api/`; определения HTTP/WebSocket/SSE endpoints, middleware и registration sites; выяснить, что в `core/app.py` является транспортом, а что инфраструктурным bootstrap. Составить полную карту `current → target` и отдельно согласовать перенос `core/app.py` без переноса доменной инициализации в API.
