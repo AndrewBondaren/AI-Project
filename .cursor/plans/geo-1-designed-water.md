@@ -10209,10 +10209,69 @@ positive Pyright0, negative165/165 (+5), warnings-as-errors, diff-check.
 Authored geometry/carve/production callers не переключались; adapter/join
 с готовыми region/budget/context/admission остаётся дальнейшей частью G5-C2.
 
+### G5-C2 adapter/join — DONE (2026-10-29)
+Продолжение по команде пользователя «Далее». Typed captured join принадлежит
+CoastlineWaterSourceAdapter в уже согласованном application terrain пути.
+Новых транспортов placement/V2 и default settings blobs не вводить.
+Owner/class map до кода:
+- dataModel/terrain/designedWater/input.py: CoastlineWaterDesignInput — alias
+  четырёх existing generic variants, параметризованных CoastlineWaterSource.
+- application/worldData/generators/terrain/designedWater/preparation/
+  coastlineWaterSourceAdapter.py::CoastlineWaterSourceAdapter.prepare_source(
+  source:DeclaredCoastline, *, geometry_request:AuthoredWaterGeometryRequest,
+  context:ResolvedWaterGenerationContext, generation:HydrologyGenerationDecision,
+  region:TerrainRegionExtent, budget:BodyCoverageAllocation,
+  region_coverage:RegionCoverage, metadata:WaterSourceMetadata,
+  admission:PlacementAdmissionInput, field_policy:WaterFieldRecipe|None)
+  ->CoastlineWaterDesignInput. Все kwargs обязательны, None — только explicit
+  отсутствие procedural recipe для authored. Geometry request группирует
+  actual source/pre-hydrology envelope/topology/grid/seed/anchors/seas/z_min.
+- Source-normalization через existing wrapper, request source должен совпадать
+  полностью. Admission world/source/mode, context/decision strategy и generation
+  mode сверяются как structural invariants. Self support/source dependency
+  запрещены. Не вычислять priority/admission/cascade/coverage budget в adapter.
+- Non-READY admission/generation отклоняются до geometry. Production caller
+  обязан передавать только offered ready headers. Zero priority пропускает
+  preparation через existing PlacementSession. Missing/invalid input → existing
+  PlanBuildFailure/FieldPathError, без отдельного failure framework.
+- Полная authored coastline в этом join — closed ring с явной water_side;
+  open line не становится authored через legacy expansion. Authored допускает
+  DECLARED_ONLY; procedural input требует готовое AUTORESOLVE решение общего
+  engine, согласованное с context. При несовместимых ready decisions — diagnostic,
+  adapter не превращает их в другой policy decision или effective strategy.
+- По effective strategy adapter делегирует только existing geometry owner
+  (authored) либо CoastlineConstraintPreparer (procedural), затем связывает
+  готовые поля existing typed constructor. Recipe должен соответствовать
+  strategy; actual source UID/kind/liquid/path сохраняются.
+- tests/geo1/coastline_source/{__init__,fixtures,test_adapter,test_batch}.py
+  (новая папка4 файла), existing typing valid/terrain/water.py и invalid.py.
+  Common lifecycle tests используют существующий executor/transport и supplied
+  test fields: реальные noise/plate implementations ещё G6/G7, без runtime stub.
+Composition: application preparation3→4, dataModel root4→4; test новая папка4.
+Уточнение порядка: legacy run_water_placement_pass не имеет captured inputs;
+его production caller cutover требует всего G8 universe и единого transport
+switch. Поэтому G5-C2 поставляет готовый join adapter и проверяет общий batch,
+production routing выполняется одним cutover G8/G10-A. Не добавлять optional
+legacy/target switch или промежуточный raw mapping в legacy caller.
+Проверки: dry/autoTrue/positive source → input + common batch ready;
+closed authored/autoFalse, incomplete open/DECLARED_ONLY fail before geometry,
+authored0 no preparation, disabled/unresolved admissions, mismatched refs/source/
+world/grid/strategy/recipe, mountain conflict без сдвига, wrapped/sphere seams,
+preview/runtime equality, no policy/no budget calculation/no Z writes.
+
+Итог adapter/join: supplied generation/admission проверены до geometry;
+готовые typed inputs → existing generic input, без raw kwargs/новых transport.
+Проверено: GEO-1 378/378 (+17), adapter/factory/wire47/47, positive Pyright0,
+negative169/169 (+4), warnings-as-errors. Общий batch: dry source accepted,
+zero skips geometry, reserved competitor rejects whole candidate; no Z writes.
+Production routing — один G8/G10-A cutover, actual auto generation G6/G7/G9/G10.
+
 ### G5-C2 — coastline как источник body generation
-Входной аудит 2026-10-28: DESIGN BLOCKER, код G5-C2 не начат.
-Уточнение 2026-10-29: type blocker закрыт G5-C2-G; нижеследующее —
-исходный аудит. Constraints реализованы G5-C2-K; adapter/caller join остаются открытыми.
+Статус 2026-10-29: isolated typed source join DONE. G5-C2-G/K и adapter/join
+реализованы и проверены через existing общий placement lifecycle.
+Production acceptance зависит от G8/G9/G10; source routing переносится
+одним cutover G8, без optional legacy/target пути. Ниже — исходный аудит
+2026-10-28, сохранённый как контекст уже закрытых type/constraint блокеров.
 G4 implemented input.py допускает CoastlineWaterSource только в
 AuthoredWaterDesignInput; Noise/Plate/PlateNoiseWaterDesignInput.source
 ограничены ProceduralSource. Их field recipes/общий G4-C preparer не несут

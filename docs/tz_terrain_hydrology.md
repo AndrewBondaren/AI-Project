@@ -118,6 +118,19 @@ constraints не читают hydro presence, не исполняют policy и 
 Authored geometry использует свою прежнюю ветку. Actual source/path/ref/grid
 проверяются на совпадение. Production adapter/join остаётся G5-C2/G8.
 
+G5-C2 adapter: CoastlineWaterSourceAdapter связывает готовые captured source,
+geometry request, resolved context, generation/admission decisions, region,
+coverage, budget и metadata с existing generic strategy input. Source/request
+равны полностью, admission world/source/absolute mode и strategy согласованы.
+Closed ring с explicit water_side допускает authored при DECLARED_ONLY;
+процедурный source требует ready AUTORESOLVE из общего engine. Несовместимые
+ready inputs — diagnostic, без самостоятельного policy decision в adapter.
+Geometry вычисляет один existing owner; adapter не считает budget/cascade/
+priority, не ищет будущую воду и не пишет Z. Нулевые/не-ready объекты отсеивает
+common lifecycle до вызова geometry. Actual source/kind/liquid/path сохраняются.
+Production routing legacy waterPlacementPass переключается вместе с G8/G10-A;
+промежуточный optional legacy/target execution path не вводится.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.

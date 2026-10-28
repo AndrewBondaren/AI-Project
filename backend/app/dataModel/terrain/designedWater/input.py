@@ -212,3 +212,11 @@ type WaterStrategyInput = Annotated[
     AuthoredWaterDesignInput | NoiseWaterDesignInput | PlateWaterDesignInput | PlateNoiseWaterDesignInput,
     Field(discriminator="strategy"),
 ]
+
+
+# A source-specific view of the same strategy transport, retaining exact source type.
+type CoastlineWaterDesignInput = Annotated[
+    AuthoredWaterDesignInput[CoastlineWaterSource] | NoiseWaterDesignInput[CoastlineWaterSource] |
+    PlateWaterDesignInput[CoastlineWaterSource] | PlateNoiseWaterDesignInput[CoastlineWaterSource],
+    Field(discriminator="strategy"),
+]

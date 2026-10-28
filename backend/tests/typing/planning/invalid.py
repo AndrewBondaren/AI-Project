@@ -612,3 +612,17 @@ def invalid_coastline_constraints(value: WaterDesignConstraints, input: NoiseWat
     value.required_cells = frozenset()  # EXPECT: reportAttributeAccessIssue
     wrong_allowed: list[Coord] = value.allowed_cells  # EXPECT: reportAssignmentType
     wrong_constraints: WaterDesignConstraints = input.constraints  # EXPECT: reportAssignmentType
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.coastlineWaterSourceAdapter import CoastlineWaterSourceAdapter
+from app.dataModel.terrain.designedWater.input import CoastlineWaterDesignInput
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
+from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+
+
+def invalid_coastline_source_join(input: CoastlineWaterDesignInput, generation: HydrologyGenerationDecision,
+                                  admission: PlacementAdmissionInput) -> None:
+    CoastlineWaterSourceAdapter().prepare_source(input.source.value)  # EXPECT: reportCallIssue
+    wrong_source: ProceduralSource = input.source  # EXPECT: reportAssignmentType
+    wrong_admission: PlacementAdmissionInput = generation  # EXPECT: reportAssignmentType
+    wrong_generation: HydrologyGenerationDecision = admission.decision  # EXPECT: reportAssignmentType

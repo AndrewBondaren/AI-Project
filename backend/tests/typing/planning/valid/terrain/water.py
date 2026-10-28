@@ -160,3 +160,25 @@ def valid_coastline_constraints(request: AuthoredWaterGeometryRequest,
     assert_type(captured.allowed_cells, frozenset[Coord])
     assert_type(captured.required_cells, frozenset[Coord])
     assert_type(input.constraints, WaterDesignConstraints | None)
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.coastlineWaterSourceAdapter import CoastlineWaterSourceAdapter
+from app.dataModel.terrain.designedWater.input import CoastlineWaterDesignInput
+from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
+from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
+from app.dataModel.terrain.designedWater.fields.field import WaterFieldRecipe
+
+
+def valid_coastline_source_join(source: DeclaredCoastline, request: AuthoredWaterGeometryRequest,
+                               context: ResolvedWaterGenerationContext, generation: HydrologyGenerationDecision,
+                               region: TerrainRegionExtent, budget: BodyCoverageAllocation, coverage: RegionCoverage,
+                               metadata: WaterSourceMetadata, admission: PlacementAdmissionInput,
+                               recipe: WaterFieldRecipe | None, implementation: DesignedWaterStrategy) -> None:
+    result = CoastlineWaterSourceAdapter().prepare_source(source, geometry_request=request,
+        context=context, generation=generation, region=region, budget=budget, region_coverage=coverage,
+        metadata=metadata, admission=admission, field_policy=recipe)
+    assert_type(result, CoastlineWaterDesignInput)
+    assert_type(result.source, CoastlineWaterSource)
+    assert_type(implementation.design(result), WaterDesignDraft)
