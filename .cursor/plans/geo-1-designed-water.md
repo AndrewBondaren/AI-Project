@@ -5149,7 +5149,7 @@ G10-A получает resolved allowed kinds/decisions вместо old auto fl
 baseline I в GEO-1 I. Old type names могут сохраняться, но registry
 schema_versions разные. Main GEO-1 input fields WaterDesignInput:
 source:WaterDesignSource, metadata:WaterSourceMetadata,
-context:WaterGenerationContext, region:TerrainRegionExtent,
+context:ResolvedWaterGenerationContext, region:TerrainRegionExtent,
 budget:BodyCoverageAllocation, pre_hydrology_ref:PlanRef,
 seed_root:EntityUid, topology:WorldTopology, grid:SurfaceGridSettings,
 field_policy:WaterFieldRecipe у ProceduralWaterDesignInput. AuthoredWaterDesignInput
@@ -9929,7 +9929,23 @@ sources/capture/BasinSpec/writer не переключены. Следующий
 61 декларация/74 assert_type сохранены, positive typing 302 файла / 0 ошибок;
 negative planning/cascade остаются 113/19. G4 ещё не выполнялся.
 
+### G4-I — immutable результат cascade
+Согласован 2026-10-28 («Далее») по последнему разделу
+[supplement](./geo-1-strategy-boundary-contract.md). Runtime WaterGenerationContext
+содержит live _world/links и mutable provenance; strategy получает вместо него
+ResolvedWaterGenerationContext через общий freeze_resolved_context.
+Точные пути/контракт/проверки/композиция — supplement. Механический перенос
+existing immutable validator в dataModel/validation устраняет обратный импорт.
+Нет новых World Snapshot identity/revision/IO/commit APIs и повторного resolve.
+G4-I IMPLEMENTED/VERIFIED (2026-10-28): GEO-1 219/219 (+10),
+location/cascade/rasterizer 70/70; positive typing 304 файла / 0 ошибок;
+negative planning 113/113, cascade 23/23 (+4). Shared immutable admission
+проверяет также nested private values, без дублирования validator.
+Existing cache/planning API сохранён; следующий шаг — G4.
+
 ### G4 — абстракция стратегий
+Prerequisite — G4-I; input.context:ResolvedWaterGenerationContext.
+
 Контракт уточнён согласованным [supplement](./geo-1-strategy-boundary-contract.md).
 Prerequisites — G4-S. Procedural draft несёт поле без footprints;
 threshold и procedural footprints создаёт G4-C. Factory получает четыре
@@ -9943,12 +9959,20 @@ dataModel/terrain/designedWater/coverage/budget.py;
 terrain/designedWater/strategies/{strategy,strategyFactory}.py.
 Контракт: §5.1/§5.2-E/G, design(input) → WaterDesignDraft,
 единственный enum→implementation dispatch. `WaterCoverageBudget` —
-frozen dataModel тип этого шага: WaterDesignInput ссылается на него,
+frozen dataModel тип этого шага; WaterDesignInput принимает BodyCoverageAllocation
+из того же coverage/budget.py по §6.29-L,
 а dataModel не импортирует application policy (§5.2-D).
 Алгоритмы в этом шаге не писать.
 Проверка: одинаковые boundary invariants всех implementations, failures
 явны; нет нового placement resolver и default в factory.
 Done: protocol/input/output/dispatch готовы, отдельные алгоритмы ниже.
+
+G4 IMPLEMENTED/VERIFIED (2026-10-28), isolated до G10-A.
+Input/draft unions, coverage records и explicit DI dispatch готовы; validate_draft
+проверяет metadata/recipe, complete canonical coarse samples и authored floor/profile.
+GEO-1 238/238 (+19), location/cascade/rasterizer 77/77; positive Pyright — 0 ошибок,
+negative planning 124/124 (+11), cascade 23/23. Algorithms/threshold/budget calculator/
+production wiring не менялись. Composition: dataModel root4, coverage2, strategies3, tests5.
 
 ### G4-P — общая policy целевого бюджета воды
 Цель: один расчёт целевой/остаточной площади для всех способов.

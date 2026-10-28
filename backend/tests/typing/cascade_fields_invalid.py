@@ -72,3 +72,18 @@ def wrong_selector(pojo: Other) -> str:
 
 wrong_model: FieldRef[Source, str] = FieldRef(lambda: Source, wrong_selector)  # expect: reportArgumentType
 wrong_value: FieldRef[Source, int] = FieldRef(lambda: Source, lambda pojo: pojo.value)  # expect: reportAssignmentType
+
+
+from app.dataModel.cascade.runtimeContext import freeze_resolved_context
+from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
+
+
+def requires_resolved_context(context: ResolvedWaterGenerationContext) -> None:
+    pass
+
+
+def invalid_resolved_context(runtime: WaterGenerationContext, resolved: ResolvedWaterGenerationContext) -> None:
+    requires_resolved_context(runtime)  # expect: reportArgumentType
+    freeze_resolved_context(runtime, WaterGenerationContext)  # expect: reportArgumentType
+    ResolvedWaterGenerationContext(level=ScopeLevel.WORLD, provenance=(), water_fraction=0.0, autoresolve=False, strategy=DesignedWaterStrategyKind.PLATE)  # expect: reportArgumentType
+    resolved.autoresolve = True  # expect: reportAttributeAccessIssue

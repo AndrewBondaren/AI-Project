@@ -91,6 +91,32 @@ _world/_links/_scope_path/_node_results/_default_sources. Это runtime state,
 с ScopeLevel, сохраняя public поля и root(world,default_sources=...);
 WaterGenerationContext — с WaterGenerationScope.
 
+### Immutable результат cascade (GEO-1 G4-I)
+
+Рабочий CascadeRuntimeContext не передаётся pure strategies как immutable
+input: он сохраняет private world/links и изменяемое рабочее provenance.
+Общий freeze_resolved_context(ctx, result_type) в dataModel/cascade/runtimeContext.py
+проецирует только публичные declared cascade values в явно заданный subtype
+ResolvedCascadeState[AxisT]. Он не вызывает extend, policy, RNG или IO.
+Result model strict/frozen/extra=forbid/revalidate_instances=always;
+все поля required, без defaults и private state. level сохраняет исходный
+enum axis; provenance — sorted unique tuple(name,(scope,path)), точно по
+параметрам результата. Несовпадающие axes, missing/extra parameters,
+отсутствующее provenance и mutable payload отклоняются. Тип projection
+сохраняется в return type; совместимость axes дополнительно проверяется runtime.
+
+ResolvedWaterGenerationContext в generationContext.py содержит required
+non-null water_fraction/autoresolve/strategy без defaults/cascade/policy metadata.
+Исходный WaterGenerationContext и existing extend API не меняются. В G4
+WaterDesignInput.context использует этот immutable результат. Это derived
+value текущего coherent caller view, не World Snapshot, не новая revision,
+не authored settings source и не механизм capture/commit/restore истории.
+Existing StateViewRevision/PlanRef и их coherence остаются у owning caller.
+Глубокая immutable validation имеет один owner —
+dataModel/validation/immutableValue.py; cache/planning используют тот же код.
+Проверка обходит также private values вложенных frozen models: они не могут
+скрывать live world, mutable container или cycle за immutable публичным полем.
+
 `application/cascade/contextResolver.py::{extend,scope_sequence,_check_level}`
 используют общий runtime; extend принимает и возвращает тот же concrete CtxT.
 Graph/verifier проверяют axis контекста, включая явные empty scopes.

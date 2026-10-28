@@ -8,3 +8,7 @@ class DesignedWaterStrategyKind(StrEnum):
     CONTINENTAL_NOISE = "continental_noise"
     PLATE = "plate"
     PLATE_NOISE = "plate_noise"
+
+
+class WaterDesignIssueCode(StrEnum):
+    INVALID_STRATEGY = "WATER_DESIGN_INVALID_STRATEGY"

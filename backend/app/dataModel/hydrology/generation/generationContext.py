@@ -4,7 +4,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, StrictBool
 
-from app.dataModel.cascade.runtimeContext import CascadeRuntimeContext
+from app.dataModel.cascade.runtimeContext import CascadeRuntimeContext, ResolvedCascadeState
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction, WaterGenerationDefaults
 from app.dataModel.hydrology.generation.waterGenerationSettings import WATER_AUTORESOLVE, WATER_FRACTION, WATER_STRATEGY
@@ -24,3 +24,11 @@ class WaterGenerationContext(CascadeRuntimeContext[WaterGenerationScope]):
         if default_sources is None:
             default_sources = (WaterGenerationDefaults.canonical_defaults(),)
         return cls.at_root(WaterGenerationScope.ROOT, world, default_sources=default_sources)
+
+
+class ResolvedWaterGenerationContext(ResolvedCascadeState[WaterGenerationScope], frozen=True):
+    """Required resolved inputs for pure water consumers; no defaults or resolution."""
+
+    water_fraction: WaterFraction
+    autoresolve: StrictBool
+    strategy: DesignedWaterStrategyKind

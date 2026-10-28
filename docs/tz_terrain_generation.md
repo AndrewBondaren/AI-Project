@@ -239,6 +239,15 @@ prepared entries/candidates; exact field formulas/knobs — §6.29-F.
 Factory связывает effective enum с четырьмя явно переданными implementations;
 не выбирает defaults и не выполняет cascade/policy. Согласованная граница:
 [G4 supplement](../.cursor/plans/geo-1-strategy-boundary-contract.md).
+G4: WaterDesignInput — union по effective strategy с BodyCoverageAllocation,
+actual pre_hydrology envelope и exact RegionCoverage. validate_draft(input result)
+на input проверяет metadata/recipe identity, один sample на canonical coarse
+working cell и complete floor profile; authored basin сохраняет floor_z.
+Проверка не создаёт footprints procedural поля, не делает threshold/placement.
+G4-I: input.context — ResolvedWaterGenerationContext, immutable результат
+общего freeze_resolved_context после cascade/policy; runtime context с private
+world/links стратегии не передаётся. Freeze не резолвит значения, не создаёт
+World Snapshot/revision и не заменяет coherent source view/PlanRef caller'а.
 G4-S предоставляет только immutable source/metadata, resolved algorithm
 policies, recipe/field и floor-profile records. Они валидируют собственные
 инварианты, не выполняют sampling/threshold/placement/z-write. Sampled profile

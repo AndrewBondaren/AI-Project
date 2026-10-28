@@ -478,3 +478,27 @@ def invalid_water_contracts(lake: DeclaredLake, basin: DeclaredBasin, topology: 
     FieldCompositionPolicy(operator="add_clamp")  # EXPECT: reportArgumentType
     FieldFloorProfile(recipe=recipe, level=GridX(0), depth=10, z_min=FineZ(-20))  # EXPECT: reportArgumentType
     profile.z_min = FineZ(-30)  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.generators.terrain.designedWater.strategies.strategyFactory import DesignedWaterStrategyFactory
+from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext, ResolvedWaterGenerationContext
+from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput
+from app.dataModel.terrain.designedWater.draft import AuthoredWaterDesignDraft, ProceduralWaterDesignDraft
+from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation, WaterCoverageBudget
+from app.dataModel.terrain.designedWater.fields.field import PlateRecipe
+
+
+def invalid_strategy_boundary(authored: AuthoredWaterDesignInput, noise: NoiseWaterDesignInput,
+                               plate: PlateWaterDesignInput, runtime: WaterGenerationContext,
+                               draft: ProceduralWaterDesignDraft, factory: DesignedWaterStrategyFactory) -> None:
+    factory.get("plate")  # EXPECT: reportArgumentType
+    wrong_recipe: NoiseRecipe = plate.field_policy  # EXPECT: reportAssignmentType
+    wrong_recipe2: PlateRecipe = noise.field_policy  # EXPECT: reportAssignmentType
+    wrong_context: ResolvedWaterGenerationContext = runtime  # EXPECT: reportAssignmentType
+    wrong_budget: WaterCoverageBudget = noise.budget  # EXPECT: reportAssignmentType
+    wrong_source: ProceduralSource = authored.source  # EXPECT: reportAssignmentType
+    authored.field_policy  # EXPECT: reportAttributeAccessIssue
+    draft.footprints  # EXPECT: reportAttributeAccessIssue
+    wrong_input: NoiseWaterDesignInput = authored  # EXPECT: reportAssignmentType
+    noise.seed_root = "changed"  # EXPECT: reportAttributeAccessIssue
+    BodyCoverageAllocation(source_uid="source", generation_region_uid="region", requested_fine2=GridX(2), allocated_fine2=1.5)  # EXPECT: reportArgumentType

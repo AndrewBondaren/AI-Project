@@ -1,6 +1,8 @@
 # GEO-1 G4 — уточнение границы стратегий
 
-Статус: APPROVED 2026-10-28; G4-S IMPLEMENTED/VERIFIED, G4 следует отдельным заходом.
+Статус: основной контракт APPROVED 2026-10-28; G4-S IMPLEMENTED/VERIFIED.
+Уточнение runtime → resolved result APPROVED 2026-10-28 («Далее»).
+G4-I и G4 IMPLEMENTED/VERIFIED; production binding остаётся G10-A.
 Дата: 2026-10-28. Основной шаг: [G4](./geo-1-designed-water.md#g4--абстракция-стратегий).
 
 ## Обнаруженные расхождения
@@ -65,7 +67,9 @@ existing geometry helpers, G4-C не растеризует её повторн�
 
 Сохраняются поля §6.29-L/M: source, metadata, context, region, budget,
 seed_root, topology, grid, pre_hydrology:PlanEnvelope[TerrainPlan],
-region_coverage. pre_hydrology_ref — property envelope.ref.
+region_coverage. context после согласованного G4-I имеет тип
+ResolvedWaterGenerationContext, не рабочий WaterGenerationContext.
+pre_hydrology_ref — property envelope.ref.
 Procedural вариант дополнительно содержит field_policy:WaterFieldRecipe;
 authored вариант его не имеет. Discriminator — effective strategy enum.
 Для трёх procedural enum нужны отдельные literal variants с подходящим
@@ -145,8 +149,130 @@ profile completeness/z<level — в draft/spec, а не isolated profile record.
 invalid kind явно отклоняются; no spatial resolve/z-write/default choice.
 Done: executable typed boundary; algorithms остаются G5/G6/G7.
 
+G4 выполнен 2026-10-28: GEO-1 238/238 (+19), location/cascade/rasterizer
+77/77, positive Pyright — 0 ошибок, negatives planning124/cascade23.
+Input.validate_draft проверяет выход с actual grid/topology: complete coarse
+samples, metadata/recipe identity, canonical authored footprints и сохранение floor.
+Budget records только проверяют границы; calculation/threshold/wiring не включены.
+
 G4-S и G4 — два отдельных захода по правилу «один шаг за заход».
 Перед G4-S пересчитать bathymetry и затрагиваемые test folders; существующий
 hydrology root не расширяется, source contracts живут в sources/.
 После согласования привести §5.1/§5.2/§6.29-M, G4 и ТЗ к этому контракту,
 добавить G4-S перед G4. G4-P/G4-C/G5/G6/G7 сохраняют свои обязанности.
+
+## Уточнение G4: рабочий cascade context не является immutable input
+
+Статус этого раздела: IMPLEMENTED/VERIFIED 2026-10-28 после согласования.
+
+При проверке ответственности перед G4 обнаружено: существующий
+WaterGenerationContext наследует CascadeRuntimeContext. Frozen запрещает
+присваивание публичным полям, но не делает объект immutable:
+provenance — dict, private _world хранит live world, _links/_node_results —
+рабочие данные общего resolver. Через такой input strategy получает доступ
+к чужой ответственности и к исходным mutable данным. Cache immutable admission
+также отвергает dict provenance; простой deepcopy не устраняет эти свойства.
+
+Прошлый G4-S не менял этот существующий runtime-контракт. Его нельзя исправить
+удалением private attrs внутри водной factory или локальным water-only freeze
+механизмом: lifecycle cascade должен оставаться у общего cascade домена.
+
+### Предлагаемая граница
+
+1. В existing dataModel/cascade/runtimeContext.py добавить общий frozen
+   ResolvedCascadeState[AxisT] с required level:AxisT и
+   provenance:tuple[tuple[str,tuple[AxisT,str]],...]. Entries сортируются по
+   имени параметра, имена уникальны; нет dict, private attrs/world/links/cache.
+   Публичный freeze_resolved_context(ctx, result_type)->result_type выполняет только
+   projection/revalidation публичных полей в явно переданный frozen subtype.
+   Поля результата required, без подстановки defaults; generic boundary не
+   содержит списка water fields и проверяет соответствие scope axis.
+   Преобразование provenance — часть общего snapshot boundary.
+2. В existing hydrology/generation/generationContext.py добавить
+   ResolvedWaterGenerationContext(ResolvedCascadeState[WaterGenerationScope]):
+   required water_fraction:WaterFraction, autoresolve:StrictBool,
+   strategy:DesignedWaterStrategyKind. Все поля non-null, extra=forbid,
+   strict/frozen/revalidate_instances=always. Нет новых defaults/cascade links,
+   policy metadata или алгоритмов. WaterGenerationContext остаётся рабочим
+   типом existing extend/PolicyResolver без изменения своего wire/state.
+3. G4 input.context меняется на ResolvedWaterGenerationContext. Caller после
+   existing cascade/policy передаёт результат общего freeze_resolved_context.
+   Snapshot не вызывает extend/policy, не создаёт отсутствующие значения,
+   не меняет исходный runtime context и не переносит private state.
+   Ошибка неполного context — validation failure, а не fallback к defaults.
+
+Это два разных контракта: рабочее состояние resolver и immutable результат
+его работы. Снимок не является вторым authored settings source; поля
+наследования/defaults по-прежнему задаются единственными existing settings.
+Преобразование не имеет водного варианта общего cascade executor.
+
+### Ownership и порядок
+
+Отдельный подготовительный шаг G4-I перед G4: common snapshot record и
+projection принадлежат dataModel/cascade/runtimeContext.py; water subtype —
+dataModel/hydrology/generation/generationContext.py. Existing файлов в каждой
+папке 5→5; новые production modules/registry registrations не требуются.
+Для повторного использования existing immutable validation pure functions
+_complete_record/_immutable/validate_immutable механически переносятся из
+application/cache/service/cacheService.py в dataModel/validation/immutableValue.py.
+cacheService сохраняет прежние names через explicit import aliases; поведение
+API cache/planning не меняется, dataModel не импортирует application.
+При проверке deep immutability найден пробел existing validator: он не обходил
+private values вложенных BaseModel. Общий walker теперь проверяет их тем же
+правилом (opaque/mutable/cycle rejected), без второго cascade-only validator.
+Добавлена регрессия nested private world/list/dict/cycle; immutable private
+tuple допустим. Это намеренное усиление admission, а не изменение cache API.
+validation
+1→2 файла; cascade и hydrology/generation остаются 5→5. Тесты нового boundary:
+tests/geo1/contracts/cascade/resolved/{__init__,test_context}.py (2 файла),
+parent cascade остаётся 5 файлов. Positive generic checks — отдельный
+typing/planning/valid/cascade.py (valid 4→5), water checks — terrain/water.py;
+negative checks — existing cascade_fields_invalid.py.
+ТЗ: tz_cascade_context — resolved result boundary;
+tz_terrain_generation §Planning и доставка GEO-1 — strategy input.
+
+Проверки G4-I: snapshot неполного context отклоняется; independent snapshots
+не делят mutable state; изменение исходного provenance не меняет снимок;
+private world/links отсутствуют; existing validate_immutable принимает снимок;
+round-trip и scope-axis validation; общий projection работает также с
+невода́ным subtype. Positive fixtures — thematic valid/policy.py и
+valid/terrain/water.py, без возврата к valid.py; negatives проверяют runtime
+context вместо resolved snapshot и несовпадающие scope axes.
+
+После G4-I G4 выполняется с остальными согласованными input/draft/budget/
+protocol/factory контрактами. Threshold остаётся G4-C; sampling — G6/G7;
+production wiring — G10-A.
+
+G4-I выполнен: GEO-1 219/219 (+10), location/cascade/rasterizer 70/70;
+positive typing 304 файла / 0 ошибок, negatives planning 113/113,
+cascade 23/23 (+4). Freeze не вызывает resolver/policy/IO; actual runtime
+world/links/provenance не передаются. Nested private values проверяет тот
+же shared immutable walker. API cache/planning сохранён через import aliases;
+immutable admission намеренно усилен для скрытых mutable/opaque/cyclic values.
+Composition: cascade/generation по5, validation2, resolved tests2, valid5.
+
+### Сверка с ТЗ World Snapshot (2026-10-28)
+
+Семантически это immutable derived value, а не World Snapshot:
+
+- tz_world_snapshot §Назначение/§Обязательные границы оставляет единственному
+  WorldSnapshotService lifecycle истории, snapshot identity/lineage, применение
+  PatchSet и commit/read/restore/branch. Ни одного такого API/IO здесь нет.
+- Domain/application caller получает coherent source view по existing G0-S
+  seam, выполняет cascade один раз и передаёт immutable результат стратегии.
+  Freeze не перечитывает world/SQL, не формирует самостоятельное состояние
+  мира, не создаёт snapshot UID/revision и не подтверждает freshness источника.
+- Existing StateViewRevision и PlanRef по-прежнему обеспечивают согласованность
+  planning inputs/dependencies; freeze их не заменяет и не пересчитывает.
+  Связь с captured view сохраняет owning caller G8/G10-A, не cascade helper.
+- tz_cascade_context §GEO-1 G0-A явно называет CascadeRuntimeContext рабочим
+  transient state, не serialized snapshot. Его состояние не сериализуется
+  новым API: результат содержит только declared resolved values/provenance.
+  §Инварианты «consumer не резолвит» и обязательный provenance сохраняются.
+
+Предыдущее имя snapshot_context слишком близко к термину World Snapshot;
+предложение уточнено до freeze_resolved_context. В API/ТЗ результат называть
+«immutable результат каскада», без отдельного snapshot lifecycle. Добавление
+такого результата — расширение tz_cascade_context и изменение G4 input.context,
+поэтому требовалось отдельное согласование; оно получено 2026-10-28 («Далее»).
+Соответствие WS-инвариантам само по себе не заменяет расширение cascade ТЗ.
