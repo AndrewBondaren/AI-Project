@@ -453,11 +453,12 @@ def valid_fact_covariance(known: KnownFact[PolicyMode]) -> KnownFact[Enum]:
 
 
 from app.application.policy.policyResolver import PolicyResolver
+from app.application.policy.declarations.compiler import compile_value_policy, compile_admission_policy
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
 from app.dataModel.hydrology.generation.waterGenerationSettings import WorldHydrologyGenerationFields
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
-from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HydrologyPolicyDefinition
+from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HYDROLOGY_GENERATION_POLICY, HYDROLOGY_AUTORESOLVE
 from app.dataModel.policy.policyBindings import PolicyFacts as PolicyObservations, PolicyInputs, PolicySource
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
@@ -465,7 +466,10 @@ from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 def valid_hydrology_generation(root: WorldHydrologyGenerationFields, context: WaterGenerationContext) -> None:
     sources = PolicyInputs(models=(PolicySource(WorldHydrologyGenerationFields, root, ("hydrology",)),
         PolicySource(WaterGenerationContext, context, ("resolved",))))
-    decision = PolicyResolver().resolve(HydrologyPolicyDefinition.generation(), sources, PolicyObservations(),
+    spec = compile_value_policy(HYDROLOGY_GENERATION_POLICY, (WorldHydrologyGenerationFields, WaterGenerationContext))
+    assert_type(HYDROLOGY_AUTORESOLVE.cases[0].when, bool)
+    assert_type(spec, ValueSelectionPolicySpec[HydrologyExecutionMode, WaterPolicyReason])
+    decision = PolicyResolver().resolve(spec, sources, PolicyObservations(),
         mode=ResolutionMode.VALIDATE_ONLY)
     assert_type(decision, ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason])
     typed: HydrologyGenerationDecision = decision
@@ -536,9 +540,6 @@ def valid_policy_declarations(priority: PriorityValueRef[PolicyDefaults]) -> Non
         conditions=(), effect=SelectBehaviorEffect(PolicyMode.FIRST))
     ValuePolicy[PolicyMode, PolicyReasonKind](owner=DeclarationOwner, behavior_type=PolicyMode,
         reason_type=PolicyReasonKind, cases=(compound,))
-
-
-from app.application.policy.declarations.compiler import compile_value_policy, compile_admission_policy
 
 
 def valid_policy_compilation(admission: AdmissionPolicy[PolicyMode, PolicyReasonKind]) -> None:

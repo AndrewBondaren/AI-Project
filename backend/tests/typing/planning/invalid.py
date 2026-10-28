@@ -438,3 +438,11 @@ def invalid_policy_compilation(admission: AdmissionPolicy[PolicyMode, PolicyReas
     compile_value_policy(admission, ())  # EXPECT: reportArgumentType
     compile_value_policy(VALUE_DECLARATION, (PolicySettings(enabled=True, priority=0, mode=PolicyMode.FIRST),))  # EXPECT: reportArgumentType
     compile_value_policy(VALUE_DECLARATION, [PolicySettings])  # EXPECT: reportArgumentType
+
+
+from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HYDROLOGY_GENERATION_POLICY
+
+
+def invalid_hydrology_metadata() -> None:
+    SelectByValue[bool, OtherPolicyMode, WaterPolicyReason](HYDROLOGY_GENERATION_POLICY, ())  # EXPECT: reportArgumentType
+    foreign: ValueSelectionPolicySpec[OtherPolicyMode, WaterPolicyReason] = compile_value_policy(HYDROLOGY_GENERATION_POLICY, ())  # EXPECT: reportAssignmentType

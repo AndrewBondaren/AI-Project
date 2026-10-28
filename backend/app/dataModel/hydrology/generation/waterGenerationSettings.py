@@ -11,6 +11,7 @@ from app.dataModel.cascade.cascadeSpec import (
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction, WaterGenerationDefaults
 from app.dataModel.hydrology.generation.legacySettings import normalize_seas_generation, normalize_lakes_generation
+from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import HYDROLOGY_ENABLED
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
 WATER_FRACTION = Cascade("water_fraction", DefaultPolicy.CANONICAL_DEFAULT, Scope,
@@ -70,7 +71,7 @@ class WorldHydrologyGenerationFields(BaseModel, frozen=True):
     """Future root owner fields; active WorldHydrology switches at G10-A."""
 
     model_config = WaterGenerationSettings.model_config
-    enabled: DefaultWhenMissing[StrictBool] = True
+    enabled: Annotated[DefaultWhenMissing[StrictBool], HYDROLOGY_ENABLED] = True
     generation: DefaultWhenMissing[WorldWaterGenerationSettings] = Field(default_factory=WorldWaterGenerationSettings)
 
 

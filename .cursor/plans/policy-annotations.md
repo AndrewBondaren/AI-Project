@@ -1,6 +1,6 @@
 # Policy annotations — план реализации
 
-Статус: согласован мастером 2026-10-28; P1–P2 сданы, следующий шаг P3.
+Статус: согласован мастером 2026-10-28; P1–P3 сданы, следующий шаг P4.
 Дата: 2026-10-28. Нормативный проект: [tz_policy](../../docs/tz_policy.md).
 Основание: обсуждение повторов G2-G, включая bool cases и PolicyRuleId.
 
@@ -156,6 +156,12 @@ StrictBool/enum errors, json round-trip; planning typing и typecheck:cascade.
 Done: в domain definition нет PolicyRuleId, Equal, SelectBehaviorEffect,
 ручных stage/operation/default precedence и duplicate self-field references.
 Production owners остаются за G10-A; enum outcomes/reasons явно объявлены.
+
+P3 IMPLEMENTED/VERIFIED (2026-10-28). Hydrology descriptor + field metadata вместо
+ручной factory; runtime fixtures typed, wire tests сохраняют raw input.
+GEO-1 160/160 (+3), location/cascade contracts 52/52; positive typing 271 файл — 0 ошибок.
+Negatives planning 103/103 (+2), cascade 16/16; full cascade-check — 16 baseline registry errors, delta 0.
+Cold import в обоих порядках, JSON/schema и decision round-trip проверены; production switch остаётся G10-A.
 
 ### P4 — проверка consumer границ и документация
 
