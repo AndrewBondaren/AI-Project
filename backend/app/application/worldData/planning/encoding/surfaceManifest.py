@@ -205,6 +205,51 @@ from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGen
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode as _MHydrologyExecutionMode
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason as _MWaterPolicyReason
 
+# GEO pipeline concrete types; existing PC declarations remain unchanged.
+from app.application.worldData.planning.contracts.surfacePlanningView import GeoSurfacePlanningView as _MGeoSurfacePlanningView
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningViewKind as _MSurfacePlanningViewKind
+from app.dataModel.terrain.regions.regionPlanningInput import TerrainRegionPlanningInput as _MTerrainRegionPlanningInput
+from app.dataModel.terrain.regions.regionPlanningInput import RegionGeometryInput as _MRegionGeometryInput
+from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage as _MRegionCoverage
+from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan as _MCoverageSpan
+from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput as _MGeoWaterPlacementInput
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings as _MWorldWaterGenerationSettings
+from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults as _MWaterGenerationDefaults
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource as _MAuthoredBasinSource
+from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind as _MWaterDesignSourceKind
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredLakeSource as _MAuthoredLakeSource
+from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource as _MCoastlineWaterSource
+from app.dataModel.hydrology.sources.waterDesignSource import ProceduralSource as _MProceduralSource
+from app.dataModel.hydrology.sources.proceduralWaterSource import ProceduralWaterSource as _MProceduralWaterSource
+from app.dataModel.hydrology.generation.waterGenerationSettings import BodyWaterGenerationSettings as _MBodyWaterGenerationSettings
+from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy as _MWaterFieldSelectionPolicy
+from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput as _MGeoHydrologyPlanInput
+from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlineBoundaryInput as _MCoastlineBoundaryInput
+from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry as _MWorldTerrainCategoryRegistry
+from app.dataModel.terrain.terrainCategoryEntry import TerrainCategoryEntry as _MTerrainCategoryEntry
+from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSurfacePlanBundle as _MGeoSurfacePlanBundle
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan as _MTerrainRegionPlan
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionsSnapshot as _MTerrainRegionsSnapshot
+from app.dataModel.terrain.regions.terrainRegionExtent import TerrainRegionExtent as _MTerrainRegionExtent
+from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan as _MGeoWaterPlacementPlan
+from app.dataModel.placement.result import ResolvedPlacementV2 as _MResolvedPlacementV2
+from app.dataModel.placement.prepared import PreparedPlacementV2 as _MPreparedPlacementV2
+from app.dataModel.policy.policyDecision import ObjectAdmissionDecision as _MObjectAdmissionDecision
+from enum import Enum as _MEnum
+from app.dataModel.placement.result import DisabledPlacement as _MDisabledPlacement
+from app.dataModel.placement.lifecycle.causal import PlacementOutcomeRef as _MPlacementOutcomeRef
+from app.dataModel.placement.lifecycle.causal import PlacementOutcomeStatus as _MPlacementOutcomeStatus
+from app.dataModel.placement.result import PlacementDiagnostic as _MPlacementDiagnostic
+from app.dataModel.placement.result import PlacementIssueCode as _MPlacementIssueCode
+from app.dataModel.placement.result import UnresolvedPlacementV2 as _MUnresolvedPlacementV2
+from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetadata as _MWaterSourceMetadata
+from app.dataModel.terrain.designedWater.coverage.budget import WaterCoverageBudget as _MWaterCoverageBudget
+from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation as _MBodyCoverageAllocation
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyRoutesPlan as _MGeoHydrologyRoutesPlan
+from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlineBoundaryPlan as _MCoastlineBoundaryPlan
+from app.dataModel.hydrology.boundaries.attachedCoastline import AttachedCoastline as _MAttachedCoastline
+from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlinePart as _MCoastlinePart
+
 # Stable TLV v1 type IDs. Append entries; never infer IDs from runtime discovery.
 SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     RegisteredTypeEntry(type_id=identity, python_type=owner, kind=kind)
@@ -442,6 +487,54 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (231, _MValueSelectionDecision[_MHydrologyExecutionMode, _MWaterPolicyReason], CanonicalTypeKind.RECORD),
     (232, _MPolicyReason[_MWaterPolicyReason], CanonicalTypeKind.RECORD),
     (233, _MPlanEnvelope[_MGeoHydrologyPlan], CanonicalTypeKind.RECORD),
+    (234, _MGeoSurfacePlanningView, CanonicalTypeKind.RECORD),
+    (235, _MSurfacePlanningViewKind, CanonicalTypeKind.ENUM),
+    (236, _MTerrainRegionPlanningInput, CanonicalTypeKind.RECORD),
+    (237, _MRegionGeometryInput, CanonicalTypeKind.RECORD),
+    (238, _MRegionCoverage, CanonicalTypeKind.RECORD),
+    (239, _MCoverageSpan, CanonicalTypeKind.RECORD),
+    (240, _MGeoWaterPlacementInput, CanonicalTypeKind.RECORD),
+    (241, _MWorldWaterGenerationSettings, CanonicalTypeKind.RECORD),
+    (242, _MWaterGenerationDefaults, CanonicalTypeKind.RECORD),
+    (243, _MAuthoredBasinSource, CanonicalTypeKind.RECORD),
+    (244, _MWaterDesignSourceKind, CanonicalTypeKind.ENUM),
+    (245, _MAuthoredLakeSource, CanonicalTypeKind.RECORD),
+    (246, _MCoastlineWaterSource, CanonicalTypeKind.RECORD),
+    (247, _MProceduralSource, CanonicalTypeKind.RECORD),
+    (248, _MProceduralWaterSource, CanonicalTypeKind.RECORD),
+    (249, _MBodyWaterGenerationSettings, CanonicalTypeKind.RECORD),
+    (250, _MWaterFieldSelectionPolicy, CanonicalTypeKind.RECORD),
+    (251, _MGeoHydrologyPlanInput, CanonicalTypeKind.RECORD),
+    (252, _MCoastlineBoundaryInput, CanonicalTypeKind.RECORD),
+    (253, _MWorldTerrainCategoryRegistry, CanonicalTypeKind.RECORD),
+    (254, _MTerrainCategoryEntry, CanonicalTypeKind.RECORD),
+    (255, _MGeoSurfacePlanBundle, CanonicalTypeKind.RECORD),
+    (256, _MPlanEnvelope[_MTerrainRegionPlan], CanonicalTypeKind.RECORD),
+    (257, _MTerrainRegionPlan, CanonicalTypeKind.RECORD),
+    (258, _MTerrainRegionsSnapshot, CanonicalTypeKind.RECORD),
+    (259, _MTerrainRegionExtent, CanonicalTypeKind.RECORD),
+    (260, _MPlanEnvelope[_MGeoWaterPlacementPlan], CanonicalTypeKind.RECORD),
+    (261, _MGeoWaterPlacementPlan, CanonicalTypeKind.RECORD),
+    (262, _MResolvedPlacementV2, CanonicalTypeKind.RECORD),
+    (263, _MPreparedPlacementV2, CanonicalTypeKind.RECORD),
+    (264, _MObjectAdmissionDecision[_MEnum, _MEnum], CanonicalTypeKind.RECORD),
+    (265, _MPolicyReason[_MEnum], CanonicalTypeKind.RECORD),
+    (266, _MDisabledPlacement, CanonicalTypeKind.RECORD),
+    (267, _MPlacementOutcomeRef, CanonicalTypeKind.RECORD),
+    (268, _MPlacementOutcomeStatus, CanonicalTypeKind.ENUM),
+    (269, _MPlacementDiagnostic, CanonicalTypeKind.RECORD),
+    (270, _MPlacementIssueCode, CanonicalTypeKind.ENUM),
+    (271, _MUnresolvedPlacementV2, CanonicalTypeKind.RECORD),
+    (272, _MWaterSourceMetadata, CanonicalTypeKind.RECORD),
+    (273, _MObjectAdmissionDecision[_MDesignedWaterStrategyKind, _MWaterPolicyReason], CanonicalTypeKind.RECORD),
+    (274, _MWaterCoverageBudget, CanonicalTypeKind.RECORD),
+    (275, _MBodyCoverageAllocation, CanonicalTypeKind.RECORD),
+    (276, _MPlanEnvelope[_MGeoHydrologyRoutesPlan], CanonicalTypeKind.RECORD),
+    (277, _MGeoHydrologyRoutesPlan, CanonicalTypeKind.RECORD),
+    (278, _MPlanEnvelope[_MCoastlineBoundaryPlan], CanonicalTypeKind.RECORD),
+    (279, _MCoastlineBoundaryPlan, CanonicalTypeKind.RECORD),
+    (280, _MAttachedCoastline, CanonicalTypeKind.RECORD),
+    (281, _MCoastlinePart, CanonicalTypeKind.RECORD),
 
 )))
 

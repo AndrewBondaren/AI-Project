@@ -2403,13 +2403,13 @@ class HydrologyAssemblyBoundaryTests(unittest.TestCase):
         import ast
         import inspect
         from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import (
-            HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider)
+            HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider, GeoHydrologyFinalPlanProvider)
         f = self.f
         owners = (f.routes_assembler, f.facts_assembler, f.routes_assembler._water,
                   f.routes_assembler._coarse, f.routes_assembler._fine, f.routes_assembler._paint)
         planning_types = {"PlanRequest", "PlanEnvelope", "PlanRef", "PlanDependencyReader", "RegisteredPlanContract",
                           "PlanningService", "CacheService", "MemoryCache"}
-        for owner in (*owners, HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider):
+        for owner in (*owners, HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider, GeoHydrologyFinalPlanProvider):
             cls = owner if isinstance(owner, type) else type(owner)
             source = inspect.getsource(cls)
             tree = ast.parse(source)
@@ -2421,7 +2421,7 @@ class HydrologyAssemblyBoundaryTests(unittest.TestCase):
         tree = ast.parse(inspect.getsource(providers))
         self.assertEqual({node.name for node in tree.body if isinstance(node, ast.FunctionDef)}, {"_failure"})
         self.assertEqual({node.name for node in tree.body if isinstance(node, ast.ClassDef)},
-                         {"HydrologyRoutesPlanProvider", "HydrologyFinalPlanProvider"})
+                         {"HydrologyRoutesPlanProvider", "HydrologyFinalPlanProvider", "GeoHydrologyFinalPlanProvider"})
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
                 self.assertEqual({method.name for method in node.body if isinstance(method, ast.FunctionDef)},

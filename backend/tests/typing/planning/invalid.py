@@ -766,3 +766,56 @@ def invalid_geo_support_dependencies(deps: SurfaceSupportDependencies[GeoHydrolo
 def invalid_geo_fields_in_common_kernel(hydrology: HydrologyPlan) -> None:
     hydrology.source_mapping  # EXPECT: reportAttributeAccessIssue
     hydrology.classification_decisions  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSurfacePlanBundle
+from app.application.worldData.planning.contracts.surfacePlanningView import GeoSurfacePlanningView
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyRoutesPlan
+from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
+from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
+from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan
+
+
+def invalid_pc_geo_inputs(water: WaterPlacementInput, routes: HydrologyPlanInput) -> tuple[GeoWaterPlacementInput, GeoHydrologyPlanInput]:
+    return water, routes  # EXPECT: reportReturnType
+
+
+def invalid_pc_geo_envelopes(geo: GeoSurfacePlanBundle) -> tuple[PlanEnvelope[WaterPlacementPlan], PlanEnvelope[HydrologyRoutesPlan]]:
+    return geo.water_placement, geo.hydrology_routes  # EXPECT: reportReturnType
+
+
+def invalid_geo_phase_substitution(geo: GeoSurfacePlanBundle) -> PlanEnvelope[GeoHydrologyRoutesPlan]:
+    return geo.hydrology  # EXPECT: reportReturnType
+
+
+def invalid_geo_capture(view: GeoSurfacePlanningView) -> None:
+    view.hydrology.classification_decisions  # EXPECT: reportAttributeAccessIssue
+    view.water_placement.source_decisions  # EXPECT: reportAttributeAccessIssue
+
+
+def invalid_geo_envelope_widening(value: PlanEnvelope[GeoWaterPlacementPlan]) -> PlanEnvelope[WaterPlacementPlan]:
+    return value  # EXPECT: reportReturnType
+
+
+def invalid_geo_boundary_snapshot(value: BoundaryWaterSnapshot[GeoHydrologyPlan]) -> BoundaryWaterSnapshot[HydrologyPlan]:
+    return value  # EXPECT: reportReturnType
+
+
+def invalid_pc_boundary_snapshot(value: BoundaryWaterSnapshot[HydrologyPlan]) -> BoundaryWaterSnapshot[GeoHydrologyPlan]:
+    return value  # EXPECT: reportReturnType
+
+
+def invalid_geo_policy_snapshot(value: HydrologyPolicySnapshot[GeoHydrologyPlan]) -> HydrologyPolicySnapshot[HydrologyPlan]:
+    return value  # EXPECT: reportReturnType
+
+
+def invalid_pc_policy_snapshot(value: HydrologyPolicySnapshot[HydrologyPlan]) -> HydrologyPolicySnapshot[GeoHydrologyPlan]:
+    return value  # EXPECT: reportReturnType
+
+
+from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyFinalPlanProvider
+
+
+def invalid_geo_final_provider_request(provider: GeoHydrologyFinalPlanProvider, request: PlanRequest[HydrologyPlanInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
+    provider.build(request, dependencies, control)  # EXPECT: reportArgumentType

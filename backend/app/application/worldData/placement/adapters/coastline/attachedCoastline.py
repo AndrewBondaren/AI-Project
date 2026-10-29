@@ -6,6 +6,7 @@ from app.application.worldData.generators.hydrology.boundaries.boundaryGeometry 
 from app.dataModel.hydrology.boundaries.attachedCoastline import AttachedCoastline, BoundaryIssueCode
 from app.dataModel.hydrology.boundaries.boundaryWaterSnapshot import BoundaryWaterSnapshot
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose, DeclaredCoastline
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.placement.common import DependencyRelation, OverlapRelation, PlacementMode
 from app.dataModel.placement.intent import PlacementIntent
 from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
@@ -24,14 +25,14 @@ class PreparedCoastlineBoundary:
 class AttachedCoastlinePreparer:
     """Structural join only; BoundaryGeometry owns all raster/association work."""
 
-    def prepare_boundary(self, source: DeclaredCoastline, accepted_water: BoundaryWaterSnapshot,
+    def prepare_boundary[H: HydrologyPlan](self, source: DeclaredCoastline, accepted_water: BoundaryWaterSnapshot[H],
                          admission: PlacementAdmissionInput) -> PreparedCoastlineBoundary:
         if not isinstance(source, DeclaredCoastline) or not isinstance(accepted_water, BoundaryWaterSnapshot):
             raise TypeError("boundary preparation requires typed source and captured water snapshot")
         if not isinstance(admission, PlacementAdmissionInput):
             raise TypeError("boundary preparation requires common typed admission")
         source = DeclaredCoastline.model_validate(source.model_dump(warnings=False), strict=True)
-        snapshot = BoundaryWaterSnapshot.model_validate(accepted_water, strict=True)
+        snapshot = type(accepted_water).model_validate(accepted_water, strict=True)
         admission = PlacementAdmissionInput.model_validate(admission, strict=True)
         header = admission.header
         if source.purpose is not CoastlinePurpose.BODY_BOUNDARY or source.target_source_uid is None:

@@ -5942,7 +5942,7 @@ Geo final input — HydrologyFinalInput, output GeoHydrologyPlan. Geo bundle
 hydrology_routes — PlanEnvelope[GeoHydrologyRoutesPlan]; river_relief —
 PlanEnvelope[RiverReliefPlan]. Final переносит source_mapping/decisions
 из geo routes без повторного policy resolution. Geo routes deps=
-(relief,water_placement); geo final deps=(relief,hydrology_routes,river_relief).
+(relief,water_placement); geo final deps=(relief,hydrology_routes,river_relief,water_placement).
 Geo routes/final/river_relief registrations имеют schema2 и отдельные ids
 `surface.geo.<slot>` / `surface.envelope.geo.<slot>`; прежние PC metadata
 entries не перерегистрируются под тем же id. Geo river wrapper в том же
@@ -11042,7 +11042,7 @@ expected annotations covered. Consumer suite requires execution outside sandbox:
 Windows asyncio socketpair otherwise stalls in event-loop setup before test code.
 PC production bindings/revision vectors remain covered; full G10-A stays OPEN.
 
-### G10-A typed pipeline closure — execution group (2026-10-29)
+### G10-A typed pipeline closure — IMPLEMENTED / VERIFIED (2026-10-29)
 
 Implement the frozen §6.29-M/§6.31-E input/output contracts before caller wiring:
 new dataModel terrain/planning/inputs/geoWaterPlacementInput.py and hydrology/
@@ -11062,6 +11062,75 @@ test_surface_validation.py and integration/support fixtures; root4→4 (future5)
 support2→3; terrain inputs3→4, hydrology inputs2→3, all other counts unchanged.
 Owning source schema and runtime activation remain one subsequent G10-A switch;
 these contracts do not enable an alternate production path.
+
+Verified: concrete codec IDs234–281 appended without changing IDs1–233;
+full view/bundle/phase replay, nonempty placement variants and input/ref rejection.
+GEO-1 545 passed (+13), planning contracts71/consumers85/codec7 passed; pyright valid0,
+negative225 vs baseline219, all expected rejections covered, surplus unchanged.
+Production source schema/capture/providers remain pending in atomic G10-A.
+
+### G10-A boundary provenance correction — IMPLEMENTED / VERIFIED (2026-10-29)
+
+Readiness replay found two concrete blockers: BoundaryWaterSnapshot requires an
+exact direct water_placement dependency, absent from the frozen GEO final graph;
+both boundary/policy snapshots reject the exact GeoHydrologyPlan envelope.
+Amend §6.31-E before activation: GEO final deps add water_placement; PC final
+remains unchanged. This is explicit accepted-placement provenance, not a second
+fill or policy pass. Boundary deps remain (hydrology,water_placement).
+
+Owner map, all existing files under backend/app:
+- dataModel/surfacePlanning/surfacePlanBindings.py: GEO final declares the exact
+  GEO water metadata. GeoHydrologyFinalPlanProvider in
+  application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py
+  takes the exact water handle, checks relief/routes/river refs before delegating
+  common final facts to HydrologyFactsAssembler, and carries mapping/decisions
+  unchanged. Registration remains part of atomic activation. prepare_geo in
+  application/worldData/planning/composition/surfacePlanningAssembler.py passes
+  the same water envelope. Neither copies geometry nor reevaluates admission.
+- dataModel/hydrology/boundaries/boundaryWaterSnapshot.py and
+  dataModel/hydrology/policy/hydrologyPlacementPolicy.py parameterize their
+  existing snapshots by H:HydrologyPlan (default HydrologyPlan). GEO binds H to
+  GeoHydrologyPlan; hydrology fields retain invariant PlanEnvelope[H].
+  Boundary provenance checks the water_placement slot, not any matching ref.
+- Existing application/worldData/generators/hydrology/boundaries/{boundaryGeometry,
+  boundaryPlanner}.py, hydrology/policy/{hydrologyPolicyFacts,hydrologyPlacementBinding}.py
+  and application/worldData/placement/adapters/coastline/attachedCoastline.py
+  preserve H in their snapshot parameters/revalidation. Domain computation and
+  policy execution remain with their current owners; no cast or envelope copy.
+
+TZ: tz_terrain_hydrology §GEO-1; tz_map_light_bake §Placement; plan §6.16-A/§6.29-G.
+Checks: geo1/integration/{test_activation,test_revisions}.py, the existing
+planning provider architecture guard and planned typing fixtures
+cover exact GEO final→policy→geometry→dependent P2, PC/GEO substitution, wrong
+water ref/slot and bundle provenance. No new files; directory counts unchanged.
+Done for this group: isolated seam verified; source/capture/provider activation
+remain atomic G10-A deliverables; the final provider is implemented isolated.
+
+Verified: GEO-1 555 passed (+10), planning292 passed; pyright valid0.
+Negative230 vs baseline219, all227 expected annotations covered; surplus unchanged.
+New final provider is isolated; production registration remains the eight PC stages.
+
+### G10-A relief provider binding — execution group (2026-10-29)
+
+Goal: implement the frozen §6.31-E GeoReliefPlanProvider and
+GeoRiverReliefPlanProvider before composition activation. TZ:
+tz_terrain_generation §GEO-1/terrain layers; tz_terrain_hydrology §HY-12;
+plan §6.16 J09/§6.31-E. Both are application terrain/relief boundary adapters in
+existing backend/app/application/worldData/generators/terrain/relief/planning/
+reliefPlanProvider.py. Exact GEO water/routes handles are required; adapters
+validate upstream refs and delegate payloads to the existing terrain computation.
+Shared _plan_relief and _plan_river_relief in that same owning module hold the
+unchanged pre-river/profile recipes currently embedded in PC build methods.
+Both PC and GEO adapters call those kernels; Geo river passes routes.payload.base.
+No policy resolution, mapping inspection, envelope rebuilding or widened handle.
+
+Files: the existing provider above; geo1/integration/{test_activation,
+test_revisions}.py and support/pipeline.py; existing planned typing fixtures.
+Check: real registry/cache builds, PC-equivalent basin/river geometry, receiver
+preservation, wrong refs/PC handles rejected, cache replay and source immutability;
+existing planning regressions and positive/negative type configurations.
+Done: both exact GEO relief adapters verified; production registration remains
+part of atomic G10-A. No new files; direct folder counts unchanged.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

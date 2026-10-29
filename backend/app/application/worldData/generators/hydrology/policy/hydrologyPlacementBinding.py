@@ -9,6 +9,7 @@ from app.application.worldData.generators.hydrology.policy.hydrologyPolicyFacts 
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.hydrology.placement.placementFields import WaterCategoryPlacementFields, WaterSourcePlacementFields
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
 from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import (
@@ -41,12 +42,12 @@ class HydrologyPlacementBinding:
     facts: PolicyFacts
 
 
-def bind_hydrology_placement_policy(
+def bind_hydrology_placement_policy[H: HydrologyPlan](
     source: WaterPlacementPolicySource,
     category: HydrologySeasPolicy | HydrologyLakesPolicy,
     gates: HydrologyPlacementGateInputs,
     behavior: HydrologyPlacementBehaviorInputs,
-    snapshot: HydrologyPolicySnapshot,
+    snapshot: HydrologyPolicySnapshot[H],
     *, source_path: SourcePath, category_path: SourcePath,
 ) -> HydrologyPlacementBinding:
     if not isinstance(source, (DeclaredCoastline, AuthoredBasinSource, AuthoredLakeSource,

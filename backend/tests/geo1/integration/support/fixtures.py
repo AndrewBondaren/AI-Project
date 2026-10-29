@@ -47,10 +47,10 @@ class FrozenUpstream:
         raise AssertionError("this seam consumes captured upstream evidence")
 
 
-def seal(handle, payload, upstream=()):
+def seal(handle, payload, upstream=(), *, world_uid="world"):
     deps = tuple(sorted((PlanDependency(slot=slot, ref=envelope.ref) for slot, envelope in upstream), key=lambda d: d.slot))
     meta = handle.metadata
-    return PlanEnvelope[type(payload)](ref=PlanRef(key=PlanKey(world_uid="world", scope=WorldPlanScope(),
+    return PlanEnvelope[type(payload)](ref=PlanRef(key=PlanKey(world_uid=world_uid, scope=WorldPlanScope(),
         contract_id=meta.id, schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
         input_fingerprint=digest(payload, SURFACE_MANIFEST)),
         output_fingerprint=output_fingerprint(payload, deps, (), SURFACE_MANIFEST)),

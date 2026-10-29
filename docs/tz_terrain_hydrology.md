@@ -78,6 +78,13 @@ Domain policy содержит enum case keys и typed predicates; target UID с
 факты, hydrologyPlacementBinding только связывает inputs и компилирует spec.
 Ни один из этих объектов не выполняет admission/placement или live World lookup.
 
+G10-A boundary binding: BoundaryWaterSnapshot[H] and HydrologyPolicySnapshot[H]
+retain the exact PlanEnvelope[H], with H=GeoHydrologyPlan for GEO. GEO final
+declares water_placement alongside relief/routes/river_relief; the final
+provider verifies that lineage before delegating common facts. Boundary
+requires the exact water_placement slot/ref; PC dependency declarations stay
+unchanged. Capture/registration still activate atomically in G10-A.
+
 G5-CP implementation clarification: field metadata сохраняет identity основного
 placement descriptor. Target-bound compound support case компилируется отдельно
 с explicit priority/facts models (без field metadata); его RequireSupport rule

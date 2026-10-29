@@ -1,6 +1,7 @@
 {
   "extends": "../../../../pyrightconfig.cascade.json",
   "include": [
+    "valid/terrain/geoPipeline.py",
     "../../../app/dataModel/cascade/cascadeGraph.py",
     "../../../app/dataModel/terrain/designedWater",
     "../../../app/application/worldData/generators/terrain/designedWater",

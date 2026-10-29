@@ -1,6 +1,7 @@
 """Explicit final fine samples and accepted supports, captured after water fill."""
 
-from typing import Literal, Self
+from typing import Generic, Literal, Self
+from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -13,6 +14,7 @@ from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineXY
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.topology.fineTopology import fine_topology
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -26,12 +28,15 @@ class FineBoundaryWaterCell(BaseModel, frozen=True):
     body_uid: EntityUid | None
 
 
-class BoundaryWaterSnapshot(BaseModel, frozen=True):
+H = TypeVar("H", bound=HydrologyPlan, default=HydrologyPlan)
+
+
+class BoundaryWaterSnapshot(BaseModel, Generic[H], frozen=True):
     """The producer supplies accepted supports in fine space; consumers never guess."""
 
     model_config = FineBoundaryWaterCell.model_config
 
-    hydrology: PlanEnvelope[HydrologyPlan]
+    hydrology: PlanEnvelope[H]
     source_mapping: SourceBodyMapping
     mapping_hydrology_ref: PlanRef
     placement_ref: PlanRef
@@ -57,7 +62,8 @@ class BoundaryWaterSnapshot(BaseModel, frozen=True):
         if self.mapping_hydrology_ref != ref:
             raise ValueError("mapping must bind to this hydrology revision")
         if self.placement_ref.key.world_uid != ref.key.world_uid or not any(
-                dependency.ref == self.placement_ref for dependency in self.hydrology.dependencies):
+                dependency.slot == SurfacePlanSlot.WATER_PLACEMENT.value and dependency.ref == self.placement_ref
+                for dependency in self.hydrology.dependencies):
             raise ValueError("accepted placement ref must be an exact hydrology dependency in the same world")
         box, bounds = self.hydrology.payload.coarse_surface_z, self.topology.bounds
         if len(box) != bounds.width * bounds.height or any(not bounds.contains(cell.gx, cell.gy) for cell, _ in box):

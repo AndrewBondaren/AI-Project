@@ -1,7 +1,8 @@
 """Water admission declarations and captured observations; the common engine decides."""
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Generic, Self
+from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, StrictBool, model_validator
 
@@ -32,14 +33,17 @@ from app.dataModel.validation.immutableValue import validate_immutable
 type WaterPlacementPolicySource = WaterDesignSource | DeclaredCoastline
 
 
-class HydrologyPolicySnapshot(BaseModel, frozen=True):
+H = TypeVar("H", bound=HydrologyPlan, default=HydrologyPlan)
+
+
+class HydrologyPolicySnapshot(BaseModel, Generic[H], frozen=True):
     """Caller-captured evidence, bound to one hydrology revision; no live lookup."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 
     world_uid: EntityUid
     supports: tuple[PolicySupportFact, ...]
-    hydrology: PlanEnvelope[HydrologyPlan] | None
+    hydrology: PlanEnvelope[H] | None
     source_mapping: SourceBodyMapping | None
     mapping_hydrology_ref: PlanRef | None
 

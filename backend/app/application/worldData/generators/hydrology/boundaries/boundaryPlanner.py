@@ -9,6 +9,7 @@ from app.dataModel.hydrology.boundaries.attachedCoastline import (
     AttachedCoastline, BoundaryIssueCode, CoastlineBoundaryInput, CoastlineBoundaryPlan,
 )
 from app.dataModel.hydrology.boundaries.boundaryWaterSnapshot import BoundaryWaterSnapshot
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.placement.batch import PlacementBatchV2
 from app.dataModel.placement.common import PlacementPhase
@@ -24,14 +25,14 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 class CoastlineBoundaryPlanner:
     """Consume whole-scope captured evidence/admissions, never requested output tiles."""
 
-    def prepare(self, input: CoastlineBoundaryInput, snapshot: BoundaryWaterSnapshot,
+    def prepare[H: HydrologyPlan](self, input: CoastlineBoundaryInput, snapshot: BoundaryWaterSnapshot[H],
                 admissions: tuple[PlacementAdmissionInput, ...], *, snapshot_uid: EntityUid) -> CoastlineBoundaryPlan:
         if not isinstance(input, CoastlineBoundaryInput) or not isinstance(snapshot, BoundaryWaterSnapshot):
             raise TypeError("boundary planning requires typed whole-scope input and final snapshot")
         if not isinstance(admissions, tuple) or any(not isinstance(item, PlacementAdmissionInput) for item in admissions):
             raise TypeError("boundary planning requires immutable typed admissions")
         input = CoastlineBoundaryInput.model_validate(input, strict=True)
-        snapshot = BoundaryWaterSnapshot.model_validate(snapshot, strict=True)
+        snapshot = type(snapshot).model_validate(snapshot, strict=True)
         sources = {source.location_uid: source for source in input.sources}
         identities = tuple(item.header.identity.source_uid for item in admissions)
         if (input.grid != snapshot.grid or input.topology != snapshot.topology

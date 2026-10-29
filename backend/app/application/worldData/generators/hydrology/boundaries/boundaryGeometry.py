@@ -11,6 +11,7 @@ from app.dataModel.hydrology.boundaries.attachedCoastline import AttachedCoastli
 from app.dataModel.hydrology.boundaries.boundaryWaterSnapshot import BoundaryWaterSnapshot
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose, DeclaredCoastline
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
@@ -36,11 +37,11 @@ class BoundaryGeometryResult:
 class BoundaryGeometry:
     """No policy or height writes: preserve the path's raster and label contiguous parts."""
 
-    def prepare(self, source: DeclaredCoastline, snapshot: BoundaryWaterSnapshot) -> BoundaryGeometryResult:
+    def prepare[H: HydrologyPlan](self, source: DeclaredCoastline, snapshot: BoundaryWaterSnapshot[H]) -> BoundaryGeometryResult:
         if not isinstance(source, DeclaredCoastline) or not isinstance(snapshot, BoundaryWaterSnapshot):
             raise TypeError("boundary geometry requires typed source and final-water snapshot")
         source = DeclaredCoastline.model_validate(source.model_dump(warnings=False), strict=True)
-        snapshot = BoundaryWaterSnapshot.model_validate(snapshot, strict=True)
+        snapshot = type(snapshot).model_validate(snapshot, strict=True)
         _UID.validate_python(source.location_uid, strict=True)
         target = source.target_source_uid
         if source.purpose is not CoastlinePurpose.BODY_BOUNDARY or target is None or target == source.location_uid:

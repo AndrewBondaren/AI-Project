@@ -79,7 +79,7 @@ def _geo_bindings() -> tuple[SurfacePlanBinding, ...]:
     relief = _declare_geo(S.RELIEF, (base, terrain, water))
     routes = _declare_geo(S.HYDROLOGY_ROUTES, (relief, water))
     river = _declare_geo(S.RIVER_RELIEF, (relief, routes))
-    final = _declare_geo(S.HYDROLOGY, (relief, routes, river))
+    final = _declare_geo(S.HYDROLOGY, (relief, routes, river, water))
     local = _declare_geo(S.CLIMATE_LOCAL, (base, final))
     boundary = _declare_geo(S.COASTLINE_BOUNDARIES, (final, water))
     support = _declare_geo(S.SURFACE_SUPPORT, (base, terrain, relief, river, final, local))

@@ -25,7 +25,8 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_fine
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
-from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult, PlanEnvelope
+from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.dataModel.planning.identity.planKey import PlanSlot
@@ -37,13 +38,15 @@ from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterPlacementInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
-from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
+from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan, GeoWaterPlacementPlan
+from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
 from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
 from app.dataModel.terrain.relief.planning.reliefPlan import (
     LightMountainCell, LightRavineCell, LightReliefPlan, MountainLayout, ReliefPlan, light_order,
     RiverReliefPlan, RiverBedRecord,
 )
-from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan, RiverRoute
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan, RiverRoute, GeoHydrologyRoutesPlan
+from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
@@ -150,6 +153,38 @@ def _light_relief(inputs: ReliefPlanInput, terrain: TerrainPlan, layout: Mountai
         ravine_terrain=RegistryKey[WorldTerrainRegistry](inputs.ravines.system_terrain), terrain_merge=inputs.terrain_merge)
 
 
+def _require_relief_refs[W: WaterPlacementPlan](climate: PlanEnvelope[ClimateBasePlan],
+    terrain: PlanEnvelope[TerrainPlan], water: PlanEnvelope[W]) -> None:
+    terrain_refs = {dependency.slot: dependency.ref for dependency in terrain.dependencies}
+    water_refs = {dependency.slot: dependency.ref for dependency in water.dependencies}
+    if (terrain_refs.get(PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value)) != climate.ref
+            or water_refs.get(PlanSlot(SurfacePlanSlot.TERRAIN_BASE.value)) != terrain.ref):
+        raise PlanBuildFailure((FieldPathError(("dependencies",), "incoherent upstream climate/terrain/water refs"),))
+
+
+def _plan_relief(inputs: ReliefPlanInput, climate: ClimateBasePlan, base: TerrainPlan,
+    water: WaterPlacementPlan, *, world_uid: EntityUid, control: PlanBuildControl) -> PlanBuildResult[ReliefPlan]:
+    bounds = water.topology.bounds
+    if ((base.bbox.x_min, base.bbox.x_max, base.bbox.y_min, base.bbox.y_max)
+            != (bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max)
+            or any(not inputs.z_min <= z <= inputs.z_max for _, z in base.surface_z)):
+        raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.TERRAIN_BASE.value,),
+            "relief requires coherent terrain extent and world z bounds"),))
+    if any(not inputs.z_min <= spec.floor_z < spec.z_water_level <= inputs.z_max
+           for spec in water.basin_specs):
+        raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.WATER_PLACEMENT.value,),
+            "basin levels outside relief world z bounds"),))
+    ctx = ResolveContext(collect_only=True)
+    layout = _mountain_layout(inputs, base, climate, world_uid, ctx, control)
+    scale = LightGridScale.from_tile(inputs.grid.fine_span, inputs.grid.light_side)
+    surface = _coarse_relief(inputs, base, water, layout, world_uid, scale, control)
+    light = _light_relief(inputs, base, layout, scale, control)
+    control.raise_if_shutdown()
+    return PlanBuildResult[ReliefPlan](payload=ReliefPlan(surface_z=surface, mountain_layout=layout, light=light),
+        diagnostics=tuple(PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.ERROR)
+                          for issue in dict.fromkeys(ctx.errors)))
+
+
 class ReliefPlanProvider:
     def __init__(self, climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
                  terrain_base: RegisteredPlanContract[TerrainBaseInput, TerrainPlan],
@@ -162,31 +197,29 @@ class ReliefPlanProvider:
         climate = dependencies.require(PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value), self._climate)
         terrain = dependencies.require(PlanSlot(SurfacePlanSlot.TERRAIN_BASE.value), self._terrain)
         water = dependencies.require(PlanSlot(SurfacePlanSlot.WATER_PLACEMENT.value), self._water)
-        terrain_refs = {dependency.slot: dependency.ref for dependency in terrain.dependencies}
-        water_refs = {dependency.slot: dependency.ref for dependency in water.dependencies}
-        if (terrain_refs.get(PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value)) != climate.ref
-                or water_refs.get(PlanSlot(SurfacePlanSlot.TERRAIN_BASE.value)) != terrain.ref):
-            raise PlanBuildFailure((FieldPathError(("dependencies",), "incoherent upstream climate/terrain/water refs"),))
-        inputs, base = request.inputs, terrain.payload
-        bounds = water.payload.topology.bounds
-        if ((base.bbox.x_min, base.bbox.x_max, base.bbox.y_min, base.bbox.y_max)
-                != (bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max)
-                or any(not inputs.z_min <= z <= inputs.z_max for _, z in base.surface_z)):
-            raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.TERRAIN_BASE.value,),
-                "relief requires coherent terrain extent and world z bounds"),))
-        if any(not inputs.z_min <= spec.floor_z < spec.z_water_level <= inputs.z_max
-               for spec in water.payload.basin_specs):
-            raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.WATER_PLACEMENT.value,),
-                "basin levels outside relief world z bounds"),))
-        ctx = ResolveContext(collect_only=True)
-        layout = _mountain_layout(inputs, base, climate.payload, request.key.world_uid, ctx, control)
-        scale = LightGridScale.from_tile(inputs.grid.fine_span, inputs.grid.light_side)
-        surface = _coarse_relief(inputs, base, water.payload, layout, request.key.world_uid, scale, control)
-        light = _light_relief(inputs, base, layout, scale, control)
+        _require_relief_refs(climate, terrain, water)
+        return _plan_relief(request.inputs, climate.payload, terrain.payload, water.payload,
+            world_uid=request.key.world_uid, control=control)
+
+
+class GeoReliefPlanProvider:
+    """Bind accepted GEO water to the shared pre-river terrain recipe."""
+
+    def __init__(self, climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
+                 terrain_base: RegisteredPlanContract[TerrainBaseInput, TerrainPlan],
+                 water_placement: RegisteredPlanContract[GeoWaterPlacementInput, GeoWaterPlacementPlan]) -> None:
+        self._climate, self._terrain, self._water = climate_base, terrain_base, water_placement
+
+    def build(self, request: PlanRequest[ReliefPlanInput], dependencies: PlanDependencyReader,
+              control: PlanBuildControl) -> PlanBuildResult[ReliefPlan]:
         control.raise_if_shutdown()
-        return PlanBuildResult[ReliefPlan](payload=ReliefPlan(surface_z=surface, mountain_layout=layout, light=light),
-            diagnostics=tuple(PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.ERROR)
-                              for issue in dict.fromkeys(ctx.errors)))
+        climate = dependencies.require(PlanSlot(SurfacePlanSlot.CLIMATE_BASE.value), self._climate)
+        terrain = dependencies.require(PlanSlot(SurfacePlanSlot.TERRAIN_BASE.value), self._terrain)
+        water = dependencies.require(PlanSlot(SurfacePlanSlot.WATER_PLACEMENT.value), self._water)
+        _require_relief_refs(climate, terrain, water)
+        return _plan_relief(request.inputs, climate.payload, terrain.payload, water.payload,
+            world_uid=request.key.world_uid, control=control)
+
 
 
 def _river_beds[S](routes: tuple[RiverRoute[S], ...], base: tuple[tuple[S, FineZ], ...], *,
@@ -228,6 +261,26 @@ def _river_beds[S](routes: tuple[RiverRoute[S], ...], base: tuple[tuple[S, FineZ
             for route in routes))
 
 
+def _plan_river_relief(inputs: RiverReliefInput, relief: ReliefPlan, routes: HydrologyRoutesPlan,
+    *, world_uid: EntityUid, control: PlanBuildControl) -> PlanBuildResult[RiverReliefPlan]:
+    bounds = inputs.topology.bounds
+    coarse = relief.surface_z
+    if (len(coarse) != bounds.width * bounds.height or any(
+            inputs.topology.canonicalize(cell.gx, cell.gy) != (cell.gx, cell.gy) for cell, _ in coarse)):
+        raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.RELIEF.value,), "river relief requires complete coarse extent"),))
+    surface, beds = _river_beds(routes.coarse_routes, coarse, topology=inputs.topology,
+        world_uid=world_uid, z_min=inputs.z_min, depths=dict(inputs.channel_depths),
+        to_xy=lambda cell: (cell.gx, cell.gy), from_xy=lambda cell: SurfaceGridCoord(GridX(cell[0]), GridY(cell[1])),
+        control=control)
+    fine_surface, fine_beds = _river_beds(routes.fine_routes, routes.fine_base_surface_z,
+        topology=fine_topology(inputs.topology, inputs.grid.fine_span), world_uid=world_uid,
+        z_min=inputs.z_min, depths=dict(inputs.channel_depths), to_xy=lambda cell: cell,
+        from_xy=lambda cell: (FineX(cell[0]), FineY(cell[1])), control=control)
+    control.raise_if_shutdown()
+    return PlanBuildResult[RiverReliefPlan](payload=RiverReliefPlan(surface_z=surface, fine_surface_z=fine_surface,
+        coarse_beds=beds, fine_beds=fine_beds), diagnostics=())
+
+
 class RiverReliefPlanProvider:
     def __init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
                  hydrology_routes: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan]) -> None:
@@ -241,20 +294,24 @@ class RiverReliefPlanProvider:
         refs = {dependency.slot: dependency.ref for dependency in routes.dependencies}
         if refs.get(PlanSlot(SurfacePlanSlot.RELIEF.value)) != relief.ref:
             raise PlanBuildFailure((FieldPathError(("dependencies",), "routes must use the exact pre-river relief ref"),))
-        inputs = request.inputs
-        bounds = inputs.topology.bounds
-        coarse = relief.payload.surface_z
-        if (len(coarse) != bounds.width * bounds.height or any(
-                inputs.topology.canonicalize(cell.gx, cell.gy) != (cell.gx, cell.gy) for cell, _ in coarse)):
-            raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.RELIEF.value,), "river relief requires complete coarse extent"),))
-        surface, beds = _river_beds(routes.payload.coarse_routes, coarse, topology=inputs.topology,
-            world_uid=request.key.world_uid, z_min=inputs.z_min, depths=dict(inputs.channel_depths),
-            to_xy=lambda cell: (cell.gx, cell.gy), from_xy=lambda cell: SurfaceGridCoord(GridX(cell[0]), GridY(cell[1])),
-            control=control)
-        fine_surface, fine_beds = _river_beds(routes.payload.fine_routes, routes.payload.fine_base_surface_z,
-            topology=fine_topology(inputs.topology, inputs.grid.fine_span), world_uid=request.key.world_uid,
-            z_min=inputs.z_min, depths=dict(inputs.channel_depths), to_xy=lambda cell: cell,
-            from_xy=lambda cell: (FineX(cell[0]), FineY(cell[1])), control=control)
+        return _plan_river_relief(request.inputs, relief.payload, routes.payload,
+            world_uid=request.key.world_uid, control=control)
+
+
+class GeoRiverReliefPlanProvider:
+    """Bind exact GEO routes; only their common route facts enter terrain."""
+
+    def __init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+                 hydrology_routes: RegisteredPlanContract[GeoHydrologyPlanInput, GeoHydrologyRoutesPlan]) -> None:
+        self._relief, self._routes = relief, hydrology_routes
+
+    def build(self, request: PlanRequest[RiverReliefInput], dependencies: PlanDependencyReader,
+              control: PlanBuildControl) -> PlanBuildResult[RiverReliefPlan]:
         control.raise_if_shutdown()
-        return PlanBuildResult[RiverReliefPlan](payload=RiverReliefPlan(surface_z=surface, fine_surface_z=fine_surface,
-            coarse_beds=beds, fine_beds=fine_beds), diagnostics=())
+        relief = dependencies.require(PlanSlot(SurfacePlanSlot.RELIEF.value), self._relief)
+        routes = dependencies.require(PlanSlot(SurfacePlanSlot.HYDROLOGY_ROUTES.value), self._routes)
+        refs = {dependency.slot: dependency.ref for dependency in routes.dependencies}
+        if refs.get(PlanSlot(SurfacePlanSlot.RELIEF.value)) != relief.ref:
+            raise PlanBuildFailure((FieldPathError(("dependencies",), "routes must use the exact pre-river relief ref"),))
+        return _plan_river_relief(request.inputs, relief.payload, routes.payload.base,
+            world_uid=request.key.world_uid, control=control)

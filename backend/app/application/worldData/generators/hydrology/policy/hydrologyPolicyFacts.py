@@ -7,18 +7,19 @@ from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import (
     HydrologyPolicyFacts, HydrologyPolicySnapshot, WaterPlacementPolicySource,
 )
 from app.dataModel.hydrology.declaredLake import DeclaredLake
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.policy.policyEnums import PolicySupportState
 from app.dataModel.policy.policyFacts import FactValue, KnownFact, UnknownFact
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
-def collect_hydrology_policy_facts(
-    source: WaterPlacementPolicySource, snapshot: HydrologyPolicySnapshot,
+def collect_hydrology_policy_facts[H: HydrologyPlan](
+    source: WaterPlacementPolicySource, snapshot: HydrologyPolicySnapshot[H],
 ) -> HydrologyPolicyFacts:
     """Observe supplied source-to-body mapping, never location/declared-basin UID aliases."""
     if not isinstance(snapshot, HydrologyPolicySnapshot):
         raise ValueError("hydrology observations require a typed snapshot")
-    snapshot = HydrologyPolicySnapshot.model_validate(snapshot)
+    snapshot = type(snapshot).model_validate(snapshot)
     value = source if isinstance(source, DeclaredCoastline) else source.value
     kind = BasinKind.LAKE if isinstance(value, DeclaredLake) else value.kind
     category = (WaterGenerationCategory.LAKE if kind is BasinKind.LAKE else
