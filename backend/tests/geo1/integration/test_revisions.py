@@ -270,3 +270,36 @@ class GeoReliefProviderTests(TestCase):
         from app.application.planning.service.planningService import PlanContractFailure
         with self.assertRaises((ValueError, PlanContractFailure)):
             self.relief(self.seam.upstream | {"water_placement": self.pc.water.get()})
+
+    def test_pc_routes_cannot_enter_the_geo_river_handle(self):
+        from app.application.planning.service.planningService import PlanContractFailure
+        relief = self.relief()
+        routes = seal(self.pc.routes_binding, self.routes(), (("relief", relief),), world_uid=self.seam.world_uid)
+        with self.assertRaises((ValueError, PlanContractFailure)):
+            self.seam.build("river_relief", self.pc.river_inputs, {"relief": relief, "hydrology_routes": routes})
+
+    def test_real_geo_relief_river_and_final_providers_share_the_same_refs(self):
+        from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+        from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
+        relief = self.relief()
+        route = self.pc.RouteFixture.route()
+        base = self.pc.RouteFixture.routes(coarse_open_water=((route.receiver_cell,
+            MapCellHydrology(liquid_candidate=True, water_body_uid="lake")),))
+        routes = self.seam.seal("hydrology_routes", GeoHydrologyRoutesPlan(base=base,
+            source_mapping=SourceBodyMapping(entries=()), classification_decisions=()),
+            (("relief", relief), ("water_placement", self.seam.upstream["water_placement"])))
+        available = self.seam.upstream | {"relief": relief, "hydrology_routes": routes}
+        river = self.seam.build("river_relief", self.pc.river_inputs, available)
+        final = declared_binding(geo_surface_plan_binding(S.HYDROLOGY), HydrologyFinalInput, GeoHydrologyPlan)
+        self.seam.handles["hydrology"] = final
+        self.seam.registry.register(final, GeoHydrologyFinalPlanProvider(self.seam.handles["relief"],
+            self.seam.handles["hydrology_routes"], self.seam.handles["river_relief"],
+            self.seam.handles["water_placement"], HydrologyFactsAssembler()))
+        inputs = HydrologyFinalInput(enabled=True, grid=self.seam.inputs.grid,
+            topology=self.seam.upstream["water_placement"].payload.topology)
+        available |= {"river_relief": river}
+        result = self.seam.build("hydrology", inputs, available)
+        self.assertEqual(result.payload.coarse_surface_z, river.payload.surface_z)
+        self.assertEqual(dict(result.payload.coarse_hydro)[route.receiver_cell].water_body_uid, "lake")
+        self.assertEqual(result.payload.source_mapping, routes.payload.source_mapping)
+        self.assertEqual(self.seam.build("hydrology", inputs, available), result)

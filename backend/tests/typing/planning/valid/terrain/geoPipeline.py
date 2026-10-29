@@ -6,6 +6,7 @@ from app.application.planning.providers.planProvider import RegisteredPlanContra
 from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanBuildControl
 from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyFinalPlanProvider
+from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import GeoReliefPlanProvider, GeoRiverReliefPlanProvider
 from app.application.worldData.planning.composition.planProviders import declared_binding
 from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSurfacePlanBundle
 from app.application.worldData.planning.contracts.surfacePlanningView import GeoSurfacePlanningView
@@ -21,6 +22,8 @@ from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
 from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
+from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverReliefPlan
 from app.application.worldData.generators.hydrology.boundaries.boundaryGeometry import BoundaryGeometry, BoundaryGeometryResult
 from app.application.worldData.generators.hydrology.boundaries.boundaryPlanner import CoastlineBoundaryPlanner
 from app.application.worldData.generators.hydrology.policy.hydrologyPolicyFacts import collect_hydrology_policy_facts
@@ -65,3 +68,10 @@ def exact_geo_boundary(source: DeclaredCoastline, snapshot: BoundaryWaterSnapsho
 def exact_geo_final_provider(provider: GeoHydrologyFinalPlanProvider, request: PlanRequest[HydrologyFinalInput],
     dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
     assert_type(provider.build(request, dependencies, control), PlanBuildResult[GeoHydrologyPlan])
+
+
+def exact_geo_relief_providers(relief: GeoReliefPlanProvider, river: GeoRiverReliefPlanProvider,
+    request: PlanRequest[ReliefPlanInput], river_request: PlanRequest[RiverReliefInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
+    assert_type(relief.build(request, dependencies, control), PlanBuildResult[ReliefPlan])
+    assert_type(river.build(river_request, dependencies, control), PlanBuildResult[RiverReliefPlan])

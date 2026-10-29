@@ -819,3 +819,19 @@ from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvid
 def invalid_geo_final_provider_request(provider: GeoHydrologyFinalPlanProvider, request: PlanRequest[HydrologyPlanInput],
     dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
     provider.build(request, dependencies, control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import GeoReliefPlanProvider, GeoRiverReliefPlanProvider
+
+
+def invalid_pc_geo_relief_handles(base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
+    terrain: RegisteredPlanContract[TerrainBaseInput, TerrainPlan],
+    water_pc: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan],
+    water_geo: RegisteredPlanContract[GeoWaterPlacementInput, GeoWaterPlacementPlan],
+    relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+    routes_pc: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan],
+    routes_geo: RegisteredPlanContract[GeoHydrologyPlanInput, GeoHydrologyRoutesPlan]) -> None:
+    GeoReliefPlanProvider(base, terrain, water_pc)  # EXPECT: reportArgumentType
+    GeoRiverReliefPlanProvider(relief, routes_pc)  # EXPECT: reportArgumentType
+    ReliefPlanProvider(base, terrain, water_geo)  # EXPECT: reportArgumentType
+    RiverReliefPlanProvider(relief, routes_geo)  # EXPECT: reportArgumentType

@@ -11110,7 +11110,7 @@ Verified: GEO-1 555 passed (+10), planning292 passed; pyright valid0.
 Negative230 vs baseline219, all227 expected annotations covered; surplus unchanged.
 New final provider is isolated; production registration remains the eight PC stages.
 
-### G10-A relief provider binding — execution group (2026-10-29)
+### G10-A relief provider binding — IMPLEMENTED / VERIFIED (2026-10-30)
 
 Goal: implement the frozen §6.31-E GeoReliefPlanProvider and
 GeoRiverReliefPlanProvider before composition activation. TZ:
@@ -11131,6 +11131,11 @@ preservation, wrong refs/PC handles rejected, cache replay and source immutabili
 existing planning regressions and positive/negative type configurations.
 Done: both exact GEO relief adapters verified; production registration remains
 part of atomic G10-A. No new files; direct folder counts unchanged.
+
+Verified: GEO-1 564 passed (+9), planning292 passed; pyright valid0.
+Negative234 (+4 this group), all231 expected annotations covered; surplus unchanged.
+PC-equivalent mountains/basins/coarse+fine beds, receiver preservation, exact refs,
+cache replay and real GEO relief→river→final build verified; production still PC.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
