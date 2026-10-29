@@ -10557,7 +10557,51 @@ PlateStrategy.design → field draft; plate параметры в POJO,
 Проверка: topology continuity, детерминизм, authored constraints, invariants
 общей strategy boundary. Done: standalone plate реализован.
 
-### G7-C — plate + noise composition
+### G7-C — implementation contract (2026-10-29)
+Продолжение по «далее». Формула §6.29-F: clamp(P + detail_weight*N,-1,1),
+operator только ADD_CLAMP. Zero detail сохраняет plate samples побитно;
+noise не вычисляется, captured noise settings остаются в full recipe/profile.
+Owner map перед кодом:
+- existing dataModel/.../fields/field.py: readonly PlateNoiseRecipe.plate_recipe
+  и .noise_recipe — explicit typed projections actual values, без model_dump,
+  defaults/cascade/resolution и без изменения persistent fields.
+- existing application fields/noiseFieldGenerator.py::build принимает
+  NoiseWaterDesignInput|PlateNoiseWaterDesignInput; concrete input revalidation,
+  для mixed использует .noise_recipe, остальной единый алгоритм/row memo прежний.
+  fields/plateFieldGenerator.py::build аналогично Plate|PlateNoise input и
+  .plate_recipe. Component field сохраняет собственный recipe/actual samples;
+  не конструировать fake component inputs с другим context.strategy.
+- application/.../fields/continentalFieldComposer.py::ContinentalFieldComposer:
+  combine(plate:ContinentalField,noise:ContinentalField|None,recipe:PlateNoiseRecipe)
+  ->ContinentalField. Signature уточняет прежний composition_policy argument до
+  полного captured recipe: без него нельзя сохранить actual inactive noise
+  settings при noise=None/weight0. Это один API, compatibility overload не нужен.
+  Strict recipe/fields validation; plate.recipe == recipe.plate_recipe,
+  noise.recipe == recipe.noise_recipe и exact coordinate tuple equality.
+  None noise допустим только при weight0; не подменять отсутствующий компонент
+  zero field. Final recipe — actual PlateNoiseRecipe. Notices: plate плюс noise
+  при weight>0; при weight0 только plate. No budget/threshold/placement.
+  sample(recipe:PlateNoiseRecipe,layout:PlateLayout,*,x:float,y:float)->field value:
+  validates layout.recipe projection, delegates existing public plate/noise
+  samplers, same formula; reusable G9 fine floor evaluator. No private kernels.
+- application/.../strategies/procedural/plateNoiseStrategy.py::PlateNoiseStrategy
+  .design(WaterStrategyInput)->ProceduralWaterDesignDraft: requires mixed input,
+  invokes component generators (noise only weight>0), then composer, binds
+  FieldFloorProfile with full recipe/captured level/depth/z_min; same scalar bound.
+  Does not invoke other strategies, policy, coverage, spatial selection or writer.
+- existing FieldCompositionPolicy owning defaults unchanged; owner docstring
+  states formula/zero semantics. Final factory composition remains G8/G10-A.
+- tests/geo1/composition/{__init__,fixtures,test_composer,test_strategy,test_replay}.py;
+  existing typing planning valid/terrain/water.py + invalid.py.
+Composition: application fields3→4, procedural strategies3→4,
+existing dataModel fields3→3, tests new folder5, no root additions.
+Проверки: formula/clamp/zero bit identity and no noise calls, strict component
+alignment/recipe rejects, full recipe/profile survives, exact coarse/fine
+sampling, wrapped/sphere aliases, tiny-world/cap notices, 0/.60/1 common quota,
+real coastline masks and unchanged path, requested policy/seed overrides,
+hash seed replay, no duplicate policy/budget/threshold/Z writes.
+
+### G7-C — plate + noise composition — DONE (2026-10-29)
 Цель: поддержать явную композицию через тот же strategy interface.
 ТЗ: GEO-1 G0, §5.1, §5.2-E/F.
 Файлы: terrain/designedWater/strategies/procedural/plateNoiseStrategy.py,
@@ -10568,6 +10612,12 @@ calculate budget/threshold/resolve не повторяются.
 Проверка: detail=0 даёт plate field, диапазон/единицы scores,
 topology seams, deterministic channels, authored/mountain constraints.
 Done: все четыре enum режима реализованы без второго writer/resolver.
+
+G7-C IMPLEMENTED/VERIFIED: typed component recipes + one composer/strategy;
+zero detail skips noise exactly, full floor recipe/notices preserved.
+Checks: GEO-1 461 passed; composition 16 passed (includes added seed replay);
+legacy adapter/basin/wire 47 passed; pyright valid 0, negative 197/197; diff clean.
+Production factory/caller cutover remains G8/G10-A.
 
 ### G8 — единая подготовка placement universe
 Цель: объединить strategy outputs и доступных competitors на одной границе.

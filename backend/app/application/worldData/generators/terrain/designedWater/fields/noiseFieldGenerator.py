@@ -5,7 +5,7 @@ from math import cos, floor, fsum, isfinite, pi, prod, sin
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.dataModel.terrain.designedWater.fields.field import ContinentalField, ContinentalFieldValue, FieldChannel, NoiseRecipe
-from app.dataModel.terrain.designedWater.input import NoiseWaterDesignInput
+from app.dataModel.terrain.designedWater.input import NoiseWaterDesignInput, PlateNoiseWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -18,11 +18,12 @@ type _LatticeMemo = dict[tuple[int, tuple[int, ...]], float]
 class NoiseFieldGenerator:
     """One sampler for planning and fine floor evaluation, without selection or Z writes."""
 
-    def build(self, input: NoiseWaterDesignInput) -> ContinentalField:
-        if not isinstance(input, NoiseWaterDesignInput):
+    def build(self, input: NoiseWaterDesignInput | PlateNoiseWaterDesignInput) -> ContinentalField:
+        if not isinstance(input, (NoiseWaterDesignInput, PlateNoiseWaterDesignInput)):
             raise TypeError("noise field requires a typed noise input")
         try:
-            input = NoiseWaterDesignInput.model_validate(input, strict=True)
+            input = type(input).model_validate(input, strict=True)
+            recipe = input.field_policy.noise_recipe if isinstance(input, PlateNoiseWaterDesignInput) else input.field_policy
             samples = []
             memo: _LatticeMemo = {}
             previous_y: int | None = None
@@ -32,11 +33,11 @@ class NoiseFieldGenerator:
                     # cache or another source of truth for the field.
                     memo.clear()
                     previous_y = coordinate.gy
-                value = self._sample(input.field_policy,
+                value = self._sample(recipe,
                     (coordinate.gx + 0.5) * input.grid.fine_span,
                     (coordinate.gy + 0.5) * input.grid.fine_span, memo)
                 samples.append((coordinate, value))
-            return ContinentalField(recipe=input.field_policy, samples=tuple(samples))
+            return ContinentalField(recipe=recipe, samples=tuple(samples))
         except (ValueError, OverflowError) as error:
             raise PlanBuildFailure((FieldPathError(("noise_field",), str(error),
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error

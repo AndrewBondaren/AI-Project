@@ -55,6 +55,16 @@ class PlateNoiseRecipe(_FieldRecipe, frozen=True):
     plate_policy: PlateGenerationPolicy
     composition_policy: FieldCompositionPolicy
 
+    @property
+    def plate_recipe(self) -> PlateRecipe:
+        """Readonly component view; preserve actual settings without context changes."""
+        return PlateRecipe(seed_root=self.seed_root, topology=self.topology, plate_policy=self.plate_policy)
+
+    @property
+    def noise_recipe(self) -> NoiseRecipe:
+        return NoiseRecipe(seed_root=self.seed_root, topology=self.topology, noise_policy=self.noise_policy)
+
+
 
 type WaterFieldRecipe = Annotated[NoiseRecipe | PlateRecipe | PlateNoiseRecipe, Field(discriminator="strategy")]
 type ContinentalFieldValue = Annotated[StrictFloat, Field(ge=-1, le=1, allow_inf_nan=False)]

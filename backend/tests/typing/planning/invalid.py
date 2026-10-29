@@ -675,3 +675,20 @@ def invalid_plate_field(noise: NoiseWaterDesignInput, plate: PlateWaterDesignInp
     layout.centers[0].buoyancy = 0.0  # EXPECT: reportAttributeAccessIssue
     wrong_recipe: NoiseRecipe = layout.recipe  # EXPECT: reportAssignmentType
     PlateFieldGenerator().build(plate).original_area  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.generators.terrain.designedWater.fields.continentalFieldComposer import ContinentalFieldComposer
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.plateNoiseStrategy import PlateNoiseStrategy
+
+
+from app.dataModel.terrain.designedWater.fields.field import ContinentalField
+
+
+def invalid_composition(mixed: PlateNoiseWaterDesignInput, plate: PlateWaterDesignInput, field: ContinentalField, layout: PlateLayout) -> None:
+    ContinentalFieldComposer().combine(field, field, plate.field_policy)  # EXPECT: reportArgumentType
+    ContinentalFieldComposer().combine({}, field, mixed.field_policy)  # EXPECT: reportArgumentType
+    ContinentalFieldComposer().sample(mixed.field_policy, field, x=.5, y=.5)  # EXPECT: reportArgumentType
+    PlateNoiseStrategy().design({})  # EXPECT: reportArgumentType
+    PlateFieldGenerator().layout(mixed.field_policy)  # EXPECT: reportArgumentType
+    NoiseFieldGenerator().sample(mixed.field_policy, x=.5, y=.5)  # EXPECT: reportArgumentType
+    mixed.field_policy.plate_recipe = plate.field_policy  # EXPECT: reportAttributeAccessIssue

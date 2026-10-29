@@ -8,7 +8,7 @@ from app.dataModel.terrain.designedWater.fields.field import (
     AffinePermutationCoefficient, ContinentalField, ContinentalFieldValue, FieldChannel, PlateRecipe,
 )
 from app.dataModel.terrain.designedWater.fields.plateLayout import PlateCenter, PlateLayout
-from app.dataModel.terrain.designedWater.input import PlateWaterDesignInput
+from app.dataModel.terrain.designedWater.input import PlateWaterDesignInput, PlateNoiseWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
 from app.dataModel.topology.topologyGeometry import dist2
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
@@ -55,16 +55,17 @@ class PlateFieldGenerator:
         except (ValueError, OverflowError) as error:
             raise self._failure("layout", error) from error
 
-    def build(self, input: PlateWaterDesignInput) -> ContinentalField:
-        if not isinstance(input, PlateWaterDesignInput):
+    def build(self, input: PlateWaterDesignInput | PlateNoiseWaterDesignInput) -> ContinentalField:
+        if not isinstance(input, (PlateWaterDesignInput, PlateNoiseWaterDesignInput)):
             raise TypeError("plate field requires a typed plate input")
         try:
-            input = PlateWaterDesignInput.model_validate(input, strict=True)
-            layout = self.layout(input.field_policy)
+            input = type(input).model_validate(input, strict=True)
+            recipe = input.field_policy.plate_recipe if isinstance(input, PlateNoiseWaterDesignInput) else input.field_policy
+            layout = self.layout(recipe)
             samples = tuple((coordinate, self._sample(layout,
                 (coordinate.gx + 0.5) * input.grid.fine_span, (coordinate.gy + 0.5) * input.grid.fine_span))
                 for coordinate, _ in input.pre_hydrology.payload.surface_z)
-            return ContinentalField(recipe=input.field_policy, samples=samples, notices=layout.notices)
+            return ContinentalField(recipe=recipe, samples=samples, notices=layout.notices)
         except (ValueError, OverflowError) as error:
             raise self._failure("build", error) from error
 

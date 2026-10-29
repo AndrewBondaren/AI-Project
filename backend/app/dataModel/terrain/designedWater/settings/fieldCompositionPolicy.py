@@ -1,4 +1,4 @@
-"""Composition identity and parameters, without field evaluation."""
+"""ADD_CLAMP: clamp(P + detail_weight*N, -1, 1); weight zero preserves plate exactly."""
 
 from enum import StrEnum
 

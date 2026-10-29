@@ -171,6 +171,19 @@ for planning and fine floor evaluation. PlateStrategy returns field and typed
 floor profile only. Field notices survive common preparation with geometry/cap/
 shortfall notices. Noise, mountains, budget, threshold and Z writers stay outside.
 
+G7-C composition: PlateNoiseRecipe exposes readonly typed component recipes
+from actual captured settings. Component field generators consume the same
+mixed input/context, without fake context.strategy reclassification.
+ContinentalFieldComposer validates component recipe/seed/topology/policies and
+exact working-coordinate alignment, then computes clamp(P+detail_weight*N,-1,1).
+Its third argument is full captured PlateNoiseRecipe (not only composition policy),
+so inactive noise settings remain in output/floor recipe. At weight0, noise may
+be None and is not computed; plate samples are preserved exactly. Otherwise
+missing noise is an error, never fabricated zero field. Normal notices survive.
+PlateNoiseStrategy returns one field draft/full floor profile; existing common
+preparer selects candidates once. Public composer sampler uses the same plate/
+noise samplers for fine floor evaluation. Factory activation remains G8/G10-A.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.

@@ -214,3 +214,22 @@ def valid_plate_field(input: PlateWaterDesignInput) -> None:
     assert_type(PlateFieldGenerator().sample(layout, x=0.5, y=1.5), float)
     assert_type(PlateFieldGenerator().build(input), ContinentalField)
     assert_type(PlateStrategy().design(input), ProceduralWaterDesignDraft)
+
+
+from app.application.worldData.generators.terrain.designedWater.fields.continentalFieldComposer import ContinentalFieldComposer
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.plateNoiseStrategy import PlateNoiseStrategy
+from app.dataModel.terrain.designedWater.fields.field import PlateRecipe, NoiseRecipe
+
+
+def valid_composition(input: PlateNoiseWaterDesignInput) -> None:
+    implementation: DesignedWaterStrategy = PlateNoiseStrategy()
+    assert_type(implementation, PlateNoiseStrategy)
+    assert_type(input.field_policy.plate_recipe, PlateRecipe)
+    assert_type(input.field_policy.noise_recipe, NoiseRecipe)
+    plate = PlateFieldGenerator().build(input)
+    noise = NoiseFieldGenerator().build(input)
+    assert_type(ContinentalFieldComposer().combine(plate, noise, input.field_policy), ContinentalField)
+    assert_type(ContinentalFieldComposer().combine(plate, None, input.field_policy), ContinentalField)
+    layout = PlateFieldGenerator().layout(input.field_policy.plate_recipe)
+    assert_type(ContinentalFieldComposer().sample(input.field_policy, layout, x=.5, y=.5), float)
+    assert_type(PlateNoiseStrategy().design(input), ProceduralWaterDesignDraft)
