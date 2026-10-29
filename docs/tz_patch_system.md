@@ -37,8 +37,8 @@ artifacts/rows, недостижимые из опубликованного с�
 § «Staged artifacts и точки публикации».
 
 **Владение двумя фазами (мастер, 2026-10-27):** домен реализует как
-write-free CRUD preparation, так и запись своих SQL/pack данных. Подготовку
-инициирует DAG/debug API; применение и запись инициирует только Snapshot.
+write-free CRUD preparation, так и запись своих SQL/pack данных. Подготовку инициирует DAG (в том числе по запросу Debug API, вызывающего
+тот же граф); применение и запись инициирует только Snapshot.
 Домен не запускает обе фазы самостоятельно и не переключает их автоматически.
 Patch принимает prepared domain result без повторного изменяющего CRUD;
 Snapshot вызывает domain storage contract, не реализуя его mapping/SQL/pack
@@ -73,10 +73,10 @@ Snapshot вызывает domain storage contract, не реализуя его 
 к полному набору данных планирования мутации и не меняет владение доменными
 форматами.
 
-## Владельцы сбора патчей — только DAG и debug API (уточнение мастера, 2026-10-27)
+## Владелец сбора патчей — только DAG (уточнение мастера, 2026-10-29)
 
-Контракт Patch/PatchSet сохраняется. **Сбор патчей и формирование patch set
-разрешены только DAG и debug API.** Доменная patch implementation формирует
+Контракт Patch/PatchSet сохраняется. **Сбор доменных patches в PatchSet
+и формирование набора разрешены только DAG.** Доменная patch implementation формирует
 отдельный typed patch из доменного результата без изменения состояния.
 Только Snapshot применяет собранный набор, вызывая доменные реализации
 поведения, и сохраняет результирующее состояние/историю. Самостоятельного
@@ -89,17 +89,19 @@ PatchSet может временно кэшировать подготовлен
 
 Генератор возвращает доменный output. Он не формирует и не собирает patches,
 не вызывает patcher/snapshot CRUD и не пишет через патчи напрямую в
-snapshots. Запись инициируется через debug API либо DAG на application
-границе. Debug API имеет право самостоятельно собирать patch set своего
-сценария; делегирование сбора DAG не является обязательным. Ни один из этих
-входов не переносит сбор patch set в генератор или доменный handler. Наличие общего
-контракта не даёт генератору write capability к истории snapshots.
+snapshots. Подготовку и сбор организует DAG по публичным доменным контрактам.
+Debug API — тонкий транспортный/диагностический вход к тому же DAG: может
+передать параметры, scope и validate_only, запросить диагностический узел
+через его DAG-контракт и получить результат, но не задаёт собственный порядок,
+не собирает PatchSet и не вызывает Snapshot напрямую. Ни один из этих путей
+не переносит сбор в генератор или доменный handler. Наличие общего контракта
+не даёт генератору write capability к истории snapshots.
 
-**Любой домен, обходящий DAG или debug API как application-вход записи
-в рамках WS, создаёт критическую архитектурную ошибку. Исключений для
+**Любой домен или внешний entry, обходящий DAG как владельца подготовки
+и сборки PatchSet, создаёт критическую архитектурную ошибку. Исключений для
 internal/debug/import/batch callers нет.** Это проверяется на каждом
 шаге WS по writer/caller ledger и фактическим calls/imports: разрешённый
-entry → подготовка/сбор PatchSet → Snapshot apply → domain implementation → storage. Вызовы storage внутри
+entry → DAG → подготовка/сбор PatchSet → Snapshot apply → domain implementation → storage. Вызовы storage внутри
 этого сценария допустимы; самостоятельный альтернативный вход — нет.
 Затронутый шаг не принимается при наличии обхода; весь WS не завершается,
 пока остаётся хотя бы один обход в его scope. Проверка не откладывается
@@ -109,7 +111,8 @@ entry → подготовка/сбор PatchSet → Snapshot apply → domain i
 
 ```mermaid
 flowchart LR
-  GEN[Generator: domain output] --> ENTRY[DAG / debug API]
+  DBG[Debug API] --> ENTRY[DAG]
+  GEN[Generator: domain output] --> ENTRY
   ENTRY --> DOMAIN[Domain: подготовка Patch без записи]
   DOMAIN --> ENTRY
   ENTRY --> SET[PatchSet: patches и временный кэш результатов]
@@ -189,7 +192,7 @@ class PatchSet(BaseModel):  # дельта одного хода
 | generator | доменный output | patch, snapshot, SQL |
 | domain patch impl | подготовка Patch без записи; поведение своего patch по вызову Snapshot | самостоятельное применение, чужие доменные правила |
 | DAG | сбор патчей и формирование patch set хода | доменная семантика payload, физическое хранение snapshot |
-| debug API | внешний application-вход сценария записи, сбор патчей и формирование patch set | генераторная логика, доменная семантика payload |
+| debug API | вызов того же DAG с параметрами/диагностикой, без собственной сборки | pipeline, PatchSet assembly, прямой Snapshot apply, доменная семантика |
 | snapshot service | единственный apply PatchSet через domain implementations; состояние/история, serialize / commit / restore / branch | сбор набора, генерация, доменные алгоритмы, LLM payload |
 
 См. правило `layer-boundaries.mdc` — persist и LLM не в генераторе; patch-система расширяет это до всех изменений состояния.
@@ -206,7 +209,7 @@ DAG напрямую вызывает read и patch соответствующе
 правила поведения patch, вызываемые только Snapshot при применении.
 Generator возвращает domain output и сам patches не формирует/не применяет.
 
-Только DAG/debug API собирают PatchSet. Он может временно кэшировать
+Только DAG собирает PatchSet. Набор может временно кэшировать
 результат для передачи в Snapshot. Только Snapshot применяет patches и
 сохраняет состояние/операции всех доменов; набор он не собирает, доменные
 алгоритмы не воспроизводит и materialization не запускает.

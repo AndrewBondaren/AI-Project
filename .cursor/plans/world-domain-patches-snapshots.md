@@ -88,7 +88,7 @@ Patch хранит историчность перехода для SQL и pack;
 ```text
 DAG → domain.read(query) → типизированный доменный результат
 DAG → domain.patch(change) → подготовленный patch без изменения состояния
-DAG / debug API → PatchSet → Snapshot → применение и сохранение состояния/истории
+Debug API → тот же DAG; DAG → PatchSet → Snapshot → применение и сохранение состояния/истории
 ```
 
 Контракт чтения принадлежит соответствующему домену. DAG вызывает его
@@ -109,8 +109,8 @@ Generator получает подготовленные inputs/актуальн�
 доменный результат. Он не читает WS/БД, не формирует patches, не собирает
 PatchSet, не сохраняет состояние или историю.
 
-Только DAG и debug API собирают доменные patches в PatchSet и передают его
-Snapshot. Snapshot — единственный владелец применения набора, сохранения
+Только DAG собирает доменные patches в PatchSet и передаёт его
+Snapshot. Debug API вызывает тот же DAG и не собирает собственный PatchSet. Snapshot — единственный владелец применения набора, сохранения
 результирующего состояния и общей истории операций. Отдельный общий patcher
 как самостоятельный вход применения исключён. Доменные алгоритмы, сбор
 набора и запуск materialization не переносятся в Snapshot.
@@ -137,7 +137,7 @@ CRUD и не получает спрятанный pipeline через validate/
 | DAG | Когда вызвать read/изменение/materialization; порядок доменных операций; сбор PatchSet |
 | Debug API | Тонкий developer entry: вызывает тот же граф DAG; своего порядка стадий/сбора не держит |
 | Domain read | Данные и domain-owned результаты, missing/fallback/merged/raw semantics; обращение к своей инфраструктуре |
-| Domain change/planning | Реализация write-free create/update/delete: смысл изменения, validation, подготовленный typed результат, зависимости и invalidation; запуск по вызову DAG/debug |
+| Domain change/planning | Реализация write-free create/update/delete: смысл изменения, validation, подготовленный typed результат, зависимости и invalidation; запуск по вызову DAG (в том числе по запросу Debug API через DAG) |
 | Domain patch | Подготовка typed patch без изменения состояния; реализация доменного поведения, вызываемая только Snapshot при применении |
 | Generator/materializer | Pure compute из актуальных prepared inputs; domain output для последующего сохранения |
 | Snapshot lifecycle | Единственный владелец применения PatchSet; сохранение результирующего состояния и общей истории; immutable identity/lineage |
@@ -185,7 +185,7 @@ CAS-механизм, после gameplay PatchSet применяет Snapshot (
 
 | Фаза | Кто инициирует | Что реализует домен | Результат |
 |---|---|---|---|
-| Подготовка | DAG / debug API по публичному domain CRUD контракту | Read/validation и расчёт create/update/delete в рамках выбранной операции, без записи состояния | Typed prepared domain result или явный отказ/конфликт |
+| Подготовка | DAG по публичному domain CRUD контракту (включая запрос Debug API через DAG) | Read/validation и расчёт create/update/delete в рамках выбранной операции, без записи состояния | Typed prepared domain result или явный отказ/конфликт |
 | Применение/сохранение | Только Snapshot при применении PatchSet | Проверка применимости и добавление подготовленных SQL-версий/pack-артефактов через свой storage контракт | Typed результат записи и references для согласованного состояния/истории |
 
 Create подготавливает новый объект с предусловием отсутствия; update —
@@ -196,7 +196,8 @@ Create подготавливает новый объект с предусло�
 PatchSet самостоятельно. Конкретный commit/publication protocol ещё открыт.
 
 ```text
-DAG/debug → domain CRUD preparation → prepared domain result
+Debug API → DAG (тот же граф, без собственной сборки)
+DAG → domain CRUD preparation → prepared domain result
          → domain Patch → PatchSet (возможен временный кэш)
          → Snapshot → domain storage implementation → SQL/pack новые версии
                     → согласованное состояние и общая история
@@ -282,7 +283,7 @@ idempotency/rollback/conflict механизмов. Общие гарантии 
 доменам; доменная реализация не меняет смысл общего результата молча.
 Неприменимое поведение отражается явно в согласованном контракте.
 Общий интерфейс не получает DB API, не интерпретирует доменный payload и
-не определяет domain read. Сбор PatchSet остаётся у DAG/debug API.
+не определяет domain read. Сбор PatchSet остаётся только у DAG; Debug API не создаёт альтернативного пути.
 
 Типизация конкретного Patch должна связывать домен, конкретную семантику
 модификации, target, inputs, change и result. Интерфейс требует такую
@@ -426,7 +427,7 @@ snapshot с проверкой позиции; при отсутствии bindi
 
 Домен определяет формат и подготовку/восстановление своей секции.
 Snapshot lifecycle сохраняет общую структуру и историю через storage ports.
-Он же единственный применяет переданный PatchSet; DAG/debug/domain preparation
+Он же единственный применяет переданный PatchSet; DAG/domain preparation
 не изменяют состояние до этого. Применение создаёт результирующее состояние,
 а не переписывает уже зафиксированный snapshot.
 Snapshot immutable; изменение создаёт последующее состояние/ветку.
@@ -523,7 +524,7 @@ Snapshot должен закрепить согласованный набор S
 1. **Patch behaviour contract:** закрыть все вопросы §3.1 общими правилами
    интерфейса и обязанностями domain implementations; отдельно определить
    domain-owned read contracts, payload и полный domain scope.
-2. **Lifecycle и атомарность:** domain preparation → сбор DAG/debug →
+2. **Lifecycle и атомарность:** domain preparation → сбор DAG →
    применение только Snapshot; согласованная единица commit; partial failure/cancellation/retry;
    границы SQL/file publication. Prepared/applied/committed статусы не смешиваются.
 3. **Revision integration:** ссылки patches на исходное/результирующее состояние,
@@ -734,7 +735,7 @@ DB-модели и имена existing services не заменяют архит
 
 ## 9. Норматив и совместимость
 
-- `docs/tz_patch_system.md`: domain patches, сбор PatchSet только DAG/debug API.
+- `docs/tz_patch_system.md`: domain patches, сбор PatchSet только DAG; Debug API вызывает тот же граф.
 - `docs/tz_world_snapshot.md`: immutable история, domain sections, authoritative state.
 - `docs/tz_world_generation_dag.md`, `.cursor/rules/dag-generator-interface.mdc`:
   stable domain interfaces, production/debug separation, Gate: DAG.

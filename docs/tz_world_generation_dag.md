@@ -8,6 +8,11 @@ metadata:
 
 > **Статус документа:** **черновик — не утверждён.** Карта нод, trigger paths (master / lazy / player), player build — рабочая спека до ревью.  
 > **Impl:** новые ноды и wiring materialization — **отложены**; проектируем **отдельно с мастером**. До сессии — generators + debug API (`map.py`), см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+.
+>
+> **Актуальный норматив 2026-10-29:** Debug API вызывает тот же engine DAG и не имеет
+> своей очереди стадий, сборки PatchSet или самостоятельного пути записи.
+> Описанные ниже прямые debug handlers/path 2 — legacy, не целевая архитектура
+> и не разрешение создавать новый debug pipeline. Миграция — GEN-DAG-1.
 
 ## Gate: DAG (жёсткое правило)
 
@@ -138,15 +143,15 @@ flowchart LR
     G[generators / orchestrators]
   end
   DAG --> G
-  MAP --> G
-  DBG --> G
+  MAP --> DAG
+  DBG --> DAG
   PY --> G
 ```
 
 | Вход | Когда | Persist | Примеры |
 |---|---|---|---|
 | **1. Engine DAG** | load мира, gameplay, materialization | ноды → repos | `generate_climate`, `lazy_terrain`, target `generate_surface` |
-| **2. Debug HTTP** | скриптовые smoke, ручной regen, изолированный pass | handlers → `MapCellService` | `POST …/map/generate-surface`, `POST …/debug/…/generate-structure` |
+| **2. Debug HTTP** | скриптовые smoke, ручной regen, изолированный pass | legacy: handlers → `MapCellService`; target: тот же DAG, без собственного persist | `POST …/map/generate-surface`, `POST …/debug/…/generate-structure` |
 | **3. In-process import** | **только** pure logic без pipeline persist | нет (или mock cells in memory) | формулы climate, `SettlementAssembler` layout, pole math |
 
 ### Инварианты
@@ -154,7 +159,7 @@ flowchart LR
 1. **Frontend и игрок** — только path **1** (DAG). Никогда path **2**.
 2. **Path 2 не заменяет path 1** — debug harness **остаётся навсегда** для точечных прогонов; production не дублирует HTTP.
 3. **Path 3 не подменяет path 2** для smoke passes с записью в БД: если тест создаёт world/locations/map через persist — это path **2**.
-4. **Generators не оркестрируют соседние домены** — очередь `surface → ores → caves → climate` собирается на **нодах** (path 1) или в **debug handlers** (path 2), не внутри `TerrainGeneratorService`.
+4. **Generators не оркестрируют соседние домены** — очередь `surface → ores → caves → climate` задаётся **DAG-нодами** для production и debug. Упомянутая ранее отдельная сборка в debug handlers — legacy, не target.
 
 ### Скриптовые тесты (`backend/scripts/`)
 
