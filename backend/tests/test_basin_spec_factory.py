@@ -13,7 +13,7 @@ class BasinSpecFactoryTests(unittest.TestCase):
         snap = context()
         prep = prepare(basins=[basin(rim={"min": 2, "max": 9})], snapshot=snap)
         _, records = resolve(prep, snap)
-        specs = basin_specs(prep, records, WorldHydrology())
+        specs = basin_specs(prep, records)
         self.assertEqual(len(specs), 1)
         result = specs[0]
         self.assertEqual((result.bands.min, result.bands.max), (2, 9))
@@ -25,7 +25,7 @@ class BasinSpecFactoryTests(unittest.TestCase):
         snap = context()
         prep = prepare(basins=[basin()], snapshot=snap)
         _, records = resolve(prep, snap)
-        result = basin_specs(prep, records, WorldHydrology())[0]
+        result = basin_specs(prep, records)[0]
         defaults = WorldHydrology().default_seas.bands
         self.assertEqual((result.bands.min, result.bands.max), (defaults.min, defaults.max))
 
@@ -33,7 +33,7 @@ class BasinSpecFactoryTests(unittest.TestCase):
         snap = context(auto={"lake": 1})
         prep = prepare(lakes=[lake()], snapshot=snap)
         _, records = resolve(prep, snap)
-        result = basin_specs(prep, records, WorldHydrology())[0]
+        result = basin_specs(prep, records)[0]
         defaults = WorldHydrology().default_lakes
         self.assertEqual((result.bands.min, result.bands.max),
                          (defaults.bands.min, defaults.bands.max))
@@ -44,7 +44,7 @@ class BasinSpecFactoryTests(unittest.TestCase):
         snap = context()
         prep = prepare(coasts=[coast()], snapshot=snap)
         _, records = resolve(prep, snap)
-        result = basin_specs(prep, records, WorldHydrology())[0]
+        result = basin_specs(prep, records)[0]
         defaults = WorldHydrology().default_seas
         self.assertEqual((result.bands.min, result.bands.max),
                          (defaults.bands.min, defaults.bands.max))
@@ -55,7 +55,7 @@ class BasinSpecFactoryTests(unittest.TestCase):
         prep = prepare(basins=[basin()], snapshot=snap)
         _, records = resolve(prepare(basins=[basin("other")], snapshot=snap), snap)
         with self.assertRaises(ValueError):
-            basin_specs(prep, records, WorldHydrology())
+            basin_specs(prep, records)
 
 
 if __name__ == "__main__":

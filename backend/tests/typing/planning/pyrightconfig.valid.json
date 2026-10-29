@@ -24,6 +24,8 @@
     "../../../app/dataModel/hydrology/seas.py",
     "../../../app/dataModel/hydrology/lakes.py",
     "../../../app/application/worldData/generators/hydrology/policy",
+    "../../../app/application/worldData/generators/hydrology/sources",
+    "../../../app/application/worldData/generators/hydrology/basinSpecFactory.py",
     "../../../app/dataModel/hydrology/enums/planning/waterGenerationScope.py",
     "../../../app/application/worldData/placement/lifecycle",
     "../../../app/application/worldData/placement/dependencies.py",

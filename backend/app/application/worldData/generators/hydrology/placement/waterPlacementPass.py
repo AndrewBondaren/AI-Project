@@ -96,7 +96,7 @@ def run_prepared_water_placement(pojo: WorldHydrology, context: WaterPlacementCo
         topology=context.topology, objects=preparation.objects, accepted=())
     batch_result = resolve_placements(batch, ctx=ctx)
     records = resolved_water_placements(preparation, batch_result)
-    specs = tuple(basin_specs(preparation, records, projected))
+    specs = tuple(basin_specs(preparation, records))
     return WaterPlacementPassResult(preparation, batch_result, records, specs, context.topology)
 
 

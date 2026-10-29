@@ -184,6 +184,16 @@ PlateNoiseStrategy returns one field draft/full floor profile; existing common
 preparer selects candidates once. Public composer sampler uses the same plate/
 noise samplers for fine floor evaluation. Factory activation remains G8/G10-A.
 
+G8-A metadata boundary: the existing PreparedWaterEntry carries resolved
+WaterSourceMetadata plus floor_z/floor_profile; source POJOs and duplicated
+kind/liquid/level fields are removed from that entry. A single hydrology-owned
+WaterSourceMetadataFactory maps source/rim/category values before placement.
+The accepted-record mapper reads that metadata; basin_specs(preparation,records)
+requires an exact accepted placement and matching metadata, never rereads world
+policy or selects bands again. Profiles remain in the entry for G9's spec/writer
+cutover; the scalar spec factory rejects non-None profiles explicitly until that
+writer supports them. G8-B binds the full captured design universe to this transport.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.

@@ -548,7 +548,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
         from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
         from app.dataModel.hydrology.shore import HydrologyShoreDefaults
         from app.dataModel.hydrology.declaredBasin import DeclaredBasin
-        from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+        from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline, CoastlinePurpose
         from app.dataModel.hydrology.declaredLake import DeclaredLake
         from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
         from app.dataModel.hydrology.enums.basinKind import BasinKind
@@ -589,7 +589,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
             BboxShape, PolygonShape, EllipseShape, AnchorRadiusShape, CorridorShape, EdgeNoise,
             PlacementIdentity, PlacementIntent, PlacementCandidate, PlacementFootprint, PreparedPlacement,
             CoastlinePlacementFact, ResolvedPlacement, ResolvedWaterPlacement, BasinSpec)
-        enums = (BasinKind, WaterSide, RegionShapeKind, WorldTopologyMode, GeographicSubtype,
+        enums = (BasinKind, WaterSide, RegionShapeKind, WorldTopologyMode, GeographicSubtype, CoastlinePurpose,
                  ResolutionMode, CoordinateSpace, PlacementMode, AbsoluteMovement, WaterPresence)
         self.manifest = CanonicalSchemaManifest(entries=self.terrain.manifest.entries + tuple(
             RegisteredTypeEntry(type_id=index, python_type=owner, kind=CanonicalTypeKind.RECORD)

@@ -1,5 +1,7 @@
 """Pure composition of aligned signed fields; no selection or height writes."""
 
+from typing import Literal
+
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.terrain.designedWater.fields.noiseFieldGenerator import NoiseFieldGenerator
 from app.application.worldData.generators.terrain.designedWater.fields.plateFieldGenerator import PlateFieldGenerator
@@ -70,6 +72,6 @@ class ContinentalFieldComposer:
         return max(-1.0, min(1.0, base + weight * detail))
 
     @staticmethod
-    def _failure(operation: str, error: Exception) -> PlanBuildFailure:
+    def _failure(operation: Literal["combine", "sample"], error: Exception) -> PlanBuildFailure:
         return PlanBuildFailure((FieldPathError(("continental_field_composition", operation), str(error),
             code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))

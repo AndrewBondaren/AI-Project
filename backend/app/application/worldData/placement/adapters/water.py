@@ -21,7 +21,8 @@ from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
-from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, CoastlineWaterSource
+from app.application.worldData.generators.hydrology.sources.waterSourceMetadataFactory import WaterSourceMetadataFactory
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterGeometryRequest
@@ -198,18 +199,22 @@ def _build_entry(primary: DeclaredBasin | DeclaredCoastline | DeclaredLake,
                  ) -> PreparedWaterEntry | WaterPreparationFailure:
     uid = primary.location_uid
     fact = None
+    # Source-to-metadata is a hydrology operation; P2 and the spec consumer
+    # receive ready values and never reread category defaults.
     if isinstance(primary, DeclaredBasin):
-        level = primary.z_water_level if primary.z_water_level is not None else hydrology.default_water_level
-        floor = primary.floor_z
-        kind, liquid = primary.kind, primary.liquid
+        wrapped = AuthoredBasinSource(value=primary)
+        rim_level = None
     elif isinstance(primary, DeclaredCoastline):
-        level = hydrology.default_water_level
-        floor = level - hydrology.default_seas.basin_depth
-        kind, liquid = primary.kind, primary.liquid
+        wrapped = CoastlineWaterSource(value=primary)
+        rim_level = None
     else:
-        kind, liquid = BasinKind.LAKE, primary.liquid
-        level = lake_level(cells, context)
-        floor = level - hydrology.default_lakes.basin_depth
+        wrapped = AuthoredLakeSource(value=primary)
+        rim_level = FineZ(lake_level(cells, context))
+    metadata = WaterSourceMetadataFactory().build(wrapped,
+        default_water_level=FineZ(hydrology.default_water_level), seas=hydrology.default_seas,
+        lakes=hydrology.default_lakes, rim_level=rim_level, source_path=("water_sources", uid))
+    level, kind = metadata.level, metadata.body_kind
+    floor = primary.floor_z if isinstance(primary, DeclaredBasin) else level - metadata.default_depth
     if floor < context.z_min or floor >= level:
         return WaterPreparationFailure(
             uid, _source_issue(context, ctx, uid, WaterPreparationCode.FLOOR,
@@ -243,7 +248,7 @@ def _build_entry(primary: DeclaredBasin | DeclaredCoastline | DeclaredLake,
                                    footprint=PlacementFootprint(cells=cells, z_min=None, z_max=None))
     prepared = PreparedPlacement(intent=intent, original_area=area, candidates=(candidate,),
                                   auto_specificity=context.auto_specificity.get(uid), coastline=fact)
-    return PreparedWaterEntry(primary, prepared, level, floor, kind, liquid)
+    return PreparedWaterEntry(source=metadata, prepared=prepared, floor_z=FineZ(floor), floor_profile=None)
 
 
 def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementContext, *,
@@ -313,6 +318,6 @@ def resolved_water_placements(preparation: WaterPlacementPreparation,
         if outcome is None or outcome.prepared != entry.prepared:
             raise ValueError(f"common batch must contain the exact water preparation: {uid}")
         if isinstance(outcome, ResolvedPlacement):
-            records.append(ResolvedWaterPlacement(placement=outcome, z_water_level=entry.z_water_level,
-                                                  kind=entry.kind, liquid=entry.liquid))
+            records.append(ResolvedWaterPlacement(placement=outcome, z_water_level=entry.source.level,
+                                                  kind=entry.source.body_kind, liquid=entry.source.liquid))
     return tuple(records)

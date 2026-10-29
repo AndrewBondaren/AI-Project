@@ -87,8 +87,8 @@ class WaterBasinAdapterTests(unittest.TestCase):
         self.assertEqual((record.source_uid, record.z_water_level, record.kind, record.liquid),
                          ("basin", 4, "ocean", "lava"))
         self.assertEqual(len(record.footprint_cells), 16)
-        self.assertEqual((prep.entries[0].kind, prep.entries[0].liquid), ("ocean", "lava"))
-        self.assertEqual(prep.entries[0].source.floor_z, -20)
+        self.assertEqual((prep.entries[0].source.body_kind, prep.entries[0].source.liquid), ("ocean", "lava"))
+        self.assertEqual(prep.entries[0].floor_z, -20)
         self.assertEqual(snap.surface_z, before)
         self.assertIsInstance(result.results[0], ResolvedPlacement)
 
@@ -108,7 +108,7 @@ class WaterBasinAdapterTests(unittest.TestCase):
         prep = prepare(basins=[broken, basin()])
         self.assertEqual([failure.source_uid for failure in prep.failures], ["bad"])
         self.assertIn("clipping", prep.failures[0].issue.message)
-        self.assertEqual([entry.source.location_uid for entry in prep.entries], ["basin"])
+        self.assertEqual([entry.source.source_uid for entry in prep.entries], ["basin"])
 
     def test_basin_is_not_truncated_by_coastline_caps(self):
         prep = prepare(basins=[basin()], default_seas={"max_area_fraction": 0.001})
@@ -275,7 +275,7 @@ class WaterSharedPassTests(unittest.TestCase):
         missing = result.model_copy(update={"results": ()})
         with self.assertRaises(ValueError):
             resolved_water_placements(prep, missing)
-        changed = replace(prep, entries=(replace(prep.entries[0], prepared=obj("basin")),))
+        changed = replace(prep, entries=(replace(prep.entries[0], prepared=prep.entries[0].prepared.model_copy(update={"original_area":999.0})),))
         with self.assertRaises(ValueError):
             resolved_water_placements(changed, result)
 
@@ -352,14 +352,14 @@ class WaterLakeAdapterTests(unittest.TestCase):
         snap = context(auto={"lake": 1}, subtypes={"lake": GeographicSubtype.INLAND_SEA})
         prep = prepare(lakes=[lake()], snapshot=snap)
         self.assertEqual(prep.notices[0].code, "WATER_PLACEMENT_KIND_MISMATCH")
-        self.assertEqual(prep.entries[0].kind, "lake")
+        self.assertEqual(prep.entries[0].source.body_kind, "lake")
         snap = context(subtypes={"lake": GeographicSubtype.LAKE})
         prep = prepare(lakes=[lake()], snapshot=snap)
         self.assertFalse(prep.notices)
         snap = context(subtypes={"coast": GeographicSubtype.LAKE})
         prep = prepare(coasts=[coast()], snapshot=snap)
         self.assertEqual(prep.notices[0].code, "WATER_PLACEMENT_KIND_MISMATCH")
-        self.assertEqual(prep.entries[0].kind, "sea")
+        self.assertEqual(prep.entries[0].source.body_kind, "sea")
         for subtype in (GeographicSubtype.OCEAN, GeographicSubtype.ISLAND):
             with self.subTest(subtype=subtype):
                 snap = context(subtypes={"basin": subtype})
@@ -370,7 +370,7 @@ class WaterLakeAdapterTests(unittest.TestCase):
         snap = context(z=-98, auto={"lake": 1, "basin": 1})
         prep = prepare(lakes=[lake()], basins=[basin()], snapshot=snap)
         self.assertEqual(prep.failures[0].issue.code, "WATER_PLACEMENT_FLOOR")
-        self.assertEqual([entry.source.location_uid for entry in prep.entries], ["basin"])
+        self.assertEqual([entry.source.source_uid for entry in prep.entries], ["basin"])
 
     def test_too_few_waypoints_is_a_geometry_failure(self):
         for shoreline in ([], [dict(x=2, y=2)]):
@@ -421,7 +421,7 @@ class WaterMergedSourceTests(unittest.TestCase):
         self.assertEqual(len(cells), 25)
         self.assertIn((3, 3), cells)   # basin bbox
         self.assertIn((10, 4), cells)  # closed coastline interior
-        self.assertEqual((entry.kind, entry.floor_z), ("ocean", -20))  # basin is primary
+        self.assertEqual((entry.source.body_kind, entry.floor_z), ("ocean", -20))  # basin is primary
         _, records = resolve(prep, snap)
         self.assertEqual(len(records), 1)
         merged = merged_notices(prep)
@@ -436,7 +436,7 @@ class WaterMergedSourceTests(unittest.TestCase):
                        footprint=dict(kind="bbox", x_min=8, x_max=11, y_min=8, y_max=10))
         prep = prepare(basins=[basin("dup"), second], snapshot=context())
         entry = prep.entries[0]
-        self.assertEqual((entry.kind, entry.floor_z), ("ocean", -20))
+        self.assertEqual((entry.source.body_kind, entry.floor_z), ("ocean", -20))
         self.assertEqual(len(entry.prepared.candidates[0].footprint.cells), 16 + 12)
         merged = merged_notices(prep)
         self.assertEqual(len(merged), 1)
@@ -448,14 +448,14 @@ class WaterMergedSourceTests(unittest.TestCase):
                        lakes=[lake("dup", points=((2, 8), (5, 8), (5, 10), (2, 10)))],
                        snapshot=context())
         entry = prep.entries[0]
-        self.assertEqual(entry.kind, "sea")
+        self.assertEqual(entry.source.body_kind, "sea")
         self.assertIsNotNone(entry.prepared.coastline)  # coastline primary keeps its water fact
 
     def test_failed_member_is_a_failure_and_the_survivor_becomes_primary(self):
         broken = basin("dup", footprint=dict(kind="bbox", x_min=-1, x_max=2, y_min=1, y_max=3))
         prep = prepare(basins=[broken], coasts=[ring()], snapshot=context())
         self.assertEqual(len(prep.entries), 1)
-        self.assertEqual(prep.entries[0].kind, "sea")
+        self.assertEqual(prep.entries[0].source.body_kind, "sea")
         self.assertEqual(len(prep.failures), 1)
         self.assertEqual(prep.failures[0].issue.code, "WATER_PLACEMENT_GEOMETRY")
 

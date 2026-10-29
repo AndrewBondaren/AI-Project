@@ -233,3 +233,24 @@ def valid_composition(input: PlateNoiseWaterDesignInput) -> None:
     layout = PlateFieldGenerator().layout(input.field_policy.plate_recipe)
     assert_type(ContinentalFieldComposer().sample(input.field_policy, layout, x=.5, y=.5), float)
     assert_type(PlateNoiseStrategy().design(input), ProceduralWaterDesignDraft)
+
+
+from app.application.worldData.generators.hydrology.sources.waterSourceMetadataFactory import WaterSourceMetadataFactory
+from app.application.worldData.generators.hydrology.basinSpecFactory import basin_specs
+from app.application.worldData.placement.adapters.waterTypes import PreparedWaterEntry, WaterPlacementPreparation
+from app.dataModel.hydrology.seas import HydrologySeasPolicy
+from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+from app.dataModel.placement import PreparedPlacement, ResolvedWaterPlacement
+from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+
+
+def valid_metadata_transport(source: WaterDesignSource, metadata: WaterSourceMetadata,
+                             prepared: PreparedPlacement, preparation: WaterPlacementPreparation,
+                             records: tuple[ResolvedWaterPlacement, ...], seas: HydrologySeasPolicy,
+                             lakes: HydrologyLakesPolicy) -> None:
+    assert_type(WaterSourceMetadataFactory().build(source, default_water_level=FineZ(0),
+        seas=seas, lakes=lakes, rim_level=None, source_path=("water_sources", "source")), WaterSourceMetadata)
+    entry = PreparedWaterEntry(source=metadata, prepared=prepared, floor_z=FineZ(-5), floor_profile=None)
+    assert_type(entry.source, WaterSourceMetadata)
+    assert_type(entry.floor_profile, BasinFloorProfile | None)
+    assert_type(basin_specs(preparation, records), list[BasinSpec])

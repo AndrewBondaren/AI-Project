@@ -1,6 +1,7 @@
 """Seeded plate permutation and normalized topology-distance blending."""
 
 from math import exp, fsum, gcd, isfinite
+from typing import Literal
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY
@@ -101,6 +102,6 @@ class PlateFieldGenerator:
         return max(-1.0, min(1.0, value))
 
     @staticmethod
-    def _failure(operation: str, error: Exception) -> PlanBuildFailure:
+    def _failure(operation: Literal["layout", "build", "sample"], error: Exception) -> PlanBuildFailure:
         return PlanBuildFailure((FieldPathError(("plate_field", operation), str(error),
             code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))

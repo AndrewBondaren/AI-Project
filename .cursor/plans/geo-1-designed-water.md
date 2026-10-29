@@ -10619,7 +10619,74 @@ Checks: GEO-1 461 passed; composition 16 passed (includes added seed replay);
 legacy adapter/basin/wire 47 passed; pyright valid 0, negative 197/197; diff clean.
 Production factory/caller cutover remains G8/G10-A.
 
-### G8 — единая подготовка placement universe
+### G7-C follow-up — typed diagnostic operations — DONE (2026-10-29)
+User approved local Literal annotations after review of repeated _failure calls.
+Owner/layer: existing terrain application fields; no shared cross-domain enum.
+Files: fields/plateFieldGenerator.py::PlateFieldGenerator._failure operation
+Literal["layout","build","sample"]; fields/continentalFieldComposer.py::
+ContinentalFieldComposer._failure operation Literal["combine","sample"].
+TZ: tz_terrain_hydrology.md GEO-1 G7-C; diagnostic paths/behavior unchanged.
+Check: planning valid pyright, diff --check. Done: arbitrary operation strings
+are rejected statically; no runtime contract or folder composition changes.
+Verified: planning valid pyright 0 errors; diff --check clean.
+
+### G8 execution split / G8-A — single metadata transport — DONE (2026-10-29)
+Code audit: active caller still constructs legacy PreparedWaterEntry from three
+source POJOs; basin_specs repeats source/category selection after P2. Geo input/
+provider activation belongs to G10-A; doing both joins now would conflate domain
+preparation with production activation. Execute G8 in atomic reviewable slices:
+G8-A replaces the existing metadata transport/consumer; G8-B performs captured
+cascade/admission/budget/design universe join, using this same transport. No
+Water V2 transport, compatibility overload or second source list is introduced.
+TZ: tz_terrain_hydrology GEO-1 source metadata boundary; §6.29-B/F, J06/J08/J09.
+Exact owner map before code:
+- NEW application/worldData/generators/hydrology/sources/{__init__,waterSourceMetadataFactory}.py:
+  WaterSourceMetadataFactory.build(source:WaterDesignSource,*,default_water_level:FineZ,
+  seas:HydrologySeasPolicy,lakes:HydrologyLakesPolicy,rim_level:FineZ|None,
+  source_path:tuple[str|int,...])->WaterSourceMetadata. Hydrology application owner
+  maps origin/kind/liquid/bands/depth and resolved source/rim/default level once;
+  no geometry, cascade, policy execution, placement or height writes.
+- existing placement/adapters/waterTypes.py::PreparedWaterEntry: source becomes
+  WaterSourceMetadata; prepared remains current PreparedPlacement until common
+  admission binding in G8-B/G10-A; floor_z:FineZ, floor_profile:BasinFloorProfile|None
+  required. Remove duplicated entry level/kind/liquid. Validate source identity,
+  strict floor and typed profile; no new defaults. Existing preparation unchanged.
+- existing placement/adapters/water.py::_build_entry: wrap actual source, compute
+  lake rim once, delegate metadata mapping before entry; source_path UID-based.
+  resolved_water_placements maps level/kind/liquid from metadata; existing
+  ResolvedWaterPlacement fields already satisfy this projection, no new record.
+- existing hydrology/basinSpecFactory.py::basin_specs(preparation,records): remove
+  WorldHydrology argument and source union branching; exact metadata/accepted
+  placement join and scalar BasinSpec mapping. Profile remains in entry; actual
+  spec/profile writer migration belongs to G9 before production field activation.
+  Scalar factory rejects non-None profiles explicitly, never silently drops them.
+- existing hydrology/placement/waterPlacementPass.py updates the sole app caller.
+- existing test_water_placement_adapter/test_basin_spec_factory and geo1/coastline/
+  test_routing follow new contract; planning pyright config includes new source factory;
+  tests/geo1/transport/{__init__,test_metadata_transport}.py covers metadata capture,
+  procedural source (no location_uid), bad joins and profile retention.
+Composition: adapters6→6 and hydrology root7→7 WARN announced; new sources2,
+new transport tests2; no existing overfull folder gains files. No source schema,
+production gates, common resolver or writer algorithms change in G8-A.
+Provider regression exposed a stale test-only canonical manifest: DeclaredCoastline
+already contains CoastlinePurpose (production surfaceManifest registers it), but
+WaterPlacementProviderTests omitted the enum. Add it to that existing fixture;
+HydrologyProviderTests inherits it. No production schema/version change.
+Additional existing file: tests/planning/providers/test_domain_providers.py (5→5).
+Checks: relevant legacy water/placement/provider regressions, GEO-1, positive
+planning typing and exact negative diagnostics; diff --check.
+Done: one PreparedWaterEntry metadata representation and one consumer path;
+all calls use the two-argument factory; G8 remains open for G8-B universe join.
+
+G8-A IMPLEMENTED/VERIFIED: existing entry now stores metadata/profile; one
+source mapper and metadata-only scalar factory; former source POJO/duplicated
+entry fields and factory WorldHydrology argument removed with all callers.
+GEO-1 472 passed (+10 transport); legacy water/placement + providers 173 passed;
+planning pyright valid 0 errors, negative 201/201; diff --check clean.
+Baseline fixture delta: registered existing CoastlinePurpose in test manifest;
+production manifest already correct. G8-B/G9/G10-A remain open as specified.
+
+### G8 — единая подготовка placement universe — IN PROGRESS (G8-A done)
 Цель: объединить strategy outputs и доступных competitors на одной границе.
 ТЗ: tz_map_light_bake §Placement P1/P2/P3 и GEO-1.
 Файлы: terrain/designedWater/preparation/designPreparation.py;

@@ -692,3 +692,14 @@ def invalid_composition(mixed: PlateNoiseWaterDesignInput, plate: PlateWaterDesi
     PlateFieldGenerator().layout(mixed.field_policy)  # EXPECT: reportArgumentType
     NoiseFieldGenerator().sample(mixed.field_policy, x=.5, y=.5)  # EXPECT: reportArgumentType
     mixed.field_policy.plate_recipe = plate.field_policy  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.placement.adapters.waterTypes import PreparedWaterEntry
+from app.dataModel.placement import PreparedPlacement
+
+
+def invalid_metadata_transport(entry: PreparedWaterEntry, prepared: PreparedPlacement) -> None:
+    entry.source.location_uid  # EXPECT: reportAttributeAccessIssue
+    entry.kind  # EXPECT: reportAttributeAccessIssue
+    PreparedWaterEntry(source={}, prepared=prepared, floor_z=FineZ(-5), floor_profile=None)  # EXPECT: reportArgumentType
+    PreparedWaterEntry(source=entry.source, prepared=prepared, floor_z=FineZ(-5), floor_profile={})  # EXPECT: reportArgumentType

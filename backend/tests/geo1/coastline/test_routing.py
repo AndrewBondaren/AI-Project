@@ -23,7 +23,7 @@ class CoastlineRoutingTests(TestCase):
         hydro = WorldHydrology(declared_basins=[basin("same")], declared_coastlines=[boundary("same")])
         prepared = prepare_water_placements(hydro, context(), ctx=ResolveContext(validate_only=True))
         self.assertEqual(len(prepared.entries), 1)
-        self.assertEqual(prepared.entries[0].source.location_uid, "same")
+        self.assertEqual(prepared.entries[0].source.source_uid, "same")
         self.assertEqual(prepared.entries[0].prepared.candidates[0].footprint.cells,
             frozenset((x, y) for x in range(2, 6) for y in range(2, 6)))
         self.assertFalse(prepared.failures)
@@ -32,7 +32,7 @@ class CoastlineRoutingTests(TestCase):
     def test_only_source_lines_enter_body_preparation(self):
         hydro = WorldHydrology(declared_coastlines=[coast("source"), boundary()])
         prepared = prepare_water_placements(hydro, context(auto={"source": 2}), ctx=ResolveContext(validate_only=True))
-        self.assertEqual([e.source.location_uid for e in prepared.entries], ["source"])
+        self.assertEqual([e.source.source_uid for e in prepared.entries], ["source"])
         self.assertFalse(prepared.failures)
 
     def test_bulk_body_projection_preserves_absolute_boundary_path_and_binding(self):
