@@ -149,6 +149,17 @@ outcomes; accepted supports are their readonly resolved projection. Causal refs
 use actual target region UID/status without changing policy decisions. Empty derive-mode and production
 post-fill capture/provider activation remain G10; current source requires path.
 
+G6 continental noise: field producer владеет seeded quintic value noise и
+normalized fBm в world-fine embedding; 2D planar, 4D torus wrapped, 3D sphere.
+RNG: UidKind.WATER_FIELD, FieldChannel.NOISE_LATTICE, octave/lattice keys.
+Coarse sampling в fine cell centers, fine floor evaluation использует тот же
+sampler. Field не зависит от quota/source UID/heights; settings из NoiseRecipe.
+Procedural inputs имеют required actual z_min (общий generic base), level>z_min;
+coastline join передаёт его из geometry request. Noise strategy возвращает
+field draft и FieldFloorProfile с metadata level/depth и captured z_min,
+floor_z=max(z_min,level-depth). Shared preparer один раз выбирает footprint;
+ни field producer, ни strategy не пишут terrain и не исполняют policy.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.

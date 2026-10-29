@@ -10416,8 +10416,66 @@ typed metadata/result mapping без basin spec emission.
 и no z-write, zero priority, full/partial parity.
 Done: зависимый boundary не создаёт воду и не запускает pipeline A fallback.
 
+### G6 — implementation contract (DONE 2026-10-29)
+Продолжение по «Далее». Норматив §6.29-F: seeded value noise [-1,1], quintic
+интерполяция, normalized fBm; planar2D/wrapped4D torus/sphere3D embedding.
+Перед кодом замыкается недостающий ready input z_min, не выводить его из
+min(surface_z) и не добавлять application default.
+Точная карта owners:
+- existing dataModel/terrain/designedWater/input.py: _ProceduralWaterDesignInput[S]
+  (общий generic base для Noise/Plate/PlateNoise) владеет required z_min:FineZ,
+  strict, level>z_min, all pre-hydrology z>=z_min. Authored использует свой
+  geometry.z_min. Input.validate_draft сверяет procedural field profile
+  z_min/depth с input.z_min и metadata.default_depth. Это structural validation.
+- existing preparation/coastlineWaterSourceAdapter.py: передаёт actual
+  geometry_request.z_min в три procedural typed constructor, без defaults.
+- existing app/ids/uidKind.py: UidKind.WATER_FIELD="water_field" для
+  existing seeded_u01; channel=FieldChannel.NOISE_LATTICE,
+  octave и lattice tuple — named keys. Source/body/material/tile UID не RNG keys.
+- application/worldData/generators/terrain/designedWater/fields/
+  noiseFieldGenerator.py (+__init__): NoiseFieldGenerator.build(
+  input:NoiseWaterDesignInput)->ContinentalField; sample(recipe:NoiseRecipe,
+  *,x:float,y:float)->ContinentalFieldValue, real world-fine positions (centers).
+  build validates once, samples coarse center ((gx+.5)*span,(gy+.5)*span)
+  в canonical row-major order. Public sample для G9 fine floor evaluator,
+  тот же алгоритм, без threshold/terrain queries/field regeneration.
+  length=max(1,min(fine width,height)*length_fraction), frequency=lacunarity**k/length,
+  octave weights=persistence**k, sum weighted N / sum weights. Zero weights
+  не вычисляются. Local lattice memo ограничен текущей coarse row; не plan cache.
+  Wrapped continuous positions modulo W/H перед torus embedding;
+  sphere fold modulo2H в fine units с half-turn longitude, R=H/pi;
+  exact poles=(0,0,+/-R) без longitude roundoff. Canonical aliases cell centers
+  совпадают. Quintic и final convex sum clamp только numerical range [-1,1].
+  Nonfinite/unrepresentable arithmetic → existing typed PlanBuildFailure,
+  без frequency/default/field fallback и без переноса policy в generator.
+- application/.../strategies/procedural/continentalNoiseStrategy.py (+__init__):
+  ContinentalNoiseStrategy.design(WaterStrategyInput)->ProceduralWaterDesignDraft.
+  Requires Noise input, delegates field build, binds FieldFloorProfile(recipe,
+  level=metadata.level, depth=metadata.default_depth, z_min=input.z_min),
+  floor_z=max(z_min,level-depth). Никаких footprints/threshold/placement/Z writes.
+- ContinentalNoisePolicy defaults не меняются; docstring единиц/формулы в owner.
+- tests/geo1/noise/{__init__,fixtures,test_field,test_strategy,test_replay}.py;
+  existing generic/procedural fixtures получают explicit test-world z_min;
+  existing typing planning valid/terrain/water.py и invalid.py.
+Composition: новые application fields2, strategies/procedural2;
+existing ids6→6 WARN, dataModel root4→4, tests noise5, no root additions.
+Проверки: 0/.60/1 allocation через existing common preparer; field независим
+от fraction/budget/source identity/heights, settings override changes field;
+seed replay/process hash seeds, analytical lattice/quintic/fBm, row-order,
+planar/wrapped/sphere aliases/seam/poles, fine/coarse center equivalence,
+tiny/negative worlds, nonfinite rejection, profile bounds/readonly snapshots,
+coastline constraints через common preparer, no policy/budget/relief writes.
+Production factory composition/cutover remains G8/G10-A; no runtime stubs.
+
 ### G6 — continental noise strategy
-Цель: реализовать отдельный producer continental candidates/field.
+Статус: DONE 2026-10-29. Noise field producer + strategy + shared procedural
+z_min input, без production factory activation (G8/G10-A).
+Проверено: GEO-1 427/427 (+21), adapter/factory/wire47/47, positive Pyright0,
+negative183/183 (+6), warnings-as-errors, replay PYTHONHASHSEED=0/1/42.
+Quintic/fBm formula, topology aliases/poles, exact fine/coarse sampling,
+0/.60/1 common selection и floor profile bounds покрыты.
+
+Цель: реализовать signed continental field producer и noise strategy.
 ТЗ: GEO-1 (формула и семантика доли воды согласованы в G0).
 Файлы: terrain/designedWater/strategies/procedural/continentalNoiseStrategy.py,
 terrain/designedWater/fields/noiseFieldGenerator.py,

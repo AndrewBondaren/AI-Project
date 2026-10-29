@@ -647,3 +647,16 @@ def invalid_attached_boundary(source: DeclaredCoastline, snapshot: BoundaryWater
     CoastlineBoundaryPlanner().prepare(input, snapshot, [admission], snapshot_uid="dependent")  # EXPECT: reportArgumentType
     CoastlinePart(body_uid="physical", closed=False, path=[HydrologyWaypoint(x=0,y=0)])  # EXPECT: reportArgumentType
     snapshot.fine_cells = ()  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.generators.terrain.designedWater.fields.noiseFieldGenerator import NoiseFieldGenerator
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.continentalNoiseStrategy import ContinentalNoiseStrategy
+
+
+def invalid_continental_noise(noise: NoiseWaterDesignInput, plate: PlateWaterDesignInput) -> None:
+    NoiseFieldGenerator().build(plate)  # EXPECT: reportArgumentType
+    NoiseFieldGenerator().sample(plate.field_policy,x=0.5,y=0.5)  # EXPECT: reportArgumentType
+    ContinentalNoiseStrategy().design({})  # EXPECT: reportArgumentType
+    wrong_z: GridX = noise.z_min  # EXPECT: reportAssignmentType
+    noise.z_min = FineZ(-10)  # EXPECT: reportAttributeAccessIssue
+    NoiseFieldGenerator().build(noise).budget  # EXPECT: reportAttributeAccessIssue

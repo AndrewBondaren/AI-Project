@@ -1,4 +1,4 @@
-"""Canonical continental-noise parameters (GEO-1 §6.29-F)."""
+"""World-fine length fraction and normalized fBm parameters (GEO-1 §6.29-F)."""
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 

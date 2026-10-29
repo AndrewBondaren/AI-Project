@@ -44,7 +44,7 @@ def case(*, closed=True, side=WaterSide.INTERIOR, mode=Mode.PLANAR, allocated=No
         context=base.context.model_copy(update={"autoresolve":True}),
         region=base.region.model_copy(update={"generation_area_fine2":area}),
         budget=base.budget.model_copy(update={"requested_fine2":area,"allocated_fine2":allocation}),
-        seed_root=req.seed_root, topology=req.topology, grid=req.grid, pre_hydrology=req.pre_hydrology,
+        seed_root=req.seed_root, z_min=req.z_min, topology=req.topology, grid=req.grid, pre_hydrology=req.pre_hydrology,
         region_coverage=coverage, constraints=constraints,
         field_policy=base.field_policy.model_copy(update={"seed_root":req.seed_root,
             "topology":fine_topology(req.topology, span)}))

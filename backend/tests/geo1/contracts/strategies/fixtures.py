@@ -60,6 +60,7 @@ def inputs(strategy=Strategy.CONTINENTAL_NOISE):
         return AuthoredWaterDesignInput(**raw, geometry=AuthoredWaterGeometry(source_uid="source",
             pre_hydrology_ref=ref, coordinate_space=CoordinateSpace.WORLD_FINE_GRID,
             footprints=(frozenset({(-4, 4), (-3, 4)}),), rim_level=None, z_min=-20, notices=()))
+    raw["z_min"] = -20
     common = dict(seed_root="seed", topology=fine_topology(topology, grid.fine_span))
     if strategy is Strategy.CONTINENTAL_NOISE:
         return NoiseWaterDesignInput(**raw, field_policy=NoiseRecipe(**common, noise_policy=ContinentalNoisePolicy()))

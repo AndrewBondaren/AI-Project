@@ -16,6 +16,7 @@ from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.identity.planKey import RegionPlanScope
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation
 from app.dataModel.terrain.designedWater.draft import (
@@ -165,6 +166,9 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
             recipe = draft.floor_profile.recipe
             if recipe.seed_root != self.seed_root or recipe.topology != fine_topology(self.topology, self.grid.fine_span):
                 raise ValueError("floor recipe differs from input world")
+            if isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)) and (
+                    draft.floor_profile.z_min != self.z_min or draft.floor_profile.depth != self.metadata.default_depth):
+                raise ValueError("procedural floor must preserve captured world z_min and metadata depth")
         validate_immutable(draft)
         return draft
 
@@ -191,17 +195,31 @@ class AuthoredWaterDesignInput(WaterDesignInput[AuthoredSourceT], Generic[Author
         return self
 
 
-class NoiseWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
+class _ProceduralWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
+    """Actual world lower bound for procedural floor profiles; never a terrain minimum."""
+
+    z_min: Annotated[FineZ, Field(strict=True)]
+
+    @model_validator(mode="after")
+    def possible_floor(self) -> Self:
+        if self.metadata.level <= self.z_min:
+            raise ValueError("procedural water requires level > world z_min")
+        if any(z < self.z_min for _, z in self.pre_hydrology.payload.surface_z):
+            raise ValueError("pre-hydrology terrain lies below world z_min")
+        return self
+
+
+class NoiseWaterDesignInput(_ProceduralWaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
     strategy: Literal[Strategy.CONTINENTAL_NOISE] = Strategy.CONTINENTAL_NOISE
     field_policy: NoiseRecipe
 
 
-class PlateWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
+class PlateWaterDesignInput(_ProceduralWaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
     strategy: Literal[Strategy.PLATE] = Strategy.PLATE
     field_policy: PlateRecipe
 
 
-class PlateNoiseWaterDesignInput(WaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
+class PlateNoiseWaterDesignInput(_ProceduralWaterDesignInput[ProceduralSourceT], Generic[ProceduralSourceT], frozen=True):
     strategy: Literal[Strategy.PLATE_NOISE] = Strategy.PLATE_NOISE
     field_policy: PlateNoiseRecipe
 

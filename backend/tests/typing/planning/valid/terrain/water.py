@@ -182,3 +182,16 @@ def valid_coastline_source_join(source: DeclaredCoastline, request: AuthoredWate
     assert_type(result, CoastlineWaterDesignInput)
     assert_type(result.source, CoastlineWaterSource)
     assert_type(implementation.design(result), WaterDesignDraft)
+
+
+from app.application.worldData.generators.terrain.designedWater.fields.noiseFieldGenerator import NoiseFieldGenerator
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.continentalNoiseStrategy import ContinentalNoiseStrategy
+
+
+def valid_continental_noise(input: NoiseWaterDesignInput) -> None:
+    implementation: DesignedWaterStrategy = ContinentalNoiseStrategy()
+    assert_type(implementation, ContinentalNoiseStrategy)
+    assert_type(input.z_min, FineZ)
+    assert_type(NoiseFieldGenerator().build(input), ContinentalField)
+    assert_type(NoiseFieldGenerator().sample(input.field_policy,x=0.5,y=1.5), float)
+    assert_type(ContinentalNoiseStrategy().design(input), ProceduralWaterDesignDraft)

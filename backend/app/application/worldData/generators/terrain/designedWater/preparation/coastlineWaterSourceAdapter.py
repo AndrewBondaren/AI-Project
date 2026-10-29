@@ -115,16 +115,16 @@ class CoastlineWaterSourceAdapter:
                 return NoiseWaterDesignInput[CoastlineWaterSource](source=shared.source, metadata=shared.metadata,
                     context=shared.context, region=shared.region, budget=shared.budget, seed_root=shared.seed_root,
                     topology=shared.topology, grid=shared.grid, pre_hydrology=shared.pre_hydrology,
-                    region_coverage=shared.region_coverage, constraints=constraints, field_policy=recipe)
+                    region_coverage=shared.region_coverage, constraints=constraints, field_policy=recipe, z_min=request.z_min)
             if isinstance(recipe, PlateRecipe):
                 return PlateWaterDesignInput[CoastlineWaterSource](source=shared.source, metadata=shared.metadata,
                     context=shared.context, region=shared.region, budget=shared.budget, seed_root=shared.seed_root,
                     topology=shared.topology, grid=shared.grid, pre_hydrology=shared.pre_hydrology,
-                    region_coverage=shared.region_coverage, constraints=constraints, field_policy=recipe)
+                    region_coverage=shared.region_coverage, constraints=constraints, field_policy=recipe, z_min=request.z_min)
             return PlateNoiseWaterDesignInput[CoastlineWaterSource](source=shared.source, metadata=shared.metadata,
                 context=shared.context, region=shared.region, budget=shared.budget, seed_root=shared.seed_root,
                 topology=shared.topology, grid=shared.grid, pre_hydrology=shared.pre_hydrology,
-                region_coverage=shared.region_coverage, constraints=constraints, field_policy=recipe)
+                region_coverage=shared.region_coverage, constraints=constraints, field_policy=recipe, z_min=request.z_min)
         except ValueError as error:
             raise PlanBuildFailure((FieldPathError(("water_source", uid), str(error),
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
