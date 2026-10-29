@@ -648,11 +648,13 @@ class HydrologyPlanningPayloadTests(unittest.TestCase):
 class HydrologyStagePayloadTests(unittest.TestCase):
     def setUp(self):
         from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+        from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
         from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan, RiverRouteBatch
         from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
         from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
         from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord, FineXY
         self.Open, self.Coarse, self.Fine, self.Batch = OpenWaterPlan, CoarseRiverPlan, FineRiverPlan, RiverRouteBatch
+        self.Mapping = SourceBodyMapping
         self.Cell, self.FineXY, self.Hydro, self.Role = SurfaceGridCoord, FineXY, MapCellHydrology, HydrologyCellRole
         self.fixture = HydrologyPlanningPayloadTests()
 
@@ -670,7 +672,7 @@ class HydrologyStagePayloadTests(unittest.TestCase):
         union = PhysicalWaterUnion(water_system_uid="system", member_uids=("lake",), child_system_uids=(), z_water_level=2)
         cell = self.Cell(GridX(0), GridY(0))
         plan = self.Open(coarse_open_water=((cell, self.Hydro(role=self.Role.LAKE, water_body_uid="lake", z_water_level=2)),),
-                         water_bodies=(body,), physical_unions=(union,))
+                         water_bodies=(body,), physical_unions=(union,), source_mapping=self.Mapping(entries=()))
         self.assertEqual(self.Open.model_validate_json(plan.model_dump_json()), plan)
         self.assertEqual(plan.water_bodies[0].parent_system_uid, union.water_system_uid)
         for updates in ({"water_bodies": (body, body)}, {"physical_unions": (union, union)},
@@ -755,7 +757,8 @@ class HydrologyStagePayloadTests(unittest.TestCase):
                 self.Fine.model_validate(plan.model_dump() | updates)
 
     def test_stage_contracts_are_required_strict_and_recursively_frozen(self):
-        for owner, payload in ((self.Open, dict(coarse_open_water=(), water_bodies=(), physical_unions=())),
+        for owner, payload in ((self.Open, dict(coarse_open_water=(), water_bodies=(), physical_unions=(),
+                                              source_mapping=self.Mapping(entries=()))),
                                (self.Coarse, dict(routes=(), claims=())), (self.Fine, dict(routes=(), base_surface_z=()))):
             model = owner.model_validate(payload)
             for name in payload:
@@ -781,7 +784,7 @@ class HydrologyStagePayloadTests(unittest.TestCase):
         from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
         from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-        plan = self.Open(coarse_open_water=(), water_bodies=(), physical_unions=())
+        plan = self.Open(coarse_open_water=(), water_bodies=(), physical_unions=(), source_mapping=self.Mapping(entries=()))
         for disposition in PlanDiagnosticDisposition:
             fact = PlanDiagnostic(issue=FieldPathError(("hydrology",), "producer decision", code="opaque"), disposition=disposition)
             result = PlanBuildResult[self.Open](payload=plan, diagnostics=(fact,))

@@ -171,3 +171,43 @@ class SurfaceContractTests(TestCase):
         final = rebuild(plans.hydrology, payload=rebuild(plans.hydrology.payload, source_mapping=mapping))
         with self.assertRaisesRegex(ValidationError, "preserve route-stage"):
             rebuild(plans, hydrology=final)
+
+    def test_geo_route_generation_sources_are_required_and_revalidated(self):
+        from tests.geo1.integration.support.pipeline import fields
+        inputs = self.view.hydrology
+        for name in ("generation", "defaults"):
+            values = fields(inputs)
+            values.pop(name)
+            with self.subTest(missing=name), self.assertRaises(ValidationError):
+                type(inputs).model_validate(values)
+        with self.assertRaises(ValidationError):
+            rebuild(inputs, generation=inputs.generation.model_copy(update={"autoresolve": "true"}))
+        with self.assertRaises(ValidationError):
+            rebuild(inputs, defaults=inputs.defaults.model_copy(update={"water_fraction": 2.0}))
+
+    def test_geo_route_root_sources_must_match_water_placement(self):
+        for update in ({"generation": rebuild(self.view.hydrology.generation, autoresolve=True)},
+                       {"defaults": rebuild(self.view.hydrology.defaults, water_fraction=0.25)}):
+            with self.subTest(update=update), self.assertRaisesRegex(ValidationError, "generation and defaults"):
+                rebuild(self.view, hydrology=rebuild(self.view.hydrology, **update))
+
+    def test_route_generation_source_edits_change_artifact_and_source_revision(self):
+        from app.application.worldData.planning.composition.planProviders import declared_binding
+        from app.application.worldData.planning.composition.surfacePlanningCapture import _revision
+        from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyRoutesPlan
+        from app.dataModel.planning.identity.planKey import WorldPlanScope
+        from app.dataModel.surfacePlanning.surfacePlanBindings import geo_surface_plan_binding
+        from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot as S
+        inputs = self.view.hydrology
+        handle = declared_binding(geo_surface_plan_binding(S.HYDROLOGY_ROUTES), type(inputs), GeoHydrologyRoutesPlan)
+        deps = bundle(self.view).hydrology_routes.dependencies
+        variants = (inputs,
+            rebuild(inputs, generation=rebuild(inputs.generation, autoresolve=False)),
+            rebuild(inputs, generation=rebuild(inputs.generation, autoresolve=True)),
+            rebuild(inputs, defaults=rebuild(inputs.defaults, water_fraction=0.25)))
+        self.assertEqual(len({handle.fingerprint_inputs("world", WorldPlanScope(), value, deps) for value in variants}), 4)
+        self.assertEqual(len({_revision("world", (value,)) for value in variants}), 4)
+        validation = rebuild(inputs, resolution_mode=ResolutionMode.VALIDATE_ONLY)
+        self.assertEqual(_revision("world", (inputs,)), _revision("world", (validation,)))
+        self.assertNotEqual(handle.fingerprint_inputs("world", WorldPlanScope(), inputs, deps),
+            handle.fingerprint_inputs("world", WorldPlanScope(), validation, deps))

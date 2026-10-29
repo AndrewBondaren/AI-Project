@@ -8,6 +8,9 @@ from app.application.planning.service.planningService import PlanBuildControl
 from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyFinalPlanProvider
 from app.application.worldData.generators.hydrology.water.waterMaterialize import MaterializedWater
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
+from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
+from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
 from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import GeoReliefPlanProvider, GeoRiverReliefPlanProvider
 from app.application.worldData.planning.composition.planProviders import declared_binding
 from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSurfacePlanBundle
@@ -81,3 +84,9 @@ def exact_geo_relief_providers(relief: GeoReliefPlanProvider, river: GeoRiverRel
 
 def final_materialized_source_mapping(result: MaterializedWater) -> None:
     assert_type(result.source_mapping, SourceBodyMapping)
+
+
+def route_stage_sources(view: GeoSurfacePlanningView, water: OpenWaterPlan) -> None:
+    assert_type(view.hydrology.generation, WorldWaterGenerationSettings)
+    assert_type(view.hydrology.defaults, WaterGenerationDefaults)
+    assert_type(water.source_mapping, SourceBodyMapping)

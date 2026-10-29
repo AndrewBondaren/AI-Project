@@ -267,6 +267,7 @@ class SourceMappingProducerTests(TestCase):
         result = self.fill({(2, 2): -2}, (), auto=True)
         self.assertTrue(result.materialized.bodies)
         self.assertEqual(result.materialized.source_mapping.entries, ())
+
         result = self.fill({(2, 2): -1}, (self.spec("probe", ((2, 2),), level=-2),), auto=True)
         actual = result.materialized.by_cell[(2, 2)].water_body_uid
         self.assertEqual(self.mapped(result), {"probe": (actual,)})
@@ -297,3 +298,44 @@ class SourceMappingProducerTests(TestCase):
             WorldHydrology(), change_uid="invalid-surface", auto_seas=False, auto_lakes=False, ctx=ctx)
         self.assertTrue(ctx.errors)
         self.assertEqual(result.materialized.source_mapping.entries, ())
+
+
+class RouteWaterTransportTests(TestCase):
+    def setUp(self):
+        from tests.planning.providers.test_domain_providers import WaterAndPaintOwnerTests
+        self.fixture = WaterAndPaintOwnerTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+
+    def test_open_water_stage_preserves_the_materializers_actual_mapping(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
+        produced = []
+        def capture(*args, **kwargs):
+            water = assemble_water_bodies(*args, **kwargs)
+            produced.append(water.materialized.source_mapping)
+            return water
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies",
+                   side_effect=capture) as materialize:
+            result = self.fixture.water()
+        materialize.assert_called_once()
+        self.assertTrue(produced[0].entries)
+        self.assertEqual(result.payload.source_mapping, produced[0])
+
+    def test_disabled_open_water_carries_explicit_empty_mapping_without_fill(self):
+        from unittest.mock import patch
+        inputs = self.fixture.fixture.hydro_inputs.model_copy(update={"enabled": False})
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as fill:
+            result = self.fixture.water(inputs=inputs)
+            fill.assert_not_called()
+        self.assertEqual(result.payload.source_mapping.entries, ())
+
+    def test_open_water_rejects_missing_mapping_and_foreign_body_uids(self):
+        value = self.fixture.water().payload
+        values = fields(value)
+        values.pop("source_mapping")
+        with self.assertRaises(ValidationError):
+            type(value).model_validate(values)
+        invalid = SourceBodyMapping(entries=(SourceBodyMappingEntry(source_uid="accepted", body_uids=("missing-body",)),))
+        with self.assertRaisesRegex(ValidationError, "final physical body UIDs"):
+            type(value).model_validate(fields(value) | {"source_mapping": invalid})

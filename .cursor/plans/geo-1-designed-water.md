@@ -5273,7 +5273,8 @@ regionExtent.py::prepare_terrain_regions, тип в своём terrain domain.
 В `hydrology/planning/inputs/geoHydrologyPlanInput.py`:
 GeoHydrologyPlanInput содержит baseline HydrologyPlanInput fields
 §6.28 (полный список там), но sea/lake policies новой schema и
-allowed_body_kinds:frozenset[BasinKind]. Input несёт только capture-time
+allowed_body_kinds:frozenset[BasinKind], generation:WorldWaterGenerationSettings
+and defaults:WaterGenerationDefaults (required captured root sources). Input несёт только capture-time
 authored настройки; вычисляемые решения в него не входят и не
 capture'ятся. Old sea/ocean autoresolve bool fields в новой schema
 отсутствуют. Producer source_decisions — GeoWaterPlacementPlan, поле
@@ -11171,6 +11172,36 @@ Verified: GEO-1 573 passed (+9), planning292 passed; pyright valid0, negative235
 HY-12 249 tests: same baseline2 failures/1 error reproduced with HEAD runtime
 modules: coarse_snapshot injection missing in smoke/determinism, tuple/list
 expectation in contract test. Route-stage consumption/activation remain pending.
+
+### G10-A route-stage transport closure — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Readiness found missing route-stage transport: GeoHydrologyPlanInput cannot
+resolve the root generation cascade without captured generation/defaults, while
+OpenWaterPlan discards the mapping already produced by materialize_water.
+TZ: tz_terrain_hydrology §GEO-1; plan §6.29-M/§6.31-E. Extend existing owners:
+- backend/app/dataModel/hydrology/planning/inputs/geoHydrologyPlanInput.py adds
+  required generation:WorldWaterGenerationSettings and defaults:WaterGenerationDefaults;
+  no computed decisions or live source objects enter input. Existing
+  application/worldData/planning/contracts/surfacePlanningView.py enforces
+  equality with the captured GeoWaterPlacementInput generation/defaults.
+  capture_geo will supply both projections from the same read view at activation.
+- backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py adds required
+  source_mapping:SourceBodyMapping; validator requires actual physical-body UIDs.
+  application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py
+  passes the exact materialized.source_mapping, with explicit empty mapping only
+  for its disabled result. No second mapping computation or new DTO.
+- Planned integration tests and typing fixtures verify missing/forged inputs,
+  cross-phase mismatch, generation/default edit fingerprints/revision, source-map
+  handoff and invalid physical UID rejection. Existing codec concrete types cover
+  the added inputs; PC envelopes and eight production registrations stay unchanged.
+
+Done: authored inputs and final water provenance survive the hydrology stage
+boundary; GEO route policy/provider composition remains atomic G10-A. No new files.
+
+Verified: GEO-1 579 passed (+6), planning292 passed; pyright valid0, negative236
+(all233 expected annotations covered; diagnostic surplus unchanged).
+Existing strict OpenWaterPlan fixtures now supply required explicit mapping;
+classification policy/GEO route provider and production activation remain open.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

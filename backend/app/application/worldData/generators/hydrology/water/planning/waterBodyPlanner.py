@@ -10,6 +10,7 @@ from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
 from app.dataModel.hydrology.planning.hydrologyPlan import coarse_order, require_map
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
 from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
@@ -37,7 +38,7 @@ class WaterBodyPlanner:
         lakes = HydrologyScope.LAKES in scopes
         if not inputs.enabled or not (seas or lakes):
             return PlanBuildResult[OpenWaterPlan](payload=OpenWaterPlan(
-                coarse_open_water=(), water_bodies=(), physical_unions=()), diagnostics=())
+                coarse_open_water=(), water_bodies=(), physical_unions=(), source_mapping=SourceBodyMapping(entries=())), diagnostics=())
         bounds = inputs.topology.bounds
         heightmap = SurfaceHeightmap(world_uid, GridBBox(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max),
             {(cell.gx, cell.gy): int(z) for cell, z in surface_z})
@@ -58,7 +59,8 @@ class WaterBodyPlanner:
         cells = water.materialized.by_cell
         return PlanBuildResult[OpenWaterPlan](payload=OpenWaterPlan(coarse_open_water=tuple(
             (SurfaceGridCoord(GridX(x), GridY(y)), cells[(x, y)]) for x, y in sorted(cells, key=lambda cell: (cell[1], cell[0]))),
-            water_bodies=water.materialized.bodies, physical_unions=water.physical_unions),
+            water_bodies=water.materialized.bodies, physical_unions=water.physical_unions,
+            source_mapping=water.materialized.source_mapping),
             diagnostics=tuple(dict.fromkeys(diagnostics)))
 
     def _select_specs(self, inputs: HydrologyPlanInput, specs: tuple[BasinSpec, ...]) -> tuple[BasinSpec, ...]:

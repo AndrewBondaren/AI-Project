@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.hydrology.planning.hydrologyPlan import coarse_order, require_map, require_unique_water
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
 
@@ -17,9 +18,13 @@ class OpenWaterPlan(BaseModel):
     coarse_open_water: tuple[tuple[SurfaceGridCoord, MapCellHydrology], ...]
     water_bodies: tuple[WaterBody, ...]
     physical_unions: tuple[PhysicalWaterUnion, ...]
+    source_mapping: SourceBodyMapping
 
     @model_validator(mode="after")
     def consistent_water(self) -> Self:
         require_map(self.coarse_open_water, coarse_order)
         require_unique_water(self.water_bodies, self.physical_unions)
+        bodies = {body.water_body_uid for body in self.water_bodies}
+        if any(uid not in bodies for entry in self.source_mapping.entries for uid in entry.body_uids):
+            raise ValueError("open water source mapping requires final physical body UIDs")
         return self

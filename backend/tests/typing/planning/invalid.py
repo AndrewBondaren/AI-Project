@@ -842,3 +842,10 @@ from app.application.worldData.generators.hydrology.water.waterMaterialize impor
 
 def invalid_materialized_source_mapping(result: MaterializedWater) -> dict[str, tuple[str, ...]]:
     return result.source_mapping  # EXPECT: reportReturnType
+
+
+from app.dataModel.hydrology.generation.waterGenerationSettings import BodyWaterGenerationSettings
+
+
+def invalid_route_root_generation(value: GeoHydrologyPlanInput) -> BodyWaterGenerationSettings:
+    return value.generation  # EXPECT: reportReturnType
