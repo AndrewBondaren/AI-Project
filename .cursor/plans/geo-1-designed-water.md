@@ -11042,6 +11042,27 @@ expected annotations covered. Consumer suite requires execution outside sandbox:
 Windows asyncio socketpair otherwise stalls in event-loop setup before test code.
 PC production bindings/revision vectors remain covered; full G10-A stays OPEN.
 
+### G10-A typed pipeline closure — execution group (2026-10-29)
+
+Implement the frozen §6.29-M/§6.31-E input/output contracts before caller wiring:
+new dataModel terrain/planning/inputs/geoWaterPlacementInput.py and hydrology/
+planning/inputs/geoHydrologyPlanInput.py own captured authored water/route inputs;
+existing terrain/planning/waterPlacementPlan.py owns GeoWaterPlacementPlan,
+hydrology/planning/hydrologyPlan.py owns GeoHydrologyRoutesPlan and final facts;
+existing application planning/contracts/{surfacePlanningView,surfacePlanBundle}.py
+own the independent GeoSurfacePlanningView/GeoSurfacePlanBundle with exact phase
+types and coherence checks. Paths are under backend/app; application paths have
+application/worldData/ prefix. WaterDesignDecision is the existing object-policy
+specialization, named in hydrology/policy/hydrologyGenerationDecision.py.
+No policy, cascade, geometry or placement algorithms belong to these records.
+Register the complete concrete codec closure in existing surfaceManifest.py;
+cover immutable input admission, mismatched mode/grid/topology/bounds/refs,
+codec replay and static PC/GEO separation. Tests use the planned integration/
+test_surface_validation.py and integration/support fixtures; root4→4 (future5),
+support2→3; terrain inputs3→4, hydrology inputs2→3, all other counts unchanged.
+Owning source schema and runtime activation remain one subsequent G10-A switch;
+these contracts do not enable an alternate production path.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

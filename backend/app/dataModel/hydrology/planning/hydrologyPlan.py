@@ -226,3 +226,23 @@ class GeoHydrologyPlan(HydrologyPlan):
         if categories != tuple(sorted(set(categories), key=lambda category: category.value)):
             raise ValueError("classification decisions must have canonical unique categories")
         return self
+
+
+class GeoHydrologyRoutesPlan(BaseModel):
+    """Route-stage common facts with the mapping/decisions reused by final fill."""
+
+    model_config = HydrologyPlan.model_config
+
+    base: HydrologyRoutesPlan
+    source_mapping: SourceBodyMapping
+    classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]
+
+    @model_validator(mode="after")
+    def coherent_sources(self) -> Self:
+        bodies = {body.water_body_uid for body in self.base.water_bodies}
+        if any(uid not in bodies for entry in self.source_mapping.entries for uid in entry.body_uids):
+            raise ValueError("source mapping must reference route-stage physical water bodies")
+        categories = tuple(category for category, _ in self.classification_decisions)
+        if categories != tuple(sorted(set(categories), key=lambda category: category.value)):
+            raise ValueError("classification decisions must have canonical unique categories")
+        return self

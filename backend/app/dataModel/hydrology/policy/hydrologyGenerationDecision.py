@@ -3,7 +3,8 @@
 from enum import StrEnum
 
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
-from app.dataModel.policy.policyDecision import ValueSelectionDecision
+from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, ValueSelectionDecision
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
 
 class WaterPolicyReason(StrEnum):
@@ -14,3 +15,4 @@ class WaterPolicyReason(StrEnum):
 
 
 type HydrologyGenerationDecision = ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason]
+type WaterDesignDecision = ObjectAdmissionDecision[DesignedWaterStrategyKind, WaterPolicyReason]
