@@ -835,3 +835,10 @@ def invalid_pc_geo_relief_handles(base: RegisteredPlanContract[ClimateBaseInput,
     GeoRiverReliefPlanProvider(relief, routes_pc)  # EXPECT: reportArgumentType
     ReliefPlanProvider(base, terrain, water_geo)  # EXPECT: reportArgumentType
     RiverReliefPlanProvider(relief, routes_geo)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.water.waterMaterialize import MaterializedWater
+
+
+def invalid_materialized_source_mapping(result: MaterializedWater) -> dict[str, tuple[str, ...]]:
+    return result.source_mapping  # EXPECT: reportReturnType

@@ -6,6 +6,8 @@ from app.application.planning.providers.planProvider import RegisteredPlanContra
 from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanBuildControl
 from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyFinalPlanProvider
+from app.application.worldData.generators.hydrology.water.waterMaterialize import MaterializedWater
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import GeoReliefPlanProvider, GeoRiverReliefPlanProvider
 from app.application.worldData.planning.composition.planProviders import declared_binding
 from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSurfacePlanBundle
@@ -75,3 +77,7 @@ def exact_geo_relief_providers(relief: GeoReliefPlanProvider, river: GeoRiverRel
     dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
     assert_type(relief.build(request, dependencies, control), PlanBuildResult[ReliefPlan])
     assert_type(river.build(river_request, dependencies, control), PlanBuildResult[RiverReliefPlan])
+
+
+def final_materialized_source_mapping(result: MaterializedWater) -> None:
+    assert_type(result.source_mapping, SourceBodyMapping)

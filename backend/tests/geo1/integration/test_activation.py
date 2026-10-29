@@ -188,3 +188,112 @@ class BoundaryBindingTests(TestCase):
             dep for dep in plans.hydrology.dependencies if dep.slot != S.WATER_PLACEMENT.value)})
         with self.assertRaisesRegex(ValidationError, "dependency refs"):
             type(plans).model_validate(fields(plans) | {"hydrology": final})
+
+
+class SourceMappingProducerTests(TestCase):
+    @staticmethod
+    def spec(uid, cells, *, level=0):
+        from app.dataModel.hydrology.bands import HydrologyBands
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+        return BasinSpec(source_uid=uid, kind=BasinKind.LAKE, liquid="water", footprint=frozenset(cells),
+            z_water_level=level, floor_z=level-5, bands=HydrologyBands(min=1, max=2))
+
+    def fill(self, wet, specs, *, auto=False, mode=None):
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
+        from app.dataModel.hydrology.worldHydrology import WorldHydrology
+        from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
+        from tests.hydrology_fixtures import flat_heightmap, hydro_topology
+        heightmap = flat_heightmap(0, 5, 0, 3, z=10)
+        heightmap.surface_z.update(wet)
+        before = dict(heightmap.surface_z)
+        result = assemble_water_bodies(heightmap, specs, hydro_topology(heightmap, mode or WorldTopologyMode.PLANAR),
+            WorldHydrology(default_seas={"min_water_cells": 1}, default_lakes={"min_water_cells": 1}),
+            change_uid="same-fill", auto_seas=auto, auto_lakes=auto, ctx=ResolveContext(collect_only=True))
+        self.assertEqual(heightmap.surface_z, before)
+        bodies = {body.water_body_uid for body in result.materialized.bodies}
+        self.assertTrue(all(set(entry.body_uids) <= bodies for entry in result.materialized.source_mapping.entries))
+        return result
+
+    @staticmethod
+    def mapped(result):
+        return {entry.source_uid: entry.body_uids for entry in result.materialized.source_mapping.entries}
+
+    def test_supplied_source_and_accepted_dry_source_are_explicit(self):
+        specs = (self.spec("wet", ((2, 2),)), self.spec("dry", ((4, 2),)))
+        result = self.fill({(2, 2): -2}, specs)
+        self.assertEqual(self.mapped(result), {"dry": (), "wet": ("wet",)})
+
+    def test_dry_shore_does_not_count_as_water_for_the_source(self):
+        from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+        specs = (self.spec("wet", ((2, 2),)), self.spec("shore", ((3, 2),)))
+        result = self.fill({(2, 2): -2, (3, 2): 0}, specs)
+        shore = result.materialized.by_cell[(3, 2)]
+        self.assertIs(shore.role, HydrologyCellRole.SHORE)
+        self.assertEqual(shore.water_body_uid, "wet")
+        self.assertEqual(self.mapped(result)["shore"], ())
+
+    def test_tied_sources_use_actual_cell_ownership_instead_of_equal_uids(self):
+        cells = ((2, 2), (3, 2))
+        result = self.fill(dict.fromkeys(cells, -2), (self.spec("a", cells), self.spec("b", cells)))
+        actual = tuple(sorted({result.materialized.by_cell[cell].water_body_uid for cell in cells}))
+        self.assertEqual(self.mapped(result), {"a": actual, "b": actual})
+        self.assertIn("b", {body.water_body_uid for body in result.materialized.bodies})
+        self.assertNotEqual(self.mapped(result)["b"], ("b",))
+
+    def test_one_source_footprint_can_map_to_multiple_final_bodies(self):
+        left, right = (1, 2), (4, 2)
+        result = self.fill({left: -2, right: -2}, (
+            self.spec("a-left", (left,)), self.spec("b-right", (right,)), self.spec("z-probe", (left, right))))
+        self.assertEqual(self.mapped(result)["z-probe"], ("a-left", "b-right"))
+
+    def test_merge_mapping_contains_physical_bodies_and_never_system_uids(self):
+        result = self.fill({(2, 2): -2, (3, 2): -2}, (
+            self.spec("a", ((2, 2),)), self.spec("b", ((3, 2),))))
+        self.assertTrue(result.physical_unions)
+        systems = {union.water_system_uid for union in result.physical_unions}
+        self.assertTrue(all(not systems.intersection(entry.body_uids) for entry in result.materialized.source_mapping.entries))
+        for source, cell in (("a", (2, 2)), ("b", (3, 2))):
+            self.assertEqual(self.mapped(result)[source], (result.materialized.by_cell[cell].water_body_uid,))
+
+    def test_spill_mapping_uses_final_wet_body_after_the_level_changes(self):
+        result = self.fill({(2, 2): 0, (2, 1): 3, (2, 0): 3}, (self.spec("spill", ((2, 2),), level=6),))
+        cell = result.materialized.by_cell[(2, 2)]
+        self.assertEqual(cell.z_water_level, 3)
+        self.assertEqual(self.mapped(result)["spill"], (cell.water_body_uid,))
+
+    def test_natural_discovery_does_not_create_placement_mapping_entries(self):
+        result = self.fill({(2, 2): -2}, (), auto=True)
+        self.assertTrue(result.materialized.bodies)
+        self.assertEqual(result.materialized.source_mapping.entries, ())
+        result = self.fill({(2, 2): -1}, (self.spec("probe", ((2, 2),), level=-2),), auto=True)
+        actual = result.materialized.by_cell[(2, 2)].water_body_uid
+        self.assertEqual(self.mapped(result), {"probe": (actual,)})
+        self.assertNotEqual(actual, "probe")
+        self.assertIn(actual, result.materialized.uid_remap.values())
+
+    def test_source_mapping_replays_across_order_and_topology(self):
+        from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
+        for mode, cells in ((Mode.PLANAR, ((2, 2), (3, 2))), (Mode.WRAPPED, ((0, 1), (5, 1))),
+                            (Mode.SPHERE, ((0, 0), (3, 0)))):
+            specs = (self.spec("a", (cells[0],)), self.spec("b", (cells[1],)))
+            first = self.fill(dict.fromkeys(cells, -2), specs, mode=mode)
+            second = self.fill(dict.fromkeys(cells, -2), tuple(reversed(specs)), mode=mode)
+            with self.subTest(mode=mode):
+                self.assertEqual(first.materialized.source_mapping, second.materialized.source_mapping)
+                self.assertEqual(first.materialized.by_cell, second.materialized.by_cell)
+
+    def test_failed_terrain_resolution_does_not_claim_accepted_sources_are_dry(self):
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
+        from app.dataModel.hydrology.worldHydrology import WorldHydrology
+        from tests.hydrology_fixtures import flat_heightmap, hydro_topology
+        heightmap = flat_heightmap(0, 5, 0, 3, z=10)
+        topology = hydro_topology(heightmap)
+        del heightmap.surface_z[(2, 2)]
+        ctx = ResolveContext(collect_only=True)
+        result = assemble_water_bodies(heightmap, (self.spec("accepted", ((1, 2),)),), topology,
+            WorldHydrology(), change_uid="invalid-surface", auto_seas=False, auto_lakes=False, ctx=ctx)
+        self.assertTrue(ctx.errors)
+        self.assertEqual(result.materialized.source_mapping.entries, ())

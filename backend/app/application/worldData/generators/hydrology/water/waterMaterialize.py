@@ -16,6 +16,7 @@ from app.application.worldData.generators.terrain.reliefObjects.bathymetry.dista
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping, SourceBodyMappingEntry
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
@@ -30,6 +31,7 @@ class MaterializedWater:
     floors: dict[str, int]
     # Auto basin seeds belonging to one final connected body coalesce here.
     uid_remap: dict[str, str]
+    source_mapping: SourceBodyMapping
 
 
 def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource, ...],
@@ -137,4 +139,9 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
             water_issue(ctx, uid, "level superseded by physical union/reservoir", "WATER_LEVEL_SUPERSEDED",
                         disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
     by_cell.update(derive_shore(surface_z, by_cell, topology))
-    return MaterializedWater(by_cell, tuple(bodies[uid] for uid in sorted(bodies)), areas, floors, auto_remap)
+    mapping = SourceBodyMapping(entries=tuple(SourceBodyMappingEntry(source_uid=source.spec.source_uid,
+        body_uids=tuple(sorted({cell.water_body_uid for coord in source.spec.footprint
+            if (cell := by_cell.get(coord)) is not None and cell.liquid_candidate
+            and cell.water_body_uid is not None})))
+        for source in sorted(sources, key=lambda source: source.spec.source_uid) if source.authored))
+    return MaterializedWater(by_cell, tuple(bodies[uid] for uid in sorted(bodies)), areas, floors, auto_remap, mapping)

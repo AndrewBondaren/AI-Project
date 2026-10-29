@@ -15,6 +15,7 @@ from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.hydrology.enums.waterSystemKind import WaterSystemKind
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.ids.waterSystemIdentity import water_system_uid
@@ -40,7 +41,7 @@ def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec
     except ValueError as error:
         water_issue(ctx, heightmap.world_uid, str(error), "WATER_TERRAIN_UNRESOLVED",
                     disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
-        return AssembledWater(MaterializedWater({}, (), {}, {}, {}), ())
+        return AssembledWater(MaterializedWater({}, (), {}, {}, {}, SourceBodyMapping(entries=())), ())
     sources = water_sources(heightmap.surface_z, specs, tree, topology, policy,
                              auto_seas=auto_seas, auto_lakes=auto_lakes)
     resolved = resolve_water_levels(tree, sources, world_uid=heightmap.world_uid,

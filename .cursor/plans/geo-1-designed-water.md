@@ -11137,6 +11137,41 @@ Negative234 (+4 this group), all231 expected annotations covered; surplus unchan
 PC-equivalent mountains/basins/coarse+fine beds, receiver preservation, exact refs,
 cache replay and real GEO relief→river→final build verified; production still PC.
 
+### G10-A final source mapping producer — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: implement the existing §6.29-G/J10 producer before GEO route-stage wiring.
+TZ: tz_terrain_hydrology §GEO-1/source-to-body mapping; plan §6.16-A/§6.29-G.
+Owner: application hydrology final materialization, existing backend/app/
+application/worldData/generators/hydrology/water/waterMaterialize.py. Its existing
+MaterializedWater result gains required source_mapping:SourceBodyMapping.
+materialize_water derives it from final wet occupancy after classification/remap:
+for every supplied accepted spec (WaterSource.authored=True, including designed
+procedural specs), inspect its footprint and collect sorted final physical body
+UIDs of liquid_candidate cells. Explicit empty entry means accepted dry. Natural
+sources discovered outside the supplied placement specs do not become accepted
+placement entries. No UID-string equality inference or PhysicalWaterUnion IDs.
+No second mapping DTO/helper module, fill, classification or geometry writer.
+
+Existing waterBodyAssembler.py empty/error result supplies an empty typed mapping;
+its union-parent normalization preserves the materializer result. Failed terrain
+resolution does not claim that accepted sources are dry. Existing PC outputs and
+cache schema are unchanged; GEO routes will consume materialized.source_mapping
+inside the atomic G10-A join. SourceBodyMapping stays owned by dataModel/hydrology/
+planning/sourceBodyMapping.py; no new files or independently persisted provenance.
+Checks: existing geo1/integration/test_activation.py plus HY-12 regressions and
+planning typing fixtures. Cover split/merge/tied ownership/dry SHORE/spill,
+accepted dry and no accepted source, natural UID remap, topology/reorder replay,
+immutable heights and final physical-body membership.
+Done: real final fill produces canonical accepted-source mapping; route/provider
+activation remains atomic G10-A. Direct counts: water10→10, hydrology root7→7,
+integration4→4, typing terrain4→4; no new files.
+
+Verified: GEO-1 573 passed (+9), planning292 passed; pyright valid0, negative235
+(all232 expected annotations covered; diagnostic surplus unchanged).
+HY-12 249 tests: same baseline2 failures/1 error reproduced with HEAD runtime
+modules: coarse_snapshot injection missing in smoke/determinism, tuple/list
+expectation in contract test. Route-stage consumption/activation remain pending.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.
