@@ -18,6 +18,14 @@ metadata:
 Delivery SoT: [geo-1-designed-water](../.cursor/plans/geo-1-designed-water.md),
 §5.4 (owners), §6.8–6.9 (policy), §6.20 (lifecycle), §6.29-A…M (exact schemas).
 
+G9-S (2026-10-29) реализован изолированно: SurfaceCoatingSupportProvider
+строит pre-coating facts из captured inputs и coherent final hydrology /
+river-relief refs. Terrain declaration запрещает только RELIEF_FACE + SHEER
++ ROCK через общий compiler/resolver. Unknown сохраняет issue: validate_only
+отклоняет, runtime оставляет поверхность через KEEP_EXISTING_SURFACE.
+SurfacePlanValidator.validate_coating передаёт issues существующему sink;
+production capture/injection и применение L0/L2 включаются только в G10-A.
+
 ### Настройки, область и единицы GEO-1
 
 Authoritative authored settings находятся только в existing

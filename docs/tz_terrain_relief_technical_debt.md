@@ -27,6 +27,9 @@ metadata:
 | 4 | **RELIEF-TD-4** | Срез leftover-pack / pretty `rays[]` с persist; leftover-хелперы — пока locked-тесты | **partial** 2026-08-27 — pretty `GradeRaySidecar` / Writer-Reader `rays[]` **done**; `downhill` / halo / R44 остаются для locked |
 | 5 | **RELIEF-TD-5** | Pack persist vs T-3c catalog emit — не один бог | **done** 2026-08-27 (`finish` = pack files; emit = runner; SQL upsert = оркестраторы) |
 | 6 | **RELIEF-TD-6** | `WorldMapPackRenderer` сплит raster/pins/omit-grade; `packBakeLog` god-модуль | **partial** — renderer **done** 2026-08-27; `packBakeLog` open |
+| 7 | **RELIEF-TD-7** | `SurfaceSupportCapture` — membership-проверка только для `templates`; остальные registry без world_uid-привязки | **open** ⚠️ требует тщательной проверки 2026-10-29 — см. § RELIEF-TD-7 |
+| 8 | **RELIEF-TD-8** | `SurfaceSupportInput` — `model_copy` не прогоняет after-валидаторы; нет защиты от неканонического copy | **open** ⚠️ требует тщательной проверки 2026-10-29 — см. § RELIEF-TD-8 |
+| 9 | **RELIEF-TD-9** | `hills_authored` — load-bearing зависимость от `model_fields_set` источника; known limitation при canonical round-trip | **open** ⚠️ требует тщательной проверки 2026-10-29 — см. § RELIEF-TD-9 |
 
 ---
 
@@ -164,6 +167,99 @@ SQL upsert **не** был в `finish`: `persist_relief_grades` на `PackDetail
 
 ---
 
+## RELIEF-TD-7 — `SurfaceSupportCapture`: membership-проверка только для `templates`
+
+**Severity:** medium. **Status:** open. **P:** P2.
+**Обнаружено:** 2026-10-29 — ревью SurfaceSupport capture/input.
+
+**Проблема:** В `_build_capture` (`surfaceSupportCapture.py:80-98`) membership-проверка
+`world_uid in registry` выполняется только для `world.terrain_templates` →
+`template_by_uid`. Остальные 10 registry (hills, ravine, materials, terrain,
+landcover, regions, water_bodies, rivers, mountain_policy, climate,
+landcover_policy) **не** проходят проверку. Если `world_uid` ссылается на объект,
+которого нет в `world.terrain_hills`, `world.materials` и т.д., `get_by_id`
+вернёт `None`, и capture упадёт с неочевидным `AttributeError` на `None`.
+
+**Влияние:** В product-пути это не воспроизводится — `world.uid` и
+`world.<field>.uid` заполняются одним и тем же resolver'ом (`mapCellService.py:36-53`),
+поэтому `world.terrain_hills.uid` всегда равен `world.uid` при наличии объекта.
+Однако контракт `SurfaceSupportCaptureInput` не гарантирует эту инвариантность явно,
+и capture-модуль уязвим для ручного/тестового построения input с несогласованными
+world_uid.
+
+**Целевое решение:** Либо (a) добавить membership-проверку для всех 11 registry
+(единый паттерн: `get_by_id` + явная ошибка при `None`), либо (b) задокументировать
+в контракте input, что `world_uid` — identity `world` и все registry-объекты
+непременно существуют при данном world_uid (тогда проверка избыточна и можно
+заменить на assert). Вариант (b) проще, но менее defensive.
+
+**Критерии закрытия:** Единый паттерн проверки для всех registry либо явный
+контракт + assert; unit-тест на несогласованный world_uid → явная ошибка.
+
+---
+
+## RELIEF-TD-8 — `SurfaceSupportInput`: `model_copy` не прогоняет after-валидаторы
+
+**Severity:** medium. **Status:** open. **P:** P2.
+**Обнаружено:** 2026-10-29 — ревью SurfaceSupport capture/input.
+
+**Проблема:** `SurfaceSupportInput` использует `frozen=True`. Pydantic v2
+`model_copy()` на frozen-модели **не** вызывает `model_post_init` /
+`field_validator(mode="after")`. После `model_copy(update={...})`
+`_validate_hills_authored` не выполнится.
+
+**Влияние:** В текущем product-пути `model_copy` на `SurfaceSupportInput` не
+используется — input строится один раз в `_build_capture` и передаётся read-only.
+Однако:
+1. Будущий caller, делающий `input.model_copy(update={...})`, получит объект,
+   на котором invariant `hills_authored == (hills is not None)` **не проверен**.
+2. `model_dump()` → `model_validate()` round-trip **проверяет** invariant.
+   Но `model_copy()` — нет.
+3. `hills_authored` вычисляется из `model_fields_set` источника — этот
+   контекст **теряется** после copy. Если кто-то скопирует input и изменит
+   `hills` через `model_copy(update={"hills": ...})`, `hills_authored`
+   останется старым.
+
+**Целевое решение:**
+- (a) Заменить на `model_validator(mode="after")` с явным re-check invariant.
+- (b) Запретить `model_copy` через override с `raise TypeError` — input
+  создаётся только через `SurfaceSupportCapture.build()`.
+- (c) Сделать `hills_authored` computed property (теряется сериализация).
+
+**Критерии закрытия:** Unit-тест: `input.model_copy(update={"hills": None})` →
+invariant проверяется (или copy запрещён). Документация: `SurfaceSupportInput` —
+immutable, создаётся только через `SurfaceSupportCapture.build()`.
+
+---
+
+## RELIEF-TD-9 — `hills_authored`: load-bearing зависимость от `model_fields_set`
+
+**Severity:** low. **Status:** open (known limitation). **P:** P3.
+**Обнаружено:** 2026-10-29 — ревью SurfaceSupport capture/input.
+
+**Проблема:** `hills_authored` вычисляется в `SurfaceSupportCapture._build_capture`
+(line 112) как `world_uid in condition.model_fields_set`. Это работает для
+in-memory объектов. Однако `model_fields_set` **теряется** при:
+1. `model_dump(exclude_none=False)` → `model_validate()`: если `hills: None`
+   явно сериализован, round-trip даст `hills_authored=True` — **неправильно**.
+2. JSON serialization без `exclude_none`: аналогично.
+
+**Влияние:** В product-пути `ReliefTemplateSnapshot` строится в-memory
+(`_load_snapshot` в `reliefTemplateStore.py`), и `model_fields_set` корректен.
+При persistence round-trip семантика `hills_authored` может деградировать.
+
+**Целевое решение:**
+- (a) Явно сериализовать `hills_authored` в snapshot JSON (отдельное поле).
+- (b) Запретить `exclude_none=False` для `ReliefTerrainCondition` в
+  persistence-пути.
+- (c) Задокументировать как known limitation.
+
+**Критерии закрытия:** Явное решение (a/b/c) + unit-тест round-trip
+`condition → dump → validate → capture` с `hills=None` → `hills_authored`
+сохраняется.
+
+---
+
 ## Не этот документ
 
 - Алгоритм полного occupancy / кто в обходе на тайле 1e6 — **R41-T-25**.
@@ -176,6 +272,7 @@ SQL upsert **не** был в `finish`: `persist_relief_grades` на `PackDetail
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-29 | **TD-7, TD-8, TD-9:** ревью SurfaceSupport capture/input — membership-проверка, model_copy, model_fields_set. |
 | 2026-08-27 | **TD-4:** срез pretty `rays[]` I/O (`GradeRaySidecar`, Writer/Reader). Leftover-pack остаётся для locked. |
 | 2026-08-27 | **TD-2:** mill `gradeRimRays` без halo; leftover-pack → `gradeRimPackLegacy` (lazy re-export для locked). |
 | 2026-08-27 | **TD-5:** `finish` = pack files; T-3c emit = `emit_fine_grade_catalog` на runner. |

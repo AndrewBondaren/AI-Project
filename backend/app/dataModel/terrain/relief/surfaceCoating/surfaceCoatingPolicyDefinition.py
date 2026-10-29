@@ -53,7 +53,7 @@ SURFACE_COATING_POLICY = ValuePolicy[SurfaceCoatingAction, SurfaceCoatingReason]
 
 
 class SurfaceCoatingSelection(BaseModel, frozen=True):
-    """Explicit action metadata exercises the shared declaration compiler."""
+    """Captured requested action; support and target proof constrain this selection."""
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid", revalidate_instances="always")
     action: Annotated[SurfaceCoatingAction, SelectByValue(SURFACE_COATING_POLICY, (
         ValueCase(when=SurfaceCoatingAction.APPLY_SHORE_SURFACE,

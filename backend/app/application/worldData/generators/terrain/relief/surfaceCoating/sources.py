@@ -107,7 +107,8 @@ class SupportSources:
         if tile not in self._tiles:
             gx, gy = tile
             sample = self.climate.sample_pole(GridX(gx), GridY(gy))
-            profile = self.climate.profile_for_key(sample.system_climate_zone)
+            anchor = self.climate.local_field.nearest(gx, gy)
+            profile = self.climate.profile_for_key(anchor.system_climate_zone if anchor is not None else sample.system_climate_zone)
             background = surface_coverage(registry=self.registry, policy=self.policy, profile=profile)
             painted = {(x, y): RegistryKey[WorldTerrainRegistry](background) for y in range(gy * span, (gy + 1) * span)
                        for x in range(gx * span, (gx + 1) * span)} if background is not None else {}
@@ -127,7 +128,7 @@ class SupportSources:
                     if xy in winners or not (bbox[0] <= xy[0] <= bbox[2] and bbox[1] <= xy[1] <= bbox[3]):
                         continue
                     winners.add(xy)
-                    if may_paint_terrain(painted.get(xy), candidate.current_type, self.registry):
+                    if painted.get(xy) == background or may_paint_terrain(painted.get(xy), candidate.current_type, self.registry):
                         painted[xy] = candidate.current_type
             self._tiles[tile] = painted
         return self._tiles[tile].get(cell)

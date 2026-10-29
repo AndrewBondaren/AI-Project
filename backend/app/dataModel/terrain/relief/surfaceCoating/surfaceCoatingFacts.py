@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
-from app.dataModel.planning.identity.planKey import InputFingerprint
+from app.dataModel.planning.identity.planKey import InputFingerprint, PlanSlot
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.policy.policyDecision import ValueSelectionDecision
 from app.dataModel.policy.policyFacts import FactValue, KnownFact
@@ -15,6 +15,9 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.spatial.grid.coordinateTypes import FineXY
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
+
+# Isolated GEO extension; the baseline SurfacePlanSlot vocabulary activates in G10-A.
+SURFACE_SUPPORT_SLOT = PlanSlot("surface_support")
 
 
 class SurfaceAspect(StrEnum):

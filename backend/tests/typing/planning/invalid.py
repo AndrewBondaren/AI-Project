@@ -728,3 +728,17 @@ def invalid_support_sources(value: SurfaceSupportInput) -> None:
     value.templates[0][1].conditions.append(None)  # EXPECT: reportAttributeAccessIssue
     value.templates[0][1].structure_refs.append("ref")  # EXPECT: reportAttributeAccessIssue
     value.materials = ()  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.generators.terrain.relief.surfaceCoatingSupport import SurfaceCoatingSupportProvider, SurfaceSupportDependencies, CoatingPlanProvider
+from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import SurfaceSupportPlan
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import CoatingPlanInput
+from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
+
+
+def invalid_coating(request: PlanRequest[SurfaceSupportInput], dependencies: SurfaceSupportDependencies,
+                    cells: RegionCoverage, inputs: CoatingPlanInput, support: SurfaceSupportPlan) -> None:
+    SurfaceCoatingSupportProvider.facts(request, {}, cells=cells)  # EXPECT: reportArgumentType
+    SurfaceCoatingSupportProvider.facts(request, dependencies, cells=())  # EXPECT: reportArgumentType
+    CoatingPlanProvider.plan(inputs, support, dependencies.relief.payload, fine_span=2)  # EXPECT: reportArgumentType
+    support.facts[0].face = "north"  # EXPECT: reportAttributeAccessIssue

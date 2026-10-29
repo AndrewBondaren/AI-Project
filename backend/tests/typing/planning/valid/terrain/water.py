@@ -168,6 +168,9 @@ from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
 from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
+from app.dataModel.planning.contracts.planRequest import PlanRequest
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.terrain.designedWater.fields.field import WaterFieldRecipe
 
 
@@ -283,3 +286,16 @@ def valid_support_sources(value: SurfaceSupportInput, material: MaterialSupportE
     assert_type(value.templates[0][1].conditions, tuple[ReliefTerrainCondition, ...])
     assert_type(value.templates[0][1].structure_refs, tuple[str, ...])
     assert_type(value.terrain_entries[0].hills_authored, bool)
+
+
+from app.application.worldData.generators.terrain.relief.surfaceCoatingSupport import SurfaceCoatingSupportProvider, SurfaceSupportDependencies, CoatingPlanProvider
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import CoatingPlanInput
+from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import SurfaceCoatingFacts, SurfaceSupportPlan, CoatingPlan
+from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
+
+
+def valid_coating(request: PlanRequest[SurfaceSupportInput], dependencies: SurfaceSupportDependencies,
+                  cells: RegionCoverage, inputs: CoatingPlanInput, support: SurfaceSupportPlan,
+                  hydrology: HydrologyPlan) -> None:
+    assert_type(SurfaceCoatingSupportProvider.facts(request, dependencies, cells=cells), tuple[SurfaceCoatingFacts, ...])
+    assert_type(CoatingPlanProvider.plan(inputs, support, hydrology, fine_span=2), PlanBuildResult[CoatingPlan])

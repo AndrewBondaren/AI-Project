@@ -10868,8 +10868,8 @@ fallback. New support binding/provider/policy activates in G9-S/G10-A as specifi
 ### G9-S execution contract (2026-10-29)
 User authorized isolated implementation; activation remains atomic G10-A.
 Owners/paths: dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py
-owns immutable facts, surface/support/coating outputs and resolved target;
-surfaceCoatingPolicyDefinition.py owns enums, ValuePolicy/case declarations
+owns immutable facts, enums, surface/support/coating outputs and resolved target;
+surfaceCoatingPolicyDefinition.py owns ValuePolicy/case declarations
 and metadata. Existing surfaceSupportInput.py adds mode/target input.
 application/worldData/generators/terrain/relief/surfaceCoatingSupport.py
 owns typed dependency binding, read-only facts and coating plan providers;
@@ -10885,9 +10885,12 @@ Counts: dataModel surfaceCoating 2→4; application relief 1→2 with new
 surfaceCoating leaf 3; tests coating 5. Checks: GEO-1, policy/compiler,
 source/codec replay, planning positive+negative typing, diff check.
 Unknown remains a typed issue in validation and runtime fallback; runtime
-reporting is exposed by the same read-only validation helper for G10-A.
+reporting is exposed by planning/validation/surfacePlanValidator.py::
+SurfacePlanValidator.validate_coating for G10-A (new validation leaf 2 files).
+SurfacePlanSlot keeps its exact eight-slot baseline; isolated support uses
+SURFACE_SUPPORT_SLOT until the atomic GEO binding activation.
 
-### G9-S — terrain-owned допустимость берегового покрытия
+### G9-S — terrain-owned допустимость берегового покрытия — DONE isolated (2026-10-29)
 Цель: исключить terrain/material покрытия на отвесной породе, сохранив SHORE.
 ТЗ: GEO-1 G0; tz_terrain_hydrology §Derived shore;
 tz_terrain_relief §Граница слоёв; HY-7 после синхронизации G0.
@@ -10908,6 +10911,14 @@ no-writes preview и L0/L2 parity.
 Done: решение покрытия одно, hydrology — consumer; mountain geometry
 и per-body level не меняются. Согласованная unknown policy реализована
 на обоих путях, а не только в runtime materializer.
+
+G9-S IMPLEMENTED/VERIFIED (isolated): captured-only facts, shared terrain policy,
+typed unknown + KEEP_EXISTING_SURFACE with retained issues/reporting, full codec
+closure and registry provider builds. Wrapped sides, state/tombstone and missing
+member/structural/post-river evidence covered. GEO-1 525 passed (+20); planning
+contracts71 + codec7 passed; pyright0, negative213 diagnostics/all211 annotations
+covered, diff clean. Production L0/L2 consumers, aggregate capture/validation
+injection, gates and schema activation remain G10-A; no mill/pack/DB reads/writes.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

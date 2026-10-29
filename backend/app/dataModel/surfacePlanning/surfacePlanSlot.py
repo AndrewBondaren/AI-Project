@@ -12,5 +12,3 @@ class SurfacePlanSlot(StrEnum):
     RIVER_RELIEF = "river_relief"
     HYDROLOGY = "hydrology"
     CLIMATE_LOCAL = "climate_local"
-    SURFACE_SUPPORT = "surface_support"
-    COATING = "coating"

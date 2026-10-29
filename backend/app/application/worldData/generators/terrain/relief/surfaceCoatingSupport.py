@@ -8,6 +8,7 @@ from app.application.policy.declarations.compiler import compile_value_policy
 from app.application.policy.policyResolver import PolicyResolver
 from app.application.worldData.generators.terrain.relief.surfaceCoating.geometry import observe_sides
 from app.application.worldData.generators.terrain.relief.surfaceCoating.sources import SupportSources
+from app.application.worldData.pack.bake.lightGrid.coords import fine_to_light, light_to_macro_local
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan, ClimateLocalPlan
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.climate.planning.inputs.climateLocalInput import ClimateLocalInput
@@ -21,7 +22,7 @@ from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, Pl
 from app.dataModel.planning.identity.planKey import PlanSlot
 from app.dataModel.policy.policyBindings import PolicyFacts, PolicyInputs, PolicySource
 from app.dataModel.policy.policyFacts import KnownFact, UnknownFact
-from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, FineXY
+from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, FineXY, LightCellRef
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
@@ -32,6 +33,7 @@ from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverRe
 from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import (
     CoatingCellPlan, CoatingPlan, SurfaceAspect, SurfaceCoatingAction, SurfaceCoatingFacts,
     SurfaceCoatingIssueCode, SurfaceSupportPlan,
+    SURFACE_SUPPORT_SLOT,
 )
 from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingPolicyDefinition import (
     SURFACE_COATING_POLICY, SurfaceCoatingSelection, SurfaceCoatingTargetFacts,
@@ -63,6 +65,12 @@ class SurfaceSupportDependencies:
             for dependency in envelope.dependencies:
                 if dependency.slot in supplied and dependency.ref != supplied[dependency.slot]:
                     raise ValueError("support dependency revisions are incoherent")
+        if not any(d.slot == "river_relief" and d.ref == self.river_relief.ref for d in self.hydrology.dependencies):
+            raise ValueError("final hydrology must prove its post-river surface reference")
+        if not any(d.slot == "relief" and d.ref == self.relief.ref for d in self.river_relief.dependencies):
+            raise ValueError("post-river surface must bind the supplied pre-river relief")
+        if not any(d.slot == "hydrology" and d.ref == self.hydrology.ref for d in self.climate_local.dependencies):
+            raise ValueError("local climate must bind the same final hydrology")
 
 
 def unknown_support(cell: FineXY, channel: str, message: str) -> UnknownFact:
@@ -108,10 +116,18 @@ class SurfaceCoatingSupportProvider:
         templates = dict(inputs.templates)
         membership_valid = all(t.template_uid in templates and
             templates[t.template_uid].side_recipe == t.side_recipe for t in layout.templates)
+        # Layout side stamps prove geometry, not the material of attached structures.
+        # Without a frozen structural material proof those candidates stay unknown.
+        bare_members = all(not templates[t.template_uid].structure_refs and
+            templates[t.template_uid].structure_canal is None for t in layout.templates
+            if t.template_uid in templates)
         surface = {cell for cell, _ in dependencies.river_relief.payload.surface_z}
         macro_extent = {(cell.gx, cell.gy) for cell in surface}
         entries = {e.key: e for e in inputs.terrain_entries}
         materials = {m.key: m for m in inputs.materials}
+        carved = {cell for bed in dependencies.river_relief.payload.fine_beds for cell, _ in bed.bed_z}
+        ravines = {c.cell for c in dependencies.relief.payload.light.ravine_cells}
+        light_mountains = {c.cell for c in dependencies.relief.payload.light.mountain_cells}
         result: list[SurfaceCoatingFacts] = []
         for span in cells.spans:
             for x in range(span.x0, span.x1):
@@ -119,17 +135,24 @@ class SurfaceCoatingSupportProvider:
                 if topology.canonicalize(*cell) != cell:
                     raise ValueError("support cells require canonical fine coordinates")
                 in_surface = (x // inputs.grid.fine_span, span.y // inputs.grid.fine_span) in macro_extent
-                observation = observe_sides(layout, cell, light_span=float(sources.scale.light_span)) if in_surface else None
-                key = layout.terrain_key if observation is not None else sources.terrain_at(cell)
+                observation = observe_sides(layout, cell, light_span=float(sources.scale.light_span), topology=topology) if in_surface else None
+                key = sources.terrain_at(cell)
+                light_cell = LightCellRef(*light_to_macro_local(*fine_to_light(*cell, sources.scale), sources.scale))
+                projected_key = (dependencies.relief.payload.light.ravine_terrain if light_cell in ravines else
+                                 layout.terrain_key if observation is not None or light_cell in light_mountains else None)
+                projected_entry = entries.get(projected_key) if projected_key is not None else None
+                if projected_key is not None and (key is None or projected_entry is None or projected_entry.merge_rank >= entries[key].merge_rank):
+                    key = projected_key
                 path: tuple[str | int, ...] = ("terrain_entries", key if key is not None else "missing", "default_material")
                 entry = entries.get(key) if key is not None else None
-                material_key = entry.default_material if entry is not None else None
+                material_key = entry.default_material if entry is not None and cell not in carved and (observation is None or bare_members) else None
                 material = materials.get(material_key) if material_key is not None else None
                 unknown_geometry = unknown_support(cell, "geometry", "required captured geometry/member evidence is unavailable")
+                unproven_projection = observation is None and (light_cell in ravines or light_cell in light_mountains)
+                geometry_known = in_surface and (observation is None or membership_valid) and cell not in carved and not unproven_projection
                 aspect = (KnownFact(value=observation.aspect if observation else SurfaceAspect.HORIZONTAL)
-                          if in_surface and membership_valid else unknown_geometry)
-                side = KnownFact(value=observation.side_kind if observation else ReliefSideKind.SLOPE) if (
-                    in_surface and membership_valid) else unknown_geometry
+                          if geometry_known else unknown_geometry)
+                side = KnownFact(value=observation.side_kind) if geometry_known and observation is not None else unknown_geometry
                 result.append(SurfaceCoatingFacts(world_uid=request.key.world_uid,
                     support_input_fingerprint=request.key.input_fingerprint, cell=cell,
                     face=observation.face if observation is not None else None, aspect=aspect, side_kind=side,
@@ -170,7 +193,8 @@ class CoatingPlanProvider:
     @staticmethod
     def plan(inputs: CoatingPlanInput, support: SurfaceSupportPlan,
              hydrology: HydrologyPlan, *, fine_span: int) -> PlanBuildResult[CoatingPlan]:
-        spec = compile_value_policy(SURFACE_COATING_POLICY, (SurfaceCoatingSelection,))
+        spec = compile_value_policy(SURFACE_COATING_POLICY, (
+            SurfaceCoatingSelection, SurfaceCoatingFacts, SurfaceCoatingTargetFacts))
         selection = SurfaceCoatingSelection(action=SurfaceCoatingAction.APPLY_SHORE_SURFACE)
         source = PolicyInputs((PolicySource(SurfaceCoatingSelection, selection, ("coating",)),))
         shores = shore_cells(hydrology, fine_span)
@@ -197,8 +221,14 @@ class CoatingPlanProvider:
     def build(self, request: PlanRequest[CoatingPlanInput], dependencies: PlanDependencyReader,
               control: PlanBuildControl) -> PlanBuildResult[CoatingPlan]:
         control.raise_if_shutdown()
-        support = dependencies.require(PlanSlot(SurfacePlanSlot.SURFACE_SUPPORT.value), self._support)
+        support = dependencies.require(SURFACE_SUPPORT_SLOT, self._support)
         hydro = dependencies.require(PlanSlot(SurfacePlanSlot.HYDROLOGY.value), self._hydrology)
+        for envelope in (support, hydro):
+            if envelope.ref.key.world_uid != request.key.world_uid or envelope.ref.key.scope != request.key.scope:
+                raise ValueError("coating requires same-world/scope evidence")
+        if any(f.world_uid != support.ref.key.world_uid or
+               f.support_input_fingerprint != support.ref.key.input_fingerprint for f in support.payload.facts):
+            raise ValueError("support facts do not match their captured input revision")
         if not any(d.ref == hydro.ref and d.slot == SurfacePlanSlot.HYDROLOGY.value for d in support.dependencies):
             raise ValueError("coating support and final hydrology revisions differ")
         result = self.plan(request.inputs, support.payload, hydro.payload, fine_span=self._span)
