@@ -12,3 +12,7 @@ class SurfacePlanSlot(StrEnum):
     RIVER_RELIEF = "river_relief"
     HYDROLOGY = "hydrology"
     CLIMATE_LOCAL = "climate_local"
+    TERRAIN_REGIONS = "terrain_regions"
+    COASTLINE_BOUNDARIES = "coastline_boundaries"
+    SURFACE_SUPPORT = "surface_support"
+    COATING = "coating"

@@ -234,16 +234,18 @@ class CacheContractTests(unittest.TestCase):
 
 
 class SurfacePlanSlotTests(unittest.TestCase):
-    def test_exact_baseline_vocabulary_without_geo_activation(self):
+    def test_surface_vocabulary_includes_geo_declarations(self):
         expected = {
             "CLIMATE_BASE": "climate_base", "TERRAIN_BASE": "terrain_base",
             "WATER_PLACEMENT": "water_placement", "RELIEF": "relief",
             "HYDROLOGY_ROUTES": "hydrology_routes", "RIVER_RELIEF": "river_relief",
             "HYDROLOGY": "hydrology", "CLIMATE_LOCAL": "climate_local",
+            "TERRAIN_REGIONS": "terrain_regions", "COASTLINE_BOUNDARIES": "coastline_boundaries",
+            "SURFACE_SUPPORT": "surface_support", "COATING": "coating",
         }
         self.assertEqual({name: member.value for name, member in SurfacePlanSlot.__members__.items()}, expected)
         self.assertTrue(issubclass(SurfacePlanSlot, StrEnum))
-        for value in ("terrain_regions", "unknown"):
+        for value in ("unknown",):
             with self.assertRaises(ValueError):
                 SurfacePlanSlot(value)
 

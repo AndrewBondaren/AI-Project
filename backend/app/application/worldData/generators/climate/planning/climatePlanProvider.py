@@ -67,9 +67,9 @@ class ClimateBasePlanProvider:
         return result
 
 
-class ClimateLocalPlanProvider:
+class ClimateLocalPlanProvider[H: HydrologyPlan]:
     def __init__(self, climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
-                 hydrology: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan]) -> None:
+                 hydrology: RegisteredPlanContract[HydrologyFinalInput, H]) -> None:
         self._base, self._hydrology = climate_base, hydrology
 
     def build(self, request: PlanRequest[ClimateLocalInput], dependencies: PlanDependencyReader,

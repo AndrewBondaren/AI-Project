@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, TypeAd
 
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
@@ -205,4 +208,21 @@ class HydrologyPlan(BaseModel):
         surface = {cell for cell, _ in self.coarse_surface_z}
         if any(cell not in surface for cell, _ in self.coarse_hydro):
             raise ValueError("coarse hydrology outside final surface")
+        return self
+
+
+class GeoHydrologyPlan(HydrologyPlan):
+    """Final common facts plus hydrology-owned GEO provenance and decisions."""
+
+    source_mapping: SourceBodyMapping
+    classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]
+
+    @model_validator(mode="after")
+    def consistent_geo_facts(self) -> Self:
+        bodies = {body.water_body_uid for body in self.water_bodies}
+        if any(uid not in bodies for entry in self.source_mapping.entries for uid in entry.body_uids):
+            raise ValueError("source mapping must reference final physical water bodies")
+        categories = tuple(category for category, _ in self.classification_decisions)
+        if categories != tuple(sorted(set(categories), key=lambda category: category.value)):
+            raise ValueError("classification decisions must have canonical unique categories")
         return self

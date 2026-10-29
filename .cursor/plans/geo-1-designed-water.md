@@ -10920,6 +10920,128 @@ contracts71 + codec7 passed; pyright0, negative213 diagnostics/all211 annotation
 covered, diff clean. Production L0/L2 consumers, aggregate capture/validation
 injection, gates and schema activation remain G10-A; no mill/pack/DB reads/writes.
 
+### G10-A prerequisite correction — AGREED / IMPLEMENTED isolated (2026-10-29)
+
+Read-only readiness audit found an unresolved binding seam in §6.31-E.
+`ClimateLocalPlanProvider` currently requires the PC final hydrology handle;
+`surface.pc.climate_local` declares `surface.pc.hydrology` as its dependency.
+GEO final hydrology has a different contract ID and payload type. Reusing the
+PC local registration fails `PlanDependencyReader.validate_for/require`, even
+though ClimateLocalInput/ClimateLocalPlan themselves do not change. Similarly,
+G9-S support/coating constructors and SurfaceSupportDependencies currently use
+the invariant PlanEnvelope[HydrologyPlan]/RegisteredPlanContract[...,HydrologyPlan].
+The §6.31-E GEO envelope cannot be passed through those baseline annotations.
+This is a dependency-contract correction, not an additional activation phase.
+
+Agreed ownership/API amendment (user approval after domain-boundary clarification):
+- dataModel surface-planning owner, existing
+  `backend/app/dataModel/surfacePlanning/surfacePlanBindings.py`:
+  SurfacePlanBinding stores explicit upstream contract metadata rather than
+  deriving every dependency through the PC-only slot lookup. Keep baseline
+  lookup and add `geo_surface_plan_binding(slot:SurfacePlanSlot)` over
+  GEO_SURFACE_BINDINGS. Only climate_base/terrain_base reuse PC registrations;
+  climate_local gets `surface.geo.climate_local` /
+  `surface.envelope.geo.climate_local`, schema/cache 2, algorithm 1, with exact
+  PC climate_base and GEO final hydrology dependencies. Other GEO registrations
+  retain the target identities/dependencies in §6.29-M/§6.31-E.
+- application climate owner, existing
+  `backend/app/application/worldData/generators/climate/planning/climatePlanProvider.py`:
+  parameterize ClimateLocalPlanProvider[H:HydrologyPlan]; constructor takes
+  RegisteredPlanContract[HydrologyFinalInput,H]. Its build binds that exact
+  handle and delegates unchanged local-climate computation to the existing kernel.
+- application terrain/relief owner, existing
+  `backend/app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py`:
+  parameterize SurfaceSupportDependencies[H:HydrologyPlan],
+  SurfaceCoatingSupportProvider[H:HydrologyPlan] and CoatingPlanProvider[H:HydrologyPlan].
+  Hydrology envelope/handle fields consistently use H; GEO instantiation uses
+  GeoHydrologyPlan, isolated baseline tests use HydrologyPlan. Coherence checks,
+  evidence computation, policy resolution and diagnostics remain unchanged.
+- application composition owner, existing
+  `backend/app/application/worldData/planning/composition/planProviders.py`:
+  bind the GEO local/support/coating instances to the same exact final GEO
+  hydrology handle. No envelope reconstruction, type cast, widened object/Any,
+  PC fallback or second facts/policy implementation.
+
+Domain responsibility constraint (clarified with the user, 2026-10-29):
+H preserves the exact registered envelope/handle type at the provider boundary;
+it does not grant the consumer ownership of GEO hydrology operations. Provider
+adapters validate upstream identity/coherence and pass the existing HydrologyPlan
+payload interface to domain kernels. No new cross-domain DTO/protocol or copy of
+the payload is introduced solely for this binding correction.
+
+Audited producer/consumer field map (paths relative to backend/app):
+- climate/planning/climatePlanProvider.py::ClimateLocalPlanProvider validates
+  dependency refs; generators/climate/localFieldFromCoarse.py::
+  build_local_plan_from_coarse reads only HydrologyPlan.coarse_surface_z and
+  delegates to collect_resolved_local_anchors. Climate owns anchor/climate
+  computation; no water classification, body association or coating selection.
+  Both application paths have the worldData/generators/ prefix.
+- generators/terrain/relief/surfaceCoatingSupport.py::shore_cells reads only
+  coarse_hydro/sparse_fine_hydro (MapCellHydrology), preserving the final sparse
+  override precedence. SupportSources in the existing surfaceCoating/sources.py
+  uses the existing hydrology/materialize/hydrologyWorkingFields.py::
+  HydrologyWorkingFields.from_plan projection: coarse_surface_z/coarse_hydro/
+  fine_z_overrides/sparse_fine_hydro. This is read-only source evidence for
+  existing landcover fact consumers, not a new hydrology calculation.
+- SurfaceCoatingSupportProvider owns terrain support evidence: relief geometry,
+  material/substrate and typed unknowns. CoatingPlanProvider uses final SHORE and
+  shore_kind to select the captured target and resolves the terrain-owned policy;
+  it does not classify water, change SHORE/body/level or carve heights.
+- hydrology remains the sole owner of fill/classification/physical unions and
+  source_mapping/classification_decisions. The owning attached-boundary operation
+  may consume source_mapping for its explicit target association. Climate,
+  support, coating and landcover kernels must not inspect either GEO-only field,
+  branch on GeoHydrologyPlan identity or rerun generation/admission decisions.
+- planning/composition/planProviders.py only binds exact handles; assembler only
+  orders stages and passes refs. Neither selects climate anchors, derives support
+  facts, evaluates coating rules nor computes hydrology mapping/classification.
+
+Acceptance adds a field-access audit of those consumer paths and their delegated
+kernels, including HydrologyWorkingFields.from_plan. For the same common payload
+and coherent dependency refs, changing GEO-only mapping/classification metadata
+must preserve computed climate anchors, support observations and coating actions/
+targets. Artifact keys/refs and evidence fingerprints may change with upstream
+provenance and invalidate caches; whole-envelope/payload equality is not required.
+Integration tests use real handles; kernels keep their
+HydrologyPlan argument type and cannot gain GEO-only field access via H.
+
+Composition for these corrections: surfacePlanning 3→3; climate/planning 4→4;
+terrain/relief 2→2; planning/composition 5→5. No new production modules.
+Validation belongs to the already planned geo1/integration/test_activation.py
+and test_revisions.py (leaf max5), plus existing planning typing fixtures:
+GEO final→local→support→coating builds through real registered contracts;
+PC envelope/handle rejection, coherent refs after cold/warm cache, changed
+hydrology invalidates all three downstream artifacts, unchanged climate_base/
+terrain_base stay HIT. Positive typing accepts exact GEO instantiations;
+negative typing rejects PC/GEO handle substitution. Full G10-A activation and
+its acceptance criteria below remain required; this audit does not close them.
+
+Implementation boundary: explicit GEO metadata declarations and generic consumer
+bindings are implemented, with the required GeoHydrologyPlan in the already
+planned hydrology/planning/hydrologyPlan.py and codec IDs225–233 appended in
+existing planning/encoding/surfaceManifest.py. New enum slots are declarations;
+production register_world_plan_providers still registers the eight PC stages.
+PC declarations retain their existing metadata lookup; GEO declarations store
+explicit dependencies, so no GEO dependency is inferred through the PC lookup.
+declared_binding in existing planProviders.py binds either explicit declaration
+through the same validator/fingerprint/cache-codec mechanism.
+Hydrology planning3→3, encoding3→3, slot declaration3→3; integration root3 new
+files (init/test_activation/test_revisions), support/{init,fixtures}2. This leaves
+the two planned validation/logging tests within the root limit5. Contracts tests4→4, typing
+root4→4 and valid/terrain3→3. No new production modules or additional activation.
+The frozen terrain_regions input contains all geometry/owner refs, hence its
+metadata has no generated dependency; GEO water depends on terrain_base plus
+terrain_regions. Other phase deps follow §6.31-E and the correction above.
+Integration fixtures supply frozen upstream envelopes and execute the three
+consumer providers via the real registry/cache. They do not claim production
+capture, upstream generation or complete G10-A activation evidence.
+
+Correction VERIFIED: GEO-1 532 passed (+7 seam tests), planning contracts71,
+consumers85 and codec7 passed; pyright valid0, negative219 diagnostics/all217
+expected annotations covered. Consumer suite requires execution outside sandbox:
+Windows asyncio socketpair otherwise stalls in event-loop setup before test code.
+PC production bindings/revision vectors remain covered; full G10-A stays OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

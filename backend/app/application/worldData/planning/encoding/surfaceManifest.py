@@ -199,6 +199,11 @@ from app.dataModel.policy.policyFacts import KnownFact as _MKnownFact, UnknownFa
 from app.dataModel.policy.policyDecision import ValueSelectionDecision as _MValueSelectionDecision, PolicyReason as _MPolicyReason, PolicyProvenance as _MPolicyProvenance
 from app.dataModel.policy.policyEnums import FactState as _MFactState, PolicyOperation as _MPolicyOperation, PolicyState as _MPolicyState, PolicyDisableReason as _MPolicyDisableReason, PolicyOrigin as _MPolicyOrigin
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey as _MMaterialKey
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyPlan as _MGeoHydrologyPlan
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping as _MSourceBodyMapping, SourceBodyMappingEntry as _MSourceBodyMappingEntry
+from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as _MWaterGenerationCategory
+from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode as _MHydrologyExecutionMode
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason as _MWaterPolicyReason
 
 # Stable TLV v1 type IDs. Append entries; never infer IDs from runtime discovery.
 SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
@@ -428,6 +433,15 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (222, _MPolicyOrigin, CanonicalTypeKind.ENUM),
     (223, _MPlanEnvelope[_MSurfaceSupportPlan], CanonicalTypeKind.RECORD),
     (224, _MPlanEnvelope[_MCoatingPlan], CanonicalTypeKind.RECORD),
+    (225, _MGeoHydrologyPlan, CanonicalTypeKind.RECORD),
+    (226, _MSourceBodyMapping, CanonicalTypeKind.RECORD),
+    (227, _MSourceBodyMappingEntry, CanonicalTypeKind.RECORD),
+    (228, _MWaterGenerationCategory, CanonicalTypeKind.ENUM),
+    (229, _MHydrologyExecutionMode, CanonicalTypeKind.ENUM),
+    (230, _MWaterPolicyReason, CanonicalTypeKind.ENUM),
+    (231, _MValueSelectionDecision[_MHydrologyExecutionMode, _MWaterPolicyReason], CanonicalTypeKind.RECORD),
+    (232, _MPolicyReason[_MWaterPolicyReason], CanonicalTypeKind.RECORD),
+    (233, _MPlanEnvelope[_MGeoHydrologyPlan], CanonicalTypeKind.RECORD),
 
 )))
 

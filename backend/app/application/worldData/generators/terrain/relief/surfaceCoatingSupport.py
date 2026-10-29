@@ -45,12 +45,12 @@ from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 
 @dataclass(frozen=True)
-class SurfaceSupportDependencies:
+class SurfaceSupportDependencies[H: HydrologyPlan]:
     climate_base: PlanEnvelope[ClimateBasePlan]
     terrain_base: PlanEnvelope[TerrainPlan]
     relief: PlanEnvelope[ReliefPlan]
     river_relief: PlanEnvelope[RiverReliefPlan]
-    hydrology: PlanEnvelope[HydrologyPlan]
+    hydrology: PlanEnvelope[H]
     climate_local: PlanEnvelope[ClimateLocalPlan]
 
     def require_coherent(self, request: PlanRequest[SurfaceSupportInput]) -> None:
@@ -94,18 +94,18 @@ def shore_cells(hydrology: HydrologyPlan, span: int) -> dict[FineXY, MapCellHydr
     return result
 
 
-class SurfaceCoatingSupportProvider:
+class SurfaceCoatingSupportProvider[H: HydrologyPlan]:
     def __init__(self, climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
                  terrain_base: RegisteredPlanContract[TerrainBaseInput, TerrainPlan],
                  relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
                  river_relief: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan],
-                 hydrology: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan],
+                 hydrology: RegisteredPlanContract[HydrologyFinalInput, H],
                  climate_local: RegisteredPlanContract[ClimateLocalInput, ClimateLocalPlan]):
         self._climate_base, self._terrain_base, self._relief = climate_base, terrain_base, relief
         self._river_relief, self._hydrology, self._climate_local = river_relief, hydrology, climate_local
 
     @staticmethod
-    def facts(request: PlanRequest[SurfaceSupportInput], dependencies: SurfaceSupportDependencies, *,
+    def facts[W: HydrologyPlan](request: PlanRequest[SurfaceSupportInput], dependencies: SurfaceSupportDependencies[W], *,
               cells: RegionCoverage) -> tuple[SurfaceCoatingFacts, ...]:
         dependencies.require_coherent(request)
         inputs = request.inputs
@@ -183,9 +183,9 @@ class SurfaceCoatingSupportProvider:
         return PlanBuildResult[SurfaceSupportPlan](payload=SurfaceSupportPlan(facts=facts), diagnostics=())
 
 
-class CoatingPlanProvider:
+class CoatingPlanProvider[H: HydrologyPlan]:
     def __init__(self, support: RegisteredPlanContract[SurfaceSupportInput, SurfaceSupportPlan],
-                 hydrology: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan], *, fine_span: int):
+                 hydrology: RegisteredPlanContract[HydrologyFinalInput, H], *, fine_span: int):
         if fine_span <= 0:
             raise ValueError("coating requires positive fine span")
         self._support, self._hydrology, self._span = support, hydrology, fine_span

@@ -31,7 +31,7 @@ from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.identity.planKey import PlanScope
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
-from app.dataModel.surfacePlanning.surfacePlanBindings import surface_plan_binding
+from app.dataModel.surfacePlanning.surfacePlanBindings import SurfacePlanBinding, surface_plan_binding
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.application.worldData.planning.encoding.surfaceEnvelopeCodec import SurfaceEnvelopeCodec
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
@@ -43,7 +43,12 @@ from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverRe
 
 
 def _binding[I, T](slot: SurfacePlanSlot, input_type: type[I], payload_type: type[T]) -> RegisteredPlanContract[I, T]:
-    declaration = surface_plan_binding(slot)
+    return declared_binding(surface_plan_binding(slot), input_type, payload_type)
+
+
+def declared_binding[I, T](declaration: SurfacePlanBinding, input_type: type[I],
+                           payload_type: type[T]) -> RegisteredPlanContract[I, T]:
+    """Bind an explicit domain declaration; no dependency-family inference."""
     metadata = declaration.metadata
     adapter = TypeAdapter[I](input_type)
 

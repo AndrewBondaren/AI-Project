@@ -742,3 +742,27 @@ def invalid_coating(request: PlanRequest[SurfaceSupportInput], dependencies: Sur
     SurfaceCoatingSupportProvider.facts(request, dependencies, cells=())  # EXPECT: reportArgumentType
     CoatingPlanProvider.plan(inputs, support, dependencies.relief.payload, fine_span=2)  # EXPECT: reportArgumentType
     support.facts[0].face = "north"  # EXPECT: reportAttributeAccessIssue
+
+
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyPlan
+
+
+def invalid_geo_climate_handle(provider: ClimateLocalPlanProvider[GeoHydrologyPlan]) -> ClimateLocalPlanProvider[HydrologyPlan]:
+    return provider  # EXPECT: reportReturnType
+
+
+def invalid_geo_support_handle(provider: SurfaceCoatingSupportProvider[GeoHydrologyPlan]) -> SurfaceCoatingSupportProvider[HydrologyPlan]:
+    return provider  # EXPECT: reportReturnType
+
+
+def invalid_geo_coating_handle(provider: CoatingPlanProvider[GeoHydrologyPlan]) -> CoatingPlanProvider[HydrologyPlan]:
+    return provider  # EXPECT: reportReturnType
+
+
+def invalid_geo_support_dependencies(deps: SurfaceSupportDependencies[GeoHydrologyPlan]) -> SurfaceSupportDependencies[HydrologyPlan]:
+    return deps  # EXPECT: reportReturnType
+
+
+def invalid_geo_fields_in_common_kernel(hydrology: HydrologyPlan) -> None:
+    hydrology.source_mapping  # EXPECT: reportAttributeAccessIssue
+    hydrology.classification_decisions  # EXPECT: reportAttributeAccessIssue

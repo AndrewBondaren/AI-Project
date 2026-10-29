@@ -299,3 +299,23 @@ def valid_coating(request: PlanRequest[SurfaceSupportInput], dependencies: Surfa
                   hydrology: HydrologyPlan) -> None:
     assert_type(SurfaceCoatingSupportProvider.facts(request, dependencies, cells=cells), tuple[SurfaceCoatingFacts, ...])
     assert_type(CoatingPlanProvider.plan(inputs, support, hydrology, fine_span=2), PlanBuildResult[CoatingPlan])
+
+
+from app.application.planning.providers.planProvider import RegisteredPlanContract
+from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateLocalPlanProvider
+from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
+from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyPlan
+from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+
+
+def valid_geo_consumer_bindings(base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
+                               final: RegisteredPlanContract[HydrologyFinalInput, GeoHydrologyPlan],
+                               support: RegisteredPlanContract[SurfaceSupportInput, SurfaceSupportPlan],
+                               deps: SurfaceSupportDependencies[GeoHydrologyPlan],
+                               request: PlanRequest[SurfaceSupportInput], cells: RegionCoverage) -> None:
+    assert_type(ClimateLocalPlanProvider(base, final), ClimateLocalPlanProvider[GeoHydrologyPlan])
+    assert_type(CoatingPlanProvider(support, final, fine_span=2), CoatingPlanProvider[GeoHydrologyPlan])
+    assert_type(deps.hydrology, PlanEnvelope[GeoHydrologyPlan])
+    assert_type(SurfaceCoatingSupportProvider.facts(request, deps, cells=cells), tuple[SurfaceCoatingFacts, ...])
