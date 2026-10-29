@@ -1,4 +1,4 @@
-"""Canonical plate parameters; effective tiny-world count is computed by the producer."""
+"""Canonical count/world-fine blend length; the producer derives tiny-world count."""
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 

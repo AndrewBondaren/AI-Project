@@ -12,6 +12,8 @@ from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import 
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.validation.immutableValue import validate_immutable
 
 
 class FieldChannel(StrEnum):
@@ -63,11 +65,13 @@ class ContinentalField(BaseModel, frozen=True):
 
     recipe: WaterFieldRecipe
     samples: tuple[tuple[SurfaceGridCoord, ContinentalFieldValue], ...]
+    notices: tuple[FieldPathError, ...] = ()
 
     @model_validator(mode="after")
     def ordered_unique_samples(self) -> Self:
         keys = tuple((coord.gy, coord.gx) for coord, _ in self.samples)
         if len(set(keys)) != len(keys) or keys != tuple(sorted(keys)):
             raise ValueError("field samples require unique coordinates in row-major order")
+        validate_immutable(self)
         # Canonical coarse membership requires the input boundary's grid scale.
         return self

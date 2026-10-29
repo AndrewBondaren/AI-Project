@@ -86,4 +86,4 @@ class FieldContractTests(TestCase):
     def test_boundary_preserves_scores_without_selecting_water_or_floor(self):
         field = ContinentalField(recipe=noise_recipe(), samples=((SurfaceGridCoord(GridX(0), GridY(0)), 0.25),))
         self.assertEqual(field.samples[0][1], 0.25)
-        self.assertEqual(set(type(field).model_fields), {"recipe", "samples"})
+        self.assertEqual(set(type(field).model_fields), {"recipe", "samples", "notices"})

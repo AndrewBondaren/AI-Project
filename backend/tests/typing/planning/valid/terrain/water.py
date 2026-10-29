@@ -195,3 +195,22 @@ def valid_continental_noise(input: NoiseWaterDesignInput) -> None:
     assert_type(NoiseFieldGenerator().build(input), ContinentalField)
     assert_type(NoiseFieldGenerator().sample(input.field_policy,x=0.5,y=1.5), float)
     assert_type(ContinentalNoiseStrategy().design(input), ProceduralWaterDesignDraft)
+
+
+from app.application.worldData.generators.terrain.designedWater.fields.plateFieldGenerator import PlateFieldGenerator
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.plateStrategy import PlateStrategy
+from app.dataModel.terrain.designedWater.fields.plateLayout import PlateLayout, PlateCenter
+from app.dataModel.spatial.grid.coordinateTypes import FineXY
+
+
+def valid_plate_field(input: PlateWaterDesignInput) -> None:
+    implementation: DesignedWaterStrategy = PlateStrategy()
+    assert_type(implementation, PlateStrategy)
+    layout = PlateFieldGenerator().layout(input.field_policy)
+    assert_type(layout, PlateLayout)
+    assert_type(layout.centers[0], PlateCenter)
+    assert_type(layout.centers[0].cell, FineXY)
+    assert_type(layout.effective_count, int)
+    assert_type(PlateFieldGenerator().sample(layout, x=0.5, y=1.5), float)
+    assert_type(PlateFieldGenerator().build(input), ContinentalField)
+    assert_type(PlateStrategy().design(input), ProceduralWaterDesignDraft)

@@ -10485,7 +10485,65 @@ ContinentalNoiseStrategy.design → field draft; candidates строит G4-C.
 Проверка: 0/0.60/1, overrides, seam/pole continuity, permutation replay,
 отсутствие post-carve input. Done: стратегия проверена независимо от plate.
 
+### G7 — implementation contract (DONE 2026-10-29)
+Продолжение по «Далее», норматив §6.29-F. Plate producer не создаёт mountains,
+не выбирает quota/threshold и не пишет Z. Geometry helper не дублируется.
+Точная карта owners перед кодом:
+- dataModel/terrain/designedWater/fields/plateLayout.py: PlateCenter(index,
+  cell:FineXY,buoyancy:ContinentalFieldValue) и PlateLayout(recipe:PlateRecipe,
+  multiplier,offset,centers tuple,notices:tuple[FieldPathError,...]). Frozen strict.
+  effective_count — readonly len(centers); requested count остаётся в recipe.
+  Проверить gcd/range affine coefficients, centers row-major-index formula,
+  indices0..k-1, k=min(requested,N), canonical unique positions, immutable data.
+- existing fields/field.py: ContinentalField.notices tuple default empty — computed
+  normal notices, не settings/fallback. validate_immutable output. Existing
+  strategyKind.py: PLATE_COUNT_ADJUSTED code. Producer уже классифицирует
+  adjustment как notice полем notices; downstream не угадывает severity по code.
+- application/.../designedWater/fields/plateFieldGenerator.py: PlateFieldGenerator
+  layout(recipe:PlateRecipe)->PlateLayout, build(input:PlateWaterDesignInput)
+  ->ContinentalField, sample(layout:PlateLayout,*,x:float,y:float)->ContinentalFieldValue.
+  layout один раз на build; sample reusable для fine floor/composition G9/G7-C.
+  N=fine width*height, k=min(requested,N). N1: a1,b0; иначе seeded start
+  a in1..N-1, cyclic scan до gcd(a,N)=1; b=floor(u*N).
+  named RNG keys channel=PLATE_CENTER, coefficient=AffinePermutationCoefficient,
+  cell_count=N; buoyancy channel=PLATE_BUOYANCY, plate_index=i. Floor u*n
+  считается exact integer-ratio арифметикой, без float rounding до N.
+  cell_i=row-major((a*i+b)%N) по canonical fine extent, O(k) без range(N).
+  p — real fine position, common topologyGeometry.dist2 получает p-(.5,.5)
+  и integer center cell, т.к. его frame — cell-center indices. Существующий
+  folded/wrapped distance owner сохраняется; own metrics/polar guesses нет.
+  L=max(1,min(fine W,H)*blend_length_fraction). Weight_i=exp(-(d2_i-min_d2)/L²),
+  divided sequentially by L twice без L² overflow; nearest has weight1.
+  fsum in plate-index order, no underflow/nearest/random fallback. Finite/range
+  validation, unrepresentable arithmetic → existing typed PlanBuildFailure.
+- application/.../strategies/procedural/plateStrategy.py: PlateStrategy.design(
+  WaterStrategyInput)->ProceduralWaterDesignDraft, требует Plate input; field
+  producer + FieldFloorProfile level/depth/z_min от ready input, scalar bound
+  max(z_min,level-depth). No noise imports/defaults/mountain construction.
+- existing preparation/placementPreparation.py: сохраняет field.notices вместе
+  с constraints/cap/shortfall notices; selection algorithm не меняется.
+- tests/geo1/plate/{__init__,fixtures,test_field,test_strategy,test_replay}.py;
+  existing typing planning valid/terrain/water.py и invalid.py; existing
+  geometry/test_fields.py фиксирует новый computed notices field.
+Composition: dataModel fields2→3, application fields2→3, procedural strategies2→3,
+new tests plate5, existing roots без additions. PlateGenerationPolicy defaults
+не меняются; docstring clarifies world-fine length/owning defaults.
+Проверки: exact permutation/coprime scan, N1/non-coprime N/full uniqueness,
+large N only k centers, prefix stability by requested count, analytical Gaussian
+blend/ties, fine/coarse identical sampler, negative/tiny/zero/full quota,
+wrapped/sphere fold aliases/continuity, recipe/seed replay across hash seeds,
+notice provenance through common prep, floor bounds, real coastline constraints,
+no noise/policy/budget/selection/Z operations in strategy. Production factory G8/G10-A.
+
 ### G7 — plate strategy
+Статус: DONE 2026-10-29. Seeded affine layout + shared topology blend +
+PlateStrategy/floor profile; computed tiny-world notices сохранены до preparer.
+Проверено: GEO-1 446/446 (+19), adapter/factory/wire47/47, positive Pyright0,
+negative190/190 (+7), warnings-as-errors; replay PYTHONHASHSEED=0/1/42.
+Large N without fine enumeration, permutation uniqueness/prefix, Gaussian/ties,
+fold aliases, quota0/.60/1, no-noise/no-policy/no-writes покрыты.
+Production factory composition/cutover остаётся G8/G10-A.
+
 Цель: реализовать plate producer через тот же интерфейс.
 ТЗ: GEO-1 (plate algorithm и отношение к mountain contracts из G0).
 Файлы: terrain/designedWater/strategies/procedural/plateStrategy.py,

@@ -660,3 +660,18 @@ def invalid_continental_noise(noise: NoiseWaterDesignInput, plate: PlateWaterDes
     wrong_z: GridX = noise.z_min  # EXPECT: reportAssignmentType
     noise.z_min = FineZ(-10)  # EXPECT: reportAttributeAccessIssue
     NoiseFieldGenerator().build(noise).budget  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.generators.terrain.designedWater.fields.plateFieldGenerator import PlateFieldGenerator
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.plateStrategy import PlateStrategy
+from app.dataModel.terrain.designedWater.fields.plateLayout import PlateLayout
+
+
+def invalid_plate_field(noise: NoiseWaterDesignInput, plate: PlateWaterDesignInput, layout: PlateLayout) -> None:
+    PlateFieldGenerator().build(noise)  # EXPECT: reportArgumentType
+    PlateFieldGenerator().sample(plate.field_policy,x=0.5,y=0.5)  # EXPECT: reportArgumentType
+    PlateStrategy().design({})  # EXPECT: reportArgumentType
+    layout.effective_count = 1  # EXPECT: reportAttributeAccessIssue
+    layout.centers[0].buoyancy = 0.0  # EXPECT: reportAttributeAccessIssue
+    wrong_recipe: NoiseRecipe = layout.recipe  # EXPECT: reportAssignmentType
+    PlateFieldGenerator().build(plate).original_area  # EXPECT: reportAttributeAccessIssue

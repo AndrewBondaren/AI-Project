@@ -52,6 +52,7 @@ class DesignedWaterPlacementPreparer:
             if isinstance(input, AuthoredWaterDesignInput):
                 notices = input.geometry.notices
         else:
+            notices = draft.field.notices
             coordinates = tuple(c for c, _ in draft.field.samples)
             areas = RegionCoverageMeasure.coarse_cell_areas(input.region_coverage, coordinates, input.grid)
             full_area = input.grid.fine_span ** 2
@@ -80,7 +81,7 @@ class DesignedWaterPlacementPreparer:
                     best, selected_area, error = count, cumulative, difference
             cells: frozenset[Coord] = required | frozenset((coord.gx, coord.gy) for coord, _, _ in ranked[:best])
             if constraints is not None:
-                notices = constraints.notices
+                notices += constraints.notices
             capacity = (len(ranked) + len(required)) * full_area
             space = CoordinateSpace.WORLD_SURFACE_GRID
             if not cells:

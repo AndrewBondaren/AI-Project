@@ -160,6 +160,17 @@ field draft и FieldFloorProfile с metadata level/depth и captured z_min,
 floor_z=max(z_min,level-depth). Shared preparer один раз выбирает footprint;
 ни field producer, ни strategy не пишут terrain и не исполняют policy.
 
+G7 plate field: centers — first min(plate_count,N) indices of seeded affine
+permutation of canonical fine cells, no enumeration of world fine grid.
+PlateLayout preserves requested recipe/effective count/coefficient provenance;
+tiny-world adjustment is a normal computed notice. Buoyancy is independently
+seeded by plate index. Sampling uses existing topologyGeometry.dist2 in its
+cell-index frame (real fine center minus .5), normalized Gaussian weights with
+minimum-distance subtraction; nearest weight=1, no fallback. Same layout/sampler
+for planning and fine floor evaluation. PlateStrategy returns field and typed
+floor profile only. Field notices survive common preparation with geometry/cap/
+shortfall notices. Noise, mountains, budget, threshold and Z writers stay outside.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.
