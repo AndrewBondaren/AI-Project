@@ -79,6 +79,8 @@
     "../../../app/dataModel/terrain/planning",
     "../../../app/dataModel/terrain/relief/bathymetry",
     "../../../app/dataModel/terrain/relief/surfaceCoating",
+    "../../../app/application/worldData/generators/terrain/relief/surfaceCoating",
+    "../../../app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py",
     "../../../app/application/worldData/planning/composition/support",
     "../../../app/dataModel/terrain/relief/reliefTemplate.py",
     "../../../app/dataModel/terrain/relief/reliefRoleCase.py",

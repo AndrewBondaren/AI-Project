@@ -4,6 +4,10 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictFloat, StrictInt, model_validator
 
 from app.dataModel.identity.uid import EntityUid
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
+from app.dataModel.policy.policyFacts import FactValue
+from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import ShoreCoatingTarget
+from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
 from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
@@ -102,4 +106,17 @@ class SurfaceSupportInput(_SupportRecord, frozen=True):
             raise ValueError("support source identities must be unique and sorted")
         if {context for context, _ in self.relief_policies} != set(ReliefContext):
             raise ValueError("support input requires each explicit relief context policy")
+        return self
+
+
+class CoatingPlanInput(_SupportRecord, frozen=True):
+    resolution_mode: ResolutionMode
+    default_target: FactValue[ShoreCoatingTarget]
+    targets: tuple[tuple[HydrologyShoreKind, FactValue[ShoreCoatingTarget]], ...]
+
+    @model_validator(mode="after")
+    def canonical_targets(self) -> Self:
+        keys = tuple(kind for kind, _ in self.targets)
+        if keys != tuple(sorted(set(keys))):
+            raise ValueError("coating targets require unique sorted shore kinds")
         return self

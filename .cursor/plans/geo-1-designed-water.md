@@ -10865,6 +10865,28 @@ wiring/codec119 passed, SQLite membership/canonical12 passed; pyright0,
 negative209/209, diff clean. Test fixture import path fixed without runtime FS
 fallback. New support binding/provider/policy activates in G9-S/G10-A as specified.
 
+### G9-S execution contract (2026-10-29)
+User authorized isolated implementation; activation remains atomic G10-A.
+Owners/paths: dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py
+owns immutable facts, surface/support/coating outputs and resolved target;
+surfaceCoatingPolicyDefinition.py owns enums, ValuePolicy/case declarations
+and metadata. Existing surfaceSupportInput.py adds mode/target input.
+application/worldData/generators/terrain/relief/surfaceCoatingSupport.py
+owns typed dependency binding, read-only facts and coating plan providers;
+relief/surfaceCoating/{geometry,sources}.py own pure captured-source sampling,
+using existing mountain side/region raster/precedence/scorer routines.
+No live World, mill, library, pack, SQL or persisted L2 reads.
+Dependencies use existing final HydrologyPlan and separate RiverReliefPlan;
+GEO binding/schema activation and Geo transport are G10-A.
+surfaceManifest appends IDs for the full isolated output closure; old IDs
+and active versions stay unchanged. New tests/geo1/coating/ has at most
+5 files; positive/negative planning typing gains this I/T pair.
+Counts: dataModel surfaceCoating 2→4; application relief 1→2 with new
+surfaceCoating leaf 3; tests coating 5. Checks: GEO-1, policy/compiler,
+source/codec replay, planning positive+negative typing, diff check.
+Unknown remains a typed issue in validation and runtime fallback; runtime
+reporting is exposed by the same read-only validation helper for G10-A.
+
 ### G9-S — terrain-owned допустимость берегового покрытия
 Цель: исключить terrain/material покрытия на отвесной породе, сохранив SHORE.
 ТЗ: GEO-1 G0; tz_terrain_hydrology §Derived shore;

@@ -188,6 +188,17 @@ from app.dataModel.terrainMasks.regions.specs import FarmlandSpec as _MFarmlandS
 from app.dataModel.terrainMasks.regions.specs import ForestSpec as _MForestSpec
 from app.dataModel.terrainMasks.regions.specs import PlainSpec as _MPlainSpec
 from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy as _MParentLightRefinePolicy
+from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import (
+    SurfaceAspect as _MSurfaceAspect, SurfaceCoatingAction as _MSurfaceCoatingAction,
+    SurfaceCoatingReason as _MSurfaceCoatingReason, SurfaceCoatingFacts as _MSurfaceCoatingFacts,
+    SurfaceSupportPlan as _MSurfaceSupportPlan, ShoreCoatingTarget as _MShoreCoatingTarget,
+    CoatingCellPlan as _MCoatingCellPlan, CoatingPlan as _MCoatingPlan,
+)
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import CoatingPlanInput as _MCoatingPlanInput
+from app.dataModel.policy.policyFacts import KnownFact as _MKnownFact, UnknownFact as _MUnknownFact, WaitingFact as _MWaitingFact
+from app.dataModel.policy.policyDecision import ValueSelectionDecision as _MValueSelectionDecision, PolicyReason as _MPolicyReason, PolicyProvenance as _MPolicyProvenance
+from app.dataModel.policy.policyEnums import FactState as _MFactState, PolicyOperation as _MPolicyOperation, PolicyState as _MPolicyState, PolicyDisableReason as _MPolicyDisableReason, PolicyOrigin as _MPolicyOrigin
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey as _MMaterialKey
 
 # Stable TLV v1 type IDs. Append entries; never infer IDs from runtime discovery.
 SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
@@ -391,6 +402,32 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (196, _MForestSpec, CanonicalTypeKind.RECORD),
     (197, _MPlainSpec, CanonicalTypeKind.RECORD),
     (198, _MParentLightRefinePolicy, CanonicalTypeKind.RECORD),
+    (199, _MSurfaceAspect, CanonicalTypeKind.ENUM),
+    (200, _MSurfaceCoatingAction, CanonicalTypeKind.ENUM),
+    (201, _MSurfaceCoatingReason, CanonicalTypeKind.ENUM),
+    (202, _MSurfaceCoatingFacts, CanonicalTypeKind.RECORD),
+    (203, _MSurfaceSupportPlan, CanonicalTypeKind.RECORD),
+    (204, _MShoreCoatingTarget, CanonicalTypeKind.RECORD),
+    (205, _MCoatingCellPlan, CanonicalTypeKind.RECORD),
+    (206, _MCoatingPlan, CanonicalTypeKind.RECORD),
+    (207, _MCoatingPlanInput, CanonicalTypeKind.RECORD),
+    (208, _MKnownFact[_MSurfaceAspect], CanonicalTypeKind.RECORD),
+    (209, _MKnownFact[_MReliefSideKind], CanonicalTypeKind.RECORD),
+    (210, _MKnownFact[_MMaterialKey], CanonicalTypeKind.RECORD),
+    (211, _MKnownFact[_MMaterialSubstrateKind], CanonicalTypeKind.RECORD),
+    (212, _MKnownFact[_MShoreCoatingTarget], CanonicalTypeKind.RECORD),
+    (213, _MUnknownFact, CanonicalTypeKind.RECORD),
+    (214, _MWaitingFact, CanonicalTypeKind.RECORD),
+    (215, _MFactState, CanonicalTypeKind.ENUM),
+    (216, _MValueSelectionDecision[_MSurfaceCoatingAction, _MSurfaceCoatingReason], CanonicalTypeKind.RECORD),
+    (217, _MPolicyReason[_MSurfaceCoatingReason], CanonicalTypeKind.RECORD),
+    (218, _MPolicyProvenance, CanonicalTypeKind.RECORD),
+    (219, _MPolicyOperation, CanonicalTypeKind.ENUM),
+    (220, _MPolicyState, CanonicalTypeKind.ENUM),
+    (221, _MPolicyDisableReason, CanonicalTypeKind.ENUM),
+    (222, _MPolicyOrigin, CanonicalTypeKind.ENUM),
+    (223, _MPlanEnvelope[_MSurfaceSupportPlan], CanonicalTypeKind.RECORD),
+    (224, _MPlanEnvelope[_MCoatingPlan], CanonicalTypeKind.RECORD),
 
 )))
 
