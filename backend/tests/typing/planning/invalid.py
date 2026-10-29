@@ -717,3 +717,14 @@ def invalid_basin_floor(input: NoiseWaterDesignInput, profile: FieldFloorProfile
     BasinFloorEvaluator(profile, topology=input.topology, coordinate_space="world_surface_grid", grid=input.grid)  # EXPECT: reportArgumentType
     BasinFloorEvaluator(profile, topology=input.topology, coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, grid={})  # EXPECT: reportArgumentType
     BasinFloorEvaluator(profile, topology=input.topology, coordinate_space=CoordinateSpace.WORLD_FINE_GRID, grid=None).sample((0.5, 1))  # EXPECT: reportArgumentType
+
+
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput, MaterialSupportEntry
+from app.dataModel.materials.enums.materialCategory import MaterialCategory
+
+
+def invalid_support_sources(value: SurfaceSupportInput) -> None:
+    MaterialSupportEntry(key=value.materials[0].key, category=MaterialCategory.SOLID, substrate="rock")  # EXPECT: reportArgumentType
+    value.templates[0][1].conditions.append(None)  # EXPECT: reportAttributeAccessIssue
+    value.templates[0][1].structure_refs.append("ref")  # EXPECT: reportAttributeAccessIssue
+    value.materials = ()  # EXPECT: reportAttributeAccessIssue

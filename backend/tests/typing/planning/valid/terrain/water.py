@@ -269,3 +269,17 @@ def valid_basin_floor(input: NoiseWaterDesignInput, spec: BasinSpec, heightmap: 
             coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, grid=input.grid)
         assert_type(evaluator.sample((0, 0)), FineZ)
     assert_type(apply_basin_z(heightmap, (spec,), input.topology, reserved=frozenset(), grid=input.grid), int)
+
+
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput, MaterialSupportEntry
+from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition
+
+
+def valid_support_sources(value: SurfaceSupportInput, material: MaterialSupportEntry) -> None:
+    assert_type(material.substrate, MaterialSubstrateKind | None)
+    assert_type(value.templates, tuple[tuple[EntityUid, ReliefTemplate], ...])
+    assert_type(value.templates[0][1].conditions, tuple[ReliefTerrainCondition, ...])
+    assert_type(value.templates[0][1].structure_refs, tuple[str, ...])
+    assert_type(value.terrain_entries[0].hills_authored, bool)

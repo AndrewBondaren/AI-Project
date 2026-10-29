@@ -26,6 +26,7 @@ from app.ids import LibraryKind, runtime_uid
 R = LibraryKind.RELIEF_TEMPLATES
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RELIEF_ROOT = REPO_ROOT / "relief_templates"
+RELIEF_SOURCE_ROOT = REPO_ROOT / "backend" / "relief_templates"
 
 
 class ReliefCanonicalTests(_ServiceCase):
@@ -52,7 +53,7 @@ class ReliefCanonicalTests(_ServiceCase):
         self.assertEqual(await self.relief_rows.list_all(), [])
 
     async def test_partial_sql_and_override_survive_repeated_concurrent_reads(self):
-        imported = await self.service.import_fs_pack(R, RELIEF_ROOT / "smoke_003", domain_root=RELIEF_ROOT)
+        imported = await self.service.import_fs_pack(R, RELIEF_SOURCE_ROOT / "smoke_003", domain_root=RELIEF_SOURCE_ROOT)
         row = imported.bodies[0]
         changed = replace(row, display_name="User override", source_file="user/edited.json",
                           data={**row.data, "display_name": "User override"})
@@ -74,7 +75,7 @@ class ReliefCanonicalTests(_ServiceCase):
                 with self.subTest(cwd=cwd), chdir(cwd):
                     self.assertEqual(resolve_relief_domain_root(), RELIEF_ROOT)
         root = Path(self.tmp.name) / "external_relief"
-        shutil.copytree(RELIEF_ROOT / "smoke_003", root / "smoke_003")
+        shutil.copytree(RELIEF_SOURCE_ROOT / "smoke_003", root / "smoke_003")
         library = self.container.relief_template_library_service()
         with patch.dict(os.environ, {"RELIEF_TEMPLATES_ROOT": str(root)}), chdir(REPO_ROOT / "backend"):
             self.assertEqual(resolve_relief_domain_root(), root.resolve())
@@ -84,7 +85,7 @@ class ReliefCanonicalTests(_ServiceCase):
 
     async def test_user_pack_resolves_only_after_instantiation_in_each_world(self):
         a, b = await self._world("a"), await self._world("b")
-        imported = await self.service.import_fs_pack(R, RELIEF_ROOT / "smoke_003", domain_root=RELIEF_ROOT)
+        imported = await self.service.import_fs_pack(R, RELIEF_SOURCE_ROOT / "smoke_003", domain_root=RELIEF_SOURCE_ROOT)
         loader = self.container.template_snapshot_loader()
         self.assertEqual(await load_relief_templates_for_world(loader, a), {})
         self.assertEqual(await load_relief_templates_for_world(loader, b), {})

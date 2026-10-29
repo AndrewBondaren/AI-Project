@@ -24,12 +24,12 @@ from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCon
 class ReliefTemplate(BaseModel):
     """Global library blob / pack JSON body (not stored inline on world)."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, revalidate_instances="always")
 
     system_name: StrictOnWire[str]
     display_name: StrictOnWire[str]
     context: StrictEnumOnWire[ReliefContext]
-    conditions: DefaultWhenMissing[list[ReliefTerrainCondition]] = Field(default_factory=list)
+    conditions: DefaultWhenMissing[tuple[ReliefTerrainCondition, ...]] = Field(default_factory=tuple)
     side_recipe: DefaultWhenMissing[MountainSideRecipe | None] = None
     # root defaults when conditions empty / case does not override (R36b Geom XOR)
     slope_length_cells: DefaultWhenMissing[int | None] = None
@@ -38,7 +38,7 @@ class ReliefTemplate(BaseModel):
     sheer_weight: DefaultWhenMissing[float | None] = None
     earthen_canal: DefaultWhenMissing[bool | None] = None
     structure_canal: DefaultWhenMissing[str | None] = None
-    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    structure_refs: DefaultWhenMissing[tuple[str, ...]] = Field(default_factory=tuple)
     version: DefaultWhenMissing[str] = "1.0"
 
     @model_validator(mode="before")

@@ -14,7 +14,7 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import require_weights_pair
 class MountainSideRecipe(BaseModel):
     """XOR: weights | pattern | fixed kind; all empty → Mode D (seeded random)."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, revalidate_instances="always")
 
     # Mode D (empty recipe) seeded weights — SoT for materialize (RELIEF-T-8)
     EMPTY_SLOPE_WEIGHT: ClassVar[float] = 0.5

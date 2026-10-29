@@ -27,7 +27,7 @@ UNBOUNDED_DELTA_Z_MAX = 10**9
 class ReliefRoleCase(BaseModel):
     """Exactly one of Mode A (delta_z + knobs) or Mode B (bands); not both."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, revalidate_instances="always")
 
     policy: StrictEnumOnWire[ReliefSlopePolicy]
     # Mode A threshold + flat knobs (wire); knobs SoT = ``mode_a_grade_knobs()``
@@ -38,9 +38,9 @@ class ReliefRoleCase(BaseModel):
     target_angle_deg: DefaultWhenMissing[float | None] = None
     earthen_canal: DefaultWhenMissing[bool | None] = None
     structure_canal: DefaultWhenMissing[str | None] = None
-    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    structure_refs: DefaultWhenMissing[tuple[str, ...]] = Field(default_factory=tuple)
     # Mode B
-    bands: DefaultWhenMissing[list[ReliefDeltaBand] | None] = None
+    bands: DefaultWhenMissing[tuple[ReliefDeltaBand, ...] | None] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -101,7 +101,7 @@ class ReliefRoleCase(BaseModel):
         return resolved_slope_length_cells(self.slope_length_cells)
 
 
-def _reject_band_overlap(bands: list[ReliefDeltaBand]) -> None:
+def _reject_band_overlap(bands: tuple[ReliefDeltaBand, ...]) -> None:
     """Inclusive intervals must not overlap (R32)."""
     ordered = sorted(
         bands,

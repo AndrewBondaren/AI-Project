@@ -12,6 +12,7 @@ from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire,
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind
 from app.dataModel.registryKey import RegistryKey
 
 if TYPE_CHECKING:
@@ -30,6 +31,8 @@ class MaterialRegistryEntry(BaseModel):
     display_name: StrictOnWire[str]
     glossary_ref: DefaultWhenMissing[str | None] = None
     material_category: StrictEnumOnWire[MaterialCategory]
+    # Classification is an authored material fact, never inferred by consumers.
+    substrate_kind: DefaultWhenMissing[StrictEnumOnWire[MaterialSubstrateKind] | None] = None
     tags: DefaultWhenMissing[list[str]] = Field(default_factory=list)
     use_type: DefaultWhenMissing[list[str]] = Field(default_factory=list)
     economic_tier: DefaultWhenMissing[EconomyTierKey | None] = None

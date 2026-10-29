@@ -167,6 +167,28 @@ from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import 
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy as _MPlateGenerationPolicy
 from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionPolicy as _MFieldCompositionPolicy, FieldCompositionOperator as _MFieldCompositionOperator
 
+from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind as _MMaterialSubstrateKind
+from app.dataModel.regions.regionState import RegionState as _MRegionState
+from app.dataModel.regions.regionState import RegionStateOverrides as _MRegionStateOverrides
+from app.dataModel.regions.regionState import RegionStateTransition as _MRegionStateTransition
+from app.dataModel.regions.regionState import RegionTransitionCause as _MRegionTransitionCause
+from app.dataModel.terrain.relief.enums import ReliefConditionTerrain as _MReliefConditionTerrain
+from app.dataModel.terrain.relief.enums import ReliefSlopePolicy as _MReliefSlopePolicy
+from app.dataModel.terrain.relief.reliefDeltaBand import ReliefDeltaBand as _MReliefDeltaBand
+from app.dataModel.terrain.relief.reliefRoleCase import ReliefRoleCase as _MReliefRoleCase
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate as _MReliefTemplate
+from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition as _MReliefTerrainCondition
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import LandcoverSupportPolicy as _MLandcoverSupportPolicy
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import MaterialSupportEntry as _MMaterialSupportEntry
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput as _MSurfaceSupportInput
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import TerrainSupportEntry as _MTerrainSupportEntry
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverClaimNoise as _MLandcoverClaimNoise
+from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverTerrainPolicy as _MLandcoverTerrainPolicy
+from app.dataModel.terrainMasks.regions.specs import FarmlandSpec as _MFarmlandSpec
+from app.dataModel.terrainMasks.regions.specs import ForestSpec as _MForestSpec
+from app.dataModel.terrainMasks.regions.specs import PlainSpec as _MPlainSpec
+from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy as _MParentLightRefinePolicy
+
 # Stable TLV v1 type IDs. Append entries; never infer IDs from runtime discovery.
 SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     RegisteredTypeEntry(type_id=identity, python_type=owner, kind=kind)
@@ -348,6 +370,28 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (175, _MPlateGenerationPolicy, CanonicalTypeKind.RECORD),
     (176, _MFieldCompositionPolicy, CanonicalTypeKind.RECORD),
     (177, _MFieldCompositionOperator, CanonicalTypeKind.ENUM),
+    (178, _MMaterialSubstrateKind, CanonicalTypeKind.ENUM),
+    (179, _MRegionState, CanonicalTypeKind.RECORD),
+    (180, _MRegionStateOverrides, CanonicalTypeKind.RECORD),
+    (181, _MRegionStateTransition, CanonicalTypeKind.RECORD),
+    (182, _MRegionTransitionCause, CanonicalTypeKind.ENUM),
+    (183, _MReliefConditionTerrain, CanonicalTypeKind.ENUM),
+    (184, _MReliefSlopePolicy, CanonicalTypeKind.ENUM),
+    (185, _MReliefDeltaBand, CanonicalTypeKind.RECORD),
+    (186, _MReliefRoleCase, CanonicalTypeKind.RECORD),
+    (187, _MReliefTemplate, CanonicalTypeKind.RECORD),
+    (188, _MReliefTerrainCondition, CanonicalTypeKind.RECORD),
+    (189, _MLandcoverSupportPolicy, CanonicalTypeKind.RECORD),
+    (190, _MMaterialSupportEntry, CanonicalTypeKind.RECORD),
+    (191, _MSurfaceSupportInput, CanonicalTypeKind.RECORD),
+    (192, _MTerrainSupportEntry, CanonicalTypeKind.RECORD),
+    (193, _MLandcoverClaimNoise, CanonicalTypeKind.RECORD),
+    (194, _MLandcoverTerrainPolicy, CanonicalTypeKind.RECORD),
+    (195, _MFarmlandSpec, CanonicalTypeKind.RECORD),
+    (196, _MForestSpec, CanonicalTypeKind.RECORD),
+    (197, _MPlainSpec, CanonicalTypeKind.RECORD),
+    (198, _MParentLightRefinePolicy, CanonicalTypeKind.RECORD),
+
 )))
 
 

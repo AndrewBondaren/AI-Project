@@ -11,6 +11,13 @@
 
 ## 2. Структура записи
 
+GEO-1 G9-ST: substrate_kind — nullable MaterialSubstrateKind (rock,
+loose_sediment, other). Missing/null означает неизвестное доказательство,
+а не other. Canonical stone=rock; earth/sand/dirt_road=loose_sediment;
+остальные canonical материалы явно other. Custom solid без этого поля
+остаётся unknown; category/tags/hardness и имя не заменяют этот факт.
+
+
 `transparent` — конечное число процентов в диапазоне `[0, 100]`, включая дробные
 значения. Missing → `0`; explicit null, bool, строки, NaN/Infinity и значения вне
 диапазона — unresolved по общей runtime/worldEdit политике, без clamp/default.

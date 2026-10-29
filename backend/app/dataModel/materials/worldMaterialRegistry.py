@@ -8,6 +8,7 @@ from pydantic import RootModel
 
 from app.dataModel.materials import materialRegistryEntry as _material_entry_mod
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind as Substrate
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.dataModel.registryEngine import engine_rows
 from app.dataModel.registryKey import RegistryKey
@@ -57,7 +58,7 @@ MaterialRegistryEntry.model_rebuild()
 # fixtures/world_template.json
 _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
-        system_material="earth",
+        system_material="earth", substrate_kind=Substrate.LOOSE_SEDIMENT,
         display_name="Земля",
         material_category=MaterialCategory.SOLID,
         tags=["raw"],
@@ -66,7 +67,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
         density=150,
     ),
     MaterialRegistryEntry(
-        system_material="stone",
+        system_material="stone", substrate_kind=Substrate.ROCK,
         display_name="Камень",
         material_category=MaterialCategory.SOLID,
         tags=["mineral"],
@@ -75,7 +76,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
         density=250,
     ),
     MaterialRegistryEntry(
-        system_material="wood",
+        system_material="wood", substrate_kind=Substrate.OTHER,
         display_name="Дерево",
         material_category=MaterialCategory.SOLID,
         tags=["organic"],
@@ -85,7 +86,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
         flammable=True,
     ),
     MaterialRegistryEntry(
-        system_material="water",
+        system_material="water", substrate_kind=Substrate.OTHER,
         display_name="Вода",
         material_category=MaterialCategory.LIQUID,
         density=100,
@@ -93,7 +94,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
         corrodible=False,
     ),
     MaterialRegistryEntry(
-        system_material="sand",
+        system_material="sand", substrate_kind=Substrate.LOOSE_SEDIMENT,
         display_name="Песок",
         material_category=MaterialCategory.SOLID,
         tags=["mineral"],
@@ -102,7 +103,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
         density=160,
     ),
     MaterialRegistryEntry(
-        system_material="ice",
+        system_material="ice", substrate_kind=Substrate.OTHER,
         display_name="Лёд",
         material_category=MaterialCategory.SOLID,
         hardness=1,
@@ -111,22 +112,22 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     # Terminal defaults for openings. No construction tag: selecting an
     # ordinary default must not introduce a random candidate draw.
     MaterialRegistryEntry(
-        system_material="window_glass", display_name="Оконное стекло",
+        system_material="window_glass", substrate_kind=Substrate.OTHER, display_name="Оконное стекло",
         material_category=MaterialCategory.SOLID, tags=["glass"],
         use_type=["window_glass"], transparent=100.0,
     ),
     MaterialRegistryEntry(
-        system_material="porthole_glass", display_name="Стекло иллюминатора",
+        system_material="porthole_glass", substrate_kind=Substrate.OTHER, display_name="Стекло иллюминатора",
         material_category=MaterialCategory.SOLID, tags=["glass"],
         use_type=["porthole_glass"], transparent=100.0,
     ),
     MaterialRegistryEntry(
-        system_material="vent_mesh", display_name="Вентиляционная сетка",
+        system_material="vent_mesh", substrate_kind=Substrate.OTHER, display_name="Вентиляционная сетка",
         material_category=MaterialCategory.SOLID, tags=["metal"],
         use_type=["vent_mesh"],
     ),
     MaterialRegistryEntry(
-        system_material="dirt_road", display_name="Грунтовое покрытие дороги",
+        system_material="dirt_road", substrate_kind=Substrate.LOOSE_SEDIMENT, display_name="Грунтовое покрытие дороги",
         material_category=MaterialCategory.SOLID, tags=["raw"], use_type=["road"],
     ),
 )
@@ -135,7 +136,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
 # Fixture-only sand/ice are dropped from the engine slice.
 _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
-        system_material="stone",
+        system_material="stone", substrate_kind=Substrate.ROCK,
         display_name="Камень",
         material_category=MaterialCategory.SOLID,
         tags=["construction", "mineral"],
@@ -147,7 +148,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         mineable=True,
     ),
     MaterialRegistryEntry(
-        system_material="wood",
+        system_material="wood", substrate_kind=Substrate.OTHER,
         display_name="Дерево",
         material_category=MaterialCategory.SOLID,
         tags=["construction", "organic"],
@@ -159,7 +160,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         flammable=True,
     ),
     MaterialRegistryEntry(
-        system_material="iron",
+        system_material="iron", substrate_kind=Substrate.OTHER,
         display_name="Железо",
         material_category=MaterialCategory.SOLID,
         tags=["metal", "mineral"],
@@ -171,7 +172,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         meltable=True,
     ),
     MaterialRegistryEntry(
-        system_material="earth",
+        system_material="earth", substrate_kind=Substrate.LOOSE_SEDIMENT,
         display_name="Земля",
         material_category=MaterialCategory.SOLID,
         tags=["raw", "mineral"],
@@ -183,7 +184,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         mineable=True,
     ),
     MaterialRegistryEntry(
-        system_material="crystal",
+        system_material="crystal", substrate_kind=Substrate.OTHER,
         display_name="Кристалл",
         material_category=MaterialCategory.SOLID,
         tags=["mineral", "magic"],
@@ -196,7 +197,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         transparent=100.0,
     ),
     MaterialRegistryEntry(
-        system_material="water",
+        system_material="water", substrate_kind=Substrate.OTHER,
         display_name="Вода",
         material_category=MaterialCategory.LIQUID,
         density=100,
@@ -204,7 +205,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         corrodible=False,
     ),
     MaterialRegistryEntry(
-        system_material="lava",
+        system_material="lava", substrate_kind=Substrate.OTHER,
         display_name="Лава",
         material_category=MaterialCategory.LIQUID,
         density=270,
@@ -212,14 +213,14 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         temp_damage=True,
     ),
     MaterialRegistryEntry(
-        system_material="air",
+        system_material="air", substrate_kind=Substrate.OTHER,
         display_name="Воздух",
         material_category=MaterialCategory.GAS,
         density=1,
         corrodible=False,
     ),
     MaterialRegistryEntry(
-        system_material="smoke",
+        system_material="smoke", substrate_kind=Substrate.OTHER,
         display_name="Дым",
         material_category=MaterialCategory.GAS,
         density=2,
@@ -227,7 +228,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         vision_block=True,
     ),
     MaterialRegistryEntry(
-        system_material="toxic_gas",
+        system_material="toxic_gas", substrate_kind=Substrate.OTHER,
         display_name="Токсичный газ",
         material_category=MaterialCategory.GAS,
         density=3,

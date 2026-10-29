@@ -19,10 +19,10 @@ _REQUIRED_POLICIES = frozenset({
 class ReliefTerrainCondition(BaseModel):
     """Exactly three cases (down/up/none); whole condition Mode A XOR Mode B."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, revalidate_instances="always")
 
     terrain: StrictEnumOnWire[ReliefConditionTerrain]
-    cases: StrictOnWire[list[ReliefRoleCase]] = Field(min_length=3, max_length=3)
+    cases: StrictOnWire[tuple[ReliefRoleCase, ...]] = Field(min_length=3, max_length=3)
 
     @model_validator(mode="after")
     def _policies_and_mode(self) -> ReliefTerrainCondition:

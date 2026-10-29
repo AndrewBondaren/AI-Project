@@ -4868,7 +4868,7 @@ GEO-1 extension view явно дополняет baseline source data полем
 `surface_support:SurfaceSupportInput`; baseline PC view этого поля не
 имеет и не приводится structural cast к GEO view. Definition в
 `dataModel/terrain/relief/surfaceCoating/surfaceSupportInput.py`:
-SurfaceSupportInput(seed:int,
+SurfaceSupportInput(seed:int,masks_enabled:bool,
 grid:SurfaceGridSettings,topology:WorldTopology,
 terrain_entries:tuple[TerrainSupportEntry,...],
 materials:tuple[MaterialSupportEntry,...],
@@ -4882,11 +4882,13 @@ MaterialSupportEntry: key:MaterialKey, category:MaterialCategory,
 substrate:MaterialSubstrateKind|None. TerrainSupportEntry: key:TerrainKey,
 category:RegistryKey[WorldTerrainCategoryRegistry],
 default_material:MaterialKey|None, merge_rank:int,
-eligibility:tuple[EligibilityRule,...], hills:HillPolicy|None.
+eligibility:tuple[EligibilityRule,...], hills:HillPolicy|None, hills_authored:bool.
 LandcoverSupportPolicy: enabled:bool, autoresolve:bool,
 transition_threshold:float, seed_spacing:int,max_radius:int,
 claim_noise:LandcoverClaimNoise,fallback_terrain:TerrainKey,
-terrain_policies:tuple[LandcoverTerrainPolicy,...]. Это projections
+terrain_policies:tuple[LandcoverTerrainPolicy,...],
+terrain_policy_hills_authored:tuple[TerrainKey,...]. Parent masks_enabled и
+authored-presence bits сохраняются явно, отдельно от child gates/values. Это projections
 existing terrain registry/landcover POJO, не второе persisted состояние.
 На snapshot capture источники — typed registry rows, WorldTerrainMasks,
 RegionState owner read view и membership-scoped TemplateSnapshotLoader.
@@ -10785,7 +10787,61 @@ Full consumer L0/L2 discovery was interrupted after prolonged execution without
 new output; not counted as passed. Fixed vectors refreshed with schema1 control
 and unchanged climate/terrain vectors. G8-B remains assigned to atomic G10-A.
 
-### G9-ST — immutable источники доказательств surface support
+### G9-ST execution contract (2026-10-29)
+No feature/coating activation; existing source closure is made immutable now.
+TZ: §6.29-H/M; tz_materials §2, tz_terrain_relief R26/R32/R33,
+tz_json_validation POJO/REF-W. Exact owner map before code:
+- existing materials/materialRegistryEntry.py adds nullable enum substrate_kind;
+  NEW materials/enums/materialSubstrateKind.py owns ROCK/LOOSE_SEDIMENT/OTHER.
+  existing worldMaterialRegistry.py canonical fixture+engine declarations carry
+  explicit classification from §6.29-H, custom rows remain None. No heuristics.
+- existing terrain/relief/{reliefTemplate,reliefTerrainCondition,reliefRoleCase,
+  reliefGradeKnobs}.py list fields become tuples, tuple defaults, overlap helper
+  accepts tuple; frozen model revalidation enabled for these source bodies and
+  existing MountainSideRecipe/ReliefDeltaBand (already immutable side pattern).
+  JSON arrays/None/empty distinction preserved; no change to Mode A/B or refs.
+- NEW dataModel/terrain/relief/surfaceCoating/{__init__,surfaceSupportInput}.py:
+  frozen strict SurfaceSupportInput, MaterialSupportEntry,TerrainSupportEntry,
+  LandcoverSupportPolicy as §6.29-H; immutable nested data, unique sorted keyed
+  collections, actual full templates+memberUID. No domain computation/IO.
+  Refinement: TerrainSupportEntry.hills_authored:bool and LandcoverSupportPolicy.
+  terrain_policy_hills_authored:tuple[TerrainKey,...] are required derived facts.
+  Existing has_authored_hills uses model_fields_set, which canonical encoding
+  does not include; these explicit bits preserve omitted versus explicit None
+  and prevent equal fingerprints for different domain behavior. SurfaceSupportInput
+  also captures required masks_enabled:bool (raw parent gate); it is not folded
+  into landcover.enabled in wiring. Global mask edits must change the input key.
+  Presence flags and this parent gate are not
+  persisted settings and do not apply policies inside wiring.
+- NEW application/worldData/planning/composition/support/{__init__,surfaceSupportCapture}.py:
+  SurfaceSupportCapture.capture(world_uid,*,seed,grid,topology,terrain:WorldTerrainRegistry,
+  materials:WorldMaterialRegistry,masks:WorldTerrainMasks,region_states:tuple[RegionState,...],
+  relief_policy:WorldReliefPickPolicy,templates:ReliefTemplateSnapshot,
+  refine_policy:ParentLightRefinePolicy)->SurfaceSupportInput. Caller-owned pure
+  projection, rejects foreign world membership, retains only supplied members,
+  checks terrain_policy dictionary key equals value.system_terrain; no loader,
+  apply_to, mill, world accessor, policy execution or generator calls.
+- existing planning/encoding/surfaceManifest.py appends stable IDs for the new
+  support source closure, full relief templates and immutable region/state models;
+  old IDs/active schema unchanged (new input binding activates in G10-A).
+- tests/geo1/support_sources/{__init__,fixtures,test_input,test_capture,test_relief}.py;
+  existing planning valid/terrain/water.py + invalid.py/config includes the new
+  application capture and contracts/changed source models.
+Composition: relief root23→23 WARN, new surfaceCoating2, composition root5→5,
+new support capture2, material enums2→3; new tests5, encoding3→3. Existing
+material root count checked before edits; no new file added there.
+Integration baseline repair: tests/test_relief_canonical.py imports smoke_003 from
+the obsolete repo-root relief_templates path although the checked-in user fixture
+is backend/relief_templates/smoke_003. Keep default-domain-root assertions; add a
+separate explicit fixture source root for import/copy only. No runtime FS fallback
+or default pack activation. This existing test file changes, no root file added.
+Windows sandbox asyncio socketpair blocks before setUp; embedded SQLite integration
+checks run outside sandbox (automatic review approved the test-only execution).
+Checks: GEO-1, targeted material/relief/ref validation and library snapshot tests,
+production codec closure/fingerprint edits, positive/negative planning typing,
+diff check. G9-S provider/policy and G10-A capture activation remain separate.
+
+### G9-ST — immutable источники доказательств surface support — DONE (2026-10-29)
 Цель: typed template/material/region source closure для facts provider.
 ТЗ: §6.29-H/M, tz_materials §2, tz_terrain_relief §R26/R32/R33,
 tz_json_validation §POJO/REF-W. Файлы: surfaceCoating/surfaceSupportInput.py;
@@ -10800,6 +10856,14 @@ materials/worldMaterialRegistry.py; caller membership-snapshot projection.
 нет REF-W regression после tuple conversion.
 Done: G9-S получает весь explicit SurfaceSupportInput; отсутствие
 material/recipe доказательства не подменяется consumer rock heuristic.
+
+G9-ST IMPLEMENTED/VERIFIED: immutable full source closure + caller membership
+projection; material-owned substrate enum/classification; tuple relief collections
+with unchanged JSON arrays/None/empty; explicit parent gate/authored-presence bits.
+GEO-1 505 passed (+18 support source checks), targeted material/relief/contracts/
+wiring/codec119 passed, SQLite membership/canonical12 passed; pyright0,
+negative209/209, diff clean. Test fixture import path fixed without runtime FS
+fallback. New support binding/provider/policy activates in G9-S/G10-A as specified.
 
 ### G9-S — terrain-owned допустимость берегового покрытия
 Цель: исключить terrain/material покрытия на отвесной породе, сохранив SHORE.

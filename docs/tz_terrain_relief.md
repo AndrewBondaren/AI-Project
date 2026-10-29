@@ -8,6 +8,20 @@ metadata:
 
 # Terrain relief grade — generate
 
+GEO-1 G9-ST source boundary: ReliefTemplate.conditions/structure_refs,
+ReliefTerrainCondition.cases, ReliefRoleCase.bands/structure_refs и
+ReliefGradeKnobs.structure_refs — immutable tuples; side_recipe.side_kinds
+также tuple. JSON wire остаётся arrays, None и empty различаются.
+SurfaceSupportInput содержит полный member UID/body из caller-loaded
+ReliefTemplateSnapshot и typed material/terrain/region/state/policy facts.
+SurfaceSupportInput.masks_enabled хранит parent terrain_masks.enabled отдельно
+от landcover.enabled; capture не объединяет эти gates.
+TerrainSupportEntry.hills_authored и landcover.terrain_policy_hills_authored
+явно сохраняют authored presence (в том числе hills=null), чтобы fingerprint
+не зависел от несерилизуемого model_fields_set. Capture не выполняет mill,
+policy или library IO; G9-S читает только согласованный frozen input.
+
+
 **Статус:** SoT **generate** (очереди, mill/pack, шаблоны/pick, canal/obstacle, SQL catalog). Writer sidecar (`pack_cell_slots` → `SCH-GRADE-CELL-SLOTS`) **есть**. Dump читает `slots[8]`. Persist occupancy-validator (`validate_grade_cell_slots`) — **только dev** (`DEBUG_GRADE_SLOT_VALIDATE=1`); product bake не обходит. Не закрыт **набор клеток** обхода на тайле ([`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T-25**). Leftover-pack (`downhill` / `leftover_plus_halo`) живёт для locked-тестов — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-4**.
 
 | Документ | Роль |

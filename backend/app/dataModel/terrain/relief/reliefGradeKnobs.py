@@ -126,7 +126,7 @@ def resolved_slope_length_cells(
 class ReliefGradeKnobs(BaseModel):
     """Weights + Geom XOR L|θ + attachments — on Mode A case or Mode B band."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, revalidate_instances="always")
 
     INVALID_GEOM_FALLBACK_ANGLE_DEG: ClassVar[float] = INVALID_GEOM_FALLBACK_ANGLE_DEG
 
@@ -141,7 +141,7 @@ class ReliefGradeKnobs(BaseModel):
     target_angle_deg: DefaultWhenMissing[float | None] = None
     earthen_canal: DefaultWhenMissing[bool | None] = None
     structure_canal: DefaultWhenMissing[str | None] = None
-    structure_refs: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+    structure_refs: DefaultWhenMissing[tuple[str, ...]] = Field(default_factory=tuple)
 
     @model_validator(mode="before")
     @classmethod

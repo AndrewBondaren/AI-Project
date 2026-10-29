@@ -12,7 +12,7 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 class ReliefDeltaBand(ReliefGradeKnobs):
     """One inclusive Δz interval with knobs (Mode B)."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, revalidate_instances="always")
 
     delta_z_min: StrictOnWire[int] = constrained_field(greater_equals=1)
     delta_z_max: DefaultWhenMissing[int | None] = None
