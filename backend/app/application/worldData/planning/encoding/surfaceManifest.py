@@ -160,6 +160,13 @@ from app.dataModel.hydrology.planning.hydrologyPlan import SegmentRiverPaint as 
 from app.dataModel.hydrology.planning.hydrologyPlan import IntentRiverPaint as _MIntentRiverPaint
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan as _MHydrologyPlan
 
+from app.dataModel.terrain.relief.bathymetry.floorProfile import SampledFloorProfile as _MSampledFloorProfile, FieldFloorProfile as _MFieldFloorProfile, FloorProfileKind as _MFloorProfileKind
+from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe as _MNoiseRecipe, PlateRecipe as _MPlateRecipe, PlateNoiseRecipe as _MPlateNoiseRecipe
+from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as _MDesignedWaterStrategyKind
+from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import ContinentalNoisePolicy as _MContinentalNoisePolicy
+from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy as _MPlateGenerationPolicy
+from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionPolicy as _MFieldCompositionPolicy, FieldCompositionOperator as _MFieldCompositionOperator
+
 # Stable TLV v1 type IDs. Append entries; never infer IDs from runtime discovery.
 SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     RegisteredTypeEntry(type_id=identity, python_type=owner, kind=kind)
@@ -330,6 +337,17 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (164, _MPlanEnvelope[_MHydrologyPlan], CanonicalTypeKind.RECORD),
     (165, _MHydrologyPlan, CanonicalTypeKind.RECORD),
     (166, _MCoastlinePurpose, CanonicalTypeKind.ENUM),
+    (167, _MSampledFloorProfile, CanonicalTypeKind.RECORD),
+    (168, _MFieldFloorProfile, CanonicalTypeKind.RECORD),
+    (169, _MFloorProfileKind, CanonicalTypeKind.ENUM),
+    (170, _MNoiseRecipe, CanonicalTypeKind.RECORD),
+    (171, _MPlateRecipe, CanonicalTypeKind.RECORD),
+    (172, _MPlateNoiseRecipe, CanonicalTypeKind.RECORD),
+    (173, _MDesignedWaterStrategyKind, CanonicalTypeKind.ENUM),
+    (174, _MContinentalNoisePolicy, CanonicalTypeKind.RECORD),
+    (175, _MPlateGenerationPolicy, CanonicalTypeKind.RECORD),
+    (176, _MFieldCompositionPolicy, CanonicalTypeKind.RECORD),
+    (177, _MFieldCompositionOperator, CanonicalTypeKind.ENUM),
 )))
 
 

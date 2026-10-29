@@ -254,3 +254,18 @@ def valid_metadata_transport(source: WaterDesignSource, metadata: WaterSourceMet
     assert_type(entry.source, WaterSourceMetadata)
     assert_type(entry.floor_profile, BasinFloorProfile | None)
     assert_type(basin_specs(preparation, records), list[BasinSpec])
+
+
+from app.application.worldData.generators.terrain.reliefObjects.bathymetry.floorProfile import BasinFloorEvaluator
+from app.application.worldData.generators.terrain.reliefObjects.bathymetry.basinZ import apply_basin_z
+from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+
+
+def valid_basin_floor(input: NoiseWaterDesignInput, spec: BasinSpec, heightmap: SurfaceHeightmap) -> None:
+    assert_type(spec.floor_profile, BasinFloorProfile | None)
+    if isinstance(spec.floor_profile, FieldFloorProfile):
+        evaluator = BasinFloorEvaluator(spec.floor_profile, topology=input.topology,
+            coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, grid=input.grid)
+        assert_type(evaluator.sample((0, 0)), FineZ)
+    assert_type(apply_basin_z(heightmap, (spec,), input.topology, reserved=frozenset(), grid=input.grid), int)

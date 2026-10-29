@@ -24,10 +24,6 @@ def basin_specs(preparation: WaterPlacementPreparation, records: Sequence[Resolv
                 or record.liquid != source.liquid or record.z_water_level != source.level
                 or record.placement.identity.world_uid != preparation.world_uid):
             raise ValueError(f"water record does not match the exact prepared metadata: {record.source_uid}")
-        # G9 moves the retained profile into BasinSpec and its single writer.
-        # Until then the scalar consumer must never silently flatten a profile.
-        if entry.floor_profile is not None:
-            raise ValueError("profiled water requires the G9 BasinSpec/profile writer")
         specs.append(BasinSpec(
             source_uid=record.source_uid,
             kind=source.body_kind,
@@ -36,5 +32,6 @@ def basin_specs(preparation: WaterPlacementPreparation, records: Sequence[Resolv
             z_water_level=source.level,
             floor_z=entry.floor_z,
             bands=source.bands,
+            floor_profile=entry.floor_profile,
         ))
     return specs

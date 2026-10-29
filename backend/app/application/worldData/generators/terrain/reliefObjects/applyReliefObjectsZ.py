@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
     from app.application.worldData.generators.terrain.reliefObjects.bathymetry import BasinSpec
     from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+    from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
     from app.dataModel.topology.worldTopology import WorldTopology
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.world import World
@@ -34,6 +35,7 @@ def apply_relief_objects_z(
     light_side: int | None = None,
     basin_specs: Sequence[BasinSpec] = (),
     topology: WorldTopology | None = None,
+    grid: SurfaceGridSettings | None = None,
 ) -> SurfaceHeightmap:
     """
     Mutate ``heightmap.surface_z`` in place (mountain rise, then ravine drop).
@@ -51,5 +53,5 @@ def apply_relief_objects_z(
     if basin_specs:
         if topology is None:
             raise ValueError("basin_specs require world topology")
-        apply_basin_z(heightmap, basin_specs, topology, reserved=raised)
+        apply_basin_z(heightmap, basin_specs, topology, reserved=raised, grid=grid)
     return heightmap

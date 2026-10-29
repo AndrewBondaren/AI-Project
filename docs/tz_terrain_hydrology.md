@@ -190,9 +190,22 @@ kind/liquid/level fields are removed from that entry. A single hydrology-owned
 WaterSourceMetadataFactory maps source/rim/category values before placement.
 The accepted-record mapper reads that metadata; basin_specs(preparation,records)
 requires an exact accepted placement and matching metadata, never rereads world
-policy or selects bands again. Profiles remain in the entry for G9's spec/writer
-cutover; the scalar spec factory rejects non-None profiles explicitly until that
-writer supports them. G8-B binds the full captured design universe to this transport.
+policy or selects bands again. Profiles pass unchanged into BasinSpec; the terrain
+writer evaluates them as specified below. G8-B binds the full captured design
+universe to this transport at the atomic G10-A cutover.
+
+G9 floor payload: BasinSpec.floor_profile=None retains scalar distance/bands.
+Sampled profiles cover the accepted footprint in an explicit world coordinate
+space, with min(samples)=floor_z and each z<level. Field profiles retain the full
+recipe and bound floor_z=max(z_min,level-depth). For signed continental field F,
+signed water wetness=-F; absolute floor=max(z_min,level-max(1,round-half-up(
+depth*(1-F)/2))). The existing terrain basin writer is the only height writer;
+field/sample profiles bypass scalar bands, reservations remain untouched and
+accepted overlaps use min absolute z. Coarse evaluation requires the captured
+grid and samples world-fine centers; fine evaluation samples x+.5/y+.5 with the
+same recipe. No threshold or placement is repeated. Water envelope schema/cache
+version2 admits the added profile field; downstream dependency refs invalidate.
+G8-B source/admission/schema join activates atomically with G10-A, after G9.
 
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor

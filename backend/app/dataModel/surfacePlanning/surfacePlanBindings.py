@@ -25,18 +25,19 @@ class SurfacePlanBinding:
             for slot in sorted(self.upstream, key=lambda slot: slot.value.encode("utf-8")))
 
 
-def _declare(slot: SurfacePlanSlot, upstream: tuple[SurfacePlanSlot, ...]) -> SurfacePlanBinding:
+def _declare(slot: SurfacePlanSlot, upstream: tuple[SurfacePlanSlot, ...], *,
+             schema_version: SchemaVersion = SchemaVersion(1)) -> SurfacePlanBinding:
     return SurfacePlanBinding(slot, upstream, PlanContractMetadata(
         id=RegistryKey[PlanContractRegistry](f"surface.pc.{slot.value}"),
-        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1)),
-        RegistryKey[CacheContractRegistry](f"surface.envelope.pc.{slot.value}"), CacheSchemaVersion(1))
+        schema_version=schema_version, algorithm_version=AlgorithmVersion(1)),
+        RegistryKey[CacheContractRegistry](f"surface.envelope.pc.{slot.value}"), CacheSchemaVersion(schema_version))
 
 
 S = SurfacePlanSlot
 PC_SURFACE_BINDINGS = (
     _declare(S.CLIMATE_BASE, ()),
     _declare(S.TERRAIN_BASE, (S.CLIMATE_BASE,)),
-    _declare(S.WATER_PLACEMENT, (S.TERRAIN_BASE,)),
+    _declare(S.WATER_PLACEMENT, (S.TERRAIN_BASE,), schema_version=SchemaVersion(2)),
     _declare(S.RELIEF, (S.CLIMATE_BASE, S.TERRAIN_BASE, S.WATER_PLACEMENT)),
     _declare(S.HYDROLOGY_ROUTES, (S.RELIEF, S.WATER_PLACEMENT)),
     _declare(S.RIVER_RELIEF, (S.RELIEF, S.HYDROLOGY_ROUTES)),

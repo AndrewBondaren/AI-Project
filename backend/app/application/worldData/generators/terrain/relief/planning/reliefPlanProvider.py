@@ -103,7 +103,7 @@ def _coarse_relief(inputs: ReliefPlanInput, terrain: TerrainPlan, water: WaterPl
         for cell in detect_depression_cells(surface, inputs.ravines):
             surface[cell] = resolve_ravine_surface_z(surface[cell], z_min=inputs.z_min, policy=inputs.ravines)
     heightmap = SurfaceHeightmap(world_uid=world_uid, bbox=terrain.bbox, surface_z=surface)
-    apply_basin_z(heightmap, water.basin_specs, water.topology, reserved=frozenset(fractions))
+    apply_basin_z(heightmap, water.basin_specs, water.topology, reserved=frozenset(fractions), grid=inputs.grid)
     return tuple((coord, FineZ(surface[(coord.gx, coord.gy)])) for coord, _ in terrain.surface_z)
 
 

@@ -78,6 +78,7 @@
     "../../../app/dataModel/climate/planning",
     "../../../app/dataModel/terrain/planning",
     "../../../app/dataModel/terrain/relief/bathymetry",
+    "../../../app/application/worldData/generators/terrain/reliefObjects/bathymetry",
     "../../../app/dataModel/terrain/relief/planning",
     "../../../app/dataModel/hydrology/planning",
     "../../../app/dataModel/hydrology/enums/planning",

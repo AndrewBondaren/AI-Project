@@ -219,19 +219,21 @@ class WiringTests(unittest.TestCase):
             finally:
                 changed.service.shutdown()
 
-    def test_stable_revision_and_all_ref_vectors_survive_boundary_refactor(self):
-        # Captured before the review refactor: module moves and field metadata
-        # must preserve the existing canonical protocol, not silently flush cache keys.
-        self.assertEqual(self.view.revision.hex(), "941978fd04c928948688581205aa70994d8f8e3664309f8237b5fbe903239a74")
+    def test_g9_schema2_revision_and_all_ref_vectors_are_stable(self):
+        # G9 schema2 baseline. Climate/terrain vectors remain unchanged;
+        # water schema invalidates dependent refs. The earlier capture vector
+        # already predates source changes, independently of the version bump.
+        self.assertEqual(self.view.revision.hex(), "d6417ff3e790c5719f177098e6be783cc8c8e1f882ba47d621c0e6163065191b")
         expected = (
             ("2736f4721825436d4d5a71afb945c11a3d5ec38b9c584e3c83447ca55206bfda", "cc69edceb54a048ed0dc8d9d23ce91c50c6cbc479eb482db4b544b9e5d897b56"),
             ("ec3a2ce38373b90dec09f218afeec38850c61fea6837723b5e8b9361e9da68ae", "2e7db55f89e7216f563e52c6de0afcfc90968385439f7a625966aeb3dbbedfc3"),
-            ("40fe4e14d54833a3b5a6c1e1b2d3edc9ff3b0abec79e76e46526cd18d61f0a06", "9955b899ff7c63f5c45d83d0366e20bc8baf776950ba5a4a4036defff1d91f98"),
-            ("daaf5e8f0220f444fcdad645fa5059f46eb1c322865ee14a619a5f72db346ae8", "6384630059a8e4421cc4666db5df6b6aba72139ff3e63ed91ea4a08dd2ff72ef"),
-            ("ff195f6f5a9718d3ecf382a2259e5688d32e72b4ff191f2f3a8e31cd6d00d4f1", "b6dd7fc700459983782f425273fc0ff37fa28405d403f94cfde6c51abd338fee"),
-            ("63e1c98f05c7d74324bc024c9c3dd99e2562f5f54c289ede2d1c02504f47790b", "7aa08c792103739f7412e8edf98c0e0910a7afbefafe217a90d1ef3d1cd91900"),
-            ("475e525e49541f26351c53e4ab14c56c164b4f1ebe9808de9345cf238457c23a", "9a645e15fc8f589c5ed10001f552dc163210a5eb36d8e6bfef8f8b912e7cc58e"),
-            ("8e0fa4e0b33e098a12ca1efec42aae390b2554465486a7b758f22394226d3737", "3a2412011c3c3998abb74ee5e66182bb5d7ca9eb4c99dddc37c585646a50e333"))
+            ("feed1f959a66e9357304ede8ad2094ef81988e4b4b6dc255fa4f823f718bc7c7", "9955b899ff7c63f5c45d83d0366e20bc8baf776950ba5a4a4036defff1d91f98"),
+            ("5339912b9a092b0f19355f5510f2c6ddd1aeaf207771f6468738a8ea30937713", "5f68ab60cb413762cf26286e2c920bbea3a20a77e1c17f656549d01b9fafe62e"),
+            ("44dea72065ae06bd9b42a4cec411dc02f107dbf15f2762477baf0b9c08c7e55d", "5ef9b42acd67ab80316e99c12791a3d334589e65972787a6c00d8f718d613b1d"),
+            ("d757fa93b3729f824230b97c6bdae02c80e532b0f43a3048bcc2be24ee5302d5", "ee6364af02c53a700c8f71010fb64c6909902883f92afe0a70f4708ccc7ed23a"),
+            ("6692b5d795ba6912e38676793830a6614921108a50a99ef45d46546e2fe4f2ee", "c44632b829b682fd2d753805b31e7d9529ff1d850e1f3ef5c18de5e6ea99b32f"),
+            ("1d61f81c97abbd0e825a7997f7131f9f71b6a7052b9729337ab3ff3b61f77c8a", "885982c153c4154b2eddb8c4ff75c6c9ea488a3853a8bbd2ba92c5f9eb0acd08"),
+        )
         bundle = self.c.prepare(self.view)
         actual = tuple((ref.key.input_fingerprint.hex(), ref.output_fingerprint.hex())
             for field in fields(self.c.handles) for ref in (getattr(bundle, field.name).ref,))

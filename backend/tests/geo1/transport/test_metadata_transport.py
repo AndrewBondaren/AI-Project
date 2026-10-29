@@ -65,10 +65,7 @@ class MetadataTransportTests(TestCase):
         self.assertEqual(records[0].source_uid,input.metadata.source_uid)
         self.assertEqual(records[0].kind,metadata.body_kind)
         self.assertEqual(prep.entries[0].floor_profile,draft.floor_profile)
-        # G9 consumes this retained profile; G8-A only migrates scalar specs.
-        self.assertIsNotNone(prep.entries[0].floor_profile)
-        with self.assertRaisesRegex(ValueError,"profiled water"):
-            basin_specs(prep,records)
+        self.assertEqual(basin_specs(prep,records)[0].floor_profile,draft.floor_profile)
 
     def test_metadata_mismatch_cannot_be_reinterpreted_as_a_different_spec(self):
         snap=context();prep=prepare(basins=[basin()],snapshot=snap);_,records=resolve(prep,snap)

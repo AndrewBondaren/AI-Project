@@ -10686,7 +10686,7 @@ planning pyright valid 0 errors, negative 201/201; diff --check clean.
 Baseline fixture delta: registered existing CoastlinePurpose in test manifest;
 production manifest already correct. G8-B/G9/G10-A remain open as specified.
 
-### G8 — единая подготовка placement universe — IN PROGRESS (G8-A done)
+### G8 — единая подготовка placement universe — G8-A DONE / G8-B at G10-A
 Цель: объединить strategy outputs и доступных competitors на одной границе.
 ТЗ: tz_map_light_bake §Placement P1/P2/P3 и GEO-1.
 Файлы: terrain/designedWater/preparation/designPreparation.py;
@@ -10704,7 +10704,65 @@ Authored после READY: geometry request→однократный geometry re
 dry coastline, full/partial одинаковый prepared universe, preview без writes.
 Done: нет отдельного resolve для plate/noise/authored.
 
-### G9 — перенос accepted field в relief spec
+### G8-B dependency audit / G9 execution contract (2026-10-29)
+Active PreparedWaterEntry/ResolvedWaterPlacement and resolve_placements still use
+legacy geometry-bearing PreparedPlacement. PlacementSession uses V2 admission
+contracts; WorldHydrology/Declared*/seas/lakes do not yet inherit the generation
+owners (waterGenerationSettings explicitly reserves this for G10-A). A standalone
+G8-B activation would need duplicate transport/cascade projection or premature
+zero/default changes. G8-B domain join and removal stay part of atomic G10-A;
+G10-A prerequisite G8 now means completed G8-A + ready leaf algorithms, not a
+preactivated G8-B caller. No new bridge/union/alternate water transport is allowed.
+Execution order: G9 → G9-ST → G9-S → G10-A including G8-B → G10-R/G11.
+Target ownership/algorithms remain §6.29; this records the actual dependency order.
+
+G9 exact implementation map (TZ tz_terrain_hydrology GEO-1 floor boundary; §6.29-F):
+- existing dataModel/terrain/relief/bathymetry/basinSpec.py::BasinSpec adds
+  floor_profile:BasinFloorProfile|None=None, strict typed validation, sampled full
+  footprint/level/min, field level/lower-bound invariants. Existing None path stays.
+- existing hydrology/basinSpecFactory.py forwards accepted profile unchanged;
+  remove temporary G8-A rejection, no policy/bands resolution.
+- existing application terrain/reliefObjects/bathymetry/floorProfile.py adds
+  BasinFloorEvaluator(profile:FieldFloorProfile,*,topology:WorldTopology,
+  coordinate_space:CoordinateSpace,grid:SurfaceGridSettings|None), sample(cell:Coord)
+  ->FineZ. Terrain owns absolute floor math, existing public samplers own field;
+  plate layout once per evaluator. Signed water wetness=-continental field F;
+  round-half-up(depth*(1-F)/2), clamp depth>=1 and z>=z_min. Decimal(str(F))
+  integer ratio prevents binary tie drift; this is independent of placement score.
+- existing basinZ.apply_basin_z accepts explicit coordinate_space (default existing
+  WORLD_SURFACE_GRID) and grid:SurfaceGridSettings|None=None for legacy scalar;
+  field/coarse requires captured grid, fine uses centers x+.5/y+.5. Validate recipe
+  topology against lifted coarse topology (or exact fine topology). Sampled space
+  must match working frame. Existing scalar distance/bands unchanged; field/sample
+  bypass distance bands, min absolute overlap, reserved untouched, transactional
+  writes only after all specs evaluate. No hidden scale/default strategy/selection.
+- existing relief/planning/reliefPlanProvider.py passes inputs.grid;
+  reliefObjects/applyReliefObjectsZ.py accepts optional captured grid and forwards.
+- existing planning/encoding/surfaceManifest.py appends IDs167..177 for two floor
+  models, floor kind, three recipe models, strategy, three policies and operator.
+  Existing dataModel/surfacePlanning/surfacePlanBindings.py::_declare accepts
+  schema_version:SchemaVersion=1; WATER_PLACEMENT schema/cache2. Downstream refs
+  invalidate via changed dependency key. No legacy/GEO parallel factory is added.
+- tests/geo1/bathymetry/{__init__,fixtures,test_profiles,test_writer,test_transport}.py
+  (5 files); update geo1/transport regression and planning valid/invalid typing;
+  pyright valid config explicitly includes the application bathymetry folder.
+Composition: application bathymetry5→5, dataModel bathymetry3→3,
+relief planning2→2, reliefObjects6→6 WARN, hydrology root7→7 WARN,
+encoding3→3, surfacePlanning3→3; new test folder5, existing transport2→2.
+Schema2 verification updates the existing tests/planning/consumers/test_wiring.py
+fixed revision/ref vectors and labels them G9 schema2 (consumer folder6→6 WARN).
+The previous vector explicitly predates source/schema changes; actual current
+vectors are captured with real bindings. No generic codec behavior is changed.
+Schema1 control still yields capture revision d6417f... (old 941978... fixture
+already stale before this schema bump); climate/terrain vectors stay exact.
+Schema2 changes water input key and downstream dependency refs as intended.
+Checks: GEO-1; existing bathymetry/water/placement/provider regressions;
+planning consumer cache/codec and typing checks. Test formula/half ties/clamp,
+all recipes/topologies, coarse/fine parity, no reselection, replay/idempotence,
+reservations/overlaps, invalid frame/profile no partial writes, full codec profile
+round-trip and water schema/cache2. G8-B remains OPEN until atomic G10-A.
+
+### G9 — перенос accepted field в relief spec — DONE (2026-10-29)
 Цель: представить принятый профиль через действующий single writer.
 ТЗ: GEO-1 и tz_terrain_hydrology §Расположение кода / HY-12.
 Файлы: dataModel/terrain/relief/bathymetry/basinSpec.py (перенесён в PC-1R),
@@ -10717,6 +10775,15 @@ floor < level, clamp/invalid-input правила из G0.
 Done: field не теряется при преобразовании в scalar BasinSpec.
 Metadata/scalar consumer migration — G8; здесь перенос accepted profile
 в единственный spec/writer, без потери profile и без повторного выбора bands.
+
+G9 IMPLEMENTED/VERIFIED: accepted profile reaches the same BasinSpec/writer;
+field/sample absolute floors, explicit frame/scale, reserved/min-overlap/replay;
+water schema/cache2 and appended stable profile recipe type IDs.
+GEO-1 487 passed (+15 bathymetry); legacy bathymetry/water/providers183 passed;
+wiring/codec30 + selected L0 parity2 passed; pyright0, negative205/205; diff clean.
+Full consumer L0/L2 discovery was interrupted after prolonged execution without
+new output; not counted as passed. Fixed vectors refreshed with schema1 control
+and unchanged climate/terrain vectors. G8-B remains assigned to atomic G10-A.
 
 ### G9-ST — immutable источники доказательств surface support
 Цель: typed template/material/region source closure для facts provider.
@@ -10771,6 +10838,8 @@ Owning policies подключают существующие metadata/descripto
 Повторное чтение enabled/autoresolve после execution decision запрещено;
 точный remaining legacy gate inventory — tz_policy §7.
 Prerequisites — полный список §6.29-J, включая G9-ST и isolated G9-S.
+G8 prerequisite: G8-A/leaf contracts complete; G8-B join/removal is implemented
+inside this atomic step before activation, per dependency audit above.
 Проверка: geo1/integration test_activation.py + test_revisions.py и
 existing regressions §6.27; declare priority=None не исчезает из-за old0,
 authored0 отключён, autoFalse не включает implicit ocean, field0=plate,

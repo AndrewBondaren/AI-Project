@@ -703,3 +703,17 @@ def invalid_metadata_transport(entry: PreparedWaterEntry, prepared: PreparedPlac
     entry.kind  # EXPECT: reportAttributeAccessIssue
     PreparedWaterEntry(source={}, prepared=prepared, floor_z=FineZ(-5), floor_profile=None)  # EXPECT: reportArgumentType
     PreparedWaterEntry(source=entry.source, prepared=prepared, floor_z=FineZ(-5), floor_profile={})  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.reliefObjects.bathymetry.floorProfile import BasinFloorEvaluator
+from app.dataModel.terrain.relief.bathymetry.floorProfile import FieldFloorProfile
+
+
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+
+
+def invalid_basin_floor(input: NoiseWaterDesignInput, profile: FieldFloorProfile) -> None:
+    BasinFloorEvaluator({}, topology=input.topology, coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, grid=input.grid)  # EXPECT: reportArgumentType
+    BasinFloorEvaluator(profile, topology=input.topology, coordinate_space="world_surface_grid", grid=input.grid)  # EXPECT: reportArgumentType
+    BasinFloorEvaluator(profile, topology=input.topology, coordinate_space=CoordinateSpace.WORLD_SURFACE_GRID, grid={})  # EXPECT: reportArgumentType
+    BasinFloorEvaluator(profile, topology=input.topology, coordinate_space=CoordinateSpace.WORLD_FINE_GRID, grid=None).sample((0.5, 1))  # EXPECT: reportArgumentType
