@@ -626,3 +626,24 @@ def invalid_coastline_source_join(input: CoastlineWaterDesignInput, generation: 
     wrong_source: ProceduralSource = input.source  # EXPECT: reportAssignmentType
     wrong_admission: PlacementAdmissionInput = generation  # EXPECT: reportAssignmentType
     wrong_generation: HydrologyGenerationDecision = admission.decision  # EXPECT: reportAssignmentType
+
+
+from app.application.worldData.generators.hydrology.boundaries.boundaryGeometry import BoundaryGeometryResult
+from app.application.worldData.generators.hydrology.boundaries.boundaryPlanner import CoastlineBoundaryPlanner
+from app.application.worldData.placement.adapters.coastline.attachedCoastline import AttachedCoastlinePreparer, PreparedCoastlineBoundary
+from app.dataModel.hydrology.boundaries.attachedCoastline import AttachedCoastline, CoastlineBoundaryInput, CoastlinePart
+from app.dataModel.hydrology.boundaries.boundaryWaterSnapshot import BoundaryWaterSnapshot, FineBoundaryWaterCell
+from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
+
+
+def invalid_attached_boundary(source: DeclaredCoastline, snapshot: BoundaryWaterSnapshot,
+                              admission: PlacementAdmissionInput, input: CoastlineBoundaryInput,
+                              result: BoundaryGeometryResult, prepared: PreparedCoastlineBoundary) -> None:
+    AttachedCoastlinePreparer().prepare_boundary({}, snapshot, admission)  # EXPECT: reportArgumentType
+    FineBoundaryWaterCell(cell=SurfaceGridCoord(GridX(0), GridY(0)), body_uid=None)  # EXPECT: reportArgumentType
+    wrong_cell: SurfaceGridCoord = snapshot.fine_cells[0].cell  # EXPECT: reportAssignmentType
+    wrong_boundary: AttachedCoastline = prepared.prepared  # EXPECT: reportAssignmentType
+    wrong_prepared: PreparedPlacementV2 = result.boundary  # EXPECT: reportAssignmentType
+    CoastlineBoundaryPlanner().prepare(input, snapshot, [admission], snapshot_uid="dependent")  # EXPECT: reportArgumentType
+    CoastlinePart(body_uid="physical", closed=False, path=[HydrologyWaypoint(x=0,y=0)])  # EXPECT: reportArgumentType
+    snapshot.fine_cells = ()  # EXPECT: reportAttributeAccessIssue

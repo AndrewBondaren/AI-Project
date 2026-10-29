@@ -10326,7 +10326,86 @@ placement fact mapping.
 mountain conflict, seam, no double carve. Done: source-line scenario
 работает через общий batch и single relief writer.
 
+### G5-C3 — implementation contract, absolute authored boundary (DONE 2026-10-29)
+Продолжение по «Далее». Current DeclaredCoastline требует nonempty path;
+этот шаг реализует absolute BODY_BOUNDARY. Empty derive-mode/ring extraction
+и production capture/cache/provider activation остаются G10; не подменять
+исходный path derived shoreline. Ни coarse hydro, ни отсутствие fine sample
+не доказывают fine dryness.
+Точная карта owners перед кодом:
+- dataModel/hydrology/boundaries/attachedCoastline.py: CoastlinePart(body_uid,
+  closed,path), AttachedCoastline(source_uid,target_source_uid,parts,
+  coordinate_space:WORLD_FINE_GRID,hydrology_ref), CoastlineBoundaryInput
+  (sources,resolution_mode,grid,topology), CoastlineBoundaryPlan(boundaries,
+  outcomes:tuple[PlacementOutcomeV2,...],issues:tuple[FieldPathError,...]).
+  BoundaryIssueCode enum: INVALID_INPUT, UNKNOWN_FINE_WATER, BOUNDARY_OFF_TARGET.
+  Typed output/diagnostics owned by hydrology; no new generic placement transport.
+- dataModel/hydrology/boundaries/boundaryWaterSnapshot.py (+__init__):
+  FineBoundaryWaterCell(cell:FineXY,body_uid:EntityUid|None),
+  BoundaryWaterSnapshot(hydrology:PlanEnvelope[HydrologyPlan],source_mapping,
+  mapping_hydrology_ref,placement_ref,water_outcomes:tuple[PlacementOutcomeV2,...],
+  fine_cells:tuple[FineBoundaryWaterCell,...],grid,topology).
+  accepted — readonly projection resolved outcomes, остальные сохраняют actual
+  source→region identity для causal refs, без повторного policy execution.
+  Fine samples sorted unique canonical; None is explicit dry; absent unknown.
+  Physical UIDs must exist in final WaterBody. Mapping ref equals hydro ref;
+  placement ref must be an exact dependency of hydro envelope, same world.
+  Accepted supports explicitly expressed in WORLD_FINE_GRID by the captured
+  producer; no guessing/projection in consumer. Actual producer is post-fill
+  fine capture (G9/G10); tests supply explicit captured evidence now.
+- application/worldData/generators/hydrology/boundaries/boundaryGeometry.py
+  (+__init__): BoundaryGeometry.prepare(source,snapshot)->AttachedCoastline.
+  Public BoundaryGeometryResult (frozen application dataclass в том же модуле)
+  содержит boundary:AttachedCoastline и уже вычисленные canonical cells:frozenset[Coord].
+  prepare возвращает этот result, adapter не растеризует parts повторно.
+  Only geometry: raster original unrolled fine path, canonicalize for IO,
+  require self+every existing cardinal neighbor sample (planar void is not dry).
+  Every path cell must see mapped wet plus explicit dry. Off-target is an issue,
+  no nearest-water snapping. Associate all supporting body UIDs, not arbitrary1.
+  Each body yields contiguous runs; closed runs stitch tail/head cyclically.
+  Whole-line body retains original authored waypoints exactly. Split runs use
+  original Bresenham cells with deterministic linear Z interpolation (no surface
+  Z writes); their union equals original raster, disconnected runs not bridged.
+- application/worldData/placement/adapters/coastline/attachedCoastline.py
+  (+__init__): AttachedCoastlinePreparer.prepare_boundary(source,accepted_water,
+  admission)->PreparedCoastlineBoundary (frozen application result: prepared
+  existing PreparedPlacementV2 + AttachedCoastline metadata). Structural validation
+  of READY header/world/source/absolute mode, explicit source→accepted region ID,
+  CONNECTED_TO dependency and SHARED_BOUNDARY overlap. Delegate BoundaryGeometry;
+  build one absolute candidate. No policy/no basin/floor/carve/fake support.
+- application/worldData/generators/hydrology/boundaries/boundaryPlanner.py:
+  CoastlineBoundaryPlanner.prepare(input,snapshot,admissions,*,snapshot_uid)
+  ->CoastlineBoundaryPlan. Post-water domain caller: existing PlacementSession,
+  phase DEPENDENT, immutable accepted fine supports. Only ready headers call
+  adapter. Disabled/unresolved/missing/failed support keep common lifecycle
+  behavior. Preparation issues retained verbatim in plan.issues and forwarded
+  as generic constraint diagnostics; generic placement enums remain domain-neutral.
+  Only resolved candidates emit boundary records; no geometry/selection repeated.
+  Admissions already computed by G5-CP using captured mode; no policy executor2.
+- tests/geo1/boundaries/{__init__,fixtures,test_geometry,test_adapter,test_planner}.py
+  and existing typing planning valid/placement.py + invalid.py.
+Composition: new dataModel boundaries3, application hydrology boundaries3,
+adapters/coastline2 (parent adapters6→6 WARN), new tests folder5. No root additions.
+Проверки: wet/dry/missing/failed/disabled target, zero skip, unknown fine evidence,
+world/ref/scale/source mismatch, no UID equality inference, merge/split parts,
+seams/poles, no path shift/no phantom segment/no Z changes, immutable supports,
+full/partial independent same inputs, common dependent phase collision behavior.
+Production mapping/fine capture/provider activation не заявляется этим шагом.
+
+Итог G5-C3 authored: typed final-water snapshot + fine geometry/parts +
+AttachedCoastlinePreparer + post-water caller через existing dependent session.
+Actual source→region causes добавляются из water_outcomes без смены решений;
+prepared support geometry immutable, domain issue codes сохранены в plan.issues.
+Проверено: GEO-1 406/406 (+28), adapter/factory/wire47/47, positive Pyright0,
+negative177/177 (+8), warnings-as-errors. Split/merge, unknown fine, zero,
+missing/failed/disabled support, unchanged path, wrapped seam/sphere pole.
+Empty derive-mode, actual post-fill fine capture и provider/cache activation
+остаются G10; canonical codec registration выполняется при том же activation.
+
 ### G5-C3 — attached coastline dependent preparation
+Статус: DONE для absolute authored boundary, 2026-10-29.
+Production capture/activation и empty derive-mode — G10.
+
 Цель: подготовить только boundary с обязательным готовым water target.
 ТЗ: GEO-1 §5.3-B/C, Placement P1/P2 dependent phase.
 Файлы: placement/adapters/coastline/attachedCoastline.py; post-water dependent caller;

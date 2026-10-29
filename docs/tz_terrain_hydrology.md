@@ -131,6 +131,24 @@ common lifecycle до вызова geometry. Actual source/kind/liquid/path со
 Production routing legacy waterPlacementPass переключается вместе с G8/G10-A;
 промежуточный optional legacy/target execution path не вводится.
 
+G5-C3 absolute boundary: hydrology/boundaries owns AttachedCoastline/parts,
+BoundaryWaterSnapshot and CoastlineBoundaryPlan. Snapshot binds final hydro,
+source mapping, exact placement dependency and immutable accepted fine supports.
+Fine samples are explicit wet physical body UID or dry None; missing sample is
+unknown. Every authored fine raster cell must have target wet and explicit dry
+in its self/cardinal stencil; planar void is not dry. Absolute path is never
+snapped. All matching physical UIDs receive contiguous parts; full-line parts
+keep original waypoints, split parts keep the same raster with interpolated
+metadata Z only. Source/world/ref/grid/topology are checked; no surface writes.
+AttachedCoastlinePreparer delegates geometry and emits existing ready prepared
+placement plus boundary metadata. CoastlineBoundaryPlanner drives common
+DEPENDENT lifecycle with captured admissions/supports; zero/nonready skips
+geometry. Only resolved results emit boundaries. Domain issues retained verbatim;
+common dependency/constraint handling is reused. Snapshot retains actual water
+outcomes; accepted supports are their readonly resolved projection. Causal refs
+use actual target region UID/status without changing policy decisions. Empty derive-mode and production
+post-fill capture/provider activation remain G10; current source requires path.
+
 Design использует terrain-owned region extent и pre-hydrology facts,
 общий budget/preparer и один P2 batch. Accepted metadata/footprint/floor
 превращаются в BasinSpec, применяемый existing relief writer ровно один раз.
