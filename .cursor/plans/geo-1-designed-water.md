@@ -12384,6 +12384,20 @@ coverage, body/mapping/ref/fact типы; один FineSurfaceWindow при до
 необходимости. Никаких дополнительных state/phase enum и duplicate water DTO.
 Изменён только план; G10-A OPEN, предыдущая отметка FIXED не восстановлена.
 
+### G10-A fine-water direction — AGREED DIRECTION / DETAILS OPEN (2026-10-30)
+Ответ мастера «Ок» после аналитики: принимается направление варианта3 —
+planning-first fine-water layout до materialization, baked L0 сохраняется
+как base для refine, boundary не зависит от bake того же cycle.
+Это согласие с направлением, не выбор ещё не определённых domain semantics
+и не команда начинать код на незакрытом контракте.
+Следующая проектная операция: точный DAG зависимостей domain operations
+(пока в существующем pipeline, без изменения engine): fine terrain base →
+hills/reservations → basin floor/fill, плюс применение этих effects в L2.
+До реализации закрепить порядок, typed inputs и owners/path каждой операции,
+сверить отсутствие water↔hills/L0 feedback и повторов POJO/enum. Конкретный
+порядок этой записи обозначает предмет анализа, а не уже выбранную семантику.
+G10-A OPEN; fine-water completeness/producer schemas пока не реализовывать.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

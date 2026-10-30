@@ -137,3 +137,5 @@ def verify_catalog(
     assert_type(view.domain_reads, tuple[DomainReadEvidence, ...])
     assert_type(catalog.current_outputs, tuple[ExecutionIdentity, ...])
     assert_type(catalog.publish(record), None)
+
+    assert_type(catalog.invalidate_for_reuse({}), tuple[ExecutionIdentity, ...])

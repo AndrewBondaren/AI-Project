@@ -29,7 +29,8 @@
     "../../../../backend/app/application/engine/runtime/validation/llmValidator.py",
     "../../../../backend/app/application/engine/runtime/validation/nodeValidationContext.py",
     "../../../../backend/app/application/engine/runtime/dag/context/dagContext.py",
-    "../../../../backend/app/application/engine/runtime/dag/context/dagReadView.py"
+    "../../../../backend/app/application/engine/runtime/dag/context/dagReadView.py",
+    "../../../../backend/app/application/engine/runtime/dag/context/resultInvalidation.py"
   ],
   "extraPaths": [
     "../../.."
@@ -67,6 +68,7 @@
     "../../../../backend/app/application/engine/runtime/validation/llmValidator.py",
     "../../../../backend/app/application/engine/runtime/validation/nodeValidationContext.py",
     "../../../../backend/app/application/engine/runtime/dag/context/dagContext.py",
-    "../../../../backend/app/application/engine/runtime/dag/context/dagReadView.py"
+    "../../../../backend/app/application/engine/runtime/dag/context/dagReadView.py",
+    "../../../../backend/app/application/engine/runtime/dag/context/resultInvalidation.py"
   ]
 }

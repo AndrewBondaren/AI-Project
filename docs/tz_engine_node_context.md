@@ -192,6 +192,12 @@ read_view(consumer) возвращает PublishedDAGReadView с фиксиро�
 
 View предоставляет immutable tuple dependency_reads/domain_reads для runner/coordinator, дедуплицируя одинаковые наблюдения; это локальное evidence, не write API каталога. record_domain_read создаёт DomainReadEvidence из переданного namespace/revision без вызова домена и без выдуманного fallback. Различающиеся domain revisions и required/optional наблюдения не сливаются. Payload разделяется по ссылкам; input или тяжёлые historical outputs в catalog history не копируются.
 
+### 7.2. Инвалидация по provenance (A2.2)
+
+ResultInvalidation — чистое вычисление устаревших node IDs по current identities и фактическим DependencyRead, без payload, deps/scheduling и обращений к доменам. Снятие результата распространяется до fixed point; сравниваются полные identity и optional absence. DAGContext остаётся единственным writer: begin_attempt снимает прежний Output вместе с потребителями; publish учитывает появление результата вместо None. Проверки и вычисление предшествуют изменениям каталога; устаревающий при каскаде candidate отклоняется без частичной публикации. Неиспользованные declarations и order-only зависимости не участвуют. Закрытие неуспешной попытки не восстанавливает снятые результаты. Существующие read views сохраняют свой снимок, но старое evidence не проходит проверку при публикации.
+
+Перед reuse координатор вызывает `DAGContext.invalidate_for_reuse(confirmed_domain_revisions: Mapping[str, DomainRevision]) -> tuple[ExecutionIdentity,...]`. Подтверждения актуальности предоставляет caller по публичной гарантии домена; runtime только сравнивает evidence. Domain read с None, без подтверждения или с несовпадающей revision снимает Output и его фактических потребителей. Без доменных чтений отдельного подтверждения не требуется. Свежая публикация не запускает проверку reuse; ни engine, ни view не ищут доменные данные и не выбирают API по namespace.
+
 ## 8. Ошибки, отмена, gate и LLM
 
 Обычная ошибка Python-задачи не отменяет соседей: координатор ждёт всех, сохраняет успехи и завершает уровень FAIL. При отмене одной задачи остальные завершаются, успехи сохраняются, решение CANCEL; сопутствующие ошибки и gate-сигналы остаются в диагностике. При отмене всего запуска координатор отменяет незавершённые задачи, ожидает их очистки, фиксирует уже завершённые валидные outcomes и сохраняет resume-снимок. CancelledError не считается success и не теряется в обработке Exception.

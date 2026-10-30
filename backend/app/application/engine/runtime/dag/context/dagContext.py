@@ -1,5 +1,6 @@
-"""Single-writer catalog primitives; coordinator and invalidation come later."""
+"""Single-writer catalog primitives and provenance invalidation."""
 
+from collections.abc import Collection, Mapping
 from typing import cast
 
 from pydantic import BaseModel, TypeAdapter
@@ -7,10 +8,11 @@ from pydantic import BaseModel, TypeAdapter
 from app.application.engine.contracts.outputRef import RequiredOutput
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
+from app.application.engine.runtime.dag.context.resultInvalidation import ResultInvalidation
 from app.dataModel.engine.dag.identity import (
-    ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, PlanRevision,
+    DomainRevision, ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, PlanRevision,
 )
-from app.dataModel.engine.dag.records import OutputRecord
+from app.dataModel.engine.dag.records import DependencyRead, OutputRecord
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
@@ -56,9 +58,7 @@ class DAGContext:
             execution_id=self._execution_id, node_id=node_id,
             attempt=self._counters.get(node_id, 0) + 1, plan_revision=plan_revision,
         )
-        # Only the producer's own old result is removed in A2.1. Transitive
-        # consumer invalidation is the explicit A2.2 extension point.
-        self._current.pop(node_id, None)
+        self._remove_current(self._affected(removed=(node_id,)))
         self._counters[node_id] = identity.attempt
         self._open[node_id] = identity
         return identity
@@ -88,9 +88,40 @@ class DAGContext:
         if not isinstance(record.output, contract.output_type):
             raise TypeError(f"node '{record.identity.node_id}' published an incompatible Output type")
         self._check_reads(record)
+        invalidated = self._affected(candidate=(record.identity, record.reads))
+        if record.identity.node_id in invalidated:
+            raise RuntimeError("candidate reads are no longer current after invalidation")
         # No await or domain I/O between admission and the coordinator's write.
+        self._remove_current(invalidated)
         self._current[record.identity.node_id] = record
         self._close(record.identity)
+
+    def invalidate_for_reuse(
+        self, confirmed_domain_revisions: Mapping[str, DomainRevision],
+    ) -> tuple[ExecutionIdentity, ...]:
+        seeds = ResultInvalidation.unconfirmed_domains(
+            {node_id: self._record(node_id).domain_reads for node_id in self._current},
+            confirmed_domain_revisions,
+        )
+        return self._remove_current(self._affected(removed=seeds))
+
+    def _affected(
+        self, *, removed: Collection[NodeId] = (),
+        candidate: tuple[ExecutionIdentity, tuple[DependencyRead, ...]] | None = None,
+    ) -> frozenset[NodeId]:
+        current = {node_id: self._record(node_id).identity for node_id in self._current}
+        reads = {node_id: self._record(node_id).reads for node_id in self._current}
+        if candidate is not None:
+            identity, evidence = candidate
+            current[identity.node_id] = identity
+            reads[identity.node_id] = evidence
+        return ResultInvalidation.affected(current, reads, removed)
+
+    def _remove_current(self, node_ids: Collection[NodeId]) -> tuple[ExecutionIdentity, ...]:
+        removed = tuple(self._record(node_id).identity for node_id in sorted(node_ids))
+        for node_id in node_ids:
+            del self._current[node_id]
+        return removed
 
     def _check_open(self, identity: ExecutionIdentity) -> None:
         ExecutionIdentity.model_validate(identity)
