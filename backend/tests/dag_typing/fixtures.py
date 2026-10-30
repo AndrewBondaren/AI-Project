@@ -9,6 +9,9 @@ from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.outputRef import OptionalOutput, OutputRef, RequiredOutput
 from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.application.engine.nodeTypes.pythonNode import PythonNode
+from app.application.engine.nodeTypes.baseNode import BaseNode
+from app.application.engine.registration.nodeRegistration import NodeRegistration
+from app.application.engine.taskType import TaskType
 
 from app.dataModel.engine.dag.identity import (
     ContractId, ContractVersion, DomainRevision, ExecutionId, ExecutionIdentity, NodeId, PlanRevision,
@@ -37,6 +40,7 @@ class OtherInput(BaseModel):
 
 REQUIRED_LEAF = RequiredOutput(OutputRef(NodeId("producer"), LeafOutput))
 OPTIONAL_COMPOSITE = OptionalOutput(OutputRef(NodeId("optional-producer"), CompositeOutput))
+OPTIONAL_LEAF = OptionalOutput(OutputRef(NodeId("producer"), LeafOutput))
 LEAF_CONTRACT = NodeContract(
     NodeInput, LeafOutput, ContractId("test.leaf"), ContractVersion("1"),
     reads=(REQUIRED_LEAF, OPTIONAL_COMPOSITE),
@@ -90,6 +94,73 @@ class FakeReadView:
 class FakeExecutor:
     async def execute[I: BaseModel, O: BaseModel](self, node: PythonNode[I, O], input: I) -> O:
         return await node.execute(input)
+
+
+class GraphRuleState(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    task_type: TaskType = TaskType.SCENE_NARRATION
+
+
+class DerivedLeafOutput(LeafOutput):
+    pass
+
+
+class GraphBindings:
+    def __init__(self) -> None:
+        self.nodes: dict[NodeId, object] = {}
+
+    def make_node[I: BaseModel, O: BaseModel](
+        self, registration: NodeRegistration[I, O],
+    ) -> BaseNode[I, O]:
+        return registration.validate_node(self.nodes[registration.node_id])
+
+
+class GraphPythonNode[I: BaseModel, O: BaseModel](PythonNode[I, O]):
+    async def prepare_input(self, view: DAGReadView) -> I:
+        raise AssertionError("compiler must not prepare Input")
+
+    async def execute(self, input: I) -> O:
+        raise AssertionError("compiler must not execute nodes")
+
+
+class GraphProducer(GraphPythonNode[NodeInput, LeafOutput]):
+    id = NodeId("producer")
+
+
+class GraphConsumer(GraphPythonNode[NodeInput, LeafOutput]):
+    id = NodeId("consumer")
+
+
+class GraphPeer(GraphPythonNode[NodeInput, LeafOutput]):
+    id = NodeId("peer")
+
+
+class GraphDerivedProducer(GraphPythonNode[NodeInput, DerivedLeafOutput]):
+    id = NodeId("derived-producer")
+
+
+class GraphLLMNode(LLMNode[NodeInput, LeafOutput]):
+    async def prepare_input(self, view: DAGReadView) -> NodeInput:
+        raise AssertionError("compiler must not prepare LLM Input")
+
+
+class GraphLLMProducer(GraphLLMNode):
+    id = NodeId("llm-producer")
+
+
+class GraphLLMConsumer(GraphLLMNode):
+    id = NodeId("llm-consumer")
+
+
+class GraphOptionalConsumer(PythonNode[CompositeOutput, LeafOutput]):
+    id = NodeId("optional-consumer")
+
+    async def prepare_input(self, view: DAGReadView) -> CompositeOutput:
+        value = view.optional(OPTIONAL_LEAF)
+        return CompositeOutput(leaves=() if value is None else (value,))
+
+    async def execute(self, input: CompositeOutput) -> LeafOutput:
+        raise AssertionError("graph preparation test must not execute node")
 
 
 def identity(node: str = "producer", attempt: int = 1) -> ExecutionIdentity:

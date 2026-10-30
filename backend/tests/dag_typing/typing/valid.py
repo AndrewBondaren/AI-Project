@@ -15,6 +15,7 @@ from app.application.engine.nodeTypes.compiledNode import CompiledNode
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.application.engine.registration.nodeRegistry import NodeRegistry, register_llm, register_python
+from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.identity import ContractId, ContractVersion, NodeId
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
@@ -89,3 +90,7 @@ async def verify() -> None:
     python_class = register_python(FakeExecutor, LEAF_CONTRACT, registry=NodeRegistry())(TypedPythonNode)
     assert_type(python_class, type[PythonNode[NodeInput, LeafOutput]])
     register_llm(LEAF_CONTRACT, registry=NodeRegistry())(TypedLLMNode)
+
+
+def verify_plan_lookup(plan: ExecutionPlan) -> None:
+    assert_type(plan.get(NodeId("typed-python"), LEAF_CONTRACT), CompiledNode[NodeInput, LeafOutput])

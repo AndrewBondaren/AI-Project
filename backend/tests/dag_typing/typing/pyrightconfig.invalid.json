@@ -25,6 +25,8 @@
     "../../../../backend/app/application/engine/nodeTypes/support/nodeKind.py",
     "../../../../backend/app/application/engine/nodeTypes/support/pythonNodeError.py",
     "invalid.py",
-    "../../../../backend/app/dataModel/engine/dag/executionPhase.py"
+    "../../../../backend/app/dataModel/engine/dag/executionPhase.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionPlan.py",
+    "../../../../backend/app/application/engine/runtime/graphs/graphCompiler.py"
   ]
 }

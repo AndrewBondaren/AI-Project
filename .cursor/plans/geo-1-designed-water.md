@@ -11942,6 +11942,153 @@ diff --check clean. Valid typing folder5→5, новых файлов/типов
 OPEN: owning schemas/defaults, capture/registration/entry и G8-B atomic cutover
 ещё не выполнены; следующий зависимый feature в этом заходе не начинался.
 
+### G10-A production cutover audit — PLAN RECORDED / CODE NOT STARTED (2026-10-30)
+Scope этой команды — сверка фактического production пути и фиксация атомарного
+состава до реализации. Предыдущие self-review не означают независимой приёмки.
+ТЗ: §6.8/6.9, §6.16 J01–J09, §6.27, §6.29-A/D/E/F/J/M, §6.31-E;
+docs/tz_policy.md §7, docs/tz_map_light_bake.md Placement,
+docs/tz_terrain_hydrology.md GEO-1/HY-12, docs/tz_terrain_generation.md planning.
+
+Фактические разрывы (сверено по backend/app):
+- core/container/worldData.py::surface_planning регистрирует baseline
+  register_world_plan_providers; GeoWorldPlanProviders пока только typed handles.
+- planning/composition/surfacePlanningEntry.py вызывает capture/prepare_captured_bundle;
+  capture_geo и production GEO entry отсутствуют. prepare_geo и
+  prepare_captured_geo_bundle уже реализованы, не писать вторые assembler/reporting.
+- generators/terrain/planning/waterPlacementPlanProvider.py::WaterPlacementPlanProvider
+  строит transient WorldHydrology и вызывает run_prepared_water_placement.
+  У него нет GEO terrain_regions dependency и mixed-source producer.
+- generators/hydrology/placement/waterPlacementPass.py, placement/adapters/water.py
+  и waterTypes.py сохраняют geometry-first PreparedWaterEntry/PlacementBatch.
+  dataModel/placement/water.py::ResolvedWaterPlacement.placement — ResolvedPlacement,
+  тогда как GeoWaterPlacementPlan.outcomes уже PlacementOutcomeV2.
+- generators/hydrology/basinSpecFactory.py требует WaterPlacementPreparation:
+  это оставшийся J08/J09 join, а не задача нового bathymetry алгоритма.
+- WorldHydrology/Declared*/HydrologySeasPolicy/HydrologyLakesPolicy ещё legacy;
+  declarations generation/placement готовы, owning schema не переключена.
+- L0/materialization callers capture делают раньше части region/template loads;
+  production producer RegionGeometryInput claims не найден. Это обязательная
+  проводка same-view inputs, не основание передавать пустые defaults.
+- Boundary: hydrology/boundaries/boundaryPlanner.py::CoastlineBoundaryPlanner
+  готов как domain caller, но registered provider и production producer
+  BoundaryWaterSnapshot.fine_cells отсутствуют. Планировщик нельзя зарегистрировать
+  вместо provider: он требует готовые final fine evidence и admissions.
+
+Атомарный набор (все пути ниже относительно backend/app; части не активировать отдельно):
+1. Owning schemas/normalization — dataModel/hydrology/{worldHydrology,seas,lakes,
+   declaredBasin,declaredLake,declaredCoastline}.py, generation/waterGenerationSettings.py,
+   placement/placementFields.py; application/jsonValidation/worldRow.py::hydrology.
+   Подключить существующие generation owners и metadata. WORLD/CATEGORY/BODY
+   nullable settings наследуют ROOT; ROOT defaults остаются WaterGenerationDefaults.
+   Sea/lake placement defaults=1 из owning POJO (§6.29-A), source None наследует,
+   explicit0 отключён; ROOT autoresolve=False. Удалить sea/lake legacy auto flags,
+   rivers/landforms сохраняют свои каналы. Existing legacySettings normalizers
+   исполняются на import boundary, не образуют runtime compatibility path.
+2. Один source/admission producer — generators/hydrology/sources/
+   proceduralSourceAdmission.py и dataModel/hydrology/policy/proceduralSourceAdmission.py
+   обобщить с заменой names/imports на WaterSourceAdmissionJob и WaterSourceAdmissions/
+   ResolvedWaterSourceBinding для существующего WaterDesignSource union.
+   Не сохранять второй native-only implementation/transport. Admission единственный
+   в PlacementBatchV2, bindings содержат PlacementIdentity, включая competitors.
+   Полные authored basin/lake → domain AUTHORED_REGION; coastline water_source
+   auto=False → authored, auto=True → constrained procedural; body_boundary не
+   body producer. Политика zero-target размещается в existing hydrologyPlacementPolicy.py
+   и binder, не в фасаде или WaterCoverageBudgetPolicy.
+3. Mixed-source preparation — existing terrain/designedWater/preparation/
+   proceduralDesignPreparation.py и proceduralWaterSourceAdapter.py обобщить как
+   captured-source facade/input binding; при переименовании заменить файлы/imports,
+   не добавлять одиннадцатый файл. Использовать existing authored/coastline adapters,
+   placement/adapters/water.py::prepare_authored_water_geometry, metadata factory,
+   designPreparation.py::prepare_designed_water и PlacementSession.run.
+   Один frozen pre-water revision; geometry после admission READY, lake metadata
+   после geometry/rim; один authored union→budget→procedural allocation, без
+   перераспределения после P2. Ни world reread, ни domain dispatch внутри фасада.
+4. G8-B J08/J09 — in-place dataModel/placement/water.py переводится на
+   ResolvedPlacementV2. Existing waterTypes.py и water.py mapper/consumers переходят
+   вместе; PreparedWaterEntry ссылается на готовый PreparedPlacementV2, без своей
+   priority/default логики. basinSpecFactory получает accepted outcomes и exact
+   source metadata/floor preparation; не выдумывает metadata для procedural UID.
+   WaterPlacementPlan/GeoWaterPlacementPlan в terrain/planning/waterPlacementPlan.py
+   проверяют одинаковые accepted records/specs/metadata; disabled/unresolved не
+   превращаются в records. Никаких ResolvedWaterPlacementV2, union old/new или bridge.
+5. Water provider — заменить body существующего waterPlacementPlanProvider.py
+   GEO producer с dependencies terrain_base+terrain_regions; provider читает
+   dependencies и делегирует mixed-source pipeline, без геометрии/cascade/gates.
+   Legacy run_prepared_water_placement caller и переведённые ветки удаляются.
+   hydrology/hydrologyGeneratorService.py и water/planning/waterBodyPlanner.py:
+   затронутый water behavior из готового decision/mode, без повторных bool gates.
+   masks/collection/defaultCollect.py и pack/bake/lightGrid/maskDomains/runMaskDomain.py:
+   проверить только water wrappers по tz_policy §7; чужие домены не мигрировать.
+6. Capture/registration — existing planning/composition/surfacePlanningCapture.py
+   получает capture_geo signature §6.29-M/§6.31-E. Water projection принадлежит
+   hydrology sources: новый sources/waterInputCapture.py::WaterInputCapture —
+   только authored POJO/source projection, без admission/design. Region input
+   projection — terrain/regions/regionExtent.py; existing composition/support/
+   surfaceSupportCapture.py capture для support/coating inputs. Все values/refs
+   из одной authoritative read/draft view; no extent остаётся NoExtent.
+   Existing planProviders.py добавляет register_geo_world_plan_providers:
+   все12 фаз, generic climate providers и surfaceCoatingSupport.py providers
+   переиспользуются с GEO типами; terrain regions — TerrainRegionPlanProvider,
+   boundary — новый generators/hydrology/planning/coastlineBoundaryPlanProvider.py::
+   CoastlineBoundaryPlanProvider (planning2→3), thin deps/delegation к existing
+   CoastlineBoundaryPlanner.prepare. Domain admission binding использует existing
+   hydrologyPlacementBinding; actual final fine evidence нельзя получать из
+   coarse nearest/upsample под видом authoritative BoundaryWaterSnapshot.
+   Недостающий registration не заменять stubs/FrozenUpstream.
+7. Production entry/callers — core/container/worldData.py, composition/
+   surfacePlanningEntry.py и typed contracts/{surfacePlanningView,surfacePlanBundle}.py:
+   GEO handles/capture→existing prepare_captured_geo_bundle→GeoSurfacePlanBundle.
+   Перевести реальные callers: pack/bake/l0/packMaterializationOrchestrator.py,
+   materialize/surface/worldSurfaceMaterializationOrchestrator.py, pack/read/
+   packLoadingProgressFacade.py и wildernessRegionReadService.py, api/routes/map.py.
+   До capture предоставить required region_states/relief_templates/region_claims/
+   mountain_templates из same view через существующие loaders/repositories;
+   не создавать snapshot/patch infrastructure и не менять engine DAG.
+   Все остальные SurfacePlanningEntry call sites проверить rg при реализации.
+   L0/L2 consume один GEO bundle/revision; materialization не делает placement.
+8. Encoding/revisions — planning/encoding/surfaceManifest.py и dataModel/
+   surfacePlanning/surfacePlanBindings.py. Существующий record ID не использовать
+   для чтения старого layout как нового. PC water schema/cache2 и GEO schema/cache2
+   повышаются до3 для изменённого water payload; GEO downstream dependency refs
+   пересобираются из деклараций. Common climate/base контракт без изменений.
+   Новые captured/owner layouts добавляются в manifest; codec tests обязаны
+   отклонять old envelopes, не чинить их converter-ом. Удалить мёртвый baseline
+   registration/transport после ledger, не включать runtime legacy fallback.
+
+Композиция/WARN перед реализацией: dataModel/hydrology20→20 (новые файлы
+в root запрещены); placement/adapters6→6; preparation10→10; composition5→5;
+hydrology/sources3→4 (waterInputCapture.py); прочие counts сверить до добавлений.
+Новые source capture class/domain/path определены выше; никаких generic Ops.
+Механический порядок кода внутри одного cutover: owning models→domain joins/
+transport→capture/registration→entry/callers→удаление переведённого пути. Рабочее
+промежуточное состояние не публикуется как самостоятельная production активация.
+
+Приёмка по поведению, без заранее собранных GEO fixtures вместо production entry:
+- реальный capture→registration→entry на World + same-view sources; mixed
+  authored basin/lake/coastline и explicit procedural source, один P2 batch,
+  accepted record совпадает с outcome/metadata/spec и единым floor writer;
+- missing generation не создаёт implicit ocean; source None использует live1,
+  explicit0 не создаёт объект; zero water_fraction даёт declared policy outcome
+  до sampling, а не EMPTY_GENERATION_TARGET exception из geometry;
+- authored geometry сохраняется при auto=False, incompatible strategy даёт issue;
+  disabled/failed support не вызывает strategy; SUPPORT resume использует current
+  decision; dry/body_boundary не образуют лишний basin;
+- unknown/runtime fallback logging через общий reporting; preview без writes;
+  перестановка sources, cold/warm cache, full/partial L0/L2 одинаковой revision;
+  source/schema change инвалидирует key, old envelopes отклоняются;
+- GEO-1, planning (providers+consumers), hydrology/placement regressions;
+  positive/negative typing и scoped diff --check. Мутации channel wiring и
+  повторного gate должны ломать поведенческие проверки, не только owner-copy test.
+Ручная проверка каждого изменённого orchestrator/callback обязательна отдельно.
+Блокер готовности к коду final activation: до него закрепить exact source/API
+actual final fine-water snapshot для boundary provider (§6.29-D, §6.10/6.31-E)
+и producer same-view RegionGeometryInput claims. Условие не закрыто наличием
+готового boundary planner или тестового snapshot. Нужная доменная реализация
+входит в cutover; новые проектные решения не принимать молча при wiring.
+Backend/HTTP smoke не запускать; commit/push/SQL migration/DAG вне разрешения.
+Done G10-A только после actual container/entry production cutover и удаления
+переведённого legacy пути. Аудит/план не закрывают G10-A, G10-R или G11.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

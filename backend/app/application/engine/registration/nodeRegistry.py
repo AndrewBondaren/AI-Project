@@ -71,6 +71,14 @@ class NodeRegistry:
     def ids(self) -> tuple[NodeId, ...]:
         return tuple(self._nodes)
 
+    def graph_registrations(self) -> tuple[NodeRegistration[BaseModel, BaseModel], ...]:
+        """Internal metadata snapshot for compilation, never an Output read API.
+
+        Only _register writes this store. Heterogeneous I/O are erased here;
+        callers use get(node_id, contract) when they need concrete I/O types.
+        """
+        return tuple(cast(NodeRegistration[BaseModel, BaseModel], entry) for entry in self._nodes.values())
+
 
 def register_python[I: BaseModel, O: BaseModel](
     executor_cls: type[PythonExecutor], contract: NodeContract[I, O], *, registry: NodeRegistry,

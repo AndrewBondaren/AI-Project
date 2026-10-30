@@ -8,7 +8,9 @@ from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.registration.nodeRegistry import NodeRegistry
-from app.dataModel.engine.dag.identity import ContractId, ContractVersion
+from app.application.engine.nodeTypes.compiledNode import CompiledNode
+from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
+from app.dataModel.engine.dag.identity import ContractId, ContractVersion, NodeId
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
     CompositeOutput, FakeExecutor, LEAF_CONTRACT, LeafOutput, NodeInput,
@@ -51,3 +53,8 @@ def wrong_phases() -> None:
     TypedPythonNode(request_value=1, phase=ExecutionPhase.LLM)  # expect: reportArgumentType
     phase: PythonExecutionPhase = ExecutionPhase.LLM  # expect: reportAssignmentType
     print(phase)
+
+
+def wrong_plan_lookup(plan: ExecutionPlan) -> None:
+    wrong: CompiledNode[OtherInput, LeafOutput] = plan.get(NodeId("typed-python"), LEAF_CONTRACT)  # expect: reportAssignmentType
+    print(wrong)
