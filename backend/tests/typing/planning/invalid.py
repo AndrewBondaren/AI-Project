@@ -885,3 +885,19 @@ def invalid_geo_route_placement(owner: HydrologyRoutesAssembler, inputs: GeoHydr
 
 def invalid_captured_category_source(inputs: GeoHydrologyPlanInput) -> BodyWaterGenerationSettings:
     return inputs.lake_generation  # EXPECT: reportReturnType
+
+
+from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyRoutesPlanProvider
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.application.policy.policyResolver import PolicyResolver
+
+
+def invalid_geo_routes_provider_request(provider: GeoHydrologyRoutesPlanProvider, request: PlanRequest[HydrologyPlanInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
+    provider.build(request, dependencies, control)  # EXPECT: reportArgumentType
+
+
+def invalid_geo_routes_water_handle(relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+    water: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan], assembler: HydrologyRoutesAssembler,
+    policy: PolicyResolver) -> None:
+    GeoHydrologyRoutesPlanProvider(relief, water, assembler, policy)  # EXPECT: reportArgumentType

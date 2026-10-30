@@ -3,11 +3,15 @@
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanBuildControl, PlanBuildFailure
+from app.application.policy.policyResolver import PolicyResolver
+from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
 from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
 from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, HydrologyRoutesPlan, GeoHydrologyPlan, GeoHydrologyRoutesPlan
 from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput, HydrologyPlanInput
+from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult, PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.planning.identity.planKey import PlanSlot
@@ -44,6 +48,39 @@ class HydrologyRoutesPlanProvider:
         refs = {dep.slot: dep.ref for dep in relief.dependencies}
         if refs.get(PlanSlot(SurfacePlanSlot.WATER_PLACEMENT.value)) != water.ref:
             raise _failure("routes must use relief's exact water-placement ref")
+
+
+class GeoHydrologyRoutesPlanProvider:
+    """Bind exact GEO dependencies and delegate policy and route production."""
+
+    def __init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
+                 water_placement: RegisteredPlanContract[GeoWaterPlacementInput, GeoWaterPlacementPlan],
+                 assembler: HydrologyRoutesAssembler, policy: PolicyResolver) -> None:
+        self._relief, self._water, self._assembler, self._policy = relief, water_placement, assembler, policy
+
+    def build(self, request: PlanRequest[GeoHydrologyPlanInput], dependencies: PlanDependencyReader,
+              control: PlanBuildControl) -> PlanBuildResult[GeoHydrologyRoutesPlan]:
+        control.raise_if_shutdown()
+        relief = dependencies.require(PlanSlot(SurfacePlanSlot.RELIEF.value), self._relief)
+        water = dependencies.require(PlanSlot(SurfacePlanSlot.WATER_PLACEMENT.value), self._water)
+        self._require_refs(relief, water)
+        inputs = request.inputs
+        decisions: list[tuple[Category, HydrologyGenerationDecision]] = []
+        for category, settings in ((Category.LAKE, inputs.lake_generation),
+                (Category.OCEAN, inputs.ocean_generation), (Category.SEA, inputs.sea_generation)):
+            control.raise_if_shutdown()
+            binding = bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation,
+                defaults=inputs.defaults, category=settings, root_path=("hydrology",),
+                context_path=("hydrology", "resolved_generation", category.value))
+            decisions.append((category, self._policy.resolve(binding.spec, binding.inputs, binding.facts,
+                mode=inputs.resolution_mode)))
+        return self._assembler.assemble_geo(world_uid=request.key.world_uid, inputs=inputs,
+            relief=relief.payload, placement=water.payload, classification_decisions=tuple(decisions), control=control)
+
+    def _require_refs(self, relief: PlanEnvelope[ReliefPlan], water: PlanEnvelope[GeoWaterPlacementPlan]) -> None:
+        refs = {dep.slot: dep.ref for dep in relief.dependencies}
+        if refs.get(PlanSlot(SurfacePlanSlot.WATER_PLACEMENT.value)) != water.ref:
+            raise _failure("GEO routes must use relief's exact water-placement ref")
 
 
 class HydrologyFinalPlanProvider:

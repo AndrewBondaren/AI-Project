@@ -1002,7 +1002,7 @@ Exact файлы, существующие ports/POJO и folder counts — ша�
 Source identity/revision, runtime target stamp, planning fingerprint и
 format version остаются разными понятиями. Операция использует captured
 source closure, включая состав коллекций; source/pack refs удерживаются
-до передачи holder. Historическое чтение разрешает pinned/as-of, не latest.
+до передачи holder. Историческое чтение разрешает pinned/as-of, не latest.
 Изменение effective inputs инвалидирует соответствующие доменные планы/
 представления; unrelated source change не требует новой materialization.
 Новая materialization другого LOD сама не создаёт SourceRevision.

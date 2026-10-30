@@ -147,3 +147,11 @@ def captured_category_generation(view: GeoSurfacePlanningView) -> None:
     assert_type(view.hydrology.sea_generation, CategoryWaterGenerationSettings)
     assert_type(view.hydrology.ocean_generation, CategoryWaterGenerationSettings)
     assert_type(view.hydrology.lake_generation, CategoryWaterGenerationSettings)
+
+
+from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyRoutesPlanProvider
+
+
+def exact_geo_routes_provider(provider: GeoHydrologyRoutesPlanProvider, request: PlanRequest[GeoHydrologyPlanInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
+    assert_type(provider.build(request, dependencies, control), PlanBuildResult[GeoHydrologyRoutesPlan])

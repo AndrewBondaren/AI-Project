@@ -11324,6 +11324,37 @@ negative 242 diagnostics (+1), all 239 expected annotations covered, baseline
 surplus unchanged. Existing manifest IDs unchanged; only282 appended.
 git diff --check clean. GEO routes provider / G10-A production remain OPEN.
 
+### G10-A GEO routes provider — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: produce the GEO route envelope from exact relief/water dependencies and
+captured category sources, using existing common policy and domain assembly.
+TZ: docs/tz_policy.md §5 (metadata/compiler/common executor),
+docs/tz_terrain_hydrology.md HY-12; plan §6.16 water-fill ledger / §6.29-M.
+Owner/layer/path: application hydrology planning adapter, existing
+backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py.
+GeoHydrologyRoutesPlanProvider(relief:RegisteredPlanContract[ReliefPlanInput,ReliefPlan],
+water_placement:RegisteredPlanContract[GeoWaterPlacementInput,GeoWaterPlacementPlan],
+assembler:HydrologyRoutesAssembler, policy:PolicyResolver) has build with exact
+PlanRequest[GeoHydrologyPlanInput] -> PlanBuildResult[GeoHydrologyRoutesPlan].
+Require typed deps and relief's exact water-placement ref before any policy/fill.
+For canonical LAKE/OCEAN/SEA captured settings, delegate to existing
+bind_hydrology_generation_policy and supplied generic PolicyResolver with the
+captured resolution_mode; pass typed decisions to assembler.assemble_geo once.
+No domain rule/algorithm, source default, World read, placement or carve in
+provider; root/category/body algorithms stay in existing common engines/owners.
+Tests: existing geo1/integration/test_revisions.py uses real registry/cache and
+kernels; exact geometry/routing vs PC, cold policy calls / warm cache, category
+and dependency edits, bad refs rejected before policy/fill, codec and actual
+routes→river-relief→final chain preserving decisions/mapping. Update existing
+planning provider boundary test and positive/negative typing fixtures.
+Folders: hydrology/planning 2→2, integration 4→4; no new files.
+Verify GEO-1 + planning suites, valid/invalid pyright and diff check. Done: isolated
+GEO route provider verified; production composition/capture activation remains
+atomic G10-A, with no PC registry switch in this group.
+Evidence: GEO-1 611 OK (+7), planning 292 OK; positive pyright 0;
+negative 244 diagnostics (+2), all 241 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

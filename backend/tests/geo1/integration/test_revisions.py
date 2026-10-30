@@ -303,3 +303,142 @@ class GeoReliefProviderTests(TestCase):
         self.assertEqual(dict(result.payload.coarse_hydro)[route.receiver_cell].water_body_uid, "lake")
         self.assertEqual(result.payload.source_mapping, routes.payload.source_mapping)
         self.assertEqual(self.seam.build("hydrology", inputs, available), result)
+
+
+class GeoRoutesProviderTests(TestCase):
+    def setUp(self):
+        from tests.geo1.integration.test_activation import GeoRouteAssemblyTests
+        from app.application.policy.policyResolver import PolicyResolver
+        from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import GeoHydrologyRoutesPlanProvider
+        from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import GeoRiverReliefPlanProvider
+        self.domain = GeoRouteAssemblyTests()
+        self.domain.setUp()
+        self.addCleanup(self.domain.doCleanups)
+        self.registry, self.handles = PlanRegistry(), {}
+        for slot, input_type, output_type in ((S.RELIEF, ReliefPlanInput, ReliefPlan),
+                (S.WATER_PLACEMENT, GeoWaterPlacementInput, GeoWaterPlacementPlan),
+                (S.HYDROLOGY_ROUTES, GeoHydrologyPlanInput, GeoHydrologyRoutesPlan),
+                (S.RIVER_RELIEF, RiverReliefInput, RiverReliefPlan),
+                (S.HYDROLOGY, HydrologyFinalInput, GeoHydrologyPlan)):
+            self.handles[slot.value] = declared_binding(geo_surface_plan_binding(slot), input_type, output_type)
+        h = self.handles
+        self.policy, self.assembler = PolicyResolver(), self.domain.owner
+        self.registry.register(h["water_placement"], FrozenUpstream())
+        self.registry.register(h["relief"], FrozenUpstream())
+        self.registry.register(h["hydrology_routes"], GeoHydrologyRoutesPlanProvider(
+            h["relief"], h["water_placement"], self.assembler, self.policy))
+        self.registry.register(h["river_relief"], GeoRiverReliefPlanProvider(h["relief"], h["hydrology_routes"]))
+        self.registry.register(h["hydrology"], GeoHydrologyFinalPlanProvider(h["relief"], h["hydrology_routes"],
+            h["river_relief"], h["water_placement"], HydrologyFactsAssembler()))
+        water = self.seal("water_placement", self.domain.placement)
+        self.upstream = {"water_placement": water,
+            "relief": self.seal("relief", self.domain.pc.before.payload, (("water_placement", water),))}
+        policy = CachePolicy(max_retained_bytes=10000000, max_entry_bytes=5000000)
+        self.service = PlanningService(self.registry, CacheService(MemoryCache(policy), policy),
+            PlanningExecutionPolicy(max_workers=2, max_pending_builds=8))
+        self.addCleanup(self.service.shutdown)
+
+    def seal(self, name, payload, upstream=()):
+        return seal(self.handles[name], payload, upstream, world_uid="climate-world")
+
+    def build(self, inputs=None, *, name="hydrology_routes", available=None):
+        inputs = self.domain.inputs if inputs is None else inputs
+        available = self.upstream if available is None else available
+        handle, reader, deps = self.handles[name], PlanDependencyReader(self.registry), []
+        for declaration in handle.dependency_contracts:
+            slot = declaration.slot
+            envelope = available[slot]
+            reader = reader.with_plan(slot, self.handles[slot], envelope)
+            deps.append(PlanDependency(slot=slot, ref=envelope.ref))
+        dependencies = tuple(deps)
+        meta, scope = handle.metadata, WorldPlanScope()
+        request = PlanRequest[type(inputs)](key=PlanKey(world_uid="climate-world", scope=scope,
+            contract_id=meta.id, schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
+            input_fingerprint=handle.fingerprint_inputs("climate-world", scope, inputs, dependencies)),
+            inputs=inputs, dependencies=dependencies)
+        return self.service.get_or_build(handle, request, reader, wait=Wait())
+
+    def test_real_provider_runs_common_policy_and_assembly_once_then_uses_cache(self):
+        with patch.object(self.policy, "resolve", wraps=self.policy.resolve) as policy, \
+                patch.object(self.assembler, "assemble_geo", wraps=self.assembler.assemble_geo) as assemble, \
+                patch("app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live World read")):
+            result = self.build()
+            self.assertEqual(self.build(), result)
+            self.assertEqual(policy.call_count, 3)
+            assemble.assert_called_once()
+        self.assertEqual(result.payload.base, self.domain.pc.routes().payload)
+        self.assertTrue(result.payload.base.coarse_routes and result.payload.base.fine_routes)
+        self.assertEqual(result.payload.classification_decisions, self.domain.decisions)
+        self.assertEqual(result.payload.source_mapping, self.domain.assemble().payload.source_mapping)
+        codec = self.handles["hydrology_routes"].cache_binding.codec
+        self.assertEqual(codec.decode(codec.encode(result)), result)
+
+    def test_captured_category_overrides_and_inheritance_drive_policy(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        inputs = rebuild(self.domain.inputs, generation=rebuild(self.domain.inputs.generation, autoresolve=True),
+            sea_generation=rebuild(self.domain.inputs.sea_generation, autoresolve=False),
+            lake_generation=rebuild(self.domain.inputs.lake_generation, autoresolve=False))
+        result = self.build(inputs)
+        decisions = dict(result.payload.classification_decisions)
+        self.assertIs(decisions[WaterGenerationCategory.SEA].require_behavior(), HydrologyExecutionMode.DECLARED_ONLY)
+        self.assertIs(decisions[WaterGenerationCategory.LAKE].require_behavior(), HydrologyExecutionMode.DECLARED_ONLY)
+        self.assertIs(decisions[WaterGenerationCategory.OCEAN].require_behavior(), HydrologyExecutionMode.AUTORESOLVE)
+        self.assertTrue(all(d.provenance for d in decisions.values()))
+
+    def test_category_edit_changes_key_without_hidden_policy_cache(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        first = self.build()
+        inputs = rebuild(self.domain.inputs,
+            sea_generation=rebuild(self.domain.inputs.sea_generation, water_fraction=0.25))
+        with patch.object(self.policy, "resolve", wraps=self.policy.resolve) as policy:
+            second = self.build(inputs)
+            self.assertEqual(self.build(inputs), second)
+            self.assertEqual(policy.call_count, 3)
+        self.assertNotEqual(first.ref.key, second.ref.key)
+        self.assertEqual(first.payload, second.payload)
+
+    def test_wrong_relief_water_provenance_fails_before_policy_or_fill(self):
+        water = self.upstream["water_placement"]
+        wrong = self.seal("relief", self.upstream["relief"].payload, (("water_placement", SimpleNamespace(
+            ref=water.ref.model_copy(update={"output_fingerprint": b"x"*32}))),))
+        with patch.object(self.policy, "resolve") as policy, patch.object(self.assembler, "assemble_geo") as assemble:
+            with self.assertRaises(PlanBuildFailure):
+                self.build(available=self.upstream | {"relief": wrong})
+            policy.assert_not_called()
+            assemble.assert_not_called()
+
+    def test_water_dependency_edit_invalidates_the_coherent_route_chain(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        first = self.build()
+        water = self.upstream["water_placement"]
+        uid, decision = water.payload.source_decisions[0]
+        changed = rebuild(water.payload, source_decisions=((uid, rebuild(decision,
+            effective_priority=decision.effective_priority+1)), *water.payload.source_decisions[1:]))
+        water = self.seal("water_placement", changed)
+        relief = self.seal("relief", self.upstream["relief"].payload, (("water_placement", water),))
+        second = self.build(available={"water_placement": water, "relief": relief})
+        self.assertNotEqual(first.ref.key, second.ref.key)
+        self.assertEqual(first.payload, second.payload)
+
+    def test_real_routes_river_relief_and_final_preserve_one_policy_result(self):
+        with patch.object(self.policy, "resolve", wraps=self.policy.resolve) as policy:
+            routes = self.build()
+            available = self.upstream | {"hydrology_routes": routes}
+            river = self.build(self.domain.pc.river_inputs, name="river_relief", available=available)
+            available |= {"river_relief": river}
+            final = self.build(self.domain.pc.final_inputs, name="hydrology", available=available)
+            self.assertEqual(policy.call_count, 3)
+        self.assertEqual(final.payload.coarse_surface_z, river.payload.surface_z)
+        self.assertEqual(final.payload.source_mapping, routes.payload.source_mapping)
+        self.assertEqual(final.payload.classification_decisions, routes.payload.classification_decisions)
+        self.assertTrue(final.payload.sparse_fine_hydro)
+        self.assertEqual(self.build(self.domain.pc.final_inputs, name="hydrology", available=available), final)
+
+    def test_disabled_root_yields_common_disabled_decisions_and_no_fill(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        with patch.object(self.assembler._water, "_materialize", side_effect=AssertionError("disabled fill")):
+            result = self.build(rebuild(self.domain.inputs, enabled=False))
+        self.assertTrue(all(decision.state is PolicyState.DISABLED
+            for _, decision in result.payload.classification_decisions))
+        self.assertFalse(result.payload.base.water_bodies or result.payload.base.coarse_routes
+            or result.payload.base.fine_routes or result.payload.source_mapping.entries)
