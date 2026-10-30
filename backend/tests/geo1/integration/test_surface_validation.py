@@ -211,3 +211,71 @@ class SurfaceContractTests(TestCase):
         self.assertEqual(_revision("world", (inputs,)), _revision("world", (validation,)))
         self.assertNotEqual(handle.fingerprint_inputs("world", WorldPlanScope(), inputs, deps),
             handle.fingerprint_inputs("world", WorldPlanScope(), validation, deps))
+
+
+    def test_captured_category_sources_are_required_strict_and_revalidated_in_both_phases(self):
+        from tests.geo1.integration.support.pipeline import fields
+        for inputs in (self.view.water_placement, self.view.hydrology):
+            for name in ("sea_generation", "ocean_generation", "lake_generation"):
+                with self.subTest(phase=type(inputs).__name__, field=name):
+                    values = fields(inputs)
+                    values.pop(name)
+                    with self.assertRaises(ValidationError):
+                        type(inputs).model_validate(values)
+                    for update in ({"autoresolve": "true"}, {"water_fraction": 2.0}, {"strategy": "unknown"}):
+                        with self.assertRaises(ValidationError):
+                            rebuild(inputs, **{name: getattr(inputs, name).model_copy(update=update)})
+
+    def test_category_generation_must_match_across_phases(self):
+        for name in ("sea_generation", "ocean_generation", "lake_generation"):
+            for update in ({"autoresolve": True}, {"water_fraction": 0.2}):
+                value = rebuild(getattr(self.view.hydrology, name), **update)
+                with self.subTest(field=name, update=update):
+                    with self.assertRaisesRegex(ValidationError, "captured category generation"):
+                        rebuild(self.view, hydrology=rebuild(self.view.hydrology, **{name: value}))
+                    matched = rebuild(self.view, hydrology=rebuild(self.view.hydrology, **{name: value}),
+                        water_placement=rebuild(self.view.water_placement, **{name: value}))
+                    restored = decode(encode(matched, SURFACE_MANIFEST), type(matched), SURFACE_MANIFEST)
+                    self.assertEqual(restored, matched)
+
+    def test_each_category_setting_changes_both_request_fingerprints_and_source_revision(self):
+        from app.application.worldData.planning.composition.planProviders import declared_binding
+        from app.application.worldData.planning.composition.surfacePlanningCapture import _revision
+        from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyRoutesPlan
+        from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan
+        from app.dataModel.planning.identity.planKey import WorldPlanScope
+        from app.dataModel.surfacePlanning.surfacePlanBindings import geo_surface_plan_binding
+        from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot as S
+        from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
+        plans = bundle(self.view)
+        for slot, inputs, payload_type in ((S.WATER_PLACEMENT, self.view.water_placement, GeoWaterPlacementPlan),
+                (S.HYDROLOGY_ROUTES, self.view.hydrology, GeoHydrologyRoutesPlan)):
+            handle = declared_binding(geo_surface_plan_binding(slot), type(inputs), payload_type)
+            deps = getattr(plans, slot.value).dependencies
+            variants = [inputs]
+            for name in ("sea_generation", "ocean_generation", "lake_generation"):
+                for update in ({"autoresolve": False}, {"autoresolve": True}, {"water_fraction": 0.2},
+                        {"strategy": Strategy.AUTHORED_REGION}):
+                    variants.append(rebuild(inputs, **{name: rebuild(getattr(inputs, name), **update)}))
+            with self.subTest(slot=slot):
+                self.assertEqual(len({handle.fingerprint_inputs("world", WorldPlanScope(), value, deps)
+                    for value in variants}), len(variants))
+                self.assertEqual(len({_revision("world", (value,)) for value in variants}), len(variants))
+
+    def test_captured_categories_feed_common_inheritance_and_policy_after_replay(self):
+        from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
+        from app.application.policy.policyResolver import PolicyResolver
+        from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode as Mode
+        inputs = rebuild(self.view.hydrology, enabled=True,
+            generation=rebuild(self.view.hydrology.generation, autoresolve=True),
+            sea_generation=rebuild(self.view.hydrology.sea_generation, autoresolve=False),
+            lake_generation=rebuild(self.view.hydrology.lake_generation, water_fraction=0.1))
+        inputs = decode(encode(inputs, SURFACE_MANIFEST), type(inputs), SURFACE_MANIFEST)
+        for name, expected, fraction in (("sea_generation", Mode.DECLARED_ONLY, 0.6),
+                ("ocean_generation", Mode.AUTORESOLVE, 0.6), ("lake_generation", Mode.AUTORESOLVE, 0.1)):
+            bound = bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation,
+                defaults=inputs.defaults, category=getattr(inputs, name), root_path=("hydrology",),
+                context_path=("classification", name))
+            decision = PolicyResolver().resolve(bound.spec, bound.inputs, bound.facts, mode=inputs.resolution_mode)
+            self.assertIs(decision.require_behavior(), expected)
+            self.assertEqual(bound.context.water_fraction, fraction)

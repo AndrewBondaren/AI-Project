@@ -137,3 +137,13 @@ def geo_route_assembly(owner: HydrologyRoutesAssembler, coarse: CoarseRiverPlann
     assert_type(planned, PlanBuildResult[CoarseRiverPlan])
     assert_type(fine.plan(world_uid="world", inputs=inputs, surface_z=relief.surface_z,
         water=water, coarse=planned.payload, control=control), PlanBuildResult[FineRiverPlan])
+
+
+
+def captured_category_generation(view: GeoSurfacePlanningView) -> None:
+    assert_type(view.water_placement.sea_generation, CategoryWaterGenerationSettings)
+    assert_type(view.water_placement.ocean_generation, CategoryWaterGenerationSettings)
+    assert_type(view.water_placement.lake_generation, CategoryWaterGenerationSettings)
+    assert_type(view.hydrology.sea_generation, CategoryWaterGenerationSettings)
+    assert_type(view.hydrology.ocean_generation, CategoryWaterGenerationSettings)
+    assert_type(view.hydrology.lake_generation, CategoryWaterGenerationSettings)

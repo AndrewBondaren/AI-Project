@@ -131,6 +131,10 @@ class GeoSurfacePlanningView(BaseModel):
             raise ValueError("GEO phases require the same authored water category settings")
         if water.generation != routes.generation or water.defaults != routes.defaults:
             raise ValueError("GEO phases require the same captured generation and defaults")
+        if (water.sea_generation != routes.sea_generation
+                or water.ocean_generation != routes.ocean_generation
+                or water.lake_generation != routes.lake_generation):
+            raise ValueError("GEO phases require the same captured category generation")
         if terrain.seed != routes.seed or terrain.seed != self.surface_support.seed:
             raise ValueError("GEO phases require one captured terrain seed")
         source_uids = {source.value.source_uid if isinstance(source, ProceduralSource) else source.value.location_uid

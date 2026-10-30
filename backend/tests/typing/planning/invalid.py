@@ -880,3 +880,8 @@ def invalid_geo_route_placement(owner: HydrologyRoutesAssembler, inputs: GeoHydr
     relief: ReliefPlan, placement: WaterPlacementPlan,
     decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...], control: PlanBuildControl) -> None:
     owner.assemble_geo(world_uid="world", inputs=inputs, relief=relief, placement=placement, classification_decisions=decisions, control=control)  # EXPECT: reportArgumentType
+
+
+
+def invalid_captured_category_source(inputs: GeoHydrologyPlanInput) -> BodyWaterGenerationSettings:
+    return inputs.lake_generation  # EXPECT: reportReturnType

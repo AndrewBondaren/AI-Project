@@ -5242,6 +5242,7 @@ GEO schema версии отделены от PC baseline. В
 GeoWaterPlacementInput(enabled:bool,resolution_mode:ResolutionMode,
 declared_world_bounds:WorldBounds|None,default_water_level:FineZ,
 generation:WorldWaterGenerationSettings,defaults:WaterGenerationDefaults,
+sea_generation/ocean_generation/lake_generation:CategoryWaterGenerationSettings,
 seas:HydrologySeasPolicy,lakes:HydrologyLakesPolicy,
 sources:tuple[WaterDesignSource,...],anchors:tuple[WaterAnchorInput,...],
 topology:WorldTopology,grid:SurfaceGridSettings,z_min:FineZ,z_max:FineZ,
@@ -5274,7 +5275,9 @@ regionExtent.py::prepare_terrain_regions, тип в своём terrain domain.
 GeoHydrologyPlanInput содержит baseline HydrologyPlanInput fields
 §6.28 (полный список там), но sea/lake policies новой schema и
 allowed_body_kinds:frozenset[BasinKind], generation:WorldWaterGenerationSettings
-and defaults:WaterGenerationDefaults (required captured root sources). Input несёт только capture-time
+and defaults:WaterGenerationDefaults (required captured root sources), plus
+sea_generation/ocean_generation/lake_generation:CategoryWaterGenerationSettings
+(required captured normalized category sources). Input несёт только capture-time
 authored настройки; вычисляемые решения в него не входят и не
 capture'ятся. Old sea/ocean autoresolve bool fields в новой schema
 отсутствуют. Producer source_decisions — GeoWaterPlacementPlan, поле
@@ -11287,6 +11290,39 @@ and atomic production wiring remain open in G10-A.
 Evidence: GEO-1 600 OK (+7), planning 292 OK; positive pyright 0;
 negative 241 diagnostics (+1), all 238 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. G10-A production remains OPEN.
+
+### G10-A captured category generation — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Readiness fact: isolated GEO inputs carry root generation/defaults but no sea,
+ocean or lake category generation source. A provider cannot synthesize these
+from old bool gates or use settings outside its input fingerprint.
+TZ: docs/tz_cascade_context.md §4 (linked category sources), docs/tz_policy.md §5;
+plan §6.29-M source capture / §6.31-E exact phase inputs.
+Owner/layer: dataModel source projection; exact existing files
+backend/app/dataModel/{terrain/planning/inputs/geoWaterPlacementInput.py,
+hydrology/planning/inputs/geoHydrologyPlanInput.py}. Both add required
+sea_generation, ocean_generation, lake_generation:CategoryWaterGenerationSettings.
+These are immutable captured projections of normalized owning settings, not new
+authored channels or computed decisions; root/body source ownership is unchanged.
+No conversion from legacy enabled/autoresolve fields and no implicit defaults in
+captured input. Atomic capture_geo will read the future owning category fields
+from the same source view used for physical category knobs.
+application/worldData/planning/contracts/surfacePlanningView.py requires exact
+cross-phase equality. application/worldData/planning/encoding/surfaceManifest.py
+appends existing CategoryWaterGenerationSettings at ID282; IDs1..281 unchanged.
+Update existing geo1 integration fixtures, test_surface_validation.py and typing
+fixtures. Folders: dataModel input leaves unchanged; composition/contracts and
+encoding unchanged; integration 4→4; no new files. Verify required/strict/forged
+inputs, per-category cross-phase mismatch, inheritance/override truth table via
+real common binder/PolicyResolver, source revision/artifact key sensitivity and
+codec closure. Run GEO-1, planning, positive/negative pyright and diff check.
+Done: complete category-source capture contract; provider and production wiring
+remain open. This amends §6.29-M with explicit category projections needed by
+both placement and hydrology route requests.
+Evidence: GEO-1 604 OK (+4), planning 292 OK; positive pyright 0;
+negative 242 diagnostics (+1), all 239 expected annotations covered, baseline
+surplus unchanged. Existing manifest IDs unchanged; only282 appended.
+git diff --check clean. GEO routes provider / G10-A production remain OPEN.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

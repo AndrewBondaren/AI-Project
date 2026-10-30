@@ -362,7 +362,7 @@ class GeoWaterDecisionConsumerTests(TestCase):
         for category in sorted(WaterGenerationCategory, key=lambda c: c.value):
             binding = bind_hydrology_generation_policy(enabled=enabled,
                 generation=WorldWaterGenerationSettings(autoresolve=autoresolve), defaults=self.inputs.defaults,
-                category=CategoryWaterGenerationSettings(), root_path=("hydrology",),
+                category=getattr(self.inputs, category.value+"_generation"), root_path=("hydrology",),
                 context_path=("classification", category.value))
             values.append((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
                 mode=self.inputs.resolution_mode)))
@@ -477,7 +477,7 @@ class GeoRouteAssemblyTests(TestCase):
         from tests.planning.providers.test_domain_providers import HydrologyProviderTests
         from tests.geo1.integration.support.pipeline import fields, geo_placement
         from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
-        from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
+        from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings
         from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
         from app.dataModel.hydrology.enums.basinKind import BasinKind
         self.pc = HydrologyProviderTests()
@@ -485,6 +485,8 @@ class GeoRouteAssemblyTests(TestCase):
         self.addCleanup(self.pc.doCleanups)
         self.inputs = GeoHydrologyPlanInput(**fields(self.pc.hydro_inputs),
             generation=WorldWaterGenerationSettings(), defaults=WaterGenerationDefaults(),
+            sea_generation=CategoryWaterGenerationSettings(), ocean_generation=CategoryWaterGenerationSettings(),
+            lake_generation=CategoryWaterGenerationSettings(),
             allowed_body_kinds=frozenset(BasinKind))
         # GEO requires positive admission. Resolve that fixture explicitly through
         # the existing placement owner while retaining the same accepted geometry.
@@ -501,7 +503,7 @@ class GeoRouteAssemblyTests(TestCase):
         for category in sorted(WaterGenerationCategory, key=lambda c: c.value):
             binding = bind_hydrology_generation_policy(enabled=enabled,
                 generation=self.inputs.generation, defaults=self.inputs.defaults,
-                category=CategoryWaterGenerationSettings(), root_path=("hydrology",),
+                category=getattr(self.inputs, category.value+"_generation"), root_path=("hydrology",),
                 context_path=("classification", category.value))
             values.append((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
                 mode=self.inputs.resolution_mode)))

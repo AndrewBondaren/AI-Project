@@ -818,6 +818,228 @@ DB-модели и имена existing services не заменяют архит
 объявляются реализованными. Ноды/SQL-schema/backend-start/коммиты не входят
 в этот документальный запрос. Новые реализации требуют согласованной карты.
 
+### 8.1. Шаг 1 — архитектурные контракты на отдельную приёмку (2026-10-30)
+
+Статус: **ПОДГОТОВЛЕНО К ПРИЁМКЕ; НЕ ПРИНЯТО**. Запрос «выполняй план»
+запускает последовательность §8; не подменяет отдельную приёмку ещё не
+описанных контрактов. Ниже — предложения по поведению §1–6 до inventory/
+contract freeze и implementation map. Python signatures, новые классы,
+DDL и DAG-facing DTO этим разделом не утверждаются. Код не изменён.
+
+Норматив шага: `docs/tz_patch_system.md` § «Владелец сбора патчей — только
+DAG», `docs/tz_world_snapshot.md` § «Staged artifacts и точки публикации»,
+«Правила модели pack + overlay», «Гранулярность модификаций и сохранение
+истории»; обязательные границы настоящего плана §1 и §3.4 сохраняются.
+
+#### Приёмка §1 — владельцы и границы вызовов
+
+Baseline не меняется. DAG вызывает domain read и write-free подготовку,
+отдельно запрашивает materialization, собирает PatchSet. Pure generator
+получает prepared inputs и возвращает результат без IO и patches.
+Domain application преобразует prepared result в frozen patch-данные.
+Snapshot получает уже собранный набор, вызывает domain handlers и storage
+и владеет единым commit. Ни Patch, ни handler, ни repository не инициируют
+следующую стадию, Snapshot или самостоятельную публикацию.
+
+Проверяемый результат: трасса вызовов не содержит обратных вызовов из
+Snapshot/storage в planning/materialization; подготовка не меняет active
+heads или опубликованные SQL/pack. Этот аудит обязателен и для вложенных
+сервисов, а не только для публичных методов. WS read/router не вводится.
+
+#### Приёмка §2 — подготовка, проверка и доменное применение
+
+Вход подготовки — доменная операция, явно выбранное исходное состояние
+и её typed inputs. Выход — prepared typed result с dependencies и
+предусловиями либо явный доменный отказ. Validation не выполняет
+сохранение с последующим rollback. `validate_only` не создаёт staging,
+lease или commit и использует те же доменные решения/диагностику.
+
+Вход materialization — готовый актуальный план/revision и запрошенный
+scope/LOD. Выход — typed result или удерживаемые staged refs. Отсутствующий
+план не строится внутри materializer. Staging выполняет application-домен
+через общий port; generator/worker IO не получает. Изменение planning
+не запускает materialization; domain output явно сообщает invalidation.
+
+При применении handler проверяет собственные предусловия и семантику
+переданной секции, формирует её результат и поручает своему storage
+добавить версии в Snapshot-owned transaction. Он не пересчитывает
+planning/materialization и не вызывает write-операцию подготовки повторно.
+Общая инфраструктура не интерпретирует payload и не угадывает effects.
+
+Проверяемый результат: подготовленное изменение не видно через published
+read; после успешного commit виден весь набор; при отказе любого handler
+не видна ни одна новая секция. Запись доменных версий без snapshot history
+не считается успешным применением.
+
+#### Приёмка §3 — Patch, секции, порядок и конфликты
+
+Каждая доменная операция объявляет свою связку target / expected state /
+change / prepared result. Typed target и область воздействия принадлежат
+домену; произвольные dict, generic field path, имя CRUD-метода, callback,
+repository или файловый путь не являются контрактом модификации.
+Patch содержит данные перехода и refs, но не исполняемое поведение.
+
+PatchSet передаёт полный подготовленный набор и явные зависимости секций.
+Snapshot проверяет полноту и допустимость указанного порядка, не выбирает
+стадии и не сортирует их самостоятельно. Внутри секции порядок и допустимые
+композиции определяет домен. Неверный порядок, цикл или отсутствующая
+зависимость дают отказ всего набора, без попытки достроить dependency.
+
+Предусловие различает ожидаемое отсутствие и удерживаемую версию цели;
+удалённая цель не превращается в никогда не существовавшую. Для runtime
+используется pack/snapshot provenance по §3.1.1, для source — существующий
+контракт SourceRevision после его freeze. Snapshot не вычисляет версии
+доменных целей по общему head и не подменяет source revision fingerprint'ом.
+
+Handler проверяет всю секцию относительно согласованного исходного
+состояния, включая пересечения target внутри набора. Последовательные
+операции над одной целью допустимы только при явно объявленной доменной
+семантике композиции; промежуточный prepared result не объявляется
+опубликованной версией. При отсутствии такой семантики пересечение
+отклоняется целиком. Межсекционные ограничения должны быть объявлены
+домена́ми и представлены явной зависимостью; общий код не выводит их из payload.
+
+Изменение стены сохраняет остальные стены; явный replace агрегата требует
+своей операции. Изменение вложенной цели учитывается при проверке
+пересекающегося агрегата. Незатрагивающий цель тик не меняет её stamp.
+Подготовленный результат другого patch/revision не подходит даже при
+совпадении scope. Нет результата или удерживаемого ref — отказ, без generate.
+
+Проверяемый результат: отдельные будущие сценарии для независимых целей,
+стена/дом, двух операций одной секции, неверного порядка секций и
+несовместимого prepared result. Для каждого concrete Patch обязательна
+замена CRUD/backend при неизменных классе, payload, format и bindings
+по §3.4. Сейчас эти проверки не выполнены: concrete классов ещё нет.
+
+#### Приёмка §4 — commit, исходы, staging и восстановление
+
+Единица публикации — весь переданный Snapshot набор. Перед записью
+проверяются форматы оболочки/секций, зарегистрированные handlers,
+связность refs и наличие удержания. Неизвестная секция, неподдерживаемый
+формат, отсутствующий или повреждённый artifact отклоняют весь набор.
+Проверка ref включает kind, format, hash и размер; доверия одному пути
+или факту наличия файла недостаточно. Upgrade старой секции — доменный
+read, без перезаписи истории и без materialization.
+
+Объёмные blobs/rows уже подготовлены и защищены lease до входа в commit.
+Snapshot не создаёт недостающий staged result. В короткой SQL-транзакции
+проверяются исходный world CAS `(pack_hash, snapshot_head)` и участвующие
+player heads, доменные предусловия; добавляются SQL-версии, история,
+snapshot records и ссылки на новый текущий overlay; передаются holders и
+фиксируется terminal outcome операции. Продвижение участвующих heads —
+в этой же транзакции. Ни domain storage, ни snapshot metadata repository
+не делают независимый commit. Старые версии/manifest остаются immutable.
+
+Логический CAS не разрешает UPDATE/DELETE исторического состояния.
+Его append-only backend binding и защита от конкурирующих successor commits
+обязательно фиксируются до реализации в шагах 2–3. Второй указатель
+для source-versioning не вводится. До gameplay активация pack проверяет
+тем же механизмом, что gameplay не стартовал; после старта pack_hash
+цепочки не меняется. Первый snapshot — первый тик, fake base не создаётся.
+
+Предлагаемые категории исходов ядра (не DAG-facing DTO): committed,
+conflict, rejected. Conflict — несовпадение head/target precondition;
+rejected — недопустимый набор/формат/ref или доменный отказ. Домен явно
+сообщает отсутствие изменения; оно не означает публикацию секции раньше
+остальных. Если фиксируется тик с no-op, его история не меняет stamp
+незатронутой цели. Инфраструктурный сбой не маскируется этими исходами
+как успешная операция; неизвестный исход commit сначала восстанавливается.
+Причина/действие и WarningError приходят от producer через общий log sink;
+consumer не выводит severity по тексту/code и не подставляет default.
+
+`operation_id` связан с неизменным содержимым запроса. Повтор того же
+запроса возвращает записанный terminal outcome, а не применяет его снова;
+другое содержимое с тем же id отклоняется. При потере ответа на COMMIT
+recovery сверяет durable outcome до повторной записи или очистки.
+Отказ/отмена до commit откатывают весь SQL-набор, а не компенсируют уже
+опубликованные доменные изменения. После commit отмена не стирает историю.
+
+Кэш малых результатов живёт в job/операции; refs объёмных защищены общим
+lease. Commit атомарно передаёт удержание опубликованному snapshot/artifact.
+После подтверждённого terminal failure/cancellation и остановки writers
+общий owner освобождает lease; только неудерживаемые staged данные
+допустимы для GC. Неизвестный outcome, resumable job и ready_inactive
+не очищаются по TTL. Retry/resume/GC запускает DAG, Snapshot сам их
+не планирует; ядро предоставляет операции и гарантии удержания.
+
+Обычный read использует pack + текущий overlay, без replay всех тиков.
+Restore выбирает удерживаемые pack/keyframe/deltas; не перезаписывает
+SQL-историю, не пересчитывает отсутствующее и не подставляет latest.
+При переходе ветки DAG явно запрашивает восстановление overlay, Snapshot
+делегирует merge доменам. Keyframe/компакция — отдельная операция по
+вызову DAG, не скрытая стадия commit. Одновременно активна одна линия мира.
+Attach готовит session-домен по уже принятой политике §4, не Snapshot.
+
+Проверяемый результат: будущие fault tests до/после каждой границы
+SQL/refs/history/holder/head; потеря ответа после COMMIT; конкурентные
+world/player commits; отказ одной цепочки; отсутствие частичной публикации;
+сохранность чтения старого snapshot; запрет GC удерживаемых данных.
+
+#### Приёмка §5 — направления зависимостей
+
+Общие dataModel patch/snapshot контракты не импортируют concrete domain
+POJO, application, Container или db. Домен объявляет свои patch/section
+типы с использованием общих контрактов; domain application реализует
+handler и свои storage ports. Snapshot application зависит на общий порт
+handler и snapshot storage, а не на concrete handlers, SQL mapping,
+алгоритмы генераторов или domain repositories. Storage adapters зависят
+на порты/модели; обратных импортов из dataModel/application в adapters нет.
+
+Только composition root связывает section key с конкретным handler.
+Регистрация явная, повтор ключа — ошибка конфигурации, import side effects
+запрещены. Handler не получает публичного publish/commit capability.
+Snapshot storage хранит общую metadata/историю, не пишет domain SQL за
+домен. Общие staging/CAS/holder механизмы находятся вне отдельного
+terrain/regions/source-versioning домена и имеют одного владельца.
+
+Проверяемый результат: import/call audit всей цепочки, включая вложенные
+storage callbacks; отсутствие SQL/UOW в WS и domain CRUD в Patch.
+Exact файлы, существующие ports/POJO и folder counts — шаги 2–3, после
+приёмки архитектуры; сейчас новые папки/файлы не добавляются.
+
+#### Приёмка §6 — revisions и граница внешней зависимости
+
+Source identity/revision, runtime target stamp, planning fingerprint и
+format version остаются разными понятиями. Операция использует captured
+source closure, включая состав коллекций; source/pack refs удерживаются
+до передачи holder. Historическое чтение разрешает pinned/as-of, не latest.
+Изменение effective inputs инвалидирует соответствующие доменные планы/
+представления; unrelated source change не требует новой materialization.
+Новая materialization другого LOD сама не создаёт SourceRevision.
+
+Ядро не вводит substitute SourceRevision/store. Точное заполнение source
+preconditions, source mutation/ref-integrity и revision-set binding —
+отдельный шаг 5 после world-source-versioning 2–3. До него отсутствие
+реализованного binding даёт явную недоступность соответствующей операции,
+а не фиктивную revision, mutable latest ref или пропуск предусловия.
+Это не блокирует независимые типы и инфраструктуру ядра после их freeze.
+
+Проверяемый результат: будущие сценарии pinned read после master edit,
+неизменный stamp незатронутой цели, конфликт пересекающегося target,
+сохранность удерживаемых source bodies и отказ неподдерживаемого формата.
+
+#### Evidence шага и граница следующего действия
+
+Повторно прочитаны `db/database.py: transaction_on`,
+`db/repositories/sqlite/base.py: save/upsert/delete`,
+`application/worldData/regions/stateChange/consumer.py: evaluate` и
+`db/migrations/0001_initial.sql: world_snapshots` (пути относительно
+`backend/app/`). Ambient transaction существует, но BaseRepository
+перезаписывает/удаляет строки и может самостоятельно commit; consumer
+совмещает расчёт с upsert. Existing world_snapshots schema не содержит
+полного целевого CAS/holder/operation outcome контракта. Эти пути не
+переиспользуются как готовая реализация нового механизма.
+
+Статический поиск не обнаружил общего WorldSnapshotService и runtime
+SourceObjectId/SourceRevision. PlanRef — identity derived plan, не
+подходящая замена artifact ref или snapshot/source revision. Это
+уточнение исходного состояния, не полный inventory шага 2 и не test pass.
+
+Для перехода к шагу 2 требуется отдельная приёмка предложений по §1–6
+выше. После неё: inventory и freeze контрактов ядра; затем отдельная
+implementation map и её приёмка; только затем реализация по слоям.
+Ни один per-class gate, миграция writer'ов или B-2 этим шагом не закрыт.
+
 ## 9. Норматив и совместимость
 
 - `docs/tz_patch_system.md`: domain patches, сбор PatchSet только DAG; Debug API вызывает тот же граф.

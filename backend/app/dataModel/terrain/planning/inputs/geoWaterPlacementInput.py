@@ -5,7 +5,7 @@ from typing import Annotated, Self
 from pydantic import BaseModel, ConfigDict, StrictBool, field_validator, model_validator
 
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
-from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSource, ProceduralSource
@@ -33,6 +33,9 @@ class GeoWaterPlacementInput(BaseModel):
     default_water_level: FineZ
     generation: WorldWaterGenerationSettings
     defaults: WaterGenerationDefaults
+    sea_generation: CategoryWaterGenerationSettings
+    ocean_generation: CategoryWaterGenerationSettings
+    lake_generation: CategoryWaterGenerationSettings
     seas: HydrologySeasPolicy
     lakes: HydrologyLakesPolicy
     sources: tuple[WaterDesignSource, ...]

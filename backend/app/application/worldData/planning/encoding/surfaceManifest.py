@@ -214,6 +214,7 @@ from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage as _MR
 from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan as _MCoverageSpan
 from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput as _MGeoWaterPlacementInput
 from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings as _MWorldWaterGenerationSettings
+from app.dataModel.hydrology.generation.waterGenerationSettings import CategoryWaterGenerationSettings as _MCategoryWaterGenerationSettings
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults as _MWaterGenerationDefaults
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource as _MAuthoredBasinSource
 from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind as _MWaterDesignSourceKind
@@ -535,6 +536,7 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (279, _MCoastlineBoundaryPlan, CanonicalTypeKind.RECORD),
     (280, _MAttachedCoastline, CanonicalTypeKind.RECORD),
     (281, _MCoastlinePart, CanonicalTypeKind.RECORD),
+    (282, _MCategoryWaterGenerationSettings, CanonicalTypeKind.RECORD),
 
 )))
 

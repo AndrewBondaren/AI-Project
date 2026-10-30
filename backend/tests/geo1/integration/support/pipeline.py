@@ -7,7 +7,7 @@ from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSu
 from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlineBoundaryInput, CoastlineBoundaryPlan
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
-from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings
 from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyPlan, GeoHydrologyRoutesPlan, HydrologyRoutesPlan
 from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
@@ -43,7 +43,9 @@ def view():
         "enabled", "resolution_mode", "default_water_level", "seas", "lakes", "anchors",
         "topology", "grid", "z_min", "z_max", "liquid_keys")},
         declared_world_bounds=water.topology.bounds, generation=WorldWaterGenerationSettings(),
-        defaults=WaterGenerationDefaults(), sources=(), noise_policy=ContinentalNoisePolicy(),
+        defaults=WaterGenerationDefaults(), sea_generation=CategoryWaterGenerationSettings(),
+        ocean_generation=CategoryWaterGenerationSettings(), lake_generation=CategoryWaterGenerationSettings(),
+        sources=(), noise_policy=ContinentalNoisePolicy(),
         plate_policy=PlateGenerationPolicy(), composition_policy=FieldCompositionPolicy(),
         selection_policy=WaterFieldSelectionPolicy())
     return GeoSurfacePlanningView(**{name: getattr(baseline, name) for name in (
@@ -51,7 +53,9 @@ def view():
         "hydrology_final", "climate_local", "capture_diagnostics")},
         water_placement=water_input,
         hydrology=GeoHydrologyPlanInput(**fields(baseline.hydrology), allowed_body_kinds=frozenset(BasinKind),
-            generation=water_input.generation, defaults=water_input.defaults),
+            generation=water_input.generation, defaults=water_input.defaults,
+            sea_generation=water_input.sea_generation, ocean_generation=water_input.ocean_generation,
+            lake_generation=water_input.lake_generation),
         region_input=TerrainRegionPlanningInput(declared_world_bounds=water.topology.bounds,
             topology=water.topology, grid=water.grid, regions=(), anchors=water.anchors),
         boundary_input=CoastlineBoundaryInput(sources=(), resolution_mode=water.resolution_mode,
