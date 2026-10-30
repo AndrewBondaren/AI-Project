@@ -90,3 +90,33 @@ def route_stage_sources(view: GeoSurfacePlanningView, water: OpenWaterPlan) -> N
     assert_type(view.hydrology.generation, WorldWaterGenerationSettings)
     assert_type(view.hydrology.defaults, WaterGenerationDefaults)
     assert_type(water.source_mapping, SourceBodyMapping)
+
+
+from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy, HydrologyGenerationBinding
+from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
+from app.dataModel.hydrology.generation.waterGenerationSettings import CategoryWaterGenerationSettings, BodyWaterGenerationSettings
+from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
+from app.dataModel.policy.policySpec import ValueSelectionPolicySpec
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
+
+
+def generation_policy_binding(inputs: GeoHydrologyPlanInput, category: CategoryWaterGenerationSettings,
+    body: BodyWaterGenerationSettings) -> None:
+    binding = bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation,
+        defaults=inputs.defaults, category=category, body=body, root_path=(), context_path=())
+    assert_type(binding, HydrologyGenerationBinding)
+    assert_type(binding.context, WaterGenerationContext)
+    assert_type(binding.spec, ValueSelectionPolicySpec[HydrologyExecutionMode, WaterPolicyReason])
+
+
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
+from app.dataModel.spatial.grid.coordinateTypes import FineZ, SurfaceGridCoord
+
+
+def decision_driven_water_fill(owner: WaterBodyPlanner, inputs: GeoHydrologyPlanInput,
+    placement: GeoWaterPlacementPlan, surface: tuple[tuple[SurfaceGridCoord, FineZ], ...],
+    decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...], control: PlanBuildControl) -> None:
+    assert_type(owner.plan_geo(world_uid="world", inputs=inputs, placement=placement,
+        surface_z=surface, classification_decisions=decisions, control=control), PlanBuildResult[OpenWaterPlan])

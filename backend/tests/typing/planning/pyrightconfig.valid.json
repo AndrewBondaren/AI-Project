@@ -71,6 +71,7 @@
     "../../../app/application/worldData/generators/hydrology/load/paint",
     "../../../app/application/worldData/generators/hydrology/water/waterDiagnostics.py",
     "../../../app/application/worldData/generators/hydrology/planning",
+    "../../../app/application/worldData/generators/hydrology/policy/hydrologyGenerationBinding.py",
     "../../../app/dataModel/encoding",
     "../../../app/dataModel/planning",
     "../../../app/dataModel/surfacePlanning",

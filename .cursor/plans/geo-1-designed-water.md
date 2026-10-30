@@ -11203,6 +11203,62 @@ Verified: GEO-1 579 passed (+6), planning292 passed; pyright valid0, negative236
 Existing strict OpenWaterPlan fixtures now supply required explicit mapping;
 classification policy/GEO route provider and production activation remain open.
 
+### G10-A generation policy binding — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Route readiness requires one typed binding for the existing common cascade/value
+policy, shared by category classification and body-source preparation. This
+execution group does not activate source owners or the GEO production graph.
+TZ: docs/tz_cascade_context.md §4 (extend), docs/tz_policy.md §5
+(metadata/compiler); hydrology contract frozen in this plan §6.16 production decision ledger and §6.29-M captured inputs.
+Owner: application hydrology policy. New exact file
+backend/app/application/worldData/generators/hydrology/policy/hydrologyGenerationBinding.py:
+HydrologyGenerationBinding holds compiled ValueSelectionPolicySpec, PolicyInputs,
+PolicyFacts and resolved WaterGenerationContext. bind_hydrology_generation_policy
+accepts required root enabled/generation/defaults/category settings and paths,
+optional body settings. It delegates inheritance to extend/Link, compiles existing
+HYDROLOGY_GENERATION_POLICY and binds root/context; only caller PolicyResolver
+executes rules. No legacy category bool adaptation, World read, selection, fill,
+placement or water-specific policy/cascade evaluator. Category binding stops at
+CATEGORY; body binding extends WATER_BODY. Captured defaults are explicit.
+Files: new binding above; existing tests/geo1/contracts/test_hydrology_generation.py
+and positive/negative planning typing fixtures plus valid pyright include. Folder policy 3→4, contracts 5→5;
+no new files in overfull directories. Verify cascade overrides/defaults, disabled
+root, strict forged inputs, provenance/roundtrip and sibling isolation through
+real PolicyResolver, then GEO/planning/type suites. Done: reusable exact binding
+verified; route caller/provider activation remains G10-A.
+Evidence: GEO-1 585 OK (+6), planning 292 OK; positive pyright 0;
+negative 239 diagnostics (+3), all 236 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. Full G10-A remains OPEN.
+
+### G10-A decision-driven water fill — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: consume resolved generation decisions at the existing hydrology water owner,
+without re-running legacy gates or reconstructing accepted geometry.
+TZ: docs/tz_terrain_hydrology.md HY-12 / natural-only classification;
+plan §6.16 water-fill ledger, §6.29-J activation, J10 accepted BasinSpec join.
+Owner/layer/path: application hydrology, existing
+backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py.
+WaterBodyPlanner.plan_geo accepts GeoHydrologyPlanInput, GeoWaterPlacementPlan,
+complete canonical classification_decisions (existing category/decision tuple),
+pre-river surface and control; returns existing PlanBuildResult[OpenWaterPlan].
+Validate terminal decisions and exact input/placement topology before fill.
+Accepted specs are already admitted: no enabled/autoresolve/category bool re-read
+or spatial selection. DISABLED stops fill; active decisions preserve all accepted
+specs (declared-only is not disabled). Natural-only lake discovery follows LAKE
+AUTORESOLVE and captured allowed_body_kinds; sea/ocean discovery is false in GEO.
+The existing PC plan retains its gates. Both entry points delegate one common
+materialization helper for heightmap/policy construction, one kernel call,
+diagnostics and exact final mapping; no new kernel, source model or cache DTO.
+Tests: existing geo1/integration/test_activation.py and planning typing fixtures;
+real binding/PolicyResolver decisions, one fill/no carve, dry mapping, invalid
+inputs before kernel, legacy-gate independence, natural lake/sea behavior and
+unchanged PC regressions. Folder water/planning 2→2; integration 4→4.
+Done: isolated decision consumer verified; GEO routes provider and atomic
+production activation remain open.
+Evidence: GEO-1 593 OK (+8), planning 292 OK; positive pyright 0;
+negative 240 diagnostics (+1), all 237 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. G10-A production path remains OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

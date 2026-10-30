@@ -339,3 +339,133 @@ class RouteWaterTransportTests(TestCase):
         invalid = SourceBodyMapping(entries=(SourceBodyMappingEntry(source_uid="accepted", body_uids=("missing-body",)),))
         with self.assertRaisesRegex(ValidationError, "final physical body UIDs"):
             type(value).model_validate(fields(value) | {"source_mapping": invalid})
+
+
+class GeoWaterDecisionConsumerTests(TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+        from tests.geo1.integration.support.pipeline import placement_plan, view, rebuild
+        self.placement = placement_plan()
+        self.inputs = rebuild(view().hydrology, topology=self.placement.topology)
+        bounds = self.inputs.topology.bounds
+        footprint = self.placement.basin_specs[0].footprint
+        from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY, FineZ, SurfaceGridCoord
+        self.surface = tuple((SurfaceGridCoord(GridX(x), GridY(y)), FineZ(-2 if (x, y) in footprint else 10))
+            for y in range(bounds.y_min, bounds.y_max+1) for x in range(bounds.x_min, bounds.x_max+1))
+        self.owner, self.control = WaterBodyPlanner(), Mock()
+
+    def decisions(self, *, enabled=True, autoresolve=False):
+        from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
+        from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings
+        values = []
+        for category in sorted(WaterGenerationCategory, key=lambda c: c.value):
+            binding = bind_hydrology_generation_policy(enabled=enabled,
+                generation=WorldWaterGenerationSettings(autoresolve=autoresolve), defaults=self.inputs.defaults,
+                category=CategoryWaterGenerationSettings(), root_path=("hydrology",),
+                context_path=("classification", category.value))
+            values.append((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
+                mode=self.inputs.resolution_mode)))
+        return tuple(values)
+
+    def fill(self, *, inputs=None, surface=None, placement=None, decisions=None):
+        return self.owner.plan_geo(world_uid="world", inputs=inputs if inputs is not None else self.inputs,
+            surface_z=surface if surface is not None else self.surface,
+            placement=placement if placement is not None else self.placement,
+            classification_decisions=decisions if decisions is not None else self.decisions(), control=self.control)
+
+    def test_accepted_specs_use_one_existing_kernel_and_keep_actual_mapping(self):
+        from unittest.mock import patch
+        from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
+        module = "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner"
+        before = tuple(self.surface)
+        with patch(module+".assemble_water_bodies", wraps=assemble_water_bodies) as kernel, \
+                patch.object(self.owner, "_select_specs", side_effect=AssertionError("legacy selection")):
+            result = self.fill()
+        kernel.assert_called_once()
+        self.assertEqual(kernel.call_args.args[1], self.placement.basin_specs)
+        self.assertFalse(kernel.call_args.kwargs["auto_seas"])
+        self.assertFalse(kernel.call_args.kwargs["auto_lakes"])
+        self.assertEqual(self.surface, before)
+        self.assertTrue(result.payload.water_bodies)
+        self.assertEqual(tuple(entry.source_uid for entry in result.payload.source_mapping.entries), ("basin",))
+        by_cell = {(cell.gx, cell.gy): value for cell, value in result.payload.coarse_open_water}
+        self.assertEqual(result.payload.source_mapping.entries[0].body_uids,
+            tuple(sorted({by_cell[cell].water_body_uid for cell in self.placement.basin_specs[0].footprint
+                if cell in by_cell and by_cell[cell].liquid_candidate})))
+
+    def test_ready_decisions_do_not_re_read_legacy_enabled_or_autoresolve_gates(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        original = self.fill()
+        inputs = rebuild(self.inputs, enabled=False, scopes=frozenset(),
+            seas=self.inputs.seas.model_copy(update={"enabled": False,
+                "autoresolve_coastal_sea": False, "autoresolve_open_ocean": False}),
+            lakes=self.inputs.lakes.model_copy(update={"enabled": False, "autoresolve": False}))
+        self.assertEqual(self.fill(inputs=inputs), original)
+
+    def test_disabled_decisions_stop_before_kernel_without_claiming_dry_sources(self):
+        from unittest.mock import patch
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+            result = self.fill(decisions=self.decisions(enabled=False))
+        kernel.assert_not_called()
+        self.assertEqual(result.payload.source_mapping.entries, ())
+        self.assertFalse(result.payload.coarse_open_water or result.payload.water_bodies or result.diagnostics)
+
+    def test_dry_accepted_source_stays_explicit_in_actual_mapping(self):
+        result = self.fill(surface=tuple((cell, 10) for cell, _ in self.surface))
+        self.assertEqual(result.payload.source_mapping.entries,
+            (SourceBodyMappingEntry(source_uid="basin", body_uids=()),))
+        self.assertFalse(result.payload.water_bodies)
+
+    def test_sea_autoresolve_never_discovers_a_second_designed_body(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        empty = rebuild(self.placement, records=(), basin_specs=(), outcomes=(), metadata=(), source_decisions=())
+        # Entirely submerged flat terrain cannot hold a natural lake. The PC sea
+        # discovery would create an ocean here; the GEO consumer must not.
+        result = self.fill(placement=empty, surface=tuple((cell, -2) for cell, _ in self.surface),
+            decisions=self.decisions(autoresolve=True))
+        self.assertFalse(result.payload.water_bodies or result.payload.coarse_open_water)
+        self.assertNotIn("WATER_NO_OCEAN_DEPRESSION", tuple(d.issue.code for d in result.diagnostics))
+
+    def test_natural_lake_classification_follows_decision_and_allowed_kinds(self):
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        from tests.geo1.integration.support.pipeline import rebuild
+        empty = rebuild(self.placement, records=(), basin_specs=(), outcomes=(), metadata=(), source_decisions=())
+        surface = tuple((cell, -2 if (cell.gx, cell.gy) in {(3, 3), (4, 3)} else 10)
+                        for cell, _ in self.surface)
+        self.assertFalse(self.fill(placement=empty, surface=surface).payload.water_bodies)
+        auto = self.fill(placement=empty, surface=surface, decisions=self.decisions(autoresolve=True))
+        self.assertTrue(auto.payload.water_bodies)
+        self.assertTrue(all(body.kind is BasinKind.LAKE for body in auto.payload.water_bodies))
+        self.assertEqual(auto.payload.source_mapping.entries, ())
+        inputs = rebuild(self.inputs, allowed_body_kinds=frozenset({BasinKind.OCEAN}))
+        self.assertFalse(self.fill(inputs=inputs, placement=empty, surface=surface,
+            decisions=self.decisions(autoresolve=True)).payload.water_bodies)
+
+    def test_missing_duplicate_unordered_and_unresolved_decisions_fail_before_fill(self):
+        from unittest.mock import patch
+        from app.application.planning.service.planningService import PlanBuildFailure
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        ready = self.decisions()
+        unresolved = ready[0][1].model_copy(update={"state": PolicyState.UNRESOLVED,
+            "behavior": None, "issues": (FieldPathError(path=("generation",), message="unresolved"),)})
+        forged = ready[0][1].model_copy(update={"behavior": "autoresolve"})
+        for values in ((), ready[:-1], ready+ready[:1], tuple(reversed(ready)),
+                ((ready[0][0], unresolved), *ready[1:]), ((ready[0][0], forged), *ready[1:])):
+            with self.subTest(values=values), patch(
+                    "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+                with self.assertRaises(PlanBuildFailure):
+                    self.fill(decisions=values)
+                kernel.assert_not_called()
+
+    def test_missing_heights_topology_or_admission_provenance_fails_before_fill(self):
+        from unittest.mock import patch
+        from app.application.planning.service.planningService import PlanBuildFailure
+        wrong = self.placement.model_copy(update={"source_decisions": ()})
+        for updates in ({"surface": self.surface[:-1]}, {"placement": wrong},
+                {"inputs": self.inputs.model_copy(update={"topology": self.inputs.topology.model_copy(update={"mode": "wrapped"})})}):
+            with self.subTest(updates=updates), patch(
+                    "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+                with self.assertRaises(PlanBuildFailure):
+                    self.fill(**updates)
+                kernel.assert_not_called()

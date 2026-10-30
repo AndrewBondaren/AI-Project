@@ -15,10 +15,12 @@ from app.application.cascade.contextResolver import extend
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model
 from app.application.policy.policyResolver import PolicyResolver
 from app.application.policy.declarations.compiler import compile_value_policy
+from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode as Mode
 from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
+from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
 from app.dataModel.hydrology.generation.waterGenerationSettings import (
     BodyWaterGenerationSettings, CategoryWaterGenerationSettings, LakesGenerationFields,
     SeasGenerationFields, WorldHydrologyGenerationFields, WorldWaterGenerationSettings,
@@ -194,3 +196,91 @@ class HydrologyGenerationTests(TestCase):
             script = "import importlib; " + "; ".join(f"importlib.import_module({name!r})" for name in order)
             subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[3],
                            check=True, capture_output=True, text=True)
+
+
+class GenerationBindingTests(TestCase):
+    def binding(self, *, enabled=True, generation=None, defaults=None, category=None, body=None):
+        return bind_hydrology_generation_policy(enabled=enabled,
+            generation=generation if generation is not None else WorldWaterGenerationSettings(),
+            defaults=defaults if defaults is not None else WaterGenerationDefaults(),
+            category=category if category is not None else CategoryWaterGenerationSettings(),
+            body=body, root_path=("hydrology",), context_path=("hydrology", "resolved_generation"))
+
+    def decision(self, binding, mode=ResolutionMode.RUNTIME):
+        return PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts, mode=mode)
+
+    def test_actual_binding_preserves_full_override_truth_table(self):
+        for enabled, world, category, body in product((False, True), *((None, False, True),) * 3):
+            bound = self.binding(enabled=enabled,
+                generation=WorldWaterGenerationSettings(autoresolve=world),
+                category=CategoryWaterGenerationSettings(autoresolve=category),
+                body=BodyWaterGenerationSettings(autoresolve=body))
+            root = WorldHydrologyGenerationFields(enabled=enabled,
+                generation=WorldWaterGenerationSettings(autoresolve=world))
+            for mode in ResolutionMode:
+                with self.subTest(enabled=enabled, world=world, category=category, body=body, mode=mode):
+                    self.assertEqual(self.decision(bound, mode), resolve(root,
+                        context_for(root, CategoryWaterGenerationSettings(autoresolve=category),
+                                    BodyWaterGenerationSettings(autoresolve=body)), mode))
+
+    def test_captured_defaults_replace_canonical_values(self):
+        from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
+        bound = self.binding(defaults=WaterGenerationDefaults(autoresolve=True,
+            water_fraction=0.25, strategy=Strategy.AUTHORED_REGION))
+        self.assertIs(self.decision(bound).require_behavior(), Mode.AUTORESOLVE)
+        self.assertEqual(bound.context.water_fraction, 0.25)
+        self.assertIs(bound.context.strategy, Strategy.AUTHORED_REGION)
+        self.assertIs(bound.context.level, Scope.CATEGORY)
+        self.assertIs(self.decision(self.binding()).require_behavior(), Mode.DECLARED_ONLY)
+
+    def test_category_binding_has_no_body_override_or_shared_sibling_state(self):
+        root = WorldWaterGenerationSettings(autoresolve=True, water_fraction=0.5)
+        category = self.binding(generation=root, category=CategoryWaterGenerationSettings(autoresolve=False))
+        body = self.binding(generation=root, category=CategoryWaterGenerationSettings(autoresolve=False),
+            body=BodyWaterGenerationSettings(autoresolve=True, water_fraction=0.1))
+        other = self.binding(generation=root)
+        self.assertIs(category.context.level, Scope.CATEGORY)
+        self.assertIs(body.context.level, Scope.WATER_BODY)
+        self.assertIs(self.decision(category).require_behavior(), Mode.DECLARED_ONLY)
+        self.assertIs(self.decision(body).require_behavior(), Mode.AUTORESOLVE)
+        self.assertIs(self.decision(other).require_behavior(), Mode.AUTORESOLVE)
+        self.assertEqual(category.context.water_fraction, 0.5)
+        self.assertEqual(body.context.water_fraction, 0.1)
+        self.assertEqual(category.context.provenance["autoresolve"][0], Scope.CATEGORY)
+        self.assertEqual(body.context.provenance["autoresolve"][0], Scope.WATER_BODY)
+        self.assertIsNone(root.model_dump()["strategy"])
+
+    def test_strict_sources_are_validated_before_disabled_root(self):
+        bad = (
+            {"enabled": 0},
+            {"generation": WorldWaterGenerationSettings().model_copy(update={"autoresolve": "true"})},
+            {"defaults": WaterGenerationDefaults().model_copy(update={"water_fraction": 2.0})},
+            {"category": CategoryWaterGenerationSettings().model_copy(update={"strategy": "unknown"})},
+            {"body": BodyWaterGenerationSettings().model_copy(update={"autoresolve": 1})},
+        )
+        for values in bad:
+            with self.subTest(values=values), self.assertRaises(ValidationError):
+                self.binding(**({"enabled": False} | values))
+
+    def test_binding_is_frozen_and_uses_caller_paths_and_common_descriptor(self):
+        from dataclasses import FrozenInstanceError
+        bound = bind_hydrology_generation_policy(enabled=True,
+            generation=WorldWaterGenerationSettings(autoresolve=True), defaults=WaterGenerationDefaults(),
+            category=CategoryWaterGenerationSettings(), root_path=("world", "hydrology"),
+            context_path=("resolved", "sea"))
+        self.assertEqual(tuple(rule.id for rule in bound.spec.rules), tuple(rule.id for rule in _SPEC.rules))
+        self.assertIs(bound.spec.operation, PolicyOperation.VALUE_SELECTION)
+        self.assertIs(bound.spec.expected_behavior_type, Mode)
+        self.assertEqual(tuple(source.path for source in bound.inputs.models),
+            (("world", "hydrology"), ("resolved", "sea")))
+        self.assertEqual(bound.facts, PolicyFacts())
+        with self.assertRaises(FrozenInstanceError):
+            bound.context = WaterGenerationContext.root(object())
+        original = self.decision(bound)
+        self.assertEqual(TypeAdapter(HydrologyGenerationDecision).validate_json(original.model_dump_json()), original)
+
+    def test_only_generic_executor_evaluates_policy(self):
+        from unittest.mock import patch
+        with patch.object(PolicyResolver, "resolve", side_effect=AssertionError("binder executed policy")):
+            bound = self.binding(generation=WorldWaterGenerationSettings(autoresolve=True))
+        self.assertIs(self.decision(bound).require_behavior(), Mode.AUTORESOLVE)

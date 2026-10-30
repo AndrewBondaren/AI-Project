@@ -849,3 +849,24 @@ from app.dataModel.hydrology.generation.waterGenerationSettings import BodyWater
 
 def invalid_route_root_generation(value: GeoHydrologyPlanInput) -> BodyWaterGenerationSettings:
     return value.generation  # EXPECT: reportReturnType
+
+
+from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
+from app.dataModel.hydrology.generation.waterGenerationSettings import CategoryWaterGenerationSettings
+
+
+def invalid_generation_binding_sources(inputs: GeoHydrologyPlanInput, category: CategoryWaterGenerationSettings,
+    body: BodyWaterGenerationSettings) -> None:
+    bind_hydrology_generation_policy(enabled=inputs.enabled, generation=body, defaults=inputs.defaults, category=category, root_path=(), context_path=())  # EXPECT: reportArgumentType
+    bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation, defaults=inputs.defaults, category=body, root_path=(), context_path=())  # EXPECT: reportArgumentType
+    bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation, defaults=inputs.defaults, category=category, body=category, root_path=(), context_path=())  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesignDecision
+
+
+def invalid_geo_fill_decisions(owner: WaterBodyPlanner, inputs: GeoHydrologyPlanInput, placement: GeoWaterPlacementPlan,
+    admission: tuple[tuple[WaterGenerationCategory, WaterDesignDecision], ...], control: PlanBuildControl) -> None:
+    owner.plan_geo(world_uid="world", inputs=inputs, placement=placement, surface_z=(), classification_decisions=admission, control=control)  # EXPECT: reportArgumentType
