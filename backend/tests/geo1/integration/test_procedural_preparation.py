@@ -373,6 +373,66 @@ class ProceduralPreparationTests(TestCase):
                             for issue in result.results[0].diagnostics))
 
 
+    def test_native_admission_references_reject_inconsistent_aggregates(self):
+        from pydantic import ValidationError
+        from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
+        from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralSourceAdmissions
+        args = self.case()
+        sources = ProceduralSourceAdmissionJob().resolve(args["inputs"], args["batch"], args["water_intents"], args["control"])
+        binding, intent = sources.sources[0], sources.water_intents[0]
+        bad_inputs = [
+            {"batch": sources.batch.model_copy(update={"objects": ()})},
+            {"sources": (binding, binding)},
+            {"water_intents": (intent, intent)},
+            {"water_intents": ()},
+            {"water_intents": (intent.model_copy(update={"dependencies": (
+                PlacementDependency(target_uid="other", relation=DependencyRelation.RESOLVED),)}),)},
+        ]
+        for field in ("world_uid", "source_uid", "region_uid"):
+            bad_inputs.append({"sources": (binding.model_copy(update={
+                "placement_identity": binding.placement_identity.model_copy(update={field: "other"})}),)})
+        for updates in bad_inputs:
+            with self.subTest(updates=updates), self.assertRaises(ValidationError):
+                ProceduralSourceAdmissions.model_validate(sources.model_copy(update=updates), strict=True)
+
+    def test_native_ready_input_uses_session_decision_after_support_resume(self):
+        from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
+        from app.application.worldData.generators.terrain.designedWater.preparation.proceduralWaterSourceAdapter import CapturedProceduralWaterInputs
+        from app.application.worldData.generators.terrain.designedWater.preparation.designPreparation import prepare_designed_water
+        from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageAllocation import WaterCoverageAllocation
+        from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralSourceAdmissions
+        from app.dataModel.placement.intent import PlacementOverlap
+        from app.dataModel.placement.common import OverlapRelation
+        from app.dataModel.policy.policyEnums import PolicyState
+        args = self.case()
+        support = lifecycle.member("support", priority=10)
+        args["batch"] = args["batch"].model_copy(update={"objects": (support,)})
+        args["water_intents"] = (args["water_intents"][0].model_copy(update={
+            "dependencies": (PlacementDependency(target_uid="support", relation=DependencyRelation.RESOLVED),),
+            "permitted_overlaps": (PlacementOverlap(target_uid="support", relation=OverlapRelation.COVERAGE),)}),)
+        sources = ProceduralSourceAdmissionJob().resolve(args["inputs"], args["batch"], args["water_intents"], args["control"])
+        identity = sources.sources[0].placement_identity
+        admission = sources.admission_for(identity)
+        waiting = admission.model_copy(update={"decision": admission.decision.model_copy(update={
+            "state": PolicyState.WAITING_SUPPORT, "waiting_supports": ("support",)})})
+        sources = ProceduralSourceAdmissions.model_validate(sources.model_copy(update={
+            "batch": sources.batch.model_copy(update={"objects": (support, waiting)})}), strict=True)
+        ready_inputs = CapturedProceduralWaterInputs.capture(args["inputs"], sources,
+            args["pre_hydrology"], args["regions"], args["seed_root"])
+        _, designs, result = prepare_designed_water(sources.batch, water_intents=sources.water_intents,
+            pre_hydrology=args["pre_hydrology"], grid=args["inputs"].grid, seed_root=args["seed_root"],
+            regions=args["regions"], world_context=sources.world_context,
+            coverage_requests=WaterCoverageAllocation().requests(sources, args["regions"]), authored_geometry=(),
+            prepare_input=ready_inputs.prepare, strategies=args["strategies"], control=args["control"],
+            prepare_competitor=lambda obj: lifecycle.prepared(obj, cells=((0, 0),)),
+            selection_policy=args["inputs"].selection_policy,
+            reevaluate_support=lambda header, causes: admission.decision)
+        self.assertEqual(len(designs), 1)
+        self.assertTrue(all(isinstance(outcome, ResolvedPlacementV2) for outcome in result.results))
+        water = next(outcome for outcome in result.results if outcome.identity == identity)
+        self.assertEqual(water.prepared.decision.state, PolicyState.READY)
+        self.assertEqual(sources.admission_for(identity).decision.state, PolicyState.WAITING_SUPPORT)
+
     def without_world_region(self, args):
         plan = args["regions"]
         args["regions"] = plan.model_copy(update={"snapshot": plan.snapshot.model_copy(update={

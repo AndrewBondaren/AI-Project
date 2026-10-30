@@ -16,7 +16,7 @@ class WaterCoverageAllocation:
     def requests(self, sources: ProceduralSourceAdmissions, regions: TerrainRegionPlan) -> tuple[BodyCoverageRequest, ...]:
         requests = []
         for binding in sources.sources:
-            if binding.admission.decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT):
+            if sources.admission_for(binding.placement_identity).decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT):
                 region = regions.snapshot.region_for(binding.source.value.generation_region_uid)
                 if region is None:
                     raise invalid_water_design_input("active source generation region is absent from captured terrain regions")

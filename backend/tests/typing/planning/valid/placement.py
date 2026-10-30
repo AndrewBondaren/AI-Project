@@ -31,8 +31,15 @@ from app.application.worldData.generators.terrain.designedWater.preparation.proc
 from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
 from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
 from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralSourceAdmissions
+from app.dataModel.hydrology.policy.proceduralSourceAdmission import ResolvedProceduralSource
+from app.dataModel.placement.intent import PlacementIdentity
 from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import HydrologyProceduralExtentFacts
 from app.dataModel.policy.policyFacts import KnownFact
+
+
+def valid_native_admission_reference(sources: ProceduralSourceAdmissions, binding: ResolvedProceduralSource) -> None:
+    assert_type(binding.placement_identity, PlacementIdentity)
+    assert_type(sources.admission_for(binding.placement_identity), PlacementAdmissionInput)
 
 
 def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[PlacementIntent, ...],

@@ -1044,3 +1044,11 @@ from app.application.worldData.generators.terrain.designedWater.strategies.proce
 def invalid_domain_preparation_contracts(inputs: GeoWaterPlacementInput) -> None:
     HydrologyProceduralExtentFacts(world_extent=True)  # EXPECT: reportArgumentType
     WaterFieldRecipeFactory().build("plate", inputs, "seed")  # EXPECT: reportArgumentType
+
+
+from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralSourceAdmissions, ResolvedProceduralSource
+
+
+def invalid_native_admission_reference(sources: ProceduralSourceAdmissions, binding: ResolvedProceduralSource) -> None:
+    binding.admission  # EXPECT: reportAttributeAccessIssue
+    sources.admission_for("source")  # EXPECT: reportArgumentType

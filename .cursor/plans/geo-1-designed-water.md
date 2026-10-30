@@ -11884,7 +11884,7 @@ negative260, все257 EXPECT покрыты, surplus baseline прежний. �
 provider управляет dependencies/calls; повторного category dispatch нет.
 G10-A остаётся OPEN/NOT ACCEPTED; production и G8-B atomic cutover не выполнены.
 
-### G10-A admission duplication conflict — OPEN / ACCEPTANCE BLOCKER (2026-10-30)
+### G10-A admission duplication conflict — IMPLEMENTED / AWAITING ACCEPTANCE (2026-10-30)
 Цель: устранить независимое хранение одного admission в двух представлениях.
 ТЗ: GEO-1 §6.29-J/M, общий placement lifecycle и single-owner контракт G0-P.
 Подтверждено ревью POJO: ProceduralSourceAdmissions хранит admission одновременно
@@ -11912,7 +11912,35 @@ native и competitor проходят один batch, budget/admission испо�
 контрактов и call graph. GEO-1/providers и positive/negative typing после исправления.
 Done: независимой копии admission нет, потребители используют общего владельца,
 несогласованные входы отвергаются. До этого срез NOT ACCEPTED; G10-A OPEN.
-Статус: только фиксация обязательного исправления; код пока не изменён.
+Контракт, зафиксированный перед реализацией по команде мастера:
+ResolvedProceduralSource.admission удаляется; placement_identity:PlacementIdentity
+ссылается на общий batch. ProceduralSourceAdmissions.admission_for(identity)
+возвращает PlacementAdmissionInput из batch.objects, не сохраняет копию/index.
+model_validator агрегата проверяет уникальность bindings/intents, соответствие
+source UID/world/полной identity и PlacementHeader.from_intent исходного intent
+общему admission; batch может содержать сторонних competitors.
+Producer собирает admissions только в batch; coverage requests и recipe capture
+читают их через admission_for. Ready input binding сопоставляет полную identity
+и использует callback admission из session, включая SUPPORT reevaluation;
+сравнивать его decision с начальным batch decision запрещено.
+Новых классов/файлов нет. WARN: preparation10→10, integration6→6;
+typing valid placement folder проверить перед правкой. Проверки: contract mismatch
+через строгую validation, competitor/replay и ready callback после WAITING→READY;
+GEO-1/providers, positive и negative planning typing. G10-A OPEN/NOT ACCEPTED.
+Итог: admission из hydrology binding удалён; единственный initial owner — batch,
+bindings содержат PlacementIdentity; capture/coverage используют admission_for.
+Aggregate validation отвергает missing/duplicate/mismatched references и intent
+headers; ready input использует полную identity и актуальный callback admission.
+Новый regression: initial batch остаётся WAITING_SUPPORT, session переводит в
+READY и native water успешно готовится после конкурирующего support.
+Проверено: GEO-1 722 OK (+2), providers129 OK, positive pyright0;
+negative262, все259 EXPECT покрыты (+2), surplus baseline прежний. Scoped
+diff --check clean. Valid typing folder5→5, новых файлов/типов нет.
+Ручная проверка prepare_procedural_designed_water и prepare_designed_water,
+включая callback: lifecycle wiring сохранён; domain checks/lookup у владельцев.
+Конфликт устранён в коде, независимая приёмка не заявлена. G10-A production
+OPEN: owning schemas/defaults, capture/registration/entry и G8-B atomic cutover
+ещё не выполнены; следующий зависимый feature в этом заходе не начинался.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

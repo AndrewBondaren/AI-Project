@@ -92,12 +92,13 @@ class CapturedProceduralWaterInputs:
         recipes = tuple((binding.source.value.source_uid,
             WaterFieldRecipeFactory().build(binding.context.strategy, inputs, seed_root))
             for binding in sources.sources
-            if binding.admission.decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT))
+            if sources.admission_for(binding.placement_identity).decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT))
         return cls(inputs, sources, pre_hydrology, regions, seed_root, recipes)
 
     def prepare(self, admission: PlacementAdmissionInput, budget: WaterCoverageBudget | None) -> WaterStrategyInput:
         uid = admission.header.identity.source_uid
-        binding = next((binding for binding in self.sources.sources if binding.source.value.source_uid == uid), None)
+        binding = next((binding for binding in self.sources.sources
+            if binding.placement_identity == admission.header.identity), None)
         if budget is None or binding is None:
             raise PlanBuildFailure((FieldPathError(("water_source",), "ready source requires captured binding and shared world budget",
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))

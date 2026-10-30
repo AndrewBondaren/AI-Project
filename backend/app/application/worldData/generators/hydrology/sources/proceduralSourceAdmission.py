@@ -53,6 +53,7 @@ class ProceduralSourceAdmissionJob:
         evidence = HydrologyPolicySnapshot(world_uid=batch.world_uid, supports=(), hydrology=None,
             source_mapping=None, mapping_hydrology_ref=None)
         bindings: list[ResolvedProceduralSource] = []
+        admissions: list[PlacementAdmissionInput] = []
         for source in inputs.sources:
             control.raise_if_shutdown()
             if not isinstance(source, ProceduralSource):
@@ -79,10 +80,12 @@ class ProceduralSourceAdmissionJob:
             decision = resolver.resolve(placement.spec, placement.inputs, placement.facts, mode=inputs.resolution_mode)
             if inputs.resolution_mode is ResolutionMode.RUNTIME and decision.issues:
                 log_issues(decision.issues)
+            header = PlacementHeader.from_intent(intents[uid])
+            admissions.append(PlacementAdmissionInput(header=header, decision=decision))
             bindings.append(ResolvedProceduralSource(source=source, context=context, generation=generation,
-                admission=PlacementAdmissionInput(header=PlacementHeader.from_intent(intents[uid]), decision=decision),
+                placement_identity=header.identity,
                 source_path=source_path))
         joint = PlacementBatchV2.model_validate(batch.model_copy(update={
-            "objects": (*batch.objects, *(binding.admission for binding in bindings))}), strict=True)
+            "objects": (*batch.objects, *admissions)}), strict=True)
         return ProceduralSourceAdmissions(world_context=world_context, sources=tuple(bindings),
             batch=joint, water_intents=water_intents)
