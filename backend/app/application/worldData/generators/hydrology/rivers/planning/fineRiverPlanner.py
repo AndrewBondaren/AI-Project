@@ -11,6 +11,7 @@ from app.application.worldData.generators.hydrology.types import resolve_scopes
 from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
+from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
 from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan
 from app.dataModel.identity.uid import EntityUid
@@ -29,7 +30,7 @@ def _fine(cell: Coord) -> FineXY:
 
 
 class FineRiverPlanner:
-    def plan(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput,
+    def plan(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput | GeoHydrologyPlanInput,
              surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...], water: OpenWaterPlan,
              coarse: CoarseRiverPlan, control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
         control.raise_if_shutdown()

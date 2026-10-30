@@ -18,7 +18,7 @@ from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import 
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
 from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
-from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan
+from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan, WaterPlacementPlan
 from app.dataModel.terrain.regions.regionPlanningInput import TerrainRegionPlanningInput
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan, TerrainRegionsSnapshot
 from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import SurfaceSupportPlan, CoatingPlan
@@ -141,18 +141,10 @@ class ReliefSeam:
         from app.dataModel.cache.policy.cachePolicy import CachePolicy
         from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
         from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
-        from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
         from app.dataModel.hydrology.seas import HydrologySeasPolicy
-        from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetadata
-        from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind
-        from app.dataModel.placement.prepared import PreparedPlacementV2
-        from app.dataModel.placement.result import ResolvedPlacementV2
-        from app.dataModel.policy.policyDecision import ObjectAdmissionDecision
-        from app.dataModel.policy.policyEnums import PolicyOperation, PolicyState
         from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
         from app.dataModel.surfacePlanning.surfacePlanBindings import geo_surface_plan_binding
         from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot as S
-        from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
         from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
         from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
         from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
@@ -179,22 +171,7 @@ class ReliefSeam:
         climate = self.seal("climate_base", pc.water.terrain.climate.get().payload)
         terrain = self.seal("terrain_base", pc.water.terrain.get().payload, (("climate_base", climate),))
         water = pc.water.get().payload
-        decisions, outcomes, metadata = [], [], []
-        specs = {spec.source_uid: spec for spec in water.basin_specs}
-        for record in water.records:
-            spec = specs[record.source_uid]
-            decision = ObjectAdmissionDecision[Strategy, WaterPolicyReason](operation=PolicyOperation.OBJECT_ADMISSION,
-                state=PolicyState.READY, effective_priority=record.placement.effective_specificity,
-                behavior=Strategy.AUTHORED_REGION, reasons=(), waiting_supports=(), provenance=(), issues=())
-            prepared = record.placement.prepared
-            outcomes.append(ResolvedPlacementV2(candidate_uid=record.placement.candidate_uid, prepared=PreparedPlacementV2(
-                intent=prepared.intent, original_area=prepared.original_area, candidates=prepared.candidates, decision=decision)))
-            decisions.append((record.source_uid, decision))
-            metadata.append(WaterSourceMetadata(source_uid=spec.source_uid, source_kind=WaterDesignSourceKind.BASIN,
-                body_kind=spec.kind, liquid=spec.liquid, level=spec.z_water_level, bands=spec.bands,
-                source_path=("water_sources", spec.source_uid), default_depth=spec.z_water_level-spec.floor_z))
-        payload = GeoWaterPlacementPlan(**fields(water), outcomes=tuple(outcomes), metadata=tuple(metadata),
-            source_decisions=tuple(decisions), budget=None)
+        payload = geo_placement(water)
         self.upstream = dict(climate_base=climate, terrain_base=terrain,
             water_placement=self.seal("water_placement", payload, (("terrain_base", terrain),)))
         policy = CachePolicy(max_retained_bytes=10000000, max_entry_bytes=5000000)
@@ -222,3 +199,31 @@ class ReliefSeam:
             contract_id=meta.id, schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
             input_fingerprint=handle.fingerprint_inputs(self.world_uid, scope, inputs, deps)), inputs=inputs, dependencies=deps)
         return self.service.get_or_build(handle, request, reader, wait=Wait())
+
+
+def geo_placement(water: WaterPlacementPlan) -> GeoWaterPlacementPlan:
+    """Retain PC geometry with explicit admitted GEO source evidence for seam tests."""
+    from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
+    from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetadata
+    from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind
+    from app.dataModel.placement.prepared import PreparedPlacementV2
+    from app.dataModel.placement.result import ResolvedPlacementV2
+    from app.dataModel.policy.policyDecision import ObjectAdmissionDecision
+    from app.dataModel.policy.policyEnums import PolicyOperation, PolicyState
+    from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
+    decisions, outcomes, metadata = [], [], []
+    specs = {spec.source_uid: spec for spec in water.basin_specs}
+    for record in water.records:
+        spec = specs[record.source_uid]
+        decision = ObjectAdmissionDecision[Strategy, WaterPolicyReason](operation=PolicyOperation.OBJECT_ADMISSION,
+            state=PolicyState.READY, effective_priority=record.placement.effective_specificity,
+            behavior=Strategy.AUTHORED_REGION, reasons=(), waiting_supports=(), provenance=(), issues=())
+        prepared = record.placement.prepared
+        outcomes.append(ResolvedPlacementV2(candidate_uid=record.placement.candidate_uid, prepared=PreparedPlacementV2(
+            intent=prepared.intent, original_area=prepared.original_area, candidates=prepared.candidates, decision=decision)))
+        decisions.append((record.source_uid, decision))
+        metadata.append(WaterSourceMetadata(source_uid=spec.source_uid, source_kind=WaterDesignSourceKind.BASIN,
+            body_kind=spec.kind, liquid=spec.liquid, level=spec.z_water_level, bands=spec.bands,
+            source_path=("water_sources", spec.source_uid), default_depth=spec.z_water_level-spec.floor_z))
+    return GeoWaterPlacementPlan(**fields(water), outcomes=tuple(outcomes), metadata=tuple(metadata),
+        source_decisions=tuple(decisions), budget=None)

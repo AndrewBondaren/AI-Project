@@ -11259,6 +11259,35 @@ Evidence: GEO-1 593 OK (+8), planning 292 OK; positive pyright 0;
 negative 240 diagnostics (+1), all 237 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. G10-A production path remains OPEN.
 
+### G10-A GEO route assembly — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: join decision-driven open water with the existing river/paint operations.
+TZ: docs/tz_terrain_hydrology.md HY-12 / river planning; plan §6.29-M route-stage
+producer and §6.31-E immutable phase contract. Owner/layer: application hydrology.
+Exact existing paths under backend/app/application/worldData/generators/hydrology/:
+- planning/assembly/hydrologyRoutesAssembler.py: HydrologyRoutesAssembler gains
+  assemble_geo(world_uid, inputs:GeoHydrologyPlanInput, relief:ReliefPlan,
+  placement:GeoWaterPlacementPlan, classification_decisions, control)
+  -> PlanBuildResult[GeoHydrologyRoutesPlan]. It calls water.plan_geo once,
+  delegates common coarse/fine/paint order to one shared method, and preserves
+  the water stage's source_mapping and exact supplied classification decisions.
+- rivers/planning/{coarseRiverPlanner,fineRiverPlanner}.py: existing owner plan
+  accepts HydrologyPlanInput | GeoHydrologyPlanInput; only common captured river
+  fields are read. No cast/reconstruction of GEO input into PC, new DTO, algorithm,
+  river policy migration, policy evaluation or repeated fill/carve.
+Tests: existing geo1/integration/support/pipeline.py extracts its accepted-water
+GEO evidence helper for reuse; test_activation.py verifies real coarse/fine
+routes vs PC, immutable heights/mapping/decisions, single stage ordering,
+diagnostics and failure/shutdown boundaries. Existing positive/negative planning
+typing fixtures verify exact GEO assembly/river inputs and reject PC placement.
+Folders: assembly 3→3, rivers/planning 3→3, integration 4→4, support 3→3;
+no new files. Verify GEO-1 + planning suites, valid/invalid pyright and diff check.
+Done: isolated route assembly verified; provider generation/source-owner binding
+and atomic production wiring remain open in G10-A.
+Evidence: GEO-1 600 OK (+7), planning 292 OK; positive pyright 0;
+negative 241 diagnostics (+1), all 238 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. G10-A production remains OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

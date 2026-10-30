@@ -870,3 +870,13 @@ from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesi
 def invalid_geo_fill_decisions(owner: WaterBodyPlanner, inputs: GeoHydrologyPlanInput, placement: GeoWaterPlacementPlan,
     admission: tuple[tuple[WaterGenerationCategory, WaterDesignDecision], ...], control: PlanBuildControl) -> None:
     owner.plan_geo(world_uid="world", inputs=inputs, placement=placement, surface_z=(), classification_decisions=admission, control=control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
+
+
+def invalid_geo_route_placement(owner: HydrologyRoutesAssembler, inputs: GeoHydrologyPlanInput,
+    relief: ReliefPlan, placement: WaterPlacementPlan,
+    decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...], control: PlanBuildControl) -> None:
+    owner.assemble_geo(world_uid="world", inputs=inputs, relief=relief, placement=placement, classification_decisions=decisions, control=control)  # EXPECT: reportArgumentType

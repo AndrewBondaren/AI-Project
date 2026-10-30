@@ -120,3 +120,20 @@ def decision_driven_water_fill(owner: WaterBodyPlanner, inputs: GeoHydrologyPlan
     decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...], control: PlanBuildControl) -> None:
     assert_type(owner.plan_geo(world_uid="world", inputs=inputs, placement=placement,
         surface_z=surface, classification_decisions=decisions, control=control), PlanBuildResult[OpenWaterPlan])
+
+
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
+from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan
+
+
+def geo_route_assembly(owner: HydrologyRoutesAssembler, coarse: CoarseRiverPlanner, fine: FineRiverPlanner,
+    inputs: GeoHydrologyPlanInput, relief: ReliefPlan, placement: GeoWaterPlacementPlan, water: OpenWaterPlan,
+    decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...], control: PlanBuildControl) -> None:
+    assert_type(owner.assemble_geo(world_uid="world", inputs=inputs, relief=relief, placement=placement,
+        classification_decisions=decisions, control=control), PlanBuildResult[GeoHydrologyRoutesPlan])
+    planned = coarse.plan(world_uid="world", inputs=inputs, surface_z=relief.surface_z, water=water, control=control)
+    assert_type(planned, PlanBuildResult[CoarseRiverPlan])
+    assert_type(fine.plan(world_uid="world", inputs=inputs, surface_z=relief.surface_z,
+        water=water, coarse=planned.payload, control=control), PlanBuildResult[FineRiverPlan])

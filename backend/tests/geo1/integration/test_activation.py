@@ -469,3 +469,144 @@ class GeoWaterDecisionConsumerTests(TestCase):
                 with self.assertRaises(PlanBuildFailure):
                     self.fill(**updates)
                 kernel.assert_not_called()
+
+
+class GeoRouteAssemblyTests(TestCase):
+    def setUp(self):
+        from unittest.mock import Mock
+        from tests.planning.providers.test_domain_providers import HydrologyProviderTests
+        from tests.geo1.integration.support.pipeline import fields, geo_placement
+        from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
+        from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
+        from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        self.pc = HydrologyProviderTests()
+        self.pc.setUp()
+        self.addCleanup(self.pc.doCleanups)
+        self.inputs = GeoHydrologyPlanInput(**fields(self.pc.hydro_inputs),
+            generation=WorldWaterGenerationSettings(), defaults=WaterGenerationDefaults(),
+            allowed_body_kinds=frozenset(BasinKind))
+        # GEO requires positive admission. Resolve that fixture explicitly through
+        # the existing placement owner while retaining the same accepted geometry.
+        positive = self.pc.water_inputs.model_copy(update={"seas":
+            self.pc.water_inputs.seas.model_copy(update={"placement_specificity": 2})})
+        self.placement = geo_placement(self.pc.water.get(inputs=positive).payload)
+        self.owner, self.control = self.pc.routes_assembler, Mock()
+        self.decisions = self.generation_decisions()
+
+    def generation_decisions(self, enabled=True):
+        from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
+        from app.dataModel.hydrology.generation.waterGenerationSettings import CategoryWaterGenerationSettings
+        values = []
+        for category in sorted(WaterGenerationCategory, key=lambda c: c.value):
+            binding = bind_hydrology_generation_policy(enabled=enabled,
+                generation=self.inputs.generation, defaults=self.inputs.defaults,
+                category=CategoryWaterGenerationSettings(), root_path=("hydrology",),
+                context_path=("classification", category.value))
+            values.append((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
+                mode=self.inputs.resolution_mode)))
+        return tuple(values)
+
+    def assemble(self, **updates):
+        return self.owner.assemble_geo(**(dict(world_uid="climate-world", inputs=self.inputs,
+            relief=self.pc.before.payload, placement=self.placement,
+            classification_decisions=self.decisions, control=self.control) | updates))
+
+    def test_real_coarse_and_fine_routes_equal_pc_without_height_changes(self):
+        original = self.pc.before.payload
+        result = self.assemble()
+        self.assertEqual(result.payload.base, self.pc.routes().payload)
+        self.assertTrue(result.payload.base.coarse_routes)
+        self.assertTrue(result.payload.base.fine_routes)
+        self.assertTrue(result.payload.source_mapping.entries)
+        self.assertEqual(result.payload.classification_decisions, self.decisions)
+        self.assertEqual(self.pc.before.payload, original)
+        self.assertEqual(self.assemble(), result)
+        self.assertEqual(decode(encode(result.payload, SURFACE_MANIFEST), type(result.payload), SURFACE_MANIFEST), result.payload)
+
+    def spies(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock, patch
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        calls = Mock()
+        for name, stage, method in (("water", self.owner._water, "plan_geo"),
+                ("coarse", self.owner._coarse, "plan"), ("fine", self.owner._fine, "plan"),
+                ("paint", self.owner._paint, "project")):
+            spy = stack.enter_context(patch.object(stage, method, wraps=getattr(stage, method)))
+            calls.attach_mock(spy, name)
+        return calls
+
+    def test_stage_order_and_exact_geo_inputs_reach_existing_river_owners(self):
+        calls = self.spies()
+        result = self.assemble()
+        self.assertEqual([call[0] for call in calls.mock_calls], ["water", "coarse", "fine", "paint"])
+        for name in ("water", "coarse", "fine"):
+            self.assertIs(getattr(calls, name).call_args.kwargs["inputs"], self.inputs)
+            self.assertIs(getattr(calls, name).call_args.kwargs["surface_z"], self.pc.before.payload.surface_z)
+        self.assertIs(calls.water.call_args.kwargs["classification_decisions"], self.decisions)
+        self.assertEqual(result.payload.source_mapping, self.owner._water.plan_geo(
+            world_uid="climate-world", inputs=self.inputs, surface_z=self.pc.before.payload.surface_z,
+            placement=self.placement, classification_decisions=self.decisions, control=self.control).payload.source_mapping)
+
+    def test_diagnostic_dispositions_and_order_are_preserved(self):
+        from unittest.mock import Mock, patch
+        from contextlib import ExitStack
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        diagnostics = tuple(PlanDiagnostic(issue=FieldPathError(("stage", str(i)), "producer fact", code="SAME_CODE"),
+            disposition=kind) for i, kind in enumerate((PlanDiagnosticDisposition.ERROR,
+                PlanDiagnosticDisposition.FALLBACK, PlanDiagnosticDisposition.NOTICE)))
+        with ExitStack() as stack:
+            for stage, method, added in ((self.owner._water, "plan_geo", (diagnostics[0],)),
+                    (self.owner._coarse, "plan", (diagnostics[1],)), (self.owner._fine, "plan", (diagnostics[2],)),
+                    (self.owner._paint, "project", (diagnostics[0],))):
+                original = getattr(stage, method)
+                def wrap(*args, _original=original, _added=added, **kwargs):
+                    return _original(*args, **kwargs).model_copy(update={"diagnostics": _added})
+                stack.enter_context(patch.object(stage, method, side_effect=wrap))
+            self.assertEqual(self.assemble().diagnostics, diagnostics)
+
+    def test_stage_failure_stops_all_later_operations(self):
+        from unittest.mock import patch
+        for name, stage, method in (("water", self.owner._water, "plan_geo"),
+                ("coarse", self.owner._coarse, "plan"), ("fine", self.owner._fine, "plan")):
+            with self.subTest(name=name), patch.object(stage, method, side_effect=ValueError("phase failed")), \
+                    patch.object(self.owner._paint, "project") as paint:
+                with self.assertRaisesRegex(ValueError, "phase failed"):
+                    self.assemble()
+                paint.assert_not_called()
+
+    def test_shutdown_after_water_stops_before_routing(self):
+        from unittest.mock import Mock, patch
+        from app.application.planning.service.planningService import PlanWaitCancelled
+        water = self.owner._water.plan_geo(world_uid="climate-world", inputs=self.inputs,
+            surface_z=self.pc.before.payload.surface_z, placement=self.placement,
+            classification_decisions=self.decisions, control=self.control)
+        control = Mock()
+        control.raise_if_shutdown.side_effect = [None, PlanWaitCancelled()]
+        with patch.object(self.owner._water, "plan_geo", return_value=water), \
+                patch.object(self.owner._coarse, "plan") as coarse, patch.object(self.owner._paint, "project") as paint:
+            with self.assertRaises(PlanWaitCancelled):
+                self.assemble(control=control)
+            coarse.assert_not_called()
+            paint.assert_not_called()
+
+    def test_invalid_decisions_stop_before_river_planning(self):
+        from unittest.mock import patch
+        from app.application.planning.service.planningService import PlanBuildFailure
+        with patch.object(self.owner._coarse, "plan") as coarse, patch.object(self.owner._fine, "plan") as fine:
+            with self.assertRaises(PlanBuildFailure):
+                self.assemble(classification_decisions=())
+            coarse.assert_not_called()
+            fine.assert_not_called()
+
+    def test_disabled_root_keeps_baseline_river_and_paint_semantics(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        result = self.assemble(inputs=rebuild(self.inputs, enabled=False),
+            classification_decisions=self.generation_decisions(enabled=False))
+        self.assertFalse(result.payload.base.water_bodies or result.payload.base.coarse_routes
+            or result.payload.base.fine_routes or result.payload.source_mapping.entries)
+        expected = self.owner._paint.project(rivers=self.inputs.declared_rivers,
+            coastlines=self.inputs.coastlines, lakes=self.inputs.declared_lakes, anchors=self.inputs.anchors)
+        self.assertEqual(result.payload.base.declared_paint, expected.payload)
