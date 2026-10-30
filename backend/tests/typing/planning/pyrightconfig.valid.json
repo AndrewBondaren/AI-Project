@@ -6,6 +6,8 @@
     "../../../app/dataModel/terrain/designedWater",
     "../../../app/application/worldData/generators/terrain/designedWater",
     "../../../app/application/worldData/generators/terrain/hills",
+    "../../../app/application/worldData/generators/terrain/passes/lightSurfaceRefine.py",
+    "../../../app/application/worldData/generators/terrain/passes/parentLightUpsample.py",
     "../../../app/dataModel/terrain/regions",
     "../../../app/application/worldData/generators/terrain/regions",
     "../../../app/dataModel/locations/context/locationContext.py",

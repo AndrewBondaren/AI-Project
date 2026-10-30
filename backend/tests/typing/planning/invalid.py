@@ -1072,3 +1072,14 @@ def invalid_pre_water_hill_hosts(world: EntityUid, inputs: SurfaceSupportInput, 
                                 final_water: PlanEnvelope[HydrologyPlan]) -> None:
     PreWaterHillHostPlanner().prepare(world, inputs, final_water, terrain, cells=cells)  # EXPECT: reportArgumentType
     PreWaterHillHostPlanner().prepare(world, inputs, base, terrain, cells=None)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.planning.preWater.terrainBasePlanner import PreWaterTerrainPlanner
+
+
+def invalid_pre_carve_terrain(world: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
+                              inputs: SurfaceSupportInput, base: PlanEnvelope[ClimateBasePlan],
+                              terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage, control: PlanBuildControl,
+                              water: PlanEnvelope[HydrologyPlan]) -> None:
+    PreWaterTerrainPlanner().prepare(world, base_input, relief_input, inputs, base, water, cells=cells, control=control)  # EXPECT: reportArgumentType
+    PreWaterTerrainPlanner().prepare(world, base_input, relief_input, inputs, base, terrain, cells=cells, control=None)  # EXPECT: reportArgumentType

@@ -6,11 +6,11 @@ from typing import Annotated, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.engine.dag.identity import (
-    ContractIdValue, ContractVersionValue, ExecutionIdentity, NodeIdValue,
+    ContractIdValue, ContractVersionValue, ExecutionIdentity, NodeIdValue, PlanRevisionValue,
 )
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
-from app.dataModel.engine.dag.records import DependencyRead
+from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
@@ -51,6 +51,16 @@ class CancellationReason(StrEnum):
 
 type Timestamp = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 type Index = Annotated[int, Field(strict=True, ge=0)]
+type OutputRequirement = tuple[NodeIdValue, ContractIdValue, ContractVersionValue, bool]
+
+
+class CancellationRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
+
+    source: CancellationSource = CancellationSource.UNKNOWN
+    reason: CancellationReason = CancellationReason.UNKNOWN
+    message: str | None = None
+    requested_at: Timestamp | None = None
 
 
 class ExecutionDiagnostic(BaseModel):
@@ -65,10 +75,14 @@ class ExecutionDiagnostic(BaseModel):
     severity: ExecutionSeverity
     status: NodeStatus
     message: str
-    requirements: tuple[tuple[NodeIdValue, ContractIdValue, ContractVersionValue, bool], ...] = ()
+    requirements: tuple[OutputRequirement, ...] = ()
     reads: tuple[DependencyRead, ...] = ()
+    domain_reads: tuple[DomainReadEvidence, ...] = ()
     saved_outputs: tuple[ExecutionIdentity, ...] = ()
+    reused_outputs: tuple[ExecutionIdentity, ...] = ()
     sibling_statuses: tuple[tuple[NodeIdValue, NodeStatus], ...] = ()
+    active_plan_revision: PlanRevisionValue | None = None
+    started_at: Timestamp | None = None
     cancel_source: CancellationSource | None = None
     cancel_reason: CancellationReason | None = None
     cancel_message: str | None = None

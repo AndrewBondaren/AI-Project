@@ -7,6 +7,8 @@ from typing import cast
 
 from pydantic import BaseModel, TypeAdapter
 
+from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
+from app.application.engine.diagnostics.executionEvents import ExecutionEvents
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
@@ -17,7 +19,7 @@ from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import LevelDecision, NodeOutcome
 from app.application.engine.runtime.execution.nodeRunner import NodeRunner
 from app.dataModel.engine.dag.diagnostics import (
-    CancellationReason, CancellationSource, ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity, Index,
+    CancellationReason, CancellationRequest, CancellationSource, ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity, Index,
 )
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase, validate_python_phase
@@ -30,19 +32,24 @@ class DAGExecutor:
     def __init__(
         self, runner: NodeRunner, executors: Mapping[type[PythonExecutor], PythonExecutor], *,
         clock: Callable[[], float] = time,
+        emit: Callable[[ExecutionDiagnostic], None] = emit_diagnostic,
     ) -> None:
         self._runner = runner
         self._executors = dict(executors)
         self._clock = clock
+        self._emit = emit
 
     async def run_python_phase(
         self, plan: ExecutionPlan, state: ExecutionState, phase: PythonExecutionPhase,
         plan_revision: PlanRevision, *, pass_number: Index = 0,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, rerun: Collection[NodeId] = (),
+        cancellation: CancellationRequest | None = None,
     ) -> LevelDecision:
         validate_python_phase(phase)
         TypeAdapter[int](Index).validate_python(pass_number)
         TypeAdapter[PlanRevision](PlanRevisionValue).validate_python(plan_revision)
+        if cancellation is not None:
+            cancellation = CancellationRequest.model_validate(cancellation)
         if set(rerun).difference(plan.nodes):
             raise KeyError("rerun contains nodes outside the plan")
         levels = plan.pre_llm_levels if phase == ExecutionPhase.PRE_LLM else plan.post_llm_levels
@@ -63,7 +70,7 @@ class DAGExecutor:
             state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
             state.begin_level(())
             for level, node_ids in enumerate(levels):
-                snapshot = await self._run_level(plan, state, phase, plan_revision, pass_number, level, node_ids, rerun)
+                snapshot = await self._run_level(plan, state, phase, plan_revision, pass_number, level, node_ids, rerun, cancellation)
                 if snapshot.decision != LevelDecision.CONTINUE:
                     return snapshot.decision
             return LevelDecision.CONTINUE
@@ -73,6 +80,7 @@ class DAGExecutor:
     async def _run_level(
         self, plan: ExecutionPlan, state: ExecutionState, phase: PythonExecutionPhase,
         revision: PlanRevision, pass_number: int, level: int, node_ids: tuple[NodeId, ...], rerun: Collection[NodeId],
+        cancellation: CancellationRequest | None,
     ) -> ExecutionLevelSnapshot:
         started_at = self._clock()
         current = {identity.node_id: identity for identity in state.catalog.current_outputs}
@@ -89,6 +97,10 @@ class DAGExecutor:
         identities = tuple(attempts)
         state.begin_level(identities)
         views = tuple(state.catalog.read_view(identity.node_id) for identity in identities)
+        events = ExecutionEvents(phase, revision, pass_number, level, started_at,
+                                 {view.consumer: view.requirements for view in views}, self._emit, self._clock, cancellation)
+        for identity in identities:
+            events.started(identity)
         tasks = tuple(asyncio.create_task(self._run_node(plan, view, identity, pass_number, level))
                       for identity, view in zip(identities, views, strict=True))
         group = asyncio.gather(*tasks, return_exceptions=True)
@@ -96,7 +108,8 @@ class DAGExecutor:
         try:
             results = await asyncio.shield(group)
         except asyncio.CancelledError:
-            cancel_requested_at = self._clock()
+            cancel_requested_at = cancellation.requested_at if cancellation is not None and cancellation.requested_at is not None else self._clock()
+            events.cancel_requested(identities, views, tuple(reused), cancel_requested_at)
             for task in tasks:
                 if not task.done():
                     task.cancel()
@@ -149,6 +162,7 @@ class DAGExecutor:
             tuple(saved), tuple(reused), cancel_requested_at, self._clock(),
         )
         state.finish_level(snapshot)
+        events.finished(snapshot, {outcome.identity.node_id: type(outcome.error) for outcome in committed if outcome.error is not None})
         return snapshot
 
     @staticmethod

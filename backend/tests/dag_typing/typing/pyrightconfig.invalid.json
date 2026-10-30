@@ -43,6 +43,9 @@
     "../../../../backend/app/application/engine/runtime/dag/dagExecutor.py",
     "../../../../backend/app/application/engine/runtime/dag/executionState.py",
     "../../../../backend/app/application/engine/runtime/dag/executionTrace.py",
-    "../../../../backend/app/application/engine/runtime/dag/executionLevelSnapshot.py"
+    "../../../../backend/app/application/engine/runtime/dag/executionLevelSnapshot.py",
+    "../../../../backend/app/application/engine/diagnostics/dagLog.py",
+    "../../../../backend/app/application/engine/diagnostics/events.py",
+    "../../../../backend/app/application/engine/diagnostics/executionEvents.py"
   ]
 }

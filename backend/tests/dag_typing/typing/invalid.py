@@ -4,6 +4,8 @@ from typing import Never
 from pydantic import BaseModel
 
 from app.application.engine.contracts.dagReadView import DAGReadView
+from app.application.engine.diagnostics.dagLog import emit
+from app.application.engine.diagnostics.events import ReplanDiagnostic
 from app.application.engine.contracts.executionBindings import ResponseBinding, SnapshotExtension
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
@@ -18,6 +20,7 @@ from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGR
 from app.application.engine.runtime.execution.nodeOutcome import GateSignal, NodeOutcome
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
+from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
 from app.application.engine.runtime.execution.nodeRunner import NodeRunner
 from app.application.engine.runtime.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.registration.nodeRegistration import NodeRegistration
@@ -83,6 +86,13 @@ async def wrong_coordinator(executor: DAGExecutor, plan: ExecutionPlan, state: E
     wrong: tuple[NodeOutcome[LeafOutput, TestNodeError], ...] = state.traces  # expect: reportAssignmentType
     payload: LeafOutput = state.traces[0]  # expect: reportAssignmentType
     print(wrong, payload)
+
+
+def wrong_diagnostics() -> None:
+    CancellationRequest(source="user")  # expect: reportArgumentType
+    CancellationRequest(reason="requested")  # expect: reportArgumentType
+    emit(LeafOutput(value=1))  # expect: reportArgumentType
+    ReplanDiagnostic(identity=identity(), pass_number=0, phase=ExecutionPhase.PRE_LLM, level=0, timestamp=1.0, code=ExecutionEventCode.REPLAN_REQUESTED, severity=ExecutionSeverity.INFO, status=NodeStatus.GATED, message="gate", next_task_type="scene_init")  # expect: reportArgumentType
 
 
 async def wrong_error_contracts(view: PublishedDAGReadView, catalog: DAGContext, runner: NodeRunner) -> None:

@@ -12,6 +12,7 @@ from app.application.engine.contracts.outputRef import OptionalOutput, RequiredO
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, NodeId
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence, OutputRecord
+from app.dataModel.engine.dag.diagnostics import OutputRequirement
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,14 @@ class PublishedDAGReadView:
     @property
     def execution_id(self) -> ExecutionId:
         return self._execution_id
+
+    @property
+    def requirements(self) -> tuple[OutputRequirement, ...]:
+        return tuple(
+            (req.ref.producer, self._producers[req.ref.producer].contract.contract_id,
+             self._producers[req.ref.producer].contract.version, isinstance(req, RequiredOutput))
+            for req in self._requirements
+        )
 
     @property
     def dependency_reads(self) -> tuple[DependencyRead, ...]:

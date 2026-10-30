@@ -12588,6 +12588,62 @@ callbacks выполняет landcover job/observation binding, не orchestrato
 projection — доменная реализация landcover. Existing TerrainBatch не менялся;
 его split остаётся до activation. Pre-carve base/reservations/floor join OPEN.
 
+### G10-A pre-carve terrain base — IMPLEMENTED (2026-10-31)
+Цель/ТЗ: §6.20, согласованный terrain→hills→carve→fill выше;
+docs/tz_world_pack_storage.md L2 open-land hills / Parent light SoT,
+docs/tz_terrain_hydrology.md HY-12. Выпустить реальную pre-carve fine surface
+и protected geometry из одной captured recipe, без water-dependent ReliefPlan.
+Карта до кода (application generation):
+- terrain/relief/planning/naturalRelief.py: перенести существующие mountain layout
+  и light recipe kernels из reliefPlanProvider.py, без изменения selection/math.
+  Прежний provider и новый terrain job используют одного владельца; no water input.
+- terrain/passes/lightSurfaceRefine.py: общий sampling/noise/clamp kernel с typed
+  grid/seed/z bounds/refine policy и z_at callback; parentLightUpsample.py только
+  связывает baked parent с ним. L2 output прежний; fake ParentLightTile запрещён.
+- terrain/planning/preWater/terrainBaseJob.py::PreWaterTerrainJob: проверка
+  согласованности TerrainBaseInput/ReliefPlanInput/SurfaceSupportInput и base
+  envelopes; natural recipe, tile-complete refinement, hill hosts и hills;
+  fine reservations из existing mountain geometry kernels, canonical topology.
+  Mountain/ravine effects — existing light relief recipe; mountain reservations —
+  actual fine geometry, не projected hydro mask. Fine heights не из carved surface.
+- terrain/planning/preWater/terrainBasePlanner.py::PreWaterTerrainPlanner:
+  только создание job и вызов prepare(cells), никаких доменных решений/callbacks.
+  Результат existing tuple[SurfaceHeightmap,frozenset[Coord]] — request scratch,
+  не новый persisted plan, POJO/enum/parallel water record не вводятся.
+Входы: world UID, existing captured base/relief/support inputs, climate/terrain
+base envelopes, RegionCoverage, PlanBuildControl. Layout фиксирован captured
+recipe; tile-complete hill kernel выполняется до clipping запроса. Никаких SQL,
+final water/local climate/parent L0 reads или fine-world materialization.
+Carve/fill остаются existing apply_basin_z + labelled/level_fill: принимают
+полученную surface/reservations; accepted floor/profile не пересчитывается.
+Fill требует полную область достижимости/rim; clipped fill не выдаётся за final.
+Проверки tests/geo1/terrain_base/: реальный natural relief→hills→accepted sampled/
+field floor→fill, protected cells, same full/partial terrain, world/ref/grid/seed
+mismatch и cancellation; old/new L2 refinement equality, existing regressions и
+positive/negative typing. Counts: passes8→9 WARN; relief/planning2→3;
+preWater0→3; tests/geo1/terrain_base0→3; valid/terrain4→4.
+Done: actual terrain base питает existing basin writer/fill в integration,
+manual planner/owner review; production/provider/consumer cutover остаётся OPEN.
+
+Provider regression: test_domain_providers.py — два patch адреса collect kernel
+обновить на naturalRelief после переноса; assertions/поведение не менять.
+
+Итог: PreWaterTerrainPlanner выпускает actual natural fine heights с hills и
+fine mountain reservations без water-dependent ReliefPlan/parent L0. Natural
+recipe и refine math общие с existing paths; новых POJO/enum/default tables нет.
+Evidence: GEO-1 738 OK (новых7), providers129 OK, hills/synchronous L0/L2 36 OK;
+positive pyright0 (оба refine files включены), negative267 /264 EXPECT покрыты,
+surplus3 baseline прежний. Old/new L2 refine совпал на18 случаях; две мутации
+(no hills / ignore reservations) дают по1 assertion failure. Typed accepted
+sampled/field floors→fill проверены; partial fill с missing rim отвергается.
+Ручной review: PreWaterTerrainPlanner только delegates; PreWaterTerrainJob
+владеет terrain recipe/projection/exclusions, naturalRelief — relief kernels;
+callback читает prepared light height. Hydrology execution внутри planner/job
+не добавлено, существующие basin writer/fill соединены с producer в integration.
+Production consumer не переключён. Следующий join: bind этого terrain source к
+GEO fine-water planning/revision и complete fill scope; затем L0/L2 consumer
+cutover, включая removal повторного hill pass. G10-A OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

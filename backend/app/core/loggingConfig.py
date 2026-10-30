@@ -111,6 +111,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "resolve",
             ),
             ("http", "http", "api"),
+            ("app.engine.dag", "engine", "dagExecution"),
         ),
         key=lambda row: len(row[0]),
         reverse=True,
@@ -120,6 +121,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
 # Server profile allowlist — catalog process=server plus unmatched sink.
 # Do not include script/* or render/dumpLog (script-only).
 SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
+    ("engine", "dagExecution"),
     ("region_state", "regionStateLog"),
     ("http", "api"),
     ("pack", "packBakeLog"),

@@ -8,7 +8,7 @@
 
 ### Готовность и граница поставки
 
-Архитектура согласована. Карта компонентов, точные пути, API, атомарные шаги и проверки приведены ниже; ТЗ синхронизировано с решениями. Разрешена подготовка документации; реализация кода начинается только по отдельному запросу. A0 завершён документально; A1.1–A1.4 приняты; обязательное исправление A1.3R выполнено, архитектурная приёмка A1.3 восстановлена после повторной проверки. A2.1–A2.3 и обязательный A2.3R реализованы и проверены; приёмка A2.3 восстановлена 2026-10-31 после типизации ошибок. A2.4 реализован и проверен; A2.5–A3/B не выполнены; блокер A2.3R закрыт. Конкретные контракты **всех** рабочих нод и их миграция принадлежат GEN-DAG-1; инфраструктура проверяется на тестовых нодах. Полная приёмка B зависит от интеграции GEN-DAG-1, но A1–A3 не ждут её завершения.
+Архитектура согласована. Карта компонентов, точные пути, API, атомарные шаги и проверки приведены ниже; ТЗ синхронизировано с решениями. Разрешена подготовка документации; реализация кода начинается только по отдельному запросу. A0 завершён документально; A1.1–A1.4 приняты; обязательное исправление A1.3R выполнено, архитектурная приёмка A1.3 восстановлена после повторной проверки. A2.1–A2.3 и обязательный A2.3R реализованы и проверены; приёмка A2.3 восстановлена 2026-10-31 после типизации ошибок. A2.4–A2.5 реализованы и проверены; A3/B не выполнены; блокер A2.3R закрыт. Конкретные контракты **всех** рабочих нод и их миграция принадлежат GEN-DAG-1; инфраструктура проверяется на тестовых нодах. Полная приёмка B зависит от интеграции GEN-DAG-1, но A1–A3 не ждут её завершения.
 
 Предоставить общий механизм обязательных типизированных Input/Output для **каждой** ноды и обмена опубликованными результатами между нодами без превращения DAG в доменный resolver, новую POJO-инфраструктуру или владельца CRUD. Изменение состава/порядка DAG не должно требовать изменения реализации доменных операций при сохранении их публичных контрактов.
 
@@ -85,7 +85,7 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 |---|---|---|---|---|
 | M01 | ExecutionIdentity; NodeId, ExecutionId, ContractId, ContractVersion, PlanRevision, DomainRevision | технические ID DAG; engine/dataModel | D/identity.py (новый) | coordinator → catalog/snapshot; stdlib/Pydantic, без application |
 | M02 | DependencyRead, DomainReadEvidence, OutputRecord[O] | immutable result/provenance; engine/dataModel | D/records.py (новый) | runtime → read view/snapshot; M01 и domain POJO через generic O |
-| M03 | ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity, CancellationSource, CancellationReason | typed события lifecycle; engine/dataModel | D/diagnostics.py (новый) | runner/coordinator → log/trace; M01, без доменных алгоритмов |
+| M03 | ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity, CancellationSource, CancellationReason, CancellationRequest, OutputRequirement | typed события lifecycle; engine/dataModel | D/diagnostics.py (новый) | runner/coordinator → log/trace; M01, без доменных алгоритмов |
 | M04 | NodeStatus | единый enum состояния; engine/dataModel | E/nodes/nodeStatus.py → D/nodeStatus.py | все engine imports обновить, старый файл удалить; без re-export/дубля |
 | M05 | SnapshotMetadata | версии формата/контрактов, execution/pass counters; engine/dataModel | D/snapshotMetadata.py (новый) | snapshot service → restore; M01 |
 | M06 | OutputRef[O], RequiredOutput[O], OptionalOutput[O] | типизированная связь producer/contract; engine/application | E/contracts/outputRef.py (новый) | декларации ноды → registry/read view; M01, type[O] |
@@ -119,6 +119,8 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 | M34 | ExecutionPhase, PythonExecutionPhase, validate_python_phase | единый enum фаз и admission Python-подмножества; engine/dataModel | D/executionPhase.py (новый) | M03/M10 → общий контракт; stdlib/Pydantic, без application |
 | M35 | NodeError | общая база immutable POJO ошибок операций; engine/dataModel | D/errors/nodeError.py (новый) | test/GEN concrete subclasses → typed binding/outcome/context; Pydantic, без application/TaskType |
 | M36 | PythonNodeError[E] | транспорт POJO ошибки через исключение; engine/application | R/execution/pythonNodeError.py (новый) | Python node → M17; M35, без строковых policy/code fields; legacy M33 до GEN handoff не меняется |
+| M37 | ExecutionEvents | lifecycle metadata → diagnostic POJO, без payload и I/O кроме M22; engine/application | E/diagnostics/executionEvents.py (новый) | M18/M14/M19 → M03/M38 → M22; не policy/executor |
+| M38 | ReplanDiagnostic, LevelDiagnostic | typed application control в событиях, TaskType остаётся application; engine/application | E/diagnostics/events.py (новый) | M37 → M22, наследуют M03; level gate_events типизированы ReplanDiagnostic |
 
 Допустимые направления: конкретные ноды/GEN → общий engine → dataModel; core logging не импортирует engine; dataModel не импортирует application/db/core runtime. Domain readers/lifecycle implementations приходят через typed binding, generic engine не импортирует domain internals. Pydantic schema — единственный источник полей/constraints. Новые generic ID описаны в ТЗ §6.1; не заводить RegistryKey для world-registry, которого нет.
 
@@ -152,10 +154,10 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 | R | 0 → 2 | target engine/resolver |
 | R/graphs; R/dag | 0 → 1; 0 → 5 | target compiler; plan/executor/state/trace/snapshot |
 | R/dag/context; R/dag/lifecycle | 0 → 3; 0 → 1 | M13–15/M20 |
-| R/execution; R/validation | 0 → 4; 0 → 4 | M16/M17/M26; M12 |
+| R/execution; R/validation | 0 → 5; 0 → 4 | M16/M17/M26/M36; M12 |
 | R/prompt; R/prompt/pojo | 0 → 1; 0 → 3 | typed payload builder/DTO |
 | R/repair; R/repair/pojo | 0 → 3; 0 → 1 | typed repair builder/projector/orchestrator/context |
-| E/diagnostics | 0 → 1 | общий emitter M22 |
+| E/diagnostics | 0 → 3 | emitter M22, lifecycle projection M37, application control diagnostics M38 |
 | C; C/typed | 6 → 4; 0 → 2 | старые memory snapshot/store до B2; target typed версии |
 | E/graphs; E/dag; E/execution | 2 → 1; 5 → 0; 3 → 0 | predecessor реализации удаляются B2, закомментированный E/graphs/executionPlan.py вне scope |
 | E/prompt; E/prompt/pojo | 4 → 3; 3 → 0 | сохранить DSL/schema helpers, удалить predecessor typed replacements B2 |
@@ -167,7 +169,7 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 | backend/tests | 278 → 278 | только подпапка dag_typing; root не расширяется |
 | T | 0 → 1 | fixtures.py; остальные файлы в подпапках |
 | T/registry | 0 → 4 | test_metadata.py, test_binding.py, test_graph.py, test_validation.py |
-| T/context | 0 → 3 | test_catalog.py, test_invalidation.py, test_retention.py |
+| T/context | 0 → 4 | test_catalog.py, test_invalidation.py, test_errors.py, test_retention.py |
 | T/execution | 0 → 3 | test_runner.py, test_level.py, test_logging.py |
 | T/lifecycle | 0 → 3 | test_snapshot.py, test_restore.py, test_passes.py |
 | T/llm | 0 → 3 | test_payload.py, test_repair.py, test_group.py |
@@ -205,7 +207,7 @@ WARN для существующих >5: E/nodes/pojo 7→0, E/validation 6→2,
 | A2.3 — локальный outcome runner | §6.2, §8.1 | M16–17 (target PythonNodeExecutor реализует M32), M14 execution_id property; T/execution/test_runner.py, typing fixtures/configs | U(execution,test_runner.py), context/registry regression, TYPE | DONE после A2.3R: приёмка восстановлена; typed error POJO вместо строкового failure_code |
 | A2.3R — типизированные POJO ошибок | §6.1–6.2, §8.2 | M35–36, M07–13/M16–17/M32, tests/typing; точный scope ниже | U(errors), runner/context/registry regression, TYPE, DIFF, owner-review | DONE: E/union сохраняется до context lookup, error admission через M12; failure_code/GateSignal.code удалены, блокер A2.4 закрыт |
 | A2.4 — конкурентный уровень и barrier commit | §7.3, §8 | M18–19, M13 validate_binding; T/execution/test_level.py, typing fixtures/configs | U(execution,test_level.py), regression, TYPE/DIFF | DONE: Event overlap/barrier, synchronous coordinator commit, cancel/cleanup, priority/gate conflict, fresh reuse; каталог не решает исход уровня |
-| A2.5 — подробные события и единый sink | §10; tz_logging §DAG execution | M22–23, M18 emitter calls, T/execution/test_logging.py | U(execution,test_logging.py) | все обязательные cancel/read/sibling/save поля, маршрут engine/dagExecution, без payload/дублирующего handler |
+| A2.5 — подробные события и единый sink | §10.1; tz_logging §DAG execution | M22–23/M37–38, M03/M14 metadata, M18 calls; logging/typing tests | U(execution,test_logging.py), logging routes/regression, TYPE/DIFF | DONE: lifecycle/cancel/read/sibling/saved-reused/gates metadata, server route, без payload/нового handler; snapshot events — A3 |
 | A3.1 — typed memory snapshot | §9 | M20–21, T/lifecycle/test_snapshot.py | U(lifecycle,test_snapshot.py) | identity/counters/versions/control/provenance/typed extension сохранены без копий payload |
 | A3.2 — restore и освобождение владения | §9 | M20–21, M13, T/lifecycle/test_restore.py, T/context/test_retention.py | U(lifecycle,test_restore.py), U(context,test_retention.py) | version/ref mismatch — явная ошибка; исходный snapshot сохранён; нет генерации; trace не удерживает payload |
 | A3.3 — общий LLM payload из typed Input | §8 | M24, T/llm/test_payload.py | U(llm,test_payload.py) | один group schema из Output POJO; input без чтения raw node_results; transport dict не публикуется |
@@ -382,6 +384,25 @@ WARN для существующих >5: E/nodes/pojo 7→0, E/validation 6→2,
 - U(execution,test_level.py): 24 PASS; runner regression: 22 PASS; context: 63 PASS; registry: 81 PASS. TYPE: 2 PASS, positive 0 diagnostics, negative ровно 38 ожидаемых rule/line (4 новых), M02 baseline неизменён. DIFF clean. Event-тесты доказывают overlap/barrier, разные порядки завершения, success при fail/cancel соседей, ожидание cleanup/repeated parent cancel, cleanup error, CANCEL→FAIL→REPLAN priority, gate conflict, rejected stale publication и typed error identity. Weakref после завершения gather callbacks доказывает отсутствие payload в trace.
 - Owner-review фактических M18/M19/helpers и M13 delta: только выбор готовых уровней, task lifecycle, delegation M17/M13, normalization runtime failures и metadata projection. Нет доменного lookup/CRUD/алгоритмов, error policy реализации, LLM dispatch, event emitter, snapshot save/restore, новых Any/ignore и пользовательского schema code. Public error lookup сохраняет E; internal heterogeneous outcome cast ограничен private bound runner boundary, commit повторно проверяет contract. Контекст не получил outcome/LevelDecision/status/trace orchestration.
 - Counts: R/dag 1→5, T/execution 1→2; новых root файлов нет, production классы <300 строк. Legacy runtime/15 production registrations не менялись. A2.5 и A3 не начаты.
+
+### Детализация A2.5 перед реализацией (2026-10-31)
+
+- M22 E/diagnostics/dagLog.py: только emit(ExecutionDiagnostic) → logger app.engine.dag, level по ExecutionSeverity, extra event с JSON-safe wire через native Pydantic schemas. Без logger handlers/setup, traceback и payload. M23 добавляет prefix route и SERVER_SINKS(engine,dagExecution) в существующий loggingConfig; router/formatter не меняются.
+- M03 diagnostics.py добавляет started_at, domain_reads, reused_outputs и active_plan_revision (контекст текущего плана отличается от identity переиспользованного результата). Общие OutputRequirement alias и frozen strict CancellationRequest(source/reason UNKNOWN, message/requested_at optional) остаются в dataModel без application imports. M14 read view предоставляет requirements metadata по зафиксированным bindings, включая условно исключённого producer; фактические чтения не подменяют declarations.
+- M38 E/diagnostics/events.py: ReplanDiagnostic(ExecutionDiagnostic) с next_task_type: TaskType и replan_reason; LevelDiagnostic(ExecutionDiagnostic) с gate_events: tuple[ReplanDiagnostic,...], gate_conflict: bool. Base causes остаются payload-free diagnostics; TaskType не переносится в dataModel и не заменяется str. Итоговое решение уровня отражается status (CONTINUE→SUCCESS, CANCEL→CANCELLED, FAIL→FAILED, REPLAN→GATED) по существующему §6.3, второго enum не вводить.
+- M37 E/diagnostics/executionEvents.py: формирует NODE_STARTED до task dispatch; CANCEL_REQUESTED при первой отмене родителя; NODE_FINISHED после commit, CANCEL_OBSERVED из факта runner, REPLAN_REQUESTED для каждого зафиксированного gate, LEVEL_FINISHED после барьера. Только M18 вызывает проектор; runner не эмитит локальные diagnostics вторично. В summaries: requirements/reads/domain evidence, sibling statuses, saved/reused identities, times, cancellation metadata, causes/gates. Для level/request identity — первый actual attempt, иначе первый reused identity; это реальный correlation anchor, не synthetic node/attempt. Пустая фаза не создаёт событий; fully reused level не создаёт NODE_STARTED/FINISHED.
+- M18 получает optional sink emit и run_python_phase(..., cancellation: CancellationRequest | None=None). Caller передаёт известные source/reason/message/requested_at, неизвестность UNKNOWN; request фиксируется один раз, повторный cancel не создаёт дубликат. Metadata запроса доступны на барьере даже при cleanup failure. Cancel WARNING, failure/conflict ERROR, прочий lifecycle INFO; необходимые cancellation/read/sibling/save поля не зависят от DEBUG. Event projection не выбирает policy и не вызывает доменные API. Emit делается до запуска либо после синхронного commit, без расширения каталога.
+- Wire использует конкретные схемы только Base/Replan/LevelDiagnostic; неизвестные subclass поля не сериализуются. Не включать error POJO, Input/Output, ValidationResult/dsl_patch, exception/traceback. Snapshot event codes сохраняются, emit save/restore реализуется в A3, без фиктивных save success событий сейчас.
+- Файлы: M22–23/M37–38, M03/M14 metadata, M18 call sites; T/execution/test_logging.py, test_level.py sink injection, typing fixtures/configs, этот план, ТЗ §10 и tz_logging §DAG execution. Counts: E/diagnostics 0→3, T/execution 2→3, core 13→13 (WARN, без новых файлов), D 6→6 (WARN), R/dag 5→5. Проверки event identity/completeness/order/no-duplicate, cancel/cleanup/fail/gates/reuse/filtering/privacy, server route/temp sink, existing logging routes, execution/context/registry regression, TYPE/DIFF, owner-review. A3/production wiring не начинаются.
+
+Уточнение A2.5 при проверке событий: M18 передаёт M37 только metadata `Mapping[NodeId, type[NodeError]]` допущенных ошибок; проектор добавляет qualified class name в поясняющий message NODE_FINISHED/REPLAN_REQUESTED. Это не новый error_type/code discriminator и не сериализация POJO; concrete E сохраняется в каталоге. Payload поля ошибки не читаются.
+
+### Execution evidence A2.5 (2026-10-31)
+
+- DONE: M22 single emitter app.engine.dag → existing core route + SERVER_SINKS engine/dagExecution; M37 metadata projection из coordinator, M38 typed replan/level controls без application import в dataModel. Started/finished/requested/observed/replan/level facts, declarations ≠ reads, parent cancellation metadata, gate conflict, saved/reused IDs и current plan revision доступны без DEBUG. Error qualified class — только поясняющий text, concrete E остаётся в каталоге.
+- U(execution,test_logging.py): 17 PASS; execution regression total: 63 PASS (17 logging + 24 level + 22 runner); context: 63 PASS; registry: 81 PASS; existing test_logging_routes.py: 15 PASS. Всего unit: 222 PASS. TYPE: 2 PASS, positive 0 diagnostics, negative ровно 42 ожидаемых rule/line (4 новых), M02 baseline неизменён. DIFF clean; temp server sink содержит одну JSON-строку на emit, privacy tests исключают unknown subclass payload во всех трёх schemas, typed TaskType сохраняется в wire/gate_events.
+- Owner-review M18/M22/M23/M37/M38 и helpers: M18 только lifecycle calls/metadata class references; M37 только diagnostic projection, M22 только native schema wire/log facade, M23 только route/allowlist. Нет Input/Output/error POJO/ValidationResult/dsl_patch/traceback в wire, отдельного handler/router/formatter, доменных read/CRUD/policy/алгоритмов, новых Any/ignore. Runner/каталог не эмитят; repeated cancel и reuse не создают дубликаты node фактов. Native event schemas используются без копии полей/constraints; события save/restore не имитируются.
+- Counts: E/diagnostics 0→3, T/execution 2→3, core 13→13 и D 6→6 (WARN до изменения), R/dag 5→5; production классы <300 строк. Legacy runtime/production wiring не менялись. A3 не начат.
 
 ### Приёмка ответственности и фиксация результата
 

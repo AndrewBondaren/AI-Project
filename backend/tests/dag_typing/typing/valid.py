@@ -8,6 +8,8 @@ from app.dataModel.engine.dag.errors.nodeError import NodeError
 from pydantic import BaseModel
 
 from app.application.engine.contracts.dagReadView import DAGReadView
+from app.application.engine.diagnostics.dagLog import emit
+from app.application.engine.diagnostics.events import ReplanDiagnostic
 from app.application.engine.contracts.executionBindings import (
     ExecutionBindings, ResolveResult, ResponseBinding, SnapshotExtension, TransitionBinding,
 )
@@ -38,6 +40,8 @@ from app.application.engine.validation.validationStatus import ValidationResult,
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.identity import ContractId, ContractVersion, ExecutionId, ExecutionIdentity, NodeId, PlanRevision
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence, OutputRecord
+from app.dataModel.engine.dag.diagnostics import CancellationRequest, CancellationSource, ExecutionEventCode, ExecutionSeverity, OutputRequirement
+from app.dataModel.engine.dag.nodeStatus import NodeStatus
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
     CompositeOutput, FakeExecutor, FakeReadView, LEAF_CONTRACT, LeafOutput, NodeInput,
@@ -188,3 +192,15 @@ async def verify_coordinator(plan: ExecutionPlan, state: ExecutionState) -> None
     assert_type(state.traces, tuple[ExecutionTrace, ...])
     assert_type(state.levels, tuple[ExecutionLevelSnapshot, ...])
     assert_type(state.catalog.node_error(NodeId("typed-error"), ERROR_CONTRACT), TestNodeError | TestOtherError | None)
+
+
+def verify_diagnostics(view: PublishedDAGReadView) -> None:
+    assert_type(view.requirements, tuple[OutputRequirement, ...])
+    assert_type(CancellationRequest().source, CancellationSource)
+    event = ReplanDiagnostic(
+        identity=identity(), pass_number=0, phase=ExecutionPhase.PRE_LLM, level=0, timestamp=1.0,
+        code=ExecutionEventCode.REPLAN_REQUESTED, severity=ExecutionSeverity.INFO, status=NodeStatus.GATED,
+        message="gate", next_task_type=TaskType.SCENE_INIT,
+    )
+    assert_type(event.next_task_type, TaskType)
+    assert_type(emit(event), None)

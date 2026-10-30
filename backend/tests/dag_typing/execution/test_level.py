@@ -87,7 +87,7 @@ class LevelTests(unittest.IsolatedAsyncioTestCase):
         self.contracts = {}
         self.events = []
         self.runner = NodeRunner(ContractValidator(), NodeValidator())
-        self.executor = DAGExecutor(self.runner, {PythonNodeExecutor: PythonNodeExecutor()})
+        self.executor = DAGExecutor(self.runner, {PythonNodeExecutor: PythonNodeExecutor()}, emit=lambda event: None)
 
     async def asyncTearDown(self):
         for event in self.events:

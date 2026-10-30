@@ -911,7 +911,7 @@ class ReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
     def test_same_layout_selected_once_and_hit_rebuild_have_equal_refs(self):
         from unittest.mock import patch
         from app.application.worldData.generators.terrain.mountains.collect import collect_prepared_mountain_entries_for_coarse
-        path = "app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider.collect_prepared_mountain_entries_for_coarse"
+        path = "app.application.worldData.generators.terrain.relief.planning.naturalRelief.collect_prepared_mountain_entries_for_coarse"
         inputs = self.inputs.model_copy(update={"declared_mountains": (self.peak(),)})
         with patch(path, wraps=collect_prepared_mountain_entries_for_coarse) as collect:
             first = self.get(inputs)
@@ -1064,7 +1064,7 @@ class ReliefTemplateProviderTests(ReliefProviderFixture, unittest.TestCase):
             supplied.extend(cells)
             return collect_prepared_mountain_entries_for_coarse(**(kwargs | {"heightmap_keys": cells}))
 
-        path = "app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider.collect_prepared_mountain_entries_for_coarse"
+        path = "app.application.worldData.generators.terrain.relief.planning.naturalRelief.collect_prepared_mountain_entries_for_coarse"
         with patch(path, side_effect=collect):
             result = self.get(self.inputs.model_copy(update={"mountains": policy}))
         self.assertEqual(supplied, keys)

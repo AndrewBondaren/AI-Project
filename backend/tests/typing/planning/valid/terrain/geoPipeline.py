@@ -265,3 +265,15 @@ def pre_water_hill_hosts(world: EntityUid, inputs: SurfaceSupportInput, base: Pl
                          terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage) -> None:
     assert_type(PreWaterHillHostPlanner().prepare(world, inputs, base, terrain, cells=cells),
                 tuple[tuple[FineXY, TerrainKey], ...])
+
+
+from app.application.worldData.generators.terrain.planning.preWater.terrainBasePlanner import PreWaterTerrainPlanner
+from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
+
+
+def pre_carve_terrain(world: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
+                      inputs: SurfaceSupportInput, base: PlanEnvelope[ClimateBasePlan],
+                      terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage, control: PlanBuildControl) -> None:
+    assert_type(PreWaterTerrainPlanner().prepare(world, base_input, relief_input, inputs, base, terrain,
+                cells=cells, control=control), tuple[SurfaceHeightmap, frozenset[tuple[int, int]]])

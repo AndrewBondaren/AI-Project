@@ -120,12 +120,12 @@ Exact event-field POJO и emitter files относятся к implementation map
 rejected и не запускает повторное применение; outcome восстанавливается
 по operation storage. Логирование не обещает exactly-once delivery записи.
 
-### DAG execution — target регистрации DAG-TYPING-1 A2.5
+### DAG execution — DAG-TYPING-1 A2.5
 
 - Logger: `app.engine.dag`; domain `engine`, service `dagExecution`, профиль `server`; файл `backend/logs/engine/dagExecution.log`.
 - Producer: единый `backend/app/application/engine/diagnostics/dagLog.py`, owner engine runtime. Координатор формирует итоговые события; причины/поля — `docs/tz_engine_node_context.md` §10.
 - Регистрация маршрута в существующем `_PREFIX_ROUTES`/`route_for` файла `backend/app/core/loggingConfig.py`; тот же JsonLogFormatter и router, без нового handler/собственного файла на ноду. L1–L8 действуют без исключений.
-- Статус: целевой sink задокументирован; код маршрута и emitter ещё не реализованы. Проверка — DAG-TYPING-1 A2.5. Payload Input/Output в лог не копировать; обязательная диагностика отмены доступна без DEBUG.
+- Статус: route, server allowlist и emitter реализованы и проверены 2026-10-31 (DAG-TYPING-1 A2.5). Используются прежние router/JsonLogFormatter, без нового handler. Payload Input/Output/error POJO в лог не копируется; обязательная диагностика отмены доступна без DEBUG. Production handoff runtime — GEN-DAG-1.
 
 ### Существующие консьюмеры
 
