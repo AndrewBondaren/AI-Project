@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.runtime.validation.contractValidator import ContractValidator
 from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
@@ -16,8 +18,8 @@ class LLMValidator:
         self._contract_validator = contract_validator
         self._node_validator = node_validator
 
-    def validate[I: BaseModel, O: BaseModel](
-        self, raw: str, contract: NodeContract[I, O], identity: ExecutionIdentity, *,
+    def validate[I: BaseModel, O: BaseModel, E: NodeError](
+        self, raw: str, contract: NodeContract[I, O, E], identity: ExecutionIdentity, *,
         pass_number: Index = 0, repair_attempt: Index = 0,
     ) -> tuple[O | None, ValidationResult]:
         output, structural = self._contract_validator.parse_json(raw, contract.output_type)

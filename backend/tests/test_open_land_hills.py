@@ -234,6 +234,53 @@ class TestPlaceHills(unittest.TestCase):
         self.assertGreaterEqual(max(z.values()) - 3, 2)
 
 
+    def test_explicit_exclusions_have_no_hydrology_value_semantics(self) -> None:
+        policy = HillPolicy(min_spacing=6, radius=2, height=2)
+        registry = self._registry(policy, policy)
+        excluded = frozenset((x, y) for x in range(8) for y in range(16))
+        results = []
+        for cells in (excluded, dict.fromkeys(excluded, object())):
+            z, terrain, _ = self._grid(16, self.plains)
+            place_hills(z, terrain, cells, terrain_registry=registry, seed=1, z_min=0, z_max=20)
+            self.assertTrue(all(z[cell] == 3 for cell in excluded))
+            self.assertTrue(any(value > 3 for value in z.values()))
+            results.append(z)
+        self.assertEqual(*results)
+
+    def test_hills_then_basin_carve_then_fill_preserve_protected_reservation(self) -> None:
+        from app.application.worldData.generators.hydrology.water.levelFill import level_fill
+        from app.application.worldData.generators.terrain.reliefObjects.bathymetry.basinZ import apply_basin_z
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from app.dataModel.hydrology.bands import HydrologyBands
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+        from app.dataModel.spatial.grid.gridBBox import GridBBox
+        from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+        from app.dataModel.topology.worldBounds import WorldBounds
+        from app.dataModel.topology.worldTopology import WorldTopology
+        from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
+        z, terrain, _ = self._grid(16, self.plains)
+        policy = HillPolicy(min_spacing=6, radius=2, height=3)
+        place_hills(z, terrain, frozenset(), terrain_registry=self._registry(policy, policy),
+                    seed=1, z_min=-10, z_max=20)
+        raised = sorted(cell for cell, height in z.items() if height > 3)
+        self.assertTrue(raised)
+        protected = raised[0]
+        protected_height = z[protected]
+        cells = frozenset(z)
+        topology = WorldTopology(mode=WorldTopologyMode.PLANAR,
+            bounds=WorldBounds(x_min=0, x_max=15, y_min=0, y_max=15))
+        spec = BasinSpec(source_uid="accepted-water", kind=BasinKind.LAKE, liquid="water",
+            footprint=cells, z_water_level=0, floor_z=-3, bands=HydrologyBands(min=1, max=2))
+        surface = SurfaceHeightmap("world", GridBBox(0, 15, 0, 15), z)
+        apply_basin_z(surface, (spec,), topology, reserved=frozenset({protected}),
+                      coordinate_space=CoordinateSpace.WORLD_FINE_GRID)
+        self.assertEqual(z[protected], protected_height)
+        self.assertTrue(all(z[cell] < spec.z_water_level for cell in cells - {protected}))
+        fill = level_fill(z, (min(cells - {protected}),), spec.z_water_level, topology)
+        self.assertEqual(fill.cells, cells - {protected})
+
+
 class TestHillsInTilePrep(unittest.TestCase):
     def test_not_a_mask_domain(self) -> None:
         self.assertFalse(hasattr(MaskDomainId, "HILLS"))

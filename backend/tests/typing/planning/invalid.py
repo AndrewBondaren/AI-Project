@@ -1052,3 +1052,12 @@ from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralS
 def invalid_native_admission_reference(sources: ProceduralSourceAdmissions, binding: ResolvedProceduralSource) -> None:
     binding.admission  # EXPECT: reportAttributeAccessIssue
     sources.admission_for("source")  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+
+
+def invalid_hill_exclusions(surface: dict[tuple[int, int], int], terrain: dict[tuple[int, int], str],
+    registry: WorldTerrainRegistry) -> None:
+    place_hills(surface, terrain, None, terrain_registry=registry, seed=1, z_min=-10, z_max=20)  # EXPECT: reportArgumentType

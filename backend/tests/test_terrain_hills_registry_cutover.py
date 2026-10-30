@@ -1,15 +1,13 @@
 """7b: registry hills, independent grade admission and explicit N+1 profile."""
 from tests.planning.consumers.test_wiring import working_fixture
-from dataclasses import replace
 from types import SimpleNamespace
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from pydantic import ValidationError
 
 from app.application.jsonValidation.terrainHillRegistry import terrain_with_hills
 from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
-from app.application.worldData.generators.terrain.landcover import finePaint
 from app.application.worldData.generators.terrain.landcover.types import StateSnapshotEntry
 from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import open_land_terrain_keys
 from app.application.worldData.materialize.terrain.terrainBatchOrchestrator import TerrainBatchOrchestrator
@@ -102,14 +100,11 @@ class RegistryCutoverTests(unittest.TestCase):
         uid = region_uid(world.world_uid, name=spec.name)
         parent = ParentLightTile.from_cells(world_uid=world.world_uid, gx=0, gy=0, side=1, tile_macro=32,
             cells=[WorldMapCellWire(tx=0, ty=0, surface_z=3, system_terrain="forest", region_uid=uid)])
-        prepare = finePaint.prepare_landcover_inputs
-        def with_state(ctx):
-            return replace(prepare(ctx), state_snapshot={uid: StateSnapshotEntry("steppe")})
-        # The caller's state-reader seam remains a stub until 9a; exercise its typed snapshot.
-        with patch.object(finePaint, "prepare_landcover_inputs", side_effect=with_state):
-            state = TerrainBatchOrchestrator().build_tile_surface_state(
-                world, [], frozen_surface_fixture(world, parent), 0, 0, parent_light=parent,
-                refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0), region_state_snapshot={uid: StateSnapshotEntry("steppe")}, working=working_fixture(world, frozen_surface_fixture(world, parent)))
+        state = TerrainBatchOrchestrator().build_tile_surface_state(
+            world, [], frozen_surface_fixture(world, parent), 0, 0, parent_light=parent,
+            refine_policy=ParentLightRefinePolicy(z_band=0, detail_noise_amplitude=0),
+            region_state_snapshot={uid: StateSnapshotEntry("steppe")},
+            working=working_fixture(world, frozen_surface_fixture(world, parent)))
         self.assertEqual(set(state.surface_terrain.values()), {"steppe"})
         self.assertEqual(set(state.surface_region_uid.values()), {uid})
         self.assertGreater(max(state.heightmap.surface_z.values()), 3)

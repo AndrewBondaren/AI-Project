@@ -5,6 +5,8 @@ from typing import cast
 
 from pydantic import BaseModel, TypeAdapter
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.baseNode import BaseNode
@@ -33,22 +35,22 @@ class NodeRegistry:
     def __init__(self) -> None:
         self._nodes: dict[NodeId, object] = {}
 
-    def register_python[I: BaseModel, O: BaseModel](
-        self, node_cls: type[PythonNode[I, O]], executor_cls: type[PythonExecutor],
-        contract: NodeContract[I, O],
-    ) -> type[PythonNode[I, O]]:
+    def register_python[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_cls: type[PythonNode[I, O, E]], executor_cls: type[PythonExecutor],
+        contract: NodeContract[I, O, E],
+    ) -> type[PythonNode[I, O, E]]:
         self._register(node_cls, NodeKind.PYTHON, contract, executor_cls)
         return node_cls
 
-    def register_llm[I: BaseModel, O: BaseModel](
-        self, node_cls: type[LLMNode[I, O]], contract: NodeContract[I, O],
-    ) -> type[LLMNode[I, O]]:
+    def register_llm[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_cls: type[LLMNode[I, O, E]], contract: NodeContract[I, O, E],
+    ) -> type[LLMNode[I, O, E]]:
         self._register(node_cls, NodeKind.LLM, contract, None)
         return node_cls
 
-    def _register[I: BaseModel, O: BaseModel](
-        self, node_cls: type[BaseNode[I, O]], kind: NodeKind,
-        contract: NodeContract[I, O], executor_cls: type[PythonExecutor] | None,
+    def _register[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_cls: type[BaseNode[I, O, E]], kind: NodeKind,
+        contract: NodeContract[I, O, E], executor_cls: type[PythonExecutor] | None,
     ) -> None:
         _check_node_class(node_cls, kind)
         _check_binding(contract, executor_cls, kind)
@@ -57,40 +59,40 @@ class NodeRegistry:
             raise ValueError(f"Node '{node_id}' is already registered")
         self._nodes[node_id] = NodeRegistration(node_id, node_cls, kind, contract, executor_cls)
 
-    def get[I: BaseModel, O: BaseModel](
-        self, node_id: NodeId, contract: NodeContract[I, O],
-    ) -> NodeRegistration[I, O]:
+    def get[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_id: NodeId, contract: NodeContract[I, O, E],
+    ) -> NodeRegistration[I, O, E]:
         entry = self._nodes[node_id]
         # Only _register writes this private heterogeneous store. The exact
         # contract identity witnesses I/O before restoring the generic type.
-        erased = cast(NodeRegistration[BaseModel, BaseModel], entry)
+        erased = cast(NodeRegistration[BaseModel, BaseModel, NodeError], entry)
         if erased.contract is not contract:
             raise TypeError(f"contract does not match registered binding '{node_id}'")
-        return cast(NodeRegistration[I, O], entry)
+        return cast(NodeRegistration[I, O, E], entry)
 
     def ids(self) -> tuple[NodeId, ...]:
         return tuple(self._nodes)
 
-    def graph_registrations(self) -> tuple[NodeRegistration[BaseModel, BaseModel], ...]:
+    def graph_registrations(self) -> tuple[NodeRegistration[BaseModel, BaseModel, NodeError], ...]:
         """Internal metadata snapshot for compilation, never an Output read API.
 
         Only _register writes this store. Heterogeneous I/O are erased here;
         callers use get(node_id, contract) when they need concrete I/O types.
         """
-        return tuple(cast(NodeRegistration[BaseModel, BaseModel], entry) for entry in self._nodes.values())
+        return tuple(cast(NodeRegistration[BaseModel, BaseModel, NodeError], entry) for entry in self._nodes.values())
 
 
-def register_python[I: BaseModel, O: BaseModel](
-    executor_cls: type[PythonExecutor], contract: NodeContract[I, O], *, registry: NodeRegistry,
-) -> Callable[[type[PythonNode[I, O]]], type[PythonNode[I, O]]]:
-    def decorate(node_cls: type[PythonNode[I, O]]) -> type[PythonNode[I, O]]:
+def register_python[I: BaseModel, O: BaseModel, E: NodeError](
+    executor_cls: type[PythonExecutor], contract: NodeContract[I, O, E], *, registry: NodeRegistry,
+) -> Callable[[type[PythonNode[I, O, E]]], type[PythonNode[I, O, E]]]:
+    def decorate(node_cls: type[PythonNode[I, O, E]]) -> type[PythonNode[I, O, E]]:
         return registry.register_python(node_cls, executor_cls, contract)
     return decorate
 
 
-def register_llm[I: BaseModel, O: BaseModel](
-    contract: NodeContract[I, O], *, registry: NodeRegistry,
-) -> Callable[[type[LLMNode[I, O]]], type[LLMNode[I, O]]]:
-    def decorate(node_cls: type[LLMNode[I, O]]) -> type[LLMNode[I, O]]:
+def register_llm[I: BaseModel, O: BaseModel, E: NodeError](
+    contract: NodeContract[I, O, E], *, registry: NodeRegistry,
+) -> Callable[[type[LLMNode[I, O, E]]], type[LLMNode[I, O, E]]]:
+    def decorate(node_cls: type[LLMNode[I, O, E]]) -> type[LLMNode[I, O, E]]:
         return registry.register_llm(node_cls, contract)
     return decorate

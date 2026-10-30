@@ -41,7 +41,7 @@ class InvalidationTests(unittest.TestCase):
             (GraphConsumer, (required("producer"), required("peer"), optional("peer"))),
             (TypedPythonNode, (required("peer"), required("consumer"))),
         ):
-            contract = NodeContract(NodeInput, LeafOutput, ContractId("test." + cls.id), ContractVersion("1"), reads)
+            contract = NodeContract(NodeInput, LeafOutput, ContractId("test." + cls.id), ContractVersion("1"), reads, error_types=())
             registry.register_python(cls, FakeExecutor, contract)
             self.contracts[cls.id] = contract
         self.catalog = DAGContext(ExecutionId("execution-1"), registry)
@@ -108,7 +108,7 @@ class InvalidationTests(unittest.TestCase):
         registry = NodeRegistry()
         bindings = GraphBindings()
         for cls, deps in ((GraphProducer, ()), (GraphConsumer, (NodeId("producer"),))):
-            contract = NodeContract(NodeInput, LeafOutput, ContractId("test." + cls.id), ContractVersion("1"), ())
+            contract = NodeContract(NodeInput, LeafOutput, ContractId("test." + cls.id), ContractVersion("1"), (), error_types=())
             registry.register_python(cls, FakeExecutor, contract)
             self.contracts[cls.id] = contract
             bindings.nodes[cls.id] = cls(id=cls.id, deps=deps)

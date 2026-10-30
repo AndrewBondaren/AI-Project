@@ -2,6 +2,14 @@
 
 from typing import assert_type
 
+from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+
+
+def hills_with_explicit_exclusions(surface: dict[tuple[int, int], int], terrain: dict[tuple[int, int], str],
+    excluded: frozenset[tuple[int, int]], registry: WorldTerrainRegistry) -> None:
+    assert_type(place_hills(surface, terrain, excluded, terrain_registry=registry, seed=1, z_min=-10, z_max=20), None)
+
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanBuildControl

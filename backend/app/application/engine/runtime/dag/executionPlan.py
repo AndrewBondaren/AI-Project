@@ -7,6 +7,8 @@ from typing import cast
 
 from pydantic import BaseModel
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.nodeTypes.compiledNode import CompiledNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
@@ -26,8 +28,8 @@ class ExecutionPlan:
     pre_llm_levels: tuple[tuple[NodeId, ...], ...]
     llm_groups: tuple[LLMGroup, ...]
     post_llm_levels: tuple[tuple[NodeId, ...], ...]
-    nodes: Mapping[NodeId, CompiledNode[BaseModel, BaseModel]]
-    registrations: Mapping[NodeId, NodeRegistration[BaseModel, BaseModel]]
+    nodes: Mapping[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]]
+    registrations: Mapping[NodeId, NodeRegistration[BaseModel, BaseModel, NodeError]]
     estimated_cost: float
 
     def __post_init__(self) -> None:
@@ -35,9 +37,9 @@ class ExecutionPlan:
         object.__setattr__(self, "nodes", MappingProxyType(dict(self.nodes)))
         object.__setattr__(self, "registrations", MappingProxyType(dict(self.registrations)))
 
-    def get[I: BaseModel, O: BaseModel](
-        self, node_id: NodeId, contract: NodeContract[I, O],
-    ) -> CompiledNode[I, O]:
+    def get[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_id: NodeId, contract: NodeContract[I, O, E],
+    ) -> CompiledNode[I, O, E]:
         registration = self.registrations[node_id]
         if registration.contract is not contract:
             raise TypeError(f"contract does not match plan binding '{node_id}'")
@@ -45,4 +47,4 @@ class ExecutionPlan:
         registration.validate_node(compiled.node)
         # Exact binding identity and factory admission witness I/O at this
         # closed heterogeneous boundary; no casts are needed by consumers.
-        return cast(CompiledNode[I, O], compiled)
+        return cast(CompiledNode[I, O, E], compiled)

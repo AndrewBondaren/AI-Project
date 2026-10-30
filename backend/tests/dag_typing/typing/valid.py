@@ -1,6 +1,9 @@
 """Positive static API probes, including request-local factories and ports."""
 
+from typing import Never
 from typing import assert_type
+
+from app.dataModel.engine.dag.errors.nodeError import NodeError
 
 from pydantic import BaseModel
 
@@ -19,19 +22,24 @@ from app.application.engine.registration.nodeRegistry import NodeRegistry, regis
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
 from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
+from app.application.engine.runtime.execution.nodeOutcome import NodeOutcome
+from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
+from app.application.engine.runtime.execution.nodeRunner import NodeRunner
+from app.application.engine.runtime.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.runtime.validation.contractValidator import ContractValidator
 from app.application.engine.runtime.validation.llmValidator import LLMValidator
 from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
 from app.application.engine.runtime.validation.nodeValidator import NodeValidator
 from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 from app.application.engine.taskType import TaskType
-from app.dataModel.engine.dag.identity import ContractId, ContractVersion, ExecutionIdentity, NodeId
+from app.dataModel.engine.dag.identity import ContractId, ContractVersion, ExecutionId, ExecutionIdentity, NodeId
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence, OutputRecord
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
     CompositeOutput, FakeExecutor, FakeReadView, LEAF_CONTRACT, LeafOutput, NodeInput,
     OPTIONAL_COMPOSITE, REQUIRED_LEAF, TypedLLMNode, TypedPythonNode,
     RecordingValidator, identity,
+    ERROR_CONTRACT, TestNodeError, TestOtherError, TypedErrorNode, GraphBindings,
 )
 
 
@@ -63,9 +71,9 @@ class Factory:
     def __init__(self, node: object) -> None:
         self._node = node
 
-    def make_node[I: BaseModel, O: BaseModel](
-        self, registration: NodeRegistration[I, O],
-    ) -> BaseNode[I, O]:
+    def make_node[I: BaseModel, O: BaseModel, E: NodeError](
+        self, registration: NodeRegistration[I, O, E],
+    ) -> BaseNode[I, O, E]:
         # The fake integration supplies a request-local, already constructed node.
         return registration.validate_node(self._node)
 
@@ -75,7 +83,7 @@ async def verify() -> None:
     registry.register_python(TypedPythonNode, FakeExecutor, LEAF_CONTRACT)
     registry.register_llm(TypedLLMNode, LEAF_CONTRACT)
     registration = registry.get(NodeId("typed-python"), LEAF_CONTRACT)
-    assert_type(registration, NodeRegistration[NodeInput, LeafOutput])
+    assert_type(registration, NodeRegistration[NodeInput, LeafOutput, Never])
     view: DAGReadView = FakeReadView(LeafOutput(value=3))
     executor: PythonExecutor = FakeExecutor()
     node = TypedPythonNode(request_value=5, phase=ExecutionPhase.POST_LLM)
@@ -86,7 +94,7 @@ async def verify() -> None:
     assert_type(await executor.execute(node, NodeInput(value=3)), LeafOutput)
     assert_type(await node.execute(NodeInput(value=3)), LeafOutput)
     factory: ExecutionBindings = Factory(node)
-    assert_type(factory.make_node(registration), BaseNode[NodeInput, LeafOutput])
+    assert_type(factory.make_node(registration), BaseNode[NodeInput, LeafOutput, Never])
     response: ResponseBinding[LeafOutput] = Response()
     assert_type(response.resolve(view), ResolveResult[LeafOutput])
     transition: TransitionBinding = Transition()
@@ -95,15 +103,15 @@ async def verify() -> None:
     assert_type(extension.capture(), LeafOutput)
     lifecycle: OutputLifecycle[LeafOutput] = Extension()
     await lifecycle.validate_restored(LeafOutput(value=1))
-    compiled = CompiledNode[NodeInput, LeafOutput](node, ())
-    assert_type(compiled.node, BaseNode[NodeInput, LeafOutput])
+    compiled = CompiledNode[NodeInput, LeafOutput, Never](node, ())
+    assert_type(compiled.node, BaseNode[NodeInput, LeafOutput, Never])
     python_class = register_python(FakeExecutor, LEAF_CONTRACT, registry=NodeRegistry())(TypedPythonNode)
-    assert_type(python_class, type[PythonNode[NodeInput, LeafOutput]])
+    assert_type(python_class, type[PythonNode[NodeInput, LeafOutput, Never]])
     register_llm(LEAF_CONTRACT, registry=NodeRegistry())(TypedLLMNode)
 
 
 def verify_plan_lookup(plan: ExecutionPlan) -> None:
-    assert_type(plan.get(NodeId("typed-python"), LEAF_CONTRACT), CompiledNode[NodeInput, LeafOutput])
+    assert_type(plan.get(NodeId("typed-python"), LEAF_CONTRACT), CompiledNode[NodeInput, LeafOutput, Never])
 
 
 def verify_validation() -> None:
@@ -117,8 +125,9 @@ def verify_validation() -> None:
     assert_type(semantic.validate(ctx, LEAF_CONTRACT), ValidationResult)
     assert_type(llm.validate('{"value":1}', LEAF_CONTRACT, identity()), tuple[LeafOutput | None, ValidationResult])
     callback = RecordingValidator[LeafOutput](ValidationResult(status=ValidationStatus.OK))
-    contract = NodeContract[NodeInput, LeafOutput](
+    contract = NodeContract[NodeInput, LeafOutput, Never](
         NodeInput, LeafOutput, ContractId("test.validated"), ContractVersion("1"), (), validator=callback,
+        error_types=(),
     )
     assert_type(semantic.validate(ctx, contract), ValidationResult)
 
@@ -139,3 +148,31 @@ def verify_catalog(
     assert_type(catalog.publish(record), None)
 
     assert_type(catalog.invalidate_for_reuse({}), tuple[ExecutionIdentity, ...])
+
+
+async def verify_runner(
+    node: TypedPythonNode, view: PublishedDAGReadView, registration: NodeRegistration[NodeInput, LeafOutput, Never],
+) -> None:
+    executor: PythonExecutor = PythonNodeExecutor()
+    assert_type(await executor.execute(node, NodeInput(value=1)), LeafOutput)
+    runner = NodeRunner(ContractValidator(), NodeValidator())
+    outcome = await runner.run(node, view, identity(), registration, executor)
+    assert_type(outcome, NodeOutcome[LeafOutput, Never])
+    assert_type(outcome.output, LeafOutput | None)
+    assert_type(outcome.reads, tuple[DependencyRead, ...])
+    assert_type(view.execution_id, ExecutionId)
+
+
+async def verify_typed_errors(view: PublishedDAGReadView, catalog: DAGContext) -> None:
+    registry = NodeRegistry()
+    registry.register_python(TypedErrorNode, PythonNodeExecutor, ERROR_CONTRACT)
+    registration = registry.get(NodeId("typed-error"), ERROR_CONTRACT)
+    assert_type(registration, NodeRegistration[NodeInput, LeafOutput, TestNodeError | TestOtherError])
+    assert_type(GraphBindings().make_node(registration), BaseNode[NodeInput, LeafOutput, TestNodeError | TestOtherError])
+    runner = NodeRunner(ContractValidator(), NodeValidator())
+    outcome = await runner.run(TypedErrorNode(), view, identity(), registration, PythonNodeExecutor())
+    assert_type(outcome, NodeOutcome[LeafOutput, TestNodeError | TestOtherError])
+    assert_type(outcome.error, TestNodeError | TestOtherError | None)
+    assert_type(catalog.node_error(NodeId("typed-error"), ERROR_CONTRACT), TestNodeError | TestOtherError | None)
+    assert_type(catalog.close_error(identity(), TestNodeError(item_id=1), ERROR_CONTRACT), None)
+    assert_type(PythonNodeError(TestNodeError(item_id=1)).error, TestNodeError)

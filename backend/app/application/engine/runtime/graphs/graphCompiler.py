@@ -4,6 +4,8 @@ from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.executionBindings import ExecutionBindings
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.nodeTypes.compiledNode import CompiledNode
@@ -17,9 +19,9 @@ from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.identity import NodeId
 
 type RuleCompiler = Callable[
-    [list[Rule]], Sequence[Callable[[BaseNode[BaseModel, BaseModel], object], bool]],
+    [list[Rule]], Sequence[Callable[[BaseNode[BaseModel, BaseModel, NodeError], object], bool]],
 ]
-type RuleEvaluator = Callable[[CompiledNode[BaseModel, BaseModel], BaseModel], bool]
+type RuleEvaluator = Callable[[CompiledNode[BaseModel, BaseModel, NodeError], BaseModel], bool]
 
 
 class GraphCompiler:
@@ -31,14 +33,14 @@ class GraphCompiler:
         self._bindings = bindings
         self._compile_rules = compile_rules
         self._evaluate_rules = evaluate_rules
-        self._nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel]] | None = None
-        self._registrations: dict[NodeId, NodeRegistration[BaseModel, BaseModel]] = {}
+        self._nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]] | None = None
+        self._registrations: dict[NodeId, NodeRegistration[BaseModel, BaseModel, NodeError]] = {}
 
     def precompile(self) -> None:
         """Validate the full declared graph before applying conditional rules."""
         self._nodes = None
         registrations = {reg.node_id: reg for reg in self._registry.graph_registrations()}
-        nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel]] = {}
+        nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]] = {}
         for node_id, registration in registrations.items():
             node = registration.validate_node(self._bindings.make_node(registration))
             nodes[node_id] = CompiledNode(node, tuple(self._compile_rules(list(node.rules))))
@@ -55,9 +57,9 @@ class GraphCompiler:
             node_id: compiled for node_id, compiled in self._nodes.items()
             if self._evaluate_rules(compiled, state)
         }
-        pre: dict[NodeId, CompiledNode[BaseModel, BaseModel]] = {}
-        post: dict[NodeId, CompiledNode[BaseModel, BaseModel]] = {}
-        buckets: dict[float, dict[NodeId, CompiledNode[BaseModel, BaseModel]]] = {}
+        pre: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]] = {}
+        post: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]] = {}
+        buckets: dict[float, dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]]] = {}
         for node_id, compiled in selected.items():
             phase = self._phase(compiled.node)
             if phase is ExecutionPhase.PRE_LLM:
@@ -78,7 +80,7 @@ class GraphCompiler:
         )
 
     @staticmethod
-    def _phase(node: BaseNode[BaseModel, BaseModel]) -> ExecutionPhase:
+    def _phase(node: BaseNode[BaseModel, BaseModel, NodeError]) -> ExecutionPhase:
         if isinstance(node, PythonNode):
             return node.phase
         if isinstance(node, LLMNode):
@@ -86,14 +88,14 @@ class GraphCompiler:
         raise TypeError(f"node '{node.id}' must be a PythonNode or LLMNode")
 
     @classmethod
-    def _position(cls, node: BaseNode[BaseModel, BaseModel]) -> tuple[int, float]:
+    def _position(cls, node: BaseNode[BaseModel, BaseModel, NodeError]) -> tuple[int, float]:
         phase = cls._phase(node)
         return tuple(ExecutionPhase).index(phase), node.temperature if isinstance(node, LLMNode) else 0.0
 
     @classmethod
     def _validate_graph(
-        cls, nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel]],
-        registrations: dict[NodeId, NodeRegistration[BaseModel, BaseModel]],
+        cls, nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]],
+        registrations: dict[NodeId, NodeRegistration[BaseModel, BaseModel, NodeError]],
     ) -> None:
         positions = {node_id: cls._position(compiled.node) for node_id, compiled in nodes.items()}
         for node_id, compiled in nodes.items():
@@ -125,7 +127,7 @@ class GraphCompiler:
 
     @staticmethod
     def _build_levels(
-        nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel]],
+        nodes: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]],
     ) -> tuple[tuple[NodeId, ...], ...]:
         in_degree = {node_id: 0 for node_id in nodes}
         dependents: dict[NodeId, list[NodeId]] = {node_id: [] for node_id in nodes}

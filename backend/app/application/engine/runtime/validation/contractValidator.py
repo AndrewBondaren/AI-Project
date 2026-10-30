@@ -8,6 +8,7 @@ from pydantic import BaseModel, RootModel, ValidationError
 from app.application.engine.validation.nodeValidationError import NodeErrorSeverity, NodeValidationError
 from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 from app.dataModel.validation.immutableValue import validate_immutable
+from app.dataModel.engine.dag.errors.nodeError import NodeError
 
 
 def _declared_instance[T: BaseModel](value: object, contract: type[T]) -> T:
@@ -63,6 +64,14 @@ def _failure(error: ValueError | TypeError, *, retry: bool) -> ValidationResult:
 
 
 class ContractValidator:
+    def validate_error[E: NodeError](
+        self, value: object, error_types: tuple[type[E], ...],
+    ) -> tuple[E | None, ValidationResult]:
+        if not isinstance(value, error_types):
+            return None, _failure(TypeError("undeclared NodeError type"), retry=False)
+        # The registered class tuple witnesses E at this erased exception boundary.
+        return self.validate(value, type(value))
+
     def validate[T: BaseModel](
         self, value: object, contract: type[T],
     ) -> tuple[T | None, ValidationResult]:

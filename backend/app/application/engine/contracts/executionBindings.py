@@ -5,6 +5,8 @@ from typing import Generic, Protocol, TypeVar
 
 from pydantic import BaseModel
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
@@ -45,6 +47,6 @@ class SnapshotExtension(Protocol[E]):
 
 
 class ExecutionBindings(Protocol):
-    def make_node[I: BaseModel, O: BaseModel](
-        self, registration: NodeRegistration[I, O],
-    ) -> BaseNode[I, O]: ...
+    def make_node[I: BaseModel, O: BaseModel, E: NodeError](
+        self, registration: NodeRegistration[I, O, E],
+    ) -> BaseNode[I, O, E]: ...

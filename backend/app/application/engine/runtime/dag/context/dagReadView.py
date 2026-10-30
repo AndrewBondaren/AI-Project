@@ -6,6 +6,8 @@ from types import MappingProxyType
 
 from pydantic import BaseModel
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.outputRef import OptionalOutput, RequiredOutput
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, NodeId
@@ -16,7 +18,7 @@ from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence,
 class PublishedDAGReadView:
     consumer: NodeId
     _requirements: tuple[RequiredOutput[BaseModel] | OptionalOutput[BaseModel], ...] = field(repr=False)
-    _producers: Mapping[NodeId, NodeRegistration[BaseModel, BaseModel]] = field(repr=False)
+    _producers: Mapping[NodeId, NodeRegistration[BaseModel, BaseModel, NodeError]] = field(repr=False)
     _records: Mapping[NodeId, OutputRecord[BaseModel]] = field(repr=False)
     _execution_id: ExecutionId = field(repr=False)
     _reads: list[DependencyRead] = field(default_factory=list[DependencyRead], init=False, repr=False, compare=False)
@@ -25,6 +27,10 @@ class PublishedDAGReadView:
     def __post_init__(self) -> None:
         object.__setattr__(self, "_producers", MappingProxyType(dict(self._producers)))
         object.__setattr__(self, "_records", MappingProxyType(dict(self._records)))
+
+    @property
+    def execution_id(self) -> ExecutionId:
+        return self._execution_id
 
     @property
     def dependency_reads(self) -> tuple[DependencyRead, ...]:

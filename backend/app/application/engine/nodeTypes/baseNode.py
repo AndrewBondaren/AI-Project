@@ -6,6 +6,8 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
+from app.dataModel.engine.dag.errors.nodeError import NodeError
+
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.nodeTypes.support.nodeCost import NodeCost
 from app.application.engine.rules.rule import Rule
@@ -14,10 +16,11 @@ from app.dataModel.engine.dag.identity import NodeId
 
 I = TypeVar("I", bound=BaseModel)
 O = TypeVar("O", bound=BaseModel)
+E = TypeVar("E", bound=NodeError)
 
 
 @dataclass(frozen=True, kw_only=True)
-class BaseNode(ABC, Generic[I, O]):
+class BaseNode(ABC, Generic[I, O, E]):
     id: NodeId
     name: str = ""
     supported_tasks: tuple[TaskType, ...] = ()

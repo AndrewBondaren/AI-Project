@@ -7,13 +7,12 @@ SoT: ``docs/tz_world_pack_storage.md`` § L2 open-land hills.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Set
+from collections.abc import Collection, Mapping
 
 from app.application.worldData.generators.terrain.hills.hillRaster import (
     Coord,
     raster_hill,
 )
-from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
@@ -21,7 +20,7 @@ from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 def place_hills(
     surface_z: dict[Coord, int],
     surface_terrain: Mapping[Coord, str],
-    l0_hydro: Mapping[Coord, MapCellHydrology] | Set[Coord],
+    excluded_cells: Collection[Coord],
     *,
     terrain_registry: WorldTerrainRegistry,
     seed: int,
@@ -30,17 +29,14 @@ def place_hills(
 ) -> None:
     """Mutate ``surface_z`` in place. ``system_terrain`` is not written.
 
-    Host = current L2 cells with that consumer's region-painted terrain
-    and no L0 hydro role. Skip the whole hill if the footprint does not fit.
+    Host = supplied cells with that consumer's terrain key
+    and outside explicit exclusions. Skip the whole hill if its footprint does not fit.
+    Exclusion ownership belongs to the caller's stage; no water facts are read here.
     ``z_band`` is not applied here.
     """
     if not surface_z:
         return
-    hydro_xy: Set[Coord]
-    if isinstance(l0_hydro, (set, frozenset)):
-        hydro_xy = l0_hydro
-    else:
-        hydro_xy = set(l0_hydro.keys())
+    excluded = frozenset(excluded_cells)
     base_z = dict(surface_z)
     for key in sorted(set(surface_terrain.values())):
         entry = terrain_registry.entry_for(key)
@@ -49,7 +45,7 @@ def place_hills(
         _place_consumer(
             surface_z,
             base_z,
-            _host_for(surface_z, surface_terrain, hydro_xy, key),
+            _host_for(surface_z, surface_terrain, excluded, key),
             entry.hills,
             seed=seed,
             salt=_salt(key),
@@ -62,13 +58,13 @@ def place_hills(
 def _host_for(
     surface_z: Mapping[Coord, int],
     surface_terrain: Mapping[Coord, str],
-    hydro_xy: Set[Coord],
+    excluded_cells: frozenset[Coord],
     terrain_key: str,
 ) -> set[Coord]:
     return {
         xy
         for xy in surface_z
-        if surface_terrain.get(xy) == terrain_key and xy not in hydro_xy
+        if surface_terrain.get(xy) == terrain_key and xy not in excluded_cells
     }
 
 

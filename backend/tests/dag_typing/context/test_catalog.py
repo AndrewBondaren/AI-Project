@@ -35,7 +35,7 @@ class CatalogTests(unittest.TestCase):
         self.registry = NodeRegistry()
         self.contracts = {}
         for cls, reads in ((GraphProducer, ()), (GraphPeer, ()), (GraphConsumer, (self.required, self.optional))):
-            contract = NodeContract(NodeInput, LeafOutput, ContractId("test." + cls.id), ContractVersion("1"), reads)
+            contract = NodeContract(NodeInput, LeafOutput, ContractId("test." + cls.id), ContractVersion("1"), reads, error_types=())
             self.registry.register_python(cls, FakeExecutor, contract)
             self.contracts[cls.id] = contract
         self.catalog = DAGContext(ExecutionId("execution-1"), self.registry)
@@ -351,7 +351,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_registry_bindings_are_fixed_for_this_execution(self):
         from tests.dag_typing.fixtures import GraphDerivedProducer
-        contract = NodeContract(NodeInput, DerivedLeafOutput, ContractId("extra"), ContractVersion("1"), ())
+        contract = NodeContract(NodeInput, DerivedLeafOutput, ContractId("extra"), ContractVersion("1"), (), error_types=())
         self.registry.register_python(GraphDerivedProducer, FakeExecutor, contract)
         with self.assertRaises(KeyError):
             self.begin("derived-producer")

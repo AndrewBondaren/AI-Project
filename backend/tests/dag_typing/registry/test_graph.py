@@ -42,7 +42,7 @@ class GraphTests(unittest.TestCase):
 
     def python(self, cls=GraphProducer, *, deps=(), reads=(), phase=ExecutionPhase.PRE_LLM,
                priority=50, cpu=1.0, tasks=(TaskType.SCENE_NARRATION,), output_type=LeafOutput):
-        contract = NodeContract(NodeInput, output_type, ContractId(cls.id), ContractVersion("1"), reads)
+        contract = NodeContract(NodeInput, output_type, ContractId(cls.id), ContractVersion("1"), reads, error_types=())
         self.registry.register_python(cls, FakeExecutor, contract)
         self.bindings.nodes[cls.id] = cls(
             id=cls.id, deps=tuple(NodeId(dep) for dep in deps), phase=phase,
@@ -53,7 +53,7 @@ class GraphTests(unittest.TestCase):
 
     def llm(self, cls=GraphLLMProducer, *, deps=(), reads=(), temperature=0.0,
             tasks=(TaskType.SCENE_NARRATION,)):
-        contract = NodeContract(NodeInput, LeafOutput, ContractId(cls.id), ContractVersion("1"), reads)
+        contract = NodeContract(NodeInput, LeafOutput, ContractId(cls.id), ContractVersion("1"), reads, error_types=())
         self.registry.register_llm(cls, contract)
         self.bindings.nodes[cls.id] = cls(
             id=cls.id, deps=tuple(NodeId(dep) for dep in deps), temperature=temperature,
@@ -264,7 +264,7 @@ class GraphTests(unittest.TestCase):
             plan.registrations[NodeId("missing")] = plan.registrations[NodeId("producer")]
         with self.assertRaises(FrozenInstanceError):
             plan.llm_groups[0].temperature = 0.5
-        wrong = NodeContract(NodeInput, CompositeOutput, contract.contract_id, contract.version, ())
+        wrong = NodeContract(NodeInput, CompositeOutput, contract.contract_id, contract.version, (), error_types=())
         with self.assertRaisesRegex(TypeError, "contract does not match plan"):
             plan.get(NodeId("producer"), wrong)
 
@@ -302,6 +302,7 @@ class GraphPreparationTests(unittest.IsolatedAsyncioTestCase):
         contract = NodeContract(
             CompositeOutput, LeafOutput, ContractId("test.optional"), ContractVersion("1"),
             reads=(OPTIONAL_LEAF,),
+            error_types=(),
         )
         graph.registry.register_python(GraphOptionalConsumer, FakeExecutor, contract)
         node = GraphOptionalConsumer(id=GraphOptionalConsumer.id, deps=(NodeId("producer"),))

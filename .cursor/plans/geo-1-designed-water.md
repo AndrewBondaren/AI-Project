@@ -12398,6 +12398,156 @@ hills/reservations → basin floor/fill, плюс применение этих 
 порядок этой записи обозначает предмет анализа, а не уже выбранную семантику.
 G10-A OPEN; fine-water completeness/producer schemas пока не реализовывать.
 
+### G10-A fine-water cost audit — MEASURED / ALGORITHM NOT SELECTED (2026-10-30)
+Мастер запросил оценку ocean / many lakes / narrow connection до выбора
+алгоритма. Выполнены изолированные вызовы реального assemble_water_bodies,
+без backend, storage, terrain generation, P2 и изменения кода. Python3.14.4,
+однократные синтетические прогоны на этом окружении, не production benchmark.
+Топология PLANAR, полный n×n heightmap, level0, wet z=-2/dry z=2,
+explicit source seeds, auto_seas=False/auto_lakes=False, bands1..2.
+Ocean: прямоугольная связная мокрая область около60%, один seed; lakes:
+изолированные3×3 pockets, шаг8, seed в центре каждого; bridge: две большие
+области, ridge шириной1, одна клетка прохода меняется с2 на-2.
+
+| n=256, cells=65 536 | Sources | Wet cells | Total s | Tree s | Materialize s |
+|---|---:|---:|---:|---:|---:|
+| Large water | 1 | 38 608 | 3.517 | 0.960 | 2.555 |
+| Small lakes | 1 024 | 9 216 | 1.693 | 0.992 | 0.689 |
+| Open connection | 2 | 64 263 | 5.365 | 1.010 | 4.353 |
+
+Level resolution в этих простых случаях <0.004s; нельзя переносить это на
+сложную иерархию высот/levels. n32/64/128 также измерены; это иллюстрация роста,
+не экстраполяция wall-clock времени на реальный мир. Tracemalloc отдельно:
+ocean128 (16 384 cells) peak16.68MiB, включая kernel allocations, но исключая
+создание input heightmap/specs до start. Tracing timing не сравнивать с таблицей.
+На всех n32/64/128 изменение одной bridge-клетки меняет physical_unions0→1.
+Независимый clipped fill может дать неправильные уровни/identity; существующий
+depression_tree дополнительно требует все canonical neighbours в heightmap.
+
+Выводы по трём сценариям:
+- Ocean: доминируют мокрая площадь, per-cell output и materialization; narrow
+  shore-only запрос не оправдывает полный fine-world обход. Для измеренного
+  ocean256 wet membership сжимается в254 row spans вместо38 608 cells.
+- Many lakes: tree обходил все65 536 cells при wet9 216. Локализация потенциально
+  полезна при доказанных закрытых rim/spill границах. Kernel сам такой clipping
+  не поддерживает; нельзя подменять world topology bounds размером lake window.
+  Wet spans здесь3 072 для9 216 cells: выгода от compression меньше, bodies много.
+- Narrow connection: малая fine-деталь меняет глобальную связность. Coarse
+  min/max height недостаточно для восстановления связей портов блока. Перед
+  freeze body IDs/levels нужны доказанные connectivity/spill summaries либо
+  уточнение неоднозначной области, а не independent per-window fill.
+  Labelled fill также выбирает owner по geodesic distance/source UID/координатам;
+  иерархия должна сохранять этот claim/tie-break, не только факт связности.
+
+Ограничения следующего target: не принимать полный dense fine-world kernel
+как baseline GEO-1; Nfine=Ncoarse*span², память нынешних dict/model structures
+O(N), depression tree O(N log N). Candidate — global hierarchical topology +
+fine refinement неопределённых областей с подтверждёнными границами; худший
+случай остаётся full fine. Выигрыш по perimeter не доказан и не обещается.
+Детали representation/summary API ещё требуют проектирования; это не выбор
+готового алгоритма и не разрешение заменить fine physical facts coarse guesses.
+До freeze layout разрешить все ambiguities, меняющие merge/spill/body identity;
+read-only query после freeze не меняет принятые решения. Unknown не становится dry.
+
+Предыдущий target «все final fine rows в sparse_fine_hydro» НЕ считать готовым
+storage contract: большой ocean делает такой набор dense. Сначала выбрать
+компактное canonical membership/recipe + нужные exceptions и окна доставки;
+проверить повторное использование RegionCoverage/CoverageSpan/существующих
+body/mapping типов. Не вводить новые POJO/enum и не сохранять одновременно две
+независимые полные wet masks ради оптимизации. Snapshot/interface inventory
+остаётся полезным, но не заменяет эту проверку представления и сложности.
+Полный порядок terrain/hills/carve/fill остаётся проектным вопросом; схема
+зависимостей не требует максимальной resolution каждого шага. Только план
+обновлён; benchmark scripts исполнялись в памяти, repo code/tests не менялись.
+G10-A OPEN; implementation/performance acceptance не заявлена.
+
+### G10-A terrain/water order — AGREED (2026-10-31)
+Мастер ответил «Ок» на конкретный вопрос о порядке операций:
+естественный рельеф с hills → разрешённый basin carve → fill.
+Protected reservations сохраняются; область/приоритет carve определяются
+existing placement/policy, а не planner или height writer. Final water mask
+этого же cycle не является входом генерации hills для hydrology planning base.
+Boundary потребляет готовые post-fill water facts; L0/L2 материализуют одну
+принятую layout revision. Baked L0 остаётся базой refine; межфазный pipeline
+сейчас остаётся существующим, перенос orchestration — только GEN-DAG-1.
+
+Эта запись закрывает вопрос порядка из предыдущих аналитических разделов,
+но не утверждает готовность fine source/consumer joins. Полный fine-world fill,
+global hierarchical solver и новые summaries НЕ выбраны и не являются
+обязательными prerequisites текущего шага. CPU-only synthetic measurements
+не доказывают production bottleneck: SQL/I/O ими не измерялись. Их профилирование
+не добавлять отдельным блокером G10-A без конкретной необходимости.
+Предыдущие требования сначала выбрать hierarchy/dense storage optimization
+считать исследовательскими гипотезами, не согласованным delivery scope.
+При этом нельзя подменять требуемые fine facts coarse guesses: unknown остаётся
+unknown, соответствие water layout и L2 consumer должно быть доказано.
+Следующий ограниченный шаг — закрепить точные typed inputs/owners для terrain
+planning base с hills без post-fill feedback и применение принятого basin floor;
+использовать existing kernels/POJO, не новый независимый terrain/water generator.
+Новые schemas/enum или production activation этим согласием не объявлены готовыми.
+Код в этом подтверждении не менялся. G10-A OPEN.
+
+### G10-A terrain planning inputs / hill kernel — IMPLEMENTED / NEXT JOIN OPEN (2026-10-31)
+ТЗ: согласованный порядок выше, §6.20, docs/tz_world_pack_storage.md L2 open-land
+hills, docs/tz_terrain_hydrology.md HY-12/basin writer. Один ограниченный срез:
+закрепить inputs и убрать hydrology knowledge из existing hill kernel.
+Контракт terrain base до water: captured TerrainBaseInput(seed/z bounds/grid),
+TerrainPlan — исходные coarse heights, ReliefPlanInput и MountainLayout/LightReliefPlan
+— geometry/relief recipe; post-carve ReliefPlan.surface_z не считать pre-carve base.
+Для hills обязательны scratch surface_z, разрешённые pre-water terrain keys,
+registry с existing HillPolicy и explicit exclusions. Registry hills/presence
+читаются из existing SurfaceSupportInput.terrain_entries/landcover overrides;
+не вводить ещё один FineTerrainSettings/enum/default table.
+Нельзя брать host terrain из готового SurfaceSupportProvider/SupportSources или
+paint_regions_fine как будто они pre-water: там final climate/hydrology и parent
+light. Producer pre-water keys — landcover owner через existing declaration/
+coverage kernels и доступные base facts; required неизвестные facts остаются
+unknown, не fake empty HydrologyPlan/ClimateLocalPlan и не final-water feedback.
+Точная проводка этого producer остаётся отдельным remaining join.
+Reservations для carve даёт terrain geometry accepted/protected объектов того же
+scope/frame, не hydrology mask и не исключение всего будущего water footprint.
+Floor application — existing apply_basin_z/BasinFloorEvaluator после hills;
+layout/profile не пересчитываются. Все входы bind к одной frozen revision.
+
+Файлы/owners до кода:
+- application/worldData/generators/terrain/hills/hillPlacement.py::place_hills:
+  третий аргумент excluded_cells:Collection[Coord]; normalize membership один раз,
+  без MapCellHydrology import/role inspection. Existing placement/raster/seed math
+  сохранена. Caller может передать keys existing map как обычную collection;
+  dual API/compatibility helper и новые классы не вводятся.
+- tests/test_open_land_hills.py: public behavior explicit exclusion и integration
+  hills→accepted basin carve→fill с protected reservation, без копирования алгоритма.
+- tests/test_terrain_hills_registry_cutover.py: найден stale patch удалённого
+  finePaint.prepare_landcover_inputs; убрать stub, использовать уже существующий
+  public region_state_snapshot argument. Это чинит проверку поведения, не caller.
+- tests/typing/planning valid terrain fixture + invalid.py: новый input contract;
+  valid config включает hills folder для проверки kernel.
+Current L2 caller остаётся positional и передаёт те же exclusions, production
+поведение не переключается. TerrainBatchOrchestrator в этом срезе не меняется;
+его existing multi-operation body не принимается как target pure facade и
+подлежит разделению в consumer cutover перед активацией.
+Counts: hills3→3, tests root278→278 WARN (новых файлов нет), valid/terrain4→4.
+Проверка: hills suites, GEO-1, planning providers/consumers и typing, сравнение
+kernel output с HEAD для прежних inputs. Done: kernel не зависит от гидрологии,
+согласованный порядок подтверждён; complete pre-water base/capture G10-A OPEN.
+Итог: place_hills принимает explicit excluded_cells, MapCellHydrology dependency
+удалена, kernel не читает/восстанавливает water facts; production caller unchanged.
+Новых POJO/enum/defaults/adapter нет. Реальные kernels hills→apply_basin_z→level_fill
+подтвердили carve после hills и сохранение protected reservation. Прежние
+результаты совпали с HEAD на18 случаях; две мутации (игнорирование exclusions/
+reservations) дают по1 assertion failure. Stale test stub убран в пользу public
+region_state_snapshot; implementation mocks для этой проверки не нужны.
+Evidence: hills/registry23 OK, GEO-1 724 OK, providers129 OK;
+synchronous L0/L2 contracts13 OK;
+positive pyright0 (hills включён в scope), negative263 — все260 EXPECT покрыты,
+surplus baseline прежний. Полный planning run и полный L0/L2 run прерваны
+без результата; их успешное прохождение не заявлено, async consumers не проверены.
+Ручной scope review: изменён только domain hill kernel, новые domain operations
+в orchestrators не добавлены; existing TerrainBatch target split остаётся в cutover.
+Следующий реальный join — pre-water terrain-key/host producer из captured base
+facts, не post-hydrology region paint; затем единая terrain base/floor проводка.
+Полный terrain planning base не объявлен готовым, production G10-A OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

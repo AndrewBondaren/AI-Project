@@ -85,7 +85,7 @@ class BindingTests(unittest.TestCase):
     def test_typed_lookup_requires_the_registered_contract(self):
         registry = NodeRegistry()
         registry.register_python(TypedPythonNode, FakeExecutor, LEAF_CONTRACT)
-        incompatible = NodeContract(NodeInput, CompositeOutput, ContractId("test.leaf"), ContractVersion("1"), ())
+        incompatible = NodeContract(NodeInput, CompositeOutput, ContractId("test.leaf"), ContractVersion("1"), (), error_types=())
         with self.assertRaisesRegex(TypeError, "contract does not match"):
             registry.get(NodeId("typed-python"), incompatible)
         with self.assertRaises(KeyError):
@@ -100,15 +100,15 @@ class BindingTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             registry.register_python(TypedPythonNode, FakeExecutor, None)
         with self.assertRaises(TypeError):
-            NodeContract(NodeInput, LeafOutput, ContractId("test"), ContractVersion("1"))
+            NodeContract(NodeInput, LeafOutput, ContractId("test"), ContractVersion("1"), error_types=())
 
     def test_invalid_pojo_classes_and_declarations_are_rejected(self):
         for model in (str, LeafOutput(value=1), None):
             with self.subTest(model=model):
                 with self.assertRaises((TypeError, ValidationError)):
-                    NodeContract(model, LeafOutput, ContractId("test"), ContractVersion("1"), ())
+                    NodeContract(model, LeafOutput, ContractId("test"), ContractVersion("1"), (), error_types=())
                 with self.assertRaises((TypeError, ValidationError)):
-                    NodeContract(NodeInput, model, ContractId("test"), ContractVersion("1"), ())
+                    NodeContract(NodeInput, model, ContractId("test"), ContractVersion("1"), (), error_types=())
                 with self.assertRaises((TypeError, ValidationError)):
                     OutputRef(NodeId("producer"), model)
         for declarations in ([REQUIRED_LEAF], (object(),)):

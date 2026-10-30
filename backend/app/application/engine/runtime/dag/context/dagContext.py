@@ -6,9 +6,12 @@ from typing import cast
 from pydantic import BaseModel, TypeAdapter
 
 from app.application.engine.contracts.outputRef import RequiredOutput
+from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
 from app.application.engine.runtime.dag.context.resultInvalidation import ResultInvalidation
+from app.application.engine.runtime.validation.contractValidator import ContractValidator
+from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.identity import (
     DomainRevision, ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, PlanRevision,
 )
@@ -32,6 +35,7 @@ class DAGContext:
         self._open: dict[NodeId, ExecutionIdentity] = {}
         self._closed: dict[tuple[ExecutionId, NodeId, int], ExecutionIdentity] = {}
         self._current: dict[NodeId, object] = {}
+        self._errors: dict[NodeId, tuple[ExecutionIdentity, NodeError]] = {}
 
     @property
     def execution_id(self) -> ExecutionId:
@@ -59,6 +63,7 @@ class DAGContext:
             attempt=self._counters.get(node_id, 0) + 1, plan_revision=plan_revision,
         )
         self._remove_current(self._affected(removed=(node_id,)))
+        self._errors.pop(node_id, None)
         self._counters[node_id] = identity.attempt
         self._open[node_id] = identity
         return identity
@@ -76,6 +81,31 @@ class DAGContext:
     def close_attempt(self, identity: ExecutionIdentity) -> None:
         self._check_open(identity)
         self._close(identity)
+
+    def close_error[I: BaseModel, O: BaseModel, E: NodeError](
+        self, identity: ExecutionIdentity, error: E, contract: NodeContract[I, O, E],
+    ) -> None:
+        self._check_open(identity)
+        self._check_error_binding(identity.node_id, contract)
+        admitted, validation = ContractValidator().validate_error(error, contract.error_types)
+        if admitted is None or not validation.ok:
+            raise TypeError("error does not satisfy the declared POJO contract")
+        self._errors[identity.node_id] = (identity, admitted)
+        self._close(identity)
+
+    def node_error[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_id: NodeId, contract: NodeContract[I, O, E],
+    ) -> E | None:
+        self._check_error_binding(node_id, contract)
+        record = self._errors.get(node_id)
+        # Only close_error writes, after admission under this exact binding.
+        return cast(E, record[1]) if record is not None else None
+
+    def _check_error_binding[I: BaseModel, O: BaseModel, E: NodeError](
+        self, node_id: NodeId, contract: NodeContract[I, O, E],
+    ) -> None:
+        if self._registrations[node_id].contract is not contract:
+            raise TypeError("error contract does not match execution binding")
 
     def publish[O: BaseModel](self, record: OutputRecord[O]) -> None:
         # Metadata/immutability admission only. Output schema and business
