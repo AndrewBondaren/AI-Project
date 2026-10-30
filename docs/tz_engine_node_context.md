@@ -42,6 +42,18 @@
 - **Запись и публикация:** read не меняет состояние мира; операции изменения подчиняются действующим контрактам доменных Patch, сборки PatchSet в DAG и применения через Snapshot. Прямой persist из ноды в обход этого пути не разрешается. Публикуемый результат ноды — экземпляр её Output POJO, не raw `dict`/`Any`; JSON от LLM должен быть приведён к валидированному POJO до публикации.
 - **Граница инфраструктур:** `NodeRegistry` должен связывать ноду с объявленными классами Input/Output, но не дублировать их Pydantic-схемы. Проверять экземпляры и ограничения через существующую POJO-инфраструктуру; специализированные wire-policy, import/runtime resolver и cascade применять только при наличии соответствующей семантики. Общий API регистрации и доступа определён в §6; реализации принадлежат DAG-TYPING-1, конкретные binding нод — GEN-DAG-1.
 
+### 2.2.1. Собственные композиционные POJO ноды и их размещение
+
+Если ноде для работы нужны несколько POJO, в том числе разных доменов, её Input объявляется собственным композиционным POJO с типизированными полями **существующих классов этих POJO**. Нода работает с вложенными объектами через их typed API. Аналогично Output может объединять несколько доменных результатов. Это композиция контрактов, а не разворачивание их полей в новую схему и не новый общий контекст мира.
+
+- Существующий подходящий доменный POJO переиспользуется напрямую из своего домена `backend/app/dataModel/<домен>/`; отдельная обёртка для одного значения не обязательна.
+- Новый контракт с самостоятельным доменным смыслом принадлежит соответствующему домену dataModel. Нельзя переносить его в engine только потому, что первым потребителем стала DAG-нода.
+- Специальный Input/Output, объединяющий данные для конкретной ноды, размещается в **`backend/app/dataModel/engine/nodes/<группа>/<контракт>.py`**. Группа определяется ответственностью нод, а не случайной нумерацией. Общие runtime-контракты остаются в `backend/app/dataModel/engine/dag/`.
+- Композиционный POJO импортирует публичные POJO доменов. Обратных импортов из доменных POJO в engine/nodes, а также импортов application/репозиториев в этот POJO быть не должно. В нём нет read/CRUD, алгоритмов доменов или выбора producer.
+- Нода явно объявляет, от каких producers какие контракты требуются; `prepare_input` получает соответствующие результаты или явно вызывает публичные доменные read API и собирает композиционный Input. Тип вложенного поля сам по себе не запускает lookup/read/CRUD.
+- Поля, defaults, normalization и validators вложенных доменных объектов не дублируются. Подтверждённо неизменяемые вложенные объекты разделяются без копирования тяжёлых payload; неизменяемость проверяется на всём графе вложений, не только на внешней модели.
+- **GEN-DAG-1 обязан для каждой такой ноды записать в её ТЗ** точные классы Input/Output, имена и типы вложенных полей, источники данных, обязательность требований, гарантии неизменяемости и точные пути файлов. До реализации проверить переиспользование существующих POJO и количество файлов в целевых папках. DAG-TYPING-1 задаёт это общее правило, но не создаёт конкретные рабочие композиции.
+
 ### 2.3. Сохранение параллельного исполнения DAG (требование 2026-10-30)
 
 - **Существующий механизм не должен деградировать:** `GraphCompiler` формирует топологические уровни; `DAGExecutor._run_level()` запускает независимые Python-ноды одного уровня через `asyncio.gather` и ждёт завершения уровня. LLM-ноды проходят через агрегированные группы по temperature; это не тождественно отдельному параллельному вызову каждой LLM-ноды.
@@ -74,7 +86,7 @@ DAG-TYPING-1 владеет общими API и инфраструктурой �
 
 ### 6.1. Типы, идентичность и декларации
 
-`I` и `O` — Pydantic POJO (`BaseModel`), неизменяемые вместе с вложениями. Классы контракта принадлежат dataModel домена; application не копирует поля и схемы. Выбор доменного класса, композиции и factory конкретной ноды — GEN-DAG-1.
+`I` и `O` — Pydantic POJO (`BaseModel`), неизменяемые вместе с вложениями. Доменные классы принадлежат dataModel своего домена, специальные композиции нод — dataModel/engine/nodes по §2.2.1; application не копирует поля и схемы. Выбор доменного класса, композиции и factory конкретной ноды — GEN-DAG-1.
 
 - `NodeId`, `ExecutionId`, `ContractId`, `ContractVersion`, `PlanRevision`, `DomainRevision` — различимые типы идентификаторов/версий. Строковое представление здесь допустимо как открытый технический идентификатор, а не закрытый enum или ключ world-registry. `attempt` — положительное целое, монотонное для `(execution_id, node_id)`; resume не сбрасывает счётчик. ExecutionId создаётся один раз на новый запуск; это runtime ID, не deterministic world UID.
 - `ExecutionIdentity(execution_id, node_id, attempt, plan_revision)` — адрес попытки. Ревизия плана — метаданные, ключ результата: execution/node/attempt.
@@ -104,9 +116,41 @@ DAG-TYPING-1 владеет общими API и инфраструктурой �
 
 `domain` в record_domain_read — явный технический namespace публичного read-контракта, допустимый открытый str; это не автоматический поиск сервиса. Контекст хранит только evidence, не выбирает доменные поля. Доменные зависимости/ревизии конкретной ноды определяются GEN-DAG-1.
 
+`NodeRegistration` хранит декларацию, а экземпляр ноды создаёт typed factory интеграции перед исполнением. В `ExecutionBindings` передаётся request-local binding `make_node[I,O](registration: NodeRegistration[I,O]) -> BaseNode[I,O]`; конкретная factory сохраняет точный I/O и внедряет доменные readers/request POJO. Закрытый runtime lookup проверяет соответствие экземпляра зарегистрированному контракту. Request-local bindings не мутируют глобальную регистрацию и не передают session через свободный dict. Generic registry не вызывает доменные readers и не пытается сконструировать конкретную ноду по типам её полей.
+
+`ResolveResult[O]` — общий POJO ответа: `ok: bool`, `data: O | None`, `error: str | None`; `error` — свободный пользовательский текст, не код ветвления. Он объявляется в `application/engine/nodes/contracts/executionBindings.py`, а ResponseResolver импортирует его, не наоборот. `ResponseBinding.resolve(view) -> ResolveResult[O]`, `TransitionBinding.transition(view) -> TaskType | None`. `SnapshotExtension[E: BaseModel]` объявляет ContractId/version и `capture() -> E`, `restore(value: E) -> Awaitable[None]`; runtime хранит typed E без интерпретации полей. Конкретный E и фабрики принадлежат GEN-DAG-1.
+
 `NodeOutcome[O]` — внутренний исход runner, а не возвращаемая нодой обёртка: identity, типизированный NodeStatus, Output только для success, прочитанные версии, диагностика, timestamps и необязательный управляющий сигнал. `NodeStatus` переиспользуется и дополняется `CANCELLED`, `GATED`; существующие IDLE/READY/RUNNING/SUCCESS/FAILED/BLOCKED сохраняют смысл. `LevelDecision` — закрытый enum CONTINUE/CANCEL/FAIL/REPLAN. Диагностика имеет enum code/severity; свободный текст message/reason допускается как пояснение, не управляющий discriminator. Gate-сигнал содержит существующий TaskType и причину, поэтому остаётся в application; pure dataModel не импортирует TaskType из application.
 
 Внутреннее закрытое гетерогенное хранилище допускает object; наружу типизированное чтение возвращает O после проверки класса. `Any` и непроверенные cast у потребителей запрещены. Валидация структуры выполняется существующей Pydantic/ContractValidator инфраструктурой, business validation остаётся у зарегистрированного валидатора; не строить вторую схему.
+
+### 6.3. Метаданные A1.1: представление и admission
+
+Технические идентификаторы §6.1 представлены отдельными NewType над str; Pydantic aliases запрещают пустые строки, крайние пробелы и неявный coerce из чисел. ExecutionIdentity.result_key — `(execution_id, node_id, attempt)`, plan_revision в ключ не входит. attempt — strict int >0, bool недопустим. Все метаданные frozen/extra-forbid/strict с revalidation экземпляров; неизменяемость вложений проверяется существующим `app.dataModel.validation.immutableValue.validate_immutable`, отдельный механизм DAG не создаётся.
+
+- `DependencyRead`: producer, contract_id, contract_version, required, result: ExecutionIdentity | None. None фиксирует отсутствие; при result producer совпадает с result.node_id.
+- `DomainReadEvidence`: domain (открытый непустой namespace read-контракта), revision: DomainRevision | None. Это evidence актуальности для reuse, не разрешение несогласованного чтения.
+- `OutputRecord[O]`: identity, contract_id, contract_version, output: O, reads: tuple[DependencyRead,...], domain_reads: tuple[DomainReadEvidence,...]. Пустые tuple означают отсутствие фактических чтений. Output принимается только как готовый экземпляр объявленного POJO; raw dict и другой класс отклоняются. Сохраняется идентичность payload, включая классы с revalidate_instances=always. Проверка схемы/семантики самого Output выполняется на границе ноды, record не копирует и не повторяет её. Глубокая неизменяемость проверяется общим валидатором. У успешного Output нет отсутствующего required чтения или ссылки на результат другого execution. Это memory record, не универсальный JSON-десериализатор доменных Output.
+- `SnapshotMetadata`: format_version (strict int >0), execution_id, plan_revision, pass_number (strict int >=0), contract_versions: tuple[(ContractId, ContractVersion),...], attempt_counters: tuple[(NodeId, attempt),...]. Tuple сохраняет неизменяемость; повторяющиеся contract/node keys запрещены. Текущую поддерживаемую версию формата задаст snapshot service A3.1, метаданные не подменяют проверку совместимости restore.
+- `ExecutionDiagnostic`: identity, pass_number, phase (pre_llm/llm/post_llm), level, timestamp, code, severity, status, message; requirements: tuple[(NodeId, ContractId, ContractVersion, required),...], reads, saved_outputs, sibling_statuses, cancel_source: CancellationSource | None, cancel_reason: CancellationReason | None, cancel_message: str | None, cancel_requested_at/observed_at/completed_at, causes: tuple[ExecutionDiagnostic,...]. Требования и фактические чтения разделены. Unix timestamps — конечные неотрицательные seconds; None для необязательных моментов означает неизвестность. message и cancel_message — свободные пояснения, не управляющие discriminator. cancel_source и cancel_reason — только enum; для cancellation они обязательны, неизвестность задаётся явно значением UNKNOWN, не None. Пояснение cancel_message необязательно. Связанные ошибки/gates/save outcomes передаются causes без payload. status итогового события уровня отражает решение (success/cancelled/failed/gated); application LevelDecision остаётся отдельным runtime-контрактом.
+- Закрытые ExecutionEventCode A1.1: node_started, node_finished, cancel_requested, cancel_observed, level_finished, replan_requested, snapshot_saved, snapshot_failed, restore_failed. ExecutionSeverity: debug/info/warning/error. Новые события при дальнейших шагах добавляются в этот SoT и enum совместно; свободные event-коды недопустимы.
+
+Классификация отмены в `dataModel/engine/dag/diagnostics.py`:
+
+| Enum | Значение | Смысл |
+|---|---|---|
+| CancellationSource | USER | явный запрос пользователя |
+| CancellationSource | PARENT | отмена родительского запуска/задачи |
+| CancellationSource | NODE | отмена инициирована самой нодой |
+| CancellationSource | TIMEOUT | отмена инициирована контролем срока/таймаута |
+| CancellationSource | UNKNOWN | источник не установлен |
+| CancellationReason | REQUESTED | явный запрос остановки |
+| CancellationReason | PARENT_CANCELLED | распространение отмены родителя |
+| CancellationReason | NODE_CANCELLED | самостоятельная отмена ноды |
+| CancellationReason | DEADLINE_EXCEEDED | истёк срок ожидания/исполнения |
+| CancellationReason | UNKNOWN | причина не установлена |
+
+Wire-значения enum — lowercase snake_case имён. Python API принимает экземпляры enum, не строки; Pydantic JSON-граница принимает только перечисленные wire-значения. Не выводить источник/причину из текста сообщения или самого факта CancelledError: при отсутствии подтверждённых метаданных producer выставляет UNKNOWN. Таблица классифицирует события и не вводит новые таймауты/политику отмены. Независимые оси source/reason не требуют искусственного взаимно-однозначного соответствия.
 
 ## 7. Уровень, барьер и актуальность
 
@@ -142,7 +186,7 @@ SnapshotStore сейчас in-memory; DAG-TYPING-1 сохраняет этот �
 
 Единственный emitter `dagLog.emit(event: ExecutionDiagnostic) -> None` в application/engine/diagnostics. Logger `app.engine.dag` через существующий loggingConfig направляется в server sink `backend/logs/engine/dagExecution.log` (domain engine, service dagExecution). Новый router/handler/форматтер не создавать. Схема маршрута — docs/tz_logging.md; событие и payload — настоящее ТЗ.
 
-Обязательные поля: execution_id, plan_revision, pass, phase, level, node_id, attempt, timestamp, status/outcome, typed event code/severity. Для отмены — requested/observed/completed time, source/reason (явное unknown при отсутствии), объявленные producer/contract/required, реально прочитанные версии/absence, исходы соседей, идентификаторы сохранённых Output, ошибки и gates, решение остановки, save snapshot success/failure. INPUT/OUTPUT payload не логируются целиком; корреляция по ID, а не порядку строк.
+Обязательные поля: execution_id, plan_revision, pass, phase, level, node_id, attempt, timestamp, status/outcome, typed event code/severity. Для отмены — requested/observed/completed time, типизированные source/reason (явные CancellationSource.UNKNOWN/CancellationReason.UNKNOWN при отсутствии), необязательный cancel_message, объявленные producer/contract/required, реально прочитанные версии/absence, исходы соседей, идентификаторы сохранённых Output, ошибки и gates, решение остановки, save snapshot success/failure. INPUT/OUTPUT payload не логируются целиком; корреляция по ID, а не порядку строк.
 
 ERROR: fail/конфликт/невалидный snapshot; WARNING: cancel; INFO: lifecycle/pass/level/replan и итог сохранения; DEBUG: детали требований и read evidence. Для диагноза отмены обязательные сведения сохраняются в событии отмены/барьера независимо от включённости DEBUG. Trace фиксирует те же идентификаторы; один факт не эмитится повторно задачей и координатором. Задачи сообщают локальные факты, координатор владеет итоговыми состояниями.
 

@@ -596,7 +596,7 @@ Ports разделены по capability:
   CommitReadScope той же transaction; read не открывает competing UOW.
   MetadataBuilder переносит неизменённые section refs из исходного envelope,
   а не восстанавливает их replay всей цепочки. Это не domain payload read API.
-- `IOperationStore.claim_publication(kind, operation_id, preparation_fingerprint,
+- `IOperationStore.claim_publication(kind, operation_id, world_uid, preparation_fingerprint,
   request_fingerprint) -> OperationClaim`, `read(operation_id)`,
   `record_terminal(scope, outcome)` и `record_refusal(claim, outcome)`;
 - `IArtifactHolders.handoff(scope, lease, snapshots, retained_refs)`:

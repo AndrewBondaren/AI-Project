@@ -11816,6 +11816,38 @@ Responsibility correction is ready for master acceptance. Original rejected item
 remains NOT ACCEPTED / READY FOR REVIEW; no next dependent feature was started.
 G10-A production activation remains OPEN.
 
+### G10-A responsibility correction — hardcode fix IMPLEMENTED / NOT ACCEPTED (2026-10-30)
+Предыдущая self-review не закрыла дубли category bindings и recipe dispatch.
+В рамках отклонённого среза, до следующего feature шага:
+- dataModel/hydrology/generation/categorySource.py: HydrologyCategorySource,
+  typed FieldRef-декларация policy/generation, без значений defaults.
+- dataModel/terrain/planning/inputs/geoWaterPlacementInput.py: единственные
+  category bindings и refs фактических source/bounds полей captured input;
+  admission job читает refs вместо таблицы и придуманных wire paths.
+- dataModel/terrain/designedWater/fields/field.py: WaterFieldRecipeContext,
+  typed carrier captured settings; существующий WaterFieldRecipe union остаётся
+  единственным dispatch/whitelist. strategies/procedural/fieldRecipeFactory.py
+  использует TypeAdapter union, без if/table по стратегиям.
+- preparation/proceduralWaterSourceAdapter.py: capture валидирует и сохраняет
+  recipes активных sources один раз; prepare потребляет готовый recipe.
+Это исправление ответственности по тем же ТЗ §6.29-J/M и G0, без production
+activation, defaults/schema/DAG/SQL. generation5→6 WARN, preparation10→10.
+Проверка: native integration + весь GEO-1, planning providers, positive/negative
+typing; provenance указывает на реальные captured поля, все три recipes
+сохраняют нестандартные policy значения; невалидные стратегии отвергаются.
+Результат: application category table/strategy whitelist/recipe dispatch удалены;
+source paths строятся по FieldRef с UID-ключом (порядок sources не влияет).
+Проверено: GEO-1 718 OK (+2), providers129 OK, positive pyright0;
+negative260, все257 EXPECT покрыты, surplus baseline неизменён.
+Повторная ручная проверка prepare_procedural_designed_water и
+prepare_designed_water (включая callback): только lifecycle/control;
+category declarations — captured POJO, recipe selection — existing union,
+domain admission/input/coverage — ранее закреплённые owning jobs.
+Статус: исправление реализовано, приёмка мастером не заявлена;
+текущий пункт NOT ACCEPTED, G10-A production OPEN. Следующий остаток:
+atomic owning schemas/defaults + capture_geo/registration/production entry
+вместе с G8-B transport cutover; zero-target admission также остаётся OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

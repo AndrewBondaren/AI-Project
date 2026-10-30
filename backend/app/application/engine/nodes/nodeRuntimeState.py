@@ -1,4 +1,4 @@
-from app.application.engine.nodes.nodeStatus import NodeStatus
+from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 
 class NodeRuntimeState:

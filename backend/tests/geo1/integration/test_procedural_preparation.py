@@ -310,6 +310,11 @@ class ProceduralPreparationTests(TestCase):
         with self.assertRaises(ValueError):
             Category.for_basin_kind("sea")
         args = self.case()
+        args["inputs"] = args["inputs"].model_copy(update={
+            "noise_policy": ContinentalNoisePolicy(length_fraction=0.37, octaves=2, lacunarity=3.0, persistence=0.7),
+            "plate_policy": PlateGenerationPolicy(plate_count=5, blend_length_fraction=0.31),
+            "composition_policy": FieldCompositionPolicy(detail_weight=0.63),
+        })
         for kind in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
             recipe = WaterFieldRecipeFactory().build(kind, args["inputs"], "captured-seed")
             self.assertEqual(recipe.strategy, kind)
@@ -318,9 +323,33 @@ class ProceduralPreparationTests(TestCase):
                 self.assertEqual(recipe.noise_policy, args["inputs"].noise_policy)
             if hasattr(recipe, "plate_policy"):
                 self.assertEqual(recipe.plate_policy, args["inputs"].plate_policy)
+            if hasattr(recipe, "composition_policy"):
+                self.assertEqual(recipe.composition_policy, args["inputs"].composition_policy)
         for kind in (Strategy.AUTHORED_REGION, "plate", None):
             with self.assertRaises(PlanBuildFailure):
                 WaterFieldRecipeFactory().build(kind, args["inputs"], "captured-seed")
+
+    def test_admission_provenance_names_captured_category_fields(self):
+        from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
+        for kind, expected_path in ((BasinKind.SEA, ("seas", "placement_specificity")),
+                                    (BasinKind.OCEAN, ("seas", "placement_specificity")),
+                                    (BasinKind.LAKE, ("lakes", "placement_specificity"))):
+            args = self.case()
+            source = args["inputs"].sources[0]
+            source = source.model_copy(update={"value": source.value.model_copy(update={"kind": kind})})
+            args["inputs"] = args["inputs"].model_copy(update={"sources": (source,)})
+            bindings = ProceduralSourceAdmissionJob().resolve(args["inputs"], args["batch"], args["water_intents"], args["control"])
+            binding = bindings.sources[0]
+            self.assertEqual(binding.source_path, ("sources", "source"))
+            self.assertIn(expected_path, tuple(p.source_path for p in binding.admission.decision.provenance))
+
+    def test_missing_extent_diagnostic_names_captured_bounds_field(self):
+        from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
+        args = self.case()
+        args["inputs"] = args["inputs"].model_copy(update={"declared_world_bounds": None})
+        bindings = ProceduralSourceAdmissionJob().resolve(args["inputs"], args["batch"], args["water_intents"], args["control"])
+        self.assertEqual(tuple(issue.path for issue in bindings.sources[0].admission.decision.issues),
+                         (("declared_world_bounds",),))
 
 
     def without_world_region(self, args):

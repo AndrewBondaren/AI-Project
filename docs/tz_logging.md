@@ -120,6 +120,13 @@ Exact event-field POJO и emitter files относятся к implementation map
 rejected и не запускает повторное применение; outcome восстанавливается
 по operation storage. Логирование не обещает exactly-once delivery записи.
 
+### DAG execution — target регистрации DAG-TYPING-1 A2.5
+
+- Logger: `app.engine.dag`; domain `engine`, service `dagExecution`, профиль `server`; файл `backend/logs/engine/dagExecution.log`.
+- Producer: единый `backend/app/application/engine/diagnostics/dagLog.py`, owner engine runtime. Координатор формирует итоговые события; причины/поля — `docs/tz_engine_node_context.md` §10.
+- Регистрация маршрута в существующем `_PREFIX_ROUTES`/`route_for` файла `backend/app/core/loggingConfig.py`; тот же JsonLogFormatter и router, без нового handler/собственного файла на ноду. L1–L8 действуют без исключений.
+- Статус: целевой sink задокументирован; код маршрута и emitter ещё не реализованы. Проверка — DAG-TYPING-1 A2.5. Payload Input/Output в лог не копировать; обязательная диагностика отмены доступна без DEBUG.
+
 ### Существующие консьюмеры
 
 Шаг wilderness 9c (согласовано 2026-10-18): `regions/regionStateLog.py`
@@ -156,7 +163,7 @@ rejected и не запускает повторное применение; out
 | `script` | `entryBgRefine` | `logs/script/entryBgRefine.log` | script | entry refine smoke | [`entry_bg_refine.py`](../backend/scripts/entry_bg_refine.py) |
 | `script` | `renderMaps` | `logs/script/renderMaps.log` | script | CLI dump без bake | [`render_maps.py`](../backend/scripts/render_maps.py) |
 
-Позже тот же ключ (не `app.log`): `hydrology`, `chat`, `engine`, прочие `script/{stem}`. `settlement` / `settlementAssembler` — в каталоге (C22).
+Позже тот же ключ (не `app.log`): `hydrology`, `chat`, прочие `script/{stem}`. `settlement` / `settlementAssembler` — в каталоге (C22).
 
 ## Маршрут
 

@@ -1,9 +1,14 @@
 """Temporary SQLite fixtures only; no production adapter or Container binding."""
 
 import sqlite3
+import asyncio
+import selectors
+import tempfile
+import time
+from contextlib import asynccontextmanager
 from hashlib import sha256
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.db.database import Database
 from app.db.models.snapshotCore.publicationRows import WorldPublicationRow, PlayerPublicationRow
@@ -160,3 +165,121 @@ def close_writers(conn, op="stage"):
            operation_id=op, fence=1, predecessor_id=op + "-writer", event_seq=2, event_kind="release")
     insert(conn, "artifact_lease_events", event_id=op + "-closed", operation_id=op,
            predecessor_id=op + "-lease", event_seq=2, fence=1, admission_open=0)
+
+
+def run_async(coroutine):
+    # Real tasks, worker threads and SQLite; only the unused network wakeup
+    # socket is replaced by bounded selector polling in this restricted host.
+    def no_pipe(loop):
+        loop._ssock = loop._csock = None
+    def factory():
+        selector = selectors.SelectSelector()
+        selector.select = lambda timeout=None: (time.sleep(min(0.002, timeout) if timeout is not None else 0.002), [])[1]
+        return asyncio.SelectorEventLoop(selector)
+    with patch.object(asyncio.SelectorEventLoop, "_make_self_pipe", no_pipe), patch.object(
+            asyncio.SelectorEventLoop, "_close_self_pipe", lambda loop: None):
+        with asyncio.Runner(loop_factory=factory) as runner:
+            return runner.run(coroutine)
+
+
+@asynccontextmanager
+async def live_database(path=None, seed=True):
+    from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
+    from app.db.repositories.sqlite.snapshotCore.publications.worldPublicationStore import SqliteWorldPublicationStore
+    from app.db.repositories.sqlite.snapshotCore.publications.playerPublicationStore import SqlitePlayerPublicationStore
+    from app.db.repositories.sqlite.snapshotCore.history.snapshotHistoryStore import SqliteSnapshotHistoryStore
+    from app.db.repositories.sqlite.snapshotCore.operations.operationStore import SqliteOperationStore
+    workspace = Path(__file__).resolve().parents[4]
+    root = (workspace / "backend/.tmp_snapshot_core").resolve()
+    assert root.is_relative_to(workspace)
+    root.mkdir(exist_ok=True)
+    temporary = tempfile.TemporaryDirectory(dir=root) if path is None else None
+    filename = str(Path(temporary.name) / "test.db") if temporary is not None else path
+    db = Database(filename)
+    try:
+        await db.connect()
+        # Schema setup only; runtime publication tests restore FULL durability.
+        await db.conn.execute("PRAGMA synchronous=OFF")
+        await db.apply_migrations()
+        await db.conn.execute("PRAGMA synchronous=FULL")
+        if seed:
+            async with db.transaction():
+                await db.conn.execute("INSERT INTO worlds(world_uid,name,created_at) VALUES ('w1','w1',?)", (STAMP,))
+                await db.conn.execute("INSERT INTO timelines(timeline_id,world_uid,created_at) VALUES ('t1','w1',?)", (STAMP,))
+                await db.conn.execute("INSERT INTO character_sheet(character_uid,character_type,display_name,world_uid,created_at) VALUES ('p1','player','p1','w1',?)", (STAMP,))
+        commits = SqlitePublicationCommitStore(db)
+        world = SqliteWorldPublicationStore(commits)
+        players = SqlitePlayerPublicationStore(commits)
+        history = SqliteSnapshotHistoryStore(commits)
+        operations = SqliteOperationStore(commits, world, players)
+        yield db, commits, world, players, history, operations
+    finally:
+        await db.disconnect()
+        if temporary is not None:
+            temporary.cleanup()
+
+
+async def live_started(bundle):
+    from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind, ArtifactFormatRegistry
+    from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
+    from app.dataModel.registryKey import RegistryKey
+    from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
+    from app.dataModel.worldSnapshot.results.publication import PackActivationResult, PackActivationDisposition, GameplayStarted
+    db, commits, world, players, history, operations = bundle
+    async with commits.transaction("bootstrap") as scope:
+        root = await world.initialize(scope, "w1")
+    await operations.claim_publication(OperationKind.PACK_ACTIVATION, "activate", "w1", "a" * 64, "b" * 64)
+    active = WorldPublicationRef(world_uid="w1", publication_id="active", pack_hash="d" * 64,
+        snapshot_head=None, active_timeline_id=None, gameplay_started=False)
+    artifact = ArtifactRef(kind=ArtifactKind.BLOB, format_key=RegistryKey[ArtifactFormatRegistry]("test.manifest"),
+                           format_version=1, content_hash="d" * 64, nbytes=0)
+    async with commits.transaction("activate") as scope:
+        await world.compare_append(scope, root, active)
+        await operations.record_terminal(scope, PackActivationResult(operation_id="activate", request_fingerprint="b" * 64,
+            manifest=artifact, disposition=PackActivationDisposition.ACTIVE, publication=active))
+    await operations.claim_publication(OperationKind.GAMEPLAY_START, "start", "w1", "a" * 64, "b" * 64)
+    started_ref = WorldPublicationRef(world_uid="w1", publication_id="started", pack_hash="d" * 64,
+        snapshot_head=None, active_timeline_id="t1", gameplay_started=True)
+    async with commits.transaction("start") as scope:
+        await world.compare_append(scope, active, started_ref)
+        await operations.record_terminal(scope, GameplayStarted(operation_id="start", request_fingerprint="b" * 64,
+                                                               publication=started_ref))
+    return started_ref
+
+
+async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, hold=None):
+    from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
+    from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef, PlayerSnapshotRef
+    from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef, PlayerHeadExpectation
+    from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata, PlayerSnapshotMetadata
+    from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
+    from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
+    db, commits, world, players, history, operations = bundle
+    expected = await world.read("w1")
+    claim = await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, operation_id, "w1", "a" * 64, "b" * 64)
+    world_ref = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id=operation_id + "-world")
+    player_ref = PlayerSnapshotRef(player_uid="p1", snapshot_id=operation_id + "-player")
+    old_player = await players.read("p1")
+    turn = 1 if expected.snapshot_head is None else (await history.read(expected.snapshot_head)).turn_id + 1
+    metadata = WorldSnapshotMetadata(ref=world_ref, parent=expected.snapshot_head, operation_id=operation_id, turn_id=turn,
+        created_at=STAMP, envelope_format_version=1, base_pack_hash="d" * 64, state_refs=(), history_refs=(), retained_artifacts=())
+    player = PlayerSnapshotMetadata(ref=player_ref, parent=old_player, operation_id=operation_id, turn_id=turn,
+        created_at=STAMP, envelope_format_version=1, state_refs=(), history_refs=(), retained_artifacts=())
+    publication = WorldPublicationRef(world_uid="w1", publication_id=operation_id + "-pub", pack_hash="d" * 64,
+        snapshot_head=world_ref, active_timeline_id="t1", gameplay_started=True)
+    result = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.COMMITTED, operation_id=operation_id,
+        request_fingerprint="b" * 64, committed=SnapshotCommitRefs(world_snapshot=world_ref,
+            player_snapshots=(player_ref,), publication=publication), diagnostics=())
+    async with commits.transaction(operation_id) as scope:
+        await history.append(scope, metadata, ())
+        await history.append(scope, player, ())
+        await world.compare_append(scope, expected, publication)
+        if fail:
+            raise RuntimeError("injected failure between world and player publication")
+        await players.compare_append(scope, PlayerHeadExpectation(player_uid="p1", expected_head=old_player), player_ref, operation_id)
+        await operations.record_terminal(scope, result)
+        if entered is not None:
+            entered.set()
+        if hold is not None:
+            await hold.wait()
+    return claim, result

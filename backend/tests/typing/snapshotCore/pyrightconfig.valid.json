@@ -14,6 +14,7 @@
     "../../../app/application/publication",
     "../../../app/application/encoding",
     "../../../app/db/models/snapshotCore",
-    "../../../app/db/models/artifacts"
+    "../../../app/db/models/artifacts",
+    "../../../app/db/repositories/sqlite/snapshotCore"
   ]
 }

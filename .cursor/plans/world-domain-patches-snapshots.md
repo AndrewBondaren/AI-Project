@@ -2095,6 +2095,11 @@ SQL-изменения и реализация adapters этим дополне�
 
 Обязательные дополнительные проверки 4C2:
 
+- Уточнение порта согласовано мастером (ответ «Да» перед 4C2):
+  claim_publication(kind, operation_id, world_uid, preparation_fingerprint,
+  request_fingerprint). world_uid передаётся явно и сверяется при reuse ID;
+  новый small-data claim не восстанавливает мир из opaque ID/fingerprint.
+
 - event_id/predecessor_id/publication_id и sequence — внутренние storage
   identities: проверить owner, точного predecessor, root/single-successor
   и монотонность sequence; не возвращать их как SnapshotRef/target version.

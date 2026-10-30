@@ -75,6 +75,7 @@ class CapturedProceduralWaterInputs:
     pre_hydrology: PlanEnvelope[TerrainPlan]
     regions: TerrainRegionPlan
     seed_root: EntityUid
+    recipes: tuple[tuple[EntityUid, WaterFieldRecipe], ...]
 
     @classmethod
     def capture(cls, inputs: GeoWaterPlacementInput, sources: ProceduralSourceAdmissions,
@@ -88,10 +89,11 @@ class CapturedProceduralWaterInputs:
             raise PlanBuildFailure((FieldPathError(("water_source", "world_bounds"),
                 "captured bounds presence must match the terrain world region",
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))
-        for binding in sources.sources:
-            if binding.admission.decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT):
-                WaterFieldRecipeFactory.require_strategy(binding.context.strategy)
-        return cls(inputs, sources, pre_hydrology, regions, seed_root)
+        recipes = tuple((binding.source.value.source_uid,
+            WaterFieldRecipeFactory().build(binding.context.strategy, inputs, seed_root))
+            for binding in sources.sources
+            if binding.admission.decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT))
+        return cls(inputs, sources, pre_hydrology, regions, seed_root, recipes)
 
     def prepare(self, admission: PlacementAdmissionInput, budget: WaterCoverageBudget | None) -> WaterStrategyInput:
         uid = admission.header.identity.source_uid
@@ -111,6 +113,6 @@ class CapturedProceduralWaterInputs:
         shared = WaterDesignInput[ProceduralSource](strategy=context.strategy, source=source, metadata=metadata,
             context=context, region=region, budget=allocation, seed_root=self.seed_root, topology=self.inputs.topology,
             grid=self.inputs.grid, pre_hydrology=self.pre_hydrology, region_coverage=coverage)
-        recipe = WaterFieldRecipeFactory().build(context.strategy, self.inputs, self.seed_root)
+        recipe = next(recipe for source_uid, recipe in self.recipes if source_uid == uid)
         return ProceduralWaterSourceAdapter().prepare_source(shared, generation=binding.generation,
             admission=admission, field_policy=recipe, z_min=self.inputs.z_min)

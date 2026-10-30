@@ -12,7 +12,7 @@ from app.dataModel.worldSnapshot.results.publication import GameplayStarted, Pac
 
 
 class IOperationStore(Protocol):
-    async def claim_publication(self, kind: OperationKind, operation_id: EntityUid,
+    async def claim_publication(self, kind: OperationKind, operation_id: EntityUid, world_uid: EntityUid,
                                 preparation_fingerprint: RevisionHex, request_fingerprint: RevisionHex) -> OperationClaim:
         """Short atomic bookkeeping claim; no domain writes or hidden retry."""
         ...
