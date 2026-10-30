@@ -4,11 +4,24 @@
 **Источник:** [ID-9 в реестре идей](../../docs/tz_ideas.md#id-9--configurable-llm-roles-intent--npc--background-planner--narrator).  
 **Связанные материалы:** [ID-14 — bounded NPC reaction turn](../../docs/tz_ideas.md), [Execution Engine Flow](../../docs/tz_engine_flow.md), [Perception](../../docs/tz_perception.md), [Lazy Simulation](../../docs/tz_lazy_simulation.md).  
 **Фаза:** подготовка отдельного доменного ТЗ; реализация, изменение DAG-нод и миграции в этот план пока не входят.  
+**Блокер исполнения ID-9:** до завершения и приёмки общей инфраструктурной фазы **DAG-TYPING-1 A1–A3** не уточнять конкретные Pydantic Input/Output-контракты рабочих LLM-нод и не начинать реализацию распределения ролей. Обсуждение принципов и структуры ролей остаётся допустимым.  
 **Зависимости:** [DAG-TYPING-1](dag-typing-1.md), [typed node contracts](../../docs/tz_engine_node_context.md), [GEN-DAG-1](gen-dag-1-post-geo-ws.md), [ID-20 — адаптивный контекст Intent](../../docs/tz_ideas.md).
 
 ## Цель
 
 Развернуть идею ID-9 в согласованный контракт ролей LLM и план интеграции с существующим движком. После закрытия открытых решений результат оформить отдельным `docs/tz_llm_roles.md`. Этот документ — рабочая программа проектирования, не утверждённое ТЗ реализации.
+
+## Блокер на детализацию контрактов нод и выполнение ID-9 (решение мастера 2026-10-31)
+
+**Обязательный gate: завершить и принять DAG-TYPING-1 A1–A3**, включая общий typed NodeContract/NodeRegistry, проверку зависимостей GraphCompiler, DAGContext/barrier, агрегированное LLM-исполнение/repair и lifecycle. На момент фиксации A1.1–A1.4 и A2.1–A2.3 уже приняты; A2.4–A3 ещё не выполнены.
+
+До закрытия этого gate:
+
+- **Можно:** обсуждать состав ролей (в том числе `TECHNICAL`), логическую декомпозицию функций, model/provider assignment, правила группировки и DSL-политику; фиксировать архитектурные требования без окончательных полей конкретных нод.
+- **Нельзя:** утверждать конкретные Pydantic Input/Output POJO, producer/consumer bindings и `NodeContract` рабочих LLM-нод; выполнять их миграцию или реализацию role-aware DAG/агрегации. Отдельное разрешение мастера на код остаётся обязательным даже после закрытия gate.
+- **После gate:** инвентаризировать существующие доменные POJO и через владельца конкретных нод (GEN-DAG-1) уточнить Input/Output, Pydantic-состав роли и привязки node → role; только затем согласовать шаги реализации ID-9.
+
+**Без круговой зависимости:** финальный handoff/этап B самого DAG-TYPING-1 требует concrete bindings GEN-DAG-1, поэтому gate для начала **детализации** нод — приёмка общей инфраструктуры **A1–A3**, а не завершение B. Интеграция/переключение production после этого требует собственных согласованных gates GEN-DAG-1 и DAG-TYPING-1 B.
 
 ## Исходная формулировка ID-9 (историческая)
 
@@ -86,8 +99,8 @@
 ## Этапы проработки
 
 - [ ] **P0. Инвентаризация.** Проверить актуальные пути `ChatService → Engine → GraphCompiler → LLMAggregateExecutor → Router`, настройки сессии, DSL resolver/registry, repair, trace и frontend. Разделить уже работающее, черновики и отсутствующее.
-- [ ] **P1. Таксономия ролей.** Учитывая принятое решение `TECHNICAL` с первой нодой `IntentDetection`, спроектировать типизированный Pydantic-список нод роли, identity роли, task/node → role mapping, экземпляры NPC и ограничения custom roles. Отдельно решить фиксированность/расширяемость registry.
-- [ ] **P2. Контракты и доступ к знаниям.** Определить typed Input/Output, actor/scene/world projections, границы secrets, context request/patch protocol и его связь с ID-20, порядок speech/actions и committed-only narration. Владелец разрешений и чтения — движок, не DSL.
+- [ ] **P1. Таксономия ролей (концептуально до gate).** Учитывая принятое решение `TECHNICAL` с первой нодой `IntentDetection`, определить логический состав и identity роли, правила списка нод, task/node → role mapping, экземпляры NPC и ограничения custom roles. **Окончательные Pydantic-поля и binding рабочих нод — только после gate DAG-TYPING-1 A1–A3.** Отдельно решить фиксированность/расширяемость registry.
+- [ ] **P2. Контракты и доступ к знаниям — после gate A1–A3.** Уточнить конкретные typed Input/Output рабочих нод через GEN-DAG-1, actor/scene/world projections, границы secrets, context request/patch protocol и его связь с ID-20, порядок speech/actions и committed-only narration. До gate — только требования и логические границы, не окончательные POJO/NodeContract. Владелец разрешений и чтения — движок/публичные доменные контракты, не DSL.
 - [ ] **P3. Конфигурация и маршрутизация.** Определить typed schema role → provider/model/settings, уровни конфигурации (global/world/session), приоритеты, разрешённые overrides, поддержку local/cloud и fallback провайдера/модели.
 - [ ] **P4. DSL-профили.** Определить структуру exact/family/default, реестр family/type, deterministic resolver, version/hash, ошибки отсутствующих/несовместимых профилей; неизменность role contract при смене модели.
 - [ ] **P5. Исполнение и repair.** Спроектировать role → temperature → compatible batch с приоритетом `deps`, обязательный isolated-first Intent, stage barriers и ограниченный context patch/repair loop. Согласовать изменение temperature-only инварианта DAG-TYPING-1, затем fan-out NPC, reaction beats, cancel/resume, валидацию и границу World PatchSet/Snapshot.
@@ -105,4 +118,4 @@
 
 ## Граница готовности
 
-План считается готовым к переносу в доменное ТЗ, когда закрыты вопросы P1–P5, определены typed схемы и инварианты безопасности, описаны стыки с текущими агрегированными вызовами и есть проверяемые сценарии приёмки. Ни одно открытое решение не трактуется как уже одобренная архитектура.
+План считается готовым к переносу в исполнимое доменное ТЗ, когда **закрыт gate DAG-TYPING-1 A1–A3**, затем закрыты вопросы P1–P5, определены конкретные typed схемы нод и инварианты безопасности, описаны стыки с агрегированными вызовами и есть проверяемые сценарии приёмки. До закрытия gate допустима только концептуальная проработка ролей без concrete NodeContract. Ни одно открытое решение не трактуется как уже одобренная архитектура; разрешение на код выдаётся отдельно.
