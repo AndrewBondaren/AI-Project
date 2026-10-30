@@ -14,6 +14,7 @@ from app.dataModel.identity.uid import EntityUid
 from app.dataModel.placement.batch import PlacementBatchV2
 from app.dataModel.placement.common import PlacementPhase
 from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+from app.dataModel.placement.lifecycle.header import PlacementHeader
 from app.dataModel.placement.result import (
     DisabledPlacement, PlacementIssueCode, PlacementOutcomeV2, ResolvedPlacementV2, UnresolvedPlacementV2,
 )
@@ -45,8 +46,8 @@ class CoastlineBoundaryPlanner:
             objects=admissions, accepted=snapshot.accepted))
         metadata: dict[EntityUid, AttachedCoastline] = {}
         issues = [issue for item in admissions for issue in item.decision.issues]
-        while True:
-            for header in session.ready_for_preparation():
+        def prepare_ready(headers: tuple[PlacementHeader, ...]) -> None:
+            for header in headers:
                 try:
                     result = AttachedCoastlinePreparer().prepare_boundary(sources[header.identity.source_uid],
                         snapshot, session.objects[header.identity.region_uid])
@@ -56,9 +57,7 @@ class CoastlineBoundaryPlanner:
                     issues.extend(failure.issues)
                     session.fail(header.identity, tuple(diagnostic(header, PlacementIssueCode.CONSTRAINT_VIOLATION,
                         issue.message, path=issue.path) for issue in failure.issues))
-            if session.step() is None:
-                break
-        batch = session.finish()
+        batch = session.run(prepare_ready)
         # Preserve actual source-to-region causes from captured water outcomes.
         # Only references are enriched; policy states, priority and reasons stay intact.
         water = {outcome.identity.source_uid: outcome for outcome in snapshot.water_outcomes}

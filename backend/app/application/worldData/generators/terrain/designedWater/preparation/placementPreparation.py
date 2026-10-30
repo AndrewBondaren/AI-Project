@@ -7,6 +7,13 @@ from pydantic import TypeAdapter
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.terrain.regions.coverageMeasure import RegionCoverageMeasure
 from app.dataModel.placement.prepared import PlacementCandidate, PlacementFootprint
+from app.dataModel.placement.prepared import PreparedPlacementV2
+from app.dataModel.placement.intent import PlacementIntent
+from app.dataModel.placement.lifecycle.header import PlacementHeader
+from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesignDecision
+from app.dataModel.policy.policyEnums import PolicyState
+from app.dataModel.terrain.relief.bathymetry.floorProfile import FieldFloorProfile
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.terrain.designedWater.draft import AuthoredWaterDesignDraft, ProceduralWaterDesignDraft, WaterDesignDraft
 from app.dataModel.terrain.designedWater.fields.field import ContinentalFieldValue
@@ -20,6 +27,7 @@ from app.dataModel.topology.worldTopology import Coord
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 _INPUT = TypeAdapter(WaterStrategyInput)
+_ADMISSION = TypeAdapter(WaterDesignDecision)
 
 
 def _wet_score(value: ContinentalFieldValue, bits: int) -> int:
@@ -28,6 +36,44 @@ def _wet_score(value: ContinentalFieldValue, bits: int) -> int:
 
 
 class DesignedWaterPlacementPreparer:
+    def bind_admission(self, input: WaterStrategyInput, preparation: WaterDesignPreparation, *,
+                       intent: PlacementIntent, admission: PlacementAdmissionInput) -> PreparedPlacementV2:
+        """Bind computed geometry to its original intent and ready common decision."""
+        try:
+            input = _INPUT.validate_python(input, strict=True)
+            preparation = WaterDesignPreparation.model_validate(preparation, strict=True)
+            intent = PlacementIntent.model_validate(intent, strict=True)
+            admission = PlacementAdmissionInput.model_validate(admission, strict=True)
+            decision = _ADMISSION.validate_python(admission.decision, strict=True)
+            if decision.state is not PolicyState.READY or decision.require_behavior() is not input.strategy:
+                raise ValueError("water geometry binding requires the same ready strategy admission")
+            if PlacementHeader.from_intent(intent) != admission.header:
+                raise ValueError("water geometry must retain its exact admission header")
+            if (intent.identity.source_uid != input.metadata.source_uid
+                    or intent.identity.world_uid != input.pre_hydrology.ref.key.world_uid
+                    or preparation.metadata != input.metadata or preparation.pre_hydrology_ref != input.pre_hydrology_ref
+                    or preparation.grid != input.grid):
+                raise ValueError("water geometry requires exact source/world/metadata/terrain/grid binding")
+            if preparation.coordinate_space is not CoordinateSpace.WORLD_SURFACE_GRID:
+                raise ValueError("water P2 requires coarse world surface geometry without implicit scaling")
+            cells = frozenset(cell for candidate in preparation.candidates for cell in candidate.footprint.cells)
+            if any(input.topology.canonicalize(*cell) != cell for cell in cells):
+                raise ValueError("water P2 requires canonical coarse geometry")
+            if isinstance(input, AuthoredWaterDesignInput):
+                authored = frozenset(cell for footprint in input.geometry.footprints for cell in footprint)
+                if input.geometry.coordinate_space != preparation.coordinate_space or cells != authored:
+                    raise ValueError("authored P2 must retain its supplied geometry result")
+            else:
+                profile = preparation.floor_profile
+                if (not isinstance(profile, FieldFloorProfile) or profile.recipe != input.field_policy
+                        or profile.depth != input.metadata.default_depth or profile.z_min != input.z_min):
+                    raise ValueError("procedural P2 must retain its captured floor recipe")
+            return PreparedPlacementV2(intent=intent, original_area=preparation.original_area,
+                candidates=preparation.candidates, decision=admission.decision)
+        except ValueError as error:
+            raise PlanBuildFailure((FieldPathError(("water_design", "binding"), str(error),
+                code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
+
     def prepare(self, input: WaterStrategyInput, draft: WaterDesignDraft, *,
                 selection_policy: WaterFieldSelectionPolicy) -> WaterDesignPreparation:
         """Return geometry for G8; never bind admission or invoke spatial competition."""

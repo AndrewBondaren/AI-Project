@@ -929,3 +929,43 @@ from app.dataModel.terrain.designedWater.geometry.authoredGeometry import Author
 def invalid_authored_source_join(adapter: AuthoredWaterSourceAdapter, shared: WaterDesignInput[CoastlineWaterSource],
     generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, geometry: AuthoredWaterGeometry) -> None:
     adapter.prepare_source(shared, generation=generation, admission=admission, geometry=geometry)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
+from app.dataModel.terrain.designedWater.input import WaterStrategyInput
+from app.dataModel.placement.lifecycle.header import PlacementHeader
+
+
+def invalid_prepared_water_intent(owner: DesignedWaterPlacementPreparer, value: WaterStrategyInput,
+    preparation: WaterDesignPreparation, header: PlacementHeader, admission: PlacementAdmissionInput) -> None:
+    owner.bind_admission(value, preparation, intent=header, admission=admission)  # EXPECT: reportArgumentType
+
+
+from collections.abc import Callable
+from app.application.worldData.placement.lifecycle.session import PlacementSession
+
+
+def invalid_placement_runner_callback(session: PlacementSession, prepare: Callable[[PlacementHeader], None]) -> None:
+    session.run(prepare)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.planning.composition.planProviders import GeoWorldPlanProviders, WorldPlanProviders
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningView
+from app.application.planning.service.planningService import PlanWaitControl
+
+
+def invalid_assembler_family(pc: SurfacePlanningAssembler[WorldPlanProviders], geo: SurfacePlanningAssembler[GeoWorldPlanProviders],
+    pc_view: SurfacePlanningView, geo_view: GeoSurfacePlanningView, wait: PlanWaitControl) -> None:
+    pc.prepare_geo(geo_view, wait=wait)  # EXPECT: reportAttributeAccessIssue
+    geo.prepare(pc_view, wait=wait)  # EXPECT: reportAttributeAccessIssue
+
+
+from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
+from app.application.jsonValidation.resolve import ResolveContext
+
+
+def invalid_geo_reporting_family(pc: SurfacePlanningAssembler[WorldPlanProviders], view: GeoSurfacePlanningView,
+    wait: PlanWaitControl, ctx: ResolveContext) -> None:
+    prepare_captured_geo_bundle(view, planning=pc, wait=wait, resolve_ctx=ctx)  # EXPECT: reportArgumentType

@@ -293,7 +293,9 @@ hash, первый snapshot — первый тик после старта game
 
 ## Контракты ядра Snapshot — freeze шага 2 (2026-10-30)
 
-**Статус: проект для приёмки, runtime не реализован.** Раздел уточняет
+**Статус: contract freeze принят мастером 2026-10-30; runtime не реализован.**
+Backend map §8.3 принят отдельно; в 4A1 реализованы только refs/value
+contracts и enum, не Snapshot lifecycle или storage. Раздел уточняет
 принятые архитектурные правила плана §8.1 и использует frozen/type правила
 из [Patch contracts](./tz_patch_system.md#контракты-ядра--freeze-шага-2-2026-10-30).
 Точные классы → файлы/backend binding относятся к implementation map шага 3.
@@ -332,8 +334,11 @@ World/player Snapshot metadata включают назначенный ref, pare
 operation_id, turn_id, created_at UTC, envelope_format_version,
 base_pack_hash (для world), section state/history refs и удерживаемые
 artifact refs. created_at назначается один раз публикацией, не входит
-в request binding. Parent — фактический expected head/точка ветвления;
-первый world snapshot имеет parent=None, без фиктивного base snapshot.
+в request binding. Parent — фактический expected head/точка ветвления.
+CreatedAtUtc — строгая UTC wire строка `YYYY-MM-DDTHH:mm:ss.ffffffZ`
+с календарной проверкой; это явное str-исключение timestamp, не enum.
+DataModel не читает часы; значение назначает application на commit boundary.
+Первый world snapshot имеет parent=None, без фиктивного base snapshot.
 Правила ancestry/перехода ветки проверяются без rebase pack.
 
 ### Snapshot.apply, результаты и порядок проверок
@@ -414,7 +419,12 @@ Handler не может незаметно добавить нового уча�
 ### ArtifactRef, staging и domain SQL rows
 
 `ArtifactKind(StrEnum)` имеет `BLOB="blob"`, `SQL_ROWS="sql_rows"`:
-это носитель, а не terrain/climate/domain tag.
+это контракт представления (байтовый payload / typed row set), а не
+terrain/climate/domain tag или идентификатор concrete storage backend.
+Замена SQL layout/backend при сохранении representation contract не меняет
+kind, format key/version, canonical content hash или уже подготовленный ref.
+Backend обязан разрешать прежние refs; новое представление — отдельное
+versioned contract решение, а не оправдание CRUD coupling Patch.
 `ArtifactRef` содержит kind: ArtifactKind, format_key: ArtifactFormatKey,
 format_version: FormatVersion, content_hash: RevisionHex,
 nbytes: strict int >= 0. Для SQL_ROWS ref дополнительно задаёт
@@ -465,7 +475,10 @@ preparation_fingerprint: RevisionHex, fence: strict int >= 1)` — общий
   только в защищённом holder lifecycle, не бессрочный сертификат;
 - `recover(operation_id) -> OperationRecord`,
   `cancel(operation_id, fence) -> OperationRecord`,
-  `collect(candidates: tuple[ArtifactRef, ...]) -> GcReport`.
+  `collect(operation_id: EntityUid, candidates: tuple[ArtifactRef, ...]) -> GcReport`.
+  ID передаёт maintenance caller для общей log correlation; это не новый
+  Snapshot/phase и не четвёртый OperationKind. Глобальный GC не выдумывает
+  world_uid, если candidates общие для нескольких миров.
 
 `StagingReservation(artifact_id: EntityUid, lease: OperationLeaseRef,
 ref: ArtifactRef)` — capability записи не опубликованного artifact.
@@ -569,8 +582,20 @@ Ports разделены по capability:
   `compare_append(scope, expected, next_publication) -> CasDecision`:
   CasDecision(StrEnum) — APPLIED/MISMATCH; compare проверяет полный expected
   record, включая publication_id, логический pointer и gameplay guard;
+- `IPlayerPublicationStore.read(player_uid) -> PlayerSnapshotRef | None`,
+  `compare_append(scope, expected: PlayerHeadExpectation,
+  next_ref: PlayerSnapshotRef, operation_id: EntityUid) -> CasDecision`:
+  тот же publication transaction/single-successor guard, без второго UOW;
+- `IWorldPublicationInitializer.initialize(scope, world_uid) -> WorldPublicationRef`:
+  explicit core bootstrap capability для единственного пустого pointer root;
+  read его не создаёт, handler не получает initializer, fake snapshot не возникает;
 - `ISnapshotHistoryStore.append(scope, metadata, receipts) -> None`:
   только общая snapshot metadata/lineage, без domain table mapping;
+  `read(ref: SnapshotRef) -> SnapshotEnvelope | None` читает только эту
+  metadata по точному immutable ref. Внутри publication validation используется
+  CommitReadScope той же transaction; read не открывает competing UOW.
+  MetadataBuilder переносит неизменённые section refs из исходного envelope,
+  а не восстанавливает их replay всей цепочки. Это не domain payload read API.
 - `IOperationStore.claim_publication(kind, operation_id, preparation_fingerprint,
   request_fingerprint) -> OperationClaim`, `read(operation_id)`,
   `record_terminal(scope, outcome)` и `record_refusal(claim, outcome)`;

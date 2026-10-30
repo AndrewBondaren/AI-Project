@@ -101,6 +101,23 @@ class PlacementSession:
         self.offered.update(h.identity.region_uid for h in ready)
         return ready
 
+    def run(self, prepare_ready: Callable[[tuple[PlacementHeader, ...]], None], *,
+            check_cancelled: Callable[[], None] | None = None) -> PlacementBatchResultV2:
+        """Drain whole ready portions through the caller's existing submit/fail API."""
+        if self.offered:
+            raise ValueError("run requires no outstanding manual preparation offers")
+        while True:
+            if check_cancelled is not None:
+                check_cancelled()
+            ready = self.ready_for_preparation()
+            if ready:
+                prepare_ready(ready)
+                if self.offered:
+                    raise ValueError("prepare_ready must submit or fail the entire offered portion")
+                continue
+            if self.step() is None:
+                return self.finish()
+
     def submit(self, prepared: PreparedPlacementV2) -> None:
         prepared = PreparedPlacementV2.model_validate(prepared, strict=True)
         uid = prepared.intent.identity.region_uid

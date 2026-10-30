@@ -135,9 +135,13 @@ flowchart LR
 
 ## Контракты ядра — freeze шага 2 (2026-10-30)
 
-**Статус: проект точных контрактов для приёмки.** Поведение P-1…P-8/L-1
-принято в плане §8.1; определения ниже ещё не являются реализованным API
-или разрешением переходить через implementation map. Это ядро, независимое
+**Статус: contract freeze принят мастером 2026-10-30 («Далее»).**
+Поведение P-1…P-8/L-1 принято в плане §8.1; определения ниже ещё не являются
+реализованным API или разрешением переходить через implementation map.
+Storage/encoding map §8.3 принят отдельно 2026-10-30; реализация проходит
+отдельные подшаги. Values/refs/metadata/enum реализованы в 4A1,
+Patch/PatchSet и application/storage этим не объявляются реализованными.
+Это ядро, независимое
 от будущих DTO нод GEN-DAG-1. Общие типы не импортируют concrete domain POJO.
 
 ### Общие правила типов и identity
@@ -150,8 +154,11 @@ Application contexts/capabilities — frozen runtime types своего слоя
 Для перечисленных далее StrEnum без отдельного wire mapping значения
 равны lowercase snake_case именам членов; неизвестные значения отклоняются.
 `EntityUid` переиспользуется для world/timeline/player/snapshot/operation
-identity. Новые runtime IDs выдаёт `app.ids.runtime_uid`, один раз на
-операцию/новый snapshot, с сохранением при retry; это не generated world UID.
+identity. Новые runtime IDs выдаёт `app.ids.runtime_uid`: operation_id
+назначается caller один раз, snapshot identity — один раз при его commit.
+Terminal retry возвращает те же опубликованные refs. Полностью откаченная
+попытка не создала snapshot, её недостижимый ID не считается опубликованным.
+Это не generated world UID.
 Порядковый `PatchOrdinal` — strict int >= 0, уникальный внутри секции.
 `FormatVersion` — strict int > 0; semantic/source revisions им не заменяются.
 
@@ -161,6 +168,8 @@ identity. Новые runtime IDs выдаёт `app.ids.runtime_uid`, один р
 ядром; не строки domain tag и не world-authored N+1 registry. Их membership
 определяет явная composition root registration, а не import side effects.
 Общие metadata этих реестров содержат ключ/поддерживаемые format versions;
+точные поля PatchSectionMetadata/ArtifactFormatMetadata — key и непустой
+supported_versions: frozenset[FormatVersion]; registry.entries — tuple metadata.
 конкретные модели, codecs и handlers привязывает application registry.
 Добавление домена не требует импорта его POJO в общий dataModel.
 

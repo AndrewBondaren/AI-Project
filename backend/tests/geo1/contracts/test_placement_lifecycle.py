@@ -268,3 +268,112 @@ class PlacementLifecycleTests(TestCase):
         ctx = ResolveContext(validate_only=True)
         emit_diagnostics(result, ctx)
         self.assertFalse(ctx.errors)
+
+
+class PlacementSessionRunTests(TestCase):
+    def test_entire_ready_portion_is_prepared_before_any_heap_step(self):
+        from unittest.mock import patch
+        session = PlacementSession.start(batch(member("b"), member("a")))
+        events = []
+        def prepare_ready(headers):
+            events.append(tuple(header.identity.region_uid for header in headers))
+            for index, header in enumerate(headers):
+                session.submit(prepared(session.objects[header.identity.region_uid], cells=((index, 0),)))
+        original = session.step
+        def step():
+            self.assertTrue(events)
+            self.assertEqual(events[0], ("a", "b"))
+            return original()
+        with patch.object(session, "step", side_effect=step):
+            result = session.run(prepare_ready)
+        self.assertEqual(events, [("a", "b")])
+        self.assertTrue(all(isinstance(outcome, ResolvedPlacementV2) for outcome in result.results))
+
+    def test_resolved_support_opens_a_new_whole_preparation_portion(self):
+        session = PlacementSession.start(batch(member("root"), member("child", targets=("root",))))
+        events = []
+        def prepare_ready(headers):
+            events.append(tuple(header.identity.region_uid for header in headers))
+            for header in headers:
+                uid = header.identity.region_uid
+                session.submit(prepared(session.objects[uid], cells=((0 if uid == "root" else 1, 0),)))
+        result = session.run(prepare_ready)
+        self.assertEqual(events, [("root",), ("child",)])
+        self.assertTrue(all(isinstance(outcome, ResolvedPlacementV2) for outcome in result.results))
+
+    def test_preparation_failure_keeps_dependent_causes_without_requesting_its_geometry(self):
+        from app.application.worldData.placement.diagnostics import diagnostic
+        session = PlacementSession.start(batch(member("root"), member("child", targets=("root",)), member("other")))
+        requested = []
+        def prepare_ready(headers):
+            for header in headers:
+                uid = header.identity.region_uid
+                requested.append(uid)
+                if uid == "root":
+                    session.fail(header.identity, (diagnostic(header, PlacementIssueCode.CONSTRAINT_VIOLATION,
+                        "bad geometry", path=("geometry",)),))
+                else:
+                    session.submit(prepared(session.objects[uid]))
+        result = session.run(prepare_ready)
+        outcomes = {outcome.identity.region_uid: outcome for outcome in result.results}
+        self.assertNotIn("child", requested)
+        self.assertIsInstance(outcomes["other"], ResolvedPlacementV2)
+        self.assertIsInstance(outcomes["child"], UnresolvedPlacementV2)
+        self.assertEqual(tuple(cause.region_uid for cause in outcomes["child"].causes), ("root",))
+        self.assertIsNone(outcomes["child"].prepared)
+
+    def test_disabled_missing_and_cyclic_members_never_request_geometry(self):
+        from unittest.mock import Mock
+        prepare_ready = Mock(side_effect=AssertionError("terminal member requested geometry"))
+        session = PlacementSession.start(batch(member("off", priority=0), member("missing", targets=("absent",)),
+            member("a", targets=("b",)), member("b", targets=("a",))))
+        result = session.run(prepare_ready)
+        prepare_ready.assert_not_called()
+        self.assertEqual(len(result.results), 4)
+        self.assertEqual(result.snapshot_revision, SNAPSHOT_REVISION)
+        self.assertEqual(sum(isinstance(outcome, DisabledPlacement) for outcome in result.results), 1)
+        self.assertTrue(all(outcome.prepared is None for outcome in result.results if isinstance(outcome, UnresolvedPlacementV2)))
+
+    def test_incomplete_callback_fails_before_heap_or_silent_finish(self):
+        from unittest.mock import Mock, patch
+        session = PlacementSession.start(batch(member("a"), member("b")))
+        def prepare_ready(headers):
+            session.submit(prepared(session.objects[headers[0].identity.region_uid]))
+        with patch.object(session, "step") as step:
+            with self.assertRaisesRegex(ValueError, "entire offered portion"):
+                session.run(prepare_ready)
+            step.assert_not_called()
+
+    def test_manual_outstanding_offers_cannot_be_lost_when_entering_run(self):
+        from unittest.mock import Mock
+        session = PlacementSession.start(batch(member("a")))
+        session.ready_for_preparation()
+        prepare_ready = Mock()
+        with self.assertRaisesRegex(ValueError, "outstanding manual"):
+            session.run(prepare_ready)
+        prepare_ready.assert_not_called()
+
+    def test_cancellation_before_and_after_preparation_stops_before_heap(self):
+        from unittest.mock import Mock, patch
+        for checks, expected in ((1, 0), (2, 1)):
+            session = PlacementSession.start(batch(member("a")))
+            calls = []
+            def prepare_ready(headers):
+                calls.append(headers)
+                session.submit(prepared(session.objects["a"]))
+            check_cancelled = Mock(side_effect=[None]*(checks-1)+[RuntimeError("cancelled")])
+            with self.subTest(checks=checks), patch.object(session, "step") as step:
+                with self.assertRaisesRegex(RuntimeError, "cancelled"):
+                    session.run(prepare_ready, check_cancelled=check_cancelled)
+                self.assertEqual(len(calls), expected)
+                step.assert_not_called()
+
+    def test_domain_callback_exception_is_propagated_without_a_fake_result(self):
+        from unittest.mock import Mock, patch
+        signal = RuntimeError("domain abort")
+        session = PlacementSession.start(batch(member("a")))
+        with patch.object(session, "step") as step:
+            with self.assertRaises(RuntimeError) as error:
+                session.run(Mock(side_effect=signal))
+            self.assertIs(error.exception, signal)
+            step.assert_not_called()

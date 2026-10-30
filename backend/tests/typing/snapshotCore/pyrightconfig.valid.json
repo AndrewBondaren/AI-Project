@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../pyrightconfig.cascade.json",
+  "venvPath": "../../..",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "include": [
+    "valid.py",
+    "../../../app/dataModel/patch",
+    "../../../app/dataModel/artifacts",
+    "../../../app/dataModel/worldSnapshot"
+  ]
+}

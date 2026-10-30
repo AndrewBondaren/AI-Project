@@ -201,3 +201,44 @@ def authored_source_join(adapter: AuthoredWaterSourceAdapter, shared: WaterDesig
     generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, geometry: AuthoredWaterGeometry) -> None:
     result = adapter.prepare_source(shared, generation=generation, admission=admission, geometry=geometry)
     assert_type(result, AuthoredWaterDesignInput[AuthoredBasinSource | AuthoredLakeSource])
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
+from app.dataModel.placement.intent import PlacementIntent
+from app.dataModel.placement.prepared import PreparedPlacementV2
+
+
+def prepared_water_admission(owner: DesignedWaterPlacementPreparer, value: WaterStrategyInput,
+    preparation: WaterDesignPreparation, intent: PlacementIntent, admission: PlacementAdmissionInput) -> None:
+    assert_type(owner.bind_admission(value, preparation, intent=intent, admission=admission), PreparedPlacementV2)
+
+
+from collections.abc import Callable
+from app.application.worldData.placement.lifecycle.session import PlacementSession
+from app.dataModel.placement.lifecycle.header import PlacementHeader
+from app.dataModel.placement.result import PlacementBatchResultV2
+
+
+def common_placement_runner(session: PlacementSession, prepare: Callable[[tuple[PlacementHeader, ...]], None],
+    check: Callable[[], None]) -> None:
+    assert_type(session.run(prepare, check_cancelled=check), PlacementBatchResultV2)
+
+
+from app.application.worldData.planning.composition.planProviders import GeoWorldPlanProviders
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.planning.service.planningService import PlanWaitControl
+
+
+def captured_geo_assembly(assembler: SurfacePlanningAssembler[GeoWorldPlanProviders], view: GeoSurfacePlanningView,
+    wait: PlanWaitControl) -> None:
+    assert_type(assembler.prepare_geo(view, wait=wait), GeoSurfacePlanBundle | None)
+
+
+from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
+from app.application.jsonValidation.resolve import ResolveContext
+
+
+def captured_geo_reporting(assembler: SurfacePlanningAssembler[GeoWorldPlanProviders], view: GeoSurfacePlanningView,
+    wait: PlanWaitControl, ctx: ResolveContext) -> None:
+    assert_type(prepare_captured_geo_bundle(view, planning=assembler, wait=wait, resolve_ctx=ctx), GeoSurfacePlanBundle | None)

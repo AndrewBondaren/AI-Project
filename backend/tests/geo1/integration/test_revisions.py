@@ -549,3 +549,221 @@ class TerrainRegionProviderTests(TestCase):
                 with self.assertRaises(PlanWaitCancelled):
                     self.provider.build(self.request(), PlanDependencyReader(self.registry), control)
                 self.assertEqual(kernel.call_count, calls)
+
+
+class GeoCapturedAssemblerTests(TestCase):
+    def setUp(self):
+        from app.application.worldData.planning.composition.planProviders import GeoWorldPlanProviders
+        from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+        from app.application.worldData.generators.terrain.regions.regionExtent import TerrainRegionPlanProvider
+        from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+        self.view, self.events, self.fail_slot, self.diagnostics = view(), [], None, {}
+        evidence = bundle(self.view)
+        input_names = {"terrain_regions": "region_input", "hydrology_routes": "hydrology",
+            "hydrology": "hydrology_final", "coastline_boundaries": "boundary_input", "coating": "coating_input"}
+        self.registry, handles = PlanRegistry(), {}
+        owner = self
+        class CapturedPayloadProvider:
+            def __init__(self, name, payload):
+                self.name, self.payload = name, payload
+            def build(self, request, dependencies, control):
+                owner.events.append(self.name)
+                if owner.fail_slot == self.name:
+                    from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+                    raise PlanBuildFailure((FieldPathError((self.name,), "fixture failure"),))
+                if self.name == "terrain_regions":
+                    result = TerrainRegionPlanProvider().build(request, dependencies, control)
+                    return result.model_copy(update={"diagnostics": (*result.diagnostics, *owner.diagnostics.get(self.name, ()))})
+                return PlanBuildResult[type(self.payload)](payload=self.payload, diagnostics=owner.diagnostics.get(self.name, ()))
+        from app.dataModel.surfacePlanning.surfacePlanBindings import GEO_SURFACE_BINDINGS
+        self.order = tuple(binding.slot.value for binding in GEO_SURFACE_BINDINGS)
+        for declaration in GEO_SURFACE_BINDINGS:
+            name = declaration.slot.value
+            inputs, payload = getattr(self.view, input_names.get(name, name)), getattr(evidence, name).payload
+            handles[name] = declared_binding(declaration, type(inputs), type(payload))
+            self.registry.register(handles[name], CapturedPayloadProvider(name, payload))
+        self.handles = GeoWorldPlanProviders(**handles)
+        policy = CachePolicy(max_retained_bytes=10000000, max_entry_bytes=5000000)
+        self.service = PlanningService(self.registry, CacheService(MemoryCache(policy), policy),
+            PlanningExecutionPolicy(max_workers=2, max_pending_builds=8))
+        self.addCleanup(self.service.shutdown)
+        self.assembler = SurfacePlanningAssembler(self.service, self.registry, self.handles)
+
+    def test_twelve_phase_order_exact_refs_codec_and_immutable_source(self):
+        from app.application.encoding.canonicalCodec import encode, decode
+        from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+        before = self.view.model_dump()
+        result = self.assembler.prepare_geo(self.view, wait=Wait())
+        self.assertEqual(tuple(self.events), self.order)
+        self.assertEqual(result.world_uid, self.view.world_uid)
+        self.assertEqual(result.view_revision, self.view.revision)
+        self.assertEqual(self.view.model_dump(), before)
+        self.assertEqual(result.terrain_regions.payload.snapshot.snapshot_uid, self.view.region_input.snapshot_uid)
+        self.assertIsNotNone(result.terrain_regions.payload.snapshot.world_region)
+        self.assertEqual(decode(encode(result, SURFACE_MANIFEST), type(result), SURFACE_MANIFEST), result)
+        self.assertEqual(tuple(dep.slot for dep in result.hydrology.dependencies),
+            ("hydrology_routes", "relief", "river_relief", "water_placement"))
+
+    def test_warm_cache_reuses_all_twelve_phases(self):
+        first = self.assembler.prepare_geo(self.view, wait=Wait())
+        self.events.clear()
+        self.assertEqual(self.assembler.prepare_geo(self.view, wait=Wait()), first)
+        self.assertEqual(self.events, [])
+
+    def test_region_identity_edit_invalidates_the_exact_downstream_chain(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        from app.application.worldData.planning.composition.surfacePlanningCapture import _revision
+        first = self.assembler.prepare_geo(self.view, wait=Wait())
+        self.events.clear()
+        region = rebuild(self.view.region_input, snapshot_uid="edited-region-snapshot")
+        changed = rebuild(self.view, region_input=region, revision=_revision(self.view.world_uid, (region,)))
+        second = self.assembler.prepare_geo(changed, wait=Wait())
+        self.assertEqual(tuple(self.events), self.order[2:])
+        self.assertEqual(first.climate_base.ref, second.climate_base.ref)
+        self.assertEqual(first.terrain_base.ref, second.terrain_base.ref)
+        self.assertNotEqual(first.water_placement.ref.key, second.water_placement.ref.key)
+        self.assertNotEqual(first.coating.ref.key, second.coating.ref.key)
+        self.assertEqual(second.view_revision, changed.revision)
+
+    def test_no_extent_returns_none_without_requesting_any_phase(self):
+        from app.application.worldData.planning.contracts.surfacePlanningView import NoExtentSurfacePlanningView
+        empty = NoExtentSurfacePlanningView(world_uid=self.view.world_uid, revision=self.view.revision, capture_diagnostics=())
+        self.assertIsNone(self.assembler.prepare_geo(empty, wait=Wait()))
+        self.assertEqual(self.events, [])
+
+    def test_incoherent_view_fails_before_any_provider(self):
+        from pydantic import ValidationError
+        wrong = self.view.model_copy(update={"hydrology": self.view.hydrology.model_copy(update={
+            "sea_generation": self.view.hydrology.sea_generation.model_copy(update={"autoresolve": True})})})
+        with self.assertRaises(ValidationError):
+            self.assembler.prepare_geo(wrong, wait=Wait())
+        self.assertEqual(self.events, [])
+
+    def test_provider_failure_stops_later_phases(self):
+        self.fail_slot = "water_placement"
+        with self.assertRaises(PlanBuildFailure):
+            self.assembler.prepare_geo(self.view, wait=Wait())
+        self.assertEqual(tuple(self.events), self.order[:4])
+
+    def test_cancellation_before_and_during_preparation_stops_the_chain(self):
+        from app.application.planning.service.planningService import PlanWaitCancelled
+        owner = self
+        class Cancel(Wait):
+            def __init__(self, after):
+                self.after = after
+            def raise_if_cancelled(self):
+                if len(owner.events) >= self.after:
+                    raise PlanWaitCancelled()
+        with self.assertRaises(PlanWaitCancelled):
+            self.assembler.prepare_geo(self.view, wait=Cancel(0))
+        self.assertEqual(self.events, [])
+        with self.assertRaises(PlanWaitCancelled):
+            self.assembler.prepare_geo(self.view, wait=Cancel(4))
+        self.assertEqual(tuple(self.events), self.order[:4])
+
+
+class GeoBundleReportingTests(TestCase):
+    def setUp(self):
+        self.fixture = GeoCapturedAssemblerTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+
+    def diagnostic(self, slot, disposition):
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        return PlanDiagnostic(issue=FieldPathError((slot,), "producer diagnostic", code="SAME_CODE"), disposition=disposition)
+
+    def prepare(self, ctx, view=None):
+        from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
+        return prepare_captured_geo_bundle(self.fixture.view if view is None else view,
+            planning=self.fixture.assembler, wait=Wait(), resolve_ctx=ctx)
+
+    def test_capture_and_all_twelve_phase_diagnostics_keep_order_and_are_deduplicated(self):
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+        from tests.geo1.integration.support.pipeline import rebuild
+        capture = self.diagnostic("capture", D.FALLBACK)
+        expected = [capture.issue]
+        self.fixture.view = rebuild(self.fixture.view, capture_diagnostics=(capture,))
+        for index, slot in enumerate(self.fixture.order):
+            disposition = (D.ERROR, D.FALLBACK, D.NOTICE)[index % 3]
+            diagnostic = self.diagnostic(slot, disposition)
+            self.fixture.diagnostics[slot] = (capture, diagnostic)
+            if disposition is not D.NOTICE:
+                expected.append(diagnostic.issue)
+        ctx = ResolveContext(collect_only=True)
+        result = self.prepare(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(ctx.errors, expected)
+        self.assertEqual(len(ctx.errors), len(set(ctx.errors)))
+
+    def test_warm_cache_replays_reporting_per_request_and_not_twice_into_one_context(self):
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+        item = self.diagnostic("coating", D.FALLBACK)
+        self.fixture.diagnostics["coating"] = (item,)
+        first, second = ResolveContext(collect_only=True), ResolveContext(collect_only=True)
+        bundle = self.prepare(first)
+        self.fixture.events.clear()
+        self.assertEqual(self.prepare(second), bundle)
+        self.assertEqual(self.prepare(second), bundle)
+        self.assertEqual(self.fixture.events, [])
+        self.assertEqual(first.errors, [item.issue])
+        self.assertEqual(second.errors, first.errors)
+
+    def test_validate_only_rejects_error_and_fallback_without_promoting_notice(self):
+        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        from tests.geo1.integration.support.pipeline import rebuild
+        first, fallback, notice = (self.diagnostic("capture", D.ERROR), self.diagnostic("surface_support", D.FALLBACK),
+            self.diagnostic("coating", D.NOTICE))
+        self.fixture.diagnostics["surface_support"] = (fallback,)
+        self.fixture.diagnostics["coating"] = (notice,)
+        value = self.fixture.view
+        view = rebuild(value, capture_diagnostics=(first,), **{name: rebuild(getattr(value, name),
+            resolution_mode=ResolutionMode.VALIDATE_ONLY) for name in (
+                "water_placement", "hydrology", "boundary_input", "coating_input")})
+        ctx = ResolveContext(validate_only=True, collect_only=True)
+        with self.assertRaises(UnresolvedModelError) as error:
+            self.prepare(ctx, view)
+        self.assertEqual(tuple(error.exception.issues), (first.issue, fallback.issue))
+        self.assertEqual(ctx.errors, [first.issue, fallback.issue])
+
+    def test_runtime_uses_existing_warning_and_notice_reporting_routes(self):
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+        warning, notice = self.diagnostic("water_placement", D.FALLBACK), self.diagnostic("surface_support", D.NOTICE)
+        self.fixture.diagnostics.update(water_placement=(warning,), surface_support=(notice,))
+        ctx = ResolveContext()
+        with patch("app.application.jsonValidation.resolve.log_issues") as warnings, self.assertLogs(
+                "app.application.worldData.planning.composition.surfacePlanningAssembler", level="INFO") as logs:
+            self.prepare(ctx)
+        warnings.assert_called_once_with((warning.issue,))
+        self.assertEqual(ctx.errors, [warning.issue])
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("surface_support", logs.records[0].getMessage())
+
+    def test_no_extent_reports_capture_diagnostics_without_building_phases(self):
+        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+        from app.application.worldData.planning.contracts.surfacePlanningView import NoExtentSurfacePlanningView
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+        capture = self.diagnostic("capture", D.FALLBACK)
+        view = NoExtentSurfacePlanningView(world_uid=self.fixture.view.world_uid,
+            revision=self.fixture.view.revision, capture_diagnostics=(capture,))
+        ctx = ResolveContext(collect_only=True)
+        self.assertIsNone(self.prepare(ctx, view))
+        self.assertEqual(ctx.errors, [capture.issue])
+        with self.assertRaises(UnresolvedModelError):
+            self.prepare(ResolveContext(validate_only=True, collect_only=True), view)
+        self.assertEqual(self.fixture.events, [])
+
+    def test_preparation_failure_is_not_reported_as_a_successful_partial_bundle(self):
+        from app.application.jsonValidation.resolve import ResolveContext
+        self.fixture.fail_slot = "water_placement"
+        ctx = ResolveContext(collect_only=True)
+        with patch("app.application.worldData.planning.composition.surfacePlanningAssembler.report_surface_diagnostics") as report:
+            with self.assertRaises(PlanBuildFailure):
+                self.prepare(ctx)
+            report.assert_not_called()
+        self.assertEqual(ctx.errors, [])

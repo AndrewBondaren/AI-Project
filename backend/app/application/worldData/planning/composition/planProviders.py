@@ -1,4 +1,4 @@
-"""The eight baseline world-surface bindings; the generic engine knows no domains."""
+"""Typed surface handles and baseline provider registration; the engine stays generic."""
 
 from dataclasses import dataclass
 
@@ -40,6 +40,15 @@ from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan
 from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
 from app.dataModel.terrain.relief.planning.reliefPlan import ReliefPlan, RiverReliefPlan
+from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlineBoundaryInput, CoastlineBoundaryPlan
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyRoutesPlan, GeoHydrologyPlan
+from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
+from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
+from app.dataModel.terrain.planning.waterPlacementPlan import GeoWaterPlacementPlan
+from app.dataModel.terrain.regions.regionPlanningInput import TerrainRegionPlanningInput
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput, CoatingPlanInput
+from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import SurfaceSupportPlan, CoatingPlan
 
 
 def _binding[I, T](slot: SurfacePlanSlot, input_type: type[I], payload_type: type[T]) -> RegisteredPlanContract[I, T]:
@@ -77,6 +86,22 @@ class WorldPlanProviders:
     river_relief: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan]
     hydrology: RegisteredPlanContract[HydrologyFinalInput, HydrologyPlan]
     climate_local: RegisteredPlanContract[ClimateLocalInput, ClimateLocalPlan]
+
+
+@dataclass(frozen=True)
+class GeoWorldPlanProviders:
+    climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan]
+    terrain_base: RegisteredPlanContract[TerrainBaseInput, TerrainPlan]
+    terrain_regions: RegisteredPlanContract[TerrainRegionPlanningInput, TerrainRegionPlan]
+    water_placement: RegisteredPlanContract[GeoWaterPlacementInput, GeoWaterPlacementPlan]
+    relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan]
+    hydrology_routes: RegisteredPlanContract[GeoHydrologyPlanInput, GeoHydrologyRoutesPlan]
+    river_relief: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan]
+    hydrology: RegisteredPlanContract[HydrologyFinalInput, GeoHydrologyPlan]
+    climate_local: RegisteredPlanContract[ClimateLocalInput, ClimateLocalPlan]
+    coastline_boundaries: RegisteredPlanContract[CoastlineBoundaryInput, CoastlineBoundaryPlan]
+    surface_support: RegisteredPlanContract[SurfaceSupportInput, SurfaceSupportPlan]
+    coating: RegisteredPlanContract[CoatingPlanInput, CoatingPlan]
 
 
 def register_world_plan_providers(registry: PlanRegistry) -> WorldPlanProviders:

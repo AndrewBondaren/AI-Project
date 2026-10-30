@@ -70,7 +70,7 @@ policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и re
 
 ### Patch/Snapshot и artifacts — target регистрации шага 2 (2026-10-30)
 
-Статус: проект contract freeze, **маршруты ещё не реализованы**.
+Статус: contract freeze принят 2026-10-30; **маршруты ещё не реализованы**.
 Используется тот же loggingConfig/JsonLogFormatter/router, без локальных
 handlers и без общего app.log. Domain emitters не дублируются.
 
@@ -108,7 +108,10 @@ validate_only возвращает diagnostics без runtime WarningError emit.
 Обязательная корреляция lifecycle: operation_id, world_uid и request_id
 общего фасада; после binding — request_fingerprint; при наличии — timeline_id,
 snapshot_id, section key, target ref, artifact hash и outcome enum value.
-Нет фиктивных UID вместо отсутствующего контекста. Domain payload/raw SQL
+Нет фиктивных UID вместо отсутствующего контекста. Для общего GC world_uid
+может быть None (artifact дедуплицирован между мирами), а operation_id
+передаётся maintenance caller; не подставляется произвольный world.
+Domain payload/raw SQL
 в record не копируются. APPLY_COMMITTED — только после подтверждённого
 COMMIT; retry терминального outcome не выдаёт новый APPLY_COMMITTED,
 а восстановление результата отмечается OPERATION_RECOVERED.

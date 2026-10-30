@@ -830,11 +830,11 @@ DB-модели и имена existing services не заменяют архит
 | Пункт | Что необходимо для приёмки | Статус |
 |---|---|---|
 | §1 Общая архитектура | Приняты владельцы read/patch/history и критические границы; нет WS-посредника/DB доступа и обхода GEN DAG | Baseline и уточнения §8.1 приняты; per-step проверки остаются |
-| §2 Ответственности и потоки | Подготовка не пишет опубликованное состояние; только Snapshot применяет набор; определены вход/выход/отказ и commit каждого этапа | Поведение §8.1 принято; exact ports — шаг 2 |
-| §3 Интерфейс Patch/PatchSet | Общие правила §3.1 и строгие domain/operation type bindings; временный кэш §3.3; для каждого класса пройдена независимость от CRUD по §3.4 | Поведение §8.1 принято; type bindings — шаг 2; class checks после реализации |
-| §4 Snapshot | Snapshot — единственный вход применения; определены domain behaviour calls, сохранение состояния/операций, held references и restore | Поведение §8.1 принято; storage/atomicity binding — шаги 2–3 |
-| §5 Размещение | Общие контракты и domain implementations разделены по владельцам/слоям, направление зависимостей однозначно | Направления §8.1 приняты; exact файлы/implementation map — шаг 3 |
-| §6 Версионирование | Source/runtime/format revisions различены; определены preconditions/stamps, pinning и связь patch→snapshot без второго versioning механизма | Разделение и границы §8.1 приняты; runtime stamp type — шаг 2; source binding — шаг 5 |
+| §2 Ответственности и потоки | Подготовка не пишет опубликованное состояние; только Snapshot применяет набор; определены вход/выход/отказ и commit каждого этапа | Поведение/core ports §8.2 и backend map §8.3 приняты; runtime проверки по подшагам |
+| §3 Интерфейс Patch/PatchSet | Общие правила §3.1 и строгие domain/operation type bindings; временный кэш §3.3; для каждого класса пройдена независимость от CRUD по §3.4 | Core DTO §8.2 приняты; concrete domain bindings и class checks отдельно |
+| §4 Snapshot | Snapshot — единственный вход применения; определены domain behaviour calls, сохранение состояния/операций, held references и restore | Контракты §8.2 и storage/atomicity map §8.3 приняты; runtime ещё не реализован |
+| §5 Размещение | Общие контракты и domain implementations разделены по владельцам/слоям, направление зависимостей однозначно | Exact core map §8.3 принят; concrete domain handler map остаётся отдельным gate |
+| §6 Версионирование | Source/runtime/format revisions различены; определены preconditions/stamps, pinning и связь patch→snapshot без второго versioning механизма | Runtime stamp contract §8.2 принят; source binding — шаг 5 |
 
 Статус «принят» для отдельного пункта/шага появляется после его
 отдельной приёмки мастером. Принятие общей архитектурной основы
@@ -846,9 +846,10 @@ DB-модели и имена existing services не заменяют архит
 Итоговая приёмка плана требует успешной критической проверки §3.4 для всех
 классов Patch. Любой провал блокирует приёмку плана до исправления реализации.
 
-Код сейчас не меняется; ни source versioning, ни snapshot runtime не
-объявляются реализованными. Ноды/SQL-schema/backend-start/коммиты не входят
-в этот документальный запрос. Новые реализации требуют согласованной карты.
+В архитектурных шагах 1–3 код не менялся; ни source versioning, ни snapshot
+runtime этим не объявлялись реализованными. Реализация начата отдельно
+после приёмки карты §8.3; evidence подшагов — §8.4 и далее. Ноды/production
+DAG wiring/backend-start/коммиты не добавляются этими подшагами автоматически.
 
 ### 8.1. Шаг 1 — принятые архитектурные правила (2026-10-30)
 
@@ -1213,12 +1214,12 @@ keyframe, terminal retry и незавершённая операция, runtime
 validate_only diagnostics. Это документальная проверка, не evidence
 runtime atomicity, import audit или per-class test pass.
 
-### 8.2. Шаг 2 — inventory и проект contract freeze (2026-10-30)
+### 8.2. Шаг 2 — inventory и принятый contract freeze (2026-10-30)
 
-Статус: **INVENTORY ВЫПОЛНЕН; ТОЧНЫЕ КОНТРАКТЫ ПОДГОТОВЛЕНЫ К ПРИЁМКЕ**.
-Архитектура §8.1 принята; новые конкретные определения этого шага
-не объявляются автоматически принятыми. Код, SQL, Container и DAG
-не изменялись. Следующий шаг после приёмки freeze — implementation map.
+Статус: **INVENTORY И CONTRACT FREEZE ПРИНЯТЫ** (2026-10-30,
+«Далее» после предъявления точных контрактов и запроса их приёмки).
+Это приёмка определений шага 2, не implementation map или реализации.
+Код, SQL, Container и DAG этим шагом не изменялись.
 
 **SoT точных определений:**
 
@@ -1329,13 +1330,626 @@ domain SQL mapping; scalar enum category не заменён строками.
 .cursor/plans 171→171. Не запускались backend, runtime tests или migrations:
 изменены только документы, тестировать реализацию пока нечего.
 
-**Следующий gate:** принять точные определения этого шага; затем шаг 3
-зафиксирует каждый класс/alias/port → owner/layer/exact file, canonical
+**Implementation map шага 3 принята** (§8.3), фиксирует
+каждый класс/alias/port → owner/layer/exact file, canonical
 type IDs, folder composition, SQLite constraints, connection/capability
 binding и последовательность отдельных implementation шагов. Concrete
 domain operation types/первый handler требуют своего binding и per-class
 CRUD-independence сценария до их кода. Source integration остаётся шагом 5,
 GEN-DAG-1 ноды/DAG-facing DTO и B-2 этим freeze не закрываются.
+
+### 8.3. Шаг 3 — implementation map ядра (2026-10-30)
+
+Статус: **IMPLEMENTATION MAP ПРИНЯТ МАСТЕРОМ** (2026-10-30, «Далее»
+после предъявления карты и запроса приёмки перед кодом). Freeze §8.2 принят;
+ниже — его привязка к слоям, файлам, backend и проверяемым implementation
+шагам. Все пути относительно `backend/app/`, если не указан другой корень.
+Новые пакеты используют пустой `__init__.py`, без import-регистрации,
+сервисов, eagerly импортируемых child modules или создания IO объектов.
+
+Область карты — shared core до Container binding. Concrete domain Patch/
+handler не вводятся ни как пример production-кода, ни как placeholder.
+Их обязательные operation type binding, domain persistence/read contracts
+и CRUD-independence сценарии фиксируются отдельной картой **до** соответствующего
+подшага первого handler (§8.2). Это не разрешает заменить domain handler
+универсальным dict patcher или объявить план законченным без доменов.
+
+#### 3.1. Карта dataModel: только frozen данные и декларации
+
+Файл → все создаваемые в нём именованные типы. Префикс `dataModel/`
+опущен внутри этого списка. Соседние типы объединены по одному контракту,
+а не по произвольному числу строк.
+
+```text
+patch/values.py
+  FormatVersion, PatchOrdinal
+patch/registry/sectionMetadata.py
+  PatchSectionMetadata, PatchSectionRegistry, SectionKey
+patch/changes/header.py
+  PatchRef, PatchHeader
+patch/sections/dependency.py
+  SectionDependencyKind, PreparedSectionDependency,
+  PublishedSectionDependency, SectionDependency
+patch/sections/section.py
+  SectionHeader, DomainSection[P]
+patch/request/patchSet.py
+  PatchSet[S]
+patch/preconditions/runtime.py
+  RuntimeVersionKind, PackTargetVersion, SnapshotTargetVersion,
+  RuntimeTargetVersion, TargetExpectationKind, TargetPresence,
+  TargetAbsent, TargetVersionExpected, RuntimeTargetExpectation
+patch/results/sectionResult.py
+  SectionAccepted, SectionRefused, SectionValidation, SectionApplyReceipt
+
+artifacts/references.py
+  ArtifactKind, ArtifactFormatMetadata, ArtifactFormatRegistry,
+  ArtifactFormatKey, ArtifactRef
+artifacts/lifecycle/operation/kinds.py
+  OperationKind, OperationPhase, OperationClaimKind
+artifacts/lifecycle/operation/record.py
+  OperationCancelled, OperationRecord
+artifacts/lifecycle/operation/claim.py
+  PublicationOwner, PublicationTerminal, PublicationBusy, OperationClaim
+artifacts/lifecycle/lease.py
+  OperationLeaseRef, StagingReservation
+artifacts/lifecycle/holders.py
+  ArtifactHolderKind, OperationHolder, ArtifactRetentionHolder,
+  SnapshotHolder, ArtifactHolderRef, VerifiedArtifactRef
+artifacts/lifecycle/gc.py
+  ArtifactStorageEventKind (SEALED/GC_DELETED), GcReport
+artifacts/events.py
+  ArtifactLogActivity, ArtifactLogRecord
+
+worldSnapshot/identity/refs.py
+  SnapshotChainKind, WorldSnapshotRef, PlayerSnapshotRef, SnapshotRef
+worldSnapshot/identity/publication.py
+  WorldPublicationRef, PlayerHeadExpectation
+worldSnapshot/sections/refs.py
+  SectionStateRef, SectionHistoryRef
+worldSnapshot/metadata/envelope.py
+  CreatedAtUtc, WorldSnapshotMetadata, PlayerSnapshotMetadata,
+  SnapshotEnvelope (= union metadata, не новый blob мира)
+worldSnapshot/results/apply.py
+  SnapshotCommitRefs, SnapshotApplyResult
+worldSnapshot/results/outcomeKind.py
+  SnapshotApplyOutcomeKind (leaf enum, доступен до patch result DTO)
+worldSnapshot/results/publication.py
+  PackActivationDisposition, PackActivationResult, GameplayStarted, CasDecision
+worldSnapshot/events.py
+  SnapshotLogActivity, SnapshotLogRecord
+```
+
+Owner patch/* — общий контракт модификаций; artifacts/* — общий контракт
+content-addressed artifacts и operation lifecycle ядра; worldSnapshot/* —
+identity/согласованная snapshot history/publication results. Здесь нет
+Terrain/Region/Player business POJO или concrete domain operation enum.
+
+Направление импортов: patch/values и sectionMetadata → shared identity/
+RegistryKey; snapshot identity → shared UID/hash; artifact references →
+patch/values; patch changes/sections → artifact refs и snapshot section refs;
+snapshot result → snapshot identity; operation record → artifact refs и
+snapshot result/publication result. Обратный импорт snapshot identity в
+operationRecord, PatchSet в snapshot result или core DTO в concrete domain
+модели не вводится. Сборка codecs/ports не находится в dataModel.
+
+CreatedAtUtc — validated UTC строка `YYYY-MM-DDTHH:mm:ss.ffffffZ`,
+с календарной проверкой; application назначает её один раз. Это timestamp
+wire value, не закрытая категория; исключение str зафиксировано в ТЗ.
+Log records содержат уже перечисленные в logging TZ typed activity,
+identity/correlation/hash/optional outcome; request_id добавляет общий facade.
+Они не содержат severity resolver, logger или methods emit.
+SnapshotLogRecord: activity, operation_id/world_uid, request_fingerprint,
+timeline_id/snapshot_id, section_key, outcome; последние context поля
+optional, outcome — SnapshotApplyOutcomeKind | None. ArtifactLogRecord:
+activity, operation_id, world_uid | None, preparation_fingerprint | None,
+request_fingerprint | None, artifact_hash | None. UID/hash/key/activity
+поля используют existing typed aliases/enums, не bare str. Target identity
+логирует владеющий им доменный producer; generic lifecycle не разбирает
+target payload ради заполнения ещё одного поля.
+
+#### 3.2. Карта application: ports, encoding и общий механизм
+
+Внутри списка префикс `application/` опущен.
+
+```text
+patch/contracts/sectionHandler.py
+  DomainSectionHandler[S], SectionContract[S]
+patch/registry/sectionRegistry.py
+  SectionRegistry, BoundSectionHandler
+patch/encoding/patchSetCodec.py
+  PatchSetCodec
+patch/encoding/coreManifest.py
+  PATCH_CORE_SCHEMA (declarative CanonicalSchemaManifest)
+
+worldSnapshot/contracts/context.py
+  SnapshotValidationContext, SnapshotApplyContext
+worldSnapshot/contracts/commitScope.py
+  CommitScope, CommitReadScope, IDomainCommitBinding[S]
+worldSnapshot/contracts/applyPort.py
+  IWorldSnapshotApply
+worldSnapshot/storage/commitStore.py
+  IPublicationCommitStore
+worldSnapshot/storage/publicationStore.py
+  IWorldPublicationStore, IPlayerPublicationStore, IWorldPublicationInitializer
+worldSnapshot/storage/historyStore.py
+  ISnapshotHistoryStore
+worldSnapshot/service/worldSnapshotService.py
+  WorldSnapshotService
+worldSnapshot/service/snapshotRequestValidator.py
+  SnapshotRequestValidator
+worldSnapshot/service/snapshotMetadataBuilder.py
+  SnapshotMetadataBuilder
+worldSnapshot/encoding/snapshotCodec.py
+  SnapshotEnvelopeCodec
+worldSnapshot/encoding/coreManifest.py
+  SNAPSHOT_CORE_SCHEMA
+worldSnapshot/logging/snapshotLog.py
+  SnapshotLifecycleLog (typed emitter через общий facade)
+
+artifacts/contracts/stagingPort.py
+  IArtifactStaging
+artifacts/contracts/formatBackend.py
+  ArtifactBackend[C], ArtifactFormatContract[C]
+artifacts/contracts/holderPort.py
+  IArtifactHolders
+artifacts/registry/artifactRegistry.py
+  ArtifactFormatRegistryBinding (application registration, не dataModel registry)
+artifacts/staging/artifactStaging.py
+  ArtifactStagingService, TypedArtifactStager[C]
+artifacts/storage/artifactCatalog.py
+  IArtifactCatalog
+artifacts/storage/artifactLeases.py
+  IArtifactLeases
+artifacts/lifecycle/artifactGc.py
+ArtifactGarbageCollector
+artifacts/logging/artifactLog.py
+  ArtifactLifecycleLog
+artifacts/encoding/coreManifest.py
+  ARTIFACT_CORE_SCHEMA
+
+publication/contracts/operationStore.py
+  IOperationStore
+publication/service/operationLedger.py
+  OperationLedger
+publication/service/publicationGuard.py
+  PublicationGuard
+publication/service/packActivation.py
+  PreparedPackActivation
+publication/service/gameplayStart.py
+  GameplayStart
+publication/errors.py
+  OperationBusyError, PublicationInfrastructureError, UnknownCommitOutcome
+
+encoding/canonicalCodec.py (existing)
+  CanonicalCodec не дублируется; добавить content_digest(bytes)->bytes,
+  digest(value,manifest) делегирует raw hashing этому primitive
+worldData/pack/io/tileCodec.py (existing)
+  TileCodec.content_hash делегирует shared content_digest(...).hex()
+```
+
+Ports не знают SQLite/paths и не открывают transactions. CommitScope —
+непрозрачная runtime capability; не сериализуется и не хранит публичную
+connection. Production service реализует только порядок проверок, вызов
+handlers и единый commit. RequestValidator проверяет общую оболочку/
+порядок/refs, не target semantics. MetadataBuilder создаёт общие refs и
+lineage, не собирает PatchSet и не считает domain outcomes.
+PublicationGuard сверяет publication transition/ожидаемые heads; он
+не второй runtime apply entry. PreparedPackActivation/GameplayStart — только
+pregame core CAS operations по внешнему вызову DAG, без planning/bake.
+OperationLedger — bookkeeping/claims/recovery по явному вызову,
+не scheduler/retry engine и не владелец business state.
+
+StagingService управляет lease/reserve/seal и typed backend dispatch.
+Backend rows для SQL_ROWS реализует **домен**; общего SQL_ROWS writer,
+принимающего table name/raw SQL/объект произвольного домена, нет.
+Blob backend хранит bytes под content hash и не имеет domain read API.
+GC выбирает только допустимые staged candidates и использует те же guards;
+не запускается таймером из конструктора/service. Emitters не открывают файлы.
+
+#### 3.3. Existing SQLite binding и модели
+
+SQL storage implementations размещаются в db, application зависит только на
+их ports. SQLite реализации — в db, physical file backend — в shared
+storage namespace, вне application. Внутри следующего списка префикс `db/` опущен.
+
+```text
+models/snapshotCore/publicationRows.py
+  WorldPublicationRow, PlayerPublicationRow
+models/snapshotCore/operationRows.py
+  PublicationOperationRow, PublicationRequestRow,
+  PublicationOperationEventRow, PublicationOutcomeRow
+models/snapshotCore/historyRows.py
+  WorldSnapshotRow, PlayerSnapshotRow
+models/artifacts/catalogRows.py
+  ArtifactCatalogRow, ArtifactStorageEventRow
+models/artifacts/holderRows.py
+  ArtifactHolderEventRow
+models/artifacts/leaseRows.py
+  ArtifactLeaseEventRow, ArtifactWriterClaimRow
+
+repositories/sqlite/snapshotCore/commitScope.py
+  SqlitePublicationCommitStore, SqliteCommitScopeBinding
+repositories/sqlite/snapshotCore/operations/operationStore.py
+  SqliteOperationStore
+repositories/sqlite/snapshotCore/publications/worldPublicationStore.py
+  SqliteWorldPublicationStore
+repositories/sqlite/snapshotCore/publications/playerPublicationStore.py
+  SqlitePlayerPublicationStore
+repositories/sqlite/snapshotCore/history/snapshotHistoryStore.py
+  SqliteSnapshotHistoryStore
+repositories/sqlite/artifacts/catalogStore.py
+  SqliteArtifactCatalog
+repositories/sqlite/artifacts/leaseStore.py
+  SqliteArtifactLeases
+repositories/sqlite/artifacts/holderStore.py
+  SqliteArtifactHolders
+
+migrations/0001_initial.sql (existing)
+  единственный файл DDL; новые 0002+ не создаются
+```
+
+`storage/artifacts/blobBackend.py: ContentAddressedBlobBackend` реализует
+ArtifactBackend[bytes]; это один storage-layer adapter, не application
+service и не доменный pack writer. Composition root импортирует его явно.
+Обратный импорт application → concrete storage module запрещён.
+
+Ни один новый adapter не наследует mutable BaseRepository для записи
+истории и не вызывает transaction_if_needed из domain apply. Storage
+scope binder проверяет current asyncio task, database instance,
+scope lifetime и разрешённый read/write режим **перед каждым обращением**.
+Connection остаётся private внутри db adapter; application handler её
+не получает даже через context. Child task, другой Database, закрытый
+scope и запись через CommitReadScope дают явный отказ.
+
+SqlitePublicationCommitStore переиспользует GuardedConnection.unit_of_work
+и BEGIN IMMEDIATE. Собственный writer gate держится до подтверждённого
+COMMIT/ROLLBACK; это один coordinator существующей connection, не второй
+SQLite connection или nested UOW. При cancellation/ошибке COMMIT состояние
+worker дожидается завершения; если исход не доказан, connection закрывается
+для новых операций до recovery. Автоматический ROLLBACK после неизвестного
+COMMIT не считается доказательством отказа. Existing Database.transaction_on
+не меняется ради legacy callers; новый adapter связывается с его существующей
+GuardedConnection, а пути не получают ambient commit capability.
+
+Runtime publication, pregame activation и gameplay-start используют
+один WorldPublicationStore и один transaction port. Operation bookkeeping
+делает свои короткие transactions без domain state. Read domain adapters
+во время validation используют CommitReadScope той же connection; запись
+не выходит в bootstrap_conn или отдельный repository auto-commit.
+
+#### 3.4. SQL constraints и точка атомарности
+
+Ниже фиксируется schema contract, не исполняемый DDL этого шага. Имена
+таблиц окончательны для implementation; все db row classes синхронизируются
+с 0001 и включаются в existing startup validate_schema.
+
+- `world_publications`: publication_id PK, world_uid FK, predecessor_id,
+  publication_seq CHECK >=1,
+  operation_id, pack_hash, snapshot_head_id, active_timeline_id,
+  gameplay_started CHECK 0/1. Composite FK (world_uid, predecessor_id)
+  ссылается на тот же мир; UNIQUE(world_uid, publication_id) служит parent key.
+  Partial UNIQUE(world_uid) WHERE predecessor_id IS NULL задаёт один root;
+  partial UNIQUE(predecessor_id) WHERE predecessor_id IS NOT NULL — один
+  successor. CAS читает текущий leaf, сравнивает **все** expected поля,
+  вставляет successor; UPDATE указателя/истории нет.
+  UNIQUE(world_uid, publication_seq) и index(world_uid, publication_seq DESC)
+  обеспечивают current lookup ORDER BY publication_seq DESC LIMIT 1,
+  без сканирования всех leaf candidates/проигрывания цепочки.
+  Seq = parent.seq+1 (root=1), проверяется guard; это internal append
+  position одного pointer, не второй head/SourceRevision/target stamp.
+  Первый root без pack/head — explicit infrastructure initialization,
+  не запись при read и не fake snapshot. Операции initialization/migration
+  доступны только core bootstrap binding, не domain handler.
+- `player_publications`: publication_id PK, player_uid FK, predecessor_id,
+  publication_seq CHECK >=1,
+  player_snapshot_id FK, operation_id. Аналогичные partial UNIQUE на root
+  per player и successor; parent FK не позволяет смешать игроков.
+  player_uid ссылается на existing character_sheet(character_uid),
+  не на несуществующую players. Session audit FK, если задан, — game_sessions(id);
+  placement/binding не помещаются в player snapshot payload.
+  UNIQUE(player_uid, publication_seq) и DESC index дают current head lookup
+  без scan истории; seq — та же internal ordering metadata, не player revision.
+  Новый snapshot_ref сравнивается с expected head; смена другой стороны
+  тика конфликтует **до** публикации любой стороны.
+- `world_snapshots` (existing table уточняется) и `player_snapshots`:
+  snapshot_id/player_snapshot_id PK, owner/world/timeline/session fields
+  соответствующего chain, turn_id CHECK >=1, parent FK ON DELETE RESTRICT,
+  operation_id, format version, created_at, envelope bytes/checksum.
+  UNIQUE(operation_id) для world; UNIQUE(operation_id, player_uid) для player.
+  Envelope содержит refs/историю секций, не serialized full world dump.
+  Обе таблицы и обе publication chains записываются одним CommitScope.
+- `publication_operations`: operation_id PK, world_uid, immutable kind и
+  preparation_fingerprint. `publication_requests`: operation_id PK/FK,
+  immutable publication_fingerprint. Canonical prepared PatchSet **не**
+  превращается здесь в отдельный durable cache: после restart для resume
+  caller обязан восстановить и передать тот же запрос/inputs.
+- `publication_operation_events`: append-only phase/fence events с
+  predecessor/event identity и single-successor constraint per operation.
+  Index(operation_id, event_seq DESC) разрешает текущую phase/fence без
+  replay operation history; такие же per-owner DESC indices — для holders,
+  leases и artifact storage events.
+  `publication_outcomes`: operation_id PK/FK, outcome bytes/checksum/kind.
+  Один ID — один terminal outcome. Success outcome вставляется в transaction
+  snapshot/heads/holders. Refusal — после доказанного rollback отдельной
+  bookkeeping transaction. Unknown COMMIT — сначала lookup outcome и
+  snapshot operation markers; повторного apply наугад нет.
+- `artifact_catalog`: artifact_id PK, kind/format/version/hash/bytes/row_count;
+  UNIQUE(kind, format_key, format_version, content_hash), CHECK размеров и
+  kind-specific row_count. Несогласованный descriptor с тем же identity
+  отклоняется, не создаёт второй artifact. Snapshot/held refs разрешаются
+  через этот каталог; физические пути не копируются в Patch.
+- `artifact_storage_events`: seal/GC events с single-successor ordering
+  per artifact. `artifact_holder_events`: append-only acquire/release с
+  typed holder identity и single-successor ordering per holder/artifact.
+  `artifact_lease_events` и `artifact_writer_claims`: fences, admission,
+  acquire/release claims; writers READY/closed/stale fence отклоняются.
+  SQL names/table mapping доменных staged rows в эти tables не помещаются.
+
+Исторические rows, catalog identity и publication/outcome events защищаются
+от UPDATE/DELETE schema triggers. GC добавляет storage/holder events;
+физически удаляет только неподдерживаемые unpublished blobs/domain staged
+rows через соответствующий backend под GC guard. Он не удаляет опубликованную
+историю или metadata удерживаемого artifact. Op/holder bookkeeping —
+append-only projection, не новая source/runtime revision accounting схема.
+
+Проверка родства snapshot/world/player, неизменности pack после gameplay,
+монотонности gameplay_started и допустимости переходов обязательна в store
+под BEGIN IMMEDIATE; соответствующие FK/UNIQUE/CHECK/BEFORE INSERT guards
+не дают обойти её прямой несовместимой вставкой. Parent/owner refs и indices
+проверяются schema tests на реальные negative cases. Ни PK, ни SQL BEGIN
+по отдельности не объявляются гарантией всей SQL+files atomicity.
+
+Blob storage root задаёт DI как Path(Database.path).parent / artifacts,
+один absolute root на database. Backend не принимает пути от Patch.
+Path components выводятся из validated content hash и private backend
+identity; произвольный UID/format key не используется как относительный
+путь. Resolved temp/final/GC paths обязаны оставаться внутри этого root.
+Writer пишет private temp artifact своего operation/fence, закрывает,
+flush/fsync и проверяет digest; окончательное размещение не перезаписывает
+существующий hash path. Seal admission под общим artifact/fence guard;
+lease/writer claims защищают temp/final content от GC. Только durable sealed
+ref может войти в publication. Files не входят в SQL rollback: при отказе
+остаются недостижимыми под lifecycle/retention, без published domain state.
+Неизвестный исход, живой/resumable lease и ready_inactive не удаляются.
+Canonical SQL_ROWS content включает доменные значения, но не назначаемый
+reserve physical artifact_id: его добавляет domain storage binding.
+Иначе content hash зависел бы от собственной catalog identity. Проверка
+после записи использует тот же domain projection/codec, без нового core
+table mapper; одинаковый content разных операций получает тот же ref.
+
+#### 3.5. Canonical identity и encoding manifests
+
+Existing surface manifest использует IDs до 282 на момент inventory.
+Новые общие IDs резервируются отдельно; module/class names не являются
+wire identity. В manifests добавляются только **records/enums**, aliases,
+ports, contexts, SQL rows и application classes не получают type ID.
+
+```text
+20001 SnapshotChainKind          20002 SnapshotApplyOutcomeKind
+20003 ArtifactKind               20004 OperationKind
+20005 OperationPhase             20006 ArtifactHolderKind
+20007 SectionDependencyKind      20008 RuntimeVersionKind
+20009 TargetExpectationKind      20010 TargetPresence
+20011 PackActivationDisposition  20012 CasDecision
+20013 OperationClaimKind          20014 SnapshotLogActivity
+20015 ArtifactLogActivity        20016 ReferenceIssueReason (existing type)
+20017 ArtifactStorageEventKind
+
+20101 WorldSnapshotRef           20102 PlayerSnapshotRef
+20103 WorldPublicationRef        20104 PlayerHeadExpectation
+20105 SectionStateRef            20106 SectionHistoryRef
+20107 ArtifactRef                20108 OperationLeaseRef
+20109 StagingReservation         20110 OperationHolder
+20111 ArtifactRetentionHolder    20112 SnapshotHolder
+20113 VerifiedArtifactRef        20114 PatchRef
+20115 PatchHeader                20116 PreparedSectionDependency
+20117 PublishedSectionDependency 20118 SectionHeader
+20119 PackTargetVersion          20120 SnapshotTargetVersion
+20121 TargetAbsent               20122 TargetVersionExpected
+20123 SnapshotCommitRefs         20124 SnapshotApplyResult
+20125 PackActivationResult       20126 GameplayStarted
+20127 OperationCancelled         20128 OperationRecord
+20129 GcReport                   20130 SectionAccepted
+20131 SectionRefused             20132 SectionApplyReceipt
+20133 WorldSnapshotMetadata      20134 PlayerSnapshotMetadata
+20135 SnapshotLogRecord          20136 ArtifactLogRecord
+20137 FieldPathError             20138 ReferenceIssueContext
+20139 RuntimeIssueContext (existing generic dataclass origin)
+```
+
+Core manifests включают shared dependency entries без смены их owner.
+Registry связывает domain section codec/manifest отдельно; domain-specific
+enum/record IDs резервируются его контрактом и проверяются на collisions
+до decode/IO. Произвольный runtime enum в diagnostics без зарегистрированного
+owner codec/manifest не сериализуется как обычная строка. Старые format
+manifests не переписываются при добавлении новых типов.
+
+PatchSetCodec использует canonical TLV **tuple projection**, не создаёт
+параллельный публичный Request DTO: version и ordered пары name/value
+общих полей из POJO declaration, затем ordered tuples section key / version /
+domain canonical bytes. Поле sections заменяется своим codec projection;
+остальные имена/значения извлекаются из модели, без второго списка полей.
+Domain bytes кодирует bound handler. В core нет type ID на универсальный
+сырой payload или dynamic concrete domain model. Golden bytes/hash tests
+фиксируют version 1; любое несовместимое изменение требует новой format
+version, не случайной смены module path или порядка импорта.
+
+#### 3.6. Composition root, schema registration и logging
+
+```text
+core/container/snapshots/wiring.py
+  SnapshotCoreWiring (ровно один набор stores/registries/services на Container)
+core/container/__init__.py (existing)
+  Container подключает SnapshotCoreWiring из подпакета
+core/container/snapshots/models.py
+  SNAPSHOT_CORE_DB_MODELS (явная последовательность всех новых row classes)
+core/app.py (existing)
+  дополняет _models этой последовательностью перед validate_schema
+core/loggingConfig.py (existing)
+  только target routes/allowlist existing facade, без новых logger handlers
+```
+
+Все concrete storages создаются здесь; application services не импортируют
+Container или db adapters. Domain binding добавляется явным register после
+согласования первого handler; пустой registry законен для empty-tick tests,
+но не разрешает пропустить неизвестную production section.
+Два emitter используют `app.snapshot` / `app.artifacts` и общий LogLevel;
+датамодели не импортируют core. Logging delivery failure после COMMIT
+не меняет durable result. Runtime readiness/DAG production wiring этим
+composition root ещё не объявляются: GEN-DAG-1 gates сохраняются.
+
+#### 3.7. Folder composition и counts
+
+Каждый новый пакет и каждый его подпакет получает один __init__.py.
+Максимум ниже уже включает этот файл; вновь создаваемых папок >5 нет.
+
+- dataModel/patch: root 0→2; registry/changes/sections/request/preconditions/
+  results — соответственно 2/2/3/2/2/2 файла.
+- dataModel/artifacts: root 0→3; lifecycle 0→4; lifecycle/operation 0→4.
+- dataModel/worldSnapshot: root 0→2; identity/sections/metadata/results —
+  соответственно 3/2/2/4 файла.
+- application/patch: root 0→1; contracts/registry/encoding — 2/2/3.
+- application/worldSnapshot: root 0→1; contracts/storage/service/encoding/
+  logging — 4/4/4/3/2.
+- application/artifacts: root 0→1; contracts/registry/staging/storage/
+  lifecycle/logging/encoding — 4/2/2/3/2/2/2.
+- application/publication: root 0→2; contracts/service — 2/5.
+- db/models/snapshotCore — 0→4; db/models/artifacts — 0→4.
+- db/repositories/sqlite/snapshotCore: root 0→2; operations/publications/
+  history — 2/3/2. db/repositories/sqlite/artifacts — 0→4.
+- core/container/snapshots — 0→3.
+- storage: root 0→1; artifacts 0→2.
+
+Изменяемые existing folders: dataModel root 6→6 (только новые подпапки),
+db/models 33→33, repositories 28→28, sqlite repositories 30→30,
+core 13→13, core/container 9→9, tests root 278→278; новые root files
+в эти переполненные папки не добавляются. application root 0→0,
+encoding 2→2, db/migrations 1→1, docs 69→69, .cursor/plans 171→171.
+Изменение счётчиков перед фактическим кодом перепроверяется; новое
+расхождение требует уточнить map, а не добавлять файлы «по месту».
+
+#### 3.8. Проверки и отдельные implementation подшаги
+
+Тесты находятся только в новых подпакетах backend/tests/snapshotCore/:
+root один __init__; contracts (test_models.py, test_registry.py,
+test_codec.py, test_typing.py), storage/publication (test_cas.py,
+test_atomicity.py), storage/artifacts (test_leases.py, test_gc.py,
+test_blob.py), lifecycle (test_apply.py, test_retry.py,
+test_capabilities.py), support (fixtures.py, fakeSection.py).
+Каждый каталог включает __init__: contracts 5, storage root 1,
+storage/publication 3, storage/artifacts 4, lifecycle 4, support 3 файла.
+Fake sections принадлежат тестам и не регистрируются в production Container.
+Имена test classes соответствуют файлам: CoreModelTests,
+SectionRegistryTests, CanonicalRequestCodecTests, TypingGateTests;
+PublicationCasTests, AtomicSnapshotCommitTests; ArtifactLeaseTests,
+ArtifactGcTests, BlobStorageTests; SnapshotApplyTests, OperationRetryTests,
+CommitCapabilityTests. Их owner — verification ядра, слой tests;
+порядок в этом списке совпадает с test modules выше.
+support/fakeSection.py содержит FakeTarget, FakeChange, FakePrepared,
+FakePatch, FakeSection, FakeSectionHandler, MemoryFakeDomainStore и
+SqliteFakeDomainStore. Это только fixtures core contract tests;
+per-class приёмку ещё не выбранного production handler они не закрывают.
+Static typing fixtures: backend/tests/typing/snapshotCore/{valid.py,
+invalid.py,pyrightconfig.valid.json,pyrightconfig.invalid.json}; четыре
+файла, без __init__. Negative diagnostic markers сверяет unittest
+contracts/test_typing.py; contracts тогда содержит **5** файлов с __init__.
+Existing positive/negative pyright setup используется через extends,
+без новых файлов в корне scripts или backend/tests.
+
+Все подшаги — отдельно ревьюимые; один заход не объединяет слои:
+
+1. **4A1 — core refs/value types:** dataModel values, identities, registries,
+   artifact refs, section refs и SnapshotApplyOutcomeKind leaf enum;
+   строгие model/enum/unknown value tests. Dependency leaves
+   создаются раньше зависимых типов, без temporary Any/stubs.
+2. **4A2 — patch/section/precondition DTO:** оставшиеся dataModel/patch;
+   binding позитив/негатив, frozen collections, отсутствие IO imports.
+3. **4A3 — snapshot/result/operation DTO:** metadata/results/events и
+   artifact lifecycle; world/player discriminator и result invariant tests.
+4. **4B1 — application ports/typed registries:** все contracts/storage ports,
+   explicit registration; runtime capability declarations без SQLite binding;
+   positive/negative pyright и duplicate/wrong model registration.
+5. **4B2 — shared encoding:** raw digest, delegating TileCodec, manifests,
+   PatchSet/Snapshot codecs; golden byte/hash/round-trip/old format cases;
+   existing encoding tests и DET-1 source gate.
+6. **4B3 — application emitters:** typed events через существующий facade,
+   correlation/no duplicate emit/no false committed; не standalone log files.
+   Создаются до services, которые на них зависят; target routes — в 4E2.
+7. **4C1 — DDL/models:** только db слой, 0001 и row models; temp database
+   schema validation, FK/partial UNIQUE/CHECK/append-only negative cases.
+8. **4C2 — SQLite publication/operation adapters:** db layer; CAS races на
+   двух connections, atomic world/player/outcome, cancellation/lost COMMIT,
+   scope task/database/lifetime/read-only ownership. Common tables only.
+9. **4C3 — SQLite artifact adapters:** catalog/lease/holders, common guards;
+   two-operation dedupe, stale fence, no deletion while any hold survives.
+10. **4C4 — physical artifact storage:** storage/artifacts/blobBackend.py;
+   no-clobber hash writes, durable seal verification, missing/corrupt bytes,
+   отказ/отмена до и после final file placement, существующий hash mismatch.
+11. **4D1 — shared artifact application:** registry/staging/GC и
+   OperationLedger (registry из 4B1 переиспользуется); crash before/after seal,
+   cancel vs writer/GC, resume
+   без prepared small data, ready_inactive retention. Не вызывает domain compute.
+12. **4D2 — Snapshot apply application:** service/validator/metadata builder
+    и общий PublicationGuard; runtime empty/no-op tick, explicit order,
+    handler refusal rollback, terminal retry, mismatched fingerprint,
+    отсутствие planning/materialization calls во всей вложенной цепочке.
+13. **4D3 — pregame core publication:** PreparedPackActivation/GameplayStart
+    через существующие ports/PublicationGuard; race activation vs start,
+    immutable manifest/ready_inactive и отсутствие fake snapshot.
+14. **4E2 — core composition:** Container mixin, model registration и
+    logging routes; constructors без IO, один instance механизмов, schema
+    validate list не теряет existing models. Backend не запускается агентом.
+15. **Первый concrete domain handler:** отдельный contract/map gate §8.2,
+    затем его собственные dataModel → domain application/storage bindings;
+    per-class CRUD swap через Snapshot и сохранность старого SQL/pack state.
+
+У подшагов 4A — ТЗ patch/snapshot «Контракты ядра», 4B — те же разделы
+и encoding norm; 4C — «Operation storage, CAS и capability ports» + storage
+TZ; 4D — «Snapshot.apply» / «ArtifactRef, staging»; 4E — tz_logging target
+catalog + snapshot logging. Файлы и контракт каждого заданы картой выше.
+Done каждого — соответствующие meaningful проверки зелёные, отсутствует
+выход за owner/layer, результат предъявлен мастеру. Это не автоматический
+DONE всего шага 4 или production readiness.
+
+Команды (из backend, существующий .venv Python):
+`python -m unittest discover -s tests/snapshotCore/contracts -p 'test_*.py'`,
+аналогично storage/publication, storage/artifacts и lifecycle, а также
+existing encoding/DET-1 tests. Test suites создаются по мере implementation,
+не все в первом types подшаге.
+Typing checker запускает existing installed pyright с указанными valid/
+invalid configs и сверяет ожидаемые diagnostic markers; обычный ненулевой
+exit invalid suite не является failure сам по себе. Конкретные команды
+фиксируются в evidence каждого подшага после создания соответствующих files.
+
+В этом шаге выполнена документальная проверка import direction, map/counts,
+references и SQL ownership; runtime tests ещё не существуют и не запущены.
+Проверка map: 78 source modules (до __init__), 46 новых production пакетов,
+не более 5 непосредственных файлов в каждом; 56 canonical IDs уникальны,
+7 локальных Markdown targets существуют, code fences сбалансированы,
+git diff --check — PASS. Это structural document evidence, не test pass ядра.
+Приёмка карты не снимает source-versioning binding gate, GEN-DAG-1,
+миграцию legacy writers, per-class проверки и B-2.
+
+### 8.4. Реализация 4A1 — values, refs, enum и metadata (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+Добавлены только объявленные в §8.3 dataModel leaves: values,
+section/format registry metadata, artifact refs, world/player/publication/
+section refs и SnapshotApplyOutcomeKind. Empty package __init__ не выполняют
+регистрацию. Код application/storage/SQL/Container и DAG не менялся.
+
+Проверка: из backend `.venv/Scripts/python.exe -m unittest discover
+-s tests/snapshotCore/contracts -p 'test_*.py' -v` — **14 PASS**;
+включает positive Pyright и ровно **8** ожидаемых negative diagnostics.
+Проверены строгие числа/hash/UID, enum wire boundary, владельцы refs,
+frozen collections, revalidation построенных instances, запрет лишних
+storage handles и dataModel imports в infrastructure/application.
+
+Membership/ancestry/CAS не симулируются моделями: это следующие слои.
+Поддерживаемые versions metadata — непустой frozenset; registry entries
+и optional absence передаются явно, без выдуманного latest/base/default.
+Concrete Patch классы ещё не созданы, §3.4 gate не объявлен пройденным.
+Следующий подшаг — 4A2 после ревью этого изменения, по §8.3.
 
 ## 9. Норматив и совместимость
 

@@ -367,3 +367,133 @@ class AuthoredSourceJoinTests(TestCase):
             self.join(inputs(Strategy.PLATE), **values)
         with self.assertRaises(PlanBuildFailure):
             self.join(shared.model_copy(update={"context": shared.context.model_copy(update={"autoresolve": True})}), **values)
+
+
+class PreparedWaterAdmissionTests(TestCase):
+    def case(self, kind=Strategy.AUTHORED_REGION, *, lake=False):
+        from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+        from app.dataModel.placement.intent import PlacementIntent
+        from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+        helper = AuthoredSourceJoinTests() if kind is Strategy.AUTHORED_REGION else ProceduralSourceJoinTests()
+        shared, values = helper.case(lake=lake) if kind is Strategy.AUTHORED_REGION else helper.case(kind)
+        value = helper.join(shared, **values)
+        admission = values["admission"]
+        header = admission.header
+        intent = PlacementIntent(identity=header.identity, mode=header.mode, shape=None, dependencies=header.dependencies,
+            permitted_overlaps=header.permitted_overlaps, separations=header.separations)
+        owner = DesignedWaterPlacementPreparer()
+        draft = DesignedWaterStrategyFactory.builtins().get(value.strategy).design(value)
+        prepared = owner.prepare(value, draft, selection_policy=WaterFieldSelectionPolicy())
+        return owner, value, prepared, intent, admission
+
+    def bind(self, case, **updates):
+        owner, value, prepared, intent, admission = case
+        return owner.bind_admission(**(dict(input=value, preparation=prepared, intent=intent, admission=admission) | updates))
+
+    def session(self, cases):
+        from app.application.worldData.placement.lifecycle.session import PlacementSession
+        from app.dataModel.placement.batch import PlacementBatchV2
+        from app.dataModel.placement.common import PlacementPhase
+        values = {case[4].header.identity.region_uid: case for case in cases}
+        session = PlacementSession.start(PlacementBatchV2(world_uid="world", snapshot_uid="pre-relief",
+            snapshot_revision=b"r"*32, phase=PlacementPhase.PRE_RELIEF, topology=cases[0][1].topology,
+            objects=tuple(case[4] for case in cases), accepted=()))
+        def prepare_ready(headers):
+            for header in headers:
+                session.submit(self.bind(values[header.identity.region_uid]))
+        return session.run(prepare_ready)
+
+    def test_all_sources_reach_common_p2_with_exact_candidates_area_and_decision(self):
+        from app.dataModel.placement.result import ResolvedPlacementV2
+        cases = (self.case(), self.case(lake=True), *(self.case(kind) for kind in
+            (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE)))
+        for case in cases:
+            with self.subTest(strategy=case[1].strategy, source=case[1].source.kind):
+                before = case[2].model_dump()
+                bound = self.bind(case)
+                self.assertEqual(bound.intent, case[3])
+                self.assertEqual(bound.candidates, case[2].candidates)
+                self.assertEqual(bound.original_area, case[2].original_area)
+                self.assertEqual(bound.decision, case[4].decision)
+                result = self.session((case,)).results[0]
+                self.assertIsInstance(result, ResolvedPlacementV2)
+                self.assertEqual(result.prepared, bound)
+                self.assertEqual(case[2].model_dump(), before)
+
+    def test_shared_p2_orders_overlapping_authored_sources_by_resolved_priority(self):
+        from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+        from app.dataModel.hydrology.seas import HydrologySeasPolicy
+        from app.dataModel.placement.result import ResolvedPlacementV2, UnresolvedPlacementV2
+        from tests.geo1.placement_policy.fixtures import bind, execute
+        cases = []
+        for lake, priority in ((False, 1), (True, 5)):
+            owner, value, prepared, intent, admission = self.case(lake=lake)
+            identity = intent.identity.model_copy(update={"region_uid": value.metadata.source_uid})
+            category = HydrologyLakesPolicy(placement_specificity=priority) if lake else HydrologySeasPolicy(placement_specificity=priority)
+            admission = admission.model_copy(update={"header": admission.header.model_copy(update={"identity": identity}),
+                "decision": execute(bind(source=value.source, category=category, strategy=value.strategy))})
+            cases.append((owner, value, prepared, intent.model_copy(update={"identity": identity}), admission))
+        first = self.session(tuple(cases))
+        self.assertEqual(first, self.session(tuple(reversed(cases))))
+        accepted = tuple(result for result in first.results if isinstance(result, ResolvedPlacementV2))
+        rejected = tuple(result for result in first.results if isinstance(result, UnresolvedPlacementV2))
+        self.assertEqual(len(accepted), 1)
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(accepted[0].prepared.effective_specificity, 5)
+        self.assertEqual(accepted[0].identity.source_uid, cases[1][1].metadata.source_uid)
+
+    def test_stale_refs_metadata_and_grid_are_rejected(self):
+        case = self.case()
+        preparation = case[2]
+        from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+        variants = (preparation.model_copy(update={"pre_hydrology_ref": preparation.pre_hydrology_ref.model_copy(
+                update={"output_fingerprint": b"x"*32})}),
+            preparation.model_copy(update={"metadata": preparation.metadata.model_copy(update={"source_uid": "other"})}),
+            preparation.model_copy(update={"grid": SurfaceGridSettings(fine_span=3, light_side=3)}))
+        for value in variants:
+            with self.subTest(value=value), self.assertRaises(PlanBuildFailure):
+                self.bind(case, preparation=value)
+
+    def test_intent_world_source_and_relations_must_match_original_header(self):
+        from app.dataModel.placement.intent import PlacementDependency
+        from app.dataModel.placement.common import DependencyRelation
+        case = self.case()
+        intent = case[3]
+        variants = (intent.model_copy(update={"identity": intent.identity.model_copy(update={"world_uid": "other"})}),
+            intent.model_copy(update={"identity": intent.identity.model_copy(update={"source_uid": "other"})}),
+            intent.model_copy(update={"dependencies": (PlacementDependency(target_uid="external", relation=DependencyRelation.RESOLVED),)}))
+        for value in variants:
+            with self.subTest(value=value), self.assertRaises(PlanBuildFailure):
+                self.bind(case, intent=value)
+
+    def test_disabled_and_wrong_strategy_admission_do_not_bind_geometry(self):
+        from tests.geo1.placement_policy.fixtures import bind, execute
+        case = self.case()
+        for decision in (execute(bind(source=case[1].source, enabled=False, strategy=case[1].strategy)),
+                execute(bind(source=case[1].source, strategy=Strategy.PLATE))):
+            with self.subTest(decision=decision), self.assertRaises(PlanBuildFailure):
+                self.bind(case, admission=case[4].model_copy(update={"decision": decision}))
+
+    def test_procedural_recipe_is_checked_without_repeating_design(self):
+        from unittest.mock import patch
+        case = self.case(Strategy.PLATE)
+        value = case[1]
+        changed = type(value).model_validate(value.model_copy(update={"seed_root": "other",
+            "field_policy": value.field_policy.model_copy(update={"seed_root": "other"})}))
+        with patch.object(DesignedWaterStrategyFactory, "get", side_effect=AssertionError("design repeated")):
+            self.bind(case)
+            with self.assertRaises(PlanBuildFailure):
+                self.bind(case, input=changed)
+
+    def test_fine_space_and_changed_authored_cells_are_not_silently_projected(self):
+        from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+        case = self.case()
+        fine = case[2].model_copy(update={"coordinate_space": CoordinateSpace.WORLD_FINE_GRID})
+        with self.assertRaises(PlanBuildFailure):
+            self.bind(case, preparation=fine)
+        candidate = case[2].candidates[0]
+        one = frozenset((next(iter(candidate.footprint.cells)),))
+        changed = case[2].model_copy(update={"original_area": 1.0, "candidates": (candidate.model_copy(
+            update={"footprint": candidate.footprint.model_copy(update={"cells": one})}),)})
+        with self.assertRaises(PlanBuildFailure):
+            self.bind(case, preparation=changed)

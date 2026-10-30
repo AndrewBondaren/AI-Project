@@ -11480,6 +11480,136 @@ Evidence: GEO-1 634 OK (+6), planning 292 OK; positive pyright 0;
 negative 247 diagnostics (+1), all 244 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. G8-B / production G10-A remain OPEN.
 
+### G10-A prepared geometry / admission binding — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: bind existing WaterDesignPreparation to the existing common P2 V2 contract,
+without a water record bridge or new placement transport.
+TZ: docs/tz_map_light_bake.md Placement P1/P2; plan §6.16 J06/J07 and G8-B.
+Owner/layer/path: application terrain water-placement preparation, existing
+backend/app/application/worldData/generators/terrain/designedWater/preparation/placementPreparation.py.
+DesignedWaterPlacementPreparer.bind_admission(input:WaterStrategyInput,
+preparation:WaterDesignPreparation,*,intent:PlacementIntent,
+admission:PlacementAdmissionInput)->PreparedPlacementV2. Caller retains original
+intent; require exact header identity/relations, READY water admission and strategy,
+same source/world/metadata/pre-hydrology ref/grid, canonical coarse candidates and
+WORLD_SURFACE_GRID space. Fine-only geometry is rejected, never silently scaled.
+Validate authored cells against the supplied geometry result or procedural
+floor recipe/depth/z_min against ready input, without recalculation. Return
+original intent, candidates, original_area and decision through existing V2.
+No policy, shape rasterization, noise/selection, priority fallback, P2 execution,
+height writes, new wire DTO or parallel ResolvedWaterPlacement. Floor/metadata
+remain with WaterDesignPreparation for the later atomic water-record migration.
+Tests: existing geo1/contracts/strategies/test_dispatch_budget.py and planning
+positive/negative typing fixtures. Real authored/procedural joins→factory→preparer
+→binding→PlacementSession competition, direct decision/area/candidate preservation,
+stale metadata/refs/recipes/relations, non-ready decisions and fine-space refusal.
+Preparation folder 6→6 (existing WARN; future source-adapter composition), no new
+files. Run GEO-1/planning/type suites and diff check. Done: reusable P2 binding
+verified; G8-B batch orchestration/source owners/record migration remain open.
+Evidence: GEO-1 641 OK (+7), planning 292 OK; positive pyright 0;
+negative 248 diagnostics (+1), all 245 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. G8-B / production G10-A remain OPEN.
+
+### G10-A common placement session runner — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: reuse one domain-neutral ready-portion/P2 drain loop for G8-B and the
+existing dependent-boundary caller, without another water batch transport.
+TZ: docs/tz_map_light_bake.md Placement P2; this plan §6.16 J07 and SUPPORT resume
+contract (prepare every new ready portion before the next heap step).
+Owner/layer/path: shared application placement lifecycle, existing
+backend/app/application/worldData/placement/lifecycle/session.py::PlacementSession.
+Add run(prepare_ready:Callable[[tuple[PlacementHeader,...]],None],*,
+check_cancelled:Callable[[],None]|None=None)->PlacementBatchResultV2. Callback
+owns domain preparation, submitting/failing every offered header via existing
+session methods. Loop re-reads ready portions before step, checks optional
+caller cancellation each iteration, delegates terminal/cycle handling to finish.
+Unfinished offered portions and entry with outstanding manual offers are caller
+contract errors; domain exceptions propagate. No policy/geometry/persist or
+water imports, new queue, result DTO, or changes to ordering/causal rules.
+Owner/layer/path of immediate consumer: application hydrology boundary,
+existing generators/hydrology/boundaries/boundaryPlanner.py under worldData.
+CoastlineBoundaryPlanner.prepare retains its existing preparation/error-to-
+diagnostic callback and metadata map; run owns only the shared loop. Existing
+pure boundary API has no cancellation argument; its synchronous call omits the
+optional check. G8-B caller will pass PlanBuildControl.raise_if_shutdown.
+Tests: existing geo1/contracts/test_placement_lifecycle.py plus water admission
+integration in contracts/strategies/test_dispatch_budget.py; whole-portion order,
+newly unblocked supports, no geometry for terminal causes/cycles, callback and
+cancellation errors, exact result parity and boundary regressions. Update
+positive/negative planning typing fixtures for callback contract. Folders
+placement/lifecycle 3→3, hydrology/boundaries 4→4; no new files.
+Run GEO-1/planning/type suites and diff check. Done: shared runner + boundary
+consumer verified; G8-B source universe/record migration/activation remain open.
+Evidence: GEO-1 649 OK (+8), planning 292 OK; positive pyright 0;
+negative 249 diagnostics (+1), all 246 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. G8-B / production G10-A remain OPEN.
+
+### G10-A GEO captured-view assembler — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: expose the agreed twelve-phase orchestration over one frozen GEO view,
+using exact typed handles and the existing generic PlanningService/cache.
+TZ: docs/tz_terrain_generation.md surface planning; plan §6.29-M / §6.31-E.
+Owner/layer/exact files: application worldData planning composition:
+backend/app/application/worldData/planning/composition/planProviders.py adds
+frozen GeoWorldPlanProviders (all twelve required RegisteredPlanContract fields,
+with existing exact GEO I/T pairs). This is a runtime handle group, not wire data
+or a second provider registry; no production registration is switched.
+backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py:
+SurfacePlanningAssembler becomes generic over WorldPlanProviders or
+GeoWorldPlanProviders with default PC specialization for existing annotations.
+prepare is restricted to PC self; prepare_geo is restricted to GEO self and takes
+GeoSurfacePlanningView | NoExtentSurfacePlanningView, returning
+GeoSurfacePlanBundle | None. _build shares unchanged request/cache construction
+for either ready view, without casts or object/Any widening.
+GEO order: climate_base→terrain_base→terrain_regions→water_placement→relief→
+hydrology_routes→river_relief→hydrology→climate_local→coastline_boundaries→
+surface_support→coating. Each call selects only its exact declared dependencies;
+final includes direct water ref, water includes regions, support has six refs,
+coating has support/final. Construct existing strict bundle at the end. Validate
+view before any build; NoExtent returns None, cancellation/failure propagates.
+No World read, source resolution, policy, domain algorithms, engine DAG edits,
+production stubs or new activation toggle. capture_geo and registering all real
+GEO owners remain atomic activation; isolated assembler tests use explicit
+captured-payload providers to test orchestration, not claim production acceptance.
+Tests: existing geo1/integration/test_revisions.py plus positive/negative planning
+typing fixtures. Real registry/cache, exact twelve-stage order/refs, warm cache,
+revision/key invalidation, NoExtent, source immutability, cancellation/failure and
+codec closure; existing PC wiring regression suite. Composition folder 5→5,
+integration 4→4; no new files. Run GEO-1/planning/type suites and diff check.
+Done: typed captured-view orchestration ready; production G10-A remains open.
+Evidence: GEO-1 656 OK (+7), planning 292 OK; positive pyright 0;
+negative 251 diagnostics (+2), all 248 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
+
+### G10-A GEO captured-bundle reporting — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: expose the existing reporting boundary for every GEO phase, including cache
+hits and NoExtent capture diagnostics, without a new severity/fallback policy.
+TZ: docs/tz_terrain_generation.md surface planning diagnostics; plan §6.12,
+§6.29-M and the existing prepare_captured_bundle/report_surface_diagnostics boundary.
+Owner/layer/exact path: application planning composition, existing
+backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py.
+Add prepare_captured_geo_bundle(view:GeoSurfacePlanningView|NoExtentSurfacePlanningView,
+*,planning:SurfacePlanningAssembler[GeoWorldPlanProviders],wait:PlanWaitControl,
+resolve_ctx:ResolveContext)->GeoSurfacePlanBundle|None. Delegate prepare_geo,
+then collect capture diagnostics and each of the twelve envelope diagnostics in
+phase order; call existing report_surface_diagnostics once. Retain producer
+ERROR/FALLBACK/NOTICE semantics, de-duplication, collect-only/runtime logging and
+validate-only UnresolvedModelError behavior. No domain rule, new sink, stored
+callback, World read or provider execution outside the assembler. Failed/cancelled
+preparation propagates without reporting an incomplete bundle as successful.
+Existing PC reporting helper/API remains exact PC specialization.
+Tests: existing geo1/integration/test_revisions.py extends captured-payload fixture
+with explicit per-phase diagnostics; verify all twelve phases/capture, duplicate
+issues, warm-cache reporting, runtime/validate-only modes, NoExtent and failure
+boundaries. Positive/negative planning typing fixtures enforce family coupling.
+Composition 5→5, integration 4→4; no new files. Run GEO-1/planning/type suites and
+diff check. Done: reporting facade ready; capture_geo, all real GEO provider
+registration, G8-B and production activation remain open.
+Evidence: GEO-1 662 OK (+6), planning 292 OK; positive pyright 0;
+negative 252 diagnostics (+1), all 249 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.
