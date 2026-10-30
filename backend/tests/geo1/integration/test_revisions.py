@@ -375,15 +375,20 @@ class GeoRoutesProviderTests(TestCase):
 
     def test_captured_category_overrides_and_inheritance_drive_policy(self):
         from tests.geo1.integration.support.pipeline import rebuild
-        inputs = rebuild(self.domain.inputs, generation=rebuild(self.domain.inputs.generation, autoresolve=True),
-            sea_generation=rebuild(self.domain.inputs.sea_generation, autoresolve=False),
-            lake_generation=rebuild(self.domain.inputs.lake_generation, autoresolve=False))
-        result = self.build(inputs)
-        decisions = dict(result.payload.classification_decisions)
-        self.assertIs(decisions[WaterGenerationCategory.SEA].require_behavior(), HydrologyExecutionMode.DECLARED_ONLY)
-        self.assertIs(decisions[WaterGenerationCategory.LAKE].require_behavior(), HydrologyExecutionMode.DECLARED_ONLY)
-        self.assertIs(decisions[WaterGenerationCategory.OCEAN].require_behavior(), HydrologyExecutionMode.AUTORESOLVE)
-        self.assertTrue(all(d.provenance for d in decisions.values()))
+        for disabled, field in ((WaterGenerationCategory.LAKE, "lake_generation"),
+                                (WaterGenerationCategory.OCEAN, "ocean_generation"),
+                                (WaterGenerationCategory.SEA, "sea_generation")):
+            with self.subTest(disabled=disabled):
+                inputs = rebuild(self.domain.inputs,
+                    generation=rebuild(self.domain.inputs.generation, autoresolve=True),
+                    **{field: rebuild(getattr(self.domain.inputs, field), autoresolve=False)})
+                result = self.build(inputs)
+                decisions = dict(result.payload.classification_decisions)
+                self.assertEqual(set(decisions), set(WaterGenerationCategory))
+                for category, decision in decisions.items():
+                    self.assertIs(decision.require_behavior(), HydrologyExecutionMode.DECLARED_ONLY
+                        if category is disabled else HydrologyExecutionMode.AUTORESOLVE)
+                    self.assertTrue(decision.provenance)
 
     def test_category_edit_changes_key_without_hidden_policy_cache(self):
         from tests.geo1.integration.support.pipeline import rebuild

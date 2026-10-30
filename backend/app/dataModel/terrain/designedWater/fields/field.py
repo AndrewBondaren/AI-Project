@@ -70,15 +70,6 @@ type WaterFieldRecipe = Annotated[NoiseRecipe | PlateRecipe | PlateNoiseRecipe, 
 type ContinentalFieldValue = Annotated[StrictFloat, Field(ge=-1, le=1, allow_inf_nan=False)]
 
 
-class WaterFieldRecipeContext(_FieldRecipe, frozen=True):
-    """Captured recipe inputs; the discriminated recipe union selects its fields."""
-
-    strategy: Strategy
-    noise_policy: ContinentalNoisePolicy
-    plate_policy: PlateGenerationPolicy
-    composition_policy: FieldCompositionPolicy
-
-
 class ContinentalField(BaseModel, frozen=True):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 

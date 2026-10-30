@@ -13,6 +13,7 @@ from app.dataModel.engine.dag.diagnostics import (
 from app.dataModel.engine.dag.identity import (
     ContractId, ContractVersion, ExecutionIdentity, NodeId,
 )
+from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence, OutputRecord
 from app.dataModel.engine.dag.snapshotMetadata import SnapshotMetadata
@@ -132,7 +133,7 @@ class MetadataTests(unittest.TestCase):
 
     def test_cancel_event_requires_explanation_and_cannot_hold_payload(self):
         fields = dict(
-            identity=identity(), pass_number=0, phase="pre_llm", level=0,
+            identity=identity(), pass_number=0, phase=ExecutionPhase.PRE_LLM, level=0,
             timestamp=1.0, code=ExecutionEventCode.CANCEL_OBSERVED,
             severity=ExecutionSeverity.WARNING, status=NodeStatus.CANCELLED,
             message="cancelled", requirements=(("producer", "test.output", "1", True),),
@@ -150,7 +151,7 @@ class MetadataTests(unittest.TestCase):
 
     def test_cancellation_codes_are_strict_and_message_is_only_explanation(self):
         event = ExecutionDiagnostic(
-            identity=identity(), pass_number=0, phase="pre_llm", level=0,
+            identity=identity(), pass_number=0, phase=ExecutionPhase.PRE_LLM, level=0,
             timestamp=1.0, code=ExecutionEventCode.CANCEL_OBSERVED,
             severity=ExecutionSeverity.WARNING, status=NodeStatus.CANCELLED,
             message="cancelled", cancel_source=CancellationSource.USER,
@@ -171,13 +172,31 @@ class MetadataTests(unittest.TestCase):
 
     def test_non_cancel_event_does_not_require_cancellation_metadata(self):
         event = ExecutionDiagnostic(
-            identity=identity(), pass_number=0, phase="pre_llm", level=0,
+            identity=identity(), pass_number=0, phase=ExecutionPhase.PRE_LLM, level=0,
             timestamp=1.0, code=ExecutionEventCode.NODE_STARTED,
             severity=ExecutionSeverity.INFO, status=NodeStatus.RUNNING, message="started",
         )
         self.assertIsNone(event.cancel_source)
         self.assertIsNone(event.cancel_reason)
         self.assertIsNone(event.cancel_message)
+
+    def test_phase_is_strict_enum_and_json_preserves_wire_values(self):
+        for phase in ExecutionPhase:
+            event = ExecutionDiagnostic(
+                identity=identity(), pass_number=0, phase=phase, level=0,
+                timestamp=1.0, code=ExecutionEventCode.NODE_STARTED,
+                severity=ExecutionSeverity.INFO, status=NodeStatus.RUNNING, message="started",
+            )
+            self.assertIs(event.phase, phase)
+            wire = json.loads(event.model_dump_json())
+            self.assertEqual(wire["phase"], phase.value)
+            restored = ExecutionDiagnostic.model_validate_json(json.dumps(wire))
+            self.assertIs(restored.phase, phase)
+            with self.assertRaises(ValidationError):
+                ExecutionDiagnostic(**{**event.model_dump(), "phase": phase.value})
+            for bad in ("arbitrary", None, 1):
+                with self.subTest(bad=bad), self.assertRaises(ValidationError):
+                    ExecutionDiagnostic.model_validate_json(json.dumps({**wire, "phase": bad}))
 
     def test_single_status_owner_and_data_model_has_no_application_imports(self):
         backend = Path(__file__).resolve().parents[3]

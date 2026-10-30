@@ -8,7 +8,7 @@
 
 ### Готовность и граница поставки
 
-Архитектура согласована. Карта компонентов, точные пути, API, атомарные шаги и проверки приведены ниже; ТЗ синхронизировано с решениями. Разрешена подготовка документации; реализация кода начинается только по отдельному запросу. A0 завершён документально; A1.1 реализован и проверен; A1.2–A3 и B не выполнены. Конкретные контракты **всех** рабочих нод и их миграция принадлежат GEN-DAG-1; инфраструктура проверяется на тестовых нодах. Полная приёмка B зависит от интеграции GEN-DAG-1, но A1–A3 не ждут её завершения.
+Архитектура согласована. Карта компонентов, точные пути, API, атомарные шаги и проверки приведены ниже; ТЗ синхронизировано с решениями. Разрешена подготовка документации; реализация кода начинается только по отдельному запросу. A0 завершён документально; A1.1–A1.2 реализованы и проверены; A1.3–A3 и B не выполнены. Конкретные контракты **всех** рабочих нод и их миграция принадлежат GEN-DAG-1; инфраструктура проверяется на тестовых нодах. Полная приёмка B зависит от интеграции GEN-DAG-1, но A1–A3 не ждут её завершения.
 
 Предоставить общий механизм обязательных типизированных Input/Output для **каждой** ноды и обмена опубликованными результатами между нодами без превращения DAG в доменный resolver, новую POJO-инфраструктуру или владельца CRUD. Изменение состава/порядка DAG не должно требовать изменения реализации доменных операций при сохранении их публичных контрактов.
 
@@ -79,7 +79,7 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 
 ### Карта классов, владельцев и файлов
 
-Обозначения путей (точные корни): **E**=`backend/app/application/engine/`, **D**=`backend/app/dataModel/engine/dag/`, **C**=`backend/app/application/cancellation/`, **T**=`backend/tests/dag_typing/`. `E/x.py` означает ровно `backend/app/application/engine/x.py`. Все классы, перечисленные в одной строке, находятся в указанном файле; `+` в файлах означает два отдельно названных файла, не диапазон.
+Обозначения путей (точные корни): **E**=`backend/app/application/engine/`, **R**=`backend/app/application/engine/runtime/`, **D**=`backend/app/dataModel/engine/dag/`, **C**=`backend/app/application/cancellation/`, **T**=`backend/tests/dag_typing/`. `E/x.py` означает ровно `backend/app/application/engine/x.py`. Все классы, перечисленные в одной строке, находятся в указанном файле; `+` в файлах означает два отдельно названных файла, не диапазон.
 
 | ID | Классы / функции | Ответственность, владелец и слой | Точный файл | Producers → consumers / зависимости |
 |---|---|---|---|---|
@@ -88,59 +88,78 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 | M03 | ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity, CancellationSource, CancellationReason | typed события lifecycle; engine/dataModel | D/diagnostics.py (новый) | runner/coordinator → log/trace; M01, без доменных алгоритмов |
 | M04 | NodeStatus | единый enum состояния; engine/dataModel | E/nodes/nodeStatus.py → D/nodeStatus.py | все engine imports обновить, старый файл удалить; без re-export/дубля |
 | M05 | SnapshotMetadata | версии формата/контрактов, execution/pass counters; engine/dataModel | D/snapshotMetadata.py (новый) | snapshot service → restore; M01 |
-| M06 | OutputRef[O], RequiredOutput[O], OptionalOutput[O] | типизированная связь producer/contract; engine/application | E/nodes/contracts/outputRef.py (новый) | декларации ноды → registry/read view; M01, type[O] |
-| M07 | NodeContract[I,O], OutputLifecycle[O] Protocol | binding POJO и восстановление ссылок; engine/application | E/nodes/contracts/nodeContract.py (новый) | интеграция GEN → registry/executors; M06, Pydantic; без импорта конкретных нод |
-| M08 | ExecutionBindings, ResponseBinding, TransitionBinding, SnapshotExtension Protocol; ResolveResult[O] | typed callbacks request/effects/response, без бизнес-правил; engine/application | E/nodes/contracts/executionBindings.py (новый) | GEN factories → engine/snapshot; существующий TaskType, BaseModel, M06 |
-| M09 | NodeRegistration[I,O], NodeRegistry, decorators | хранение binding и поиск; engine/application | E/nodes/nodeRegistration.py + E/nodes/nodeRegistry.py | GEN/test registration → compiler/runner; M06–08, NodeKind |
-| M10 | BaseNode[I,O], PythonNode[I,O], LLMNode[I,O], CompiledNode | общий typed-call интерфейс; engine/application | E/nodes/pojo/baseNode.py + E/nodes/pojo/pythonNode.py + E/nodes/pojo/llmNode.py + E/nodes/pojo/compiledNode.py | factories → runtime; M07, существующие Rule/NodeCost; без конкретных schemas |
-| M11 | GraphCompiler, ExecutionPlan, LLMGroup | выбор/порядок и проверка рёбер контрактов; engine/application | E/graphs/graphCompiler.py + E/dag/executionPlan.py | registry + rule engine → DAGExecutor; не читает мир |
-| M12 | ContractValidator, NodeValidator, LLMValidator, NodeValidationContext[O] | общий boundary validation и вызов доменного валидатора; engine/application | E/validation/contractValidator.py + E/validation/nodeValidator.py + E/validation/llmValidator.py + E/validation/nodeValidationContext.py | runner/aggregate → существующий ValidationResult; конкретные validators — GEN |
-| M13 | DAGContext | single-writer каталог и lifecycle attempts; engine/application | E/dag/context/dagContext.py (новый) | coordinator → M14/restore; M01–07, M15; не доменный resolver |
-| M14 | DAGReadView | неизменяемое представление и контроль требований; engine/application | E/dag/context/dagReadView.py (новый) | catalog → prepare_input; M06, M02; без write API |
-| M15 | ResultInvalidation | вычисление invalidation по read evidence; engine/application | E/dag/context/resultInvalidation.py (новый) | begin_attempt → catalog; M02, без повторного scheduler/графа deps |
-| M16 | NodeOutcome[O], GateSignal, LevelDecision | локальный результат исполнения и control metadata; engine/application | E/execution/nodeOutcome.py (новый) | runner/aggregate → coordinator; M01–04, TaskType, PythonNodeError |
-| M17 | PythonNodeExecutor, NodeRunner | typed invocation + локальный исход; engine/application | E/execution/pythonNodeExecutor.py + E/execution/nodeRunner.py | M10/M12 → M16; не пишет shared runtime |
-| M18 | DAGExecutor, ExecutionState | scheduling, единственный writer runtime; engine/application | E/dag/dagExecutor.py + E/dag/executionState.py | plan/outcomes → catalog/level decision; M13/M16; business gate остаётся в ноде |
-| M19 | ExecutionTrace, ExecutionLevelSnapshot | только immutable IDs/status/provenance; engine/application | E/dag/executionTrace.py + E/dag/executionLevelSnapshot.py | coordinator → diagnostics; не хранит Input/Output payload |
-| M20 | ExecutionSnapshotService | capture/restore/retention; engine/application | E/dag/lifecycle/executionSnapshotService.py (новый) | state ↔ SessionSnapshot; M05/M07/M08; domain refs через lifecycle callback |
-| M21 | SessionSnapshot, SnapshotStore | типизированный снимок и прежнее memory-хранилище; cancellation/application | C/sessionSnapshot.py + C/snapshotStore.py | M20 ↔ cancellation; immutable Output refs, без SQL |
+| M06 | OutputRef[O], RequiredOutput[O], OptionalOutput[O] | типизированная связь producer/contract; engine/application | E/contracts/outputRef.py (новый) | декларации ноды → registry/read view; M01, type[O] |
+| M07 | NodeContract[I,O], OutputLifecycle[O] Protocol | binding POJO и восстановление ссылок; engine/application | E/contracts/nodeContract.py (новый) | интеграция GEN → registry/executors; M06, Pydantic; без импорта конкретных нод |
+| M08 | ExecutionBindings, ResponseBinding, TransitionBinding, SnapshotExtension Protocol; ResolveResult[O] | typed callbacks request/effects/response, без бизнес-правил; engine/application | E/contracts/executionBindings.py (новый) | GEN factories → engine/snapshot; существующий TaskType, BaseModel, M06 |
+| M09 | NodeRegistration[I,O], NodeRegistry, decorators | хранение binding и поиск; engine/application | E/registration/nodeRegistration.py + E/registration/nodeRegistry.py (новые) | GEN/test registration → compiler/runner; M06–08, NodeKind |
+| M10 | BaseNode[I,O], PythonNode[I,O], LLMNode[I,O], CompiledNode | общий typed-call интерфейс; engine/application | E/nodeTypes/baseNode.py + E/nodeTypes/pythonNode.py + E/nodeTypes/llmNode.py + E/nodeTypes/compiledNode.py (новые) | factories → runtime; M07, существующие Rule/NodeCost; без конкретных schemas |
+| M11 | GraphCompiler, ExecutionPlan, LLMGroup | выбор/порядок и проверка рёбер контрактов; engine/application | R/graphs/graphCompiler.py + R/dag/executionPlan.py | registry + rule engine → DAGExecutor; не читает мир |
+| M12 | ContractValidator, NodeValidator, LLMValidator, NodeValidationContext[O] | общий boundary validation и вызов доменного валидатора; engine/application | R/validation/contractValidator.py + R/validation/nodeValidator.py + R/validation/llmValidator.py + R/validation/nodeValidationContext.py | runner/aggregate → существующий ValidationResult; конкретные validators — GEN |
+| M13 | DAGContext | single-writer каталог и lifecycle attempts; engine/application | R/dag/context/dagContext.py (новый) | coordinator → M14/restore; M01–07, M15; не доменный resolver |
+| M14 | PublishedDAGReadView | неизменяемое представление и контроль требований; engine/application | R/dag/context/dagReadView.py (новый) | catalog → prepare_input; реализует M31, M06/M02; без write API |
+| M15 | ResultInvalidation | вычисление invalidation по read evidence; engine/application | R/dag/context/resultInvalidation.py (новый) | begin_attempt → catalog; M02, без повторного scheduler/графа deps |
+| M16 | NodeOutcome[O], GateSignal, LevelDecision | локальный результат исполнения и control metadata; engine/application | R/execution/nodeOutcome.py (новый) | runner/aggregate → coordinator; M01–04, TaskType, PythonNodeError |
+| M17 | PythonNodeExecutor, NodeRunner | typed invocation + локальный исход; engine/application | R/execution/pythonNodeExecutor.py + R/execution/nodeRunner.py | M10/M12/M32 → M16; реализация typed executor в A2.3, не пишет shared runtime |
+| M18 | DAGExecutor, ExecutionState | scheduling, единственный writer runtime; engine/application | R/dag/dagExecutor.py + R/dag/executionState.py | plan/outcomes → catalog/level decision; M13/M16; business gate остаётся в ноде |
+| M19 | ExecutionTrace, ExecutionLevelSnapshot | только immutable IDs/status/provenance; engine/application | R/dag/executionTrace.py + R/dag/executionLevelSnapshot.py | coordinator → diagnostics; не хранит Input/Output payload |
+| M20 | ExecutionSnapshotService | capture/restore/retention; engine/application | R/dag/lifecycle/executionSnapshotService.py (новый) | state ↔ SessionSnapshot; M05/M07/M08; domain refs через lifecycle callback |
+| M21 | SessionSnapshot, SnapshotStore | типизированный снимок и прежнее memory-хранилище; cancellation/application | C/typed/sessionSnapshot.py + C/typed/snapshotStore.py (новые) | M20 ↔ cancellation; immutable Output refs, без SQL |
 | M22 | emit | единый emitter событий engine; engine/application | E/diagnostics/dagLog.py (новый) | M03 → loggingConfig; без собственного handler |
 | M23 | route_for, _PREFIX_ROUTES (функция/таблица; классы formatter/router не менять) | регистрация sink; logging/core | backend/app/core/loggingConfig.py | logger app.engine.dag → engine/dagExecution; без импорта engine |
-| M24 | LLMGroupPayloadBuilder, NodeSection, LLMPayload | POJO Input → групповой wire payload; engine/application | E/prompt/llmGroupPayloadBuilder.py + E/prompt/pojo/nodeSection.py + E/prompt/pojo/llmPayload.py | M07/M10 → client; существующие DSLResolver и schemaBuilder без дублирования |
-| M25 | RepairBuilder, LLMRepairPayload, NodeFailureContext, DSLFailureProjector | typed repair request/errors → wire; engine/application | E/repair/repairBuilder.py + E/prompt/pojo/llmRepairPayload.py + E/repair/pojo/nodeFailureContext.py + E/repair/dslFailureProjector.py | ValidationResult → repair loop; не ищет свободный node_results |
-| M26 | LLMAggregateExecutor, RepairOrchestrator | групповой вызов + repair, локальные outcomes; engine/application | E/execution/llmAggregateExecutor.py + E/repair/repairOrchestrator.py | M24/M25/M12 → M16; single group publication через coordinator |
-| M27 | LLMExecutionEngine | passes/cancel/resume, делегация callbacks; engine/application | E/llmExecutionEngine.py | M18/M20/M08; конкретное извлечение intents переносится в GEN binding |
-| M28 | ResponseResolver | общий lookup результата через typed response binding; engine/application | E/responseResolver.py | M08/M14 → caller; ResolveResult переносится в M08 без дублирования, конкретные TaskType→node mappings — GEN |
+| M24 | LLMGroupPayloadBuilder, NodeSection, LLMPayload | POJO Input → групповой wire payload; engine/application | R/prompt/llmGroupPayloadBuilder.py + R/prompt/pojo/nodeSection.py + R/prompt/pojo/llmPayload.py | M07/M10 → client; существующие DSLResolver и schemaBuilder без дублирования |
+| M25 | RepairBuilder, LLMRepairPayload, NodeFailureContext, DSLFailureProjector | typed repair request/errors → wire; engine/application | R/repair/repairBuilder.py + R/prompt/pojo/llmRepairPayload.py + R/repair/pojo/nodeFailureContext.py + R/repair/dslFailureProjector.py | ValidationResult → repair loop; не ищет свободный node_results |
+| M26 | LLMAggregateExecutor, RepairOrchestrator | групповой вызов + repair, локальные outcomes; engine/application | R/execution/llmAggregateExecutor.py + R/repair/repairOrchestrator.py | M24/M25/M12 → M16; single group publication через coordinator |
+| M27 | LLMExecutionEngine | passes/cancel/resume, делегация callbacks; engine/application | R/llmExecutionEngine.py | M18/M20/M08; конкретное извлечение intents переносится в GEN binding |
+| M28 | ResponseResolver | общий lookup результата через typed response binding; engine/application | R/responseResolver.py | M08/M14 → caller; целевой ResolveResult из M08, прежний класс удаляется B2; конкретные TaskType→node mappings — GEN |
 | M29 | NodeRuntimeState | оставшийся потребитель NodeStatus; engine/application | E/nodes/nodeRuntimeState.py | обновить импорт M04, не создавать второй lifecycle store |
 | M30 | NodeResult | удалить общую legacy-обёртку после handoff | E/nodes/pojo/nodeResult.py | все usages до удаления устранены GEN и общим runtime |
+| M31 | DAGReadView Protocol | интерфейс чтения без каталога; engine/application | E/contracts/dagReadView.py (новый) | M10/M08 → порт; M14 реализует; только M01/M06, без runtime imports |
+| M32 | PythonExecutor Protocol | typed executor interface; engine/application | E/contracts/pythonExecutor.py (новый) | M09/runner → порт; M17 реализует; M10, без импорта executor реализации |
+| M33 | NodeKind, NodeCost, PythonNodeError | существующие общие декларации, перенос без изменения поведения; engine/application | E/nodes/nodeKind.py → E/nodeTypes/support/nodeKind.py; E/nodes/pojo/nodeCost.py → E/nodeTypes/support/nodeCost.py; E/nodes/pojo/pythonNodeError.py → E/nodeTypes/support/pythonNodeError.py | старые и новые consumers обновляют imports в A1.2; один владелец каждого типа, без копий/re-export |
+| M34 | ExecutionPhase, PythonExecutionPhase, validate_python_phase | единый enum фаз и admission Python-подмножества; engine/dataModel | D/executionPhase.py (новый) | M03/M10 → общий контракт; stdlib/Pydantic, без application |
 
 Допустимые направления: конкретные ноды/GEN → общий engine → dataModel; core logging не импортирует engine; dataModel не импортирует application/db/core runtime. Domain readers/lifecycle implementations приходят через typed binding, generic engine не импортирует domain internals. Pydantic schema — единственный источник полей/constraints. Новые generic ID описаны в ТЗ §6.1; не заводить RegistryKey для world-registry, которого нет.
 
-ResolveResult переносится из E/responseResolver.py в E/nodes/contracts/executionBindings.py вместе с обновлением imports в A1.2; M08 не импортирует ResponseResolver, поэтому цикла нет. Его поля: ok: bool, data: O | None, error: str | None; текст ошибки — объяснение, не discriminator.
+Целевые M06–10/M31–32 не импортируют `E/nodes` даже для аннотаций. M33 переносит общие декларации в нейтральные файлы: все imports в прежних consumers меняются одновременно, но старые decorators, сигнатуры, регистрация и исполнение не меняются. `E/nodes/__init__.py` и `backend/app/core/container/engine.py` в A1.2 сохраняют текущий production bootstrap. Изменение путей M33 — перенос идентичных типов, не legacy adapter.
+
+`ResolveResult[O]` создаётся в E/contracts/executionBindings.py для целевого API. Старый ResolveResult остаётся в E/responseResolver.py до handoff; его generic replacement не подмешивается в старый ResponseResolver. Это временное сосуществование исходников predecessor/target, не два поддерживаемых runtime и не дублирование доменной схемы. Старый класс удаляется с прежним общим runtime в B2. Поля целевого класса: ok: bool, data: O | None, error: str | None.
+
+#### Изоляция целевого кода и единое переключение
+
+- `E/contracts/`, `E/registration/`, `E/nodeTypes/`, `R/` и `C/typed/` — постоянные целевые пути, не staging-копии для последующего переноса. Новые runtime-реализации карты R и C/typed создаются на соответствующих шагах; прежние файлы E/dag, E/execution и других runtime-групп не переписываются под новый API до handoff. Запрещено добавлять поддержку старых сигнатур в целевые классы.
+- В A1.2 целевой NodeRegistry требует NodeContract, создаётся явно тестом, не загружает concrete-ноды. Старый NODE_REGISTRY продолжает принимать только прежние decorators через прежний bootstrap. Пустые namespace packages не содержат auto-registration. Нельзя подменять модули в sys.modules, отключать __init__ тестовым флагом или делать contract optional.
+- Тесты R используют target registry/ports и fake concrete bindings; target не вызывает legacy executor, старый production runtime не получает target bindings. Сохранение прежнего production entrypoint проверяется импортом в отдельном процессе, без запуска backend. Старые и новые registry никогда не участвуют в одном исполнении.
+- В GEN-DAG-1 создать явный bootstrap `E/registration/productionNodes.py` с `register_production_nodes(registry: NodeRegistry) -> None`; он регистрирует все принятые concrete bindings. В одном шаге переключить `backend/app/core/container/engine.py` и caller imports на R/C/typed и этот bootstrap, убрать side-effect регистрацию из `E/nodes/__init__.py`, обновить concrete-ноды на E/nodeTypes. Этот шаг не входит в A1.2.
+- B1 принимает handoff; B2 удаляет predecessor файлы общих компонентов, перечисленных M09–12/M17–19/M21/M24–28, а также NodeResult M30, после поиска всех usages. Для R/x.py predecessor — E/x.py; исключения: target `R/graphs/graphCompiler.py` использует прежний E/graphs/graphCompiler.py, target registration/nodeTypes заменяют прежние E/nodes/nodeRegistration.py, nodeRegistry.py и четыре base POJO M10; C/typed заменяет C/sessionSnapshot.py и snapshotStore.py. M33 старые файлы удаляются при самом переносе A1.2. Удаление concrete-ноды — только GEN-DAG-1.
+- Не удалять неизменяемые общие зависимости: E/taskType.py, E/rules/, E/prompt/dslResolver.py, dslRegistry.py, schemaBuilder.py, E/validation/validationStatus.py, nodeValidationError.py, E/repair/repairMode.py. Они переиспользуются R и не импортируют E/nodes. Другие обнаруженные зависимости сначала фиксируются в карте, а не копируются по дереву.
 
 Обязательные детали M08: `ResponseBinding.resolve(view) -> ResolveResult[BaseModel]`, `TransitionBinding.transition(view) -> TaskType | None`; конкретный generic O уточняется binding. `SnapshotExtension[E: BaseModel]` предоставляет `capture() -> E` и `restore(value: E) -> Awaitable[None]` плюс ContractId/version и lifecycle validation. Конкретные request/session/effect POJO принадлежат GEN; JSON/Any не является допустимой заменой E. M20 хранит immutable extension вместе с версиями, не интерпретирует его поля.
 
 ### Композиция папок и imports
 
-Подсчёт непосредственных файлов включает служебные. Новые папки — namespace packages, `__init__.py` не добавлять без пересчёта. Новые файлы только по M01–30; остальные строки — изменение существующих. Дополнительный файл требует корректировки карты и counts до кода.
+Подсчёт непосредственных файлов включает служебные. Новые папки — namespace packages, `__init__.py` не добавлять без пересчёта. Все файлы под R/ и C/typed/ создаются заново на шагах карты; остальные новые файлы и переносы явно указаны в M01–34. Production bootstrap добавляется отдельно в GEN-DAG-1, как указано ниже. Дополнительный файл требует корректировки карты и counts до кода.
 
 | Папка | Сейчас → целевое | Действие |
 |---|---:|---|
-| E | 4 → 4 | менять llmExecutionEngine/responseResolver |
-| E/nodes | 6 → 5 | NodeStatus переносится в D, импорт consumers обновить в A1.1 |
-| E/nodes/pojo | 7 → 6 | NodeResult удаляется только B2 |
-| E/nodes/contracts | 0 → 3 | M06–08 |
-| E/graphs | 2 → 2 | старый закомментированный executionPlan не менять |
-| E/dag | 5 → 5 | новые механизмы в подпапках по ответственности |
-| E/dag/context | 0 → 3 | M13–15 |
-| E/dag/lifecycle | 0 → 1 | M20 |
-| E/execution | 3 → 4 | M16 |
-| E/diagnostics | 0 → 1 | M22 |
-| E/prompt; E/prompt/pojo | 4 → 4; 3 → 3 | существующие builders/wire DTO |
-| E/repair; E/repair/pojo | 5 → 5; 1 → 1 | existing repair, без новых framework |
-| E/validation | 6 → 6 | только изменяемые файлы M12 |
-| C | 6 → 6 | существующий memory snapshot |
-| D | 0 → 5 | M01–05, без init |
+| E | 4 → 2 | прежние llmExecutionEngine/responseResolver удаляются B2 после переключения на R |
+| E/nodes | 5 → 2 | исходное после A1.1; nodeKind переносится A1.2, старые registry/registration удаляются B2 |
+| E/nodes/pojo | 7 → 0 | NodeCost/PythonNodeError перенос A1.2; 4 base POJO и NodeResult удаление B2 |
+| E/contracts | 0 → 5 | M06–08, M31–32; без init и side effects |
+| E/registration | 0 → 2 (A1.2), 3 (GEN) | target registry/registration; productionNodes добавляет GEN |
+| E/nodeTypes; E/nodeTypes/support | 0 → 4; 0 → 3 | M10 и перенос M33 |
+| R | 0 → 2 | target engine/resolver |
+| R/graphs; R/dag | 0 → 1; 0 → 5 | target compiler; plan/executor/state/trace/snapshot |
+| R/dag/context; R/dag/lifecycle | 0 → 3; 0 → 1 | M13–15/M20 |
+| R/execution; R/validation | 0 → 4; 0 → 4 | M16/M17/M26; M12 |
+| R/prompt; R/prompt/pojo | 0 → 1; 0 → 3 | typed payload builder/DTO |
+| R/repair; R/repair/pojo | 0 → 3; 0 → 1 | typed repair builder/projector/orchestrator/context |
+| E/diagnostics | 0 → 1 | общий emitter M22 |
+| C; C/typed | 6 → 4; 0 → 2 | старые memory snapshot/store до B2; target typed версии |
+| E/graphs; E/dag; E/execution | 2 → 1; 5 → 0; 3 → 0 | predecessor реализации удаляются B2, закомментированный E/graphs/executionPlan.py вне scope |
+| E/prompt; E/prompt/pojo | 4 → 3; 3 → 0 | сохранить DSL/schema helpers, удалить predecessor typed replacements B2 |
+| E/repair; E/repair/pojo | 5 → 2; 1 → 0 | B2 удаляет 3 predecessor runtime файла; PatchApplier удаляет GEN отдельно |
+| E/validation | 6 → 2 | B2 удаляет 4 predecessor runtime файла, сохраняет общие validation errors/status |
+| D | 5 → 6 | M01–05 и уточнение M34, без init; WARN >5 |
 | backend/app/dataModel | 6 → 6 | только подпапка engine/dag; root не расширяется |
 | backend/app/core | 13 → 13 | только routing entry; новых файлов нет, композиция всего core вне scope |
 | backend/tests | 278 → 278 | только подпапка dag_typing; root не расширяется |
@@ -153,11 +172,11 @@ ResolveResult переносится из E/responseResolver.py в E/nodes/contr
 | T/integration | 0 → 3 | test_handoff.py, test_types.py, test_cleanup.py |
 | T/typing | 0 → 4 | valid.py, invalid.py, pyrightconfig.json, pyrightconfig.invalid.json |
 
-WARN для существующих >5: E/nodes 6→5, E/nodes/pojo 7→6, E/validation 6→6, C 6→6, dataModel root 6→6, core 13→13, tests root 278→278. Новые файлы в перегруженные core/tests root запрещены; этот план их не добавляет. Рекомендована композиция по ответственности при будущем расширении. Все imports NodeStatus и NodeResult проверить по репозиторию, включая side-effect registration, fixtures и re-exports. Новые typed механизмы не импортируют legacy/конкретные ноды через глобальный singleton; тесты создают isolated NodeRegistry. Production imports/Container wiring переводятся в GEN-DAG-1 перед B.
+WARN для существующих >5: E/nodes/pojo 7→0, E/validation 6→2, C 6→4, dataModel root 6→6, core 13→13, tests root 278→278. Новые файлы в перегруженные core/tests root запрещены; этот план их не добавляет. Рекомендована композиция по ответственности при будущем расширении. Все imports NodeStatus и NodeResult проверить по репозиторию, включая side-effect registration, fixtures и re-exports. Новые typed механизмы не импортируют legacy/конкретные ноды через глобальный singleton; тесты создают isolated NodeRegistry. Production imports/Container wiring переводятся в GEN-DAG-1 перед B.
 
 ## Атомарный порядок реализации
 
-Каждая строка ниже — отдельный шаг и один проверяемый слой/контракт/группа файлов. После шага короткий отчёт и ожидание «ок». Сначала весь A1 (types/binding), затем A2 (catalog/runner/coordinator), A3 (lifecycle/LLM/engine), затем handoff и B. A0 выполнен как документация; A1.1 реализован отдельно по запросу пользователя. Остальные шаги не начинались.
+Каждая строка ниже — отдельный шаг и один проверяемый слой/контракт/группа файлов. После шага короткий отчёт и ожидание «ок». Сначала весь A1 (types/binding), затем A2 (catalog/runner/coordinator), A3 (lifecycle/LLM/engine), затем handoff и B. A0 выполнен как документация; A1.1–A1.2 реализованы отдельно по запросам пользователя. Следующие шаги не начинались.
 
 Для каждой строки: файлы Mxx раскрываются в точные файлы таблицы выше; дополнительно создаётся ровно названный тест. ТЗ всегда `docs/tz_engine_node_context.md` с указанным §. При новом неучтённом классе сначала дополнить карту, не выбирать место в коде.
 
@@ -167,20 +186,20 @@ WARN для существующих >5: E/nodes 6→5, E/nodes/pojo 7→6, E/va
 
 Обозначение **U(folder,file)** — точная команда `.venv/Scripts/python.exe -m unittest discover -s backend/tests/dag_typing/<folder> -p <file> -v`; значения folder/file даны в каждой строке. Ожидается exit 0, все тесты PASS, отсутствие пропущенных обязательных сценариев. Это будущие тесты, создаваемые соответствующим шагом, а не заявление о существующих/пройденных проверках.
 
-**TYPE**: `.venv/Scripts/python.exe -m unittest discover -s backend/tests/dag_typing/integration -p test_types.py -v`. Тест запускает установленный `node node_modules/pyright/index.js -p backend/tests/dag_typing/typing/pyrightconfig.json --outputjson`, затем аналогично pyrightconfig.invalid.json. Positive exit 0; negative exit 1 и точное совпадение rule/line для каждого `# expect:`; отсутствие/лишние ошибки — FAIL. Python 3.12, extraPaths от config до backend (`../../..`), include valid.py и точных реализованных generic модулей шага: в A1.2 M01–10, в A2.1 добавить M13–14, в A2.4 M15–18; strict для новых контрактов; negative config включает invalid.py. Известные ошибки нетронутых импортируемых модулей фиксировать baseline отдельно, не скрывать новые через Any/ignore. Модель проверки — существующий scripts/check-cascade-types.cjs, новый скрипт в scripts не нужен.
+**TYPE**: `.venv/Scripts/python.exe -m unittest discover -s backend/tests/dag_typing/integration -p test_types.py -v`. Тест запускает установленный `node node_modules/pyright/index.js -p backend/tests/dag_typing/typing/pyrightconfig.json --outputjson`, затем аналогично pyrightconfig.invalid.json. Positive exit 0; negative exit 1 и точное совпадение rule/line для каждого `# expect:`; отсутствие/лишние ошибки — FAIL. Python 3.12, extraPaths от config до backend (`../../..`), include valid.py и точных реализованных generic модулей шага: в A1.2 M01–10/M31–34, в A2.1 добавить M13–14, в A2.4 M15–18; strict для новых контрактов; negative config включает invalid.py. Известные ошибки нетронутых импортируемых модулей фиксировать baseline отдельно, не скрывать новые через Any/ignore. Модель проверки — существующий scripts/check-cascade-types.cjs, новый скрипт в scripts не нужен.
 
 **ALL**: по очереди U для folder registry/context/execution/lifecycle/llm/integration с file `test_*.py` (каждая папка отдельно; рекурсивный discover без init не предполагать). **DIFF**: `git diff --check -- .cursor/plans/dag-typing-1.md .cursor/plans/gen-dag-1-post-geo-ws.md docs/tz_engine_node_context.md docs/tz_logging.md` для документации; при коде дополнить точными файлами шага. Архитектурная проверка владельцев Mxx обязательна дополнительно к тестам, не заменяется ими.
 
 | Шаг / цель | ТЗ | Файлы и контракт | Проверка | Done |
 |---|---|---|---|---|
-| A0 — зафиксировать исполнимую документацию | §§4,6–12; tz_logging §Каталог | этот план, GEN-DAG-1, tz_engine_node_context, tz_logging; карта M01–30, шаги и sink | DIFF; сверка всех M/§/counts | DONE (документы), поведение и владельцы согласованы |
+| A0 — зафиксировать исполнимую документацию | §§4,6–12; tz_logging §Каталог | этот план, GEN-DAG-1, tz_engine_node_context, tz_logging; карта M01–34, шаги и sink | DIFF; сверка всех M/§/counts | DONE (документы), поведение и владельцы согласованы |
 | A1.1 — общие metadata и единый status | §6.1, §6.3, §10 | M01–05, M29; обновить все импорты старого NodeStatus; T/fixtures.py, registry/test_metadata.py | U(registry,test_metadata.py) | DONE: immutable record/identity, один NodeStatus; нет dataModel→application |
-| A1.2 — binding ноды и typed вызов | §6.1–6.2 | M06–10, M28 (только перенос ResolveResult и imports), T/registry/test_binding.py, T/typing/valid.py, invalid.py, pyrightconfig.json, pyrightconfig.invalid.json, T/integration/test_types.py | U(registry,test_binding.py), TYPE | обязательные I/O и producer/contract declarations, generic binding сохраняет I/O; неверный I/O отклоняется статически; проверки require добавляются A2.1 |
+| A1.2 — binding ноды и typed вызов | §6.1–6.2 | M06–10/M31–34 (новые целевые пакеты; из production — только перенос общих деклараций и imports M33), T/registry/test_binding.py, T/typing/valid.py, invalid.py, pyrightconfig.json, pyrightconfig.invalid.json, T/integration/test_types.py | U(registry,test_binding.py), TYPE | DONE: обязательные I/O и producer/contract declarations, generic binding и оба Protocol доступны без реализации runtime; TYPE проверяет require/optional/execute; target import не загружает concrete-ноды, production bootstrap сохраняет прежний набор регистраций |
 | A1.3 — проверка контрактов графа | §6.1, §8 | M11, T/registry/test_graph.py; compile проверяет deps/binding/phase/group | U(registry,test_graph.py) | неизвестный producer/несовместимый Output/невозможное чтение в группе отвергнуты, order-only deps сохранены |
 | A1.4 — общая валидация boundary | §6.2 | M12, T/registry/test_validation.py; POJO+semantic delegation | U(registry,test_validation.py) | нет копии схемы; invalid Output не допускается к публикации |
-| A2.1 — каталог и read view | §6.2, §7 | M13–14, T/context/test_catalog.py, T/typing/valid.py, invalid.py и оба pyrightconfig; identity/read_view/require/optional, transitive invalidation — A2.2 | U(context,test_catalog.py), TYPE | неподписанный producer и чужой тип недоступны; соседний незавершённый Output невидим |
+| A2.1 — каталог и read view | §6.2, §7 | M13–14 (PublishedDAGReadView реализует готовый M31), T/context/test_catalog.py, T/typing/valid.py, invalid.py и оба pyrightconfig; identity/read_view/require/optional, transitive invalidation — A2.2 | U(context,test_catalog.py), TYPE | неподписанный producer и чужой тип недоступны; соседний незавершённый Output невидим |
 | A2.2 — invalidation provenance | §7 | M15, интеграция в M13–14, T/context/test_invalidation.py | U(context,test_invalidation.py) | chain/diamond/optional absence инвалидируются до rerun; order-only не инвалидирует, failed rerun не оживляет старое |
-| A2.3 — локальный outcome runner | §6.2, §8 | M16–17, T/execution/test_runner.py | U(execution,test_runner.py) | prepare/validate/execute/validate, gate/cancel/fail локальны; общих записей нет |
+| A2.3 — локальный outcome runner | §6.2, §8 | M16–17 (target PythonNodeExecutor реализует готовый M32), T/execution/test_runner.py | U(execution,test_runner.py) | prepare/validate/execute/validate, gate/cancel/fail локальны; общих записей нет |
 | A2.4 — конкурентный уровень и barrier commit | §7–8 | M18–19, T/execution/test_level.py и оба T/typing/pyrightconfig | U(execution,test_level.py) | Event-барьер доказывает overlap; разные порядки завершения дают согласованные исходы; cancel ждёт cleanup; gate останавливает до следующего уровня |
 | A2.5 — подробные события и единый sink | §10; tz_logging §DAG execution | M22–23, M18 emitter calls, T/execution/test_logging.py | U(execution,test_logging.py) | все обязательные cancel/read/sibling/save поля, маршрут engine/dagExecution, без payload/дублирующего handler |
 | A3.1 — typed memory snapshot | §9 | M20–21, T/lifecycle/test_snapshot.py | U(lifecycle,test_snapshot.py) | identity/counters/versions/control/provenance/typed extension сохранены без копий payload |
@@ -190,12 +209,12 @@ WARN для существующих >5: E/nodes 6→5, E/nodes/pojo 7→6, E/va
 | A3.5 — агрегированное исполнение и repair | §8 | M26, вызов group commit M18, T/llm/test_group.py | U(llm,test_group.py) | один initial call; repair в той же conversation; all-or-none публикация; cancelled/invalid group не публикуется частично |
 | A3.6 — общий pass/resume loop и response hook | §9, §11 | M27–28, M08, T/lifecycle/test_passes.py | U(lifecycle,test_passes.py), TYPE | engine делегирует конкретные transitions/responses/effects; resume повторно не вызывает актуальную группу |
 | B1 — принять handoff конкретных нод | §4, §11 | план GEN-DAG-1 (его отдельные шаги); T/integration/test_handoff.py | U(integration,test_handoff.py) | все production registrations имеют concrete binding из GEN; domain-read гарантии/refs проверены владельцами; нет смешанного runtime |
-| B2 — удалить общие legacy-каналы | §11 | M30 удалить, M18/M27/M28 удалить free fields/old usages; конкретный PatchApplier/consumers уже заменены GEN; T/integration/test_cleanup.py | U(integration,test_cleanup.py), ALL | нет старых imports/side-effect refs и свободного доступа; cascade shared_context не затронут; нет aliases/adapters |
+| B2 — удалить общие legacy-каналы | §11 | M30 и predecessor общих компонентов удалить по разделу переключения; конкретный PatchApplier/consumers уже заменены GEN; T/integration/test_cleanup.py | U(integration,test_cleanup.py), ALL | нет старых imports/side-effect refs и свободного доступа; cascade shared_context не затронут; нет aliases/adapters |
 | B3 — общая архитектурная приёмка | §12 | только статус этого плана после проверки итогового кода | ALL, TYPE, DIFF по итоговым файлам | параллелизм, lifecycle, LLM и typing подтверждены; owners/imports/counts соблюдены, baseline delta записана |
 
 ### Сценарии проверок и исполнения
 
-Тесты в T используют TestCase/IsolatedAsyncioTestCase; helpers и тестовые BaseModel помещаются в T/fixtures.py, не в production dataModel. Для overlap две ноды сигнализируют started до разрешения обеим закончить; timeout ограничен, wall-clock benchmark не является доказательством. Negative typing проверяет wrong Input, wrong Output, неверное присваивание результата require. Тесты registry — no side-effect import рабочих нод.
+Тесты в T используют TestCase/IsolatedAsyncioTestCase; helpers и тестовые BaseModel помещаются в T/fixtures.py, не в production dataModel. Для overlap две ноды сигнализируют started до разрешения обеим закончить; timeout ограничен, wall-clock benchmark не является доказательством. Negative typing проверяет wrong Input, wrong Output, неверное присваивание результата require. Тесты registry — no side-effect import рабочих нод. В A1.2 test_binding.py запускает два отдельных процесса: target imports не добавляют E/nodes/concrete-модули в sys.modules; прежний production bootstrap регистрирует тот же baseline-набор ID (сравнить до/после изменения), без optional contract. TYPE использует fake implementations Protocol, не импортирует будущие R реализации и проверяет неверный return require/optional/execute; Protocol не инстанцируется как runtime stub.
 
 Тесты graph включают required producer, исключённый rules: compile не создаёт фиктивный Output, prepare падает по отсутствию; optional допускает отсутствие. Проверки LLM сохраняют один вызов для всей temperature-группы и не принимают чтение будущего Output соседа. Restore тестирует format и contract mismatch отдельно, invalid domain ref callback и отсутствие auto-generation. Snapshot extension — тестовый POJO, конкретные эффекты не выдумываются.
 
@@ -211,6 +230,32 @@ WARN для существующих >5: E/nodes 6→5, E/nodes/pojo 7→6, E/va
 - U(registry,test_metadata.py): 14 PASS (включая строгие enum отмены, неверные wire-коды и JSON round-trip). Pyright новых модулей: 0 errors/warnings. Проверены no-copy композиции, mutable-вложения, required absence, producer/execution identity, snapshot keys и cancel diagnostics.
 - Владельцы/imports: только dataModel→dataModel/Pydantic/stdlib; application runtime и параллелизм не менялись. Folder counts: D 0→5, E/nodes 6→5, T 0→1, T/registry 0→1; без добавлений в переполненные root.
 - Baseline: фактический интерпретатор `.venv` — Python 3.14.4, Pydantic 2.13.4; planned typecheck target Python 3.12 сохраняется. A1.2 не начат.
+
+### Preflight A1.2 (2026-10-30): решения блокеров карты
+
+Статус A1.2: DONE. Три блокера закрыты согласованной корректировкой карты; реализация и проверки выполнены по ней (evidence ниже).
+
+| Блокер | Согласованное исправление | Проверка реализации |
+|---|---|---|
+| E/nodes/__init__ регистрирует 15 production-нод при импорте registry; старые decorators не принимают contract | target M06–10 вне E/nodes; M33 выносит переиспользуемые декларации; прежние registration/Container остаются до явного GEN-переключения | subprocess target import не загружает concrete-ноды; отдельный production import сохраняет baseline registration IDs |
+| DAGReadView создавался позже своих consumers | M31 DAGReadView Protocol в E/contracts/dagReadView.py вводится A1.2; M14 PublishedDAGReadView в R/dag/context/dagReadView.py реализуется A2.1 | TYPE для prepare_input/response bindings проходит без R; fake read view для тестов, без Any/object substitutes |
+| PythonNodeExecutor в старой сигнатуре до A2.3 | M32 PythonExecutor Protocol в E/contracts/pythonExecutor.py вводится A1.2; target M17 в R/execution реализует его A2.3; старый E/execution executor остаётся до handoff | TYPE проверяет execute(node,input)->O через Protocol; test_runner позже проверяет реализацию |
+
+Изменены карта M06–33, постоянные пути R/, E/registration/, E/nodeTypes/, E/contracts/ и C/typed/, counts, TYPE и последовательность подключения. Это явная корректировка плана до кода; optional contract, legacy adapter, смешанное исполнение и подмена импортов запрещены. A1.1 не меняется.
+
+### Execution evidence A1.2 (2026-10-30)
+
+- DONE: M06–10/M31–34 в постоянных E/contracts, E/registration, E/nodeTypes; обязательные I/O/reads, typed factory admission/lookup, read/executor/response/transition/snapshot ports. M33 перенесён побайтно, все imports обновлены; target не импортирует E/nodes, production baseline — те же 15 ID.
+- U(registry,test_binding.py): 15 PASS (Windows asyncio требует запуска вне sandbox из-за зависания локального socketpair); U(registry,test_metadata.py): 14 PASS. TYPE: 2 PASS, positive — 0 diagnostics, negative — ровно 13 ожидаемых rule/line, включая require/optional/execute и несовместимые I/O.
+- Baseline: неизменённый M02 records.py:59 имеет один strict reportUnnecessaryIsInstance из-за аннотации Pydantic FieldInfo.annotation; он проверяется отдельным exact-baseline тестом. Основной config проверяет M02 в basic, все остальные M01–10/M31–34 и typing fixtures — strict; новых Any/ignore и baseline delta нет. Python 3.14.4, target Python 3.12, Pyright 1.1.414.
+- Owners/imports проверены: только общие декларации, хранение binding и typed порты; доменных вычислений/CRUD, нового runtime исполнения и изменений параллелизма нет. Counts: contracts 5, registration 2, nodeTypes 4/support 3; nodes/pojo 7→5, nodes 5→4, concrete terrain 7→7 (import-only). DIFF clean; A1.3 не начат.
+
+### Уточнение A1.2: общий контракт фаз (запрошено 2026-10-30)
+
+- M34 вводит ExecutionPhase(StrEnum): PRE_LLM/LLM/POST_LLM с прежними wire-значениями pre_llm/llm/post_llm. PythonExecutionPhase = Literal[ExecutionPhase.PRE_LLM, ExecutionPhase.POST_LLM]; validate_python_phase(value: object) принимает только экземпляры enum из этого подмножества через Pydantic TypeAdapter. Отдельной схемы/таблицы фаз в application нет.
+- M03 ExecutionDiagnostic.phase использует ExecutionPhase; Python API строгий, JSON принимает только wire-значения enum. M10 PythonNode.phase использует PythonExecutionPhase, default ExecutionPhase.PRE_LLM; __post_init__ вызывает admission M34 и отклоняет строки/LLM. Прежний production runtime сохраняется до handoff.
+- Файлы: D/executionPhase.py, D/diagnostics.py, E/nodeTypes/pythonNode.py; registry/test_metadata.py, registry/test_binding.py, typing/valid.py, invalid.py и оба pyrightconfig; docs/tz_engine_node_context.md §6.1/6.3. D 5→6 (WARN, без новых root-файлов). Проверки: U(registry,test_metadata.py), U(registry,test_binding.py), TYPE, DIFF. Статус уточнения: DONE.
+- Evidence: metadata 15 PASS, binding 16 PASS, TYPE 2 PASS (positive 0 diagnostics; negative ровно 16 ожидаемых rule/line; прежний M02 baseline без изменений), DIFF clean. Проверены отказ строкам/LLM на Python boundary, все три enum-фазы диагностики и JSON round-trip; owning validation находится в dataModel, application только делегирует. Production bootstrap сохраняет те же 15 ID; A1.3 не начат.
 
 ### Приёмка ответственности и фиксация результата
 

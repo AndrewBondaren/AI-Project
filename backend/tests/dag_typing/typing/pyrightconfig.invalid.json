@@ -1,0 +1,30 @@
+{
+  "extends": "./pyrightconfig.json",
+  "include": [
+    "invalid.py"
+  ],
+  "strict": [
+    "valid.py",
+    "../fixtures.py",
+    "../../../../backend/app/dataModel/engine/dag/identity.py",
+    "../../../../backend/app/dataModel/engine/dag/diagnostics.py",
+    "../../../../backend/app/dataModel/engine/dag/nodeStatus.py",
+    "../../../../backend/app/dataModel/engine/dag/snapshotMetadata.py",
+    "../../../../backend/app/application/engine/contracts/dagReadView.py",
+    "../../../../backend/app/application/engine/contracts/executionBindings.py",
+    "../../../../backend/app/application/engine/contracts/nodeContract.py",
+    "../../../../backend/app/application/engine/contracts/outputRef.py",
+    "../../../../backend/app/application/engine/contracts/pythonExecutor.py",
+    "../../../../backend/app/application/engine/registration/nodeRegistration.py",
+    "../../../../backend/app/application/engine/registration/nodeRegistry.py",
+    "../../../../backend/app/application/engine/nodeTypes/baseNode.py",
+    "../../../../backend/app/application/engine/nodeTypes/compiledNode.py",
+    "../../../../backend/app/application/engine/nodeTypes/llmNode.py",
+    "../../../../backend/app/application/engine/nodeTypes/pythonNode.py",
+    "../../../../backend/app/application/engine/nodeTypes/support/nodeCost.py",
+    "../../../../backend/app/application/engine/nodeTypes/support/nodeKind.py",
+    "../../../../backend/app/application/engine/nodeTypes/support/pythonNodeError.py",
+    "invalid.py",
+    "../../../../backend/app/dataModel/engine/dag/executionPhase.py"
+  ]
+}

@@ -1,0 +1,1 @@
+"""Capability-checked row access."""

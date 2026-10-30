@@ -1,13 +1,14 @@
 """Payload-free execution diagnostics. SoT: tz_engine_node_context §10."""
 
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.engine.dag.identity import (
     ContractIdValue, ContractVersionValue, ExecutionIdentity, NodeIdValue,
 )
+from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 from app.dataModel.engine.dag.records import DependencyRead
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -57,7 +58,7 @@ class ExecutionDiagnostic(BaseModel):
 
     identity: ExecutionIdentity
     pass_number: Index
-    phase: Literal["pre_llm", "llm", "post_llm"]
+    phase: ExecutionPhase
     level: Index
     timestamp: Timestamp
     code: ExecutionEventCode

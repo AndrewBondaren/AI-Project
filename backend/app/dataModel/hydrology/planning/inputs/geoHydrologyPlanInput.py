@@ -2,7 +2,7 @@
 
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, field_validator, model_validator
+from pydantic import ConfigDict, StrictBool, StrictInt, field_validator, model_validator
 
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredLake import DeclaredLake
@@ -10,7 +10,8 @@ from app.dataModel.hydrology.declaredRiver import DeclaredRiver, validate_declar
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.planning.hydrologyScope import HYDROLOGY_BOOTSTRAP_SCOPES, HydrologyScope
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
-from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings
+from app.dataModel.hydrology.generation.categorySource import HydrologyCategoryFields
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyAnchorInput
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
@@ -25,21 +26,16 @@ from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
-class GeoHydrologyPlanInput(BaseModel):
+class GeoHydrologyPlanInput(HydrologyCategoryFields):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     enabled: StrictBool
     generation: WorldWaterGenerationSettings
     defaults: WaterGenerationDefaults
-    sea_generation: CategoryWaterGenerationSettings
-    ocean_generation: CategoryWaterGenerationSettings
-    lake_generation: CategoryWaterGenerationSettings
     seed: StrictInt
     resolution_mode: Annotated[ResolutionMode, SourceFieldRole.EXECUTION_POLICY]
     scopes: frozenset[HydrologyScope]
     default_water_level: FineZ
-    seas: HydrologySeasPolicy
-    lakes: HydrologyLakesPolicy
     rivers: HydrologyRiversPolicy
     declared_rivers: tuple[DeclaredRiver, ...]
     coastlines: tuple[DeclaredCoastline, ...]

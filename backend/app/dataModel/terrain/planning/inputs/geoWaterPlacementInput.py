@@ -2,13 +2,12 @@
 
 from typing import Annotated, ClassVar, Self
 
-from pydantic import BaseModel, ConfigDict, StrictBool, field_validator, model_validator
+from pydantic import ConfigDict, StrictBool, field_validator, model_validator
 
 from app.dataModel.cascade.cascadeSpec import FieldRef
-from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category
-from app.dataModel.hydrology.generation.categorySource import HydrologyCategorySource
+from app.dataModel.hydrology.generation.categorySource import HydrologyCategoryFields
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
-from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings
+from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSource, ProceduralSource
@@ -27,7 +26,7 @@ from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
-class GeoWaterPlacementInput(BaseModel):
+class GeoWaterPlacementInput(HydrologyCategoryFields):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     enabled: StrictBool
@@ -36,11 +35,6 @@ class GeoWaterPlacementInput(BaseModel):
     default_water_level: FineZ
     generation: WorldWaterGenerationSettings
     defaults: WaterGenerationDefaults
-    sea_generation: CategoryWaterGenerationSettings
-    ocean_generation: CategoryWaterGenerationSettings
-    lake_generation: CategoryWaterGenerationSettings
-    seas: HydrologySeasPolicy
-    lakes: HydrologyLakesPolicy
     sources: tuple[WaterDesignSource, ...]
     anchors: tuple[WaterAnchorInput, ...]
     topology: WorldTopology
@@ -53,27 +47,10 @@ class GeoWaterPlacementInput(BaseModel):
     composition_policy: FieldCompositionPolicy
     selection_policy: WaterFieldSelectionPolicy
 
-    category_sources: ClassVar[tuple[HydrologyCategorySource["GeoWaterPlacementInput"], ...]] = (
-        HydrologyCategorySource(Category.LAKE,
-            FieldRef(lambda: GeoWaterPlacementInput, lambda s: s.lakes),
-            FieldRef(lambda: GeoWaterPlacementInput, lambda s: s.lake_generation)),
-        HydrologyCategorySource(Category.OCEAN,
-            FieldRef(lambda: GeoWaterPlacementInput, lambda s: s.seas),
-            FieldRef(lambda: GeoWaterPlacementInput, lambda s: s.ocean_generation)),
-        HydrologyCategorySource(Category.SEA,
-            FieldRef(lambda: GeoWaterPlacementInput, lambda s: s.seas),
-            FieldRef(lambda: GeoWaterPlacementInput, lambda s: s.sea_generation)),
-    )
     source_field: ClassVar[FieldRef["GeoWaterPlacementInput", tuple[WaterDesignSource, ...]]] = FieldRef(
         lambda: GeoWaterPlacementInput, lambda s: s.sources)
     bounds_field: ClassVar[FieldRef["GeoWaterPlacementInput", WorldBounds | None]] = FieldRef(
         lambda: GeoWaterPlacementInput, lambda s: s.declared_world_bounds)
-
-    @classmethod
-    def category_source(cls, category: Category) -> HydrologyCategorySource["GeoWaterPlacementInput"]:
-        if not isinstance(category, Category):
-            raise ValueError("category binding requires a water generation category")
-        return next(binding for binding in cls.category_sources if binding.category is category)
 
     @field_validator("seas", "lakes", "topology", "declared_world_bounds", mode="before")
     @classmethod

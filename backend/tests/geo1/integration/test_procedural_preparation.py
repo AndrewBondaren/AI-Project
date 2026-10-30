@@ -58,34 +58,27 @@ class ProceduralPreparationTests(TestCase):
             result = prepare_procedural_designed_water(**args)
         return result, adapter
 
-    def test_three_strategies_are_prepared_from_owners_without_caller_inputs_or_requests(self):
+    def test_three_strategies_resolve_native_sources_with_the_shared_budget(self):
         for strategy in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
             args = self.case(strategy)
-            (budget, designs, result), adapter = self.run_case(args)
+            budget, designs, result = prepare_procedural_designed_water(**args)
             self.assertEqual(budget.allocations[0].requested_fine2, 8)
             self.assertEqual(budget.allocations[0].allocated_fine2, 8)
             self.assertEqual(len(designs), 1)
             self.assertIsInstance(result.results[0], ResolvedPlacementV2)
             self.assertEqual(designs[0].floor_profile.recipe.strategy, strategy)
-            adapter.assert_called_once()
-            shared = adapter.call_args.args[1]
-            self.assertTrue(shared.context.autoresolve)
-            self.assertEqual(shared.context.level, Scope.WATER_BODY)
-            self.assertEqual(shared.budget, budget.allocations[0])
+            self.assertEqual(result.results[0].identity.source_uid, "source")
 
-    def test_body_overrides_category_and_world_and_retains_provenance(self):
+    def test_body_overrides_category_and_world_and_drives_allocation_and_strategy(self):
         args = self.case()
         source = args["inputs"].sources[0]
         source = source.model_copy(update={"value": source.value.model_copy(update={"generation": BodyWaterGenerationSettings(
             autoresolve=True, strategy=Strategy.PLATE, water_fraction=0.25)})})
         args["inputs"] = args["inputs"].model_copy(update={"sources": (source,),
             "sea_generation": CategoryWaterGenerationSettings(autoresolve=False, strategy=Strategy.PLATE_NOISE)})
-        (budget, designs, result), adapter = self.run_case(args)
-        context = adapter.call_args.args[1].context
+        budget, designs, result = prepare_procedural_designed_water(**args)
+        self.assertIsInstance(result.results[0], ResolvedPlacementV2)
         self.assertEqual(budget.allocations[0].requested_fine2, 4)
-        self.assertEqual(context.strategy, Strategy.PLATE)
-        self.assertTrue(context.autoresolve)
-        self.assertEqual(dict(context.provenance)["water_fraction"], (Scope.WATER_BODY, "BodyWaterGenerationSettings.water_fraction"))
         self.assertEqual(designs[0].floor_profile.recipe.strategy, Strategy.PLATE)
 
     def test_false_none_and_disabled_gates_never_execute_metadata_or_fields(self):
@@ -120,11 +113,11 @@ class ProceduralPreparationTests(TestCase):
             source = source.model_copy(update={"value": source.value.model_copy(update={"kind": kind})})
             args["inputs"] = args["inputs"].model_copy(update={"sources": (source,), settings_field:
                 CategoryWaterGenerationSettings(strategy=Strategy.PLATE, water_fraction=0.25)})
-            (budget, designs, result), adapter = self.run_case(args)
+            budget, designs, result = prepare_procedural_designed_water(**args)
             self.assertEqual(designs[0].metadata.body_kind, kind)
             self.assertEqual(designs[0].floor_profile.recipe.strategy, Strategy.PLATE)
             self.assertEqual(budget.allocations[0].requested_fine2, 4)
-            self.assertEqual(dict(adapter.call_args.args[1].context.provenance)["strategy"], (Scope.CATEGORY, "CategoryWaterGenerationSettings.strategy"))
+            self.assertIsInstance(result.results[0], ResolvedPlacementV2)
 
     def test_explicit_zero_priority_disables_and_none_uses_captured_category(self):
         for priority, expected in ((0, DisabledPlacement), (None, ResolvedPlacementV2)):
@@ -303,34 +296,63 @@ class ProceduralPreparationTests(TestCase):
         self.assertFalse(result.results[0].decision.issues)
         log.assert_not_called()
 
-    def test_category_and_recipe_owners_are_strict_and_use_captured_settings(self):
-        from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category
-        from app.application.worldData.generators.terrain.designedWater.strategies.procedural.fieldRecipeFactory import WaterFieldRecipeFactory
-        self.assertEqual(Category.for_basin_kind(BasinKind.INLAND_SEA), Category.SEA)
-        with self.assertRaises(ValueError):
-            Category.for_basin_kind("sea")
-        args = self.case()
-        args["inputs"] = args["inputs"].model_copy(update={
-            "noise_policy": ContinentalNoisePolicy(length_fraction=0.37, octaves=2, lacunarity=3.0, persistence=0.7),
-            "plate_policy": PlateGenerationPolicy(plate_count=5, blend_length_fraction=0.31),
-            "composition_policy": FieldCompositionPolicy(detail_weight=0.63),
-        })
-        for kind in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
-            recipe = WaterFieldRecipeFactory().build(kind, args["inputs"], "captured-seed")
-            self.assertEqual(recipe.strategy, kind)
-            self.assertEqual(recipe.seed_root, "captured-seed")
-            if hasattr(recipe, "noise_policy"):
-                self.assertEqual(recipe.noise_policy, args["inputs"].noise_policy)
-            if hasattr(recipe, "plate_policy"):
-                self.assertEqual(recipe.plate_policy, args["inputs"].plate_policy)
-            if hasattr(recipe, "composition_policy"):
-                self.assertEqual(recipe.composition_policy, args["inputs"].composition_policy)
-        for kind in (Strategy.AUTHORED_REGION, "plate", None):
-            with self.assertRaises(PlanBuildFailure):
-                WaterFieldRecipeFactory().build(kind, args["inputs"], "captured-seed")
+    def test_custom_field_settings_change_downstream_floor_without_changing_budget(self):
+        from app.application.worldData.generators.terrain.reliefObjects.bathymetry.floorProfile import BasinFloorEvaluator
+        for strategy, change in (
+                (Strategy.CONTINENTAL_NOISE, {"noise_policy": ContinentalNoisePolicy(
+                    length_fraction=0.37, octaves=2, lacunarity=3.0, persistence=0.7)}),
+                (Strategy.PLATE, {"plate_policy": PlateGenerationPolicy(plate_count=5, blend_length_fraction=0.31)}),
+                (Strategy.PLATE_NOISE, {"composition_policy": FieldCompositionPolicy(detail_weight=0.0)})):
+            with self.subTest(strategy=strategy):
+                args = self.case(strategy)
+                first = prepare_procedural_designed_water(**args)
+                args["inputs"] = args["inputs"].model_copy(update=change)
+                second = prepare_procedural_designed_water(**args)
+                self.assertEqual(first[0], second[0])
+                floors = []
+                for _, designs, result in (first, second):
+                    self.assertIsInstance(result.results[0], ResolvedPlacementV2)
+                    design = designs[0]
+                    evaluator = BasinFloorEvaluator(design.floor_profile, topology=args["inputs"].topology,
+                        coordinate_space=design.coordinate_space, grid=design.grid)
+                    floors.append(tuple(evaluator.sample((x, y)) for y in range(2) for x in range(2)))
+                self.assertNotEqual(*floors)
+                self.assertEqual(prepare_procedural_designed_water(**args), second)
+
+    def test_zero_detail_composition_preserves_plate_geometry_and_floor(self):
+        from app.application.worldData.generators.terrain.reliefObjects.bathymetry.floorProfile import BasinFloorEvaluator
+        outputs = []
+        for strategy in (Strategy.PLATE, Strategy.PLATE_NOISE):
+            args = self.case(strategy)
+            args["inputs"] = args["inputs"].model_copy(update={
+                "plate_policy": PlateGenerationPolicy(plate_count=5, blend_length_fraction=0.31),
+                "noise_policy": ContinentalNoisePolicy(length_fraction=0.37, octaves=2),
+                "composition_policy": FieldCompositionPolicy(detail_weight=0.0)})
+            budget, designs, result = prepare_procedural_designed_water(**args)
+            self.assertIsInstance(result.results[0], ResolvedPlacementV2)
+            design = designs[0]
+            evaluator = BasinFloorEvaluator(design.floor_profile, topology=args["inputs"].topology,
+                coordinate_space=design.coordinate_space, grid=design.grid)
+            cells = frozenset(c for candidate in design.candidates for c in candidate.footprint.cells)
+            outputs.append((budget, cells, tuple(evaluator.sample((x, y)) for y in range(2) for x in range(2))))
+        self.assertEqual(*outputs)
+
+    def test_each_category_can_disable_only_its_own_native_sources(self):
+        channels = ((BasinKind.LAKE, "lake_generation"), (BasinKind.OCEAN, "ocean_generation"),
+                    (BasinKind.SEA, "sea_generation"))
+        for disabled_kind, disabled_field in channels:
+            for kind, _ in channels:
+                with self.subTest(disabled=disabled_kind, source=kind):
+                    args = self.case()
+                    source = args["inputs"].sources[0]
+                    source = source.model_copy(update={"value": source.value.model_copy(update={"kind": kind})})
+                    args["inputs"] = args["inputs"].model_copy(update={"sources": (source,),
+                        disabled_field: CategoryWaterGenerationSettings(autoresolve=False)})
+                    budget, designs, result = prepare_procedural_designed_water(**args)
+                    self.assertIsInstance(result.results[0], DisabledPlacement if kind is disabled_kind else ResolvedPlacementV2)
+                    self.assertEqual(len(designs), 0 if kind is disabled_kind else 1)
 
     def test_admission_provenance_names_captured_category_fields(self):
-        from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
         for kind, expected_path in ((BasinKind.SEA, ("seas", "placement_specificity")),
                                     (BasinKind.OCEAN, ("seas", "placement_specificity")),
                                     (BasinKind.LAKE, ("lakes", "placement_specificity"))):
@@ -338,18 +360,17 @@ class ProceduralPreparationTests(TestCase):
             source = args["inputs"].sources[0]
             source = source.model_copy(update={"value": source.value.model_copy(update={"kind": kind})})
             args["inputs"] = args["inputs"].model_copy(update={"sources": (source,)})
-            bindings = ProceduralSourceAdmissionJob().resolve(args["inputs"], args["batch"], args["water_intents"], args["control"])
-            binding = bindings.sources[0]
-            self.assertEqual(binding.source_path, ("sources", "source"))
-            self.assertIn(expected_path, tuple(p.source_path for p in binding.admission.decision.provenance))
+            _, designs, result = prepare_procedural_designed_water(**args)
+            self.assertEqual(designs[0].metadata.source_path, ("sources", "source"))
+            self.assertIn(expected_path, tuple(p.source_path for p in result.results[0].prepared.decision.provenance))
 
     def test_missing_extent_diagnostic_names_captured_bounds_field(self):
-        from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
         args = self.case()
         args["inputs"] = args["inputs"].model_copy(update={"declared_world_bounds": None})
-        bindings = ProceduralSourceAdmissionJob().resolve(args["inputs"], args["batch"], args["water_intents"], args["control"])
-        self.assertEqual(tuple(issue.path for issue in bindings.sources[0].admission.decision.issues),
-                         (("declared_world_bounds",),))
+        self.without_world_region(args)
+        _, _, result = prepare_procedural_designed_water(**args)
+        self.assertTrue(any(issue.path[-1:] == ("declared_world_bounds",)
+                            for issue in result.results[0].diagnostics))
 
 
     def without_world_region(self, args):

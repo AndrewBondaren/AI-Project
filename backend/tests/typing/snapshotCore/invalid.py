@@ -180,3 +180,41 @@ from app.db.models.snapshotCore.historyRows import WorldSnapshotRow
 
 def cannot_mutate_historical_sql_row(row: WorldSnapshotRow) -> None:
     row.turn_id = 2  # EXPECT: reportAttributeAccessIssue
+
+
+from app.db.repositories.sqlite.snapshotCore.publications.worldPublicationStore import SqliteWorldPublicationStore
+from app.db.repositories.sqlite.snapshotCore.operations.operationStore import SqliteOperationStore
+
+
+async def invalid_sqlite_capability(world: SqliteWorldPublicationStore, read: CommitReadScope,
+                                    publication: WorldPublicationRef, operations: SqliteOperationStore) -> None:
+    await world.compare_append(read, publication, publication)  # EXPECT: reportArgumentType
+    await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, "op", preparation_fingerprint="a" * 64, request_fingerprint="b" * 64)  # EXPECT: reportCallIssue
+
+
+from app.db.database import Database
+from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
+from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
+from app.db.repositories.sqlite.shared.capabilities.scopeRegistry import SqliteScopeRegistry
+from app.db.models.snapshotCore.publicationRows import WorldPublicationRow
+
+
+async def invalid_shared_capability(access: ScopedSqliteAccess, registry: SqliteScopeRegistry,
+                                   read: CommitReadScope, row: WorldPublicationRow, db: Database) -> None:
+    await access.insert(read, row)  # EXPECT: reportArgumentType
+    registry.operation_id(read)  # EXPECT: reportArgumentType
+    SqlitePublicationCommitStore(db, registry)  # EXPECT: reportCallIssue
+
+
+from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance
+from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+from app.db.repositories.sqlite.snapshotCore.history.rowProjection import encode_history_row, decode_history_row
+from app.dataModel.worldSnapshot.metadata.envelope import PlayerSnapshotMetadata
+
+
+def invalid_history_projection(metadata: WorldSnapshotMetadata, player: PlayerSnapshotMetadata,
+                               receipt: SectionApplyReceipt, publication: WorldPublicationRef,
+                               codec: SnapshotEnvelopeCodec) -> None:
+    validate_receipt_provenance(metadata, [receipt], None, metadata.operation_id)  # EXPECT: reportArgumentType
+    encode_history_row(player, player, codec)  # EXPECT: reportArgumentType
+    decode_history_row({}, publication, codec)  # EXPECT: reportArgumentType

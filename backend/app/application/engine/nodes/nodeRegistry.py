@@ -1,6 +1,6 @@
 from typing import Type
 
-from app.application.engine.nodes.nodeKind import NodeKind
+from app.application.engine.nodeTypes.support.nodeKind import NodeKind
 from app.application.engine.nodes.nodeRegistration import NodeRegistration
 from app.application.engine.nodes.pojo.llmNode import LLMNode
 from app.application.engine.nodes.pojo.pythonNode import PythonNode

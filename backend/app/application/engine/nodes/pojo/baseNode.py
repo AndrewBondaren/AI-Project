@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Optional, Type
 
 from app.application.engine.taskType import TaskType
-from app.application.engine.nodes.pojo.nodeCost import NodeCost
+from app.application.engine.nodeTypes.support.nodeCost import NodeCost
 from app.application.engine.rules.rule import Rule
 
 @dataclass(frozen=True, kw_only=True)

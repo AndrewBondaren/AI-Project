@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Type
 
-from app.application.engine.nodes.nodeKind import NodeKind
+from app.application.engine.nodeTypes.support.nodeKind import NodeKind
 
 
 @dataclass(frozen=True)

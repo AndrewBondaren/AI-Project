@@ -1479,6 +1479,8 @@ worldSnapshot/service/snapshotRequestValidator.py
   SnapshotRequestValidator
 worldSnapshot/service/snapshotMetadataBuilder.py
   SnapshotMetadataBuilder
+worldSnapshot/validation/receiptProvenance.py
+  validate_receipt_provenance (4C2-H, §8.14; pure policy)
 worldSnapshot/encoding/snapshotCodec.py
   SnapshotEnvelopeCodec
 worldSnapshot/encoding/coreManifest.py
@@ -1568,15 +1570,35 @@ models/artifacts/leaseRows.py
   ArtifactLeaseEventRow, ArtifactWriterClaimRow
 
 repositories/sqlite/snapshotCore/commitScope.py
-  SqlitePublicationCommitStore, SqliteCommitScopeBinding
+  SqlitePublicationCommitStore (4C2-R, §8.13: только transaction lifecycle)
+repositories/sqlite/shared/capabilities/scopeBinding.py
+  SqliteCommitScopeBinding (перенесён из commitScope.py в 4C2-R)
+repositories/sqlite/shared/capabilities/scopeRegistry.py
+  SqliteScopeRegistry (4C2-R: issuance/ownership/lifetime/quarantine state)
+repositories/sqlite/shared/transactions/transactionDriver.py
+  SqliteTransactionDriver (4C2-R: driver commands, worker acknowledgement/close)
+repositories/sqlite/shared/access/scopedAccess.py
+  ScopedSqliteAccess (4C2-R: guarded row IO, без transaction control)
+repositories/sqlite/shared/validation/rowValues.py
+  _UID, _HASH, _POS, _fields, _wire (scalar validation, 4C2-R)
+repositories/sqlite/shared/validation/blobIntegrity.py
+  _checked_blob (bytes/checksum validation, 4C2-R)
 repositories/sqlite/snapshotCore/operations/operationStore.py
   SqliteOperationStore
+repositories/sqlite/snapshotCore/operations/terminalCodec.py
+  StoredTerminalCodec (target 4C2-O, §8.14; outcome wire/row projection)
+repositories/sqlite/snapshotCore/operations/publicationEvidence.py
+  SqlitePublicationEvidence (target 4C2-O; исторические publication refs)
 repositories/sqlite/snapshotCore/publications/worldPublicationStore.py
   SqliteWorldPublicationStore
 repositories/sqlite/snapshotCore/publications/playerPublicationStore.py
   SqlitePlayerPublicationStore
 repositories/sqlite/snapshotCore/history/snapshotHistoryStore.py
   SqliteSnapshotHistoryStore
+repositories/sqlite/snapshotCore/history/rowProjection.py
+  encode_history_row, decode_history_row (4C2-H; pure SQL projection)
+repositories/sqlite/artifacts/operationArtifacts.py
+  SqliteOperationArtifacts (target 4C2-O; read-only operation-held refs)
 repositories/sqlite/artifacts/catalogStore.py
   SqliteArtifactCatalog
 repositories/sqlite/artifacts/leaseStore.py
@@ -1817,6 +1839,18 @@ composition root ещё не объявляются: GEN-DAG-1 gates сохра�
 - db/models/snapshotCore — 0→4; db/models/artifacts — 0→4.
 - db/repositories/sqlite/snapshotCore: root 0→2; operations/publications/
   history — 2/3/2. db/repositories/sqlite/artifacts — 0→4.
+- Дополнение 4C2-R (§8.13): db/repositories/sqlite/shared — root 0→1;
+  capabilities 0→3; transactions/access — 0→2 каждый; validation 0→3.
+  Все counts включают __init__.py; root snapshotCore остаётся 2 файла.
+  Исторический structural audit 78 source modules/46 packages ниже относится
+  к исходной карте; target с 4C2-R — 84 source modules/51 packages.
+- Дополнение 4C2-H/4C2-O (§8.14): application/worldSnapshot/validation —
+  новый пакет 0→2; snapshotCore/history 2→3, operations 2→4.
+  sqlite/artifacts пока отсутствует: 4C2-O создаёт __init__ + operationArtifacts
+  (0→2), итог с будущим 4C3 — 5 вместо 4. Новых файлов в sqlite root нет.
+  Target всей карты с этими дополнениями — 89 source modules/52 packages
+  (+5 modules и один новый пакет validation к target 4C2-R; пакет artifacts
+  уже учитывался исходной картой). Counts включают __init__.py.
 - core/container/snapshots — 0→3.
 - storage: root 0→1; artifacts 0→2.
 
@@ -1881,6 +1915,11 @@ Existing positive/negative pyright setup используется через ext
    двух connections, atomic world/player/outcome, cancellation/lost COMMIT,
    scope task/database/lifetime/read-only ownership. Common tables only.
    Обязательная boundary validation всех полей rows и её negative cases — §8.11.
+   Перед 4C3 — отдельный обязательный подшаг **4C2-R**: композиция
+   commitScope по §8.13; функциональный PASS 4C2 этот gate не снимает.
+   Затем по одному за заход: **4C2-H** — history provenance/projection,
+   **4C2-O** — operation composition по §8.14. Они также блокируют 4C3
+   до реализации и повторной архитектурной приёмки.
 9. **4C3 — SQLite artifact adapters:** catalog/lease/holders, common guards;
    two-operation dedupe, stale fence, no deletion while any hold survives.
    Обязательная boundary validation всех полей rows и её negative cases — §8.11.
@@ -2039,14 +2078,14 @@ SQL, services, emitters, Container и DAG не менялись; backend не з
 
 ### 8.10. Реализация 4C1 — DDL/models (2026-10-30)
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**. Только 0001_initial.sql и 13 frozen SQL row-моделей по §8.3: publications/history/operations и artifact catalog/storage/holder/lease/writer facts. Сохранены snapshot_data/snapshot_checksum; добавлены FK ownership, partial UNIQUE/single-successor, CHECK, DESC lookup indices и append-only/INSERT guards, включая запрет обхода через INSERT OR REPLACE.
+Статус: **ПРИНЯТО мастером 2026-10-30 («Следующий шаг»); переход к 4C2 разрешён**. Только 0001_initial.sql и 13 frozen SQL row-моделей по §8.3: publications/history/operations и artifact catalog/storage/holder/lease/writer facts. Сохранены snapshot_data/snapshot_checksum; добавлены FK ownership, partial UNIQUE/single-successor, CHECK, DESC lookup indices и append-only/INSERT guards, включая запрет обхода через INSERT OR REPLACE.
 Проверка: из backend `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **81 PASS** (59 contracts + 22 storage; existing Pyright: positive 0, negative **40** ожидаемых diagnostics). Временный SQLite :memory: с полной initial schema; Database.validate_schema проверен на реальных PRAGMA через no-IO async transport shim, точные колонки и mapper round-trip всех row-моделей — PASS.
 Negative cases: owner/parent/tick, FK, root/successor/sequence, operation binding/kind/phase/fence, terminal results, writer admission/drain и GC live holds — PASS. Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS; сохранены исходные CRLF/mixed EOL схемы. Новые пакеты содержат 1–4 файла с __init__; все содержательные правки через apply_patch, чужие изменения сохранены.
 Adapters/CAS races/task/database/lifetime proofs остаются в 4C2–4C3; startup model registration — 4E2. Production БД, services, Container и DAG не менялись; backend не запускался, commit не создавался. **Остановка перед 4C2**.
 
 ### 8.11. Обязательная boundary validation в 4C2–4C3 — inventory полей
 
-Статус: **INVENTORY ЗАФИКСИРОВАН; ПРОВЕРКИ ADAPTERS ЕЩЁ НЕ РЕАЛИЗОВАНЫ**.
+Статус: **4C2 — ADAPTER VALIDATION РЕАЛИЗОВАНА И ПРОВЕРЕНА (§8.12), ПОДГОТОВЛЕНА К РЕВЬЮ; 4C3 — ЕЩЁ НЕ РЕАЛИЗОВАН**.
 Сверено с фактическими 13 SQL row-моделями после 4C1: **92 поля**.
 Это checklist приёмки следующих подшагов, а не утверждение, что обычные
 dataclass-аннотации или DDL уже выполняют контрактную валидацию.
@@ -2185,6 +2224,199 @@ test_leases/test_gc (4C3), test_capabilities при появлении scope imp
 и existing typing fixtures; не создавать новые root tests/validation pipeline.
 4C1 SQL tests не засчитываются за эти adapter boundary tests. 4C2/4C3 не
 объявляются DONE без закрытия inventory и соответствующих meaningful проверок.
+
+### 8.12. Реализация 4C2 — SQLite publication/operation adapters (2026-10-30)
+
+Статус: **ФУНКЦИОНАЛЬНО РЕАЛИЗОВАНО; АРХИТЕКТУРНАЯ ПРИЁМКА НЕ ЗАКРЫТА — 4C2-R (§8.13), 4C2-H/4C2-O (§8.14)**. По §8.3 добавлены SqlitePublicationCommitStore/SqliteCommitScopeBinding, world/player publication CAS, snapshot history и operation store; общий errors.py. Согласованное добавление world_uid в claim_publication синхронизировано с портом/ТЗ/typing. Boundary validation 56 полей 4C2 по §8.11: internal UID, enum/tag, strict numbers/raw bool, UTC/hash/version/bytes и row↔DTO coherence; checksum проверяется до decode.
+Проверка из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **95 PASS**, включая existing Pyright (positive 0 diagnostics, negative ровно **42** ожидаемых diagnostics). Реальные Database/GuardedConnection/aiosqlite workers, две SQLite connections, FULL synchronous в runtime tests; только schema setup ускорен OFF. Сетевой wakeup event loop заменён bounded polling в test fixture; production loop/driver не менялись.
+CAS race — один победитель; world/player/history/outcome commit/rollback вместе; preparing/busy/ready/terminal retry и immutable ID/world/preparation/request bindings — PASS. Cancellation до commit, во время COMMIT и ROLLBACK дожидается worker; lost COMMIT acknowledgement закрывает/quarantine connection, включая уже ожидающих gate callers, запрещает refusal и восстанавливает terminal через свежую connection — PASS. Task/database/lifetime/read-only/forged/nested scope, persisted corruption и constructed/copied invalid DTO до writes — PASS.
+Прежняя положительная архитектурная отметка о commitScope **снята**: проверка классов <300 строк не выявила смешение ответственностей всего модуля. Domain CRUD/planning/materialization отсутствуют, raw connection handler не получает; эти факты и функциональный baseline сохраняются, но композицию модуля не оправдывают. Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все правки через apply_patch; чужие изменения сохранены. Production БД, services, Container/DAG не менялись; backend не запускался, commit агентом не создавался. **Переход к 4C3 заблокирован до 4C2-R и повторной архитектурной приёмки**.
+
+### 8.13. 4C2-R — разделение ответственностей commitScope
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К ПОВТОРНОМУ АРХИТЕКТУРНОМУ РЕВЬЮ** (2026-10-30).
+Запрос мастера: зафиксировать проблему и решение в плане, затем «выполняй». Это отдельный
+подшаг перед 4C3, без совмещения с artifact adapters и без изменения
+принятых публичных contracts. Основание — §8.3.3 и §8.11 этого плана,
+tz_world_snapshot «Operation storage, CAS и capability ports»,
+правило class-size-limit о проверке фактических ответственностей.
+
+#### Проблема
+
+В исходном repositories/sqlite/snapshotCore/commitScope.py были смешаны:
+выдача/проверка capabilities, управление UOW, низкоуровневое завершение
+worker, выполнение SQL и валидация SQL scalars/bytes. SqlitePublicationCommitStore
+одновременно координирует transaction lifecycle и реализует registry/driver
+механизмы; свободные _one/_all/_insert/_fields/_wire/_checked_blob обслуживают
+разные adapters, хотя размещены в модуле commit scope.
+Все эти обязанности относятся к общей SQLite-инфраструктуре, но не к одному
+владельцу реализации. Порог размера класса не решает проблему композиции.
+Особенно непрозрачен _settle(sql=None): None означает физический close,
+а return bool — поступившую cancellation после worker acknowledgement.
+
+#### Целевые владельцы, пути и контракты
+
+Все пути ниже — относительно backend/app/; слой всех компонентов — db.
+Пути таблицы материализованы в 4C2-R; публичные application ports сохранены.
+
+| Владелец → точный файл | Ответственность и API | Producer/consumer; ограничения |
+|---|---|---|
+| SqlitePublicationCommitStore → db/repositories/sqlite/snapshotCore/commitScope.py | Только lifecycle: acquire существующего unit_of_work, BEGIN/read transaction, yield scope, выбор COMMIT/ROLLBACK по завершению тела, порядок quarantine/close и revoke. transaction(operation_id), read_scope(existing_scope либо None), внутренний _transaction. | Получает Database, SqliteScopeRegistry и SqliteTransactionDriver через явный DI; вызывается publication owner и bookkeeping owner. Не реализует registry, worker drain, SQL row IO или scalar/blob validation. Валидация своего operation_id делегируется существующему shared leaf validator. |
+| SqliteCommitScopeBinding → db/repositories/sqlite/shared/capabilities/scopeBinding.py | Оpaque token: assert_active и read_scope. Делегирует проверки registry. | Выдаёт только registry. Binding не регистрирует себя, не хранит public connection, не выполняет SQL и не открывает UOW. Перенос существующего класса, не дополнительный вид scope. |
+| SqliteScopeRegistry → db/repositories/sqlite/shared/capabilities/scopeRegistry.py | Единственный registry issued capabilities: issue/check/read-only derivation/revoke, operation identity и logical quarantine. Проверяет task, Database/connection identity, lifetime и read/write режим. | Используют coordinator, Binding и ScopedSqliteAccess. Issued entries — private runtime state, не DTO/dataModel. Registry не исполняет SQL, не выбирает COMMIT/ROLLBACK и не закрывает driver. Проверка quarantine выполняется также после ожидания gate. |
+| SqliteTransactionDriver → db/repositories/sqlite/shared/transactions/transactionDriver.py | Выполнение begin/commit/rollback/close на существующей GuardedConnection; ожидание worker acknowledgement и корректное сохранение cancellation. Явные методы, без sentinel sql=None. | Вызывает coordinator под принадлежащим текущему task UOW. Driver не выдаёт scopes, не открывает вторую connection/UOW, не знает publications/rows/DTO и не решает domain outcome. Сигнал cancellation после acknowledgement отделён от exception неопределённого результата. |
+| ScopedSqliteAccess → db/repositories/sqlite/shared/access/scopedAccess.py | Проверенные one/all/insert с повторной registry-проверкой перед SQL/cursor access; INSERT через штатный mapper. | Используют publication/history/operation adapters и затем 4C3. Принимает тот же registry; не открывает и не завершает transaction, не возвращает connection наружу, не содержит table/domain-specific policy. Bulk — по-прежнему только app.db.bulkSql, когда появится реальная batch операция. |
+| _UID/_HASH/_POS, _fields/_wire → db/repositories/sqlite/shared/validation/rowValues.py | Только pure strict scalar/wire validation существующими EntityUid/RevisionHex/enum/StrictInt контрактами, включая raw SQL 0/1 до mapper. | Вызывают owning adapters и registry для своих входов. Ни IO, ни scope lifecycle, ни табличных списков полей/новых дублей DTO. Состав проверяемых columns и semantic row↔DTO проверки остаются у конкретного adapter. |
+| _checked_blob → db/repositories/sqlite/shared/validation/blobIntegrity.py | Pure проверка bytes и checksum через existing content_digest до decode. | Используют history/operation adapters. Не выбирает domain codec, не делает IO и не восстанавливает state/history. |
+
+Направление зависимостей: shared validation → existing dataModel/encoding
+leaves; shared registry → Binding и abstract CommitScope/CommitReadScope;
+Binding использует registry без runtime import cycle; shared access →
+shared registry/mapper; shared driver → existing GuardedConnection/aiosqlite.
+Coordinator и owning adapters зависят на этих shared компонентах.
+Обратных импортов shared → concrete snapshot/artifact stores, Container
+или domain application быть не должно. Registry/driver/access не получают
+canonical type IDs и не переносятся в dataModel.
+
+#### Композиция и миграция
+
+- SQLite shared — новый подпакет, без добавления файлов в существующий
+  переполненный sqlite root. Пакеты и counts с __init__ заданы в §8.3.7:
+  shared root 1, capabilities 3, transactions 2, access 2, validation 3.
+  Перед кодом фактические counts/конфликты путей перепроверить.
+- Один registry, driver, access и commit coordinator на соответствующий
+  Database/connection binding. Constructor DI явный и без IO; fixtures
+  создают тот же набор. Wiring будущего 4E2 учитывает эту композицию,
+  но Container в 4C2-R не реализуется и не меняется.
+- Перенести реализации по владельцам, затем переключить все imports/calls
+  publication/history/operation stores, support/fixtures.py, test_cas,
+  test_atomicity, test_capabilities и typing fixtures/config. _write_operation
+  переходит к registry как извлечение operation identity; _read_scope —
+  к coordinator как использование/открытие read transaction.
+- Не оставлять compatibility reexports helpers в commitScope.py и новый
+  универсальный Ops/Utils класс с прежним набором обязанностей. Публичные
+  application ports, DDL/rows, canonical bytes/IDs, error/outcome semantics
+  и границы 4C2/4C3 не меняются. Дополнительные именованные типы, если
+  понадобятся, сначала добавить в карту, не создавать по месту.
+
+#### Приёмка отдельного подшага
+
+Сохранить все meaningful проверки baseline 4C2 (**95 PASS**, Pyright
+positive 0 / negative 42), адаптировав fault-injection seams к driver API,
+а не удаляя или ослабляя assertions. Повторить actual two-connection CAS,
+world/player/history/outcome atomicity, cancellation до/во время COMMIT
+и ROLLBACK, lost acknowledgement, quarantine queued callers, terminal
+recovery/retry и task/database/lifetime/read-only/forged/nested capabilities.
+Не создавать заново services или concrete Patch ради этих тестов.
+
+Дополнительно проверить import direction и DI identity: все adapters/access
+используют один registry; driver не может выполнить terminal command вне
+owned UOW; shared компоненты не импортируют concrete stores; commitScope.py
+не содержит реализаций row IO/scalar validation/worker drain. Для каждого
+нового/изменённого класса зафиксировать owner и фактические операции,
+проверить также callbacks/helpers, а не только число строк.
+
+Done: публичные contracts и поведение сохранены, проверки зелёные,
+разделение реализаций соответствует этой карте и повторно принято мастером.
+До этого 4C2 не объявляется архитектурно принятым, 4C3 не начинается.
+Evidence 4C2-R: реализации перенесены по таблице, compatibility reexports отсутствуют; четыре adapters и fixtures переведены на явный DI одного registry/access, coordinator получает Database/registry/driver. Container/4E2 не менялся; его будущая композиция использует этот же набор.
+Из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **99 PASS** (baseline 95 + 4); existing Pyright — positive **0**, negative **45** ожидаемых (42 прежних + 3 shared capability/DI checks). Сохранены реальные two-connection CAS, atomicity, cancellation COMMIT/ROLLBACK, lost COMMIT acknowledgement/queued quarantine и recovery; добавлены DI identity/refusal, driver owner guard, import-direction и lost ROLLBACK acknowledgement + failed close/quarantine/recovery.
+Проверка ответственностей: SqlitePublicationCommitStore (включая _transaction/_quarantine) содержит только lifecycle/order/cancellation; SqliteScopeRegistry владеет issuance/check/revoke, SqliteTransactionDriver — worker drain/close, ScopedSqliteAccess — row IO, validation leaves — scalars/bytes. В coordinator нет SQL row IO, registry state или worker callbacks; shared не импортирует concrete stores/Container. Фактические package counts 1/3/2/2/3 совпали с §8.3.7; классы 12–64 строки, но архитектурный вывод основан на обязанностях, а не размере.
+Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все изменения через apply_patch; чужие изменения сохранены, backend не запускался, commit не создавался. **Остановка перед 4C3; повторная приёмка мастером ожидается.**
+
+### 8.14. 4C2-H / 4C2-O — history provenance и композиция operation/history stores
+
+Статус: **4C2-H РЕАЛИЗОВАНО, ПОДГОТОВЛЕНО К РЕВЬЮ; 4C2-O НЕ НАЧАТ** (2026-10-30, запрос мастера «Выполняй», один подшаг за заход).
+Основание: ревью мастером operationStore/snapshotHistoryStore после 4C2-R;
+tz_world_snapshot «Operation storage, CAS и capability ports» и правило
+соответствия refs receipt назначенным snapshots/участникам. Эти подшаги
+не являются реализацией 4C3/4D1. Публичные ports, DTO, DDL и canonical
+formats/IDs сохраняются. Общая архитектурная приёмка 4C2 остаётся открытой;
+положительная проверка commitScope в §8.13 не распространяется на эти классы.
+
+#### Подтверждённые проблемы
+
+- **H1, P1 — неподтверждённый новый state.** В snapshotHistoryStore.append
+  проверяется receipt.state_refs → metadata.state_refs, но обратного условия
+  для refs текущего snapshot нет. Проверка pinned base пропускает такие refs.
+  На временной БД через existing live_database/live_started воспроизведено:
+  metadata с текущим state_ref test.unbacked и receipts=() успешно проходит
+  append и read. Это точечный probe, не добавленный regression test и не
+  доказательство успешной публикации: нарушение уже на границе append.
+- **H2 — смешение provenance policy и SQL projection.** append одновременно
+  сопоставляет receipts/metadata/base, кодирует envelope и строит world/player
+  rows. read содержит raw scalar validation, decode и row↔DTO comparison
+  вместе с загрузкой связанных operation/parent/world/player/session facts.
+  SQL integrity checks законны в db; перенос всей валидации в application
+  не является решением.
+- **O1 — несколько владельцев внутри SqliteOperationStore.** _event/claim
+  обслуживают lifecycle/fence/identity; _decode_terminal/_save содержат
+  outcome wire dispatch/codec; _terminal_refs проверяет исторические
+  world/player publication evidence; _load напрямую JOIN-ит artifact
+  catalog/holder events и строит ArtifactRef. Последняя зона принадлежит
+  artifacts и иначе пересечётся с 4C3. Число строк <300 и baseline 99 PASS
+  не подтверждают разделение этих ответственностей.
+
+#### Target владельцы и направления импортов
+
+Пути относительно backend/app/. Компоненты 4C2-H материализованы по карте;
+компоненты 4C2-O остаются target. Добавление других именованных компонентов
+требует предварительной правки карты.
+
+| Владелец / точный путь | Обязанность, контракт и границы |
+|---|---|
+| validate_receipt_provenance → application/worldSnapshot/validation/receiptProvenance.py | Чистая policy: (metadata: SnapshotEnvelope, receipts: tuple[SectionApplyReceipt, ...], base: SnapshotEnvelope \| None, operation_id: EntityUid) → None. Strict revalidation входов; operation binding, точный assigned snapshot, section ownership и уникальность receipts, симметричная сверка новых state/history refs, наследование старых state только из pinned base. Никаких SQL/clock/logging, построения refs или domain payload semantics. Вызывается history append; будущий SnapshotMetadataBuilder переиспользует её, а не дублирует. |
+| encode_history_row / decode_history_row → db/repositories/sqlite/snapshotCore/history/rowProjection.py | Pure row projection: encode принимает metadata, связанный world metadata для player и существующий codec; возвращает WorldSnapshotRow \| PlayerSnapshotRow. Decode принимает raw Mapping, expected SnapshotRef и codec, возвращает SnapshotEnvelope после strict scalar/version/checksum и row↔envelope checks. Не получает access/registry/connection, не читает связанные rows. Session audit проверяется отдельно storage owner. |
+| SqliteSnapshotHistoryStore → db/repositories/sqlite/snapshotCore/history/snapshotHistoryStore.py | Единственный публичный ISnapshotHistoryStore adapter. Получает commits/access/codec, загружает pinned base и SQL relation facts, делегирует provenance/projection, вставляет одну row. read загружает rows и проверяет operation/parent/world/player/session relations. Не реализует receipt policy или envelope wire mapping; не открывает competing UOW и не собирает metadata за MetadataBuilder. |
+| StoredTerminalCodec → db/repositories/sqlite/snapshotCore/operations/terminalCodec.py | Pure storage outcome projection: decode(raw row) → существующий union terminal DTO; encode(typed outcome) → PublicationOutcomeRow. Владеет storage-only discriminator/category/version, strict row/body/checksum validation, existing canonical codec/manifest. Не делает SQL, не проверяет durable publications, не решает claim/refusal/recovery. Constructor manifest без IO. |
+| SqlitePublicationEvidence → db/repositories/sqlite/snapshotCore/operations/publicationEvidence.py | check(scope, typed terminal outcome) → None: SQL сверка historical marker, world/player refs и запрета скрыть publication отказом/cancellation. Использует тот же access/registry и world/player stores; concrete внутренние calls _by_id/_for_operation локализованы здесь. Не читает latest heads вместо historical refs, не выбирает terminal category и не управляет transaction. |
+| SqliteOperationArtifacts → db/repositories/sqlite/artifacts/operationArtifacts.py | read(scope: CommitReadScope, operation_id: EntityUid) → tuple[ArtifactRef, ...]: existing active operation-holder query, scalar/enum/ref validation и стабильная сортировка. Владеет artifact table knowledge, получает общий access. Read-only leaf; без claim/reserve/handoff/release/GC/writers и без собственного UOW. Будущий 4C3 использует этого владельца, не копирует query в operation store. |
+| SqliteOperationStore → db/repositories/sqlite/snapshotCore/operations/operationStore.py | Сохраняет IOperationStore: operation identity/lifecycle/fence, atomic claims и terminal idempotency/bookkeeping в существующих scopes. Сборка OperationRecord и SQL operation/event integrity остаются его зоной. Получает codec/evidence/artifact reader явным DI; делегирует их работу. Не содержит artifact SQL, terminal encode/decode dispatch или реализации publication evidence. Это owning operation storage adapter, не новая application service или recovery scheduler. |
+
+Направления: receipt policy → existing dataModel; db history → policy,
+projection/codec и shared access; db operation store → terminal codec,
+publication evidence и artifact read leaf; artifact leaf → shared access
+и artifact DTO. Обратных импортов artifacts → snapshotCore stores нет.
+DataModel не получает IO/application imports, новые DTO/параллельные ports
+и logging pipelines не вводятся. Lifecycle decisions ядра operation storage
+не переносятся механически в будущий OperationLedger. Codec/projection
+получают typed данные; SQL relation validation остаётся у db owners.
+
+#### Последовательность и проверки
+
+1. **4C2-H, отдельный заход:** сначала regression H1 (до INSERT), затем pure
+   provenance policy и history projection, переключение adapter/fixtures/typing.
+   Новый state текущего snapshot обязан совпасть с относящимся к этой цепочке
+   receipt.state_refs; refs других участников не считаются подтверждением.
+   Старый state должен точно присутствовать в pinned base; receipt со старым
+   state также не обходит эту проверку. Сохраняются законный empty tick,
+   неизменённый base state, отдельные history refs и world/player receipts.
+2. **4C2-O, следующий отдельный заход:** выделить codec, publication evidence
+   и read-only artifact leaf; обновить явный DI и fixtures без Container.
+   Сохранить все прежние lifecycle/fence/terminal retry/identity checks.
+   Artifact leaf добавляется только как перенос existing read, без функционала
+   будущего 4C3; его columns/guards сверяются с инвентарём §8.11.
+3. Для каждого шага — `.venv/Scripts/python.exe -m unittest discover -s
+   tests/snapshotCore -p 'test_*.py'` из backend через existing venv; baseline
+   **99 PASS**, Pyright positive **0** / negative **45** + новые EXPECT cases.
+   H: отрицательные current state без receipt, несовпадение section/snapshot/
+   world/player и неподтверждённый старый state; положительные multi-participant,
+   history/state separation и retained base. O: checksum/tag/row-body corruption,
+   mismatch historical evidence, active/released artifact holds и foreign scopes.
+   Scope/DI identity, atomicity, CAS, cancellation/lost ack/quarantine/recovery
+   не ослабляются. Golden bytes/format IDs сохраняются, SQL schemas неизменны.
+4. Перед приёмкой — actual responsibility/import review каждого изменённого
+   класса и helper, counts по §8.3.7, scoped diff --check. Не принимать фасад,
+   который делегирует в новый универсальный Ops с прежними смешанными зонами.
+
+Done каждого подшага: regression/contract/typing проверки зелёные, карта
+совпадает с кодом, evidence обновлён и мастер повторно принял обязанности.
+**4C3 заблокирован до приёмки 4C2-H и завершения/приёмки 4C2-O.**
+
+Evidence 4C2-H: regression H1 сначала воспроизвёл принятие current state без receipt; теперь world/player cases и неподтверждённый старый state отклоняются до INSERT. validate_receipt_provenance проверяет assigned refs, operation/section/receipt uniqueness, симметрию новых state/history и достижимость из точного pinned base; rowProjection владеет pure strict row↔envelope/checksum projection. Публичные ports, DTO, SQL и canonical formats/IDs сохранены.
+Из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **106 PASS** (99 + 7 history tests), existing Pyright positive **0** / negative **48** (45 + 3 EXPECT). Проверены реальные multi-participant world/player history append/read, retained base, empty tick, strict copied inputs, JSON/row round-trip и immutable rows; прежние CAS/atomicity/cancellation/quarantine/recovery проверки сохранены.
+Архитектурная проверка SqliteSnapshotHistoryStore, _validate_parent/_world_for_player, policy/_same_owner и projection: policy импортирует только Pydantic/dataModel, projection не получает DB/access/scope, store владеет pinned SQL relation reads и делегирует provenance/wire mapping. Counts validation/history/tests-publication = **2/3/4**, __init__ application пустой; 85 строк класса не использованы как доказательство архитектуры.
+Scoped diff --check — PASS. Правки через apply_patch; чужие изменения сохранены, backend не запускался, commit не создавался. **Остановка перед 4C2-O; приёмка 4C2-H мастером ожидается.**
 
 ## 9. Норматив и совместимость
 

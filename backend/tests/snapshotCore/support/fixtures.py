@@ -189,6 +189,9 @@ async def live_database(path=None, seed=True):
     from app.db.repositories.sqlite.snapshotCore.publications.playerPublicationStore import SqlitePlayerPublicationStore
     from app.db.repositories.sqlite.snapshotCore.history.snapshotHistoryStore import SqliteSnapshotHistoryStore
     from app.db.repositories.sqlite.snapshotCore.operations.operationStore import SqliteOperationStore
+    from app.db.repositories.sqlite.shared.capabilities.scopeRegistry import SqliteScopeRegistry
+    from app.db.repositories.sqlite.shared.transactions.transactionDriver import SqliteTransactionDriver
+    from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
     workspace = Path(__file__).resolve().parents[4]
     root = (workspace / "backend/.tmp_snapshot_core").resolve()
     assert root.is_relative_to(workspace)
@@ -207,11 +210,14 @@ async def live_database(path=None, seed=True):
                 await db.conn.execute("INSERT INTO worlds(world_uid,name,created_at) VALUES ('w1','w1',?)", (STAMP,))
                 await db.conn.execute("INSERT INTO timelines(timeline_id,world_uid,created_at) VALUES ('t1','w1',?)", (STAMP,))
                 await db.conn.execute("INSERT INTO character_sheet(character_uid,character_type,display_name,world_uid,created_at) VALUES ('p1','player','p1','w1',?)", (STAMP,))
-        commits = SqlitePublicationCommitStore(db)
-        world = SqliteWorldPublicationStore(commits)
-        players = SqlitePlayerPublicationStore(commits)
-        history = SqliteSnapshotHistoryStore(commits)
-        operations = SqliteOperationStore(commits, world, players)
+        registry = SqliteScopeRegistry(db)
+        driver = SqliteTransactionDriver()
+        access = ScopedSqliteAccess(registry)
+        commits = SqlitePublicationCommitStore(db, registry, driver)
+        world = SqliteWorldPublicationStore(commits, access)
+        players = SqlitePlayerPublicationStore(commits, access)
+        history = SqliteSnapshotHistoryStore(commits, access)
+        operations = SqliteOperationStore(commits, world, players, access)
         yield db, commits, world, players, history, operations
     finally:
         await db.disconnect()
@@ -247,7 +253,7 @@ async def live_started(bundle):
     return started_ref
 
 
-async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, hold=None):
+async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, hold=None, claims=None):
     from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
     from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef, PlayerSnapshotRef
     from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef, PlayerHeadExpectation
@@ -257,6 +263,8 @@ async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, ho
     db, commits, world, players, history, operations = bundle
     expected = await world.read("w1")
     claim = await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, operation_id, "w1", "a" * 64, "b" * 64)
+    if claims is not None:
+        claims.append(claim)
     world_ref = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id=operation_id + "-world")
     player_ref = PlayerSnapshotRef(player_uid="p1", snapshot_id=operation_id + "-player")
     old_player = await players.read("p1")
@@ -283,3 +291,15 @@ async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, ho
         if hold is not None:
             await hold.wait()
     return claim, result
+
+
+async def unsafe_update(db, table, key, identity, column, value):
+    """Corrupt only a disposable test database; exercise read validation beyond DDL."""
+    async with db.conn.execute(f"SELECT {column} FROM {table} WHERE {key}=?", (identity,)) as cursor:
+        previous = (await cursor.fetchone())[0]
+    await db.conn.execute("PRAGMA foreign_keys=OFF")
+    await db.conn.execute("PRAGMA ignore_check_constraints=ON")
+    await db.conn.execute(f"DROP TRIGGER IF EXISTS {table}_no_update")
+    async with db.transaction():
+        await db.conn.execute(f"UPDATE {table} SET {column}=? WHERE {key}=?", (value, identity))
+    return previous

@@ -11848,6 +11848,72 @@ domain admission/input/coverage — ранее закреплённые owning j
 atomic owning schemas/defaults + capture_geo/registration/production entry
 вместе с G8-B transport cutover; zero-target admission также остаётся OPEN.
 
+### G10-A duplicate-contract correction — IMPLEMENTED / NOT ACCEPTED (2026-10-30)
+ТЗ: те же §6.29-J/M, G0; исправление отклонённого среза без activation.
+Удалить WaterFieldRecipeContext (fields/field.py). fieldRecipeFactory.py создаёт
+существующие typed recipes явным исчерпывающим domain dispatch, без отдельного
+whitelist и без промежуточного POJO. Настройки читает из captured input.
+dataModel/hydrology/generation/categorySource.py: HydrologyCategoryFields —
+единый required captured schema категорий и FieldRef bindings; существующие
+GeoWaterPlacementInput и GeoHydrologyPlanInput наследуют его без изменения wire
+полей/defaults. HydrologyCategorySource остаётся descriptor, не settings record.
+application/.../hydrology/policy/hydrologyGenerationBinding.py: общий domain
+resolve_hydrology_category_policies читает эти bindings и исполняет common policy;
+GeoHydrologyRoutesPlanProvider только вызывает его, без своей category table.
+Проверка ответственности: оба preparation фасада, routes provider и callback;
+проверка дублей — чтением schemas/call graph, не тестом на структуру кода.
+Тесты: пересмотреть новые owner tests; оставить внешние контракты (режимы трёх
+категорий, override/provenance, field от custom settings, invalid input/replay).
+Existing recipes/context/placement модели повторно не вводятся. Поля captured
+остаются required. Counts: generation6→6, preparation10→10, integration6→6
+(WARN); новых файлов нет. GEO-1/providers + positive/negative typing.
+Итог: context удалён; required category fields/bindings объявлены один раз,
+оба input наследуют их, admission и routes читают один контракт. JSON schemas
+обоих input сравнены с HEAD: содержание, required/defaults не изменились.
+Owner-copy test заменён проверками результата public preparation→floor consumer:
+custom knobs меняют floor при неизменном budget; zero-detail сохраняет plate;
+каждая категория отключает только свои sources. Routes проверяет все три
+варианта category override; body override/provenance tests не перехватывают
+аргументы adapter/job. Тесты по-прежнему авторские, не независимая приёмка.
+Изолированные мутации в памяти: lake/ocean swap пойман native и routes tests
+(6 assertion failures); игнорирование noise settings поймано floor test (1).
+Evidence: GEO-1 720 OK, providers129 OK, positive pyright0;
+negative260, все257 EXPECT покрыты, surplus baseline прежний. После последней
+правки только tests native24 OK. Ручная проверка обоих preparation facade,
+их callback и routes provider: domain operations у owning jobs/factory,
+provider управляет dependencies/calls; повторного category dispatch нет.
+G10-A остаётся OPEN/NOT ACCEPTED; production и G8-B atomic cutover не выполнены.
+
+### G10-A admission duplication conflict — OPEN / ACCEPTANCE BLOCKER (2026-10-30)
+Цель: устранить независимое хранение одного admission в двух представлениях.
+ТЗ: GEO-1 §6.29-J/M, общий placement lifecycle и single-owner контракт G0-P.
+Подтверждено ревью POJO: ProceduralSourceAdmissions хранит admission одновременно
+в sources[].admission и batch.objects; проверки их соответствия нет. Воспроизведение:
+strict model_validate принимает sources с одним native binding и batch.objects=().
+Это конфликт владения данными, а не дубль enum или только недостаток тестов.
+Файлы/владельцы:
+- dataModel/hydrology/policy/proceduralSourceAdmission.py — hydrology bindings;
+- application/worldData/generators/hydrology/sources/proceduralSourceAdmission.py — producer;
+- application/worldData/generators/terrain/designedWater/coverage/waterCoverageAllocation.py
+  и preparation/proceduralWaterSourceAdapter.py — потребители bindings;
+- preparation/proceduralDesignPreparation.py — только wiring общего lifecycle.
+Пути application выше — относительно backend/app/; dataModel — там же.
+Целевой контракт: admission имеет одного владельца — общий PlacementBatchV2;
+hydrology binding ссылается на него по существующей typed identity, не хранит
+независимую копию decision/header. Точные сигнатуры зафиксировать до кода.
+Проверить также water_intents ↔ headers: полные intents могут быть необходимы
+для геометрии, но не должны независимо переопределять identity/admission.
+Не закрывать конфликт одним validator сравнения двух сохранённых копий;
+не создавать новый параллельный transport/compatibility bridge.
+Проверка: missing/mismatched/duplicate binding отклоняются до design/placement;
+native и competitor проходят один batch, budget/admission используют одно
+решение; body override, disabled/unresolved, порядок sources и replay сохранены.
+Тесты проверяют публичное поведение; single-owner подтверждается чтением
+контрактов и call graph. GEO-1/providers и positive/negative typing после исправления.
+Done: независимой копии admission нет, потребители используют общего владельца,
+несогласованные входы отвергаются. До этого срез NOT ACCEPTED; G10-A OPEN.
+Статус: только фиксация обязательного исправления; код пока не изменён.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

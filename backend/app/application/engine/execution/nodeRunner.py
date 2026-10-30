@@ -2,10 +2,10 @@ import logging
 from datetime import datetime, timezone
 
 from app.application.engine.dag.executionTrace import ExecutionTrace
-from app.application.engine.nodes.nodeKind import NodeKind
+from app.application.engine.nodeTypes.support.nodeKind import NodeKind
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
-from app.application.engine.nodes.pojo.pythonNodeError import PythonNodeError
+from app.application.engine.nodeTypes.support.pythonNodeError import PythonNodeError
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecut
 from app.application.engine.nodes.nodeRegistry import register_python
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
 from app.application.engine.nodes.pojo.pythonNode import PythonNode
-from app.application.engine.nodes.pojo.pythonNodeError import PythonNodeError
+from app.application.engine.nodeTypes.support.pythonNodeError import PythonNodeError
 from app.application.engine.nodes.pojo.python.scene.sceneLocationSelectNode import can_start, _resolve_type_display
 from app.application.engine.rules.rule import Rule
 from app.application.engine.taskType import TaskType

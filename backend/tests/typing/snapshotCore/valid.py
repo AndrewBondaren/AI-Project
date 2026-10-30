@@ -188,3 +188,59 @@ from app.db.models.snapshotCore.publicationRows import WorldPublicationRow
 
 def sql_row_projection(snapshot: WorldSnapshotRow, publication: WorldPublicationRow) -> tuple[bytes, str, bool]:
     return snapshot.snapshot_data, snapshot.snapshot_checksum, publication.gameplay_started
+
+
+from app.application.publication.contracts.operationStore import IOperationStore
+from app.application.worldSnapshot.storage.publicationStore import (
+    IWorldPublicationStore, IWorldPublicationInitializer, IPlayerPublicationStore,
+)
+from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
+from app.db.repositories.sqlite.snapshotCore.publications.worldPublicationStore import SqliteWorldPublicationStore
+from app.db.repositories.sqlite.snapshotCore.publications.playerPublicationStore import SqlitePlayerPublicationStore
+from app.db.repositories.sqlite.snapshotCore.history.snapshotHistoryStore import SqliteSnapshotHistoryStore
+from app.db.repositories.sqlite.snapshotCore.operations.operationStore import SqliteOperationStore
+
+
+def sqlite_ports(commits: SqlitePublicationCommitStore, world: SqliteWorldPublicationStore,
+                 players: SqlitePlayerPublicationStore, history: SqliteSnapshotHistoryStore,
+                 operations: SqliteOperationStore) -> tuple[IPublicationCommitStore, IWorldPublicationStore,
+                     IWorldPublicationInitializer, IPlayerPublicationStore, ISnapshotHistoryStore, IOperationStore]:
+    return commits, world, world, players, history, operations
+
+
+async def explicit_world_claim(operations: IOperationStore, digest: RevisionHex) -> OperationClaim:
+    return await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, "op", "world", digest, digest)
+
+
+from app.db.database import Database
+from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
+from app.db.repositories.sqlite.shared.capabilities.scopeRegistry import SqliteScopeRegistry
+from app.db.repositories.sqlite.shared.transactions.transactionDriver import SqliteTransactionDriver
+
+
+def sqlite_composition(db: Database) -> tuple[IPublicationCommitStore, IWorldPublicationStore,
+        IWorldPublicationInitializer, IPlayerPublicationStore, ISnapshotHistoryStore, IOperationStore]:
+    registry = SqliteScopeRegistry(db)
+    driver = SqliteTransactionDriver()
+    access = ScopedSqliteAccess(registry)
+    commits = SqlitePublicationCommitStore(db, registry, driver)
+    world = SqliteWorldPublicationStore(commits, access)
+    players = SqlitePlayerPublicationStore(commits, access)
+    history = SqliteSnapshotHistoryStore(commits, access)
+    operations = SqliteOperationStore(commits, world, players, access)
+    return sqlite_ports(commits, world, players, history, operations)
+
+
+from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance
+from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+from app.db.repositories.sqlite.snapshotCore.history.rowProjection import encode_history_row, decode_history_row
+from app.dataModel.worldSnapshot.metadata.envelope import SnapshotEnvelope
+from dataclasses import asdict
+
+
+def history_provenance_projection(metadata: SnapshotEnvelope, base: SnapshotEnvelope | None,
+                                 receipts: tuple[SectionApplyReceipt, ...], world: WorldSnapshotMetadata,
+                                 codec: SnapshotEnvelopeCodec) -> SnapshotEnvelope:
+    validate_receipt_provenance(metadata, receipts, base, metadata.operation_id)
+    row = encode_history_row(metadata, world, codec)
+    return decode_history_row(asdict(row), metadata.ref, codec)
