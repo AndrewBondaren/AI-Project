@@ -1994,7 +1994,7 @@ commit не создавался. **Остановка перед 4B1: один 
 
 ### 8.7. Реализация 4B1 — application ports и typed registries (2026-10-30)
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+Статус: **ПРИНЯТО мастером 2026-10-30 («Следующий шаг»); переход к 4B2 разрешён**.
 По карте §8.3 добавлены DomainSectionHandler/SectionContract, SectionRegistry/
 BoundSectionHandler, validation/apply contexts, непрозрачные абстрактные
 CommitScope/CommitReadScope и IDomainCommitBinding; apply/publication/history/
@@ -2021,6 +2021,13 @@ CAS, transactions, staging/GC или recovery. Они остаются у сле
 services. Shared encoding, emitters, concrete domain Patch, SQL, services,
 Container и DAG не добавлялись; backend не запускался, commit не создавался.
 Предыдущие и параллельные изменения сохранены. **Остановка перед 4B2**.
+
+### 8.8. Реализация 4B2 — shared encoding (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**. По §8.3: общий content_digest и делегирование TileCodec, три core manifests, PatchSetCodec (tuple projection) и SnapshotEnvelopeCodec; section registry проверяет collisions до dispatch, domain codec валидирует canonical bytes по своему immutable format manifest до read-upgrade. IDs — 56 из карты + existing shared Facing=110, без смены владельца.
+Проверки через backend/.venv/Scripts/python.exe: contracts — **53 PASS**; tests/planning/encoding — **7 PASS**; tests.test_deterministic_ids (включая DET-1 source gate) — **19 PASS**. Existing Pyright: positive 0 diagnostics, negative ровно **36** ожидаемых diagnostics.
+Golden полных bytes/SHA-256, concrete round-trip, порядок секций/players, malformed/unsupported formats, manifest collisions и сохранение binding исходных bytes при read-upgrade из исторической схемы с другим набором полей — PASS; scoped diff/whitespace — PASS. Изменения TileCodec сохраняют hash прежних bytes.
+SQL, services, emitters, Container и DAG не менялись; backend не запускался, commit не создавался. Чужие изменения сохранены. **Остановка перед 4B3**.
 
 ## 9. Норматив и совместимость
 

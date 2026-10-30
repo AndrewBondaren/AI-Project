@@ -152,3 +152,13 @@ def wrong_context_capabilities(validation: SnapshotValidationContext, player: Pl
 async def wrong_history_scope(history: ISnapshotHistoryStore, read: CommitReadScope,
                               metadata: WorldSnapshotMetadata) -> None:
     await history.append(read, metadata, ())  # EXPECT: reportArgumentType
+
+
+from app.application.patch.encoding.patchSetCodec import PatchSetCodec
+from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
+
+
+def wrong_codec_input(codec: PatchSetCodec[FakeSection], wrong_request: PatchSet[DomainSection[PatchHeader]],
+                      publication: WorldPublicationRef) -> None:
+    codec.encode(wrong_request)  # EXPECT: reportArgumentType
+    SnapshotEnvelopeCodec().encode(publication)  # EXPECT: reportArgumentType

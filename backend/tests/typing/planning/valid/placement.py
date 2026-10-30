@@ -26,6 +26,7 @@ from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, WaterCoverageBudget
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
 
 
 def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[PlacementIntent, ...],
@@ -34,11 +35,11 @@ def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[Placemen
     competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2],
     reevaluate: SupportReevaluation, selection: WaterFieldSelectionPolicy,
     regions: TerrainRegionPlan, world_context: ResolvedWaterGenerationContext,
-    requests: tuple[BodyCoverageRequest, ...]) -> None:
+    requests: tuple[BodyCoverageRequest, ...], geometries: tuple[AuthoredWaterGeometry, ...]) -> None:
     assert_type(prepare_designed_water(batch, water_intents=intents, pre_hydrology=terrain, grid=grid,
         seed_root="seed", prepare_input=prepare, prepare_competitor=competitor,
         regions=regions, world_context=world_context, coverage_requests=requests,
-        authored_union_fine2=0, available_auto_area_fine2=0,
+        authored_geometry=geometries,
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=selection,
         control=control, reevaluate_support=reevaluate),
         tuple[WaterCoverageBudget | None, tuple[WaterDesignPreparation, ...], PlacementBatchResultV2])

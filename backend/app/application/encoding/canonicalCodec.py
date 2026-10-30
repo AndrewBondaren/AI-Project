@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 from typing import get_type_hints
 from struct import unpack
 
-from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind
+from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 
 
 class CanonicalEncodingError(ValueError):
@@ -109,9 +109,35 @@ def encode(value: object, manifest: CanonicalSchemaManifest) -> bytes:
         raise CanonicalEncodingError(str(exc)) from exc
 
 
-def digest(value: object, manifest: CanonicalSchemaManifest) -> bytes:
+def content_digest(data: bytes) -> bytes:
+    """SHA-256 of exact stored bytes, shared by canonical values and pack blobs."""
     from hashlib import sha256
-    return sha256(encode(value, manifest)).digest()
+    if type(data) is not bytes:
+        raise CanonicalEncodingError("content digest input must be bytes")
+    return sha256(data).digest()
+
+
+def digest(value: object, manifest: CanonicalSchemaManifest) -> bytes:
+    return content_digest(encode(value, manifest))
+
+
+def merge_manifests(*manifests: CanonicalSchemaManifest) -> CanonicalSchemaManifest:
+    """Allow identical shared declarations; reject ID/owner collisions before codec dispatch."""
+    entries: list[RegisteredTypeEntry] = []
+    by_id: dict[int, RegisteredTypeEntry] = {}
+    by_owner: dict[type, RegisteredTypeEntry] = {}
+    for manifest in manifests:
+        CanonicalCodec(manifest)
+        for entry in manifest.entries:
+            if entry.type_id in by_id and by_id[entry.type_id] != entry:
+                raise CanonicalEncodingError("canonical type id collision")
+            if entry.python_type in by_owner and by_owner[entry.python_type] != entry:
+                raise CanonicalEncodingError("canonical owner has conflicting identities")
+            if entry.type_id not in by_id:
+                entries.append(entry)
+                by_id[entry.type_id] = entry
+                by_owner[entry.python_type] = entry
+    return CanonicalSchemaManifest(entries=tuple(entries))
 
 
 def _tuple(value: object) -> tuple:

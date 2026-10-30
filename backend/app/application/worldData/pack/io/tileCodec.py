@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import struct
 
 import orjson
 import zstandard
 
+from app.application.encoding.canonicalCodec import content_digest
 from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
 PAYLOAD_KIND_WORLD_MAP = 0
@@ -66,4 +66,4 @@ class TileCodec:
 
     @staticmethod
     def content_hash(data: bytes) -> str:
-        return hashlib.sha256(data).hexdigest()
+        return content_digest(data).hex()

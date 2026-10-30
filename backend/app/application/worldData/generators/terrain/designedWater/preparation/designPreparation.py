@@ -8,6 +8,7 @@ from app.application.planning.service.planningService import PlanBuildControl, P
 from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageBudgetPolicy import WaterCoverageBudgetPolicy
 from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
 from app.application.worldData.generators.terrain.designedWater.strategies.strategyFactory import DesignedWaterStrategyFactory
+from app.application.worldData.generators.terrain.regions.coverageMeasure import RegionCoverageMeasure
 from app.application.worldData.placement.diagnostics import diagnostic
 from app.application.worldData.placement.lifecycle.session import PlacementSession, SupportReevaluation
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesignDecision
@@ -23,8 +24,9 @@ from app.dataModel.placement.result import PlacementBatchResultV2, PlacementIssu
 from app.dataModel.policy.policyEnums import PolicyState
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
-from app.dataModel.terrain.designedWater.input import WaterStrategyInput
-from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, FineArea, WaterCoverageBudget
+from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput, WaterStrategyInput
+from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, WaterCoverageBudget
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
 from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind, WaterDesignIssueCode
@@ -36,6 +38,7 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 _INPUT = TypeAdapter(WaterStrategyInput)
 _ADMISSION = TypeAdapter(WaterDesignDecision)
 _REQUESTS = TypeAdapter(tuple[BodyCoverageRequest, ...])
+_GEOMETRY = TypeAdapter(tuple[AuthoredWaterGeometry, ...])
 
 
 def _invalid(message: str) -> PlanBuildFailure:
@@ -48,7 +51,7 @@ def prepare_designed_water(
     pre_hydrology: PlanEnvelope[TerrainPlan], grid: SurfaceGridSettings, seed_root: EntityUid,
     regions: TerrainRegionPlan, world_context: ResolvedWaterGenerationContext,
     coverage_requests: tuple[BodyCoverageRequest, ...],
-    authored_union_fine2: FineArea, available_auto_area_fine2: FineArea,
+    authored_geometry: tuple[AuthoredWaterGeometry, ...],
     prepare_input: Callable[[PlacementAdmissionInput, WaterCoverageBudget | None], WaterStrategyInput],
     prepare_competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2],
     strategies: DesignedWaterStrategyFactory, selection_policy: WaterFieldSelectionPolicy,
@@ -56,7 +59,8 @@ def prepare_designed_water(
 ) -> tuple[WaterCoverageBudget | None, tuple[WaterDesignPreparation, ...], PlacementBatchResultV2]:
     """Design each ready water source once, in the same P2 session as competitors.
 
-    The input owner supplies J01–J03 evidence and terrain-owned union measures.
+    The input owner supplies J01–J03 evidence and captured authored geometry.
+    Terrain coverage operations measure the admitted union before allocation.
     J04 allocates once before J05 can construct any ready strategy input.
     Authored-only sources without fixed world extent retain no global budget.
     It receives the session's current decision after SUPPORT reevaluation. Neither
@@ -98,11 +102,18 @@ def prepare_designed_water(
             for coverage in regions.coverages for span in coverage.spans):
         raise _invalid("water budget requires canonical world-fine region coverages")
     procedural_sources: set[EntityUid] = set()
+    authored_sources: set[EntityUid] = set()
     for uid, intent in by_region.items():
         decision = _ADMISSION.validate_python(admissions[uid].decision, strict=True)
         if decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT):
             if decision.require_behavior() is not DesignedWaterStrategyKind.AUTHORED_REGION:
                 procedural_sources.add(intent.identity.source_uid)
+            else:
+                authored_sources.add(intent.identity.source_uid)
+    geometries = _GEOMETRY.validate_python(authored_geometry, strict=True)
+    geometry_by_source = {geometry.source_uid: geometry for geometry in geometries}
+    if len(geometry_by_source) != len(geometries) or not geometry_by_source.keys() <= authored_sources:
+        raise _invalid("captured geometry requires unique admitted authored sources")
     if {request.source_uid for request in requests} != procedural_sources:
         raise _invalid("coverage requests must identify exactly admitted procedural sources")
     if snapshot.world_region is None and procedural_sources:
@@ -112,14 +123,38 @@ def prepare_designed_water(
         if region is None or region.generation_area_fine2 != request.generation_area_fine2:
             raise _invalid("coverage request must retain the terrain-owned generation region and area")
     control.raise_if_shutdown()
+    session = PlacementSession.start(batch, reevaluate_support=reevaluate_support)
+    pending_sources = {intent.identity.source_uid for uid, intent in by_region.items() if uid in session.queue.pending}
+    if not authored_sources.intersection(pending_sources) <= geometry_by_source.keys():
+        raise _invalid("pending authored sources require captured geometry before budget")
+    requests = tuple(request for request in requests if request.source_uid in pending_sources)
+    authored_coverages = []
+    for geometry in geometries:
+        if geometry.pre_hydrology_ref != pre_hydrology.ref:
+            raise _invalid("authored coverage must retain its captured terrain revision")
+        if geometry.source_uid not in pending_sources:
+            continue
+        control.raise_if_shutdown()
+        coverage = RegionCoverageMeasure.from_cells(
+            frozenset(cell for footprint in geometry.footprints for cell in footprint),
+            region_uid=geometry.source_uid, space=geometry.coordinate_space, grid=grid)
+        if any(not fine_bounds.contains(span.x0, span.y) or not fine_bounds.contains(span.x1 - 1, span.y)
+                for span in coverage.spans):
+            raise _invalid("authored coverage requires canonical native world geometry")
+        authored_coverages.append(coverage)
     budget: WaterCoverageBudget | None = None
     if snapshot.world_region is not None:
+        measure_uid = snapshot.world_region.region_uid
+        authored_union = RegionCoverageMeasure.union(tuple(authored_coverages), region_uid=measure_uid)
+        auto_union = RegionCoverageMeasure.union(tuple(coverages[request.generation_region_uid]
+            for request in requests), region_uid=measure_uid)
+        available = RegionCoverageMeasure.subtract(auto_union, authored_union, region_uid=measure_uid)
         budget = WaterCoverageBudgetPolicy().calculate(snapshot.world_region, world_context, requests,
-            authored_union_fine2=authored_union_fine2, available_auto_area_fine2=available_auto_area_fine2)
+            authored_union_fine2=RegionCoverageMeasure.area(authored_union),
+            available_auto_area_fine2=RegionCoverageMeasure.area(available))
     allocations = {allocation.source_uid: allocation for allocation in budget.allocations} if budget is not None else {}
     requests_by_source = {request.source_uid: request for request in requests}
 
-    session = PlacementSession.start(batch, reevaluate_support=reevaluate_support)
     preparer = DesignedWaterPlacementPreparer()
     designs: dict[EntityUid, WaterDesignPreparation] = {}
 
@@ -142,6 +177,8 @@ def prepare_designed_water(
                 if (snapshot.region_for(value.region.region_uid) != value.region
                         or coverages.get(value.region.region_uid) != value.region_coverage):
                     raise _invalid("ready water input must retain the captured terrain region and coverage")
+                if isinstance(value, AuthoredWaterDesignInput) and value.geometry != geometry_by_source.get(value.metadata.source_uid):
+                    raise _invalid("authored input must reuse its captured coverage geometry")
                 if (value.strategy is not DesignedWaterStrategyKind.AUTHORED_REGION
                         and (allocations.get(value.metadata.source_uid) != value.budget
                              or requests_by_source[value.metadata.source_uid].target_fraction != value.context.water_fraction)):

@@ -3,6 +3,8 @@
 from collections.abc import Awaitable, Callable
 from typing import cast
 
+from app.application.encoding.canonicalCodec import merge_manifests
+from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
@@ -22,7 +24,7 @@ class BoundSectionHandler:
         contract.__post_init__()
         self._metadata = PatchSectionMetadata(key=contract.key, supported_versions=contract.supported_versions)
         self._model: type[DomainSection] = contract.section_model
-        self._manifest = contract.manifest
+        self._manifest = merge_manifests(PATCH_CORE_SCHEMA, contract.manifest)
 
         def checked(section: DomainSection) -> S:
             if type(section) is not contract.section_model:
@@ -39,7 +41,8 @@ class BoundSectionHandler:
             return await handler.apply(checked(section), context)
 
         def encode(section: DomainSection) -> bytes:
-            payload = handler.encode(checked(section))
+            section = checked(section)
+            payload = handler.encode(section)
             if type(payload) is not bytes:
                 raise TypeError("section encoder must return bytes")
             return payload
@@ -47,6 +50,9 @@ class BoundSectionHandler:
         def decode(payload: bytes, version: FormatVersion) -> DomainSection:
             if type(payload) is not bytes or type(version) is not int or version not in contract.supported_versions:
                 raise ValueError("unsupported section bytes or version")
+            # The domain codec selects its immutable format manifest and validates
+            # original canonical bytes before upgrading. Current model fields
+            # cannot validate historical formats with a different declaration.
             return checked(handler.decode(payload, version))
 
         self._validate: Callable[[DomainSection, SnapshotValidationContext], Awaitable[SectionValidation]] = validate
@@ -82,6 +88,7 @@ class BoundSectionHandler:
 class SectionRegistry:
     def __init__(self) -> None:
         self._bindings: dict[SectionKey, BoundSectionHandler] = {}
+        self._manifest = PATCH_CORE_SCHEMA
 
     def register[S: DomainSection](self, contract: SectionContract[S], handler: DomainSectionHandler[S]) -> None:
         if contract.key in self._bindings:
@@ -89,7 +96,13 @@ class SectionRegistry:
         if any(bound.section_model is contract.section_model for bound in self._bindings.values()):
             raise ValueError("section model already registered")
         bound = BoundSectionHandler(contract, handler)
+        manifest = merge_manifests(self._manifest, bound.manifest)
         self._bindings[contract.key] = bound
+        self._manifest = manifest
+
+    @property
+    def manifest(self) -> CanonicalSchemaManifest:
+        return self._manifest
 
     def require(self, key: SectionKey) -> BoundSectionHandler:
         try:

@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import create_autospec
 
 from pydantic import BaseModel, ValidationError
+from app.application.encoding.canonicalCodec import encode as canonical_encode
 
 from app.application.patch.contracts.sectionHandler import SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry
@@ -23,7 +24,7 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
 from tests.snapshotCore.support.fakeSection import (
-    FakeTarget, FakeChange, FakePrepared, FakePatch, FakeSection, FakeSectionHandler,
+    FakeTarget, FakeChange, FakePrepared, FakePatch, FakeSection, FakeSectionHandler, FAKE_SECTION_SCHEMA,
 )
 
 
@@ -42,9 +43,7 @@ class SectionRegistryTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.key = RegistryKey[PatchSectionRegistry]("test.section")
-        self.manifest = CanonicalSchemaManifest(entries=(
-            RegisteredTypeEntry(type_id=90001, python_type=FakeSection, kind=CanonicalTypeKind.RECORD),
-        ))
+        self.manifest = FAKE_SECTION_SCHEMA
         self.contract = SectionContract(key=self.key, section_model=FakeSection,
                                         supported_versions=frozenset({1, 2}), manifest=self.manifest)
         self.handler = FakeSectionHandler(self.contract)
@@ -73,7 +72,7 @@ class SectionRegistryTests(unittest.TestCase):
         decoded = bound.decode(encoded, 1)
         self.assertIs(type(decoded), FakeSection)
         self.assertEqual(decoded, self.section)
-        self.assertIn(b'"values":[1,2,3]', encoded)
+        self.assertEqual(decoded.patches[0].prepared.values, (1, 2, 3))
         self._complete(bound.validate(self.section, self.context))
         apply_context = SnapshotApplyContext(validation=self.context,
             world_snapshot=WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="tick"),
@@ -81,7 +80,7 @@ class SectionRegistryTests(unittest.TestCase):
         receipt = self._complete(bound.apply(self.section, apply_context))
         self.assertEqual(receipt.section_key, self.key)
         self.assertEqual(self.handler.calls, ["encode", "decode", "validate", "apply"])
-        self.assertIs(bound.manifest, self.manifest)
+        self.assertEqual(bound.manifest, self.manifest)
 
     def test_duplicate_wrong_binding_models_keys_and_versions_fail_before_handler(self) -> None:
         registry = SectionRegistry()
@@ -130,10 +129,10 @@ class SectionRegistryTests(unittest.TestCase):
         wrong = self.section.model_copy(update={"header": self.section.header.model_copy(
             update={"key": RegistryKey[PatchSectionRegistry]("other")})})
         with self.assertRaises(ValueError):
-            bound.decode(wrong.model_dump_json().encode(), 1)
+            bound.decode(canonical_encode(wrong, self.manifest), 1)
         self.handler.decode = lambda payload, version: FakePrepared(values=())
         with self.assertRaises(TypeError):
-            bound.decode(b"{}", 1)
+            bound.decode(canonical_encode(self.section, self.manifest), 1)
 
     def test_runtime_capabilities_are_abstract_opaque_and_read_is_not_write(self) -> None:
         for scope_type in (CommitReadScope, CommitScope):

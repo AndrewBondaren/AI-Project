@@ -157,3 +157,16 @@ async def pinned_publication_reads(store: IPublicationCommitStore, history: ISna
 
 def bound_domain_storage(binding: IDomainCommitBinding[FakeSectionHandler], scope: CommitScope) -> FakeSectionHandler:
     return binding.bind(scope)
+
+
+from app.application.patch.encoding.patchSetCodec import PatchSetCodec
+from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
+
+
+def typed_patch_codec(codec: PatchSetCodec[FakeSection], request: PatchSet[FakeSection]) -> PatchSet[FakeSection]:
+    return codec.decode(codec.encode(request))
+
+
+def typed_snapshot_codec(world: WorldSnapshotMetadata, player: PlayerSnapshotMetadata) -> tuple[bytes, bytes]:
+    codec = SnapshotEnvelopeCodec()
+    return codec.encode(world), codec.encode(player)

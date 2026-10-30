@@ -11,6 +11,7 @@
     "../../../app/application/patch",
     "../../../app/application/worldSnapshot",
     "../../../app/application/artifacts",
-    "../../../app/application/publication"
+    "../../../app/application/publication",
+    "../../../app/application/encoding"
   ]
 }

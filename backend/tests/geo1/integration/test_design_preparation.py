@@ -9,7 +9,7 @@ from app.application.worldData.generators.terrain.designedWater.strategies.strat
 from app.application.worldData.placement.lifecycle.session import PlacementSession
 from app.dataModel.placement.batch import PlacementBatchV2
 from app.dataModel.placement.common import DependencyRelation, PlacementPhase
-from app.dataModel.placement.intent import PlacementDependency
+from app.dataModel.placement.intent import PlacementDependency, PlacementIntent
 from app.dataModel.placement.lifecycle.header import PlacementHeader
 from app.dataModel.placement.result import DisabledPlacement, ResolvedPlacementV2, UnresolvedPlacementV2
 from app.dataModel.policy.policyEnums import PolicyState
@@ -21,6 +21,8 @@ from tests.geo1.contracts import test_placement_lifecycle as lifecycle
 from tests.geo1.coverage import test_budget as coverage
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan, TerrainRegionsSnapshot
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 
 
 class DesignPreparationTests(TestCase):
@@ -45,8 +47,8 @@ class DesignPreparationTests(TestCase):
             world_region=value.region, regions=()), coverages=(value.region_coverage,))
         return dict(batch=batch, water_intents=(intent,), pre_hydrology=value.pre_hydrology,
             regions=regions, world_context=coverage.context(value.context.water_fraction),
-            coverage_requests=requests, authored_union_fine2=0,
-            available_auto_area_fine2=value.region.generation_area_fine2,
+            coverage_requests=requests,
+            authored_geometry=(value.geometry,) if value.strategy is Strategy.AUTHORED_REGION else (),
             grid=value.grid, seed_root=value.seed_root, prepare_input=Mock(return_value=value),
             prepare_competitor=Mock(side_effect=AssertionError("unexpected competitor")),
             strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(),
@@ -98,6 +100,7 @@ class DesignPreparationTests(TestCase):
             args = self.arguments(case)
             obj = case[4].model_copy(update={"decision": decision})
             args["batch"] = args["batch"].model_copy(update={"objects": (obj,)})
+            args["authored_geometry"] = ()
             budget, preparations, result = prepare_designed_water(**args)
             self.assertEqual(preparations, ())
             self.assertIsInstance(result.results[0], expected)
@@ -201,6 +204,7 @@ class DesignPreparationTests(TestCase):
                 "header": PlacementHeader.from_intent(intent)})))
         args = self.arguments(renamed[0], competitors=(renamed[1][4],))
         args["water_intents"] = tuple(case[3] for case in renamed)
+        args["authored_geometry"] = tuple(case[1].geometry for case in renamed)
         inputs = {case[1].metadata.source_uid: case[1] for case in renamed}
         args["prepare_input"] = Mock(side_effect=lambda obj, budget: inputs[obj.header.identity.source_uid])
         budget, preparations, result = prepare_designed_water(**args)
@@ -264,7 +268,6 @@ class DesignPreparationTests(TestCase):
         args = self.arguments(cases[0], competitors=(cases[1][4], competitor))
         args["water_intents"] = tuple(c[3] for c in cases)
         args["coverage_requests"] += (args["coverage_requests"][0].model_copy(update={"source_uid": "b"}),)
-        args["available_auto_area_fine2"] = 8  # one union cap, not 8 per overlapping region
         values = {c[1].metadata.source_uid: c[1] for c in cases}
         events = []
         def ready(obj, budget):
@@ -345,10 +348,9 @@ class DesignPreparationTests(TestCase):
 
     def test_zero_target_reaches_existing_empty_geometry_failure_without_fake_water(self):
         case = self.case(Strategy.CONTINENTAL_NOISE)
-        for authored, fraction in ((0, 0.0), (12, 0.5)):
+        for fraction in (0.0,):
             args = self.arguments(case)
-            args.update(world_context=coverage.context(fraction), authored_union_fine2=authored,
-                available_auto_area_fine2=16 - authored)
+            args.update(world_context=coverage.context(fraction))
             def ready(obj, budget):
                 return type(case[1]).model_validate(case[1].model_copy(update={"budget": budget.allocations[0]}))
             args["prepare_input"] = ready
@@ -418,4 +420,153 @@ class DesignPreparationTests(TestCase):
         args["regions"] = plan.model_copy(update={"coverages": (shifted,)})
         with self.assertRaises(PlanBuildFailure):
             prepare_designed_water(**args)
+        args["prepare_input"].assert_not_called()
+
+    def add_captured_authored(self, args, uid, cells, *, fine=False):
+        sample = self.case()
+        obj = lifecycle.member(uid, chosen=sample[4].decision)
+        header = obj.header
+        intent = PlacementIntent(identity=header.identity, mode=header.mode, shape=None,
+            dependencies=header.dependencies, permitted_overlaps=header.permitted_overlaps, separations=header.separations)
+        geometry = AuthoredWaterGeometry.model_validate(sample[1].geometry.model_copy(update={
+            "source_uid": header.identity.source_uid, "pre_hydrology_ref": args["pre_hydrology"].ref,
+            "coordinate_space": CoordinateSpace.WORLD_FINE_GRID if fine else CoordinateSpace.WORLD_SURFACE_GRID,
+            "footprints": (frozenset(cells),)}))
+        args["batch"] = args["batch"].model_copy(update={"objects": (*args["batch"].objects, obj)})
+        args["water_intents"] += (intent,)
+        args["authored_geometry"] += (geometry,)
+        return geometry
+
+    def test_authored_overlap_is_measured_once_and_failed_sources_do_not_redistribute(self):
+        case = self.case(Strategy.CONTINENTAL_NOISE)
+        args = self.arguments(case)
+        self.add_captured_authored(args, "a", {(0, 0), (1, 0)})
+        self.add_captured_authored(args, "b", {(1, 0), (1, 1)})
+        args["world_context"] = coverage.context(1.0)
+        def ready(obj, budget):
+            if obj.header.identity.source_uid != case[1].metadata.source_uid:
+                raise PlanBuildFailure((FieldPathError(("authored",), "source preparation failed", code="authored_failure"),))
+            return type(case[1]).model_validate(case[1].model_copy(update={"budget": budget.allocations[0]}))
+        args["prepare_input"] = ready
+        budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual((budget.area_fine2, budget.target_fine2, budget.authored_union_fine2, budget.residual_fine2), (16, 16, 12, 4))
+        self.assertEqual(budget.allocations[0].allocated_fine2, 4)
+        self.assertEqual(len(designs), 1)
+        self.assertEqual(sum(isinstance(o, ResolvedPlacementV2) for o in result.results), 1)
+        args["authored_geometry"] = tuple(reversed(args["authored_geometry"]))
+        args["batch"] = args["batch"].model_copy(update={"objects": tuple(reversed(args["batch"].objects))})
+        self.assertEqual(prepare_designed_water(**args), (budget, designs, result))
+
+    def test_available_area_is_union_of_requested_regions_minus_authored_geometry(self):
+        from tests.geo1.regions.test_coverage import coverage as make_coverage
+        from app.dataModel.terrain.regions.terrainRegionExtent import TerrainRegionExtent
+        case = self.case(Strategy.PLATE)
+        second = self.rename(case, "second")
+        args = self.arguments(case, competitors=(second[4],))
+        args["water_intents"] += (second[3],)
+        self.add_captured_authored(args, "authored", {(0, 0)})
+        auto = make_coverage({(x, y) for x in range(4) for y in range(2)}, "auto")
+        plan = args["regions"]
+        args["regions"] = plan.model_copy(update={"snapshot": plan.snapshot.model_copy(update={
+            "regions": (TerrainRegionExtent(region_uid="auto", generation_area_fine2=8),)}),
+            "coverages": (*plan.coverages, auto)})
+        args["coverage_requests"] = tuple(BodyCoverageRequest(source_uid=c[1].metadata.source_uid,
+            generation_region_uid="auto", generation_area_fine2=8, target_fraction=1.0) for c in (case, second))
+        args["world_context"] = coverage.context(1.0)
+        args["prepare_input"].side_effect = PlanBuildFailure((FieldPathError(("source",), "stop after budget", code="stop"),))
+        budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual((budget.authored_union_fine2, budget.residual_fine2), (4, 12))
+        self.assertEqual([a.allocated_fine2 for a in budget.allocations], [2, 2])
+        self.assertEqual(designs, ())
+
+    def test_native_fine_geometry_is_not_scaled_a_second_time(self):
+        case = self.case(Strategy.PLATE)
+        args = self.arguments(case)
+        self.add_captured_authored(args, "fine", {(0, 0), (1, 0), (3, 3)}, fine=True)
+        args["prepare_input"].side_effect = PlanBuildFailure((FieldPathError(("source",), "stop after budget", code="stop"),))
+        budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual(budget.authored_union_fine2, 3)
+
+    def test_terminal_sources_supply_no_geometry_and_are_not_measured(self):
+        from app.application.worldData.generators.terrain.regions.coverageMeasure import RegionCoverageMeasure
+        from tests.geo1.placement_policy.fixtures import bind, execute
+        case = self.case()
+        args = self.arguments(case)
+        off = case[4].model_copy(update={"decision": execute(bind(source=case[1].source, enabled=False, strategy=case[1].strategy))})
+        args["batch"] = args["batch"].model_copy(update={"objects": (off,)})
+        with self.assertRaises(PlanBuildFailure):
+            prepare_designed_water(**args)
+        args["authored_geometry"] = ()
+        with patch.object(RegionCoverageMeasure, "from_cells", side_effect=AssertionError("disabled geometry measured")):
+            budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual(budget.authored_union_fine2, 0)
+        self.assertIsInstance(result.results[0], DisabledPlacement)
+        args["prepare_input"].assert_not_called()
+
+    def test_stale_duplicate_foreign_or_noncanonical_authored_geometry_fails_before_input(self):
+        case = self.case()
+        geometry = case[1].geometry
+        variants = ((geometry, geometry), (geometry.model_copy(update={"source_uid": "foreign"}),),
+            (geometry.model_copy(update={"pre_hydrology_ref": geometry.pre_hydrology_ref.model_copy(update={"output_fingerprint": b"s"*32})}),),
+            (geometry.model_copy(update={"footprints": (frozenset({(10000, 10000)}),)}),))
+        for geometries in variants:
+            args = self.arguments(case)
+            args["authored_geometry"] = geometries
+            with self.assertRaises(PlanBuildFailure):
+                prepare_designed_water(**args)
+            args["prepare_input"].assert_not_called()
+
+    def test_authored_ready_input_reuses_exact_geometry_that_was_measured(self):
+        case = self.case()
+        args = self.arguments(case)
+        different = case[1].geometry.model_copy(update={"notices": (FieldPathError(("source",), "changed", code="changed"),)})
+        args["prepare_input"].return_value = type(case[1]).model_validate(case[1].model_copy(update={"geometry": different}))
+        with patch.object(args["strategies"], "get", side_effect=AssertionError("geometry changed after budget")):
+            budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual(designs, ())
+        self.assertIsInstance(result.results[0], UnresolvedPlacementV2)
+
+    def test_planned_authored_union_above_target_is_not_clipped_or_negative(self):
+        case = self.case(Strategy.PLATE)
+        args = self.arguments(case)
+        geometry = self.add_captured_authored(args, "large", {(0, 0), (1, 0), (0, 1)})
+        before = geometry.model_dump()
+        def ready(obj, budget):
+            if obj.header.identity.source_uid != case[1].metadata.source_uid:
+                raise PlanBuildFailure((FieldPathError(("source",), "failed authored source", code="authored_failure"),))
+            return type(case[1]).model_validate(case[1].model_copy(update={"budget": budget.allocations[0]}))
+        args["prepare_input"] = ready
+        budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual((budget.target_fine2, budget.authored_union_fine2, budget.residual_fine2), (8, 12, 0))
+        self.assertEqual(budget.allocations[0].allocated_fine2, 0)
+        self.assertEqual(designs, ())
+        self.assertTrue(all(isinstance(o, UnresolvedPlacementV2) for o in result.results))
+        self.assertEqual(geometry.model_dump(), before)
+
+    def test_initial_common_dependency_failure_is_excluded_before_measurement_and_allocation(self):
+        from app.application.worldData.generators.terrain.regions.coverageMeasure import RegionCoverageMeasure
+        for kind in (Strategy.AUTHORED_REGION, Strategy.PLATE):
+            args = self.arguments(self.dependent_case(self.case(kind), target="missing"))
+            with patch.object(RegionCoverageMeasure, "from_cells", side_effect=AssertionError("terminal geometry measured")):
+                budget, designs, result = prepare_designed_water(**args)
+            self.assertEqual(budget.authored_union_fine2, 0)
+            self.assertEqual(budget.allocations, ())
+            self.assertEqual(designs, ())
+            self.assertIsInstance(result.results[0], UnresolvedPlacementV2)
+            args["prepare_input"].assert_not_called()
+            if kind is Strategy.AUTHORED_REGION:
+                args["authored_geometry"] = ()
+                self.assertEqual(prepare_designed_water(**args), (budget, designs, result))
+
+    def test_pending_competitor_with_same_source_uid_does_not_restore_terminal_water_request(self):
+        case = self.dependent_case(self.case(Strategy.PLATE), target="missing")
+        other = lifecycle.member("other")
+        other = other.model_copy(update={"header": other.header.model_copy(update={
+            "identity": other.header.identity.model_copy(update={"source_uid": case[1].metadata.source_uid})})})
+        args = self.arguments(case, competitors=(other,))
+        args["prepare_competitor"] = lambda obj: lifecycle.prepared(obj, cells=((0, 0),))
+        budget, designs, result = prepare_designed_water(**args)
+        self.assertEqual(budget.allocations, ())
+        self.assertEqual(designs, ())
+        self.assertEqual(sum(isinstance(o, ResolvedPlacementV2) for o in result.results), 1)
         args["prepare_input"].assert_not_called()

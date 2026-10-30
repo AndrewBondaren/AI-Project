@@ -1,6 +1,9 @@
 """Test-only domain contracts; never registered in production."""
 
 from pydantic import BaseModel, ConfigDict
+from app.application.encoding.canonicalCodec import CanonicalEncodingError, encode, decode, merge_manifests
+from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
+from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
 from app.dataModel.patch.changes.header import PatchHeader
@@ -36,6 +39,13 @@ class FakeSection(DomainSection[FakePatch]):
     pass
 
 
+FAKE_SECTION_SCHEMA = merge_manifests(PATCH_CORE_SCHEMA, CanonicalSchemaManifest(entries=tuple(
+    RegisteredTypeEntry(type_id=identity, python_type=owner, kind=CanonicalTypeKind.RECORD)
+    for identity, owner in ((90001, FakeSection), (90002, FakeTarget), (90003, FakeChange),
+                            (90004, FakePrepared), (90005, FakePatch))
+)))
+
+
 class FakeSectionHandler(DomainSectionHandler[FakeSection]):
     def __init__(self, contract: SectionContract[FakeSection]) -> None:
         self._contract = contract
@@ -56,8 +66,11 @@ class FakeSectionHandler(DomainSectionHandler[FakeSection]):
 
     def encode(self, section: FakeSection) -> bytes:
         self.calls.append("encode")
-        return section.model_dump_json().encode("utf-8")
+        return encode(section, self.contract.manifest)
 
     def decode(self, payload: bytes, version: FormatVersion) -> FakeSection:
         self.calls.append("decode")
-        return FakeSection.model_validate_json(payload)
+        section = decode(payload, FakeSection, self.contract.manifest)
+        if section.header.format_version != version:
+            raise CanonicalEncodingError("section bytes do not match their format version")
+        return section

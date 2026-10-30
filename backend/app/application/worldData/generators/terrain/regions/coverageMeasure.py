@@ -3,11 +3,18 @@
 from collections.abc import Iterable, Iterator
 from bisect import bisect_left
 from heapq import merge
+from itertools import groupby
+
+from pydantic import TypeAdapter
 
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.spatial.grid.coordinateTypes import FineX, SurfaceGridCoord
+from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, SurfaceGridCoord
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan, RegionCoverage
+from app.dataModel.topology.worldTopology import Coord
+
+_CELLS = TypeAdapter(frozenset[Coord])
 
 
 def normalized_spans(spans: Iterable[CoverageSpan]) -> tuple[CoverageSpan, ...]:
@@ -21,6 +28,27 @@ def normalized_spans(spans: Iterable[CoverageSpan]) -> tuple[CoverageSpan, ...]:
 
 
 class RegionCoverageMeasure:
+    @staticmethod
+    def from_cells(cells: frozenset[Coord], *, region_uid: EntityUid,
+                   space: CoordinateSpace, grid: SurfaceGridSettings) -> RegionCoverage:
+        """Project existing canonical cells to fine spans, without fine XY expansion."""
+        cells = _CELLS.validate_python(cells, strict=True)
+        grid = SurfaceGridSettings.model_validate(grid, strict=True)
+        if not isinstance(space, CoordinateSpace) or space not in (
+                CoordinateSpace.WORLD_SURFACE_GRID, CoordinateSpace.WORLD_FINE_GRID):
+            raise ValueError("coverage requires world surface or world fine coordinate space")
+        rows = normalized_spans(CoverageSpan(y=FineY(y), x0=FineX(x), x1=FineX(x + 1))
+            for x, y in sorted(cells, key=lambda cell: (cell[1], cell[0])))
+        if space is CoordinateSpace.WORLD_FINE_GRID:
+            return RegionCoverage(region_uid=region_uid, spans=rows)
+        expanded: list[CoverageSpan] = []
+        for y, spans in groupby(rows, key=lambda span: span.y):
+            row = tuple(spans)
+            for dy in range(grid.fine_span):
+                expanded.extend(CoverageSpan(y=FineY(y * grid.fine_span + dy),
+                    x0=FineX(span.x0 * grid.fine_span), x1=FineX(span.x1 * grid.fine_span)) for span in row)
+        return RegionCoverage(region_uid=region_uid, spans=tuple(expanded))
+
     @staticmethod
     def area(coverage: RegionCoverage) -> int:
         return sum(span.x1 - span.x0 for span in coverage.spans)

@@ -11639,7 +11639,7 @@ Consumer-код не изменялся. Это ограничение regressio
 приёмка L0/L2. После внешнего commit/merge HEAD повторены новые 12 тестов
 и positive pyright: OK / 0 ошибок. G10-A production остаётся OPEN.
 
-### G10-A shared coverage budget in main runner — IN PROGRESS (2026-10-30)
+### G10-A shared coverage budget in main runner — IMPLEMENTED / VERIFIED (2026-10-30)
 
 J04→J05, ТЗ tz_terrain_generation GEO-1 §Planning и доставка / plan §6.29-E.
 Owner: application terrain design orchestration, existing preparation/designPreparation.py.
@@ -11658,7 +11658,46 @@ zero-target admission activation and water record migration stay atomic G10-A.
 Tests: existing geo1/integration/test_design_preparation.py and planning typing fixtures;
 shared cap, overlaps/admitted scope, losers without redistribution, stale/foreign
 budgets/regions, zero requests and whole-scope replay. No new files; preparation7→7,
-integration5→5. Run GEO-1, planning providers, positive/negative typing, scoped diff.
+integration5→5. Evidence: GEO-1 684 OK (+10), planning providers 129 OK;
+positive pyright 0; negative 255 diagnostics (+2), все 252 EXPECT покрыты,
+baseline surplus unchanged; scoped diff check clean. Full planning292
+не перепроверялся (consumer-run limitation зафиксирована предыдущим срезом).
+Следующий остаток: owning settings/cascade → admissions/coverage requests
+и terrain-owned admitted union measures; zero-target admission, G8-B records,
+capture/registration/production cutover остаются атомарным G10-A, OPEN.
+
+### G10-A captured geometry / admitted union measures — IMPLEMENTED / VERIFIED (2026-10-30)
+
+J04/J05, plan §6.29-E/F and tz_terrain_generation GEO-1 planning: replace
+manual authored_union_fine2/available_auto_area_fine2 in prepare_designed_water
+with tuple[AuthoredWaterGeometry,...]. Require unique source UID, exact terrain
+ref and canonical native space for geometry associated with admitted authored
+headers; policy-terminal sources provide no geometry. Initially dependency-terminal
+sources may omit geometry; already captured geometry is excluded from measurement. Reuse that
+same geometry in ready AuthoredWaterDesignInput, without a second rasterization.
+Main runner delegates cells→fine spans to terrain RegionCoverageMeasure.from_cells
+in existing application/worldData/generators/terrain/regions/coverageMeasure.py;
+generic projection owns only coordinates/grid/space, no water dependencies.
+Union authored geometry and union requested generation-region coverages, subtract
+authored once, measure through existing terrain operations, then allocate once.
+Start the same PlacementSession before measurement; its initial dependency
+settlement excludes already-terminal source geometry/requests from budget, without
+executing geometry preparation or duplicating dependency/policy rules.
+Keep planned budget after failed supports/P2; no post-placement redistribution.
+Authored-only without fixed extent retains budget=None. Source/settings/admission
+and capture of the geometry remain caller lifecycle; no schema/default activation,
+new water records, policy gates or compatibility overload. Files: existing
+designPreparation.py, coverageMeasure.py, geo1/integration/test_design_preparation.py,
+geo1/regions/test_coverage.py and planning typing fixtures. Folder counts unchanged:
+preparation7, regions4, integration5, region tests4. Verify native spaces/negative
+coordinates, exact union/overlaps/exclusions, stale geometry, one geometry reuse,
+Evidence: GEO-1 696 OK (+12), planning providers 129 OK; positive pyright 0;
+negative 256 diagnostics (+1), все 253 EXPECT покрыты, baseline surplus
+unchanged; scoped diff check clean. Full planning292 не перепроверялся,
+сохраняется ранее записанное ограничение consumer-run evidence.
+Следующий остаток: owning source/settings/cascade → admission/request и
+captured geometry/input production; zero-target admission и G8-B records,
+capture/registration/production cutover остаются атомарным G10-A, OPEN.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

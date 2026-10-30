@@ -995,7 +995,7 @@ def invalid_water_universe_callback(batch: PlacementBatchV2, terrain: PlanEnvelo
     prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
         prepare_input=prepare, prepare_competitor=competitor,  # EXPECT: reportArgumentType
         regions=regions, world_context=world_context, coverage_requests=(),
-        authored_union_fine2=0, available_auto_area_fine2=0,
+        authored_geometry=(),
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
 
 
@@ -1007,10 +1007,15 @@ def invalid_water_budget_callback(batch: PlacementBatchV2, terrain: PlanEnvelope
     prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
         prepare_input=prepare, prepare_competitor=competitor,  # EXPECT: reportArgumentType
         regions=regions, world_context=world_context, coverage_requests=(),
-        authored_union_fine2=0, available_auto_area_fine2=0,
+        authored_geometry=(),
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
     prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
         prepare_input=lambda admission, allocation: prepare(admission), prepare_competitor=competitor,
         regions=regions, world_context=world_context, coverage_requests=(budget,),  # EXPECT: reportArgumentType
-        authored_union_fine2=0, available_auto_area_fine2=0,
+        authored_geometry=(),
+        strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
+    prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
+        prepare_input=lambda admission, allocation: prepare(admission), prepare_competitor=competitor,
+        regions=regions, world_context=world_context, coverage_requests=(),
+        authored_geometry=(budget,),  # EXPECT: reportArgumentType
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
