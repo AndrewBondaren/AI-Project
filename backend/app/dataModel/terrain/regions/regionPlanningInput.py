@@ -39,6 +39,8 @@ class RegionGeometryInput(TerrainRegionModel, frozen=True):
 
 
 class TerrainRegionPlanningInput(TerrainRegionModel, frozen=True):
+    snapshot_uid: EntityUid
+    world_region_uid: EntityUid
     declared_world_bounds: WorldBounds | None
     topology: WorldTopology
     grid: SurfaceGridSettings

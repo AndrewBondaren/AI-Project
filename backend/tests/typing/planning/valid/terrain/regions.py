@@ -16,7 +16,7 @@ from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPl
 
 
 def valid_region_extent(world: RasterWorld, inputs: TerrainRegionPlanningInput, coverage: RegionCoverage) -> None:
-    plan = prepare_terrain_regions(world, snapshot_uid="snapshot", world_region_uid="world-region", inputs=inputs)
+    plan = prepare_terrain_regions(world, inputs=inputs)
     assert_type(plan, TerrainRegionPlan)
     assert_type(plan.snapshot.region_for("body"), TerrainRegionExtent | None)
     assert_type(require_terrain_region(plan.snapshot, world_uid=world.world_uid, snapshot_uid="snapshot", region_uid="body"), TerrainRegionExtent)

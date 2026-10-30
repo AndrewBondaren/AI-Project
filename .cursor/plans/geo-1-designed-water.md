@@ -1121,8 +1121,7 @@ API сейчас нет.
 
 **Terrain provider (реализуется isolated в G3-R):**
 `backend/app/application/worldData/generators/terrain/regions/regionExtent.py`
-— `prepare_terrain_regions(world: RasterWorld, *, snapshot_uid, world_region_uid,
-inputs: TerrainRegionPlanningInput) -> TerrainRegionPlan`.
+— `prepare_terrain_regions(world: RasterWorld, *, inputs: TerrainRegionPlanningInput) -> TerrainRegionPlan`.
 Вход: world/snapshot identity, resolved topology, масштаб coarse→fine,
 фиксированные world_bounds, полные region intents и готовые anchors.
 Переиспользовать PlacementIntent/RegionShape, без нового геометрического
@@ -5257,7 +5256,8 @@ cached geometry является canonical source UID path; request reporting
 array indices. Diagnostic fingerprint не зависит от display labels.
 
 Region provider input в `terrain/regions/regionPlanningInput.py`:
-TerrainRegionPlanningInput(declared_world_bounds:WorldBounds|None,
+TerrainRegionPlanningInput(snapshot_uid:EntityUid,world_region_uid:EntityUid,
+ declared_world_bounds:WorldBounds|None,
 topology:WorldTopology,grid:SurfaceGridSettings,
 regions:tuple[RegionGeometryInput,...],anchors:tuple[WaterAnchorInput,...]).
 RegionGeometryInput(region_uid:EntityUid,geometry:RegionShape|RegionCoverage,
@@ -11353,6 +11353,40 @@ GEO route provider verified; production composition/capture activation remains
 atomic G10-A, with no PC registry switch in this group.
 Evidence: GEO-1 611 OK (+7), planning 292 OK; positive pyright 0;
 negative 244 diagnostics (+2), all 241 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
+
+### G10-A terrain regions provider — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: expose the existing pre-water region kernel through the declared cached
+planning contract, retaining explicitly supplied identities.
+Readiness fact: prepare_terrain_regions currently receives snapshot_uid and
+world_region_uid outside TerrainRegionPlanningInput. The provider cannot use
+hidden identities outside the key or mint replacements (§6.3 identity rule).
+TZ: docs/tz_terrain_generation.md GEO-1 region extent; this plan §6.3 / §6.29-M
+and exact provider method §6.31-E. Owner/layer/path:
+- dataModel terrain, existing terrain/regions/regionPlanningInput.py:
+  TerrainRegionPlanningInput gains required snapshot_uid, world_region_uid:EntityUid,
+  moving the already required kernel identity parameters into one frozen input.
+- application terrain, existing generators/terrain/regions/regionExtent.py:
+  prepare_terrain_regions(world:RasterWorld,*,inputs:TerrainRegionPlanningInput)
+  reads these identities from input; all direct callers migrate together.
+  TerrainRegionPlanProvider.build accepts exact PlanRequest[TerrainRegionPlanningInput],
+  PlanDependencyReader,PlanBuildControl and returns PlanBuildResult[TerrainRegionPlan].
+  It delegates once to that kernel using request.key as its existing RasterWorld
+  projection (world_uid/seed_root); no World read, UID mint, new DTO or geometry.
+  Registered terrain_regions binding has no dependencies. Shutdown checked before/after.
+Exact application paths relative to backend/app/application/worldData/; input
+path relative to backend/app/dataModel/. Capture remains responsible for freezing
+its supplied phase/world-region identities, rather than choosing them inside cache.
+Tests: existing geo1/regions/test_extent.py, integration/support/pipeline.py and
+integration/test_revisions.py; positive/negative planning region/GEO typing fixtures.
+Verify real registry/cache, kernel parity/codec, warm reuse, identity/geometry key
+invalidation, absent world extent (no AABB fallback), canonical topology and
+failure/shutdown boundaries. No new files (region application 4→4, model 5→5,
+region tests 4→4, integration 4→4). Run GEO-1/planning/type checks and diff check.
+Done: isolated region provider verified; atomic capture/composition remains open.
+Evidence: GEO-1 618 OK (+7), planning 292 OK; positive pyright 0;
+negative 245 diagnostics (+1), all 242 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
 
 ### G10-A — атомарное включение GEO-1 production path

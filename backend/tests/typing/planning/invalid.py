@@ -455,7 +455,7 @@ from app.application.worldData.masks.regionRasterContext import RasterWorld
 def invalid_region_extent(world: RasterWorld, snapshot: TerrainRegionsSnapshot, coverage: RegionCoverage) -> None:
     CoverageSpan(y=FineY(0), x0=GridX(0), x1=FineX(1))  # EXPECT: reportArgumentType
     RegionCoverageMeasure.union((coverage,))  # EXPECT: reportCallIssue
-    prepare_terrain_regions(world, snapshot_uid="snapshot", world_region_uid="world", inputs=snapshot)  # EXPECT: reportArgumentType
+    prepare_terrain_regions(world, inputs=snapshot)  # EXPECT: reportArgumentType
     snapshot.world_uid = "other"  # EXPECT: reportAttributeAccessIssue
 
 
@@ -901,3 +901,11 @@ def invalid_geo_routes_water_handle(relief: RegisteredPlanContract[ReliefPlanInp
     water: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan], assembler: HydrologyRoutesAssembler,
     policy: PolicyResolver) -> None:
     GeoHydrologyRoutesPlanProvider(relief, water, assembler, policy)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.regions.regionExtent import TerrainRegionPlanProvider
+
+
+def invalid_region_provider_request(provider: TerrainRegionPlanProvider, request: PlanRequest[GeoWaterPlacementInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
+    provider.build(request, dependencies, control)  # EXPECT: reportArgumentType

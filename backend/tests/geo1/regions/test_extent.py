@@ -33,13 +33,14 @@ WORLD = CapturedWorld()
 
 def inputs(*regions, mode=Mode.WRAPPED, fine_span=1, declared=True, anchors=()):
     bounds = WorldBounds(x_min=0, x_max=2, y_min=0, y_max=3)
-    return TerrainRegionPlanningInput(declared_world_bounds=bounds if declared else None,
+    return TerrainRegionPlanningInput(snapshot_uid="snapshot", world_region_uid="world-region",
+        declared_world_bounds=bounds if declared else None,
         topology=WorldTopology(mode=mode, bounds=bounds), grid=SurfaceGridSettings(fine_span=fine_span, light_side=1),
         regions=tuple(regions), anchors=anchors)
 
 
 def build(value):
-    return prepare_terrain_regions(WORLD, snapshot_uid="snapshot", world_region_uid="world-region", inputs=value)
+    return prepare_terrain_regions(WORLD, inputs=value)
 
 
 def claim_ref(world_uid=WORLD.world_uid):
@@ -173,3 +174,14 @@ class ExtentTests(TestCase):
         forged = value.topology.model_copy(update={"bounds": value.topology.bounds.model_copy(update={"x_max": 1.5})})
         with self.assertRaises(ValidationError):
             TerrainRegionPlanningInput.model_validate(value.model_dump() | {"topology": forged})
+
+
+    def test_phase_and_world_region_identities_are_required_in_frozen_input(self):
+        value = inputs()
+        for name in ("snapshot_uid", "world_region_uid"):
+            values = {field: getattr(value, field) for field in type(value).model_fields}
+            values.pop(name)
+            with self.subTest(field=name), self.assertRaises(ValidationError):
+                type(value).model_validate(values)
+            with self.assertRaises(ValidationError):
+                type(value).model_validate(value.model_dump() | {name: 123})

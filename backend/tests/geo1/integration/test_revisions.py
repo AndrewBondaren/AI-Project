@@ -442,3 +442,110 @@ class GeoRoutesProviderTests(TestCase):
             for _, decision in result.payload.classification_decisions))
         self.assertFalse(result.payload.base.water_bodies or result.payload.base.coarse_routes
             or result.payload.base.fine_routes or result.payload.source_mapping.entries)
+
+
+class TerrainRegionProviderTests(TestCase):
+    def setUp(self):
+        from app.application.worldData.generators.terrain.regions.regionExtent import TerrainRegionPlanProvider
+        from app.dataModel.terrain.regions.regionPlanningInput import TerrainRegionPlanningInput
+        from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
+        from tests.geo1.regions.test_extent import inputs, WORLD
+        self.inputs, self.world_uid = inputs(fine_span=2), WORLD.world_uid
+        self.handle = declared_binding(geo_surface_plan_binding(S.TERRAIN_REGIONS), TerrainRegionPlanningInput, TerrainRegionPlan)
+        self.registry, self.provider = PlanRegistry(), TerrainRegionPlanProvider()
+        self.registry.register(self.handle, self.provider)
+        policy = CachePolicy(max_retained_bytes=10000000, max_entry_bytes=5000000)
+        self.service = PlanningService(self.registry, CacheService(MemoryCache(policy), policy),
+            PlanningExecutionPolicy(max_workers=2, max_pending_builds=8))
+        self.addCleanup(self.service.shutdown)
+
+    def request(self, inputs=None):
+        inputs = self.inputs if inputs is None else inputs
+        meta, scope = self.handle.metadata, WorldPlanScope()
+        return PlanRequest[type(inputs)](key=PlanKey(world_uid=self.world_uid, scope=scope,
+            contract_id=meta.id, schema_version=meta.schema_version, algorithm_version=meta.algorithm_version,
+            input_fingerprint=self.handle.fingerprint_inputs(self.world_uid, scope, inputs, ())),
+            inputs=inputs, dependencies=())
+
+    def build(self, inputs=None):
+        return self.service.get_or_build(self.handle, self.request(inputs),
+            PlanDependencyReader(self.registry), wait=Wait())
+
+    def test_real_region_kernel_cache_and_codec_preserve_supplied_identity(self):
+        from app.application.worldData.generators.terrain.regions import regionExtent as module
+        from tests.geo1.regions.test_extent import WORLD
+        expected = module.prepare_terrain_regions(WORLD, inputs=self.inputs)
+        with patch.object(module, "prepare_terrain_regions", wraps=module.prepare_terrain_regions) as kernel:
+            first = self.build()
+            self.assertEqual(self.build(), first)
+            kernel.assert_called_once()
+        self.assertEqual(first.payload, expected)
+        self.assertEqual(first.payload.snapshot.snapshot_uid, self.inputs.snapshot_uid)
+        self.assertEqual(first.payload.snapshot.world_region.region_uid, self.inputs.world_region_uid)
+        self.assertEqual(first.payload.snapshot.world_region.generation_area_fine2, 48)
+        self.assertEqual(self.handle.cache_binding.codec.decode(self.handle.cache_binding.codec.encode(first)), first)
+        self.assertEqual(first.dependencies, ())
+        self.assertEqual(first.diagnostics, ())
+
+    def test_identity_and_geometry_edits_invalidate_request_and_source_revision(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        from app.application.worldData.planning.composition.surfacePlanningCapture import _revision
+        from app.dataModel.spatial.regionShape import BboxShape
+        from app.dataModel.terrain.regions.regionPlanningInput import RegionGeometryInput
+        variants = (self.inputs, rebuild(self.inputs, snapshot_uid="next-snapshot"),
+            rebuild(self.inputs, world_region_uid="next-world-region"),
+            rebuild(self.inputs, regions=(RegionGeometryInput(region_uid="authored",
+                geometry=BboxShape(x_min=0, x_max=1, y_min=0, y_max=1)),)))
+        plans = tuple(self.build(value) for value in variants)
+        self.assertEqual(len({plan.ref.key for plan in plans}), len(plans))
+        self.assertEqual(len({_revision(self.world_uid, (value,)) for value in variants}), len(variants))
+        self.assertEqual(plans[1].payload.snapshot.snapshot_uid, "next-snapshot")
+        self.assertEqual(plans[2].payload.snapshot.world_region.region_uid, "next-world-region")
+        self.assertIsNotNone(plans[3].payload.snapshot.region_for("authored"))
+
+    def test_missing_declared_bounds_never_produces_world_extent_from_topology(self):
+        from tests.geo1.integration.support.pipeline import rebuild
+        from app.dataModel.spatial.regionShape import BboxShape
+        from app.dataModel.terrain.regions.regionPlanningInput import RegionGeometryInput
+        inputs = rebuild(self.inputs, declared_world_bounds=None,
+            regions=(RegionGeometryInput(region_uid="authored", geometry=BboxShape(x_min=0, x_max=1, y_min=0, y_max=1)),))
+        plan = self.build(inputs).payload
+        self.assertIsNone(plan.snapshot.world_region)
+        self.assertEqual(tuple(coverage.region_uid for coverage in plan.coverages), ("authored",))
+        self.assertEqual(plan.snapshot.snapshot_uid, inputs.snapshot_uid)
+
+    def test_topology_normalization_replays_without_an_extra_geometry_path(self):
+        from tests.geo1.regions.test_extent import inputs, WORLD
+        from app.application.worldData.generators.terrain.regions.regionExtent import prepare_terrain_regions
+        from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
+        for mode in WorldTopologyMode:
+            value = inputs(mode=mode, fine_span=2)
+            with self.subTest(mode=mode):
+                actual = self.build(value)
+                self.assertEqual(actual.payload, prepare_terrain_regions(WORLD, inputs=value))
+                self.assertEqual(self.build(value), actual)
+                area = sum(span.x1-span.x0 for coverage in actual.payload.coverages for span in coverage.spans)
+                self.assertEqual(area, actual.payload.snapshot.world_region.generation_area_fine2)
+
+    def test_foreign_claim_owner_is_not_hidden_by_the_provider(self):
+        from tests.geo1.regions.test_extent import inputs, claim_ref
+        from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
+        from app.dataModel.terrain.regions.regionPlanningInput import RegionGeometryInput
+        value = inputs(RegionGeometryInput(region_uid="claim", geometry=RegionCoverage(region_uid="claim", spans=()),
+            owner_ref=claim_ref("other-world")))
+        with self.assertRaises(PlanBuildFailure) as error:
+            self.build(value)
+        self.assertEqual(error.exception.issues[0].code, "TERRAIN_REGION_IDENTITY_MISMATCH")
+
+    def test_shutdown_is_checked_before_and_after_the_region_kernel(self):
+        from unittest.mock import Mock
+        from app.application.planning.service.planningService import PlanWaitCancelled
+        from app.application.worldData.generators.terrain.regions import regionExtent as module
+        for side_effect, calls in (([PlanWaitCancelled()], 0), ([None, PlanWaitCancelled()], 1)):
+            control = Mock()
+            control.raise_if_shutdown.side_effect = side_effect
+            with self.subTest(calls=calls), patch.object(module, "prepare_terrain_regions",
+                    wraps=module.prepare_terrain_regions) as kernel:
+                with self.assertRaises(PlanWaitCancelled):
+                    self.provider.build(self.request(), PlanDependencyReader(self.registry), control)
+                self.assertEqual(kernel.call_count, calls)

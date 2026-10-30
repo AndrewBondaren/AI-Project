@@ -1,10 +1,13 @@
 """One pre-water region measurement; no surface reads, writes or water policy (GEO-1 §6.3)."""
 
-from app.application.planning.service.planningService import PlanBuildFailure
+from app.application.planning.service.planningService import PlanBuildControl, PlanBuildFailure
+from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.worldData.generators.terrain.regions.coverageMeasure import RegionCoverageMeasure
 from app.application.worldData.generators.terrain.regions.shapeCoverage import coverage_for_shape
 from app.application.worldData.masks.regionRasterContext import RasterWorld
 from app.dataModel.identity.uid import EntityUid
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+from app.dataModel.planning.contracts.planRequest import PlanRequest
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EllipseShape
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
 from app.dataModel.terrain.regions.regionPlanningInput import TerrainRegionPlanningInput
@@ -30,9 +33,9 @@ def require_terrain_region(snapshot: TerrainRegionsSnapshot, *, world_uid: Entit
     return region
 
 
-def prepare_terrain_regions(world: RasterWorld, *, snapshot_uid: EntityUid, world_region_uid: EntityUid,
-                            inputs: TerrainRegionPlanningInput) -> TerrainRegionPlan:
+def prepare_terrain_regions(world: RasterWorld, *, inputs: TerrainRegionPlanningInput) -> TerrainRegionPlan:
     inputs = TerrainRegionPlanningInput.model_validate(inputs, strict=True)
+    snapshot_uid, world_region_uid = inputs.snapshot_uid, inputs.world_region_uid
     topology = fine_topology(inputs.topology, inputs.grid.fine_span)
     root = seed_root(world)
     coverages: list[RegionCoverage] = []
@@ -71,3 +74,14 @@ def prepare_terrain_regions(world: RasterWorld, *, snapshot_uid: EntityUid, worl
     snapshot = TerrainRegionsSnapshot(world_uid=world.world_uid, snapshot_uid=snapshot_uid,
                                       world_region=world_region, regions=tuple(regions))
     return TerrainRegionPlan(snapshot=snapshot, coverages=tuple(coverages))
+
+
+class TerrainRegionPlanProvider:
+    """Delegate one immutable region request without a second identity source."""
+
+    def build(self, request: PlanRequest[TerrainRegionPlanningInput], dependencies: PlanDependencyReader,
+              control: PlanBuildControl) -> PlanBuildResult[TerrainRegionPlan]:
+        control.raise_if_shutdown()
+        payload = prepare_terrain_regions(request.key, inputs=request.inputs)
+        control.raise_if_shutdown()
+        return PlanBuildResult[TerrainRegionPlan](payload=payload, diagnostics=())

@@ -155,3 +155,14 @@ from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvid
 def exact_geo_routes_provider(provider: GeoHydrologyRoutesPlanProvider, request: PlanRequest[GeoHydrologyPlanInput],
     dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
     assert_type(provider.build(request, dependencies, control), PlanBuildResult[GeoHydrologyRoutesPlan])
+
+
+from app.application.worldData.generators.terrain.regions.regionExtent import TerrainRegionPlanProvider
+from app.dataModel.terrain.regions.regionPlanningInput import TerrainRegionPlanningInput
+
+
+def exact_region_provider(provider: TerrainRegionPlanProvider, request: PlanRequest[TerrainRegionPlanningInput],
+    dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
+    assert_type(provider.build(request, dependencies, control), PlanBuildResult[TerrainRegionPlan])
+    assert_type(request.inputs.snapshot_uid, EntityUid)
+    assert_type(request.inputs.world_region_uid, EntityUid)
