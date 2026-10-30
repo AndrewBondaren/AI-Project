@@ -12,6 +12,14 @@ from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectati
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
+from app.dataModel.patch.changes.header import PatchHeader
+from app.dataModel.patch.sections.section import DomainSection, SectionHeader
+from app.dataModel.patch.request.patchSet import PatchSet
+from app.dataModel.patch.preconditions.runtime import (
+    RuntimeTargetVersion, TargetPresence, TargetVersionExpected,
+)
+from app.dataModel.patch.results.sectionResult import SectionRefused
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 def section_state(key: SectionKey, snapshot: SnapshotRef) -> SectionStateRef:
@@ -50,3 +58,66 @@ format_registry = ArtifactFormatRegistry(entries=(
     ArtifactFormatMetadata(key=format_key, supported_versions=frozenset({1})),
 ))
 category = outcome(SnapshotApplyOutcomeKind.CONFLICT)
+
+
+def typed_section(header: SectionHeader, patch: PatchHeader) -> DomainSection[PatchHeader]:
+    return DomainSection[PatchHeader](header=header, patches=(patch,))
+
+
+def typed_request(publication: WorldPublicationRef, digest: RevisionHex,
+                  section: DomainSection[PatchHeader]) -> PatchSet[DomainSection[PatchHeader]]:
+    return PatchSet[DomainSection[PatchHeader]](
+        format_version=1, operation_id="op", preparation_fingerprint=digest,
+        world_uid=publication.world_uid, timeline_id="main", turn_id=1,
+        expected_world=publication, expected_players=(), sections=(section,),
+    )
+
+
+def expectation(version: RuntimeTargetVersion) -> TargetVersionExpected:
+    return TargetVersionExpected(version=version, presence=TargetPresence.DELETED)
+
+
+def refused(diagnostic: FieldPathError) -> SectionRefused:
+    return SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT, diagnostics=(diagnostic,))
+
+from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata, PlayerSnapshotMetadata
+from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
+from app.dataModel.worldSnapshot.results.publication import PackActivationDisposition, GameplayStarted
+from app.dataModel.worldSnapshot.events import SnapshotLogActivity, SnapshotLogRecord
+from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase, OperationClaimKind
+from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord
+from app.dataModel.artifacts.lifecycle.operation.claim import OperationClaim, PublicationOwner
+from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
+from app.dataModel.artifacts.lifecycle.holders import ArtifactHolderRef, OperationHolder, SnapshotHolder
+from app.dataModel.artifacts.lifecycle.gc import GcReport
+
+
+def committed_result(refs: SnapshotCommitRefs, digest: RevisionHex) -> SnapshotApplyResult:
+    return SnapshotApplyResult(category=SnapshotApplyOutcomeKind.COMMITTED, operation_id="op",
+                               request_fingerprint=digest, committed=refs, diagnostics=())
+
+
+def immutable_envelopes(world: WorldSnapshotRef, player: PlayerSnapshotRef,
+                        state: SectionStateRef, history_ref: SectionHistoryRef,
+                        digest: RevisionHex) -> tuple[WorldSnapshotMetadata, PlayerSnapshotMetadata]:
+    return (
+        WorldSnapshotMetadata(ref=world, parent=None, operation_id="op", turn_id=1,
+            created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash=digest,
+            state_refs=(state,), history_refs=(history_ref,), retained_artifacts=()),
+        PlayerSnapshotMetadata(ref=player, parent=None, operation_id="op", turn_id=1,
+            created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1,
+            state_refs=(), history_refs=(), retained_artifacts=()),
+    )
+
+
+def typed_lifecycle(lease: OperationLeaseRef, record: OperationRecord,
+                    snapshot: SnapshotRef) -> tuple[OperationClaim, ArtifactHolderRef, GcReport]:
+    claim: OperationClaim = PublicationOwner(lease=lease)
+    holder: ArtifactHolderRef = SnapshotHolder(snapshot=snapshot)
+    return claim, holder, GcReport(deleted=(), retained=record.leased_artifacts, failed=())
+
+
+def lifecycle_event(digest: RevisionHex) -> SnapshotLogRecord:
+    return SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_COMMITTED, operation_id="op", world_uid="world",
+        request_fingerprint=digest, timeline_id=None, snapshot_id=None, section_key=None,
+        outcome=SnapshotApplyOutcomeKind.COMMITTED)

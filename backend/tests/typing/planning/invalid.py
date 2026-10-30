@@ -969,3 +969,23 @@ from app.application.jsonValidation.resolve import ResolveContext
 def invalid_geo_reporting_family(pc: SurfacePlanningAssembler[WorldPlanProviders], view: GeoSurfacePlanningView,
     wait: PlanWaitControl, ctx: ResolveContext) -> None:
     prepare_captured_geo_bundle(view, planning=pc, wait=wait, resolve_ctx=ctx)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.designPreparation import prepare_designed_water
+from app.application.worldData.generators.terrain.designedWater.strategies.strategyFactory import DesignedWaterStrategyFactory
+from app.application.planning.service.planningService import PlanBuildControl
+from app.dataModel.terrain.designedWater.input import WaterStrategyInput
+from app.dataModel.placement.batch import PlacementBatchV2
+from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+from app.dataModel.placement.prepared import PreparedPlacementV2
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+
+
+def invalid_water_universe_callback(batch: PlacementBatchV2, terrain: PlanEnvelope[TerrainPlan],
+    grid: SurfaceGridSettings, control: PlanBuildControl,
+    prepare: Callable[[PlacementAdmissionInput], WaterDesignPreparation],
+    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2]) -> None:
+    prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
+        prepare_input=prepare, prepare_competitor=competitor,  # EXPECT: reportArgumentType
+        strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)

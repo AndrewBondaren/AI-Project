@@ -1932,7 +1932,7 @@ git diff --check — PASS. Это structural document evidence, не test pass �
 
 ### 8.4. Реализация 4A1 — values, refs, enum и metadata (2026-10-30)
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+Статус: **ПРИНЯТО мастером 2026-10-30 («Далее»); переход к 4A2 разрешён**.
 Добавлены только объявленные в §8.3 dataModel leaves: values,
 section/format registry metadata, artifact refs, world/player/publication/
 section refs и SnapshotApplyOutcomeKind. Empty package __init__ не выполняют
@@ -1950,6 +1950,47 @@ Membership/ancestry/CAS не симулируются моделями: это �
 и optional absence передаются явно, без выдуманного latest/base/default.
 Concrete Patch классы ещё не созданы, §3.4 gate не объявлен пройденным.
 Следующий подшаг — 4A2 после ревью этого изменения, по §8.3.
+
+### 8.5. Реализация 4A2 — Patch/section/precondition DTO (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+Добавлены оставшиеся dataModel/patch по §8.3: headers, typed dependencies,
+generic sections/PatchSet, runtime expectations и section results/receipts.
+Проверка contracts suite — **21 PASS**, включая positive Pyright и ровно
+**12** ожидаемых negative diagnostics; frozen/strict/round-trip/revalidation,
+порядок секций, empty tick, уникальность refs и отсутствие IO imports — PASS.
+Новые production подпапки содержат не более 3 файлов, включая __init__.
+Domain semantics, prepared binding/order/fingerprints, participants/base guards,
+CAS и no-op state comparison остаются в application; production Patch и
+per-class CRUD swap gate ещё не реализованы. Следующий подшаг — 4A3 после ревью.
+
+### 8.6. Реализация 4A3 — Snapshot/result/events и artifact lifecycle DTO (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+По точным путям §8.3 добавлены snapshot metadata/envelope, apply/publication
+results, typed logging events и artifact operation/lease/holder/GC DTO.
+Исходы используют общий SnapshotApplyOutcomeKind; metadata различают
+world/player и state/history refs, допускают сохранение прежнего state ref.
+CreatedAtUtc проверяет формат и календарь без чтения часов. Все records —
+frozen/strict с extra=forbid и revalidate_instances=always; dataModel не
+содержит IO, CRUD, services, clock, emitters или application imports.
+
+Проверка из backend: `.venv/Scripts/python.exe -m unittest discover
+-s tests/snapshotCore/contracts -p 'test_*.py' -v` — **32 PASS**.
+Включён существующий project-installed Pyright (`node_modules/pyright/index.js`)
+с `tests/typing/snapshotCore/pyrightconfig.valid.json` / `pyrightconfig.invalid.json`:
+positive — 0 diagnostics; negative — ровно **26** ожидаемых diagnostics.
+Проверены owner/ref/category инварианты, phase/terminal/kind/binding matrix,
+claim/holder discriminators, fence, GC disjointness, strict/frozen/nested
+revalidation, JSON round-trip и pure-import/запрет IO/clock calls — PASS.
+Новые production пакеты содержат 2–4 файла с __init__, карта соблюдена;
+`git diff --check` — PASS. Предыдущие и параллельные изменения сохранены.
+
+CAS/ancestry, проверка физической готовности artifacts, переходы lifecycle,
+clock assignment и delivery событий остаются в будущих application/storage
+слоях; tests DTO не объявляют эти гарантии реализованными. Concrete domain
+Patch, SQL, services, Container и DAG не добавлялись; backend не запускался,
+commit не создавался. **Остановка перед 4B1: один подшаг за заход**.
 
 ## 9. Норматив и совместимость
 

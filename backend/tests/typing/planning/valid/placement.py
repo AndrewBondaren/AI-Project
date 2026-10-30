@@ -12,6 +12,30 @@ from app.dataModel.policy.policyDecision import ObjectAdmissionDecision
 
 from tests.typing.planning.valid.policy import PolicyMode, PolicyReasonKind
 
+from collections.abc import Callable
+from app.application.planning.service.planningService import PlanBuildControl
+from app.application.worldData.generators.terrain.designedWater.preparation.designPreparation import prepare_designed_water
+from app.application.worldData.generators.terrain.designedWater.strategies.strategyFactory import DesignedWaterStrategyFactory
+from app.dataModel.placement.intent import PlacementIntent
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
+from app.dataModel.terrain.designedWater.input import WaterStrategyInput
+from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
+from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+
+
+def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[PlacementIntent, ...],
+    terrain: PlanEnvelope[TerrainPlan], grid: SurfaceGridSettings, control: PlanBuildControl,
+    prepare: Callable[[PlacementAdmissionInput], WaterStrategyInput],
+    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2],
+    reevaluate: SupportReevaluation, selection: WaterFieldSelectionPolicy) -> None:
+    assert_type(prepare_designed_water(batch, water_intents=intents, pre_hydrology=terrain, grid=grid,
+        seed_root="seed", prepare_input=prepare, prepare_competitor=competitor,
+        strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=selection,
+        control=control, reevaluate_support=reevaluate),
+        tuple[tuple[WaterDesignPreparation, ...], PlacementBatchResultV2])
+
 
 def valid_placement_lifecycle(batch: PlacementBatchV2, header: PlacementHeader,
     prepared: PreparedPlacementV2, decision: ObjectAdmissionDecision[PolicyMode, PolicyReasonKind],

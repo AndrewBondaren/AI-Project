@@ -139,8 +139,9 @@ flowchart LR
 Поведение P-1…P-8/L-1 принято в плане §8.1; определения ниже ещё не являются
 реализованным API или разрешением переходить через implementation map.
 Storage/encoding map §8.3 принят отдельно 2026-10-30; реализация проходит
-отдельные подшаги. Values/refs/metadata/enum реализованы в 4A1,
-Patch/PatchSet и application/storage этим не объявляются реализованными.
+отдельные подшаги. Values/refs/metadata/enum реализованы в 4A1;
+общие Patch/section/PatchSet/precondition/result DTO — в 4A2.
+Concrete domain Patch и application/storage этим не объявляются реализованными.
 Это ядро, независимое
 от будущих DTO нод GEN-DAG-1. Общие типы не импортируют concrete domain POJO.
 

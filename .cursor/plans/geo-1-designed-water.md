@@ -11610,6 +11610,28 @@ Evidence: GEO-1 662 OK (+6), planning 292 OK; positive pyright 0;
 negative 252 diagnostics (+1), all 249 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
 
+### G10-A ready-source design / joint placement — IN PROGRESS (2026-10-30)
+
+Срез J05–J07, ТЗ tz_map_light_bake §Placement P1/P2/P3 и
+tz_terrain_generation §Planning и доставка GEO-1: application terrain owner
+`designedWater/preparation/designPreparation.py::prepare_designed_water` выполняет
+strategy dispatch → prepare → bind admission в одном PlacementSession с competitors.
+Входы: existing PlacementBatchV2, original water intents, frozen terrain envelope,
+grid/seed/selection policy, strategy factory, PlanBuildControl; callbacks поставляют
+готовый WaterStrategyInput и generic competitor preparation только после READY.
+SUPPORT reevaluation использует existing session callback и актуальный admission.
+Выход — tuple существующих WaterDesignPreparation и PlacementBatchResultV2,
+без нового water transport/bridge; preparations сохраняют metadata/profile/notices
+spatial losers. Domain PlanBuildFailure становится общим failed outcome, остальные
+ошибки и cancellation распространяются. Проверяются world/revision/whole scope,
+intent identity/relations и ready input terrain/topology/grid/seed/strategy.
+J01–J05 source/settings/cascade/budget capture остаётся caller boundary этого среза;
+J08/records/schema/defaults/capture/production activation остаются атомарным остатком.
+Файлы тестов: geo1/integration/test_design_preparation.py (integration 4→5),
+typing/planning/valid/placement.py и invalid.py; preparation 6→7, WARN в чате.
+Проверка: GEO-1, planning, positive/negative planning typing и diff check.
+G10-A production остаётся OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

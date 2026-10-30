@@ -6,6 +6,13 @@ from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectati
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
+from app.dataModel.artifacts.references import ArtifactRef
+from app.dataModel.patch.changes.header import PatchHeader
+from app.dataModel.patch.sections.section import DomainSection, SectionHeader
+from app.dataModel.patch.request.patchSet import PatchSet
+from app.dataModel.patch.preconditions.runtime import TargetVersionExpected, TargetPresence
+from app.dataModel.patch.results.sectionResult import SectionRefused
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 def needs_section(key: SectionKey) -> None:
@@ -48,3 +55,58 @@ def different_refs(world: WorldSnapshotRef, player: PlayerSnapshotRef,
 
 
 needs_outcome("committed")  # EXPECT: reportArgumentType
+
+
+def needs_patch_request(request: PatchSet[DomainSection[PatchHeader]]) -> None:
+    pass
+
+
+def different_payloads(header: SectionHeader, artifact: ArtifactRef,
+                       wrong_request: PatchSet[DomainSection[ArtifactRef]],
+                       diagnostic: FieldPathError) -> None:
+    DomainSection[PatchHeader](header=header, patches=(artifact,))  # EXPECT: reportArgumentType
+    needs_patch_request(wrong_request)  # EXPECT: reportArgumentType
+    TargetVersionExpected(version=artifact, presence=TargetPresence.PRESENT)  # EXPECT: reportArgumentType
+    SectionRefused(category="conflict", diagnostics=(diagnostic,))  # EXPECT: reportArgumentType
+
+from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata, PlayerSnapshotMetadata
+from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
+from app.dataModel.worldSnapshot.results.publication import PackActivationDisposition, GameplayStarted
+from app.dataModel.worldSnapshot.events import SnapshotLogActivity, SnapshotLogRecord
+from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase, OperationClaimKind
+from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord
+from app.dataModel.artifacts.lifecycle.operation.claim import OperationClaim, PublicationOwner
+from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
+from app.dataModel.artifacts.lifecycle.holders import ArtifactHolderRef, OperationHolder, SnapshotHolder
+from app.dataModel.artifacts.lifecycle.gc import GcReport
+
+
+def needs_runtime_kind(kind: OperationKind) -> None:
+    pass
+
+
+def needs_phase(phase: OperationPhase) -> None:
+    pass
+
+
+def needs_holder(holder: ArtifactHolderRef) -> None:
+    pass
+
+
+def different_lifecycle_types(world: WorldSnapshotRef, player: PlayerSnapshotRef,
+                              lease: OperationLeaseRef, state: SectionStateRef,
+                              commit: SnapshotCommitRefs, publication: WorldPublicationRef) -> None:
+    SnapshotCommitRefs(world_snapshot=player, player_snapshots=(), publication=publication)  # EXPECT: reportArgumentType
+    SnapshotCommitRefs(world_snapshot=world, player_snapshots=(world,), publication=publication)  # EXPECT: reportArgumentType
+    needs_runtime_kind(OperationPhase.READY)  # EXPECT: reportArgumentType
+    needs_phase(SnapshotApplyOutcomeKind.COMMITTED)  # EXPECT: reportArgumentType
+    needs_runtime_kind(OperationClaimKind.OWNER)  # EXPECT: reportArgumentType
+    needs_outcome(PackActivationDisposition.ACTIVE)  # EXPECT: reportArgumentType
+    needs_holder(lease)  # EXPECT: reportArgumentType
+    OperationHolder(lease=world)  # EXPECT: reportArgumentType
+    SnapshotHolder(snapshot=publication)  # EXPECT: reportArgumentType
+    SnapshotApplyResult(category="committed", operation_id="op", request_fingerprint="a" * 64, committed=commit, diagnostics=())  # EXPECT: reportArgumentType
+    SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_STARTED, operation_id="op", world_uid="world", request_fingerprint=None, timeline_id=None, snapshot_id=None, section_key=None, outcome=OperationPhase.TERMINAL)  # EXPECT: reportArgumentType
+    WorldSnapshotMetadata(ref=player, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(), retained_artifacts=())  # EXPECT: reportArgumentType
+    PlayerSnapshotMetadata(ref=player, parent=world, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, state_refs=(), history_refs=(), retained_artifacts=())  # EXPECT: reportArgumentType
+    WorldSnapshotMetadata(ref=world, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(state,), retained_artifacts=())  # EXPECT: reportArgumentType
