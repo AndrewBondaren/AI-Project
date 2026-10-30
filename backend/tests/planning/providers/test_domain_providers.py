@@ -1390,7 +1390,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         with patch("app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live World lookup")), patch(
             "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.river_bed_spec", side_effect=AssertionError("route profile")):
             routes = self.routes()
-        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies",
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies",
                    side_effect=AssertionError("final water discovery")):
             final = self.finish(routes)
         self.assertTrue(routes.payload.coarse_routes)
@@ -1577,7 +1577,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         river = self.execute(self.river_binding, self.river_inputs, self.river_handles, (self.before, routes))
         path = "app.application.worldData.generators.hydrology."
         with patch(path + "rivers.planning.coarseRiverPlanner.prepared_declared_river_requests", side_effect=AssertionError("reroute")), patch(
-            path + "water.planning.waterBodyPlanner.assemble_water_bodies", side_effect=AssertionError("refill")), patch(
+            path + "water.planning.waterBodyJob.assemble_water_bodies", side_effect=AssertionError("refill")), patch(
             "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.apply_river_bed_z",
             side_effect=AssertionError("recarve")):
             self.finish(routes, river)
@@ -1819,7 +1819,7 @@ class WaterAndPaintOwnerTests(unittest.TestCase):
         from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
         f = self.fixture
         before = f.before.payload.surface_z
-        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies",
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies",
                    wraps=assemble_water_bodies) as kernel, patch(
             "app.application.jsonValidation.worldRow.hydrology", side_effect=AssertionError("live read")):
             result = self.water()
@@ -1838,7 +1838,7 @@ class WaterAndPaintOwnerTests(unittest.TestCase):
         f = self.fixture
         for update in ({"enabled": False}, {"scopes": frozenset()}, {"scopes": frozenset((HydrologyScope.RIVERS,))}):
             with self.subTest(update=update), patch(
-                "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+                "app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies") as kernel:
                 result = self.water(inputs=f.hydro_inputs.model_copy(update=update))
                 self.assertFalse(result.payload.coarse_open_water or result.payload.water_bodies or result.payload.physical_unions)
                 self.assertFalse(result.diagnostics)
@@ -2416,7 +2416,13 @@ class HydrologyAssemblyBoundaryTests(unittest.TestCase):
             tree = ast.parse(source)
             self.assertLessEqual(len(source.splitlines()), 250, cls.__name__)
             if not isinstance(owner, type):
-                names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+                # Frozen provenance is part of the public GEO contract, not a runtime planning service.
+                annotations = [node.annotation for node in ast.walk(tree) if isinstance(node, ast.arg)]
+                annotations += [node.returns for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+                annotation_nodes = {id(child) for annotation in annotations if annotation is not None
+                                    for child in ast.walk(annotation)}
+                names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
+                         and not (id(node) in annotation_nodes and node.id in {"PlanEnvelope", "PlanRef"})}
                 self.assertFalse(names & planning_types, (cls.__name__, names & planning_types))
         from app.application.worldData.generators.hydrology.planning import hydrologyPlanProvider as providers
         tree = ast.parse(inspect.getsource(providers))

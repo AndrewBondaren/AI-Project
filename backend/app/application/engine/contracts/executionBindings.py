@@ -14,7 +14,7 @@ from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.identity import ContractId, ContractVersion
 
 O = TypeVar("O", bound=BaseModel, covariant=True)
-E = TypeVar("E", bound=BaseModel)
+S = TypeVar("S", bound=BaseModel)
 
 
 @dataclass(frozen=True)
@@ -32,18 +32,21 @@ class TransitionBinding(Protocol):
     def transition(self, view: DAGReadView) -> TaskType | None: ...
 
 
-class SnapshotExtension(Protocol[E]):
+class SnapshotExtension(Protocol[S]):
+    @property
+    def snapshot_type(self) -> type[S]: ...
+
     @property
     def contract_id(self) -> ContractId: ...
 
     @property
     def version(self) -> ContractVersion: ...
 
-    def capture(self) -> E: ...
+    def capture(self) -> S: ...
 
-    async def restore(self, value: E) -> None: ...
+    async def restore(self, value: S) -> None: ...
 
-    async def validate_restored(self, value: E) -> None: ...
+    async def validate_restored(self, value: S) -> None: ...
 
 
 class ExecutionBindings(Protocol):

@@ -2118,3 +2118,22 @@ LANDFORMS в planning input не активируется. Segment fine width и
 wire width остаются разными контрактами; wire bounds берутся из
 HydrologyMaskWire. Приёмка: 123 tests OK, pyright positive 0 errors/warnings,
 negative 14 ожидаемых diagnostics. Runtime cutover остаётся PC-8/9/10/11.
+
+
+### GEO-1: frozen fine terrain input before accepted basin fill
+
+FineSurfaceWindow (dataModel/terrain/sampling) содержит RegionCoverage и полный
+row-major tuple[(FineXY,FineZ)] ровно этой области. Его PlanEnvelope сохраняет
+exact climate_base/terrain_base dependencies; input fingerprint включает captured
+base/relief/landcover recipe и coverage. Window также содержит exact fine
+WorldTopology и protected_cells:frozenset[Coord], покрытые output fingerprint.
+Window не содержит water records и не заменяет final hydrology plan; water owner
+проверяет topology и читает protection из frozen payload, не из water mask.
+Accepted fine fill проверяет ожидаемый ref и frame до любых writes, применяет
+accepted BasinSpec floor через terrain writer и вызывает общий physical water
+resolver. Source admission/placement не повторяются; implicit sources отключены.
+Existing physical resolver требует полного fine world evidence: clipped window
+отвергается, не считается implicit dry и не расширяется через I/O. Это ограничение
+операции, не переключение production на dense fine-world planning. Результат —
+existing AssembledWater/MaterializedWater; публикация final coverage и L0/L2
+projection выполняются отдельным atomic GEO cutover без второго water SoT.

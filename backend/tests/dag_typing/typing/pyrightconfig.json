@@ -42,7 +42,11 @@
     "../../../../backend/app/application/engine/runtime/dag/executionLevelSnapshot.py",
     "../../../../backend/app/application/engine/diagnostics/dagLog.py",
     "../../../../backend/app/application/engine/diagnostics/events.py",
-    "../../../../backend/app/application/engine/diagnostics/executionEvents.py"
+    "../../../../backend/app/application/engine/diagnostics/executionEvents.py",
+    "../../../../backend/app/application/engine/runtime/dag/context/catalogSnapshot.py",
+    "../../../../backend/app/application/engine/runtime/dag/lifecycle/executionSnapshotService.py",
+    "../../../../backend/app/application/cancellation/typed/sessionSnapshot.py",
+    "../../../../backend/app/application/cancellation/typed/snapshotStore.py"
   ],
   "extraPaths": [
     "../../.."
@@ -93,6 +97,10 @@
     "../../../../backend/app/application/engine/runtime/dag/executionLevelSnapshot.py",
     "../../../../backend/app/application/engine/diagnostics/dagLog.py",
     "../../../../backend/app/application/engine/diagnostics/events.py",
-    "../../../../backend/app/application/engine/diagnostics/executionEvents.py"
+    "../../../../backend/app/application/engine/diagnostics/executionEvents.py",
+    "../../../../backend/app/application/engine/runtime/dag/context/catalogSnapshot.py",
+    "../../../../backend/app/application/engine/runtime/dag/lifecycle/executionSnapshotService.py",
+    "../../../../backend/app/application/cancellation/typed/sessionSnapshot.py",
+    "../../../../backend/app/application/cancellation/typed/snapshotStore.py"
   ]
 }

@@ -3,17 +3,23 @@
 from collections.abc import Mapping
 from types import MappingProxyType
 
+from pydantic import TypeAdapter
+
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import GateSignal, LevelDecision
-from app.dataModel.engine.dag.identity import ExecutionId, ExecutionIdentity, NodeId
+from app.dataModel.engine.dag.identity import ExecutionId, ExecutionIdentity, NodeId, PlanRevision, PlanRevisionValue
+from app.dataModel.engine.dag.diagnostics import Index
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 
 class ExecutionState:
-    def __init__(self, execution_id: ExecutionId, registry: NodeRegistry) -> None:
+    def __init__(
+        self, execution_id: ExecutionId, registry: NodeRegistry, *,
+        plan_revision: PlanRevision | None = None, pass_number: Index = 0,
+    ) -> None:
         self.catalog = DAGContext(execution_id, registry)
         self._statuses = {node_id: NodeStatus.IDLE for node_id in registry.ids()}
         self._traces: list[ExecutionTrace] = []
@@ -21,6 +27,30 @@ class ExecutionState:
         self._attempt_passes: dict[NodeId, int] = {}
         self._decision = LevelDecision.CONTINUE
         self._active = False
+        self._plan_revision = plan_revision
+        self._pass_number = self._validate_context(plan_revision, pass_number)
+
+    @staticmethod
+    def _validate_context(revision: PlanRevision | None, pass_number: int, *, require_revision: bool = False) -> int:
+        if require_revision or revision is not None:
+            TypeAdapter[PlanRevision](PlanRevisionValue).validate_python(revision)
+        return TypeAdapter[int](Index).validate_python(pass_number)
+
+    @property
+    def plan_revision(self) -> PlanRevision | None:
+        return self._plan_revision
+
+    @property
+    def pass_number(self) -> int:
+        return self._pass_number
+
+    @property
+    def is_active(self) -> bool:
+        return self._active
+
+    @property
+    def attempt_passes(self) -> tuple[tuple[NodeId, int], ...]:
+        return tuple(sorted(self._attempt_passes.items()))
 
     @property
     def statuses(self) -> Mapping[NodeId, NodeStatus]:
@@ -44,9 +74,12 @@ class ExecutionState:
             return self._levels[-1].gate
         return None
 
-    def begin_phase(self) -> None:
+    def begin_phase(self, plan_revision: PlanRevision, pass_number: Index = 0) -> None:
         if self._active:
             raise RuntimeError("execution already has an active phase writer")
+        validated_pass = self._validate_context(plan_revision, pass_number, require_revision=True)
+        self._plan_revision = plan_revision
+        self._pass_number = validated_pass
         self._active = True
         self._decision = LevelDecision.CONTINUE
 

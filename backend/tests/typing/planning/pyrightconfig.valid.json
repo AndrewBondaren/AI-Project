@@ -9,6 +9,7 @@
     "../../../app/application/worldData/generators/terrain/passes/lightSurfaceRefine.py",
     "../../../app/application/worldData/generators/terrain/passes/parentLightUpsample.py",
     "../../../app/dataModel/terrain/regions",
+    "../../../app/dataModel/terrain/sampling",
     "../../../app/application/worldData/generators/terrain/regions",
     "../../../app/dataModel/locations/context/locationContext.py",
     "../../../app/application/worldData/generators/utils/materialResolver.py",

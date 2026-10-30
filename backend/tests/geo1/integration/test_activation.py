@@ -315,7 +315,7 @@ class RouteWaterTransportTests(TestCase):
             water = assemble_water_bodies(*args, **kwargs)
             produced.append(water.materialized.source_mapping)
             return water
-        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies",
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies",
                    side_effect=capture) as materialize:
             result = self.fixture.water()
         materialize.assert_called_once()
@@ -325,7 +325,7 @@ class RouteWaterTransportTests(TestCase):
     def test_disabled_open_water_carries_explicit_empty_mapping_without_fill(self):
         from unittest.mock import patch
         inputs = self.fixture.fixture.hydro_inputs.model_copy(update={"enabled": False})
-        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as fill:
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies") as fill:
             result = self.fixture.water(inputs=inputs)
             fill.assert_not_called()
         self.assertEqual(result.payload.source_mapping.entries, ())
@@ -377,10 +377,10 @@ class GeoWaterDecisionConsumerTests(TestCase):
     def test_accepted_specs_use_one_existing_kernel_and_keep_actual_mapping(self):
         from unittest.mock import patch
         from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
-        module = "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner"
+        module = "app.application.worldData.generators.hydrology.water.planning.waterBodyJob"
         before = tuple(self.surface)
         with patch(module+".assemble_water_bodies", wraps=assemble_water_bodies) as kernel, \
-                patch.object(self.owner, "_select_specs", side_effect=AssertionError("legacy selection")):
+                patch(module + ".WaterBodyJob._select_specs", side_effect=AssertionError("legacy selection")):
             result = self.fill()
         kernel.assert_called_once()
         self.assertEqual(kernel.call_args.args[1], self.placement.basin_specs)
@@ -405,7 +405,7 @@ class GeoWaterDecisionConsumerTests(TestCase):
 
     def test_disabled_decisions_stop_before_kernel_without_claiming_dry_sources(self):
         from unittest.mock import patch
-        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies") as kernel:
             result = self.fill(decisions=self.decisions(enabled=False))
         kernel.assert_not_called()
         self.assertEqual(result.payload.source_mapping.entries, ())
@@ -453,7 +453,7 @@ class GeoWaterDecisionConsumerTests(TestCase):
         for values in ((), ready[:-1], ready+ready[:1], tuple(reversed(ready)),
                 ((ready[0][0], unresolved), *ready[1:]), ((ready[0][0], forged), *ready[1:])):
             with self.subTest(values=values), patch(
-                    "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+                    "app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies") as kernel:
                 with self.assertRaises(PlanBuildFailure):
                     self.fill(decisions=values)
                 kernel.assert_not_called()
@@ -465,7 +465,7 @@ class GeoWaterDecisionConsumerTests(TestCase):
         for updates in ({"surface": self.surface[:-1]}, {"placement": wrong},
                 {"inputs": self.inputs.model_copy(update={"topology": self.inputs.topology.model_copy(update={"mode": "wrapped"})})}):
             with self.subTest(updates=updates), patch(
-                    "app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner.assemble_water_bodies") as kernel:
+                    "app.application.worldData.generators.hydrology.water.planning.waterBodyJob.assemble_water_bodies") as kernel:
                 with self.assertRaises(PlanBuildFailure):
                     self.fill(**updates)
                 kernel.assert_not_called()

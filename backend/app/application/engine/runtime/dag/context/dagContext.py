@@ -9,6 +9,7 @@ from app.application.engine.contracts.outputRef import RequiredOutput
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
+from app.application.engine.runtime.dag.context.catalogSnapshot import CatalogSnapshot
 from app.application.engine.runtime.dag.context.resultInvalidation import ResultInvalidation
 from app.application.engine.runtime.validation.contractValidator import ContractValidator
 from app.dataModel.engine.dag.errors.nodeError import NodeError
@@ -52,6 +53,22 @@ class DAGContext:
     @property
     def current_outputs(self) -> tuple[ExecutionIdentity, ...]:
         return tuple(self._record(node_id).identity for node_id in sorted(self._current))
+
+    @property
+    def is_quiescent(self) -> bool:
+        return not self._open
+
+    def capture(self) -> CatalogSnapshot:
+        if not self.is_quiescent:
+            raise RuntimeError("cannot capture a catalog with open attempts")
+        return CatalogSnapshot(
+            execution_id=self._execution_id, attempt_counters=self.attempt_counters,
+            closed_attempts=self.closed_attempts,
+            contracts=tuple((node, reg.contract.contract_id, reg.contract.version)
+                            for node, reg in sorted(self._registrations.items())),
+            _records=tuple(self._record(node) for node in sorted(self._current)),
+            _errors=tuple(self._errors[node] for node in sorted(self._errors)),
+        )
 
     def begin_attempt(self, node_id: NodeId, plan_revision: PlanRevision) -> ExecutionIdentity:
         if node_id not in self._registrations:

@@ -12644,6 +12644,54 @@ Production consumer не переключён. Следующий join: bind э�
 GEO fine-water planning/revision и complete fill scope; затем L0/L2 consumer
 cutover, включая removal повторного hill pass. G10-A OPEN.
 
+### G10-A frozen terrain window → accepted fine water — IMPLEMENTED (2026-10-31)
+ТЗ: §6.10, §6.20, shared final fine-water contract/source-order audit выше;
+docs/tz_terrain_hydrology.md §GEO-1 frozen fine terrain input / HY-12.
+Цель: actual pre-water terrain → accepted fine carve → existing physical water
+resolver, с одним frozen source и exact expected revision. Production OPEN.
+Инвентарь: единственный новый POJO — ранее предусмотренный FineSurfaceWindow
+(dataModel/terrain/sampling/fineSurfaceWindow.py): required coverage, complete
+canonical surface_z, exact fine WorldTopology, protected_cells:frozenset[Coord].
+Protection хранится один раз, внутри output fingerprint. Refs/key/fingerprints —
+existing PlanEnvelope/PlanKey; новых water records/enum/compatibility bridge нет.
+Карта application owners:
+- terrain/planning/preWater/terrainWindowJob.py::PreWaterTerrainWindowJob:
+  existing terrain job → frozen envelope, common input/output fingerprint formulas,
+  required climate_base/terrain_base deps. Captured recipe + coverage в key.
+  PreWaterTerrainPlanner.prepare_window только delegates, возвращает envelope.
+- hydrology/water/planning/fineWaterJob.py::FineWaterJob: exact expected ref/output
+  proof, complete coverage/topology и accepted fine profile checks до writes;
+  копия scratch → existing apply_basin_z → existing assemble_water_bodies.
+  Protection читается из payload; source admission/placement не повторяются,
+  implicit sources отключены. Output existing scratch/AssembledWater/diagnostics.
+- water/planning/waterBodyJob.py::WaterBodyJob: existing coarse open-water domain
+  execution перенесён без изменения алгоритмов; WaterBodyPlanner.plan/plan_geo/
+  fill_fine — только delegates. Никаких domain helpers в публичном planner.
+- water/planning/waterAssemblyResult.py: existing AssembledWater перенесён;
+  finalize_water/unresolved_water владеют union/parent/UID normalization и domain
+  result/error diagnostics. waterBodyAssembler — kernel order/error delegation.
+- surfaceManifest.py: appended stable IDs283/284 window/envelope; production phase
+  registration не добавлена. Existing test patch paths направлены на owning job;
+  AST boundary test разрешает PlanEnvelope/PlanRef только в annotations согласно
+  public frozen contracts; runtime planning/cache ban и assertions сохранены.
+Scope: existing depression_tree требует полного fine world evidence. Operation
+отвергает render clip, не делает implicit dry/hidden I/O/full-world expansion.
+Lazy/partial physical solver и dense production strategy не объявлены готовыми.
+Counts: sampling0→2; preWater3→4; water/planning2→5; new fine_water tests0→2.
+WARN touched roots: generators/hydrology7→7, geo1/integration6→6, без новых файлов.
+Evidence: GEO-1 745 OK (новых7), providers129 OK, hills/sync L0/L2 36 OK;
+positive pyright0, negative269 /266 EXPECT покрыты, surplus3 baseline прежний.
+Реальный merge/mapping и frozen replay/codec проверены; ignore frozen protection
+mutation даёт1 assertion failure. После extraction error result повторены fine7
+и positive typing0. Backend/SQL/engine DAG/commit/push не выполнялись.
+Manual review: оба public planner только delegate; waterBodyAssembler не считает
+normalization/result evidence; kernel algorithms в owning jobs, callbacks не
+скрывают domain work в orchestration. Generic climate/coating не дублируются.
+Следующий join: публикация canonical fine result/coverage в final GEO contract и
+readonly query без refill, coarse становится projection; затем atomic G8-B и
+production/L0/L2 cutover. Сейчас только isolated accepted fine execution,
+coarse production path прежний; весь G10-A OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

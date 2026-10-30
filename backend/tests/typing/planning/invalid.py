@@ -1083,3 +1083,16 @@ def invalid_pre_carve_terrain(world: EntityUid, base_input: TerrainBaseInput, re
                               water: PlanEnvelope[HydrologyPlan]) -> None:
     PreWaterTerrainPlanner().prepare(world, base_input, relief_input, inputs, base, water, cells=cells, control=control)  # EXPECT: reportArgumentType
     PreWaterTerrainPlanner().prepare(world, base_input, relief_input, inputs, base, terrain, cells=cells, control=None)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.hydrology.worldHydrology import WorldHydrology
+
+
+def invalid_frozen_fine_water(terrain: PlanEnvelope[TerrainPlan], expected: PlanRef, topology: WorldTopology,
+                              policy: WorldHydrology, world: EntityUid, control: PlanBuildControl,
+                              coverage: RegionCoverage) -> None:
+    WaterBodyPlanner().fill_fine(terrain, expected_surface=expected, topology=topology, specs=(), policy=policy, change_uid=world, control=control)  # EXPECT: reportArgumentType
+    FineSurfaceWindow(coverage=coverage, surface_z=terrain.payload.surface_z, topology=topology, protected_cells=frozenset())  # EXPECT: reportArgumentType

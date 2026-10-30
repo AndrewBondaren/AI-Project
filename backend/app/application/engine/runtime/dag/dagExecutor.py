@@ -5,7 +5,7 @@ from collections.abc import Collection, Mapping, Callable
 from time import time
 from typing import cast
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 
 from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
 from app.application.engine.diagnostics.executionEvents import ExecutionEvents
@@ -23,7 +23,7 @@ from app.dataModel.engine.dag.diagnostics import (
 )
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase, validate_python_phase
-from app.dataModel.engine.dag.identity import DomainRevision, ExecutionIdentity, NodeId, PlanRevision, PlanRevisionValue
+from app.dataModel.engine.dag.identity import DomainRevision, ExecutionIdentity, NodeId, PlanRevision
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 from app.dataModel.engine.dag.records import OutputRecord
 
@@ -46,8 +46,6 @@ class DAGExecutor:
         cancellation: CancellationRequest | None = None,
     ) -> LevelDecision:
         validate_python_phase(phase)
-        TypeAdapter[int](Index).validate_python(pass_number)
-        TypeAdapter[PlanRevision](PlanRevisionValue).validate_python(plan_revision)
         if cancellation is not None:
             cancellation = CancellationRequest.model_validate(cancellation)
         if set(rerun).difference(plan.nodes):
@@ -65,7 +63,7 @@ class DAGExecutor:
                 raise TypeError(f"executor does not match binding '{node_id}'")
         if phase == ExecutionPhase.POST_LLM and state.decision != LevelDecision.CONTINUE:
             return state.decision
-        state.begin_phase()
+        state.begin_phase(plan_revision, pass_number)
         try:
             state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
             state.begin_level(())

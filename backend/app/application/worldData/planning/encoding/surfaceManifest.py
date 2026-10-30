@@ -55,6 +55,7 @@ from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint as _MHyd
 from app.dataModel.hydrology.declaredLake import DeclaredLake as _MDeclaredLake
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterAnchorInput as _MWaterAnchorInput
 from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype as _MGeographicSubtype
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow as _MFineSurfaceWindow
 from app.dataModel.topology.worldTopology import WorldTopology as _MWorldTopology
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as _MWorldTopologyMode
 from app.dataModel.topology.worldBounds import WorldBounds as _MWorldBounds
@@ -537,6 +538,8 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (280, _MAttachedCoastline, CanonicalTypeKind.RECORD),
     (281, _MCoastlinePart, CanonicalTypeKind.RECORD),
     (282, _MCategoryWaterGenerationSettings, CanonicalTypeKind.RECORD),
+    (283, _MFineSurfaceWindow, CanonicalTypeKind.RECORD),
+    (284, _MPlanEnvelope[_MFineSurfaceWindow], CanonicalTypeKind.RECORD),
 
 )))
 

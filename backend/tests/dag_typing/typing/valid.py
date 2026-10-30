@@ -7,6 +7,9 @@ from app.dataModel.engine.dag.errors.nodeError import NodeError
 
 from pydantic import BaseModel
 
+from app.application.cancellation.typed.sessionSnapshot import SessionSnapshot
+from app.application.cancellation.typed.snapshotStore import SnapshotStore
+from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.diagnostics.dagLog import emit
 from app.application.engine.diagnostics.events import ReplanDiagnostic
@@ -62,6 +65,7 @@ class Transition:
 
 
 class Extension:
+    snapshot_type = LeafOutput
     contract_id = ContractId("test.extension")
     version = ContractVersion("1")
 
@@ -204,3 +208,16 @@ def verify_diagnostics(view: PublishedDAGReadView) -> None:
     )
     assert_type(event.next_task_type, TaskType)
     assert_type(emit(event), None)
+
+
+def verify_snapshot(state: ExecutionState) -> None:
+    service = ExecutionSnapshotService[LeafOutput](Extension())
+    snapshot = service.capture(state)
+    assert_type(snapshot, SessionSnapshot[LeafOutput])
+    assert_type(snapshot.extension, LeafOutput | None)
+    assert_type(snapshot.catalog.record(NodeId("typed-python"), LEAF_CONTRACT), OutputRecord[LeafOutput] | None)
+    assert_type(snapshot.catalog.node_error(NodeId("typed-error"), ERROR_CONTRACT), TestNodeError | TestOtherError | None)
+    store = SnapshotStore[LeafOutput]()
+    assert_type(store.save(snapshot), None)
+    assert_type(store.load(state.catalog.execution_id), SessionSnapshot[LeafOutput] | None)
+    assert_type(ExecutionSnapshotService[Never]().capture(state), SessionSnapshot[Never])

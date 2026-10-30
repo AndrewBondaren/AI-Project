@@ -7,6 +7,10 @@ from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.diagnostics.dagLog import emit
 from app.application.engine.diagnostics.events import ReplanDiagnostic
 from app.application.engine.contracts.executionBindings import ResponseBinding, SnapshotExtension
+from app.application.cancellation.typed.sessionSnapshot import SessionSnapshot
+from app.application.cancellation.typed.snapshotStore import SnapshotStore
+from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
+from app.dataModel.engine.dag.records import OutputRecord
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.pythonNode import PythonNode
@@ -93,6 +97,19 @@ def wrong_diagnostics() -> None:
     CancellationRequest(reason="requested")  # expect: reportArgumentType
     emit(LeafOutput(value=1))  # expect: reportArgumentType
     ReplanDiagnostic(identity=identity(), pass_number=0, phase=ExecutionPhase.PRE_LLM, level=0, timestamp=1.0, code=ExecutionEventCode.REPLAN_REQUESTED, severity=ExecutionSeverity.INFO, status=NodeStatus.GATED, message="gate", next_task_type="scene_init")  # expect: reportArgumentType
+
+
+def wrong_snapshot(
+    leaf: SessionSnapshot[LeafOutput], composite: SessionSnapshot[CompositeOutput],
+    extension: SnapshotExtension[CompositeOutput],
+) -> None:
+    wrong: SessionSnapshot[CompositeOutput] = leaf  # expect: reportAssignmentType
+    wrong_record: OutputRecord[CompositeOutput] | None = leaf.catalog.record(NodeId("typed-python"), LEAF_CONTRACT)  # expect: reportAssignmentType
+    wrong_error: TestNodeError | None = leaf.catalog.node_error(NodeId("typed-error"), ERROR_CONTRACT)  # expect: reportAssignmentType
+    ExecutionSnapshotService[LeafOutput](extension)  # expect: reportArgumentType
+    SnapshotStore[LeafOutput]().save(composite)  # expect: reportArgumentType
+    SnapshotStore[LeafOutput]().load("execution-1")  # expect: reportArgumentType
+    print(wrong, wrong_record, wrong_error)
 
 
 async def wrong_error_contracts(view: PublishedDAGReadView, catalog: DAGContext, runner: NodeRunner) -> None:

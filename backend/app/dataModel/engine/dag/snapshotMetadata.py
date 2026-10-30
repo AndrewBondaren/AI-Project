@@ -1,6 +1,6 @@
 """Version and attempt metadata for memory resume. SoT: tz_engine_node_context §9."""
 
-from typing import Annotated, Self
+from typing import Annotated, ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -15,6 +15,7 @@ from app.dataModel.engine.dag.identity import (
 
 
 class SnapshotMetadata(BaseModel):
+    CURRENT_FORMAT_VERSION: ClassVar[int] = 1
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 
     format_version: Annotated[int, Field(strict=True, gt=0)]

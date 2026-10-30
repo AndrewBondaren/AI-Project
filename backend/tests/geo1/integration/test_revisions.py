@@ -441,7 +441,7 @@ class GeoRoutesProviderTests(TestCase):
 
     def test_disabled_root_yields_common_disabled_decisions_and_no_fill(self):
         from tests.geo1.integration.support.pipeline import rebuild
-        with patch.object(self.assembler._water, "_materialize", side_effect=AssertionError("disabled fill")):
+        with patch("app.application.worldData.generators.hydrology.water.planning.waterBodyJob.WaterBodyJob._materialize", side_effect=AssertionError("disabled fill")):
             result = self.build(rebuild(self.domain.inputs, enabled=False))
         self.assertTrue(all(decision.state is PolicyState.DISABLED
             for _, decision in result.payload.classification_decisions))

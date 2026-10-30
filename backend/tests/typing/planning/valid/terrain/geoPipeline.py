@@ -277,3 +277,25 @@ def pre_carve_terrain(world: EntityUid, base_input: TerrainBaseInput, relief_inp
                       terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage, control: PlanBuildControl) -> None:
     assert_type(PreWaterTerrainPlanner().prepare(world, base_input, relief_input, inputs, base, terrain,
                 cells=cells, control=control), tuple[SurfaceHeightmap, frozenset[tuple[int, int]]])
+
+
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.application.worldData.generators.hydrology.waterBodyAssembler import AssembledWater
+from app.dataModel.hydrology.worldHydrology import WorldHydrology
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.topology.worldTopology import WorldTopology
+
+
+def frozen_fine_water(world: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
+                      inputs: SurfaceSupportInput, base: PlanEnvelope[ClimateBasePlan],
+                      terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage, control: PlanBuildControl,
+                      window: PlanEnvelope[FineSurfaceWindow], expected: PlanRef, topology: WorldTopology,
+                      specs: tuple[BasinSpec, ...], policy: WorldHydrology) -> None:
+    assert_type(PreWaterTerrainPlanner().prepare_window(world, base_input, relief_input, inputs, base, terrain,
+        cells=cells, control=control), PlanEnvelope[FineSurfaceWindow])
+    assert_type(WaterBodyPlanner().fill_fine(window, expected_surface=expected, topology=topology, specs=specs,
+        policy=policy, change_uid=world, control=control),
+        tuple[SurfaceHeightmap, AssembledWater, tuple[PlanDiagnostic, ...]])
