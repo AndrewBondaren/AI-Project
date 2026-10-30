@@ -2,7 +2,7 @@
 
 **Тип:** living registry / backlog идей (не player-facing).  
 **Статус:** концепция ✅ · **impl — по фазам**, не блокирует текущий цикл (generators, JSON validation, DAG topology).  
-**Обновлено:** 2026-10-22 (ID-20: контекстная история intent и адаптивный RAG).
+**Обновлено:** 2026-10-30 (ID-9: план проработки ролей LLM взят в работу).
 
 **Связанные документы:**
 
@@ -305,6 +305,8 @@ LlamaBrain: authority hierarchy, canonical facts immutable.
 ## ID-9 — Configurable LLM roles (Intent / NPC / Background Planner / Narrator)
 
 **Status:** `open` | **Priority:** P0 | **Layer:** engine
+
+**Проработка ТЗ:** `in_progress` с 2026-10-30 — [отдельный план ID-9](../.cursor/plans/llm-roles-design.md). В работу взято **проектирование**; реализация не объявлена начатой, статус идеи `open` сохранён.
 
 ### Принцип
 
@@ -1210,3 +1212,4 @@ ID-13 отвечает за адресацию и lazy disclosure событий
 | 0.5 | 2026-09 | ID-14: bounded NPC reaction turn — default 1 beat per player turn, anti-loop invariant |
 | 0.6 | 2026-09 | ID-9 expanded: configurable LLM roles — Intent, NPC, Background Planner / GM, Narrator; role-specific context/knowledge boundaries |
 | 0.7 | 2026-09 | ID-9: model-specific DSL profiles + deterministic fallback exact model → family/type → role default |
+| 1.1 | 2026-10-30 | ID-9: начата проработка отдельного плана LLM-ролей, добавлена ссылка; без изменения статуса реализации |
