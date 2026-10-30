@@ -19,11 +19,13 @@ alwaysApply: false
 - **post_llm** — пишет в DB через patches, не валидирует, не replan
 - Replan: `state.next_task_type` (Python) или intent из `intent_detection` (LLM)
 
-## Контекст между нодами
+## Контракты и контекст между нодами
 
-- Сейчас: `state.shared_context["scene"]`, `["terrain"]` и т.д.
-- Целевое: типизированные поля на `ExecutionState` (`SceneContext`, `TerrainContext`) — см. `docs/tz_engine_node_context.md`
-- Downstream LLM-ноды: `context_fields` на ноде + gatherer-ноды
+- Сейчас: `state.shared_context[...]`, `node_results: dict[str, object]`, `NodeResult.data: Any` — legacy.
+- Целевое (решение 2026-10-30): каждая нода декларирует типизированные Input/Output и самостоятельно подготавливает экземпляр Input. Зависимости исполнения уже объявляются через `BaseNode.deps` — не создавать второй `REQUIRES`.
+- Результат исполнения — непосредственно типизированный Output; обёртка `NodeResult(data: Any)` при миграции устраняется, если не имеет иной подтверждённой семантики. Статусы/ошибки/replan — ответственность execution runtime.
+- Конкретные интерфейсы и переход — после gates GEN-DAG-1. См. `docs/tz_engine_node_context.md`.
+- Downstream LLM-ноды сейчас используют `context_fields` и gatherer-ноды; миграцию агрегированного LLM-пути согласовать отдельно.
 
 ## Repos в нодах
 
