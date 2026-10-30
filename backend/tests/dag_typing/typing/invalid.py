@@ -10,11 +10,18 @@ from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.nodeTypes.compiledNode import CompiledNode
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
+from app.application.engine.runtime.dag.context.dagContext import DAGContext
+from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
+from app.application.engine.runtime.validation.contractValidator import ContractValidator
+from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
+from app.application.engine.runtime.validation.nodeValidator import NodeValidator
+from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 from app.dataModel.engine.dag.identity import ContractId, ContractVersion, NodeId
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
     CompositeOutput, FakeExecutor, LEAF_CONTRACT, LeafOutput, NodeInput,
     OPTIONAL_COMPOSITE, OtherInput, REQUIRED_LEAF, TypedPythonNode,
+    RecordingValidator, identity,
 )
 
 
@@ -58,3 +65,19 @@ def wrong_phases() -> None:
 def wrong_plan_lookup(plan: ExecutionPlan) -> None:
     wrong: CompiledNode[OtherInput, LeafOutput] = plan.get(NodeId("typed-python"), LEAF_CONTRACT)  # expect: reportAssignmentType
     print(wrong)
+
+
+def wrong_validation() -> None:
+    wrong: tuple[CompositeOutput | None, ValidationResult] = ContractValidator().validate(LeafOutput(value=1), LeafOutput)  # expect: reportAssignmentType
+    wrong_callback = RecordingValidator[CompositeOutput](ValidationResult(status=ValidationStatus.OK))
+    contract = NodeContract[NodeInput, LeafOutput](NodeInput, LeafOutput, ContractId("test"), ContractVersion("1"), (), validator=wrong_callback)  # expect: reportArgumentType
+    wrong_ctx = NodeValidationContext(CompositeOutput(leaves=()), identity())
+    NodeValidator().validate(wrong_ctx, LEAF_CONTRACT)  # expect: reportArgumentType
+    print(wrong, contract)
+
+
+def wrong_catalog_reads(view: PublishedDAGReadView, catalog: DAGContext) -> None:
+    wrong: CompositeOutput = view.require(REQUIRED_LEAF)  # expect: reportAssignmentType
+    optional: LeafOutput | None = view.optional(OPTIONAL_COMPOSITE)  # expect: reportAssignmentType
+    catalog.publish(LeafOutput(value=1))  # expect: reportArgumentType
+    print(wrong, optional)

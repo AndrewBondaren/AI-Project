@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
+from app.application.engine.validation.nodeValidationError import NodeValidationError
+
 
 class ValidationStatus(str, Enum):
     OK = "ok"

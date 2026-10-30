@@ -24,6 +24,19 @@ from tests.dag_typing.fixtures import (
 
 
 class BindingTests(unittest.TestCase):
+    def test_llm_temperature_admission_rejects_nonfinite_values_at_construction(self):
+        for temperature in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(temperature=temperature):
+                with self.assertRaises(ValidationError) as raised:
+                    TypedLLMNode(temperature=temperature)
+                self.assertEqual(raised.exception.errors()[0]["type"], "finite_number")
+
+    def test_llm_temperature_admission_accepts_default_and_finite_values_without_range_policy(self):
+        self.assertEqual(TypedLLMNode().temperature, 0.0)
+        for temperature in (-1.0, 0.0, 0.8, 2.5, 1e300):
+            with self.subTest(temperature=temperature):
+                self.assertEqual(TypedLLMNode(temperature=temperature).temperature, temperature)
+
     def test_python_phase_accepts_only_enum_members_of_python_subset(self):
         self.assertIs(TypedPythonNode(request_value=1).phase, ExecutionPhase.PRE_LLM)
         for phase in (ExecutionPhase.PRE_LLM, ExecutionPhase.POST_LLM):

@@ -1,14 +1,19 @@
 """Node I/O binding; POJO classes remain the only schema owners."""
 
 from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, cast
 
 from pydantic import BaseModel, TypeAdapter
 
 from app.application.engine.contracts.outputRef import OptionalOutput, RequiredOutput
+from app.application.engine.validation.validationStatus import ValidationResult
 from app.dataModel.engine.dag.identity import (
     ContractId, ContractIdValue, ContractVersion, ContractVersionValue,
 )
+
+if TYPE_CHECKING:
+    from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
 
 I = TypeVar("I", bound=BaseModel)
 O = TypeVar("O", bound=BaseModel)
@@ -35,6 +40,7 @@ class NodeContract(Generic[I, O]):
     version: ContractVersion
     reads: tuple[RequiredOutput[BaseModel] | OptionalOutput[BaseModel], ...]
     lifecycle: OutputLifecycle[O] | None = None
+    validator: Callable[["NodeValidationContext[O]"], ValidationResult] | None = None
 
     def __post_init__(self) -> None:
         for model in (self.input_type, self.output_type):

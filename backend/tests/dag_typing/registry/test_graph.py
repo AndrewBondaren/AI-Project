@@ -207,14 +207,6 @@ class GraphTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "later phase/group producer"):
             self.compiler.precompile()
 
-    def test_nonfinite_temperature_is_rejected(self):
-        for temperature in (float("nan"), float("inf"), float("-inf")):
-            with self.subTest(temperature=temperature):
-                self.setUp()
-                self.llm(temperature=temperature)
-                with self.assertRaisesRegex(ValueError, "non-finite"):
-                    self.compiler.precompile()
-
     def test_excluded_producer_has_no_fake_result_and_consumer_keeps_read(self):
         for optional in (False, True):
             with self.subTest(optional=optional):

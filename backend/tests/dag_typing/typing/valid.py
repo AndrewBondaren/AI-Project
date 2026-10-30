@@ -8,7 +8,8 @@ from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.contracts.executionBindings import (
     ExecutionBindings, ResolveResult, ResponseBinding, SnapshotExtension, TransitionBinding,
 )
-from app.application.engine.contracts.nodeContract import OutputLifecycle
+from app.application.engine.contracts.nodeContract import NodeContract, OutputLifecycle
+from app.application.engine.contracts.outputRef import OptionalOutput, RequiredOutput
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.nodeTypes.compiledNode import CompiledNode
@@ -16,12 +17,21 @@ from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.application.engine.registration.nodeRegistry import NodeRegistry, register_llm, register_python
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
+from app.application.engine.runtime.dag.context.dagContext import DAGContext
+from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
+from app.application.engine.runtime.validation.contractValidator import ContractValidator
+from app.application.engine.runtime.validation.llmValidator import LLMValidator
+from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
+from app.application.engine.runtime.validation.nodeValidator import NodeValidator
+from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 from app.application.engine.taskType import TaskType
-from app.dataModel.engine.dag.identity import ContractId, ContractVersion, NodeId
+from app.dataModel.engine.dag.identity import ContractId, ContractVersion, ExecutionIdentity, NodeId
+from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence, OutputRecord
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
     CompositeOutput, FakeExecutor, FakeReadView, LEAF_CONTRACT, LeafOutput, NodeInput,
     OPTIONAL_COMPOSITE, REQUIRED_LEAF, TypedLLMNode, TypedPythonNode,
+    RecordingValidator, identity,
 )
 
 
@@ -94,3 +104,36 @@ async def verify() -> None:
 
 def verify_plan_lookup(plan: ExecutionPlan) -> None:
     assert_type(plan.get(NodeId("typed-python"), LEAF_CONTRACT), CompiledNode[NodeInput, LeafOutput])
+
+
+def verify_validation() -> None:
+    structural = ContractValidator()
+    semantic = NodeValidator()
+    llm = LLMValidator(structural, semantic)
+    assert_type(structural.validate(LeafOutput(value=1), LeafOutput), tuple[LeafOutput | None, ValidationResult])
+    assert_type(structural.parse_json('{"leaves":[]}', CompositeOutput), tuple[CompositeOutput | None, ValidationResult])
+    ctx = NodeValidationContext(LeafOutput(value=1), identity())
+    assert_type(ctx.output, LeafOutput)
+    assert_type(semantic.validate(ctx, LEAF_CONTRACT), ValidationResult)
+    assert_type(llm.validate('{"value":1}', LEAF_CONTRACT, identity()), tuple[LeafOutput | None, ValidationResult])
+    callback = RecordingValidator[LeafOutput](ValidationResult(status=ValidationStatus.OK))
+    contract = NodeContract[NodeInput, LeafOutput](
+        NodeInput, LeafOutput, ContractId("test.validated"), ContractVersion("1"), (), validator=callback,
+    )
+    assert_type(semantic.validate(ctx, contract), ValidationResult)
+
+
+def verify_catalog(
+    catalog: DAGContext, required: RequiredOutput[LeafOutput],
+    optional: OptionalOutput[CompositeOutput], record: OutputRecord[LeafOutput],
+) -> None:
+    view = catalog.read_view(NodeId("consumer"))
+    assert_type(view, PublishedDAGReadView)
+    port: DAGReadView = view
+    assert_type(view.require(required), LeafOutput)
+    assert_type(view.optional(optional), CompositeOutput | None)
+    assert_type(port.require(required), LeafOutput)
+    assert_type(view.dependency_reads, tuple[DependencyRead, ...])
+    assert_type(view.domain_reads, tuple[DomainReadEvidence, ...])
+    assert_type(catalog.current_outputs, tuple[ExecutionIdentity, ...])
+    assert_type(catalog.publish(record), None)

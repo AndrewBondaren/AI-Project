@@ -68,6 +68,36 @@ class BoundaryPlannerTests(TestCase):
             self.assertIsInstance(result.outcomes[0],UnresolvedPlacementV2)
             self.assertEqual(result.issues[0].code,code.value)
             self.assertTrue(result.outcomes[0].diagnostics)
+            issue = result.issues[0]
+            diagnostic = result.outcomes[0].diagnostics[0]
+            self.assertEqual(diagnostic.detail, issue.message)
+            self.assertEqual(diagnostic.path[-len(issue.path):], issue.path)
+
+    def test_own_zero_disable_is_not_attributed_to_failed_or_disabled_water(self):
+        for support in (PolicySupportState.FAILED, PolicySupportState.DISABLED):
+            with self.subTest(support=support):
+                case = make(priority=0, support=support)
+                result = plan(case)
+                outcome = result.outcomes[0]
+                self.assertIsInstance(outcome, DisabledPlacement)
+                self.assertEqual(outcome.reason, PolicyDisableReason.ZERO_PRIORITY)
+                self.assertEqual(outcome.causes, ())
+                self.assertEqual(outcome.decision, case.admission.decision)
+                self.assertFalse(result.boundaries)
+
+    def test_target_cause_uses_actual_placement_region_without_changing_decision(self):
+        case = make(support=PolicySupportState.DISABLED)
+        target = case.snapshot.water_outcomes[0]
+        target = target.model_copy(update={"identity": target.identity.model_copy(update={
+            "region_uid": "actual-target-region"})})
+        snapshot = case.snapshot.model_copy(update={"water_outcomes": (target,)})
+        result = plan(replace(case, snapshot=snapshot))
+        outcome = result.outcomes[0]
+        self.assertEqual(outcome.reason, PolicyDisableReason.SUPPORT_DISABLED)
+        self.assertEqual(tuple((cause.region_uid, cause.status) for cause in outcome.causes),
+                         (("actual-target-region", PlacementOutcomeStatus.DISABLED),))
+        self.assertEqual(outcome.decision, case.admission.decision)
+        self.assertEqual(snapshot.water_outcomes, (target,))
 
     def test_merged_sources_use_explicit_shared_boundary_rules(self):
         result=plan(make(merged=True))

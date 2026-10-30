@@ -11975,6 +11975,24 @@ docs/tz_terrain_hydrology.md GEO-1/HY-12, docs/tz_terrain_generation.md planning
   вместо provider: он требует готовые final fine evidence и admissions.
 
 Атомарный набор (все пути ниже относительно backend/app; части не активировать отдельно):
+Уточнение мастера о переходе GEN-DAG-1 (2026-10-30): текущая межфазная
+оркестрация остаётся в существующем generator pipeline до GEN-DAG-1;
+G10-A не переносит её в engine и не создаёт новый внутренний DAG.
+Границы держать уже сейчас: публичный planner/facade — контракт операции,
+порядок вызовов и передача typed результатов; доменные алгоритмы, решения,
+валидация предметных инвариантов и causal enrichment — отдельные owning jobs.
+В частности, в ревью CoastlineBoundaryPlanner.prepare после session.run сам
+сопоставлял target outcomes, интерпретировал SUPPORT_DISABLED и дополнял causes.
+Исправление этой границы и точные owners закреплены в execution-срезе
+boundary planner responsibility correction ниже; приёмку boundary wiring
+не подменять наличием готовых domain jobs.
+При GEN-DAG-1 меняется владелец межфазного порядка; доменные реализации и их
+контракты сохраняются. DAG вызывает публичные операции, не внутренние jobs/
+assembler/geometry helpers. Различать межфазную оркестрацию самостоятельных
+операций и внутренние вычислительные стадии одной операции; перенос первой
+не требует выноса алгоритмов второй в DAG. Проверять обе независимости:
+изменение domain algorithm не меняет orchestration, изменение межфазного
+порядка не меняет domain algorithm. Это чтение call graph, а не вывод из tests.
 1. Owning schemas/normalization — dataModel/hydrology/{worldHydrology,seas,lakes,
    declaredBasin,declaredLake,declaredCoastline}.py, generation/waterGenerationSettings.py,
    placement/placementFields.py; application/jsonValidation/worldRow.py::hydrology.
@@ -12088,6 +12106,283 @@ actual final fine-water snapshot для boundary provider (§6.29-D, §6.10/6.31
 Backend/HTTP smoke не запускать; commit/push/SQL migration/DAG вне разрешения.
 Done G10-A только после actual container/entry production cutover и удаления
 переведённого legacy пути. Аудит/план не закрывают G10-A, G10-R или G11.
+
+### G10-A boundary planner responsibility correction — IMPLEMENTED / AWAITING ACCEPTANCE (2026-10-30)
+ТЗ: §6.29-D/§6.31-E, G5-C3 boundary contract, tz_map_light_bake Placement;
+уточнение мастера GEN-DAG-1 выше: текущий pipeline сохраняется, planner thin.
+Карта до кода, paths относительно backend/app/application/worldData/:
+- generators/hydrology/boundaries/boundaryPreparation.py::BoundaryPreparationJob[H]:
+  доменный input binding — strict validation scope/revision/grid/identities,
+  сборка dependent batch с существующими accepted supports; prepare(admission)
+  выбирает исходный source и вызывает existing AttachedCoastlinePreparer.
+- generators/hydrology/boundaries/boundaryResult.py::BoundaryResultAssembler[H]:
+  доменная сборка boundary plan, issues/diagnostics, target-water causal refs,
+  отбор metadata только accepted boundaries; decision/priority/reasons не меняет.
+- existing boundaryPlanner.py::CoastlineBoundaryPlanner.prepare сохраняет public
+  generic signature; только job calls, session.run, callback submit/fail, результат.
+  Domain geometry остаётся boundaryGeometry.py; общий lifecycle — placement.
+Новые классы — application jobs, без новых POJO/enum/transport или общего Ops.
+boundary folder3→5, tests/boundaries5→5; новые test files не нужны.
+Проверка: существующие boundary public behavior и GEO-1/providers/typing;
+добавить независимый zero-disable при failed water (не получает чужие causes),
+target source UID≠region UID, failure diagnostics и scope mismatch; проверить
+planner/callback чтением кода отдельно от тестов. Production/fine evidence
+activation/G8-B/GEN-DAG-1 остаются OPEN; DAG/backend/SQL/commit не затрагиваются.
+Итог: public generic prepare signature сохранена; planner/callback содержат
+только создание owning jobs, session.run, submit/fail и передачу typed results.
+PreparationJob владеет scope/frame/source binding, ResultAssembler — issues,
+accepted metadata и causal enrichment. Геометрия и общий P2 не изменены;
+новых моделей/enum/transport нет, source decisions не пересчитываются.
+Проверено: boundary30 OK (+2), GEO-1 724 OK (+2), providers129 OK,
+positive pyright0, negative262 — все259 EXPECT покрыты, surplus baseline прежний.
+Public results совпали с HEAD baseline на27 сценариях трёх topology modes;
+удаление causal attribution в памяти вызывает1 assertion failure нового test.
+Scoped diff/new-file whitespace clean. Ручное чтение planner и callback отдельно
+от tests: domain branches/lookup/validation/diagnostic classification отсутствуют;
+PreparationJob не владеет очередью, ResultAssembler не запускает geometry/policy.
+Это авторская проверка, не независимая приёмка. Текущий межфазный pipeline
+сохранён для последующего GEN-DAG-1. G10-A production OPEN: actual fine boundary
+evidence, same-view claims и atomic capture/registration/G8-B/entry ещё впереди.
+
+### G10-A final fine-water source audit — DESIGN GAP CONFIRMED (2026-10-30)
+Проверка следующего остатка boundary production evidence, без кода/activation.
+Факты по существующим owners (paths относительно backend/app/application/worldData):
+- generators/hydrology/water/planning/waterBodyPlanner.py::_materialize вызывает
+  assemble_water_bodies на coarse SurfaceHeightmap; это не full fine fill.
+- generators/hydrology/planning/assembly/hydrologyFactsAssembler.py публикует
+  coarse_hydro и sparse_fine_hydro из river overlays; отсутствие fine entry
+  само по себе не является наблюдением dry.
+- generators/hydrology/materialize/hydrologyWorkingFields.py индексирует готовые
+  sparse entries, но не создаёт факты final fine body membership.
+- generators/hydrology/shore/parentLightHydroCorridor.py разворачивает L0 role в
+  MapCellHydrology(role=...), без water_body_uid; merge требует parent light,
+  существующий только после planning/bake. Этот output не удовлетворяет
+  BoundaryWaterSnapshot и до завершения bundle создаёт обратную зависимость.
+- generators/terrain/relief/surfaceCoatingSupport.py::shore_cells — coarse shore
+  projection с sparse overrides, не authoritative fine body membership.
+- §6.10 описывает будущий HY-RIV-1 pre-river terrain sampler. Его реализация
+  отсутствует; post-river boundary нельзя снабжать pre-river или выдуманной базой.
+
+Уточнение cutover: missing fine producer — не задача ещё одного mapper/capture.
+До boundary provider необходим единый hydrology-owned final fine-water source,
+который потребляют и boundary, и L2. Его terrain-вход имеет явные frozen
+revision/topology/grid и не зависит от уже собранного GEO bundle/parent L0 того
+же cycle. Terrain владеет fine heights; hydrology — wet/dry/body classification.
+Публичный boundary planner только потребляет готовое evidence; domain algorithms
+не попадают в planner, planning provider или будущую DAG-ноду.
+Existing FineBoundaryWaterCell/BoundaryWaterSnapshot сохраняются; не заводить
+параллельные water records/enum. Sampling должен доказать canonical full requested
+coverage: body UID для wet, explicit None для dry, отсутствие — unknown.
+Source-to-body mapping/levels/support outcomes относятся к той же final revision;
+нельзя принять accepted placement footprint за final wet mask после fill/spill.
+
+Следующая обязательная проектная операция: закрепить producer fine terrain base
+и single-owner fine water evaluation API, точные paths и порядок без L0 feedback,
+затем только выполнять код producer и подключение двух потребителей. Существующий
+cutover owner map не является доказательством готовности этой границы к коду;
+не расширять GEO-1 молча до HY-RIV-1 source search. Материализация окон/тайлов
+не меняет ответ; проверка boundary и L2 на одной revision, seams и sparse dry
+overrides обязательна. Architecture acceptance отдельно от авторских fixtures.
+G10-A OPEN; в этом аудите изменён только план, тесты кода не запускались.
+
+### G10-A shared final fine-water contract — REOPENED / SOURCE-ORDER CONFLICT (2026-10-30)
+Уточнение после проверки bootstrap: ниже зафиксирован предварительный выбор
+source/types; его production applicability НЕ подтверждена. Поля completeness,
+fine→coarse направление и размещение final source зависят от выбора порядка
+ниже. Не реализовывать их как закрытый контракт до решения мастера.
+По команде мастера: закрепить общий источник и проверить POJO/enum до кода.
+ТЗ: boundary §6.29-D/6.31-E, fine/L2 delivery §6.10 (без source search HY-RIV-1),
+single-owner J08–J10 и GEN-DAG-1 boundary выше. Это изменение целевого контракта,
+а не утверждение о наличии production producer или готовности cutover.
+
+Один authoritative final source — existing PlanEnvelope[GeoHydrologyPlan]
+(dataModel/hydrology/planning/hydrologyPlan.py). Boundary и GEO L2 читают его.
+Existing sparse_fine_hydro остаётся единственным хранилищем final fine hydro rows
+(FineXY,MapCellHydrology); не добавлять рядом второй fine_hydro/body-mask массив.
+GeoHydrologyPlan получает required fine_water_coverage:RegionCoverage — область,
+для которой producer доказал полноту наблюдений. Это не wet extent и не bbox
+запрошенного render tile. Coverage берётся из canonical terrain region scope,
+её region_uid не синтезируется заново reader-ом. В production с explicit world
+extent покрытие полное для объявленного planning scope; clipped render request
+не меняет fine-water layout. Частичное evidence допустимо только с явной областью
+известности: вне неё unknown, а не implicit dry/fallback на coarse.
+Семантика GEO rows внутри coverage: entry содержит финальные роли/уровень/body;
+отсутствие entry означает доказанную dry клетку; explicit dry/SHORE overrides
+не теряются. Wet без подтверждённого physical body UID не превращать в dry.
+Все wet UID существуют в water_bodies того же envelope; source_mapping,
+classification decisions и water placement dependency относятся к той же revision.
+PC HydrologyPlan старую sparse-override семантику сохраняет до его удаления;
+нельзя применять GEO completeness assumption к PC plan без coverage proof.
+
+Публичная операция existing WaterBodyPlanner (water/planning/waterBodyPlanner.py):
+sample_final_water(final:PlanEnvelope[GeoHydrologyPlan], window:RegionCoverage)
+ -> tuple[tuple[FineXY,FactValue[EntityUid|None]], ...].
+Это readonly query одной domain operation, не новый phase orchestrator.
+Алгоритм lookup/coverage/proof — application job HydrologyFineWaterQuery в
+generators/hydrology/materialize/fineWaterQuery.py; planner только делегирует.
+KnownFact[EntityUid|None]: UID — wet конкретного тела, None — доказанный dry;
+UnknownFact — вне coverage/нет необходимого proof. Нового status enum нет.
+Не оборачивать MapCellHydrology в KnownFact: его legacy frozen config не проходит
+strict immutable-value contract policyFacts._policy_value. Для body-query
+достаточен существующий EntityUid|None; роли/уровни L2 читает из тех же canonical
+rows через hydrology working view, а не из отдельно сохранённого wet/dry record.
+Validation envelope/refs/scale выполняется существующими request/provider
+контрактами; reader не создаёт свою revision и не читает live World/L0 cache.
+
+Boundary capture переводит Known body facts в existing FineBoundaryWaterCell
+и existing BoundaryWaterSnapshot; unknown передаётся штатной boundary issue.
+Эти модели — projection/связка existing refs+placement outcomes, не второй
+persisted source. Не сохранять независимую изменяемую копию fine facts в bundle.
+GEO L2 hydrology working fields/terrainBatchOrchestrator переходят на тот же
+final source; parent-light corridor не переопределяет доказанный fine wet/dry
+и не обрезает known fine rows. Родительская L0 база высот этим не отменяется.
+Проверить reader-ы именно по Geo типу; implicit PC/Geo union/fallback запрещён.
+
+Producer — existing hydrology fill/materialization owner:
+generators/hydrology/waterBodyAssembler.py и water/waterMaterialize.py,
+далее existing planning/assembly/hydrologyFactsAssembler.py публикует final source.
+Hydrology owns fill/spill/merge/body identity; terrain supplies frozen fine heights.
+Не исполнять coarse fill и затем независимый fine fill как два владельца воды:
+для GEO coarse гидрология становится projection canonical fine результата.
+Внутренние этапные outputs переносятся через existing AssembledWater/
+MaterializedWater и существующие route/final contracts; необходимые изменения
+полей закрепить по конкретному data flow перед кодом, не вводить GeoFineWaterV2.
+Геометрия/вода не вычисляются повторно в query, boundary или L2 materialization.
+
+Инвентаризация POJO/enum и разрешённое повторное использование:
+- MapCellHydrology, WaterBody, PhysicalWaterUnion, SourceBodyMapping — существующие
+  роли/уровни/identity/mapping. Новые FineWaterBody/WaterSampleStatus запрещены.
+- RegionCoverage/CoverageSpan — existing canonical fine intervals; coverage proof
+  расширяет смысл final plan completeness, не дублирует wet/body membership.
+- FineXY/FineZ, WorldTopology, SurfaceGridSettings, PlanRef/PlanDependency,
+  FactValue/KnownFact/UnknownFact — существующие units/frame/provenance/state.
+  Новые FineWaterPhase/CoordinateMode/Revision/BodyKind enums не нужны.
+- TerrainPlan и ReliefPlan несут coarse SurfaceGridCoord, RiverReliefPlan.
+  fine_surface_z — sparse overlays; mutable SurfaceHeightmap не frozen contract.
+  Поэтому они не заменяют полный fine height window простым rename/cast.
+- Единственный допустимый новый terrain payload — уже предусмотренный §6.10
+  FineSurfaceWindow, dataModel/terrain/sampling/fineSurfaceWindow.py. Required
+  coverage:RegionCoverage, surface_z:tuple[tuple[FineXY,FineZ],...]; полнота/unique
+  row-major относительно coverage обязательна. Provenance использовать existing
+  PlanRef/PlanDependency и InputFingerprint, не новый snapshot ID/phase enum.
+  Один тип для нужных фаз с точными typed dependency refs; pre-river и final
+  базы не взаимозаменять. Не создавать рядом FinalFineTerrainWindow или
+  BoundaryFineSurfaceSnapshot. Планируемый §6.10 PreRiverTerrainSnapshot не
+  реализовывать параллельно как ещё один полный мешок тех же captured settings.
+- SurfaceSupportInput уже содержит frozen seed/regions/templates/refine settings;
+  использовать его необходимые источники/refs, не копировать defaults и поля
+  в новый FineWaterSettings/FineTerrainContext. Не передавать SurfaceCoatingFacts
+  вместо water facts: это ответы другой доменной операции.
+
+Точный owner terrain extraction остаётся §6.10 fineSurfaceBase.py +
+TerrainFineSurfaceSampler (generators/terrain/sampling/fineSurfaceSampler.py).
+До реализации отдельно закрыть bootstrap/порядок base heights/hills/reservations:
+он не может требовать parent L0/final hydrology того же ещё не собранного cycle.
+Существующий L2 recipe сохраняется; изменение его семантики не скрывать в
+fine-water query. Этот оставшийся algorithm/input gate не закрыт выбором DTO.
+Новые app jobs/terrain payload не создавать до закрытия этой карты inputs.
+
+Проверки будущей реализации: cold/warm и boundary/L2 совпадают по одному final ref;
+полный/частичный window одинаков в пересечении; вне proof coverage unknown;
+dry override в coarse-wet клетке сохраняется; wet UID/mapping/ref mismatch reject;
+coarse nearest или sparse-only substitution ломают tests; planar/wrapped/sphere.
+Архитектурная проверка: один final source, нет альтернативной state/enum модели,
+planner/query не выполняют fill; body/hill ordering подтверждён по call graph.
+Composition до кода: hydrology planning3→3, materialize2→3, water10→10 (WARN,
+новые файлы в water root не добавлять); terrain sampling folders absent→2 each
+с __init__, FineSurfaceWindow один; новые enum файлы0. Существующие model schemas,
+manifest/cache versions и GEO callers переключаются только атомарным G10-A.
+В этом шаге изменён только план; код/typing/tests не менялись, G10-A OPEN.
+
+### G10-A fine-water bootstrap conflict — MASTER DECISION REQUIRED (2026-10-30)
+При попытке перейти к коду обнаружен пропущенный конфликт нормативных контрактов.
+docs/tz_world_pack_storage.md § Parent light SoT: единственный parent для refine —
+baked pack blob, live recompose запрещён. docs/tz_terrain_generation.md PC-11
+сохраняет parent-light SoT. materialize/terrain/terrainBatchOrchestrator.py
+строит fine_z из parent_light; hydrology L0 contributor
+pack/bake/lightGrid/contributors/hydro/coarseOpenWater.py::apply_coarse_open_water
+записывает post-fill coarse floor_z в light surface_z.
+Значит, цепочка «final fine heights от baked L0 → canonical fine water fill →
+coarse projection → тот же L0» циклична. Pure extraction upsample сама по себе
+её не устраняет. SurfaceSupportInput/FineSurfaceWindow не являются missing
+provenance magic и не разрешают замену baked parent выдуманным pre-L0 parent.
+
+Два конкретных варианта, вопрос мастеру отправлен (ответ не получен):
+1. Сохранить утверждённый baked L0 SoT: разделить base planning/L0 publication
+   и post-L0 fine evidence/boundary. Boundary output не может быть обязательной
+   частью bundle, нужного для производства того же L0. Graph/bundle/query refs
+   и место хранения final fine evidence пересмотреть до моделей/кода;
+   прежний выбор GeoHydrologyPlan как pre-L0 canonical fine source не применять
+   автоматически. This option preserves existing terrain contract.
+2. Явно изменить terrain contract: authoritative terrain plan возникает до
+   hydrology; L0/L2 — его materializations. Нужны согласованные изменения ТЗ,
+   parent/refine contract и water/hills/reservations order, не скрытый fallback
+   на in-memory parent. GEN-DAG-1 здесь не реализуется.
+
+Первоначальная рекомендация варианта1 снята аналитикой ниже: она не учла
+planning-before-materialization §6.20. Решение принадлежит мастеру. Это выбор
+архитектуры, не повторное разрешение
+править код. До ответа зависимые fine producer/model/reader changes не делать.
+Инвентаризация reuse POJO/enum предыдущего раздела остаётся полезной, но не
+закрывает конфликт source/order. Не вводить промежуточный адаптер вместо решения.
+В этом заходе только сверка и исправление плана; код не менялся, G10-A OPEN.
+
+### G10-A fine-water bootstrap — ANALYSIS / NO ARCHITECTURE CHOICE YET (2026-10-30)
+Ответ мастера на предложенные варианты: «Нужна аналитика»; ни один вариант
+этим ответом не выбран. Код и зависимые модели не менять до решения.
+
+Выявлена неточность исходной постановки: persisted parent light — SoT базового
+refine input (tz_world_pack_storage § Parent light SoT), тогда как §6.20 задаёт
+domain layout до materialization и оба LOD как его представления. Это разные
+области владения; baked L0 не объявлен владельцем всех planning decisions.
+terrainBatchOrchestrator строит upsample base, затем применяет fine overrides,
+region paint и hills; hills/hillPlacement.py явно не применяет z_band.
+Поэтому «fine layout до L0» само по себе не доказывает глобальный цикл.
+Цикличен конкретный предложенный join: брать вход planning fill из уже
+материализованного L2 того же cycle, который зависит от final L0 этого fill.
+
+Сравнение направлений:
+1. Boundary после baked L0 сохраняет нынешний refine input, но разрывает
+   planning-first: boundary layout/preview начинает зависеть от materialization.
+   Нужны split bundle/отдельная публикация/новые refs, нельзя незаметно заставить
+   boundary planner bake-ать L0. Для текущего GEO layout это не локальный fix.
+2. Отмена parent light SoT в пользу полностью нового terrain source меняет
+   общий L2/storage contract вне одной hydrology задачи; из отсутствия fine
+   evidence необходимость такого глобального изменения не следует.
+3. Кандидат, лучше согласованный с §6.20: canonical fine water layout строится
+   при planning из frozen pre-water terrain recipe; accepted geometry/floor
+   constraints и fill формируют окончательные fine body facts. Boundary читает
+   эти facts до materialization. L0 — их projection, L2 использует baked L0
+   для background/base и применяет согласованные fine domain effects из layout.
+   Хранение parent light сохраняется; новые domain facts не извлекаются из pack.
+   Это не готовая реализация и не утверждение, что текущий L2 уже так работает.
+
+Реальные незакрытые joins варианта3, без которых объявлять его готовым нельзя:
+- Frozen fine planning terrain base не равна автоматически final materialized
+  L2 surface. Необходимо определить нужную фазу высот и точные inputs; нельзя
+  назвать coarse relief/continental score field «готовыми fine elevations».
+- Hills сейчас используют final L0 hydro mask как exclusion. Если эти же hills
+  становятся входом fine fill, появляется отдельный water↔hills cycle. Явно
+  выбрать domain precedence/reservations и полный canonical tile/halo scope;
+  не подменять final wetness accepted placement footprint без контракта.
+- G9 BasinFloorEvaluator/apply_basin_z уже умеют fine space, но текущий L2
+  build_tile_surface_state не вызывает этот fine writer: fine_z_overrides
+  clamped к upsample band, затем hills и hydro corridor. Значит, перенос
+  согласованного floor profile в L2 — реальный обязательный consumer change.
+- Parent-light corridor сегодня обрезает fine entries и теряет body UID.
+  При fine layout authority этот механизм не может переопределять принятую
+  fine membership. Его согласование с L0 partial cells нужно проверять отдельно.
+- Fine fill/merge/identity — один hydrology owner; coarse output только derived.
+  Это изменение существующего coarse producer, не lookup adapter поверх него.
+
+Рабочая рекомендация — проработать вариант3, не отменяя baked-parent storage
+и не делая planning зависимым от bake. До кода вынести на решение точный
+height/footprint/level порядок, исключение hills и L2 floor application.
+GEN-DAG-1 позже переносит межфазное управление, а не исправляет эти зависимости.
+POJO inventory предыдущего раздела применим: existing GeoHydrologyPlan +
+coverage, body/mapping/ref/fact типы; один FineSurfaceWindow при доказанной
+необходимости. Никаких дополнительных state/phase enum и duplicate water DTO.
+Изменён только план; G10-A OPEN, предыдущая отметка FIXED не восстановлена.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

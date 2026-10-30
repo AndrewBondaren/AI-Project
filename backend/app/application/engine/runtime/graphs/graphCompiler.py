@@ -1,7 +1,6 @@
 """Scheduling and contract checks only. SoT: node context §§6.1–6.2/8."""
 
 from collections.abc import Callable, Sequence
-from math import isfinite
 
 from pydantic import BaseModel
 
@@ -14,7 +13,7 @@ from app.application.engine.registration.nodeRegistration import NodeRegistratio
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.rules.rule import Rule
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan, LLMGroup
-from app.dataModel.engine.dag.executionPhase import ExecutionPhase, validate_python_phase
+from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.identity import NodeId
 
 type RuleCompiler = Callable[
@@ -81,10 +80,8 @@ class GraphCompiler:
     @staticmethod
     def _phase(node: BaseNode[BaseModel, BaseModel]) -> ExecutionPhase:
         if isinstance(node, PythonNode):
-            return validate_python_phase(node.phase)
+            return node.phase
         if isinstance(node, LLMNode):
-            if not isfinite(node.temperature):
-                raise ValueError(f"node '{node.id}' has a non-finite LLM temperature")
             return ExecutionPhase.LLM
         raise TypeError(f"node '{node.id}' must be a PythonNode or LLMNode")
 

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.contracts.nodeContract import NodeContract
@@ -12,6 +12,8 @@ from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.application.engine.taskType import TaskType
+from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
+from app.application.engine.validation.validationStatus import ValidationResult
 
 from app.dataModel.engine.dag.identity import (
     ContractId, ContractVersion, DomainRevision, ExecutionId, ExecutionIdentity, NodeId, PlanRevision,
@@ -26,6 +28,53 @@ class LeafOutput(BaseModel):
 class CompositeOutput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
     leaves: tuple[LeafOutput, ...]
+
+
+class LeafTupleOutput(RootModel[tuple[LeafOutput, ...]]):
+    model_config = ConfigDict(frozen=True, strict=True)
+
+
+class BoundedOutput(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    value: int = Field(default=5, ge=0)
+
+
+class MutableBoundaryOutput(BaseModel):
+    value: int
+
+
+class FrozenListOutput(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    leaves: list[LeafOutput]
+
+
+class AlwaysLeafOutput(LeafOutput):
+    model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
+
+
+class AlwaysCompositeOutput(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
+    leaves: tuple[AlwaysLeafOutput, ...]
+
+
+class NormalizedOutput(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    text: str
+
+    @field_validator("text")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class RecordingValidator[O: BaseModel]:
+    def __init__(self, result: ValidationResult) -> None:
+        self.result = result
+        self.contexts: list[NodeValidationContext[O]] = []
+
+    def __call__(self, ctx: NodeValidationContext[O]) -> ValidationResult:
+        self.contexts.append(ctx)
+        return self.result
 
 
 class NodeInput(BaseModel):
