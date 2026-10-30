@@ -86,7 +86,7 @@ class DAGContext:
         self, identity: ExecutionIdentity, error: E, contract: NodeContract[I, O, E],
     ) -> None:
         self._check_open(identity)
-        self._check_error_binding(identity.node_id, contract)
+        self.validate_binding(identity.node_id, contract)
         admitted, validation = ContractValidator().validate_error(error, contract.error_types)
         if admitted is None or not validation.ok:
             raise TypeError("error does not satisfy the declared POJO contract")
@@ -96,12 +96,12 @@ class DAGContext:
     def node_error[I: BaseModel, O: BaseModel, E: NodeError](
         self, node_id: NodeId, contract: NodeContract[I, O, E],
     ) -> E | None:
-        self._check_error_binding(node_id, contract)
+        self.validate_binding(node_id, contract)
         record = self._errors.get(node_id)
         # Only close_error writes, after admission under this exact binding.
         return cast(E, record[1]) if record is not None else None
 
-    def _check_error_binding[I: BaseModel, O: BaseModel, E: NodeError](
+    def validate_binding[I: BaseModel, O: BaseModel, E: NodeError](
         self, node_id: NodeId, contract: NodeContract[I, O, E],
     ) -> None:
         if self._registrations[node_id].contract is not contract:

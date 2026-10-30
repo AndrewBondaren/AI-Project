@@ -35,7 +35,11 @@
     "../../../../backend/app/application/engine/runtime/execution/nodeRunner.py",
     "../../../../backend/app/application/engine/runtime/execution/pythonNodeExecutor.py",
     "../../../../backend/app/dataModel/engine/dag/errors/nodeError.py",
-    "../../../../backend/app/application/engine/runtime/execution/pythonNodeError.py"
+    "../../../../backend/app/application/engine/runtime/execution/pythonNodeError.py",
+    "../../../../backend/app/application/engine/runtime/dag/dagExecutor.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionState.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionTrace.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionLevelSnapshot.py"
   ],
   "extraPaths": [
     "../../.."
@@ -79,6 +83,10 @@
     "../../../../backend/app/application/engine/runtime/execution/nodeRunner.py",
     "../../../../backend/app/application/engine/runtime/execution/pythonNodeExecutor.py",
     "../../../../backend/app/dataModel/engine/dag/errors/nodeError.py",
-    "../../../../backend/app/application/engine/runtime/execution/pythonNodeError.py"
+    "../../../../backend/app/application/engine/runtime/execution/pythonNodeError.py",
+    "../../../../backend/app/application/engine/runtime/dag/dagExecutor.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionState.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionTrace.py",
+    "../../../../backend/app/application/engine/runtime/dag/executionLevelSnapshot.py"
   ]
 }

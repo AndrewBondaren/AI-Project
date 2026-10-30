@@ -20,9 +20,13 @@ from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.application.engine.registration.nodeRegistry import NodeRegistry, register_llm, register_python
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
+from app.application.engine.runtime.dag.dagExecutor import DAGExecutor
+from app.application.engine.runtime.dag.executionState import ExecutionState
+from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
+from app.application.engine.runtime.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
-from app.application.engine.runtime.execution.nodeOutcome import NodeOutcome
+from app.application.engine.runtime.execution.nodeOutcome import LevelDecision, NodeOutcome
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from app.application.engine.runtime.execution.nodeRunner import NodeRunner
 from app.application.engine.runtime.execution.pythonNodeExecutor import PythonNodeExecutor
@@ -32,7 +36,7 @@ from app.application.engine.runtime.validation.nodeValidationContext import Node
 from app.application.engine.runtime.validation.nodeValidator import NodeValidator
 from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 from app.application.engine.taskType import TaskType
-from app.dataModel.engine.dag.identity import ContractId, ContractVersion, ExecutionId, ExecutionIdentity, NodeId
+from app.dataModel.engine.dag.identity import ContractId, ContractVersion, ExecutionId, ExecutionIdentity, NodeId, PlanRevision
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence, OutputRecord
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
@@ -176,3 +180,11 @@ async def verify_typed_errors(view: PublishedDAGReadView, catalog: DAGContext) -
     assert_type(catalog.node_error(NodeId("typed-error"), ERROR_CONTRACT), TestNodeError | TestOtherError | None)
     assert_type(catalog.close_error(identity(), TestNodeError(item_id=1), ERROR_CONTRACT), None)
     assert_type(PythonNodeError(TestNodeError(item_id=1)).error, TestNodeError)
+
+
+async def verify_coordinator(plan: ExecutionPlan, state: ExecutionState) -> None:
+    executor = DAGExecutor(NodeRunner(ContractValidator(), NodeValidator()), {PythonNodeExecutor: PythonNodeExecutor()})
+    assert_type(await executor.run_python_phase(plan, state, ExecutionPhase.PRE_LLM, PlanRevision("plan-1")), LevelDecision)
+    assert_type(state.traces, tuple[ExecutionTrace, ...])
+    assert_type(state.levels, tuple[ExecutionLevelSnapshot, ...])
+    assert_type(state.catalog.node_error(NodeId("typed-error"), ERROR_CONTRACT), TestNodeError | TestOtherError | None)

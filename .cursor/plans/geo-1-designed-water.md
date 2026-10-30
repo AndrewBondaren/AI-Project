@@ -12548,6 +12548,46 @@ surplus baseline прежний. Полный planning run и полный L0/L2
 facts, не post-hydrology region paint; затем единая terrain base/floor проводка.
 Полный terrain planning base не объявлен готовым, production G10-A OPEN.
 
+### G10-A pre-water hill hosts — IMPLEMENTED (2026-10-31)
+Цель/ТЗ: предыдущий NEXT JOIN, §6.20 и согласованный terrain→carve→fill:
+получить terrain keys до water через единый landcover owner, без final-water inputs.
+Карта до кода (application generation, без новых dataModel POJO/enum):
+- terrain/landcover/planning/capturedSources.py::CapturedLandcoverSources и
+  CapturedRegionWorld перенесены из relief/surfaceCoating/sources.py: единственный
+  captured registry/policy, declaration/state/autoresolve/precedence/raster owner.
+  Profile callback задаёт доступную фазе climate observation, не policy/алгоритм.
+- relief/surfaceCoating/sources.py::SupportSources: post-water views binding и
+  делегирование общему landcover owner; прежние selection semantics сохранены.
+- terrain/landcover/planning/preWaterHillHosts.py::PreWaterHillHostJob:
+  base envelopes/world/scope/dependency/topology validation, base facts и scoped
+  host projection; PreWaterHillHostPlanner.prepare — только вызов job.
+  Входы existing SurfaceSupportInput, ClimateBasePlan/TerrainPlan envelopes,
+  RegionCoverage; выход tuple[tuple[FineXY,TerrainKey],...]. Никаких final hydro,
+  local climate, baked parent, fake empty plans. Unknown hydrology остаётся None;
+  eligibility/required/fallback решает existing coverage resolver, не новый scorer.
+- regions/factConsumers/climate.py: base observation через ClimatePlanSampler,
+  общая агрегация profiles для base/local facts; не отдельный climate provider.
+- tests/geo1/hill_hosts/: public behavior, hills integration, states/overrides,
+  scope/revision failures и partial replay; existing typing fixtures + negative.
+Counts: landcover root8→8 WARN; planning0→3; tests root278→278 WARN;
+новый tests/geo1/hill_hosts0→2; valid/terrain4→4. Production не переключается.
+Проверка: GEO-1, hills regression, providers, synchronous L0/L2 и positive/negative
+pyright. Done: pre-water keys питают actual hill kernel, coating использует тот
+же selection owner; ручной review planner/callback responsibilities обязателен.
+Следующий join: единая pre-carve terrain base + reservations/floor и consumers.
+G10-A OPEN; isolated producer не объявляет production activation завершённой.
+
+Итог: pre-water hosts реализованы; capture policy/selection/raster один у landcover,
+coating делегирует ему, новые POJO/enum/defaults не введены. Existing climate
+sampler/fact aggregation переиспользованы; required unknown не становится water=0.
+Evidence: GEO-1 731 OK (новых7), providers129 OK, hills + synchronous L0/L2 36 OK;
+positive pyright0, negative265 /262 EXPECT покрыты, surplus3 baseline прежний.
+Coating output/registry совпал с HEAD на8 случаях planar/wrapped, auto/state.
+Ручной review: PreWaterHillHostPlanner — только вызов owning job; profile/facts
+callbacks выполняет landcover job/observation binding, не orchestrator; shared
+projection — доменная реализация landcover. Existing TerrainBatch не менялся;
+его split остаётся до activation. Pre-carve base/reservations/floor join OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

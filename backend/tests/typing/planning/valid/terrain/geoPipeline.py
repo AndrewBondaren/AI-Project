@@ -250,3 +250,18 @@ from app.application.jsonValidation.resolve import ResolveContext
 def captured_geo_reporting(assembler: SurfacePlanningAssembler[GeoWorldPlanProviders], view: GeoSurfacePlanningView,
     wait: PlanWaitControl, ctx: ResolveContext) -> None:
     assert_type(prepare_captured_geo_bundle(view, planning=assembler, wait=wait, resolve_ctx=ctx), GeoSurfacePlanBundle | None)
+
+
+from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostPlanner
+from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
+from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput
+from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
+from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
+from app.dataModel.spatial.grid.coordinateTypes import FineXY
+
+
+def pre_water_hill_hosts(world: EntityUid, inputs: SurfaceSupportInput, base: PlanEnvelope[ClimateBasePlan],
+                         terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage) -> None:
+    assert_type(PreWaterHillHostPlanner().prepare(world, inputs, base, terrain, cells=cells),
+                tuple[tuple[FineXY, TerrainKey], ...])

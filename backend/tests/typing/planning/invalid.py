@@ -1061,3 +1061,14 @@ from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 def invalid_hill_exclusions(surface: dict[tuple[int, int], int], terrain: dict[tuple[int, int], str],
     registry: WorldTerrainRegistry) -> None:
     place_hills(surface, terrain, None, terrain_registry=registry, seed=1, z_min=-10, z_max=20)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostPlanner
+from app.dataModel.identity.uid import EntityUid
+
+
+def invalid_pre_water_hill_hosts(world: EntityUid, inputs: SurfaceSupportInput, base: PlanEnvelope[ClimateBasePlan],
+                                terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage,
+                                final_water: PlanEnvelope[HydrologyPlan]) -> None:
+    PreWaterHillHostPlanner().prepare(world, inputs, final_water, terrain, cells=cells)  # EXPECT: reportArgumentType
+    PreWaterHillHostPlanner().prepare(world, inputs, base, terrain, cells=None)  # EXPECT: reportArgumentType
