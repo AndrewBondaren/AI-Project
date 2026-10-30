@@ -416,14 +416,9 @@ Excavation — **отдельная node** + material `hardness` ([`tz_materials
 
 ---
 
-## Domain contexts (ExecutionState)
+## Контракты Input/Output engine DAG (отложено до GEN-DAG-1)
 
-Ноды домена пишут в типизированные поля, не в произвольный dict:
-
-| Context | Writers | Readers |
-|---|---|---|
-| `TerrainContext` | `check_terrain`, `lazy_terrain`, `terrain_context` | movement, scene, LLM payload |
-| `StructureContext` | structure/settlement nodes ⬜ | narration, build validation |
+Целевое решение от 2026-10-30: каждая нода объявляет типизированные Input/Output, сама подготавливает Input и использует существующие `deps` для зависимостей исполнения. Общие `TerrainContext`/`StructureContext` как обязательные поля `ExecutionState` — историческое предложение, **не утверждённый целевой канал**. Не реализовывать ноды и новый wiring до отдельного gate с мастером.
 
 Детали: [`tz_engine_node_context.md`](./tz_engine_node_context.md).
 
