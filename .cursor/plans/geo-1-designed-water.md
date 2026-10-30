@@ -11699,7 +11699,21 @@ unchanged; scoped diff check clean. Full planning292 не перепроверя
 captured geometry/input production; zero-target admission и G8-B records,
 capture/registration/production cutover остаются атомарным G10-A, OPEN.
 
-### G10-A native procedural source producer — IMPLEMENTED / VERIFIED (2026-10-30)
+### G10-A native procedural source producer — NOT ACCEPTED / RESPONSIBILITY FIX READY FOR REVIEW (2026-10-30)
+
+Приёмка отклонена мастером: доменная реализация в оркестраторе — критическая ошибка.
+Исправление ответственности готово для повторной приёмки; карта владельцев и review ниже в responsibility correction.
+Прежняя IMPLEMENTED/VERIFIED-отметка снята; тесты ниже подтверждают только поведение.
+Описание написанного кода ниже не является принятой декомпозицией ответственности.
+Причина отклонения исходной реализации: prepare_procedural_designed_water содержал kind→category/settings/path,
+strategy→recipe, построение context/evidence/metadata/input и доменные проверки,
+включая собственную реакцию на missing world bounds вместо owning policy.
+Сначала исправить границы владельцев: hydrology — category/cascade/admission/evidence;
+designed-water preparation — recipes/metadata/input и domain validation;
+общий placement — scheduling/competition; orchestrator — только управление.
+Повторная приёмка требует проверки каждого затронутого оркестратора по
+.cursor/rules/class-size-limit.mdc, явных owning paths и подходящих regression/typing checks.
+До устранения блокера следующий зависимый срез G10-A не начинать.
 
 J01–J07, TZ tz_terrain_generation GEO-1 planning / plan §6.16, §6.29-A/E/M.
 Application terrain source orchestration: new preparation/proceduralDesignPreparation.py
@@ -11729,9 +11743,78 @@ frozen replay. Evidence: GEO-1 711 OK (+15), planning providers129 OK;
 positive pyright0; negative258 (+2), все255 EXPECT покрыты, baseline surplus
 unchanged; scoped diff/new-file whitespace clean. Existing owning priority
 defaults remain unchanged; full planning292 consumer evidence is not renewed.
-Next: authored owning schemas/body channels and mixed-source producer,
-then G8-B records/capture/registration/production activation in atomic G10-A.
+Next mandatory: повторная приёмка исправленной ответственности мастером; self-review/evidence — в responsibility correction.
+Authored owning schemas/body channels, mixed-source producer и G8-B records/capture/
+registration/production activation остаются последующими зависимыми работами G10-A.
 Zero-target admission remains open; production G10-A stays OPEN.
+
+### G10-A responsibility correction — IMPLEMENTED / SELF-REVIEWED / AWAITING ACCEPTANCE (2026-10-30)
+
+User-authorized correction of the critical rejected native producer; no next G10-A
+feature/production activation. TZ: tz_terrain_generation GEO-1 planning, plan
+§6.16/§6.29 and .cursor/rules/class-size-limit.mdc mandatory ownership review.
+Review scope includes both prepare_procedural_designed_water and prepare_designed_water.
+Exact owner map / application unless explicitly dataModel:
+Application generator paths are relative to backend/app/application/worldData/generators/;
+preparation/coverage paths are under terrain/designedWater/. dataModel paths are
+relative to backend/app/.
+- dataModel/hydrology/policy/proceduralSourceAdmission.py: ResolvedProceduralSource
+  and ProceduralSourceAdmissions, strict immutable source/context/decision bindings;
+  no geometry/floor, persistence or parallel water placement record.
+- hydrology/sources/proceduralSourceAdmission.py: ProceduralSourceAdmissionJob owns
+  native source/intent validation, category selection via shared generation category,
+  WORLD/body cascade, evidence, source paths and common policy execution/reporting.
+- dataModel/hydrology/enums/planning/waterGenerationScope.py: canonical kind→category;
+  existing hydrologyPolicyFacts delegates to it rather than duplicating the mapping.
+- dataModel/hydrology/policy/hydrologyPlacementPolicy.py and existing binder:
+  HydrologyProceduralExtentFacts(world_extent:FactValue[bool]) and native
+  UNKNOWN_FACT disable fallback declaration.
+  Missing required extent is unresolved in validation and ERROR_FALLBACK disable
+  with existing logging in runtime, before metadata/field sampling.
+- terrain/designedWater/strategies/procedural/fieldRecipeFactory.py:
+  WaterFieldRecipeFactory owns strategy→recipe construction/compatibility.
+- existing preparation/proceduralWaterSourceAdapter.py: CapturedProceduralWaterInputs
+  owns source metadata, allocation/region lookup and ready strategy input binding;
+  existing adapter remains the concrete input validator, not an orchestrator.
+- preparation/designUniverse.py: WaterDesignUniverse owns snapshot/source/intent/
+  region/geometry/input consistency, exact captured evidence and domain validation.
+- coverage/waterCoverageAllocation.py: WaterCoverageAllocation owns request creation,
+  pending-source selection, fine projection/union/subtract and one budget allocation.
+- preparation/readyWaterDesign.py: ReadyWaterDesignJob owns one ready source's
+  input validation→strategy design→geometry preparation→admission binding.
+- backend/app/application/worldData/placement/diagnostics.py: generic preparation issue→placement diagnostic
+  conversion, no domain rules.
+Both existing public facades retain signatures and only wire typed jobs/results,
+common PlacementSession, whole ready portions, cancellation and errors. No domain
+branching or callbacks hiding domain work; no aggregate Ops replacement. Existing
+PlacementSession is the shared placement owner; queue/competition algorithms remain
+there and are not reimplemented by domain facades. No DAG/backend/SQL/commit work.
+Counts: preparation8→10 (WARN), coverage2→3, procedural strategies4→5,
+hydrology sources2→3, dataModel hydrology policy4→5; no test files added.
+Tests: existing native/main integration, policy/coverage suites and positive/negative
+planning typing; add missing-extent runtime/validation evidence and owning job
+boundaries. Evidence: GEO-1 716 OK (+5), planning providers129 OK; positive
+pyright0; negative260 (+2), все257 EXPECT покрыты, baseline surplus unchanged.
+Scoped diff/new-file whitespace clean; no class exceeds300 lines. Full planning292
+consumer run not renewed; its prior limitation remains recorded above.
+Manual responsibility review (actual source, independent of functional test results):
+- prepare_procedural_designed_water: cancellation + typed job calls and data wiring
+  only; no category/strategy branches, evidence/recipe/metadata creation or fallback.
+- prepare_designed_water, including prepare_ready callback: common session startup/
+  drain, producer routing by registered intent identity, cancellation, submit/fail
+  and deterministic result collection only. Domain checks, coverage and strategy
+  execution are with the owners mapped above.
+- ReadyWaterDesignJob.prepare delegates one source design operation; no batch queue
+  or category logic. CapturedProceduralWaterInputs owns only ready input binding;
+  ProceduralSourceAdmissionJob owns only hydrology admission. No aggregate Ops.
+- PlacementSession.run remains generic lifecycle control; its existing placement
+  engine/checker owns dependency and competition algorithms, with no water rules.
+Both facade call graphs checked for hidden domain work in callbacks/helpers and
+for imports of domain algorithm internals: none remain. Category/recipe/domain
+rule changes are confined to owners unless the pipeline contract itself changes.
+Responsibility correction is ready for master acceptance. Original rejected item
+remains NOT ACCEPTED / READY FOR REVIEW; no next dependent feature was started.
+G10-A production activation remains OPEN.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

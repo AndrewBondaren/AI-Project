@@ -180,3 +180,11 @@ from app.dataModel.artifacts.events import ArtifactLogRecord
 def typed_lifecycle_emitters(snapshot: SnapshotLogRecord, artifact: ArtifactLogRecord) -> None:
     SnapshotLifecycleLog().emit(snapshot)
     ArtifactLifecycleLog().emit(artifact)
+
+
+from app.db.models.snapshotCore.historyRows import WorldSnapshotRow
+from app.db.models.snapshotCore.publicationRows import WorldPublicationRow
+
+
+def sql_row_projection(snapshot: WorldSnapshotRow, publication: WorldPublicationRow) -> tuple[bytes, str, bool]:
+    return snapshot.snapshot_data, snapshot.snapshot_checksum, publication.gameplay_started

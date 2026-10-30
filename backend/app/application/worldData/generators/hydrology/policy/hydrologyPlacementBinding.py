@@ -18,6 +18,7 @@ from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import (
     HydrologyPlacementCase, HydrologyPlacementGateInputs, HydrologyPolicyFacts,
     HydrologyPolicySnapshot, WaterPlacementPolicySource,
     HydrologyProceduralGenerationInputs, PROCEDURAL_GENERATION_CASES,
+    HydrologyProceduralExtentFacts, PROCEDURAL_EXTENT_CASE, PROCEDURAL_EXTENT_FALLBACK,
 )
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 from app.dataModel.hydrology.sources.waterDesignSource import (
@@ -54,6 +55,7 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
     snapshot: HydrologyPolicySnapshot[H],
     *, source_path: SourcePath, category_path: SourcePath,
     generation: HydrologyGenerationDecision | None = None,
+    procedural_extent: HydrologyProceduralExtentFacts | None = None,
 ) -> HydrologyPlacementBinding:
     if not isinstance(source, (DeclaredCoastline, AuthoredBasinSource, AuthoredLakeSource,
                                CoastlineWaterSource, ProceduralSource)):
@@ -76,6 +78,7 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
     value = source if isinstance(source, DeclaredCoastline) else source.value
     policy = HYDROLOGY_PLACEMENT_POLICY
     generation_sources: tuple[PolicySource, ...] = ()
+    extent_sources: tuple[PolicySource, ...] = ()
     if generation is not None:
         if not isinstance(source, ProceduralSource):
             raise ValueError("computed procedural generation requires a native procedural source")
@@ -86,6 +89,10 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
         if (resolved_generation.state is PolicyState.DISABLED) != (execution_mode is HydrologyExecutionMode.DISABLED):
             raise ValueError("procedural generation state must agree with its execution mode")
         mode = HydrologyProceduralGenerationInputs(execution_mode=execution_mode)
+        if procedural_extent is None:
+            raise ValueError("native procedural admission requires explicit captured extent facts")
+        extent = HydrologyProceduralExtentFacts.model_validate(procedural_extent, strict=True)
+        extent_sources = (PolicySource(HydrologyProceduralExtentFacts, extent, (*source_path, "extent")),)
         generation_sources = (PolicySource(HydrologyProceduralGenerationInputs, mode,
             (*source_path, "resolved_generation")),)
     spec = compile_admission_policy(policy, (
@@ -94,11 +101,14 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
     if generation is not None:
         # Keep field metadata attached to the original descriptor, as for the
         # separately bound target-support cases below.
-        mode_spec = compile_admission_policy(replace(policy, cases=PROCEDURAL_GENERATION_CASES), (
+        mode_spec = compile_admission_policy(replace(policy,
+            cases=(*PROCEDURAL_GENERATION_CASES, PROCEDURAL_EXTENT_CASE),
+            fallback_rules=(*policy.fallback_rules, PROCEDURAL_EXTENT_FALLBACK)), (
             WaterSourcePlacementFields, WaterCategoryPlacementFields, PlacementPolicyDefaults,
-            HydrologyProceduralGenerationInputs))
+            HydrologyProceduralGenerationInputs, HydrologyProceduralExtentFacts))
         spec = replace(spec, rules=(*spec.rules, *(rule for rule in mode_spec.rules
-            if isinstance(rule.effect, DisableEffect) and rule.stage is PolicyStage.ABSOLUTE_GATE)))
+            if isinstance(rule.effect, DisableEffect) and rule.stage in (PolicyStage.ABSOLUTE_GATE, PolicyStage.SUPPORT))),
+            fallback_rules=mode_spec.fallback_rules)
     if isinstance(value, DeclaredCoastline) and value.target_source_uid is not None:
         # Structural target binding only: the generic support stage decides its state.
         # Attached field metadata retains its descriptor identity. Compile the bound
@@ -119,6 +129,6 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
         PolicySource(HydrologyPlacementGateInputs, gates, ("hydrology", "placement_gates")),
         PolicySource(HydrologyPlacementBehaviorInputs, behavior, ("hydrology", "resolved_generation")),
         *generation_sources))
-    facts = PolicyFacts(models=(PolicySource(HydrologyPolicyFacts, observations, ("hydrology", "facts")),),
+    facts = PolicyFacts(models=(PolicySource(HydrologyPolicyFacts, observations, ("hydrology", "facts")), *extent_sources),
                         supports=snapshot.supports)
     return HydrologyPlacementBinding(spec=spec, inputs=inputs, facts=facts)

@@ -1035,3 +1035,12 @@ def invalid_native_source_producer(legacy: WaterPlacementInput, batch: Placement
         HydrologyPlacementGateInputs(world_enabled=True, category_enabled=True),
         HydrologyPlacementBehaviorInputs(strategy=DesignedWaterStrategyKind.PLATE), snapshot,
         source_path=(), category_path=(), generation=decision)  # EXPECT: reportArgumentType
+
+
+from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import HydrologyProceduralExtentFacts
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.fieldRecipeFactory import WaterFieldRecipeFactory
+
+
+def invalid_domain_preparation_contracts(inputs: GeoWaterPlacementInput) -> None:
+    HydrologyProceduralExtentFacts(world_extent=True)  # EXPECT: reportArgumentType
+    WaterFieldRecipeFactory().build("plate", inputs, "seed")  # EXPECT: reportArgumentType

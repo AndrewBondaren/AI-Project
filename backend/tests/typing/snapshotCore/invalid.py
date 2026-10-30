@@ -173,3 +173,10 @@ def wrong_event_models(snapshot: SnapshotLogRecord, artifact: ArtifactLogRecord)
     SnapshotLifecycleLog().emit(artifact)  # EXPECT: reportArgumentType
     ArtifactLifecycleLog().emit(snapshot)  # EXPECT: reportArgumentType
     SnapshotLifecycleLog().emit({"activity": "apply_started"})  # EXPECT: reportArgumentType
+
+
+from app.db.models.snapshotCore.historyRows import WorldSnapshotRow
+
+
+def cannot_mutate_historical_sql_row(row: WorldSnapshotRow) -> None:
+    row.turn_id = 2  # EXPECT: reportAttributeAccessIssue

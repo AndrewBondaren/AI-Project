@@ -1,6 +1,17 @@
 """Bind ready procedural source evidence; policy and geometry stay with their owners."""
 
 from pydantic import TypeAdapter
+from dataclasses import dataclass
+from app.application.worldData.generators.hydrology.sources.waterSourceMetadataFactory import WaterSourceMetadataFactory
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.fieldRecipeFactory import WaterFieldRecipeFactory
+from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralSourceAdmissions
+from app.dataModel.identity.uid import EntityUid
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
+from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
+from app.dataModel.terrain.designedWater.coverage.budget import WaterCoverageBudget
+from app.dataModel.terrain.designedWater.input import WaterStrategyInput
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
@@ -54,3 +65,52 @@ class ProceduralWaterSourceAdapter:
         except ValueError as error:
             raise PlanBuildFailure((FieldPathError(("water_source",), str(error),
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
+
+
+@dataclass(frozen=True)
+class CapturedProceduralWaterInputs:
+    """Bind captured native source facts to ready strategy inputs; no P2 lifecycle."""
+    inputs: GeoWaterPlacementInput
+    sources: ProceduralSourceAdmissions
+    pre_hydrology: PlanEnvelope[TerrainPlan]
+    regions: TerrainRegionPlan
+    seed_root: EntityUid
+
+    @classmethod
+    def capture(cls, inputs: GeoWaterPlacementInput, sources: ProceduralSourceAdmissions,
+                pre_hydrology: PlanEnvelope[TerrainPlan], regions: TerrainRegionPlan,
+                seed_root: EntityUid) -> "CapturedProceduralWaterInputs":
+        inputs = GeoWaterPlacementInput.model_validate(inputs, strict=True)
+        sources = ProceduralSourceAdmissions.model_validate(sources, strict=True)
+        pre_hydrology = PlanEnvelope[TerrainPlan].model_validate(pre_hydrology, strict=True)
+        regions = TerrainRegionPlan.model_validate(regions, strict=True)
+        if (inputs.declared_world_bounds is None) != (regions.snapshot.world_region is None):
+            raise PlanBuildFailure((FieldPathError(("water_source", "world_bounds"),
+                "captured bounds presence must match the terrain world region",
+                code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))
+        for binding in sources.sources:
+            if binding.admission.decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT):
+                WaterFieldRecipeFactory.require_strategy(binding.context.strategy)
+        return cls(inputs, sources, pre_hydrology, regions, seed_root)
+
+    def prepare(self, admission: PlacementAdmissionInput, budget: WaterCoverageBudget | None) -> WaterStrategyInput:
+        uid = admission.header.identity.source_uid
+        binding = next((binding for binding in self.sources.sources if binding.source.value.source_uid == uid), None)
+        if budget is None or binding is None:
+            raise PlanBuildFailure((FieldPathError(("water_source",), "ready source requires captured binding and shared world budget",
+                code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))
+        source, context = binding.source, binding.context
+        allocation = next((item for item in budget.allocations if item.source_uid == uid), None)
+        region = self.regions.snapshot.region_for(source.value.generation_region_uid)
+        coverage = next((item for item in self.regions.coverages if item.region_uid == source.value.generation_region_uid), None)
+        if allocation is None or region is None or coverage is None:
+            raise PlanBuildFailure((FieldPathError(binding.source_path, "ready source requires exact allocation/region/coverage",
+                code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))
+        metadata = WaterSourceMetadataFactory().build(source, default_water_level=self.inputs.default_water_level,
+            seas=self.inputs.seas, lakes=self.inputs.lakes, rim_level=None, source_path=binding.source_path)
+        shared = WaterDesignInput[ProceduralSource](strategy=context.strategy, source=source, metadata=metadata,
+            context=context, region=region, budget=allocation, seed_root=self.seed_root, topology=self.inputs.topology,
+            grid=self.inputs.grid, pre_hydrology=self.pre_hydrology, region_coverage=coverage)
+        recipe = WaterFieldRecipeFactory().build(context.strategy, self.inputs, self.seed_root)
+        return ProceduralWaterSourceAdapter().prepare_source(shared, generation=binding.generation,
+            admission=admission, field_policy=recipe, z_min=self.inputs.z_min)

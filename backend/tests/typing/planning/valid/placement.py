@@ -29,6 +29,10 @@ from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPl
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
 from app.application.worldData.generators.terrain.designedWater.preparation.proceduralDesignPreparation import prepare_procedural_designed_water
 from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
+from app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission import ProceduralSourceAdmissionJob
+from app.dataModel.hydrology.policy.proceduralSourceAdmission import ProceduralSourceAdmissions
+from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import HydrologyProceduralExtentFacts
+from app.dataModel.policy.policyFacts import KnownFact
 
 
 def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[PlacementIntent, ...],
@@ -65,6 +69,8 @@ def valid_native_source_producer(inputs: GeoWaterPlacementInput, batch: Placemen
         pre_hydrology=terrain, regions=regions, seed_root="seed", prepare_competitor=competitor,
         strategies=DesignedWaterStrategyFactory.builtins(), control=control),
         tuple[WaterCoverageBudget | None, tuple[WaterDesignPreparation, ...], PlacementBatchResultV2])
+    assert_type(ProceduralSourceAdmissionJob().resolve(inputs, batch, intents, control), ProceduralSourceAdmissions)
+    assert_type(HydrologyProceduralExtentFacts(world_extent=KnownFact[bool](value=True)), HydrologyProceduralExtentFacts)
 
 
 from app.application.worldData.generators.hydrology.boundaries.boundaryGeometry import BoundaryGeometry, BoundaryGeometryResult

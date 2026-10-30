@@ -22,8 +22,7 @@ def collect_hydrology_policy_facts[H: HydrologyPlan](
     snapshot = type(snapshot).model_validate(snapshot)
     value = source if isinstance(source, DeclaredCoastline) else source.value
     kind = BasinKind.LAKE if isinstance(value, DeclaredLake) else value.kind
-    category = (WaterGenerationCategory.LAKE if kind is BasinKind.LAKE else
-                WaterGenerationCategory.OCEAN if kind is BasinKind.OCEAN else WaterGenerationCategory.SEA)
+    category = WaterGenerationCategory.for_basin_kind(kind)
     purpose = value.purpose if isinstance(value, DeclaredCoastline) else CoastlinePurpose.WATER_SOURCE
     water: FactValue[bool | None] = KnownFact[bool | None](value=None)
     if isinstance(value, DeclaredCoastline) and purpose is CoastlinePurpose.BODY_BOUNDARY:

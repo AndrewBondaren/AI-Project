@@ -14,6 +14,12 @@ def diagnostic(obj: PreparedGeometry | PlacementHeader, code: PlacementIssueCode
                                path=("objects", uid, *path), detail=detail)
 
 
+def preparation_diagnostics(header: PlacementHeader, issues: tuple[FieldPathError, ...]) -> tuple[PlacementDiagnostic, ...]:
+    """Transport preparation failures through the existing generic placement sink."""
+    return tuple(diagnostic(header, PlacementIssueCode.CONSTRAINT_VIOLATION,
+        f"{issue.code}: {issue.message}", path=issue.path) for issue in issues)
+
+
 def emit_diagnostics(result: PlacementBatchResult | PlacementBatchResultV2, ctx: ResolveContext) -> None:
     issues = [FieldPathError(
         path=ctx.path_prefix + item.path, schema_id=ctx.schema_id, code=item.code.value,

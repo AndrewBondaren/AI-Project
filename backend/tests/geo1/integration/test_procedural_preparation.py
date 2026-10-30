@@ -176,8 +176,8 @@ class ProceduralPreparationTests(TestCase):
             prepare_procedural_designed_water(**args)
 
     def test_active_source_requires_declared_bounds_region_and_field_strategy(self):
-        for change in ({"declared_world_bounds": None}, {"generation": WorldWaterGenerationSettings(
-                autoresolve=True, strategy=Strategy.AUTHORED_REGION)}):
+        for change in ({"generation": WorldWaterGenerationSettings(
+                autoresolve=True, strategy=Strategy.AUTHORED_REGION)},):
             args = self.case()
             args["inputs"] = args["inputs"].model_copy(update=change)
             with self.assertRaises(PlanBuildFailure):
@@ -195,6 +195,12 @@ class ProceduralPreparationTests(TestCase):
         first = prepare_procedural_designed_water(**args)
         self.assertEqual(prepare_procedural_designed_water(**args), first)
         self.assertEqual({name: args[name].model_dump() for name in before}, before)
+
+    def test_captured_world_extent_presence_cannot_disagree_with_region_snapshot(self):
+        args = self.case()
+        self.without_world_region(args)
+        with self.assertRaises(PlanBuildFailure):
+            prepare_procedural_designed_water(**args)
 
     def test_cancellation_before_capture_never_runs_policy_or_metadata(self):
         args = self.case()
@@ -253,3 +259,71 @@ class ProceduralPreparationTests(TestCase):
                 {"state": PolicyState.DISABLED, "issues": (FieldPathError(("source",), "fallback", code="fallback"),)}):
             with self.assertRaises(ValueError):
                 bind_hydrology_placement_policy(scene.sources[0], **kwargs, generation=generation.model_copy(update=update))
+
+
+    def test_missing_bounds_is_unresolved_in_validation_before_field_preparation(self):
+        args = self.case()
+        args["inputs"] = args["inputs"].model_copy(update={"declared_world_bounds": None})
+        self.without_world_region(args)
+        with patch.object(WaterSourceMetadataFactory, "build", side_effect=AssertionError("missing extent metadata")), \
+             patch.object(args["strategies"], "get", side_effect=AssertionError("missing extent sampling")):
+            budget, designs, result = prepare_procedural_designed_water(**args)
+        self.assertIsInstance(result.results[0], UnresolvedPlacementV2)
+        self.assertTrue(result.results[0].diagnostics)
+        self.assertIsNone(budget)
+        self.assertEqual(designs, ())
+
+    def test_missing_bounds_runtime_uses_policy_disable_and_existing_logging_sink(self):
+        from app.dataModel.policy.policyEnums import PolicyDisableReason
+        args = self.case()
+        args["inputs"] = args["inputs"].model_copy(update={"declared_world_bounds": None,
+            "resolution_mode": ResolutionMode.RUNTIME})
+        self.without_world_region(args)
+        with patch("app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission.log_issues") as log, \
+             patch.object(WaterSourceMetadataFactory, "build", side_effect=AssertionError("fallback metadata")):
+            budget, designs, result = prepare_procedural_designed_water(**args)
+        self.assertIsInstance(result.results[0], DisabledPlacement)
+        self.assertEqual(result.results[0].reason, PolicyDisableReason.ERROR_FALLBACK)
+        self.assertTrue(result.results[0].decision.issues)
+        log.assert_called_once_with(result.results[0].decision.issues)
+        self.assertIsNone(budget)
+        self.assertEqual(designs, ())
+
+    def test_zero_priority_does_not_require_unused_extent_or_emit_fallback(self):
+        from app.dataModel.policy.policyEnums import PolicyDisableReason
+        args = self.case()
+        source = args["inputs"].sources[0]
+        source = source.model_copy(update={"value": source.value.model_copy(update={"placement_specificity": 0})})
+        args["inputs"] = args["inputs"].model_copy(update={"sources": (source,),
+            "declared_world_bounds": None, "resolution_mode": ResolutionMode.RUNTIME})
+        self.without_world_region(args)
+        with patch("app.application.worldData.generators.hydrology.sources.proceduralSourceAdmission.log_issues") as log:
+            budget, designs, result = prepare_procedural_designed_water(**args)
+        self.assertEqual(result.results[0].reason, PolicyDisableReason.ZERO_PRIORITY)
+        self.assertFalse(result.results[0].decision.issues)
+        log.assert_not_called()
+
+    def test_category_and_recipe_owners_are_strict_and_use_captured_settings(self):
+        from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category
+        from app.application.worldData.generators.terrain.designedWater.strategies.procedural.fieldRecipeFactory import WaterFieldRecipeFactory
+        self.assertEqual(Category.for_basin_kind(BasinKind.INLAND_SEA), Category.SEA)
+        with self.assertRaises(ValueError):
+            Category.for_basin_kind("sea")
+        args = self.case()
+        for kind in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
+            recipe = WaterFieldRecipeFactory().build(kind, args["inputs"], "captured-seed")
+            self.assertEqual(recipe.strategy, kind)
+            self.assertEqual(recipe.seed_root, "captured-seed")
+            if hasattr(recipe, "noise_policy"):
+                self.assertEqual(recipe.noise_policy, args["inputs"].noise_policy)
+            if hasattr(recipe, "plate_policy"):
+                self.assertEqual(recipe.plate_policy, args["inputs"].plate_policy)
+        for kind in (Strategy.AUTHORED_REGION, "plate", None):
+            with self.assertRaises(PlanBuildFailure):
+                WaterFieldRecipeFactory().build(kind, args["inputs"], "captured-seed")
+
+
+    def without_world_region(self, args):
+        plan = args["regions"]
+        args["regions"] = plan.model_copy(update={"snapshot": plan.snapshot.model_copy(update={
+            "world_region": None, "regions": (plan.snapshot.world_region,)})})

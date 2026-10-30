@@ -1880,8 +1880,10 @@ Existing positive/negative pyright setup используется через ext
 8. **4C2 — SQLite publication/operation adapters:** db layer; CAS races на
    двух connections, atomic world/player/outcome, cancellation/lost COMMIT,
    scope task/database/lifetime/read-only ownership. Common tables only.
+   Обязательная boundary validation всех полей rows и её negative cases — §8.11.
 9. **4C3 — SQLite artifact adapters:** catalog/lease/holders, common guards;
    two-operation dedupe, stale fence, no deletion while any hold survives.
+   Обязательная boundary validation всех полей rows и её negative cases — §8.11.
 10. **4C4 — physical artifact storage:** storage/artifacts/blobBackend.py;
    no-clobber hash writes, durable seal verification, missing/corrupt bytes,
    отказ/отмена до и после final file placement, существующий hash mismatch.
@@ -2031,9 +2033,153 @@ SQL, services, emitters, Container и DAG не менялись; backend не з
 
 ### 8.9. Реализация 4B3 — application emitters (2026-10-30)
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**. SnapshotLifecycleLog и ArtifactLifecycleLog по §8.3 принимают только typed DTO; один вызов — один aggregate event в app.snapshot/app.artifacts, уровни через общий LogLevel, request_id добавляет общий formatter. Нет local handlers/files, domain WarningError re-emit или хранения истории операций; delivery failure не вызывает повторную эмиссию и не меняет outcome.
+Статус: **ПРИНЯТО мастером 2026-10-30 («Следующий шаг»); переход к 4C1 разрешён**. SnapshotLifecycleLog и ArtifactLifecycleLog по §8.3 принимают только typed DTO; один вызов — один aggregate event в app.snapshot/app.artifacts, уровни через общий LogLevel, request_id добавляет общий formatter. Нет local handlers/files, domain WarningError re-emit или хранения истории операций; delivery failure не вызывает повторную эмиссию и не меняет outcome.
 Проверки через backend/.venv/Scripts/python.exe: contracts — **59 PASS** (включая existing Pyright: positive 0, negative **39** ожидаемых diagnostics); tests.test_logging_routes — **15 PASS** с tempfile.tempdir внутри workspace (default sandbox Temp давал WinError 5). Уровни всех activity, correlation, typed/frozen revalidation, recovery/unknown без нового commit event, отсутствие IO/handlers и logging failure — PASS; git diff --check — PASS.
 Реальный COMMIT/retry gating принадлежит будущим services; routes/allowlist общего facade остаются в 4E2. SQL, services, Container и DAG не менялись; backend не запускался, commit не создавался. Все правки внесены через apply_patch. **Остановка перед 4C1**.
+
+### 8.10. Реализация 4C1 — DDL/models (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**. Только 0001_initial.sql и 13 frozen SQL row-моделей по §8.3: publications/history/operations и artifact catalog/storage/holder/lease/writer facts. Сохранены snapshot_data/snapshot_checksum; добавлены FK ownership, partial UNIQUE/single-successor, CHECK, DESC lookup indices и append-only/INSERT guards, включая запрет обхода через INSERT OR REPLACE.
+Проверка: из backend `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **81 PASS** (59 contracts + 22 storage; existing Pyright: positive 0, negative **40** ожидаемых diagnostics). Временный SQLite :memory: с полной initial schema; Database.validate_schema проверен на реальных PRAGMA через no-IO async transport shim, точные колонки и mapper round-trip всех row-моделей — PASS.
+Negative cases: owner/parent/tick, FK, root/successor/sequence, operation binding/kind/phase/fence, terminal results, writer admission/drain и GC live holds — PASS. Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS; сохранены исходные CRLF/mixed EOL схемы. Новые пакеты содержат 1–4 файла с __init__; все содержательные правки через apply_patch, чужие изменения сохранены.
+Adapters/CAS races/task/database/lifetime proofs остаются в 4C2–4C3; startup model registration — 4E2. Production БД, services, Container и DAG не менялись; backend не запускался, commit не создавался. **Остановка перед 4C2**.
+
+### 8.11. Обязательная boundary validation в 4C2–4C3 — inventory полей
+
+Статус: **INVENTORY ЗАФИКСИРОВАН; ПРОВЕРКИ ADAPTERS ЕЩЁ НЕ РЕАЛИЗОВАНЫ**.
+Сверено с фактическими 13 SQL row-моделями после 4C1: **92 поля**.
+Это checklist приёмки следующих подшагов, а не утверждение, что обычные
+dataclass-аннотации или DDL уже выполняют контрактную валидацию.
+Пути/owners adapters остаются ровно по §8.3.3; новые DTO/enum/classes,
+SQL-изменения и реализация adapters этим дополнением не вводятся.
+
+#### Общие правила границы
+
+- Перед SQL write и перед выдачей результата read адаптер явно валидирует
+  вход/гидратированные значения существующими контрактами (Pydantic
+  model_validate/TypeAdapter с strict/revalidation). Простая аннотация,
+  isinstance или from_row этого не заменяет; model_construct/model_copy
+  также не являются доказательством валидности instance.
+- **U** ниже = существующий EntityUid: строгая непустая opaque string без
+  пробелов по краям. Это не UUID parser и не доказательство существования
+  записи. **U?** допускает только явный None/SQL NULL; пустая строка,
+  sentinel и придуманный UID вместо отсутствия запрещены. Ownership,
+  chain identity и достижимость ref проверяются отдельно.
+- **H** = RevisionHex; **H?** = он же либо явный None. Формат hash не
+  доказывает совпадение bytes, fingerprint binding или content identity.
+- **I+** = strict int >= 1; **I0** = strict int >= 0. Не принимать bool,
+  float или numeric string на typed write boundary; sequence/fence/turn
+  не объявляются FormatVersion или source/runtime revision.
+- **B** = typed bool на write, строго integer 0/1 из SQLite на read.
+  Проверять raw cell **до** bool_col/from_row: bool(2) или bool('0')
+  не должны скрыть повреждение. Затем используется штатный mapper.
+- Новые внутренние event_id и artifact_id назначает их owning adapter
+  через общий app.ids.deterministicIds.runtime_uid с последующей U-проверкой;
+  не вводятся собственный uuid/hash mint или новый UID namespace. Назначенные
+  application SnapshotRef/publication refs не переназначаются адаптером.
+  Невалидные сохранённые значения дают явную validation/infrastructure
+  ошибку; не default, не ложный успех и не новый domain refusal.
+
+#### 4C2 — publication/operation/history rows: 8 классов, 56 полей
+
+| SQL row → файл в backend/app/db/models/snapshotCore/ | UID-поля, включая внутренние | Остальные поля и существующий контракт |
+|---|---|---|
+| WorldPublicationRow → publicationRows.py | publication_id, world_uid: U; predecessor_id, operation_id, snapshot_head_id, active_timeline_id: U? | publication_seq: I+; pack_hash: H?; gameplay_started: B. Результат — WorldPublicationRef; отсутствие head не создаёт base snapshot. |
+| PlayerPublicationRow → publicationRows.py | publication_id, player_uid, player_snapshot_id, operation_id: U; predecessor_id: U? | publication_seq: I+. Результат — PlayerSnapshotRef/PlayerHeadExpectation; player UID не подменяется world UID. |
+| PublicationOperationRow → operationRows.py | operation_id, world_uid: U | kind: OperationKind; preparation_fingerprint: H. Immutable binding operation ID/world/kind/preparation. |
+| PublicationRequestRow → operationRows.py | operation_id: U | publication_fingerprint: H; отдельный immutable apply-request binding, не preparation fingerprint. |
+| PublicationOperationEventRow → operationRows.py | event_id, operation_id: U; predecessor_id: U? | event_seq, fence: I+; phase: OperationPhase. Внутренние event/predecessor IDs проверять явно: публичный OperationRecord их не содержит. |
+| PublicationOutcomeRow → operationRows.py | operation_id: U | outcome_kind: закрытый storage discriminator (см. ниже); category: SnapshotApplyOutcomeKind либо None по terminal variant; format_version: FormatVersion; outcome_data: bytes; outcome_checksum: H. |
+| WorldSnapshotRow → historyRows.py | snapshot_id, timeline_id, world_uid, operation_id: U; parent_snapshot_id: U? | turn_id: I+; created_at: CreatedAtUtc; envelope_format_version: FormatVersion; base_pack_hash, snapshot_checksum: H; snapshot_data: bytes. Восстановить WorldSnapshotMetadata/WorldSnapshotRef. |
+| PlayerSnapshotRow → historyRows.py | player_snapshot_id, player_uid, world_uid, timeline_id, operation_id: U; session_id, parent_player_snapshot_id: U? | turn_id: I+; created_at: CreatedAtUtc; envelope_format_version: FormatVersion; snapshot_checksum: H; snapshot_data: bytes. Восстановить PlayerSnapshotMetadata/PlayerSnapshotRef; session_id — audit FK, не поле player payload. |
+
+Обязательные дополнительные проверки 4C2:
+
+- event_id/predecessor_id/publication_id и sequence — внутренние storage
+  identities: проверить owner, точного predecessor, root/single-successor
+  и монотонность sequence; не возвращать их как SnapshotRef/target version.
+- outcome_kind имеет storage значения snapshot_apply/pack_activation/
+  gameplay_start/cancelled. Готового отдельного domain enum для этого
+  discriminator нет: нужен явный закрытый decode по concrete terminal
+  типам, без выдуманного нового публичного enum/DTO. cancelled не является
+  четвёртым OperationKind или SnapshotApplyOutcomeKind. category обязательна
+  только для SnapshotApplyResult, у остальных terminal types — None;
+  общий CONFLICT/REJECTED допустим для любого OperationKind, COMMITTED —
+  только для SNAPSHOT_APPLY. Сверить operation ID, kind и оба bindings,
+  phase/fence/terminal coherence существующим OperationRecord.
+- Для snapshot_data/outcome_data проверить точный bytes type и SHA-256
+  сохранённых bytes против checksum **до decode**, затем использовать
+  существующий canonical codec/format manifest и typed DTO validation.
+  Не пересчитывать checksum/fingerprint по upgraded view вместо исходных bytes.
+  Неизвестный format/type ID, неправильный terminal тип и повреждённые
+  bytes — явный отказ decode/recovery, без перезаписи прежней истории.
+- Сверить duplicated SQL columns с decoded DTO: назначенный ref/owner,
+  parent, operation ID, turn, created_at, format version, base pack hash;
+  для outcome — discriminator/category, request binding и committed refs.
+  Нельзя выбрать «более правдоподобную» сторону при несовпадении.
+- World/player refs, timeline/ancestry, parent/head, runtime pack guard,
+  явные participants и session audit FK остаются разными проверками.
+  При доступе через CommitScope/CommitReadScope binder перед каждым SQL
+  обращением проверяет task/database/lifetime и read/write capability;
+  validated UID не заменяет CommitScope ownership. Отдельный bookkeeping
+  IO не получает права создавать фиктивный publication scope.
+  CreatedAtUtc валидируется, но часы в db-модели/adapter hydration не читаются.
+
+#### 4C3 — artifact rows: 5 классов, 36 полей
+
+| SQL row → файл в backend/app/db/models/artifacts/ | UID-поля, включая внутренние | Остальные поля и существующий контракт |
+|---|---|---|
+| ArtifactCatalogRow → catalogRows.py | artifact_id: U | kind: ArtifactKind; format_key: ArtifactFormatKey; format_version: FormatVersion; content_hash: H; nbytes: I0; row_count: I0 либо None по kind. Восстановить полный ArtifactRef, а не возвращать artifact_id вместо него. |
+| ArtifactStorageEventRow → catalogRows.py | event_id, artifact_id: U; predecessor_id: U? | event_seq: I+; kind: ArtifactStorageEventKind. Storage fact sealed/gc_deleted не является operation phase/outcome. |
+| ArtifactHolderEventRow → holderRows.py | event_id, artifact_id: U; operation_id, retained_artifact_id, world_snapshot_id, player_snapshot_id, predecessor_id: U? | holder_kind: ArtifactHolderKind; fence: I+ либо None только по holder branch; event_seq: I+; event_kind: закрытый acquire/release storage tag. Восстановить ArtifactHolderRef с точным discriminator. |
+| ArtifactLeaseEventRow → leaseRows.py | event_id, operation_id: U; predecessor_id: U? | event_seq, fence: I+; admission_open: B. Lease восстанавливается как OperationLeaseRef с kind/world/preparation binding из operation record. |
+| ArtifactWriterClaimRow → leaseRows.py | event_id, artifact_id, operation_id: U; predecessor_id: U? | fence, event_seq: I+; event_kind: закрытый acquire/release storage tag. Claim identity не выдаётся за content hash или publication outcome. |
+
+Обязательные дополнительные проверки 4C3:
+
+- Для holder/writer event_kind сейчас нет отдельного dataModel enum:
+  явно проверять закрытый storage набор acquire/release на границе,
+  неизвестное значение не преобразовывать в release/False. Если для
+  реализации потребуется новый именованный тип, сначала дополнить карту,
+  а не добавлять unapproved enum/class по месту.
+- Все event_id/predecessor_id валидировать как U **явно**, включая read:
+  ArtifactRef/OperationLeaseRef сами этих полей не содержат. Проверить
+  artifact/holder/operation/fence identity всей цепочки и sequence,
+  а не только PK и корректный синтаксис строки.
+- У OperationHolder нужны operation_id+fence и согласованный полный
+  OperationLeaseRef; остальные owner columns — NULL. У retention holder
+  retained_artifact_id разрешается через catalog в полный ArtifactRef,
+  operation/fence/snapshot columns — NULL. У SnapshotHolder ровно один
+  world_snapshot_id/player_snapshot_id с соответствующим typed ref;
+  другие owner columns — NULL. Не смешивать ArtifactHolderKind с OperationKind.
+- Проверить BLOB/SQL_ROWS invariant в ArtifactRef и descriptor equality:
+  для одной identity (kind/format_key/version/hash) nbytes/row_count должны
+  совпадать, иначе refusal, а не успешный dedupe. Membership/совместимость
+  format key/version остаются у existing ArtifactFormatRegistryBinding;
+  physical bytes/domain rows verification — у backend, не у catalog row.
+- admission/fence, writer claims, seal, holder handoff/cancel/GC проверяются
+  в общем guard непосредственно перед действием. Корректный ArtifactRef
+  не доказывает seal/удержание, а валидный fence int — право старой попытки
+  писать. Не освобождать operation hold до закрытия admission и drain claims;
+  не удалять artifact, пока остаётся любой live holder.
+
+#### Приёмка, которую добавить при реализации adapters
+
+Для каждой строки таблиц выше — positive read/write round-trip и negative
+boundary cases по её группам: wrong Python type, пустой/обрамлённый пробелами
+UID, недопустимый None, bool/float/string вместо integer, raw SQL boolean
+вне 0/1, неизвестный enum/storage tag, неверный hash/timestamp/version,
+несогласованные row↔DTO и cross-owner refs. Отдельно проверить внутренние
+event_id/predecessor_id, которые не проходят через публичные DTO, и
+constructed/copied invalid instances. Write-side rejection — до записи;
+read-side corruption — без default/ремонта данных/нового durable outcome.
+Не требовать UUID shape от существующего opaque EntityUid.
+
+Проверки разместить в уже предусмотренных test_cas/test_atomicity (4C2),
+test_leases/test_gc (4C3), test_capabilities при появлении scope implementation,
+и existing typing fixtures; не создавать новые root tests/validation pipeline.
+4C1 SQL tests не засчитываются за эти adapter boundary tests. 4C2/4C3 не
+объявляются DONE без закрытия inventory и соответствующих meaningful проверок.
 
 ## 9. Норматив и совместимость
 

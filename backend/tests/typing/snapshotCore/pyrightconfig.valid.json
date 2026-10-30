@@ -12,6 +12,8 @@
     "../../../app/application/worldSnapshot",
     "../../../app/application/artifacts",
     "../../../app/application/publication",
-    "../../../app/application/encoding"
+    "../../../app/application/encoding",
+    "../../../app/db/models/snapshotCore",
+    "../../../app/db/models/artifacts"
   ]
 }

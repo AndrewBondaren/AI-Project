@@ -23,10 +23,10 @@ from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration
 from app.dataModel.policy.declarations.policyDeclaration import AdmissionPolicy, PolicyOwner
 from app.dataModel.policy.objectAdmissionPolicyDefinition import PlacementPolicyDefaults
 from app.dataModel.policy.policyBindings import PolicySupportFact
-from app.dataModel.policy.policyEnums import PolicyDisableReason, PolicyStage
+from app.dataModel.policy.policyEnums import PolicyDisableReason, PolicyIssueReason, PolicyStage
 from app.dataModel.policy.policyFacts import FactValue
 from app.dataModel.policy.policyReferences import DirectValueRef, FactValueRef, PriorityValueRef
-from app.dataModel.policy.policyRules import DisableEffect, Equal
+from app.dataModel.policy.policyRules import DisableEffect, Equal, PolicyFallback
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 from app.dataModel.validation.immutableValue import validate_immutable
 
@@ -82,6 +82,7 @@ class HydrologyPlacementCase(StrEnum):
     DRY_BOUNDARY = "dry_boundary"
     PROCEDURAL_DISABLED = "procedural_disabled"
     PROCEDURAL_DECLARED_ONLY = "procedural_declared_only"
+    PROCEDURAL_EXTENT = "procedural_extent"
 
 
 class HydrologyProceduralGenerationInputs(BaseModel, frozen=True):
@@ -89,6 +90,11 @@ class HydrologyProceduralGenerationInputs(BaseModel, frozen=True):
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
     execution_mode: HydrologyExecutionMode
+
+
+class HydrologyProceduralExtentFacts(BaseModel, frozen=True):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
+    world_extent: FactValue[bool]
 
 
 PROCEDURAL_GENERATION_CASES = (
@@ -102,6 +108,17 @@ PROCEDURAL_GENERATION_CASES = (
         effect=DisableEffect(PolicyDisableReason.DOMAIN_RULE), reason=WaterPolicyReason.DECLARED_ONLY,
         stage=PolicyStage.ABSOLUTE_GATE),
 )
+
+
+PROCEDURAL_EXTENT_CASE = PolicyCaseDeclaration(
+    key=HydrologyPlacementCase.PROCEDURAL_EXTENT,
+    conditions=(Equal(DirectValueRef(FieldRef(lambda: HydrologyProceduralGenerationInputs,
+        lambda inputs: inputs.execution_mode)), HydrologyExecutionMode.AUTORESOLVE),
+        Equal(FactValueRef(FieldRef(lambda: HydrologyProceduralExtentFacts, lambda facts: facts.world_extent)), False)),
+    effect=DisableEffect(PolicyDisableReason.DOMAIN_RULE), stage=PolicyStage.SUPPORT)
+
+PROCEDURAL_EXTENT_FALLBACK = PolicyFallback[DesignedWaterStrategyKind](
+    reason=PolicyIssueReason.UNKNOWN_FACT, behavior=None, disable_object=True)
 
 
 BOUNDARY_PURPOSE = Equal(DirectValueRef(FieldRef(
