@@ -11389,6 +11389,31 @@ Evidence: GEO-1 618 OK (+7), planning 292 OK; positive pyright 0;
 negative 245 diagnostics (+1), all 242 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
 
+### G10-A built-in strategy composition — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: compose the four completed strategy implementations through the single
+existing factory, ready for the G8-B caller without switching production yet.
+TZ: docs/tz_terrain_generation.md GEO-1 strategies; plan G8 / §6.29-M factory
+composition (still explicitly open after G6/G7/G7-C leaf acceptance).
+Owner/layer/path: application terrain strategy composition, existing
+backend/app/application/worldData/generators/terrain/designedWater/strategies/strategyFactory.py.
+DesignedWaterStrategyFactory.builtins()->Self constructs AuthoredRegionStrategy,
+ContinentalNoiseStrategy, PlateStrategy and PlateNoiseStrategy and supplies them
+to the existing required constructor. No default strategy, settings, recipe,
+policy, sampling, placement or World lookup is introduced. All knobs remain in
+WaterStrategyInput; get() and injected-factory semantics are unchanged.
+Tests: existing geo1/contracts/strategies/test_dispatch_budget.py and positive
+planning GEO typing fixture. Verify real dispatch for every enum variant through
+DesignedWaterPlacementPreparer, preserved floor/metadata/ref, immutable input
+heights and recipe, replay across fresh factories and no cross-request settings
+retention; strategy domain failures remain explicit, with no fallback strategy.
+Folders strategy 4→4, strategy contract tests 5→5; no new files.
+Run GEO-1/planning/positive typing and diff check. Done: built-in factory ready;
+G8-B universe, authoritative fine boundary evidence and atomic G10-A activation
+remain open. This is composition of existing algorithms, not a second factory.
+Evidence: GEO-1 622 OK (+4), planning 292 OK; positive pyright 0.
+git diff --check clean. G8-B / production G10-A remain OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

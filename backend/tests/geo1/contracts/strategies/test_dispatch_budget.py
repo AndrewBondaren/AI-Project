@@ -85,3 +85,65 @@ class BudgetRecordTests(TestCase):
         for update in ({"allocated_fine2": 9}, {"requested_fine2": -1}, {"allocated_fine2": False}):
             with self.assertRaises(ValidationError):
                 type(allocation).model_validate(allocation.model_copy(update=update))
+
+
+class BuiltinStrategyCompositionTests(TestCase):
+    def cases(self):
+        from tests.geo1.preparation.fixtures import procedural_case
+        from app.dataModel.topology.worldBounds import WorldBounds
+        return tuple(inputs(kind) if kind is Strategy.AUTHORED_REGION else procedural_case(strategy=kind,
+            allocated=8, bounds=WorldBounds(x_min=-2, x_max=3, y_min=-1, y_max=2))[0] for kind in Strategy)
+
+    def prepare(self, factory, value):
+        from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+        from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+        draft = factory.get(value.strategy).design(value)
+        value.validate_draft(draft)
+        return draft, DesignedWaterPlacementPreparer().prepare(value, draft, selection_policy=WaterFieldSelectionPolicy())
+
+    def test_all_builtins_feed_the_same_preparer_and_preserve_ready_evidence(self):
+        from unittest.mock import patch
+        from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
+        factory = DesignedWaterStrategyFactory.builtins()
+        for value in self.cases():
+            before = value.model_dump()
+            with self.subTest(strategy=value.strategy), patch(
+                    "app.application.worldData.placement.adapters.water.shape_cells", side_effect=AssertionError("geometry repeated")):
+                draft, prepared = self.prepare(factory, value)
+                self.assertEqual(prepared.metadata, value.metadata)
+                self.assertEqual(prepared.pre_hydrology_ref, value.pre_hydrology_ref)
+                self.assertEqual(prepared.floor_z, draft.floor_z)
+                self.assertEqual(prepared.floor_profile, draft.floor_profile)
+                self.assertEqual(WaterDesignPreparation.model_validate_json(prepared.model_dump_json()), prepared)
+                self.assertEqual(value.model_dump(), before)
+
+    def test_fresh_factories_replay_the_same_drafts_and_geometry(self):
+        first, other = DesignedWaterStrategyFactory.builtins(), DesignedWaterStrategyFactory.builtins()
+        for value in self.cases():
+            with self.subTest(strategy=value.strategy):
+                expected = self.prepare(first, value)
+                self.assertEqual(self.prepare(first, value), expected)
+                self.assertEqual(self.prepare(other, value), expected)
+
+    def test_one_factory_uses_each_requests_captured_recipe_without_retaining_settings(self):
+        factory = DesignedWaterStrategyFactory.builtins()
+        for value in self.cases():
+            if value.strategy is Strategy.AUTHORED_REGION:
+                continue
+            changed = type(value).model_validate(value.model_copy(update={"seed_root": "other-seed",
+                "field_policy": value.field_policy.model_copy(update={"seed_root": "other-seed"})}))
+            with self.subTest(strategy=value.strategy):
+                before = factory.get(value.strategy).design(value)
+                after = factory.get(changed.strategy).design(changed)
+                self.assertEqual(after.field.recipe, changed.field_policy)
+                self.assertEqual(after.floor_profile.recipe, changed.field_policy)
+                self.assertNotEqual(after.field.samples, before.field.samples)
+                self.assertEqual(factory.get(value.strategy).design(value), before)
+
+    def test_wrong_input_retains_the_selected_strategys_domain_failure(self):
+        from tests.geo1.preparation.fixtures import procedural_case
+        factory = DesignedWaterStrategyFactory.builtins()
+        value, _ = procedural_case(strategy=Strategy.PLATE)
+        with self.assertRaises(PlanBuildFailure) as failure:
+            factory.get(Strategy.CONTINENTAL_NOISE).design(value)
+        self.assertEqual(failure.exception.issues[0].code, WaterDesignIssueCode.INVALID_STRATEGY.value)

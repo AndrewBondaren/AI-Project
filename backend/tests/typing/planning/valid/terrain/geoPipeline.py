@@ -166,3 +166,14 @@ def exact_region_provider(provider: TerrainRegionPlanProvider, request: PlanRequ
     assert_type(provider.build(request, dependencies, control), PlanBuildResult[TerrainRegionPlan])
     assert_type(request.inputs.snapshot_uid, EntityUid)
     assert_type(request.inputs.world_region_uid, EntityUid)
+
+
+from app.application.worldData.generators.terrain.designedWater.strategies.strategyFactory import DesignedWaterStrategyFactory
+from app.dataModel.terrain.designedWater.input import WaterStrategyInput
+from app.dataModel.terrain.designedWater.draft import WaterDesignDraft
+
+
+def built_in_water_strategy_composition(value: WaterStrategyInput) -> None:
+    factory = DesignedWaterStrategyFactory.builtins()
+    assert_type(factory, DesignedWaterStrategyFactory)
+    assert_type(factory.get(value.strategy).design(value), WaterDesignDraft)
