@@ -982,10 +982,35 @@ from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 
 
+from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
+from app.dataModel.terrain.designedWater.coverage.budget import WaterCoverageBudget
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
+
+
 def invalid_water_universe_callback(batch: PlacementBatchV2, terrain: PlanEnvelope[TerrainPlan],
     grid: SurfaceGridSettings, control: PlanBuildControl,
-    prepare: Callable[[PlacementAdmissionInput], WaterDesignPreparation],
-    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2]) -> None:
+    prepare: Callable[[PlacementAdmissionInput, WaterCoverageBudget | None], WaterDesignPreparation],
+    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2],
+    regions: TerrainRegionPlan, world_context: ResolvedWaterGenerationContext) -> None:
     prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
         prepare_input=prepare, prepare_competitor=competitor,  # EXPECT: reportArgumentType
+        regions=regions, world_context=world_context, coverage_requests=(),
+        authored_union_fine2=0, available_auto_area_fine2=0,
+        strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
+
+
+def invalid_water_budget_callback(batch: PlacementBatchV2, terrain: PlanEnvelope[TerrainPlan],
+    grid: SurfaceGridSettings, control: PlanBuildControl,
+    prepare: Callable[[PlacementAdmissionInput], WaterStrategyInput],
+    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2], regions: TerrainRegionPlan,
+    world_context: ResolvedWaterGenerationContext, budget: WaterCoverageBudget) -> None:
+    prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
+        prepare_input=prepare, prepare_competitor=competitor,  # EXPECT: reportArgumentType
+        regions=regions, world_context=world_context, coverage_requests=(),
+        authored_union_fine2=0, available_auto_area_fine2=0,
+        strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
+    prepare_designed_water(batch, water_intents=(), pre_hydrology=terrain, grid=grid, seed_root="seed",
+        prepare_input=lambda admission, allocation: prepare(admission), prepare_competitor=competitor,
+        regions=regions, world_context=world_context, coverage_requests=(budget,),  # EXPECT: reportArgumentType
+        authored_union_fine2=0, available_auto_area_fine2=0,
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)

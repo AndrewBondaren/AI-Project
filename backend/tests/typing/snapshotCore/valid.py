@@ -121,3 +121,39 @@ def lifecycle_event(digest: RevisionHex) -> SnapshotLogRecord:
     return SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_COMMITTED, operation_id="op", world_uid="world",
         request_fingerprint=digest, timeline_id=None, snapshot_id=None, section_key=None,
         outcome=SnapshotApplyOutcomeKind.COMMITTED)
+
+from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
+from app.application.patch.registry.sectionRegistry import SectionRegistry
+from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
+from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
+from app.application.worldSnapshot.contracts.commitScope import CommitScope, CommitReadScope, IDomainCommitBinding
+from app.application.worldSnapshot.contracts.context import SnapshotValidationContext, SnapshotApplyContext
+from app.application.worldSnapshot.storage.commitStore import IPublicationCommitStore
+from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
+from tests.snapshotCore.support.fakeSection import FakeSection, FakeSectionHandler, FakePrepared
+
+
+def register_typed_sections(contract: SectionContract[FakeSection], handler: FakeSectionHandler,
+                            section: FakeSection) -> bytes:
+    registry = SectionRegistry()
+    registry.register(contract, handler)
+    return registry.resolve(section).encode(section)
+
+
+def register_typed_artifacts(contract: ArtifactFormatContract[FakePrepared],
+                             backend: ArtifactBackend[FakePrepared], content: FakePrepared) -> bytes:
+    registry = ArtifactFormatRegistryBinding()
+    registry.register(contract, backend)
+    exact_backend: ArtifactBackend[FakePrepared] = registry.resolve(contract)
+    return registry.encode(exact_backend.contract, content)
+
+
+async def pinned_publication_reads(store: IPublicationCommitStore, history: ISnapshotHistoryStore,
+                                   ref: SnapshotRef) -> None:
+    async with store.transaction("op") as scope:
+        read_scope: CommitReadScope = scope.read_scope
+        await history.read(ref, scope=read_scope)
+
+
+def bound_domain_storage(binding: IDomainCommitBinding[FakeSectionHandler], scope: CommitScope) -> FakeSectionHandler:
+    return binding.bind(scope)

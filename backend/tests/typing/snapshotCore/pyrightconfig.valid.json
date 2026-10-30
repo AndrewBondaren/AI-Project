@@ -7,6 +7,10 @@
     "valid.py",
     "../../../app/dataModel/patch",
     "../../../app/dataModel/artifacts",
-    "../../../app/dataModel/worldSnapshot"
+    "../../../app/dataModel/worldSnapshot",
+    "../../../app/application/patch",
+    "../../../app/application/worldSnapshot",
+    "../../../app/application/artifacts",
+    "../../../app/application/publication"
   ]
 }

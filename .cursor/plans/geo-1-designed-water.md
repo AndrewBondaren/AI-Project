@@ -11610,7 +11610,7 @@ Evidence: GEO-1 662 OK (+6), planning 292 OK; positive pyright 0;
 negative 252 diagnostics (+1), all 249 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. Production G10-A remains OPEN.
 
-### G10-A ready-source design / joint placement — IN PROGRESS (2026-10-30)
+### G10-A ready-source design / joint placement — IMPLEMENTED / VERIFIED (2026-10-30)
 
 Срез J05–J07, ТЗ tz_map_light_bake §Placement P1/P2/P3 и
 tz_terrain_generation §Planning и доставка GEO-1: application terrain owner
@@ -11629,8 +11629,36 @@ J01–J05 source/settings/cascade/budget capture остаётся caller boundar
 J08/records/schema/defaults/capture/production activation остаются атомарным остатком.
 Файлы тестов: geo1/integration/test_design_preparation.py (integration 4→5),
 typing/planning/valid/placement.py и invalid.py; preparation 6→7, WARN в чате.
-Проверка: GEO-1, planning, positive/negative planning typing и diff check.
-G10-A production остаётся OPEN.
+Evidence: GEO-1 674 OK (+12), planning providers 129 OK; positive pyright 0;
+negative 253 diagnostics (+1), все 250 EXPECT покрыты, baseline surplus unchanged.
+Scoped diff/whitespace checks clean. Полный planning 292 не подтверждён:
+процессы прерывались (-1, без traceback), verbose run дошёл до existing
+L2ProductionTests.test_climate_bundle_preserves_coarse_and_fine_wire_baseline;
+изолированный consumer/remainder retry остановлен без итогового результата.
+Consumer-код не изменялся. Это ограничение regression evidence, не новая
+приёмка L0/L2. После внешнего commit/merge HEAD повторены новые 12 тестов
+и positive pyright: OK / 0 ошибок. G10-A production остаётся OPEN.
+
+### G10-A shared coverage budget in main runner — IN PROGRESS (2026-10-30)
+
+J04→J05, ТЗ tz_terrain_generation GEO-1 §Planning и доставка / plan §6.29-E.
+Owner: application terrain design orchestration, existing preparation/designPreparation.py.
+prepare_designed_water requires TerrainRegionPlan, WORLD ResolvedWaterGenerationContext,
+BodyCoverageRequest tuple and terrain-owned authored_union/available fine² measures.
+Validate region snapshot world/snapshot UID, request region/area and exact admitted
+procedural source set before design. Calculate WaterCoverageBudget once through
+existing WaterCoverageBudgetPolicy when fixed world extent exists; authored-only
+without that extent continues with budget=None (§6.29-M), never an AABB percentage.
+Callback becomes (admission,budget|None)→WaterStrategyInput.
+Require each procedural input's allocation/region/coverage to match that budget
+and region plan. Return existing budget alongside existing designs/common outcomes;
+no new transport, compatibility overload, post-P2 redistribution or geometry measure.
+Owning settings/cascade/request production remains caller; owning schema/defaults,
+zero-target admission activation and water record migration stay atomic G10-A.
+Tests: existing geo1/integration/test_design_preparation.py and planning typing fixtures;
+shared cap, overlaps/admitted scope, losers without redistribution, stale/foreign
+budgets/regions, zero requests and whole-scope replay. No new files; preparation7→7,
+integration5→5. Run GEO-1, planning providers, positive/negative typing, scoped diff.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

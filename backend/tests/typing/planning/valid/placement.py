@@ -23,18 +23,25 @@ from app.dataModel.terrain.designedWater.input import WaterStrategyInput
 from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
+from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, WaterCoverageBudget
+from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
 
 
 def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[PlacementIntent, ...],
     terrain: PlanEnvelope[TerrainPlan], grid: SurfaceGridSettings, control: PlanBuildControl,
-    prepare: Callable[[PlacementAdmissionInput], WaterStrategyInput],
+    prepare: Callable[[PlacementAdmissionInput, WaterCoverageBudget | None], WaterStrategyInput],
     competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2],
-    reevaluate: SupportReevaluation, selection: WaterFieldSelectionPolicy) -> None:
+    reevaluate: SupportReevaluation, selection: WaterFieldSelectionPolicy,
+    regions: TerrainRegionPlan, world_context: ResolvedWaterGenerationContext,
+    requests: tuple[BodyCoverageRequest, ...]) -> None:
     assert_type(prepare_designed_water(batch, water_intents=intents, pre_hydrology=terrain, grid=grid,
         seed_root="seed", prepare_input=prepare, prepare_competitor=competitor,
+        regions=regions, world_context=world_context, coverage_requests=requests,
+        authored_union_fine2=0, available_auto_area_fine2=0,
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=selection,
         control=control, reevaluate_support=reevaluate),
-        tuple[tuple[WaterDesignPreparation, ...], PlacementBatchResultV2])
+        tuple[WaterCoverageBudget | None, tuple[WaterDesignPreparation, ...], PlacementBatchResultV2])
 
 
 def valid_placement_lifecycle(batch: PlacementBatchV2, header: PlacementHeader,

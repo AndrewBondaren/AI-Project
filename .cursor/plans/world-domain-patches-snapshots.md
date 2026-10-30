@@ -1966,7 +1966,7 @@ per-class CRUD swap gate ещё не реализованы. Следующий 
 
 ### 8.6. Реализация 4A3 — Snapshot/result/events и artifact lifecycle DTO (2026-10-30)
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+Статус: **ПРИНЯТО мастером 2026-10-30 («Следующий шаг»); переход к 4B1 разрешён**.
 По точным путям §8.3 добавлены snapshot metadata/envelope, apply/publication
 results, typed logging events и artifact operation/lease/holder/GC DTO.
 Исходы используют общий SnapshotApplyOutcomeKind; metadata различают
@@ -1991,6 +1991,36 @@ clock assignment и delivery событий остаются в будущих a
 слоях; tests DTO не объявляют эти гарантии реализованными. Concrete domain
 Patch, SQL, services, Container и DAG не добавлялись; backend не запускался,
 commit не создавался. **Остановка перед 4B1: один подшаг за заход**.
+
+### 8.7. Реализация 4B1 — application ports и typed registries (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**.
+По карте §8.3 добавлены DomainSectionHandler/SectionContract, SectionRegistry/
+BoundSectionHandler, validation/apply contexts, непрозрачные абстрактные
+CommitScope/CommitReadScope и IDomainCommitBinding; apply/publication/history/
+operation/staging/catalog/lease/holder ports, ArtifactBackend/FormatContract
+и ArtifactFormatRegistryBinding. Регистрация явная, без domain work в
+конструкторах; проверяются contract identity, concrete model/key/version,
+strict/frozen declarations и точный тип до dispatch. Type erasure/casts
+ограничены внутренними границами реестров; caller не передаёт Any/object payload.
+
+Проверка из backend: `.venv/Scripts/python.exe -m unittest discover
+-s tests/snapshotCore/contracts -p 'test_*.py' -v` — **41 PASS**.
+Existing project-installed Pyright через valid/invalid configs snapshotCore:
+positive — 0 diagnostics, negative — ровно **34** ожидаемых diagnostics.
+Проверены duplicate/wrong key/model/handler/backend, неподдерживаемые версии,
+сохранение concrete полей при codec delegation, corrupt constructed instances,
+типизация content и read/write capability, отсутствие concrete storage imports.
+Fake секция/handler находятся только в tests/snapshotCore/support/fakeSection.py.
+Проверки корутин без IO не создают event loop: Windows socketpair в этой
+среде зависал до выполнения тестов. Непредвиденная suspension fixture — failure.
+Новые production пакеты содержат 1–4 файла с __init__; scoped diff/whitespace — PASS.
+
+Это declarations/registration, не реализация task/database/lifetime guards,
+CAS, transactions, staging/GC или recovery. Они остаются у следующих adapters/
+services. Shared encoding, emitters, concrete domain Patch, SQL, services,
+Container и DAG не добавлялись; backend не запускался, commit не создавался.
+Предыдущие и параллельные изменения сохранены. **Остановка перед 4B2**.
 
 ## 9. Норматив и совместимость
 

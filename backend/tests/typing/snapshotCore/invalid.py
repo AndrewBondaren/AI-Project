@@ -110,3 +110,45 @@ def different_lifecycle_types(world: WorldSnapshotRef, player: PlayerSnapshotRef
     WorldSnapshotMetadata(ref=player, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(), retained_artifacts=())  # EXPECT: reportArgumentType
     PlayerSnapshotMetadata(ref=player, parent=world, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, state_refs=(), history_refs=(), retained_artifacts=())  # EXPECT: reportArgumentType
     WorldSnapshotMetadata(ref=world, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(state,), retained_artifacts=())  # EXPECT: reportArgumentType
+
+from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
+from app.application.patch.registry.sectionRegistry import SectionRegistry
+from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
+from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
+from app.application.worldSnapshot.contracts.commitScope import CommitScope, CommitReadScope, IDomainCommitBinding
+from app.application.worldSnapshot.contracts.context import SnapshotValidationContext, SnapshotApplyContext
+from app.application.worldSnapshot.storage.commitStore import IPublicationCommitStore
+from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
+from tests.snapshotCore.support.fakeSection import FakeSection, FakeSectionHandler, FakePrepared
+
+
+def write_capability(scope: CommitScope) -> None:
+    pass
+
+
+def wrong_handler_binding(contract: SectionContract[FakeSection],
+                          handler: DomainSectionHandler[DomainSection[PatchHeader]]) -> None:
+    SectionRegistry().register(contract, handler)  # EXPECT: reportArgumentType
+
+
+def wrong_artifact_binding(contract: ArtifactFormatContract[bytes],
+                           rows: ArtifactBackend[FakePrepared], content: FakePrepared) -> None:
+    registry = ArtifactFormatRegistryBinding()
+    registry.register(contract, rows)  # EXPECT: reportArgumentType
+    registry.encode(contract, content)  # EXPECT: reportArgumentType
+
+
+def wrong_scope_capabilities(read: CommitReadScope, binding: IDomainCommitBinding[FakeSectionHandler]) -> None:
+    write_capability(read)  # EXPECT: reportArgumentType
+    binding.bind(read)  # EXPECT: reportArgumentType
+
+
+def wrong_context_capabilities(validation: SnapshotValidationContext, player: PlayerSnapshotRef,
+                               world: WorldSnapshotRef, scope: CommitScope, read: CommitReadScope) -> None:
+    SnapshotApplyContext(validation=validation, world_snapshot=player, player_snapshots=(), scope=scope)  # EXPECT: reportArgumentType
+    SnapshotApplyContext(validation=validation, world_snapshot=world, player_snapshots=(), scope=read)  # EXPECT: reportArgumentType
+
+
+async def wrong_history_scope(history: ISnapshotHistoryStore, read: CommitReadScope,
+                              metadata: WorldSnapshotMetadata) -> None:
+    await history.append(read, metadata, ())  # EXPECT: reportArgumentType
