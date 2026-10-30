@@ -27,6 +27,8 @@ from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGe
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageRequest, WaterCoverageBudget
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
+from app.application.worldData.generators.terrain.designedWater.preparation.proceduralDesignPreparation import prepare_procedural_designed_water
+from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWaterPlacementInput
 
 
 def valid_water_design_universe(batch: PlacementBatchV2, intents: tuple[PlacementIntent, ...],
@@ -54,6 +56,15 @@ def valid_placement_lifecycle(batch: PlacementBatchV2, header: PlacementHeader,
     session.submit(prepared)
     assert_type(session.step(), PlacementOutcomeV2 | None)
     assert_type(session.finish(), PlacementBatchResultV2)
+
+
+def valid_native_source_producer(inputs: GeoWaterPlacementInput, batch: PlacementBatchV2,
+    intents: tuple[PlacementIntent, ...], terrain: PlanEnvelope[TerrainPlan], regions: TerrainRegionPlan,
+    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2], control: PlanBuildControl) -> None:
+    assert_type(prepare_procedural_designed_water(inputs, batch, water_intents=intents,
+        pre_hydrology=terrain, regions=regions, seed_root="seed", prepare_competitor=competitor,
+        strategies=DesignedWaterStrategyFactory.builtins(), control=control),
+        tuple[WaterCoverageBudget | None, tuple[WaterDesignPreparation, ...], PlacementBatchResultV2])
 
 
 from app.application.worldData.generators.hydrology.boundaries.boundaryGeometry import BoundaryGeometry, BoundaryGeometryResult

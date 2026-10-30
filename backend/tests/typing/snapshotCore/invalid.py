@@ -162,3 +162,14 @@ def wrong_codec_input(codec: PatchSetCodec[FakeSection], wrong_request: PatchSet
                       publication: WorldPublicationRef) -> None:
     codec.encode(wrong_request)  # EXPECT: reportArgumentType
     SnapshotEnvelopeCodec().encode(publication)  # EXPECT: reportArgumentType
+
+
+from app.application.worldSnapshot.logging.snapshotLog import SnapshotLifecycleLog
+from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
+from app.dataModel.artifacts.events import ArtifactLogRecord
+
+
+def wrong_event_models(snapshot: SnapshotLogRecord, artifact: ArtifactLogRecord) -> None:
+    SnapshotLifecycleLog().emit(artifact)  # EXPECT: reportArgumentType
+    ArtifactLifecycleLog().emit(snapshot)  # EXPECT: reportArgumentType
+    SnapshotLifecycleLog().emit({"activity": "apply_started"})  # EXPECT: reportArgumentType

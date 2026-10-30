@@ -8,14 +8,16 @@ from app.application.policy.declarations.compiler import compile_admission_polic
 from app.application.worldData.generators.hydrology.policy.hydrologyPolicyFacts import collect_hydrology_policy_facts
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
+from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.hydrology.placement.placementFields import WaterCategoryPlacementFields, WaterSourcePlacementFields
-from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
 from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import (
     BOUNDARY_PURPOSE, HYDROLOGY_PLACEMENT_POLICY, HydrologyPlacementBehaviorInputs,
     HydrologyPlacementCase, HydrologyPlacementGateInputs, HydrologyPolicyFacts,
     HydrologyPolicySnapshot, WaterPlacementPolicySource,
+    HydrologyProceduralGenerationInputs, PROCEDURAL_GENERATION_CASES,
 )
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 from app.dataModel.hydrology.sources.waterDesignSource import (
@@ -25,12 +27,14 @@ from app.dataModel.identity.uid import EntityUid
 from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration
 from app.dataModel.policy.objectAdmissionPolicyDefinition import PlacementPolicyDefaults
 from app.dataModel.policy.policyBindings import PolicyFacts, PolicyInputs, PolicySource, SourcePath
-from app.dataModel.policy.policyRules import RequireSupportEffect
+from app.dataModel.policy.policyRules import DisableEffect, RequireSupportEffect
 from app.dataModel.policy.policySpec import ObjectAdmissionPolicySpec
+from app.dataModel.policy.policyEnums import PolicyStage, PolicyState
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
 _SOURCE = TypeAdapter[WaterPlacementPolicySource](WaterPlacementPolicySource)
 _UID = TypeAdapter(EntityUid)
+_GENERATION = TypeAdapter[HydrologyGenerationDecision](HydrologyGenerationDecision)
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,7 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
     behavior: HydrologyPlacementBehaviorInputs,
     snapshot: HydrologyPolicySnapshot[H],
     *, source_path: SourcePath, category_path: SourcePath,
+    generation: HydrologyGenerationDecision | None = None,
 ) -> HydrologyPlacementBinding:
     if not isinstance(source, (DeclaredCoastline, AuthoredBasinSource, AuthoredLakeSource,
                                CoastlineWaterSource, ProceduralSource)):
@@ -70,9 +75,30 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
         raise ValueError("water category owner does not match the source")
     value = source if isinstance(source, DeclaredCoastline) else source.value
     policy = HYDROLOGY_PLACEMENT_POLICY
+    generation_sources: tuple[PolicySource, ...] = ()
+    if generation is not None:
+        if not isinstance(source, ProceduralSource):
+            raise ValueError("computed procedural generation requires a native procedural source")
+        resolved_generation = _GENERATION.validate_python(generation, strict=True)
+        if resolved_generation.state not in (PolicyState.READY, PolicyState.DISABLED) or resolved_generation.issues:
+            raise ValueError("procedural admission requires a terminal generation behavior without fallback")
+        execution_mode = resolved_generation.require_behavior()
+        if (resolved_generation.state is PolicyState.DISABLED) != (execution_mode is HydrologyExecutionMode.DISABLED):
+            raise ValueError("procedural generation state must agree with its execution mode")
+        mode = HydrologyProceduralGenerationInputs(execution_mode=execution_mode)
+        generation_sources = (PolicySource(HydrologyProceduralGenerationInputs, mode,
+            (*source_path, "resolved_generation")),)
     spec = compile_admission_policy(policy, (
         WaterSourcePlacementFields, WaterCategoryPlacementFields, PlacementPolicyDefaults,
         HydrologyPlacementGateInputs, HydrologyPlacementBehaviorInputs, HydrologyPolicyFacts))
+    if generation is not None:
+        # Keep field metadata attached to the original descriptor, as for the
+        # separately bound target-support cases below.
+        mode_spec = compile_admission_policy(replace(policy, cases=PROCEDURAL_GENERATION_CASES), (
+            WaterSourcePlacementFields, WaterCategoryPlacementFields, PlacementPolicyDefaults,
+            HydrologyProceduralGenerationInputs))
+        spec = replace(spec, rules=(*spec.rules, *(rule for rule in mode_spec.rules
+            if isinstance(rule.effect, DisableEffect) and rule.stage is PolicyStage.ABSOLUTE_GATE)))
     if isinstance(value, DeclaredCoastline) and value.target_source_uid is not None:
         # Structural target binding only: the generic support stage decides its state.
         # Attached field metadata retains its descriptor identity. Compile the bound
@@ -91,7 +117,8 @@ def bind_hydrology_placement_policy[H: HydrologyPlan](
             WaterCategoryPlacementFields(placement_specificity=category.placement_specificity), category_path),
         PolicySource(PlacementPolicyDefaults, PlacementPolicyDefaults.canonical_defaults(), ("placement_defaults",)),
         PolicySource(HydrologyPlacementGateInputs, gates, ("hydrology", "placement_gates")),
-        PolicySource(HydrologyPlacementBehaviorInputs, behavior, ("hydrology", "resolved_generation"))))
+        PolicySource(HydrologyPlacementBehaviorInputs, behavior, ("hydrology", "resolved_generation")),
+        *generation_sources))
     facts = PolicyFacts(models=(PolicySource(HydrologyPolicyFacts, observations, ("hydrology", "facts")),),
                         supports=snapshot.supports)
     return HydrologyPlacementBinding(spec=spec, inputs=inputs, facts=facts)

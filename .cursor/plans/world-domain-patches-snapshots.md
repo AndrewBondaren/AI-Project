@@ -2024,10 +2024,16 @@ Container и DAG не добавлялись; backend не запускался,
 
 ### 8.8. Реализация 4B2 — shared encoding (2026-10-30)
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**. По §8.3: общий content_digest и делегирование TileCodec, три core manifests, PatchSetCodec (tuple projection) и SnapshotEnvelopeCodec; section registry проверяет collisions до dispatch, domain codec валидирует canonical bytes по своему immutable format manifest до read-upgrade. IDs — 56 из карты + existing shared Facing=110, без смены владельца.
+Статус: **ПРИНЯТО мастером 2026-10-30 («Далее»); переход к 4B3 разрешён**. По §8.3: общий content_digest и делегирование TileCodec, три core manifests, PatchSetCodec (tuple projection) и SnapshotEnvelopeCodec; section registry проверяет collisions до dispatch, domain codec валидирует canonical bytes по своему immutable format manifest до read-upgrade. IDs — 56 из карты + existing shared Facing=110, без смены владельца.
 Проверки через backend/.venv/Scripts/python.exe: contracts — **53 PASS**; tests/planning/encoding — **7 PASS**; tests.test_deterministic_ids (включая DET-1 source gate) — **19 PASS**. Existing Pyright: positive 0 diagnostics, negative ровно **36** ожидаемых diagnostics.
 Golden полных bytes/SHA-256, concrete round-trip, порядок секций/players, malformed/unsupported formats, manifest collisions и сохранение binding исходных bytes при read-upgrade из исторической схемы с другим набором полей — PASS; scoped diff/whitespace — PASS. Изменения TileCodec сохраняют hash прежних bytes.
 SQL, services, emitters, Container и DAG не менялись; backend не запускался, commit не создавался. Чужие изменения сохранены. **Остановка перед 4B3**.
+
+### 8.9. Реализация 4B3 — application emitters (2026-10-30)
+
+Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К РЕВЬЮ ПОДШАГА**. SnapshotLifecycleLog и ArtifactLifecycleLog по §8.3 принимают только typed DTO; один вызов — один aggregate event в app.snapshot/app.artifacts, уровни через общий LogLevel, request_id добавляет общий formatter. Нет local handlers/files, domain WarningError re-emit или хранения истории операций; delivery failure не вызывает повторную эмиссию и не меняет outcome.
+Проверки через backend/.venv/Scripts/python.exe: contracts — **59 PASS** (включая existing Pyright: positive 0, negative **39** ожидаемых diagnostics); tests.test_logging_routes — **15 PASS** с tempfile.tempdir внутри workspace (default sandbox Temp давал WinError 5). Уровни всех activity, correlation, typed/frozen revalidation, recovery/unknown без нового commit event, отсутствие IO/handlers и logging failure — PASS; git diff --check — PASS.
+Реальный COMMIT/retry gating принадлежит будущим services; routes/allowlist общего facade остаются в 4E2. SQL, services, Container и DAG не менялись; backend не запускался, commit не создавался. Все правки внесены через apply_patch. **Остановка перед 4C1**.
 
 ## 9. Норматив и совместимость
 

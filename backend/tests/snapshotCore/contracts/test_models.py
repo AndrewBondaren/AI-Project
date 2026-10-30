@@ -1,8 +1,11 @@
 """Core 4A1–4A3: DTO invariants, strict validation, immutability and boundaries."""
 
 import ast
+import json
+import logging
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
@@ -53,6 +56,9 @@ from app.dataModel.artifacts.lifecycle.holders import (
     OperationHolder, ArtifactRetentionHolder, SnapshotHolder, ArtifactHolderRef, VerifiedArtifactRef,
 )
 from app.dataModel.artifacts.lifecycle.gc import GcReport, ArtifactStorageEventKind
+from app.application.worldSnapshot.logging.snapshotLog import SnapshotLifecycleLog
+from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
+from app.core.loggingConfig import JsonLogFormatter, request_id_var
 
 class CoreModelTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -670,6 +676,132 @@ class CoreModelTests(unittest.TestCase):
                 TypeAdapter(enum).validate_json('"unknown"')
             for value in enum:
                 self.assertIs(TypeAdapter(enum).validate_json('"' + value.value + '"'), value)
+
+
+    def test_snapshot_emitter_activity_levels_and_common_facade_correlation(self) -> None:
+        outcomes = {
+            SnapshotLogActivity.APPLY_COMMITTED: SnapshotApplyOutcomeKind.COMMITTED,
+            SnapshotLogActivity.APPLY_CONFLICT: SnapshotApplyOutcomeKind.CONFLICT,
+            SnapshotLogActivity.APPLY_REJECTED: SnapshotApplyOutcomeKind.REJECTED,
+        }
+        levels = {
+            SnapshotLogActivity.APPLY_STARTED: logging.DEBUG,
+            SnapshotLogActivity.APPLY_COMMITTED: logging.INFO,
+            SnapshotLogActivity.APPLY_CONFLICT: logging.WARNING,
+            SnapshotLogActivity.APPLY_REJECTED: logging.WARNING,
+            SnapshotLogActivity.APPLY_FAILED: logging.ERROR,
+            SnapshotLogActivity.APPLY_OUTCOME_UNKNOWN: logging.ERROR,
+            SnapshotLogActivity.OPERATION_BUSY: logging.DEBUG,
+            SnapshotLogActivity.OPERATION_RECOVERED: logging.INFO,
+        }
+        token = request_id_var.set("request-correlation")
+        try:
+            for activity in SnapshotLogActivity:
+                event = SnapshotLogRecord(activity=activity, operation_id="op", world_uid="world",
+                    request_fingerprint="a" * 64, timeline_id="main", snapshot_id="tick",
+                    section_key=self.section_key, outcome=outcomes.get(activity))
+                with self.subTest(activity=activity), self.assertLogs("app.snapshot", level="DEBUG") as captured:
+                    SnapshotLifecycleLog().emit(event)
+                self.assertEqual(len(captured.records), 1)
+                record = captured.records[0]
+                self.assertEqual(record.name, "app.snapshot")
+                self.assertEqual(record.levelno, levels[activity])
+                fields = json.loads(JsonLogFormatter().format(record))
+                self.assertEqual(fields["request_id"], "request-correlation")
+                for name, value in event.model_dump(mode="json").items():
+                    self.assertEqual(fields[name], value)
+                self.assertNotIn("request_id", event.model_dump())
+                self.assertNotIn("diagnostics", fields)
+                self.assertNotIn("payload", fields)
+        finally:
+            request_id_var.reset(token)
+
+    def test_artifact_emitter_levels_context_and_global_gc_absence(self) -> None:
+        levels = {ArtifactLogActivity.ARTIFACT_SEALED: logging.DEBUG,
+                  ArtifactLogActivity.LEASE_RELEASED: logging.INFO,
+                  ArtifactLogActivity.GC_DELETED: logging.INFO,
+                  ArtifactLogActivity.GC_FAILED: logging.ERROR}
+        for activity in ArtifactLogActivity:
+            event = ArtifactLogRecord(activity=activity, operation_id="maintenance", world_uid=None,
+                preparation_fingerprint="b" * 64, request_fingerprint=None, artifact_hash="a" * 64)
+            with self.subTest(activity=activity), self.assertLogs("app.artifacts", level="DEBUG") as captured:
+                ArtifactLifecycleLog().emit(event)
+            self.assertEqual(len(captured.records), 1)
+            record = captured.records[0]
+            self.assertEqual(record.levelno, levels[activity])
+            fields = json.loads(JsonLogFormatter().format(record))
+            self.assertIsNone(fields["world_uid"])
+            self.assertIsNone(fields["request_fingerprint"])
+            for name, value in event.model_dump(mode="json").items():
+                self.assertEqual(fields[name], value)
+
+    def test_terminal_retry_event_and_unknown_outcome_never_add_a_commit_event(self) -> None:
+        values = dict(operation_id="op", world_uid="world", request_fingerprint="a" * 64,
+                      timeline_id=None, snapshot_id=None, section_key=None)
+        emitter = SnapshotLifecycleLog()
+        with self.assertLogs("app.snapshot", level="DEBUG") as captured:
+            emitter.emit(SnapshotLogRecord(activity=SnapshotLogActivity.OPERATION_RECOVERED,
+                outcome=SnapshotApplyOutcomeKind.COMMITTED, **values))
+            emitter.emit(SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_OUTCOME_UNKNOWN,
+                outcome=None, **values))
+        self.assertEqual([record.activity for record in captured.records],
+                         ["operation_recovered", "apply_outcome_unknown"])
+        self.assertEqual([record.outcome for record in captured.records], ["committed", None])
+        invalid = SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_STARTED, outcome=None, **values)
+        invalid = invalid.model_copy(update={"activity": SnapshotLogActivity.APPLY_COMMITTED})
+        with patch("app.application.worldSnapshot.logging.snapshotLog._LOGGER.log") as log:
+            with self.assertRaises(ValidationError):
+                emitter.emit(invalid)
+            log.assert_not_called()
+
+    def test_logging_delivery_failure_is_not_reemitted_and_preserves_typed_outcomes(self) -> None:
+        event = SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_COMMITTED, operation_id="op", world_uid="world",
+            request_fingerprint="a" * 64, timeline_id=None, snapshot_id=None, section_key=None,
+            outcome=SnapshotApplyOutcomeKind.COMMITTED)
+        artifact = ArtifactLogRecord(activity=ArtifactLogActivity.ARTIFACT_SEALED, operation_id="op", world_uid="world",
+            preparation_fingerprint="b" * 64, request_fingerprint=None, artifact_hash="a" * 64)
+        for emitter, record, target in (
+            (SnapshotLifecycleLog(), event, "app.application.worldSnapshot.logging.snapshotLog._LOGGER.log"),
+            (ArtifactLifecycleLog(), artifact, "app.application.artifacts.logging.artifactLog._LOGGER.log"),
+        ):
+            before = record.model_dump()
+            with patch(target, side_effect=RuntimeError("sink unavailable")) as log:
+                emitter.emit(record)
+                log.assert_called_once()
+            self.assertEqual(record.model_dump(), before)
+
+    def test_emitters_reject_wrong_models_and_untyped_payloads_before_logging(self) -> None:
+        event = SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_STARTED, operation_id="op", world_uid="world",
+            request_fingerprint=None, timeline_id=None, snapshot_id=None, section_key=None, outcome=None)
+        artifact = ArtifactLogRecord(activity=ArtifactLogActivity.GC_FAILED, operation_id="maintenance", world_uid=None,
+            preparation_fingerprint=None, request_fingerprint=None, artifact_hash=None)
+        for emitter, wrong, target in (
+            (SnapshotLifecycleLog(), artifact, "app.application.worldSnapshot.logging.snapshotLog._LOGGER.log"),
+            (SnapshotLifecycleLog(), event.model_dump(), "app.application.worldSnapshot.logging.snapshotLog._LOGGER.log"),
+            (ArtifactLifecycleLog(), event, "app.application.artifacts.logging.artifactLog._LOGGER.log"),
+            (ArtifactLifecycleLog(), artifact.model_dump(), "app.application.artifacts.logging.artifactLog._LOGGER.log"),
+        ):
+            with patch(target) as log:
+                with self.assertRaises(TypeError):
+                    emitter.emit(wrong)
+                log.assert_not_called()
+
+    def test_emitters_install_no_handlers_and_have_no_storage_or_lifecycle_state(self) -> None:
+        for logger_name, emitter_type in (("app.snapshot", SnapshotLifecycleLog), ("app.artifacts", ArtifactLifecycleLog)):
+            logger = logging.getLogger(logger_name)
+            handlers = tuple(logger.handlers)
+            emitter = emitter_type()
+            self.assertEqual(tuple(logger.handlers), handlers)
+            self.assertFalse(hasattr(emitter, "__dict__"))
+        source_root = Path(__file__).resolve().parents[3] / "app" / "application"
+        for relative in ("worldSnapshot/logging/snapshotLog.py", "artifacts/logging/artifactLog.py"):
+            tree = ast.parse((source_root / relative).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    name = (node.func.attr if isinstance(node.func, ast.Attribute) else
+                            node.func.id if isinstance(node.func, ast.Name) else None)
+                    self.assertNotIn(name, ("addHandler", "basicConfig", "FileHandler", "StreamHandler",
+                                           "open", "commit", "apply", "write_text", "emit_warning"))
 
 
 if __name__ == "__main__":

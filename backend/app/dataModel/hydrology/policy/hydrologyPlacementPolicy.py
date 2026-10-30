@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool, model_validator
 from app.dataModel.cascade.cascadeSpec import FieldRef
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose, DeclaredCoastline
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
+from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.placement.placementFields import WaterCategoryPlacementFields, WaterSourcePlacementFields
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
@@ -79,6 +80,28 @@ class HydrologyPlacementPolicy(PolicyOwner):
 class HydrologyPlacementCase(StrEnum):
     TARGET_SUPPORT = "target_support"
     DRY_BOUNDARY = "dry_boundary"
+    PROCEDURAL_DISABLED = "procedural_disabled"
+    PROCEDURAL_DECLARED_ONLY = "procedural_declared_only"
+
+
+class HydrologyProceduralGenerationInputs(BaseModel, frozen=True):
+    """Computed generation behavior for native procedural source admission."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
+    execution_mode: HydrologyExecutionMode
+
+
+PROCEDURAL_GENERATION_CASES = (
+    PolicyCaseDeclaration(key=HydrologyPlacementCase.PROCEDURAL_DISABLED,
+        conditions=(Equal(DirectValueRef(FieldRef(lambda: HydrologyProceduralGenerationInputs,
+            lambda inputs: inputs.execution_mode)), HydrologyExecutionMode.DISABLED),),
+        effect=DisableEffect(PolicyDisableReason.ENABLED_FALSE), stage=PolicyStage.ABSOLUTE_GATE),
+    PolicyCaseDeclaration(key=HydrologyPlacementCase.PROCEDURAL_DECLARED_ONLY,
+        conditions=(Equal(DirectValueRef(FieldRef(lambda: HydrologyProceduralGenerationInputs,
+            lambda inputs: inputs.execution_mode)), HydrologyExecutionMode.DECLARED_ONLY),),
+        effect=DisableEffect(PolicyDisableReason.DOMAIN_RULE), reason=WaterPolicyReason.DECLARED_ONLY,
+        stage=PolicyStage.ABSOLUTE_GATE),
+)
 
 
 BOUNDARY_PURPOSE = Equal(DirectValueRef(FieldRef(

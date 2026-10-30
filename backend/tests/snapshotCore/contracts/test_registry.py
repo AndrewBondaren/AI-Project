@@ -237,6 +237,11 @@ class SectionRegistryTests(unittest.TestCase):
                     imports = ([node.module or ""] if isinstance(node, ast.ImportFrom) else
                                [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
                     for name in imports:
+                        emitter = source.relative_to(root).as_posix() in {
+                            "worldSnapshot/logging/snapshotLog.py", "artifacts/logging/artifactLog.py",
+                        }
+                        if emitter and name in ("logging", "app.core.logLevel"):
+                            continue
                         self.assertFalse(any(name == prefix or name.startswith(prefix + ".")
                             for prefix in ("app.db", "app.core", "app.storage", "sqlite3", "aiosqlite", "logging")), source)
                         self.assertNotIn(".service.", name, source)

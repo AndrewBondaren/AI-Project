@@ -11699,6 +11699,40 @@ unchanged; scoped diff check clean. Full planning292 не перепроверя
 captured geometry/input production; zero-target admission и G8-B records,
 capture/registration/production cutover остаются атомарным G10-A, OPEN.
 
+### G10-A native procedural source producer — IMPLEMENTED / VERIFIED (2026-10-30)
+
+J01–J07, TZ tz_terrain_generation GEO-1 planning / plan §6.16, §6.29-A/E/M.
+Application terrain source orchestration: new preparation/proceduralDesignPreparation.py
+prepare_procedural_designed_water(inputs:GeoWaterPlacementInput,batch:PlacementBatchV2,
+*,water_intents,pre_hydrology,regions,seed_root,prepare_competitor,strategies,control,
+reevaluate_support=None) returns the existing common runner tuple.
+Accept only existing ProceduralSource owners, explicit source/intents and frozen
+terrain/regions, no implicit ocean or authored settings projection. Resolve WORLD
+and independent CATEGORY→WATER_BODY through existing cascade/binder; execute common
+generation/admission policies, produce BodyCoverageRequests from ready native
+source context and terrain extent, then delegate prepare_designed_water once.
+Ready callback constructs metadata/recipe/common input through existing owners;
+disabled sources never reach metadata/field/geometry. Compete in the same P2 batch.
+Hydrology owns computed-mode admission declarations in existing
+dataModel/hydrology/policy/hydrologyPlacementPolicy.py: HydrologyProceduralGenerationInputs
+and procedural DISABLED/DECLARED_ONLY cases at ABSOLUTE_GATE. Existing application
+hydrologyPlacementBinding.py accepts optional generation decision only for native
+ProceduralSource, compiling these declarations with the same compiler/resolver.
+No application-local auto gate, new water transport, compatibility bridge, schema/
+default change, floor writer or registration. Authored source owner migration and
+complete GEO entry remain atomic G10-A; this is the native source producer.
+Files/tests: new geo1/integration/test_procedural_preparation.py plus existing
+planning positive/negative fixtures. WARN preparation7→8, integration5→6; policy
+folders4→4. Validate three strategies, category/body overrides/provenance, zero/
+False/None, common disable before geometry, regions/competition/dependencies,
+frozen replay. Evidence: GEO-1 711 OK (+15), planning providers129 OK;
+positive pyright0; negative258 (+2), все255 EXPECT покрыты, baseline surplus
+unchanged; scoped diff/new-file whitespace clean. Existing owning priority
+defaults remain unchanged; full planning292 consumer evidence is not renewed.
+Next: authored owning schemas/body channels and mixed-source producer,
+then G8-B records/capture/registration/production activation in atomic G10-A.
+Zero-target admission remains open; production G10-A stays OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

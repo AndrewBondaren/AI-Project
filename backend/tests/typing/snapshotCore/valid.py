@@ -170,3 +170,13 @@ def typed_patch_codec(codec: PatchSetCodec[FakeSection], request: PatchSet[FakeS
 def typed_snapshot_codec(world: WorldSnapshotMetadata, player: PlayerSnapshotMetadata) -> tuple[bytes, bytes]:
     codec = SnapshotEnvelopeCodec()
     return codec.encode(world), codec.encode(player)
+
+
+from app.application.worldSnapshot.logging.snapshotLog import SnapshotLifecycleLog
+from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
+from app.dataModel.artifacts.events import ArtifactLogRecord
+
+
+def typed_lifecycle_emitters(snapshot: SnapshotLogRecord, artifact: ArtifactLogRecord) -> None:
+    SnapshotLifecycleLog().emit(snapshot)
+    ArtifactLifecycleLog().emit(artifact)

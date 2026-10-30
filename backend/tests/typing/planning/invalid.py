@@ -1019,3 +1019,19 @@ def invalid_water_budget_callback(batch: PlacementBatchV2, terrain: PlanEnvelope
         regions=regions, world_context=world_context, coverage_requests=(),
         authored_geometry=(budget,),  # EXPECT: reportArgumentType
         strategies=DesignedWaterStrategyFactory.builtins(), selection_policy=WaterFieldSelectionPolicy(), control=control)
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.proceduralDesignPreparation import prepare_procedural_designed_water
+
+
+def invalid_native_source_producer(legacy: WaterPlacementInput, batch: PlacementBatchV2,
+    terrain: PlanEnvelope[TerrainPlan], regions: TerrainRegionPlan,
+    competitor: Callable[[PlacementAdmissionInput], PreparedPlacementV2], control: PlanBuildControl,
+    source: ProceduralSource, snapshot: HydrologyPolicySnapshot, decision: WaterDesignDecision) -> None:
+    prepare_procedural_designed_water(legacy, batch, water_intents=(),  # EXPECT: reportArgumentType
+        pre_hydrology=terrain, regions=regions, seed_root="seed", prepare_competitor=competitor,
+        strategies=DesignedWaterStrategyFactory.builtins(), control=control)
+    bind_hydrology_placement_policy(source, HydrologySeasPolicy(),
+        HydrologyPlacementGateInputs(world_enabled=True, category_enabled=True),
+        HydrologyPlacementBehaviorInputs(strategy=DesignedWaterStrategyKind.PLATE), snapshot,
+        source_path=(), category_path=(), generation=decision)  # EXPECT: reportArgumentType
