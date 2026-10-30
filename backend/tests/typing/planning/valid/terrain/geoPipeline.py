@@ -189,3 +189,15 @@ def procedural_source_join(adapter: ProceduralWaterSourceAdapter, shared: WaterD
     generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, recipe: WaterFieldRecipe, z_min: FineZ) -> None:
     result = adapter.prepare_source(shared, generation=generation, admission=admission, field_policy=recipe, z_min=z_min)
     assert_type(result.source, ProceduralSource)
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.authoredWaterSourceAdapter import AuthoredWaterSourceAdapter
+from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, AuthoredLakeSource
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
+from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput
+
+
+def authored_source_join(adapter: AuthoredWaterSourceAdapter, shared: WaterDesignInput[AuthoredBasinSource],
+    generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, geometry: AuthoredWaterGeometry) -> None:
+    result = adapter.prepare_source(shared, generation=generation, admission=admission, geometry=geometry)
+    assert_type(result, AuthoredWaterDesignInput[AuthoredBasinSource | AuthoredLakeSource])

@@ -246,3 +246,124 @@ class ProceduralSourceJoinTests(TestCase):
             self.join(inputs(Strategy.AUTHORED_REGION), **values)
         with self.assertRaises(PlanBuildFailure):
             self.join(shared.model_copy(update={"metadata": shared.metadata.model_copy(update={"source_uid": "other"})}), **values)
+
+
+class AuthoredSourceJoinTests(TestCase):
+    def case(self, *, lake=False, auto=False, enabled=True, admitted=True):
+        from app.application.worldData.placement.adapters import water
+        from app.application.worldData.generators.hydrology.sources.waterSourceMetadataFactory import WaterSourceMetadataFactory
+        from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
+        from app.application.policy.policyResolver import PolicyResolver
+        from app.dataModel.cascade.runtimeContext import freeze_resolved_context
+        from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
+        from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings, CategoryWaterGenerationSettings, BodyWaterGenerationSettings
+        from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
+        from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, AuthoredLakeSource
+        from app.dataModel.hydrology.declaredLake import DeclaredLake
+        from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+        from app.dataModel.terrain.designedWater.input import WaterDesignInput
+        from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
+        from app.dataModel.placement.lifecycle.header import PlacementHeader
+        from app.dataModel.placement.intent import PlacementIdentity
+        from app.dataModel.placement.common import PlacementMode
+        from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+        from tests.geo1.authored.fixtures import request, design_input
+        from tests.geo1.authored.test_geometry import ring
+        from tests.geo1.placement_policy.fixtures import bind, execute
+        source = AuthoredLakeSource(value=DeclaredLake(location_uid="lake", shoreline=ring())) if lake else None
+        req = request(source)
+        geometry = water.prepare_authored_water_geometry(req)
+        lakes = HydrologyLakesPolicy(placement_specificity=3)
+        metadata = WaterSourceMetadataFactory().build(req.source, default_water_level=0,
+            seas=req.seas, lakes=lakes, rim_level=geometry.rim_level, source_path=("sources", req.source.value.location_uid))
+        ready = design_input(req, geometry)
+        binding = bind_hydrology_generation_policy(enabled=enabled,
+            generation=WorldWaterGenerationSettings(autoresolve=auto, strategy=Strategy.AUTHORED_REGION),
+            defaults=WaterGenerationDefaults(), category=CategoryWaterGenerationSettings(), body=BodyWaterGenerationSettings(),
+            root_path=("hydrology",), context_path=("resolved",))
+        generation = PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts, mode=ResolutionMode.RUNTIME)
+        values = {name: getattr(ready, name) for name in WaterDesignInput.model_fields}
+        values.update(context=freeze_resolved_context(binding.context, ResolvedWaterGenerationContext), metadata=metadata)
+        shared = WaterDesignInput[AuthoredBasinSource | AuthoredLakeSource](**values)
+        category = lakes if lake else req.seas.model_copy(update={"placement_specificity": 3})
+        admission = PlacementAdmissionInput(header=PlacementHeader(identity=PlacementIdentity(world_uid="world",
+            source_uid=metadata.source_uid, region_uid="placement-region"), mode=PlacementMode.ABSOLUTE,
+            dependencies=(), permitted_overlaps=(), separations=()),
+            decision=execute(bind(source=req.source, category=category, enabled=admitted, strategy=Strategy.AUTHORED_REGION)))
+        return shared, dict(generation=generation, admission=admission, geometry=geometry)
+
+    def join(self, shared, **kwargs):
+        from app.application.worldData.generators.terrain.designedWater.preparation.authoredWaterSourceAdapter import AuthoredWaterSourceAdapter
+        return AuthoredWaterSourceAdapter().prepare_source(shared, **kwargs)
+
+    def test_real_geometry_metadata_and_ready_policy_feed_authored_pipeline_once(self):
+        from unittest.mock import patch
+        from app.application.worldData.placement.adapters import water
+        from app.application.worldData.generators.terrain.designedWater.preparation.placementPreparation import DesignedWaterPlacementPreparer
+        from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
+        for lake in (False, True):
+            with self.subTest(lake=lake), patch.object(water, "prepare_authored_water_geometry",
+                    wraps=water.prepare_authored_water_geometry) as geometry:
+                shared, kwargs = self.case(lake=lake)
+                before = shared.model_dump()
+                value = self.join(shared, **kwargs)
+                draft = DesignedWaterStrategyFactory.builtins().get(value.strategy).design(value)
+                result = DesignedWaterPlacementPreparer().prepare(value, draft, selection_policy=WaterFieldSelectionPolicy())
+                geometry.assert_called_once()
+                self.assertEqual(value.geometry, kwargs["geometry"])
+                self.assertEqual(result.metadata, shared.metadata)
+                self.assertEqual(result.pre_hydrology_ref, shared.pre_hydrology_ref)
+                self.assertEqual(shared.model_dump(), before)
+                if lake:
+                    self.assertEqual(result.metadata.level, kwargs["geometry"].rim_level)
+                    self.assertEqual(result.floor_z, result.metadata.level-result.metadata.default_depth)
+                else:
+                    self.assertEqual(result.floor_z, shared.source.value.floor_z)
+
+    def test_complete_authored_geometry_remains_authored_when_autoresolve_is_active(self):
+        shared, kwargs = self.case(auto=True)
+        result = self.join(shared, **kwargs)
+        self.assertIs(result.strategy, Strategy.AUTHORED_REGION)
+        self.assertTrue(result.context.autoresolve)
+        self.assertEqual(result.geometry, kwargs["geometry"])
+
+    def test_disabled_generation_and_admission_are_not_replaced_with_ready_inputs(self):
+        for kwargs in ({"enabled": False}, {"admitted": False}):
+            shared, values = self.case(**kwargs)
+            with self.subTest(kwargs=kwargs), self.assertRaises(PlanBuildFailure):
+                self.join(shared, **values)
+
+    def test_stale_geometry_wrong_source_and_lake_rim_level_are_rejected(self):
+        shared, values = self.case(lake=True)
+        geometry = values["geometry"]
+        bad = (geometry.model_copy(update={"source_uid": "other"}),
+            geometry.model_copy(update={"pre_hydrology_ref": geometry.pre_hydrology_ref.model_copy(
+                update={"output_fingerprint": b"x"*32})}), geometry.model_copy(update={"z_min": True}))
+        for value in bad:
+            with self.subTest(value=value), self.assertRaises(PlanBuildFailure):
+                self.join(shared, **(values | {"geometry": value}))
+        with self.assertRaises(PlanBuildFailure):
+            self.join(shared.model_copy(update={"metadata": shared.metadata.model_copy(
+                update={"level": shared.metadata.level+1})}), **values)
+
+    def test_foreign_or_semantic_admission_and_self_support_are_rejected(self):
+        from app.dataModel.placement.common import PlacementMode, DependencyRelation
+        from app.dataModel.placement.intent import PlacementDependency
+        shared, values = self.case()
+        admission = values["admission"]
+        header = admission.header
+        wrong = (header.model_copy(update={"identity": header.identity.model_copy(update={"world_uid": "other"})}),
+            header.model_copy(update={"identity": header.identity.model_copy(update={"source_uid": "other"})}),
+            header.model_copy(update={"mode": PlacementMode.SEMANTIC}),
+            header.model_copy(update={"dependencies": (PlacementDependency(target_uid=header.identity.region_uid,
+                relation=DependencyRelation.RESOLVED),)}))
+        for value in wrong:
+            with self.subTest(value=value), self.assertRaises(PlanBuildFailure):
+                self.join(shared, **(values | {"admission": admission.model_copy(update={"header": value})}))
+
+    def test_procedural_source_and_context_decision_mismatch_are_rejected(self):
+        shared, values = self.case()
+        with self.assertRaises(PlanBuildFailure):
+            self.join(inputs(Strategy.PLATE), **values)
+        with self.assertRaises(PlanBuildFailure):
+            self.join(shared.model_copy(update={"context": shared.context.model_copy(update={"autoresolve": True})}), **values)

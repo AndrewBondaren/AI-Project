@@ -11448,6 +11448,38 @@ Evidence: GEO-1 628 OK (+6), planning 292 OK; positive pyright 0;
 negative 246 diagnostics (+1), all 243 expected annotations covered, baseline
 surplus unchanged. git diff --check clean. G8-B / production G10-A remain OPEN.
 
+### G10-A authored basin/lake input join — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: bind ready basin/lake source evidence to existing AuthoredWaterDesignInput,
+completing the non-coastline authored join without a new placement transport.
+TZ: docs/tz_terrain_generation.md GEO-1 authored sources; plan §6.16 J03/J05/J06
+and G8 one geometry result → lake metadata → strategy input ordering.
+Owner/layer/path: application terrain input preparation. NEW exact file
+backend/app/application/worldData/generators/terrain/designedWater/preparation/authoredWaterSourceAdapter.py:
+AuthoredWaterSourceAdapter.prepare_source(input:WaterDesignInput[AuthoredBasinSource|
+AuthoredLakeSource],*,generation:HydrologyGenerationDecision,
+admission:PlacementAdmissionInput,geometry:AuthoredWaterGeometry)
+->AuthoredWaterDesignInput[AuthoredBasinSource|AuthoredLakeSource].
+Require READY admission/generation, AUTHORED_REGION strategy agreement and active
+generation/context autoresolve consistency, exact header source/world/absolute
+mode and no self-support. Existing concrete input validation owns geometry ref,
+source identity, coordinate space and lake rim/metadata-level agreement.
+The caller supplies the already computed geometry and metadata; this adapter
+never rasterizes, resolves rim/level/depth, executes policy, budgets, P2 or writes
+heights. Coastline sources retain their existing dedicated adapter. No new wire
+model, enum, source default or silent disabled/unresolved conversion.
+Tests: existing geo1/contracts/strategies/test_dispatch_budget.py and positive/
+negative planning typing fixtures. Real geometry/metadata factory/common policy
+pipeline for basin/lake, exactly one geometry calculation, built-in authored
+strategy/common preparer, stale/foreign evidence, disabled decisions, strict
+source separation and immutable inputs. Preparation folder 5→6 (WARN in chat,
+future composition by source adapters versus field preparation); no other files
+added, contract test folder 5→5. Run GEO-1/planning/type suites and diff check.
+Done: isolated basin/lake join verified; G8-B universe / production G10-A open.
+Evidence: GEO-1 634 OK (+6), planning 292 OK; positive pyright 0;
+negative 247 diagnostics (+1), all 244 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. G8-B / production G10-A remain OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

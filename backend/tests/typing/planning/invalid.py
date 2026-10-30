@@ -920,3 +920,12 @@ from app.dataModel.terrain.designedWater.fields.field import WaterFieldRecipe
 def invalid_procedural_source_join(adapter: ProceduralWaterSourceAdapter, shared: WaterDesignInput[CoastlineWaterSource],
     generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, recipe: WaterFieldRecipe, z_min: FineZ) -> None:
     adapter.prepare_source(shared, generation=generation, admission=admission, field_policy=recipe, z_min=z_min)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.authoredWaterSourceAdapter import AuthoredWaterSourceAdapter
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry
+
+
+def invalid_authored_source_join(adapter: AuthoredWaterSourceAdapter, shared: WaterDesignInput[CoastlineWaterSource],
+    generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, geometry: AuthoredWaterGeometry) -> None:
+    adapter.prepare_source(shared, generation=generation, admission=admission, geometry=geometry)  # EXPECT: reportArgumentType
