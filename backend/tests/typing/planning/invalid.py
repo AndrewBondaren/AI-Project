@@ -909,3 +909,14 @@ from app.application.worldData.generators.terrain.regions.regionExtent import Te
 def invalid_region_provider_request(provider: TerrainRegionPlanProvider, request: PlanRequest[GeoWaterPlacementInput],
     dependencies: PlanDependencyReader, control: PlanBuildControl) -> None:
     provider.build(request, dependencies, control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.proceduralWaterSourceAdapter import ProceduralWaterSourceAdapter
+from app.dataModel.terrain.designedWater.input import WaterDesignInput
+from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource
+from app.dataModel.terrain.designedWater.fields.field import WaterFieldRecipe
+
+
+def invalid_procedural_source_join(adapter: ProceduralWaterSourceAdapter, shared: WaterDesignInput[CoastlineWaterSource],
+    generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, recipe: WaterFieldRecipe, z_min: FineZ) -> None:
+    adapter.prepare_source(shared, generation=generation, admission=admission, field_policy=recipe, z_min=z_min)  # EXPECT: reportArgumentType

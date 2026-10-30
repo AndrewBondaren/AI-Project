@@ -831,6 +831,20 @@ world_snapshots
   snapshot_checksum      — SHA256(snapshot_data); проверяется при загрузке
 ```
 
+**Target core contract (2026-10-30, проект freeze шага 2):** поле
+snapshot_data выше не означает полный слепок мира или capture после
+доменной записи. Target — versioned envelope со ссылкой на immutable
+base pack, domain state/history sections и artifact refs; единственный
+runtime write entry — Snapshot.apply(PatchSet). Точные контракты —
+[`tz_world_snapshot.md` § «Контракты ядра Snapshot»](./tz_world_snapshot.md#контракты-ядра-snapshot--freeze-шага-2-2026-10-30).
+Existing 0001_initial.sql пока содержит legacy world_snapshots, без полного
+CAS/operation/holder контракта; player_snapshots ниже — target design,
+не свидетельство существования таблицы в текущем DDL. Изменения DDL и
+db/models выполняются после implementation map, только в 0001_initial.sql.
+Bulk delete/prune ниже не разрешает удалить удерживаемую snapshot/pack/
+source историю: retention/holder checks обязательны, удаление не является
+доменным delete или откатом состояния.
+
 **Дерево снапшотов:**
 ```
 snap_1 (turn 1, main,     parent = null)

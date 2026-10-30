@@ -133,7 +133,208 @@ flowchart LR
 - Частичная дельта перекрывает только явно затронутую часть, сохраняя остальные поля/части прежнего состояния; полная замена объекта допускается только как явная доменная операция. Для runtime target учитывается последний Snapshot, изменивший эту цель/область, для source — SourceRevision; общий CAS snapshot_head остаётся отдельной проверкой публикации.
 - Состояние при restore = базовый pack + overlay patches цепочки (keyframe + дельты); отдельного authoritative blob мира нет (2026-10-27, [`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации»). Patches — часть authoritative состояния.
 
-## Контракт (черновик)
+## Контракты ядра — freeze шага 2 (2026-10-30)
+
+**Статус: проект точных контрактов для приёмки.** Поведение P-1…P-8/L-1
+принято в плане §8.1; определения ниже ещё не являются реализованным API
+или разрешением переходить через implementation map. Это ядро, независимое
+от будущих DTO нод GEN-DAG-1. Общие типы не импортируют concrete domain POJO.
+
+### Общие правила типов и identity
+
+Все сериализуемые data records — frozen strict Pydantic models: extra=forbid,
+revalidate_instances=always; коллекции — tuple/frozenset, не изменяемые
+dict/list внутри frozen оболочки. Bool не принимается как int.
+Application contexts/capabilities — frozen runtime types своего слоя,
+не serializable payload Patch и не часть canonical request.
+Для перечисленных далее StrEnum без отдельного wire mapping значения
+равны lowercase snake_case именам членов; неизвестные значения отклоняются.
+`EntityUid` переиспользуется для world/timeline/player/snapshot/operation
+identity. Новые runtime IDs выдаёт `app.ids.runtime_uid`, один раз на
+операцию/новый snapshot, с сохранением при retry; это не generated world UID.
+Порядковый `PatchOrdinal` — strict int >= 0, уникальный внутри секции.
+`FormatVersion` — strict int > 0; semantic/source revisions им не заменяются.
+
+`SectionKey = RegistryKey[PatchSectionRegistry]` и
+`ArtifactFormatKey = RegistryKey[ArtifactFormatRegistry]` переиспользуют
+общий механизм RegistryKey. Это разные номинальные реестры, объявленные
+ядром; не строки domain tag и не world-authored N+1 registry. Их membership
+определяет явная composition root registration, а не import side effects.
+Общие metadata этих реестров содержат ключ/поддерживаемые format versions;
+конкретные модели, codecs и handlers привязывает application registry.
+Добавление домена не требует импорта его POJO в общий dataModel.
+
+`RevisionHex` из validation/diagnostics/runtimeIssueContext переиспользуется
+как уже существующий строгий 64-символьный lowercase SHA-256 hex value.
+Его использование для hash не превращает значение в SourceRevision.
+Для человекочитаемого текста diagnostics применяется существующий
+`FieldPathError`; его path/message/code не используются для маршрутизации
+секций, выбора outcome или вывода severity.
+
+Исключения текстового wire-представления: UID — opaque identity по
+`EntityUid`; registry key — открытый, но типизированный RegistryKey;
+hash — `RevisionHex`; diagnostic message/path — `FieldPathError`.
+Coerce выполняется на decode boundary с полной model validation.
+Голый str для закрытой категории, артефактного kind или outcome запрещён.
+
+### Frozen данные Patch и PatchSet
+
+`PatchRef(operation_id: EntityUid, section_key: SectionKey,
+ordinal: PatchOrdinal)` — адрес операции в наборе, не SQL row identity.
+`PatchHeader(ref: PatchRef, format_version: FormatVersion,
+depends_on: tuple[PatchRef, ...], artifacts: tuple[ArtifactRef, ...])` —
+только общая metadata. Дубли refs и self-dependency запрещены.
+
+Каждый concrete domain Patch объявляет отдельный frozen тип с `header`
+и своими **typed target, expected, inputs, change, prepared**. Эти пять
+типов связываются декларацией конкретной операции в domain dataModel,
+а не произвольным pairing generic payload. Разные операции — отдельные
+типы/дискриминаторы домена. Prepared содержит неизменяемый малый результат
+или ArtifactRef плюс inputs/dependency stamps; не callback/repository/метод.
+Общий код не читает эти пять доменных полей. Публичные доменные операции
+и их concrete Patch classes проходят отдельный freeze до первого handler.
+
+`SectionHeader(key: SectionKey, format_version: FormatVersion,
+depends_on: tuple[SectionDependency, ...])` принадлежит общему контракту.
+`SectionDependency` — typed union
+`PreparedSectionDependency(section_key, section_fingerprint: RevisionHex)` либо
+`PublishedSectionDependency(section_ref: SectionStateRef)` с общим
+enum-дискриминатором `SectionDependencyKind.PREPARED/PUBLISHED`.
+Prepared dependency должна предшествовать consumer в этом PatchSet;
+published dependency удерживается и принадлежит выбранной исходной базе.
+Core не заменяет одну другой и не сортирует набор.
+
+`DomainSection[P]` содержит `header: SectionHeader` и `patches: tuple[P, ...]`,
+где P — конкретный domain-owned union операций этой секции. Домен задаёт
+concrete subclass, фиксирующий key, union P и format; пустая секция
+отклоняется как malformed (пустой тик представлен пустым tuple секций).
+Отсутствие patch для неизменяемой published dependency допустимо.
+
+`PatchSet[S]` содержит **format_version, operation_id, preparation_fingerprint, world_uid,
+timeline_id, turn_id, expected_world, expected_players, sections**:
+
+- format_version — FormatVersion общей оболочки запроса;
+- operation_id/world_uid/timeline_id — EntityUid; turn_id — strict int >= 1;
+- preparation_fingerprint — RevisionHex исходного immutable запроса
+  подготовки; он совпадает с binding lease, если staging использовался;
+- expected_world — WorldPublicationRef; pack_hash в runtime обязателен;
+- expected_players — tuple[PlayerHeadExpectation, ...], без повторов player_uid;
+- sections — tuple[S, ...] в явном порядке, без повторов section key;
+  S — concrete union секций, задаваемый composition root, не Any/raw dict.
+
+Поле category результата задаёт общий **SnapshotApplyOutcomeKind(StrEnum)**:
+`COMMITTED="committed"`, `CONFLICT="conflict"`, `REJECTED="rejected"`.
+Новый enum принадлежит dataModel ядра Snapshot. Все typed consumers,
+durable outcomes и logging contracts используют его; на SQL/JSON boundary
+сохраняется `.value`, при чтении — проверяемое восстановление enum.
+
+### Runtime target preconditions
+
+Общие `RuntimeTargetVersion` — discriminated union по
+`RuntimeVersionKind.PACK/SNAPSHOT` (StrEnum):
+
+- `PackTargetVersion(pack_hash: RevisionHex, artifact: ArtifactRef)`;
+- `SnapshotTargetVersion(snapshot: SnapshotRef)`.
+
+`RuntimeTargetExpectation` — union `TargetAbsent` либо
+`TargetVersionExpected(version: RuntimeTargetVersion, presence)`.
+Дискриминатор — `TargetExpectationKind.ABSENT/VERSION`; presence —
+`TargetPresence.PRESENT/DELETED` (оба StrEnum). TargetAbsent означает
+отсутствие и в исходном pack, и в истории/overlay пересекающихся целей;
+tombstone не удовлетворяет этому предусловию. Recreate после delete
+требует ожидаемой версии tombstone и явной доменной операции.
+
+Target identity и пересечение не входят в generic field path: они остаются
+typed полями concrete Patch. Handler сверяет preconditions на captured
+base, защищённой commit transaction. Композиция нескольких операций
+внутри секции не требует snapshot stamp неопубликованного промежуточного
+результата; домен проверяет их переходы и ссылки на prepared результаты.
+Source preconditions не притворяются RuntimeTargetExpectation:
+они добавляются domain binding только после source-versioning 2–3.
+
+### DomainSectionHandler и явный реестр
+
+`DomainSectionHandler[S]` — общий application port, S фиксируется
+concrete секцией. Обязанности и сигнатуры:
+
+- `validate(section: S, context: SnapshotValidationContext) -> SectionValidation`:
+  async read-only проверка семантики, target versions, композиции и
+  dependencies; никаких staging, planning, materialization или writes;
+- `apply(section: S, context: SnapshotApplyContext) -> SectionApplyReceipt | SectionRefused`:
+  async доменное apply уже подготовленного изменения, append новых
+  доменных SQL/overlay/history версий через domain storage в переданной
+  commit scope. При несовпадении precondition — typed refusal всего набора;
+- `encode(section: S) -> bytes` / `decode(payload: bytes, version: FormatVersion) -> S`:
+  pure domain codec; decode включает поддерживаемый read-upgrade и полную
+  валидацию. Неизвестный формат — отказ, не partial decode;
+- `restore(ref: SectionStateRef, context: SnapshotReadContext) -> S` **не вводится**:
+  секция patches не является состоянием. Domain read/restore контракты
+  остаются у домена; Snapshot использует отдельные domain-owned read/merge
+  ports, согласуемые с concrete handler. Общего state DTO ядро не выдумывает.
+
+`SectionValidation` — typed union `SectionAccepted` / `SectionRefused`.
+Accepted не даёт права самостоятельной записи. Refused содержит
+category: SnapshotApplyOutcomeKind (только CONFLICT/REJECTED) и
+diagnostics: tuple[FieldPathError, ...], непустой. Producer выбирает
+категорию в точке решения, не по diagnostic.code на стороне consumer.
+
+`SectionApplyReceipt` содержит section_key,
+history_refs: tuple[SectionHistoryRef, ...],
+state_refs: tuple[SectionStateRef, ...], changed: tuple[PatchRef, ...],
+retained_artifacts: tuple[ArtifactRef, ...]. Нет changed — domain state_ref
+не меняется; history текущей операции всё равно может фиксировать no-op.
+Refs сгруппированы по участвующим world/player snapshots; повтор пары
+chain identity + section_key запрещён. Domain receipt не добавляет участника,
+не объявленного в expected_players/world входа.
+SectionStateRef/SectionHistoryRef содержат SnapshotRef + SectionKey +
+FormatVersion; их payload и физическое хранение остаются у домена.
+Ни receipt, ни SectionAccepted не означают COMMITTED до общего SQL commit.
+
+SnapshotValidationContext предоставляет pinned исходные world/player refs
+и refs предшествующих секций; он не общий query router к чужим таблицам.
+SnapshotApplyContext добавляет назначенные world/player SnapshotRef и
+`CommitScope` — непередаваемый другим tasks и недействительный вне
+Snapshot transaction capability. Domain storage binding присоединяется
+к этому scope; handler не получает BEGIN/COMMIT/ROLLBACK, connection,
+publication pointer API или возможность самостоятельного открытия UOW.
+Read context не содержит write capability. Точные storage bindings — шаг 3.
+
+Application registry предоставляет
+`register[S](contract: SectionContract[S], handler: DomainSectionHandler[S])`
+и `resolve(section) -> BoundSectionHandler`. SectionContract фиксирует key,
+concrete section model, supported format versions и canonical schema
+manifest. Register проверяет соответствие key/model/handler, повтор key
+запрещён. Bound handler проверяет точный тип секции перед typed dispatch.
+Единственная проверяемая heterogeneous dispatch boundary находится внутри
+реестра; публичные входы не используют Any, object payload или casts caller'а.
+Core serializers не сериализуют concrete subtype как base Pydantic model
+с потерей domain fields: encode/decode всегда делегируются bound codec.
+SectionContract/codec — application binding; dataModel registry metadata
+не содержит исполняемых codecs/handlers. Encode сохраняет заявленную
+format version; manifests старых поддерживаемых форматов остаются доступны.
+Canonical bytes проверяются до read-upgrade. Upgrade view не переписывает
+сохранённый request binding и не вычисляет ему новый hash по новой схеме.
+
+### Canonical request binding и no-op
+
+Переиспользуется общий `application/encoding/CanonicalCodec` и его digest
+с явным `CanonicalSchemaManifest`: новые enum/record IDs закрепляются
+декларативно в шаге 3 и не зависят от Python module/class names.
+Core canonical request включает все поля PatchSet, порядок секций,
+canonical bytes каждой секции и refs; encode выполняют соответствующие
+domain codecs. Hash секции пересчитывается, а не берётся на доверие из payload.
+Транспортные request_id, elapsed time, лог-сообщения и server-created_at
+в binding не входят. Одинаковый ID с другим binding не меняет старую запись.
+Декодирование неканоничных/неизвестных данных отклоняется до domain writes.
+
+Snapshot.apply — явный запрос фиксации тика: PatchSet с sections=()
+или с одними domain no-op допустим при валидных turn_id/heads и создаёт
+новый snapshot/историю операции. Автоматический commit пустого тика при
+read/flush не вводится. Незатронутые target stamps/section state refs
+остаются прежними; changed flags определяет домен, не сравнение общего head.
+Повтор того же operation_id не создаёт второй snapshot даже для пустого тика.
+
+## Исторический эскиз контракта (не целевой API)
 
 Уточнение мастера 2026-10-27: **интерфейс Patch — общий поведенческий
 контракт, передаваемый доменам на реализацию.** Схема полей ниже сама по себе
@@ -185,7 +386,10 @@ class PatchSet(BaseModel):  # дельта одного хода
 - **diff/diff на restore** — «что изменилось в climate между N и N−1» читается без разбора всего набора;
 - **аудит/диагностика** — патч всегда адресуем доменом, orphaned payload невозможен.
 
-**Кросс-доменный порядок внутри patch set** — явная зависимость (domain-level `depends_on` / фиксированный порядок секций), не порядок записи. Независимые секции применяются независимо.
+**Кросс-доменный порядок внутри patch set** — явная зависимость (domain-level
+`depends_on` / фиксированный порядок секций), не порядок записи. Независимые
+секции имеют собственную доменную обработку, но общий атомарный commit;
+независимые commits секций запрещены.
 
 ## Границы слоёв
 

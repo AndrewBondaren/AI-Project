@@ -177,3 +177,15 @@ def built_in_water_strategy_composition(value: WaterStrategyInput) -> None:
     factory = DesignedWaterStrategyFactory.builtins()
     assert_type(factory, DesignedWaterStrategyFactory)
     assert_type(factory.get(value.strategy).design(value), WaterDesignDraft)
+
+
+from app.application.worldData.generators.terrain.designedWater.preparation.proceduralWaterSourceAdapter import ProceduralWaterSourceAdapter
+from app.dataModel.hydrology.sources.waterDesignSource import ProceduralSource
+from app.dataModel.terrain.designedWater.input import WaterDesignInput
+from app.dataModel.terrain.designedWater.fields.field import WaterFieldRecipe
+
+
+def procedural_source_join(adapter: ProceduralWaterSourceAdapter, shared: WaterDesignInput[ProceduralSource],
+    generation: HydrologyGenerationDecision, admission: PlacementAdmissionInput, recipe: WaterFieldRecipe, z_min: FineZ) -> None:
+    result = adapter.prepare_source(shared, generation=generation, admission=admission, field_policy=recipe, z_min=z_min)
+    assert_type(result.source, ProceduralSource)

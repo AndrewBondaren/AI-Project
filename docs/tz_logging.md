@@ -68,6 +68,57 @@ policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и re
 
 ## Каталог консьюмеров
 
+### Patch/Snapshot и artifacts — target регистрации шага 2 (2026-10-30)
+
+Статус: проект contract freeze, **маршруты ещё не реализованы**.
+Используется тот же loggingConfig/JsonLogFormatter/router, без локальных
+handlers и без общего app.log. Domain emitters не дублируются.
+
+- Logger `app.snapshot` → `world_snapshot/snapshotLifecycle`, server sink
+  `logs/world_snapshot/snapshotLifecycle.log`.
+  Producer — Snapshot application lifecycle, семантика в
+  `tz_world_snapshot.md` § «Логирование и проверка контрактов».
+- Logger `app.artifacts` → `artifacts/artifactLifecycle`, server sink
+  `logs/artifacts/artifactLifecycle.log`.
+  Producer — общий artifact/staging/holder/GC application owner.
+
+В реализации нужны согласованные entries в существующих _PREFIX_ROUTES
+и SERVER_SINKS, не новый file router. Script profile сохраняет собственный
+script sink; не открывает server files. Logger names — явный контракт
+маршрутизации, не названия классов и не автоопределение домена по payload.
+
+Activity — domain-owned StrEnum, передача в JSON через `.value`:
+`SnapshotLogActivity` содержит APPLY_STARTED, APPLY_COMMITTED,
+APPLY_CONFLICT, APPLY_REJECTED, APPLY_FAILED, APPLY_OUTCOME_UNKNOWN,
+OPERATION_BUSY, OPERATION_RECOVERED; wire lowercase snake_case.
+`ArtifactLogActivity` содержит ARTIFACT_SEALED, LEASE_RELEASED,
+GC_DELETED, GC_FAILED; wire lowercase snake_case.
+P-4 outcome типизирован общим SnapshotApplyOutcomeKind; activity не
+подменяет outcome и не становится ещё одним state/revision store.
+
+Уровни определяет producer: STARTED/BUSY/SEALED — DEBUG;
+COMMITTED/RECOVERED/LEASE_RELEASED/GC_DELETED — INFO;
+CONFLICT/REJECTED — WARNING; FAILED/OUTCOME_UNKNOWN/GC_FAILED — ERROR.
+Используется existing core.logLevel.LogLevel в application emitter,
+dataModel events не импортируют core. Snapshot refusal log — один
+aggregate lifecycle event без повторной эмиссии domain WarningError.
+Runtime unresolved domain reason пишет его существующий producer;
+validate_only возвращает diagnostics без runtime WarningError emit.
+
+Обязательная корреляция lifecycle: operation_id, world_uid и request_id
+общего фасада; после binding — request_fingerprint; при наличии — timeline_id,
+snapshot_id, section key, target ref, artifact hash и outcome enum value.
+Нет фиктивных UID вместо отсутствующего контекста. Domain payload/raw SQL
+в record не копируются. APPLY_COMMITTED — только после подтверждённого
+COMMIT; retry терминального outcome не выдаёт новый APPLY_COMMITTED,
+а восстановление результата отмечается OPERATION_RECOVERED.
+Exact event-field POJO и emitter files относятся к implementation map.
+Отказ доставки лога после COMMIT не превращает committed operation в
+rejected и не запускает повторное применение; outcome восстанавливается
+по operation storage. Логирование не обещает exactly-once delivery записи.
+
+### Существующие консьюмеры
+
 Шаг wilderness 9c (согласовано 2026-10-18): `regions/regionStateLog.py`
 эмитит WARNING `region_state | overlap_rerank_deferred | world_uid=… region_uid=… neighbors=…`.
 Маршрут общего фасада: `app.application.worldData.regions.regionStateLog` →

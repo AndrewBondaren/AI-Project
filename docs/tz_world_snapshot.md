@@ -291,6 +291,353 @@ hash, первый snapshot — первый тик после старта game
 
 Конкретные типы, порты, файлы и DDL не выбраны; реализация не разрешена.
 
+## Контракты ядра Snapshot — freeze шага 2 (2026-10-30)
+
+**Статус: проект для приёмки, runtime не реализован.** Раздел уточняет
+принятые архитектурные правила плана §8.1 и использует frozen/type правила
+из [Patch contracts](./tz_patch_system.md#контракты-ядра--freeze-шага-2-2026-10-30).
+Точные классы → файлы/backend binding относятся к implementation map шага 3.
+
+### Identity, refs и ожидаемые heads
+
+`WorldSnapshotRef(world_uid: EntityUid, timeline_id: EntityUid,
+snapshot_id: EntityUid)` и `PlayerSnapshotRef(player_uid: EntityUid,
+snapshot_id: EntityUid)` — разные frozen types. `SnapshotRef` — их typed
+union с StrEnum-дискриминатором `SnapshotChainKind.WORLD/PLAYER`.
+Каждый record имеет kind, ограниченный своим членом этого enum.
+Совпадение snapshot_id строкой не разрешает подмену world/player refs.
+Runtime target versions ссылаются на эти refs, не на turn_id.
+
+`WorldPublicationRef` имеет world_uid: EntityUid, publication_id: EntityUid,
+pack_hash: RevisionHex | None, snapshot_head: WorldSnapshotRef | None,
+active_timeline_id: EntityUid | None, gameplay_started: bool.
+Логический указатель один: `(pack_hash, snapshot_head)`; publication_id —
+identity его append-only записи для CAS и защиты от ABA, не второй head
+и не SourceRevision/activation_seq store. snapshot_head, если присутствует,
+принадлежит этому world_uid и active timeline либо является явно
+закреплённой точкой ветвления до первого тика нового active timeline.
+Единственный допустимый
+runtime base без snapshot_head — опубликованный pack до первого тика.
+Отсутствующий pack не позволяет Snapshot.apply или старт gameplay.
+
+`PlayerHeadExpectation(player_uid: EntityUid,
+expected_head: PlayerSnapshotRef | None)` задаёт ожидаемое отсутствие
+player-цепочки или её точный head. Участвующие player refs упорядочены
+по player_uid в canonical request, дубли запрещены. Участник не выводится
+Snapshot из чужого payload: handler сверяет свои declared targets с этим
+явным набором и отклоняет несогласованность. Scope migration подчиняется
+тому же правилу, без независимого commit player/world.
+
+World/player Snapshot metadata включают назначенный ref, parent ref,
+operation_id, turn_id, created_at UTC, envelope_format_version,
+base_pack_hash (для world), section state/history refs и удерживаемые
+artifact refs. created_at назначается один раз публикацией, не входит
+в request binding. Parent — фактический expected head/точка ветвления;
+первый world snapshot имеет parent=None, без фиктивного base snapshot.
+Правила ancestry/перехода ветки проверяются без rebase pack.
+
+### Snapshot.apply, результаты и порядок проверок
+
+`IWorldSnapshotApply.apply(patch_set: PatchSet[S]) -> SnapshotApplyResult`
+— async единственный публичный runtime publication entry. Реализация —
+WorldSnapshotService. PatchSet не содержит validate_only: этот режим
+заканчивается в той же DAG/domain preparation до вызова apply.
+Самостоятельные create/update/delete, capture после доменного commit
+и вызов domain persist из debug route не являются альтернативами apply.
+
+`SnapshotApplyResult` — frozen record с category: SnapshotApplyOutcomeKind,
+operation_id: EntityUid, request_fingerprint: RevisionHex,
+committed: SnapshotCommitRefs | None, diagnostics: tuple[FieldPathError, ...].
+`SnapshotCommitRefs` содержит world_snapshot: WorldSnapshotRef,
+player_snapshots: tuple[PlayerSnapshotRef, ...], publication: WorldPublicationRef.
+Валидатор требует committed!=None и diagnostics=() только при COMMITTED;
+при CONFLICT/REJECTED committed=None и diagnostics непустой.
+Category — сам enum, не str и не отдельный набор Literal значений.
+Infrastructure/IO exception и cancellation не добавляются
+в SnapshotApplyOutcomeKind и не выдаются за domain refusal. Неизвестный
+commit outcome — отдельное recovery состояние операции, не результат успеха.
+Ошибка формата запроса до принятия валидного operation_id/binding является
+ошибкой decode; она не создаёт фиктивный durable operation outcome.
+
+Порядок проверок фиксирован:
+
+1. Строгий decode/валидация общей оболочки, registry/model bindings,
+   formats, уникальности, порядка dependencies и request fingerprint.
+   Некорректная форма — rejected/decode error, без доменных writes.
+2. Проверка immutable binding operation_id. Иной запрос с тем же ID —
+   rejected без изменения исходной operation record. Уже имеющийся terminal
+   outcome того же запроса возвращается **до повторного чтения target refs**:
+   retry успешного commit не превращается в conflict на новом head.
+3. Claim одного apply owner операции; проверка artifact refs/holders.
+   Missing/corrupt/unsupported — rejected. Результат проверки защищён
+   удержанием и immutable storage до завершения публикации.
+4. В короткой publication transaction сверяются expected world/player
+   heads и gameplay/base pack; несовпадение — conflict без вызова handlers.
+   Runtime apply требует gameplay_started=True и активный timeline запроса;
+   до gameplay допустима только pregame pack activation, не snapshot-тик.
+   turn_id — следующий тик active timeline, первый тик timeline имеет
+   turn_id=1; родитель из другого timeline допустим только как уже
+   явно закреплённая точка ветвления, apply сам ветку не создаёт.
+5. Handler.validate всех секций в явном порядке на согласованной базе.
+   Если среди полученных refusals есть REJECTED, основной исход REJECTED;
+   иначе при любом CONFLICT — CONFLICT. Diagnostics возвращаются в порядке
+   секций и порядке producer, не сортируются по message/code.
+6. Только после успешной validation всех секций вызываются handler.apply
+   и domain storage в той же transaction. Защитный отказ любого apply
+   откатывает весь набор; завершение остальных apply после отказа запрещено.
+7. Snapshot storage записывает общую metadata/refs, holder handoff, новый
+   publication record и COMMITTED outcome в этой же transaction.
+   COMMIT подтверждается до возврата результата COMMITTED и success log.
+
+При одновременных причинах более ранняя неуспешная общая фаза определяет
+основной исход. При IO failure во время проверки не изобретается более
+полный domain report. Внутренние effects handler не являются публичным
+DAG-facing effects DTO; его контракт остаётся в GEN-DAG-1.
+
+`SnapshotValidationContext` содержит operation_id, expected_world,
+expected_players, resolved_dependencies: tuple[SectionDependency, ...]
+и read_scope: CommitReadScope;
+domain handler получает свои read ports через DI и читает на той же
+transaction-bound базе. `SnapshotApplyContext` содержит тот же validation
+context, назначенные world_snapshot/player_snapshots и CommitScope.
+CommitReadScope — read-only capability той же publication transaction;
+выдаётся её owner, не открывает отдельный read snapshot/connection.
+Prepared dependency — проверенный key/fingerprint предшествующей секции,
+не SectionStateRef ещё не опубликованного snapshot. Необходимые typed
+inputs/prepared данные уже включены producer'ом в consumer patches;
+handler сверяет их binding. Snapshot не загружает/объединяет domain payload
+и не строит промежуточное состояние ради validation следующей секции.
+Refs receipt проверяются на соответствие участникам/назначенным snapshots;
+references к старым незатронутым секциям должны быть достижимы из pinned base.
+Handler не может незаметно добавить нового участника или продвинуть head.
+
+### ArtifactRef, staging и domain SQL rows
+
+`ArtifactKind(StrEnum)` имеет `BLOB="blob"`, `SQL_ROWS="sql_rows"`:
+это носитель, а не terrain/climate/domain tag.
+`ArtifactRef` содержит kind: ArtifactKind, format_key: ArtifactFormatKey,
+format_version: FormatVersion, content_hash: RevisionHex,
+nbytes: strict int >= 0. Для SQL_ROWS ref дополнительно задаёт
+row_count: strict int >= 0; для BLOB row_count=None. Файловых путей,
+SQL/table names, connection и callback в ref нет.
+
+Content hash BLOB = SHA-256 точных сохранённых bytes; nbytes — их длина.
+SQL_ROWS hash/nbytes относятся к canonical bytes полного domain row set
+с объявленным стабильным порядком и codec; row_count проверяется отдельно.
+Mapping row set → domain tables и чтение для проверки выполняет доменный
+storage adapter, не Snapshot и не общий staging coordinator.
+CanonicalCodec переиспользуется для structured data; raw bytes digest
+добавляется как общий primitive того же encoding модуля, без копирования
+tileCodec/hash implementation в новое ядро. Existing TileCodec.content_hash
+переводится на делегирование этому primitive в implementation map;
+canonicalCodec.digest использует его же после canonical encode.
+RevisionHex — представление
+digest, не revision accounting. Format key и version участвуют в identity
+проверки; одинаковый hash не делает несовместимые форматы взаимозаменяемыми.
+
+`OperationKind(StrEnum)` — SNAPSHOT_APPLY, PACK_ACTIVATION, GAMEPLAY_START.
+Это разные виды публикации одного общего механизма, не три operation stores.
+`OperationLeaseRef(operation_id: EntityUid, world_uid: EntityUid,
+kind: OperationKind,
+preparation_fingerprint: RevisionHex, fence: strict int >= 1)` — общий
+не TTL-based holder. Preparation fingerprint домен вычисляет из своего
+типизированного исходного запроса/captured inputs; ядро его не реконструирует.
+Финальный apply request fingerprint привязывается к операции отдельно один
+раз после подготовки PatchSet. Это два immutable bindings разных фаз,
+не разрешение изменить запрос подготовки или заменить готовый PatchSet.
+
+Общий `IArtifactStaging` предоставляет async операции:
+
+- `open_operation(operation_id, world_uid, kind, preparation_fingerprint)
+  -> OperationLeaseRef`: идемпотентно для того же binding, иной binding — отказ;
+- `reserve(lease, descriptor: ArtifactRef) -> StagingReservation`:
+  descriptor — тот же content-addressed ref, ещё не доказательство готовности;
+  reservation связывает
+  artifact identity с lease и fence, ещё не делает ref читаемым/готовым;
+- `seal(reservation) -> ArtifactRef`: проверяет durable полный content
+  через зарегистрированный ArtifactBackend и делает ref доступным
+  только рабочему view job, не published readers;
+- `finish_preparation(lease, refs: tuple[ArtifactRef, ...]) -> OperationRecord`:
+  проверяет полный объявленный набор sealed/held refs, закрывает admission
+  новых writers и переводит подготовку в READY; не публикует состояние;
+- `verify(ref, holder) -> VerifiedArtifactRef`: проверяет existence,
+  kind/format/hash/nbytes/row_count и удержание; verified token действителен
+  только в защищённом holder lifecycle, не бессрочный сертификат;
+- `recover(operation_id) -> OperationRecord`,
+  `cancel(operation_id, fence) -> OperationRecord`,
+  `collect(candidates: tuple[ArtifactRef, ...]) -> GcReport`.
+
+`StagingReservation(artifact_id: EntityUid, lease: OperationLeaseRef,
+ref: ArtifactRef)` — capability записи не опубликованного artifact.
+artifact_id — identity общей catalog record, используемая domain SQL rows;
+reserve одинакового content identity переиспользует её между операциями.
+В Patch не передаётся artifact_id вместо полного content ref.
+`ArtifactHolderRef` — typed union `OperationHolder(lease: OperationLeaseRef)`,
+`ArtifactRetentionHolder(artifact: ArtifactRef)` и
+`SnapshotHolder(snapshot: SnapshotRef)`; discriminator —
+ArtifactHolderKind(StrEnum) OPERATION/ARTIFACT/SNAPSHOT.
+У holder wrappers собственное поле kind этого enum; оно не смешивается
+с OperationLeaseRef.kind: OperationKind.
+`VerifiedArtifactRef(ref: ArtifactRef, holder: ArtifactHolderRef)` —
+проверенный ref под указанным удержанием, не второй artifact identity.
+
+Перед reserve домен уже имеет prepared materialization/canonical bytes;
+descriptor нельзя заполнить догадкой о будущем результате.
+`ArtifactBackend[C]` предоставляет async `write(reservation, content: C)` /
+`verify(ref)` / `delete(ref)`; C — concrete bytes либо frozen domain row set,
+не object/dict. `ArtifactFormatContract[C]` связывает format key, kind,
+versions, concrete content model и pure canonical codec. Это application
+binding; dataModel metadata остаётся без executable codec. Реестр регистрирует
+contract/backend с одним C, проверяет ключ/тип перед dispatch, без публичного
+untyped payload. `TypedArtifactStager[C].stage(lease, content: C) -> ArtifactRef`
+делегирует encode/hash/reserve/write/seal общему механизму; domain producer
+получает только binding своего C. Это application staging, не generator API.
+Blob adapter пишет bytes; domain SQL adapter пишет только новые rows с
+artifact identity. Raw SQL и domain POJO не передаются staging coordinator.
+Каждый writer проверяет reservation/fence до записи и seal; повтор записи
+совпадающих immutable данных идемпотентен, overwrite и INSERT OR REPLACE
+опубликованных rows запрещены. Неизвестный format/backend — явный отказ.
+Patches/генераторы эти write ports не получают.
+
+GC работает с тем же artifact catalog/holder/fence guard, что writer,
+reserve, seal и handoff. Он повторно проверяет live-set непосредственно
+перед удалением. Cancel сначала закрывает writer admission и подтверждает
+остановку/отсутствие writer claims; освобождение lease до этого запрещено.
+Fence не даёт writer прежней попытки записать/seal после resume/cancel.
+Повторные collect/cancel идемпотентны; holds опубликованной истории
+и ready_inactive artifact не освобождаются операцией cancel.
+
+`GcReport(deleted: tuple[ArtifactRef, ...], retained: tuple[ArtifactRef, ...],
+failed: tuple[FieldPathError, ...])` сообщает фактические удаления, а не
+обещание фоновой задачи. Writer fence/GC не требуют независимого scheduler:
+все операции явно вызывает DAG/domain application по принятым границам.
+
+### Operation storage, CAS и capability ports
+
+`OperationPhase(StrEnum)` — PREPARING, READY, APPLYING, TERMINAL,
+RECOVERY_REQUIRED (wire lowercase). Phase отделена от enum итогов apply.
+`OperationRecord` содержит operation_id/world_uid, kind: OperationKind,
+preparation_fingerprint, publication_fingerprint: RevisionHex | None,
+phase: OperationPhase,
+fence, leased_artifacts: tuple[ArtifactRef, ...],
+terminal: SnapshotApplyResult | PackActivationResult | GameplayStarted |
+OperationCancelled | None.
+`OperationCancelled` — отдельный frozen record с operation_id и reason:
+FieldPathError; это не четвёртый SnapshotApplyOutcomeKind. TERMINAL требует
+terminal, остальные phases его не содержат; APPLYING требует publication_fingerprint.
+Kind и оба bindings immutable; terminal type обязан соответствовать kind.
+SnapshotApplyResult с CONFLICT/REJECTED может описывать общий refusal
+любого kind; его COMMITTED разрешён только для SNAPSHOT_APPLY.
+Same ID другой kind — identity reuse refusal, не возврат результата чужого API.
+Enum phase не является per-target version stamp или авторской revision.
+
+Переходы phases: open создаёт PREPARING; finish_preparation — READY;
+успешный claim — APPLYING; durable success/refusal/cancellation — TERMINAL.
+Если staging record не создавался и запрос не имеет staged refs, claim
+может атомарно создать операцию сразу для готового малого PatchSet.
+Claim существующей PREPARING операции возвращает busy: подготовку нельзя
+объявить законченной по одному наличию нескольких refs. После READY
+reserve/write запрещены; published refs, уже удерживаемые другим holder,
+не обязаны копироваться в staging, но проверяются при commit.
+Неизвестный исход сохраняет APPLYING либо RECOVERY_REQUIRED; recover
+сначала проверяет terminal marker. Только доказанный rollback и отсутствие
+активного владельца/writers позволяют вернуть операцию в READY с новым
+fence для явного resume. Один TTL/отсутствие процесса этого не доказывает.
+Recover не генерирует PatchSet и не запускает apply автоматически.
+Cancel после подтверждённого commit возвращает его прежний outcome;
+OperationCancelled создаётся только после доказанного отсутствия публикации
+и закрытия claims/writers, не как замена committed history.
+
+После успешного Snapshot.apply outcome и snapshot refs durable в одной
+publication transaction. При typed refusal все domain writes откатываются;
+common operation store затем сохраняет CONFLICT/REJECTED без продвижения
+heads. Потеря ответа/отказ самой записи refusal оставляет recovery состояние,
+не ложный terminal marker. Повтор same ID сначала читает durable outcome,
+после чего либо возвращает его, либо recovery сверяет commit marker.
+Нельзя повторно применять набор только потому, что процесс с owner исчез.
+При невалидном identity reuse первоначальная terminal record не меняется.
+
+Ports разделены по capability:
+
+- `IPublicationCommitStore.transaction(operation_id) -> async context manager[CommitScope]`:
+  общий transaction port ядра. Runtime transaction инициирует только
+  Snapshot service; pregame pack activation/gameplay-start — соответствующая
+  core CAS операция по вызову DAG, без Snapshot-тика. Domain handler
+  этот порт не получает. Adapter выдаёт одному task непрозрачный scope,
+  делает COMMIT/ROLLBACK при выходе;
+- `IWorldPublicationStore.read(world_uid) -> WorldPublicationRef` и
+  `compare_append(scope, expected, next_publication) -> CasDecision`:
+  CasDecision(StrEnum) — APPLIED/MISMATCH; compare проверяет полный expected
+  record, включая publication_id, логический pointer и gameplay guard;
+- `ISnapshotHistoryStore.append(scope, metadata, receipts) -> None`:
+  только общая snapshot metadata/lineage, без domain table mapping;
+- `IOperationStore.claim_publication(kind, operation_id, preparation_fingerprint,
+  request_fingerprint) -> OperationClaim`, `read(operation_id)`,
+  `record_terminal(scope, outcome)` и `record_refusal(claim, outcome)`;
+- `IArtifactHolders.handoff(scope, lease, snapshots, retained_refs)`:
+  атомарно добавляет published holders и снимает operation holder только
+  с переданных refs; оставшиеся refs удерживаются до корректного завершения;
+- `IDomainCommitBinding[S]` связывает domain storage с данным CommitScope
+  без предоставления handler управления transaction или raw connection.
+
+`read` у этих инфраструктурных ports не подменяет domain.read API.
+Общий CAS не хранится в world-source-versioning вторым механизмом.
+Publication transaction повторно проверяет latest expected heads даже если
+apply owner был claimed до неё; claim не является publication lock всего мира.
+Claim выполняется атомарно в отдельной короткой common operation-bookkeeping
+transaction без domain writes: связывает неизменный publication fingerprint и
+возвращает typed `OperationClaim` (owner с lease/fence, сохранённый terminal
+result либо busy). Одновременный busy не становится CONFLICT/REJECTED:
+service выдаёт OperationBusyError без hidden wait/retry, DAG явно выбирает
+дальнейшее действие. Owner, terminal и busy варианты различаются через
+OperationClaimKind(StrEnum): OWNER/TERMINAL/BUSY. Record_refusal вызывается
+Snapshot после полного rollback domain transaction и сохраняет outcome
+отдельной common bookkeeping transaction; handler не получает этот порт.
+Неизвестный COMMIT outcome запрещает record_refusal до recovery сверки marker.
+Имена concrete transaction/adapters, ограничения SQL и binding к existing
+Database/GuardedConnection обязательны в шаге 3; ambient transaction alone
+не является capability или доказательством Snapshot ownership.
+
+Pregame pack activation использует тот же compare_append/holder protocol,
+новый immutable manifest и guard gameplay_started=False. Несовпадение
+expected publication оставляет законченный artifact удерживаемым
+ready_inactive, без скрытого повторного CAS. Повторная активация — новая
+операция с новым expected ref. Старт gameplay тем же CAS фиксирует pack
+и active timeline; он не создаёт snapshot-тик. Для runtime Snapshot
+next publication сохраняет pack_hash/gameplay_started и продвигает только
+snapshot head в согласованном timeline; silent branch switch запрещён.
+Core pack-activation result задан ниже; source-specific preconditions/
+holder bindings согласуются с world-source-versioning без placeholder SourceRevision.
+
+Core terminal types для разделяемой operation storage заданы отдельно:
+`PackActivationResult(operation_id, request_fingerprint, manifest: ArtifactRef,
+disposition: PackActivationDisposition, publication: WorldPublicationRef)`;
+PackActivationDisposition(StrEnum) — ACTIVE/READY_INACTIVE. В первом случае
+CAS применён, во втором сохранён удерживаемый artifact без активации;
+это не альтернативные значения SnapshotApplyOutcomeKind.
+`GameplayStarted(operation_id, request_fingerprint, publication)` фиксирует
+guard-переход без snapshot-тика. Невалидная pregame операция может завершиться
+общим typed refusal, не придуманным успешным activation result. Наполнение
+source-specific preconditions/holds — внешний binding, core types не ждут его.
+
+### Логирование и проверка контрактов
+
+Общий фасад — `tz_logging.md`. Snapshot producer пишет lifecycle/outcome,
+artifact producer — staging/holder/GC. Общая категория события outcome
+типизирована SnapshotApplyOutcomeKind; typed domain diagnostics не
+переэмитируются Snapshot как новая доменная причина. События/ref checks
+не логируют полные domain payload или raw SQL. Success — после COMMIT.
+Неизвестный исход логируется отдельно и требует storage recovery.
+Лог не является OperationRecord или authoritative snapshot history.
+
+Обязательные проверки до приёмки реализации: static negative type cases
+для смешения секций/handlers/enum/ref kinds; codec round-trip и неподдерживаемые
+formats; immutable request binding; пустой тик и no-op stamps; одна
+transaction world/player/holders/outcome; retry после lost response;
+stale fence writer против GC; refusal после domain writes; независимость
+каждого concrete Patch от замены CRUD по плану §3.4. Сейчас это acceptance
+требования, не выполненные тесты.
+
 ## Обязательное разделение ответственности — gate каждого шага WS
 
 **Критическое требование мастера (2026-10-26): разделение ответственности
@@ -458,7 +805,14 @@ Capabilities/UOW и WS-0 ledger также сохранены как архив
 инвентаризации; старые class map и WS-1…WS-5 не являются implementation plan.
 Сначала архитектура и её приёмка, затем конкретные реализации.
 
-### Домен snapshot CRUD и методы (design для приёмки, 2026-10-25)
+### Домен snapshot CRUD и методы (исторический design, 2026-10-25)
+
+**Superseded точным core contract шага 2:** независимый `create` начального
+snapshot не реализуется; единственный вход нового runtime состояния —
+`IWorldSnapshotApply.apply(PatchSet)`. До gameplay активируется pack,
+первый snapshot создаётся первым тиком. Упоминания create ниже сохраняются
+как история design, не второй target publication API. Domain read не
+поглощается общим IWorldSnapshotCrud/WS read посредником.
 
 Владелец только snapshot lifecycle — платформенный домен **worldSnapshot**. Контракт
 `IWorldSnapshotCrud` принадлежит application/worldSnapshot/contracts/
@@ -569,7 +923,11 @@ app/application/engine/nodes/…   ← post_llm: capture после commit хо�
 
 ---
 
-## Контракт API (черновик)
+## Контракт API (исторический эскиз, не target API)
+
+`capture_turn` «после commit: прочитать БД и сохранить историю» ниже
+superseded Snapshot-owned apply. Его реализация по этому эскизу запрещена;
+он не дополняет и не заменяет core contract шага 2.
 
 ```python
 @dataclass(frozen=True)

@@ -1213,6 +1213,130 @@ keyframe, terminal retry и незавершённая операция, runtime
 validate_only diagnostics. Это документальная проверка, не evidence
 runtime atomicity, import audit или per-class test pass.
 
+### 8.2. Шаг 2 — inventory и проект contract freeze (2026-10-30)
+
+Статус: **INVENTORY ВЫПОЛНЕН; ТОЧНЫЕ КОНТРАКТЫ ПОДГОТОВЛЕНЫ К ПРИЁМКЕ**.
+Архитектура §8.1 принята; новые конкретные определения этого шага
+не объявляются автоматически принятыми. Код, SQL, Container и DAG
+не изменялись. Следующий шаг после приёмки freeze — implementation map.
+
+**SoT точных определений:**
+
+- [`tz_patch_system.md` § «Контракты ядра — freeze шага 2»](../../docs/tz_patch_system.md#контракты-ядра--freeze-шага-2-2026-10-30):
+  identity/value types, PatchRef/Header, domain operation bindings,
+  DomainSection/PatchSet, target preconditions, handler/registry, canonical
+  binding и поведение empty/no-op тика.
+- [`tz_world_snapshot.md` § «Контракты ядра Snapshot — freeze шага 2»](../../docs/tz_world_snapshot.md#контракты-ядра-snapshot--freeze-шага-2-2026-10-30):
+  refs, Snapshot.apply/result, порядок validation/apply/commit, artifacts,
+  staging/leases/fences, operation storage, CAS/capabilities и fault checks.
+- [`tz_logging.md` § «Patch/Snapshot и artifacts — target регистрации шага 2»](../../docs/tz_logging.md#patchsnapshot-и-artifacts--target-регистрации-шага-2-2026-10-30):
+  общий фасад, два target маршрута, typed activities/outcome, levels,
+  корреляция и отсутствие duplicate emit.
+- `project_data_storage_tz.md` § world_snapshots: target envelope/refs
+  отделены от legacy blob/schema. DDL этим шагом не меняется.
+
+#### Inventory: переиспользование
+
+Пути относительно `backend/app/`; проверены реальные файлы, а не только ТЗ.
+
+- `dataModel/identity/uid.py: EntityUid` — shared strict opaque UID;
+  переиспользуется для существующих identity, не создаются bare-str аналоги.
+- `dataModel/registryKey.py: RegistryKey` — nominal registry reference;
+  используется для разных core section/format registries, с явной membership
+  проверкой composition root. World registry и section registry не смешиваются.
+- `dataModel/validation/diagnostics/runtimeIssueContext.py: RevisionHex` —
+  существующий SHA-256 hex value contract; это value validation, не revision store.
+- `dataModel/validation/diagnostics/fieldPathError.py: FieldPathError` —
+  общий record diagnostics; не копируется в PatchError с теми же полями.
+- `dataModel/encoding/schemaManifest.py` и
+  `application/encoding/canonicalCodec.py` — shared canonical TLV encoder/
+  decoder/digest и явные schema manifests. Core/domain manifests объявляются
+  отдельно через этот механизм; ещё один JSON/TLV fingerprint engine не нужен.
+- `ids/deterministicIds.py: runtime_uid/state_fingerprint` — общий runtime UID
+  и structured JSON fingerprint. JSON fingerprint не заменяет canonical TLV
+  request digest и не является binary blob checksum.
+- `core/loggingConfig.py`, `core/logLevel.py`, `core/logMiddleware.py` —
+  единый facade/router/JSON/request context и application LogLevel. События
+  домена добавляются через него, не через собственный file handler.
+- `db/database.py`, `db/guardedConnection.py` — существующие transaction/task
+  ownership primitives для будущего binding. Они не являются готовым
+  SnapshotCommitStore/CommitScope; backend mapping проверяется в шаге 3.
+
+#### Inventory: что не является подходящим контрактом
+
+- `PlanRef/PlanKey/StateViewRevision` — derived planning identity/input
+  fingerprint, не SnapshotRef/SourceRevision/ArtifactRef.
+- `WorldScope` из прежних target описаний фактически не найден;
+  существующие координаты/GridBBox переиспользует конкретный домен,
+  ядро не создаёт подменяющий их generic target/scope DTO.
+- `worldPack/meta/worldPackManifest.py: ChunkRef` содержит chunk coordinates,
+  optional hash/bytes и legacy storage semantics; не универсальный immutable
+  ArtifactRef. WorldPackManifest остаётся pack format своего домена.
+- `PlacementOutcomeStatus` и `PlanDiagnosticDisposition` описывают другие
+  результаты (включая fallback), не подходят для SnapshotApplyOutcomeKind.
+- `regions/RegionState`, RegionStateSnapshot и cancellation SessionSnapshot —
+  другие предметные данные, не общая snapshot history или operation storage.
+- `PatchStoreService`, engine repair PatchApplier и BaseRepository.upsert
+  не реализуют новый Patch/Snapshot contract; mutable save/replace/delete
+  не объявлены append-only совместимыми.
+- SourceObjectId/SourceRevision, общий Snapshot service, ArtifactRef,
+  shared lease/holder/CAS/operation stores поиском не обнаружены.
+  world_snapshots в 0001_initial.sql — legacy schema; player_snapshots
+  описаны в ТЗ, но соответствующая CREATE TABLE в текущем initial SQL
+  не найдена. Подключение нового ядра требует отдельного schema/model map.
+
+#### Решения freeze, конкретизирующие §8.1
+
+1. **Исходы:** SnapshotApplyOutcomeKind(StrEnum) COMMITTED/CONFLICT/REJECTED;
+   SnapshotApplyResult — один frozen record с enum category и проверяемой
+   связью committed refs/diagnostics, без bare str/Literal substitute.
+2. **Приоритет отказов:** последовательность envelope → immutable operation
+   binding/terminal lookup → refs → CAS/heads → domain validation → apply →
+   atomic publication. Среди domain validation refusals REJECTED имеет
+   приоритет над CONFLICT; ранняя неуспешная общая фаза завершается раньше.
+3. **Пустой тик:** явный apply с валидным turn_id/expected heads может
+   зафиксировать пустой/no-op snapshot; read не создаёт тика. Неизменённые
+   target stamps/section states сохраняются. Empty section запрещена;
+   empty tick задаётся sections=(). Это конкретизация P-7, не implicit flush.
+4. **Typed dispatch:** generic domain section и handler связываются одним
+   concrete type при registration. Core не сериализует subtype как base
+   model с потерей полей и не интерпретирует target/change/prepared.
+5. **Ref/precondition:** отсутствующая цель, tombstone и удерживаемая
+   pack/snapshot version различаются. Prepared dependency проверяется по
+   key/fingerprint, не выдаётся за опубликованную SectionStateRef.
+6. **Operation lifecycle:** preparation binding фиксируется до staging;
+   publication binding — один раз при claim. Один operation kind/ID
+   не меняется на другой. Busy и неизвестный COMMIT outcome не являются
+   domain conflict/rejection. Terminal retry не повторяет validation/apply.
+7. **Artifacts:** общий typed staging mechanism обслуживает BLOB/SQL_ROWS;
+   domain backend владеет canonical row mapping, ядро — lease/fence/holder/GC.
+   Raw-byte digest общий для existing encoding/tileCodec, не копия алгоритма.
+8. **Atomicity:** world/player heads, domain versions/history, overlay refs,
+   holders и success outcome публикуются одной Snapshot-owned transaction.
+   Refusal записывается common operation storage после rollback; неизвестный
+   исход commit сначала восстанавливается, не превращается в refusal.
+9. **Logging:** activities и outcome typed; existing facade получает
+   target routes world_snapshot/snapshotLifecycle и artifacts/artifactLifecycle.
+   ТЗ фиксирует producer/levels/correlation, success только после COMMIT.
+
+#### Проверка и границы шага
+
+Документальный audit: frozen data не содержит IO/callbacks; apply/merge
+принадлежат handler; domain persistence не перенесён в Snapshot; commit
+capability не раскрывает handler connection/UOW; общий staging не содержит
+domain SQL mapping; scalar enum category не заменён строками.
+Сверены ссылки и отсутствие новых непосредственных файлов: docs 69→69,
+.cursor/plans 171→171. Не запускались backend, runtime tests или migrations:
+изменены только документы, тестировать реализацию пока нечего.
+
+**Следующий gate:** принять точные определения этого шага; затем шаг 3
+зафиксирует каждый класс/alias/port → owner/layer/exact file, canonical
+type IDs, folder composition, SQLite constraints, connection/capability
+binding и последовательность отдельных implementation шагов. Concrete
+domain operation types/первый handler требуют своего binding и per-class
+CRUD-independence сценария до их кода. Source integration остаётся шагом 5,
+GEN-DAG-1 ноды/DAG-facing DTO и B-2 этим freeze не закрываются.
+
 ## 9. Норматив и совместимость
 
 - `docs/tz_logging.md`: общий фасад логирования проекта, sinks, JSON,

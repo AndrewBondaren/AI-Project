@@ -11414,6 +11414,40 @@ remain open. This is composition of existing algorithms, not a second factory.
 Evidence: GEO-1 622 OK (+4), planning 292 OK; positive pyright 0.
 git diff --check clean. G8-B / production G10-A remain OPEN.
 
+### G10-A procedural source input join — IMPLEMENTED / VERIFIED (2026-10-30)
+
+Goal: bind ready procedural source evidence to one of the existing three concrete
+strategy inputs before the common factory/preparer; no alternate placement transport.
+TZ: docs/tz_terrain_generation.md GEO-1 strategies and region-scoped generation;
+plan §6.16 J03/J05/J06 / G8-B ready-input boundary.
+Owner/layer/path: application terrain designed-water input preparation. NEW exact
+backend/app/application/worldData/generators/terrain/designedWater/preparation/proceduralWaterSourceAdapter.py:
+ProceduralWaterSourceAdapter.prepare_source(input:WaterDesignInput[ProceduralSource],
+*,generation:HydrologyGenerationDecision,admission:PlacementAdmissionInput,
+field_policy:WaterFieldRecipe,z_min:FineZ) returns the existing union
+NoiseWaterDesignInput[ProceduralSource] | PlateWaterDesignInput[ProceduralSource] |
+PlateNoiseWaterDesignInput[ProceduralSource]. No new dataModel/wire type.
+Validate frozen ready input, terminal READY generation/admission, explicit
+AUTORESOLVE/context consistency, exact admission source/world, strategy/recipe
+agreement and no self-support. Existing concrete input validators own region,
+metadata, terrain revision, fine topology/seed and floor-bound checks.
+Construct only the matching existing variant; no rule evaluation, recipe/default
+selection, field sampling, budget calculation, geometry, P2 or Z writes. Authored
+and coastline joins remain their existing owners; this adapter accepts only the
+existing ProceduralSource wrapper. Explicit failures use PlanBuildFailure and
+existing INVALID_PREPARATION_INPUT diagnostics. No disabled/unresolved source
+is converted into a ready input; caller lifecycle retains those outcomes.
+Tests: existing geo1/contracts/strategies/test_dispatch_budget.py and positive/
+negative planning GEO typing fixtures. Real common binder/PolicyResolver decisions,
+three variants through built-in factory/preparer, invalid/foreign/stale evidence
+before design, immutable captured inputs and explicit world floor.
+Folders preparation 4→5, strategy contract tests 5→5; no new files elsewhere.
+Run GEO-1/planning/type suites and diff check. Done: isolated procedural join
+verified; G8-B universe and atomic source/transport activation remain open.
+Evidence: GEO-1 628 OK (+6), planning 292 OK; positive pyright 0;
+negative 246 diagnostics (+1), all 243 expected annotations covered, baseline
+surplus unchanged. git diff --check clean. G8-B / production G10-A remain OPEN.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.
