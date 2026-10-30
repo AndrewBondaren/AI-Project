@@ -40,7 +40,7 @@ metadata:
 |---|---|
 | **Этот TZ** | Какие generator-модули существуют, **какие ноды** их вызывают, **когда** (master / lazy / player) |
 | [`tz_engine_flow.md`](./tz_engine_flow.md) | Pass loop, repair, PatchApplier — **механика движка** |
-| [`tz_engine_node_context.md`](./tz_engine_node_context.md) | `TerrainContext`, `StructureContext` — типизированный state |
+| [`DAG-TYPING-1`](../.cursor/plans/dag-typing-1.md), [`tz_engine_node_context.md`](./tz_engine_node_context.md) | Общесистемные POJO Input/Output и `DAGContext`; не доменные Context-поля |
 | Domain TZ | climate, terrain, building, city, roads, connections |
 | [`tz_logging.md`](./tz_logging.md) | sinks; скрипты = консьюмер `script/{stem}`, bake на сервере |
 
@@ -193,7 +193,7 @@ flowchart LR
 | `eager_terrain` | pre_llm | `check_terrain` | `MapCellService.get_scene_volume` (target); сейчас `get_by_location` | read only |
 | `lazy_terrain` | pre_llm | `check_terrain` | `generate_z_slice` → `save_pass` → `get_scene_volume`; fallback `generate_minimal` (§ TR-LAZY-LOAD) | upsert column / orphan |
 | `lazy_settlement` | pre_llm | `check_terrain`, `lazy_terrain` | `SettlementGeneratorService.generate_and_collect` | upsert cells + connections |
-| `terrain_context` | pre_llm | terrain chain | aggregate → `TerrainContext` | — |
+| `terrain_context` (историческое предложение) | — | terrain chain | отдельный `TerrainContext` не принят; типизированный обмен определяется DAG-TYPING-1 | — |
 | `terrain_summary` | pre_llm | … | read-only для LLM payload | — |
 
 > **Terrain chain (target):** после `materialize-stack` wilderness cells без `location_uid` — `eager_terrain` грузит bbox вокруг `(map_x,map_y,map_z)`, не весь location. Детали — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **TR-LAZY-LOAD**, **TR-PERF**.  
@@ -416,11 +416,11 @@ Excavation — **отдельная node** + material `hardness` ([`tz_materials
 
 ---
 
-## Контракты Input/Output engine DAG (отложено до GEN-DAG-1)
+## Контракты Input/Output engine DAG (самостоятельный DAG-TYPING-1)
 
 Целевое решение от 2026-10-30: каждая нода объявляет типизированные Input/Output, сама подготавливает Input и использует существующие `deps` для зависимостей исполнения. Общие `TerrainContext`/`StructureContext` как обязательные поля `ExecutionState` — историческое предложение, **не утверждённый целевой канал**. Не реализовывать ноды и новый wiring до отдельного gate с мастером.
 
-Детали: [`tz_engine_node_context.md`](./tz_engine_node_context.md).
+План общесистемной типизации: [DAG-TYPING-1](../.cursor/plans/dag-typing-1.md); подробное ТЗ: [`tz_engine_node_context.md`](./tz_engine_node_context.md). GEN-DAG-1 решает только генераторную интеграцию; порядок внедрения планов согласовывается отдельно.
 
 ---
 
