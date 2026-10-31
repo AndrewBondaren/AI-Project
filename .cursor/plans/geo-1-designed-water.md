@@ -13468,108 +13468,32 @@ The earlier source-lifecycle next step is superseded by the responsibility accep
 requirements recorded next; do not proceed to source lifecycle integration
 before resolving the architectural findings. G10-A remains OPEN.
 
-### Task2 follow-up — AGREED OWNERS / GRANULARITY; REFACTOR NOT IMPLEMENTED (2026-10-31)
-Analysis of e0139c33 found an implicit NaturalPreparationJob → PreWaterTerrainJob
-contract through working fields, transitive access to hosts.sources.registry,
-and two implementations of hill exclusions. Earlier functional/typing evidence
-remains historical evidence, not architectural acceptance. No independent-world-
-stage orchestration violation was established in the audited job chain; calls
-between jobs alone do not justify new DAG nodes.
+### GEO-1 / SPATIAL-1 — пространственное распределение сред и материалов (linked plan, 2026-10-31)
 
-Master-agreed ownership:
-- PreWaterHillHostJob / landcover owns captured overrides, effective registry,
-  effective hill-policy resolution and coordinate-specific host membership.
-- Terrain hills owns hill selection from ready hosts and resolved policies.
-- Existing AcceptedHill / HillLayout own retained accepted hill geometry.
-- NaturalWindowJob reproduces ready geometry without preparation, host resolution
-  or hill selection. Planner delegates; provider binds/validates dependencies.
+Основной план, полный responsibility matrix, точные существующие классы и два интеграционных шва:
+[SPATIAL-1 — пространственное распределение сред и материалов](./spatial-distribution-domain.md).
 
-Master REJECTED moving capture_landcover_policy() into PreWaterHillHostPlanner.
-Keep that planner's delegation boundary: policy/override resolution is a domain
-operation inside the owning landcover job, not planner preparation knowledge.
-WorldTerrainRegistry is RootModel[list[TerrainRegistryEntry]], not immutable.
-Making it an explicit parameter alone does not solve ownership. Agreed direction:
-retain the effective registry inside the landcover job and expose required
-resolved immutable values, not registry getters or transitive working-state reads.
-If mutable sharing is proposed later, separately establish instance owner, allowed
-writers, read-only consumers and execution lifetime; never publish it in frozen
-prepared data. No such sharing contract is currently approved.
+**Разделение ответственности принято как направление; интерфейс, POJO, ambient/vacuum,
+material composition, runtime revision binding и production activation — OPEN.**
+Общий контракт ограниченного XYZ-чтения с доменными реализациями, без переноса
+fill/routing/physics/material policy в универсальный домен.
 
-Granularity is deliberately different for these existing operations:
-1. Resolve effective registry / hill policies once per coherent preparation.
-2. Project host observations per required tile/scope, reusing one prepared host
-   job. Do NOT replace scoped projection with one immutable world-wide host list.
-3. Select accepted hills once per canonical selection scope, independent of the
-   requested materialization window.
-4. Materialize only from accepted immutable geometry and frozen refine inputs.
-This does not require four new classes. Reuse existing frozen HillPolicy,
-TerrainKey, AcceptedHill / HillLayout and planning identities; no parameter-copy
-DTO, parallel POJO/enum, adapter or abstraction without demonstrated necessity.
+**Точное место интеграции с GEO:** после публикации canonical native fine-water
+и river-relief/final facts через HydrologyFactsAssembler и GeoHydrologyFinalPlanProvider;
+hydrology-owned read adapter читает только согласованный финальный source.
+Текущий HydrologyRoutesAssembler.assemble_geo всё ещё coarse-led, а
+HydrologyFactsAssembler.assemble не переносит native open-water fine occupancy
+в final sparse_fine_hydro: SP-H/G10-A blocker. River water-column требует
+отдельного доказанного z_water(x,y), а не только RIVER_BED.
 
-Selection must receive already resolved HillPolicy | None instead of discovering
-policy through registry.entry_for(key). None means hills forbidden; NEVER replace
-it with HillPolicy() defaults. Preserve inherited policies, authored overrides
-and authored null, sorted terrain-key order, seed/hash/salt, spacing, greedy
-acceptance, full-footprint admission, exclusions and computation order.
-For exclusions, old and new sets differ outside the candidate hosts, but their
-membership on same-tile hosts is equivalent. Unify rule ownership without changing
-that admission semantics, adding full passes or replacing the full reference path
-with the prepared/window implementation. Exact class/method restructuring and
-result signature still require agreement; the earlier consolidation proposal is
-not blanket authorization to implement it.
+**L2 consumer seam:** FineChunkRunner → fineTilePrep → FineChunkCompute.compute_rect
+(после local grade, до ChunkComputeResult/persist). FineChunkPersist остаётся
+writer. Текущий FineTerrainZRun + mapCellToFineTerrainWire не сохраняет
+water UID/level/role — отдельный pack-output blocker; текущий
+fineTilePrep принимает SurfacePlanBundle, не GeoSurfacePlanBundle.
+Не активировать до контракта geometry/physics revision и pack-read replay.
 
-Required acceptance evidence for the future refactor:
-- capture_landcover_policy() is called once per preparation regardless of tile
-  count; PreWaterHillHostJob is instantiated once, not once per tile.
-- Resolved-policy transport adds no full host maps/copies or world-wide host list.
-  Measure actual current/peak retained host cells, including the existing
-  CapturedLandcoverSources._tiles cache and simultaneous projection/working maps;
-  job/call counts alone do not demonstrate memory behavior. Record the baseline
-  and refactor delta; do not silently broaden this into a new cache algorithm.
-- All eight historical GOLDEN digests remain unchanged. Additionally verify
-  inherited policies, authored overrides and authored hills=None; the existing
-  eight digests alone do not prove authored-override coverage.
-- Full-reference vs bounded-window geometry, protection/exclusions, revisions,
-  exact dependencies and output fingerprints remain unchanged for equal inputs.
-  Ready materialization performs no preparation/host resolution/hill selection.
-- No domain work moves into planners/providers; no consumer reads another job's
-  mutable working fields. Preserve the callable full calculation as reference.
-No hill/mountain/light-relief algorithm or formula changes; no seed/default/order
-changes, production L2/GEO final wiring, engine DAG, SQL migrations or backend run.
-Only this plan was updated on the master's instruction to record the agreement;
-code, POJO and tests remain unchanged. Refactor implementation is not authorized
-by this record. Task2 architectural acceptance and G10-A remain OPEN.
-
-### Task2 responsibility follow-up — VERIFIED ISOLATED REFACTOR (2026-10-31)
-Master's subsequent "Делай" authorized implementation of the recorded boundaries.
-PreWaterTerrainJob.prepare_revision now publishes existing PreparedNaturalTerrain;
-the redundant NaturalPreparationJob was removed, eliminating cross-job working-
-field reads. Both full/reference and prepared paths use its one exclusions rule.
-PreWaterHillHostJob still owns capture_landcover_policy and its execution-only
-registry; resolved_hill_policies publishes one immutable tuple of existing
-TerrainKey / HillPolicy | None. Terrain creates one local lookup per preparation;
-project/project_tile stay scoped on one reused host job. No policy defaults added.
-prepare_hills consumes resolved values; place_resolved_hills supplies the same full
-calculation without exporting registry. Its shared kernel retains place_hills'
-existing registry API for current L2 callers; no production L2 change or second
-selection/raster algorithm. Restored early empty-host exit before bbox scans.
-Manual boundary check: both public planners delegate only; provider still binds
-exact upstream refs. No new POJO/enum/cache/adapters, no frozen execution objects.
-Eight historical GOLDEN preserved; independently loaded e0139c33 operations and
-refactor produce identical complete envelopes in all 12 cases (eight geometry
-cases plus inheritance/override/authored-null/registry-precedence). Four policy
-envelope digests retained as regressions; one capture/one host job and scoped host
-maps are instrumented. Runtime probe: cache entries 256→512→768→1024 for four S16
-tiles in BOTH versions, projection and current working host map each256 cells.
-Traced preparation peak in this fixture:418693→401823 bytes; not a production
-benchmark or proof of a global memory bound. Existing _tiles accumulation remains;
-no cache retention algorithm change. Empty-host100x100 bbox visits40000→0.
-Checks: GEO771 OK (+2), planning292 OK (including providers129), hills23 OK;
-positive pyright0; negative280 diagnostics /277 EXPECT covered, surplus3 unchanged;
-git diff --check clean. Full planning passed outside the sandbox: Windows asyncio
-stdlib socketpair/accept blocks before async test bodies inside the sandbox.
-The three audited responsibility findings are resolved in this isolated slice;
-this supersedes the earlier Task2 architectural-acceptance OPEN marker only.
-Next after checks: bind prepared revision into fine-window publication/main GEO
-source lifecycle; production L2, GEO final, engine DAG and SQL remain untouched.
-G10-A remains OPEN; no backend, commit or push.
+G10-A, GEO final coverage и Aerial A4 остаются OPEN; перенос текста в
+SPATIAL-1 не является разрешением на реализацию. В SPATIAL-1 шаги
+SP-0 (audit) → SP-1/2 (architecture) → SP-H (GEO prerequisite)
+→ SP-3 (hydrology reader) → SP-4 (L2 integration) → SP-5 (other domains).
