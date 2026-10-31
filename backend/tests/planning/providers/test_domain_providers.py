@@ -2319,7 +2319,7 @@ class HydrologyAssemblyBoundaryTests(unittest.TestCase):
 
     def test_facts_preserve_kernel_roles_instead_of_recomputing_them(self):
         from unittest.mock import patch
-        from app.application.worldData.generators.hydrology.planning.assembly import hydrologyFactsAssembler as module
+        from app.application.worldData.generators.hydrology.planning.assembly.final import riverFacts as module
         f = self.f
         routes = f.routes()
         river = f.execute(f.river_binding, f.river_inputs, f.river_handles, (f.before, routes))

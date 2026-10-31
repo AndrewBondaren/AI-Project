@@ -13760,3 +13760,36 @@ Planning suite not repeated: existing execution/providers unchanged; GEO covers
 this isolated operation. git diff --check clean. Next: native final facts + exact
 W/F/routes/river dependency closure and successful coverage, then atomic G8-B
 registration/production cutover. G10-A OPEN; no production changes or commit/push.
+
+
+### Task8 — NATIVE FINAL FACTS — VERIFIED ISOLATED (2026-11-01)
+Clean4946dd98; source-join frozen-source/delivery contract and
+ docs/tz_terrain_hydrology.md. Existing GeoHydrologyPlan fields suffice for facts;
+coverage/provenance publication is separate and no completeness claim is made.
+Owner/files: hydrology/planning/assembly/final/riverFacts.py contains unchanged
+river roles/receiver checks extracted from HydrologyFactsAssembler; both paths
+reuse these rules. final/nativeFacts.py::NativeFinalFactsJob joins canonical
+open-water + actual river roles, validates fine receivers/source identities,
+projects coarse hydro at existing center sample, delegates B union H to terrain
+FineHeightDeltaJob and checks actual coarse geometry via existing projection.
+HydrologyFactsAssembler.assemble_fine only delegates. No domain algorithms in
+planner/orchestrator, no new POJO/enum, refill, independent coarse carve or bridge.
+Folders: assembly4 direct unchanged + final/2; tests geo1/native_final/2.
+Checks: actual W→F→routes→beds→final reconstruction, unsampled fine lake receiver,
+retained open-water/dry SHORE, bad beds/receiver/source/frame rejection, unchanged
+legacy algorithms, GEO/planning and positive/negative typing. G10-A OPEN; no
+production registration/L2/final, backend, DAG, SQL migration, commit or push.
+
+Verified: GEO814 OK (+6), refined coarse-sampling test and all6 native-final cases
+passed again; planning292 OK; positive pyright0; negative293 diagnostics, all290
+EXPECT lines covered. Historical roles/receiver function bodies match HEAD;
+only mock target moved to their new module, assertions unchanged.
+Boundary review: new assemble_fine delegates only; native facts job owns merging/
+identity checks, terrain jobs retain geometry/delta ownership. No private job
+state reads, policy resolution or rerouting. Full fine height maps are not copied;
+merged fine hydro retains canonical water + river facts (O(water facts + H)).
+Next: native final publication must admit exact W/F/routes/river refs, preserve
+upstream diagnostics and publish successful physical coverage without implying
+all-intent routing success. Then atomic G8-B capture/registration/production.
+G10-A OPEN; existing registered/production/L2 paths unchanged; no backend, DAG,
+SQL migrations, commit or push. git diff --check clean.

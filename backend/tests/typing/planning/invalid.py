@@ -1182,3 +1182,11 @@ from app.application.worldData.generators.terrain.planning.projection.heightDelt
 
 def invalid_height_delta(water: PlanEnvelope[FineWaterResult], river: RiverReliefPlan, control: PlanBuildControl) -> None:
     FineHeightDeltaJob().compute(water, water.payload[0], samples=(), river=river, control=control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler
+
+
+def invalid_native_final(inputs: GeoHydrologyPlanInput, before: FineSurfaceWindow, water: PlanEnvelope[FineWaterResult],
+                         routes: GeoHydrologyRoutesPlan, river: RiverReliefPlan, control: PlanBuildControl) -> None:
+    HydrologyFactsAssembler().assemble_fine(inputs=inputs, before=before, water=water, routes=routes, river=river, control=control)  # EXPECT: reportArgumentType

@@ -2218,3 +2218,10 @@ B (changed water heights) union H (actual river samples), with H taking preceden
 Validate H against F and actual bed records; unchanged non-bed samples stay
 unchanged. This pure operation does not prove revision closure or successful
 water coverage: final publication must bind exact source envelopes separately.
+
+Native final facts merge canonical fine open-water with actual accepted river-bed
+roles. Actual fine receiving identity is required; coarse membership cannot prove
+it. Dry shore may become an accepted river bed; canonical liquid cells are retained.
+Coarse hydro samples the merged fine facts at the same centers as final heights.
+The pure facts operation returns existing GeoHydrologyPlan without asserting
+successful coverage or all-intent routing; exact refs/coverage require publication.

@@ -387,3 +387,13 @@ def final_height_delta(before: FineSurfaceWindow, water: FineSurfaceWindow, rive
                        samples: tuple[tuple[FineXY, FineZ], ...], control: PlanBuildControl) -> None:
     assert_type(FineHeightDeltaJob().compute(before, water, samples=samples, river=river, control=control),
                 tuple[tuple[FineXY, FineZ], ...])
+
+
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler
+from app.dataModel.hydrology.planning.hydrologyPlan import GeoHydrologyPlan
+
+
+def native_final_facts(inputs: GeoHydrologyPlanInput, before: FineSurfaceWindow, water: FineWaterResult,
+                       routes: GeoHydrologyRoutesPlan, river: RiverReliefPlan, control: PlanBuildControl) -> None:
+    assert_type(HydrologyFactsAssembler().assemble_fine(inputs=inputs, before=before, water=water,
+        routes=routes, river=river, control=control), PlanBuildResult[GeoHydrologyPlan])
