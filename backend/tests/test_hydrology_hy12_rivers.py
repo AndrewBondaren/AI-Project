@@ -108,7 +108,7 @@ class RiverWaterlineTests(unittest.TestCase):
         apply_basin_z(hm, (spec,), topology, reserved=frozenset())
         water = assemble_water_bodies(hm, (spec,), topology, WorldHydrology(),
                                      change_uid="test", auto_seas=False, auto_lakes=False)
-        index = water.materialized.by_cell
+        index = dict(water.materialized.cells)
         self.assertEqual(index[(4, 2)].role, Role.SHORE)
         path = plan_descent_path(hm, (1, 2), index, topology=topology, policy=HydrologyRiversPolicy())
         self.assertTrue(path)

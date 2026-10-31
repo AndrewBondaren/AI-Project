@@ -280,7 +280,8 @@ def pre_carve_terrain(world: EntityUid, base_input: TerrainBaseInput, relief_inp
 
 
 from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
-from app.application.worldData.generators.hydrology.waterBodyAssembler import AssembledWater
+from app.dataModel.hydrology.planning.stages.openWaterPlan import AssembledWater, FineWaterResult
+from app.dataModel.placement.result import PlacementBatchResultV2
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
@@ -293,9 +294,10 @@ def frozen_fine_water(world: EntityUid, base_input: TerrainBaseInput, relief_inp
                       inputs: SurfaceSupportInput, base: PlanEnvelope[ClimateBasePlan],
                       terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage, control: PlanBuildControl,
                       window: PlanEnvelope[FineSurfaceWindow], expected: PlanRef, topology: WorldTopology,
-                      specs: tuple[BasinSpec, ...], policy: WorldHydrology) -> None:
+                      specs: tuple[BasinSpec, ...], placement: PlanEnvelope[PlacementBatchResultV2], physical: GeoHydrologyPlanInput,
+                      decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]) -> None:
     assert_type(PreWaterTerrainPlanner().prepare_window(world, base_input, relief_input, inputs, base, terrain,
         cells=cells, control=control), PlanEnvelope[FineSurfaceWindow])
-    assert_type(WaterBodyPlanner().fill_fine(window, expected_surface=expected, topology=topology, specs=specs,
-        policy=policy, change_uid=world, control=control),
-        tuple[SurfaceHeightmap, AssembledWater, tuple[PlanDiagnostic, ...]])
+    assert_type(WaterBodyPlanner().fill_fine(window, expected_surface=expected, placement=placement,
+        expected_placement=placement.ref, inputs=physical, specs=specs, classification_decisions=decisions, control=control),
+        PlanEnvelope[FineWaterResult])

@@ -12,6 +12,13 @@ from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
 from app.application.engine.runtime.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
 from app.application.engine.runtime.prompt.pojo.nodeSection import NodeSection
+from app.application.engine.runtime.prompt.pojo.llmPayload import LLMPayload
+from app.application.engine.runtime.repair.repairBuilder import RepairBuilder
+from app.application.engine.runtime.repair.dslFailureProjector import DSLFailureProjector
+from app.application.engine.runtime.repair.pojo.nodeFailureContext import NodeFailureContext
+from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
+from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
+from app.application.llm.models import ChatMessage
 from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.dataModel.engine.dag.records import OutputRecord
 from app.application.engine.contracts.nodeContract import NodeContract
@@ -153,6 +160,33 @@ def wrong_payload(
     wrong: NodeSection[OtherInput] = section  # expect: reportAssignmentType
     builder.build((NodeInput(value=1),), player_message="", language="ru")  # expect: reportArgumentType
     print(wrong)
+
+
+def wrong_repair(
+    projector: DSLFailureProjector, builder: RepairBuilder, base: LLMPayload,
+    node: LLMNode[NodeInput, LeafOutput, Never], registration: NodeRegistration[NodeInput, LeafOutput, Never],
+    validation: ValidationResult,
+) -> None:
+    failure = projector.project(node, registration, identity(), validation, raw_output="{}")
+    wrong: NodeFailureContext[CompositeOutput] = failure  # expect: reportAssignmentType
+    projector.project(node, registration, identity(), validation, raw_output={})  # expect: reportArgumentType
+    builder.build(base, (failure,), mode="economy")  # expect: reportArgumentType
+    builder.build(base, (validation,))  # expect: reportArgumentType
+    print(wrong)
+
+
+async def bad_llm_request(messages: list[ChatMessage], schema: dict[str, object], *, enable_thinking: bool, temperature: float) -> LeafOutput:
+    return LeafOutput(value=1)
+
+
+async def wrong_llm_execution(
+    executor: DAGExecutor, aggregate: LLMAggregateExecutor, plan: ExecutionPlan, state: ExecutionState,
+    request: LLMRequest, options: LLMExecutionOptions,
+) -> None:
+    await executor.run_llm_phase(plan, state, PlanRevision("r1"), aggregate, bad_llm_request, options=options)  # expect: reportArgumentType
+    await executor.run_llm_phase(plan, state, PlanRevision("r1"), aggregate, request, options={})  # expect: reportArgumentType
+    state.catalog.publish_batch((LeafOutput(value=1),))  # expect: reportArgumentType
+    LLMExecutionOptions(player_message="", language="ru", repair_iterations=1, repair_mode="maximum")  # expect: reportArgumentType
 
 
 def wrong_validation() -> None:

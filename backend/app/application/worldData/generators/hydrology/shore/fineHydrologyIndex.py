@@ -49,7 +49,7 @@ def apply_declared_fine_river_carves(
     requests = sampling.sample_requests(requests, classify)
     jobs = prepare_river_requests(world, hm, requests, dict(sampling.occupied), topology, policy,
         water_bodies, ctx, world_z_min(world), space=CoordinateSpace.WORLD_FINE_GRID)
-    hm = sampling.output_heightmap(cell for segments in chain(
+    hm = sampling.heightmap if base_space is CoordinateSpace.WORLD_FINE_GRID else sampling.output_heightmap(cell for segments in chain(
         (request.segments for request in requests), (job.segments for job in jobs))
         for segment in segments for cell in segment.polyline_cells)
     apply_river_bed_z(hm, tuple(spec for job in jobs for spec in job.specs))

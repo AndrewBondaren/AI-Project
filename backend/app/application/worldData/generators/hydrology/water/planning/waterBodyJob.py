@@ -1,6 +1,6 @@
 """Coarse open-water domain execution from accepted geometry and captured policy."""
 
-from pydantic import TypeAdapter
+from app.application.worldData.generators.hydrology.water.planning.geoExecution import geo_execution_modes, geo_auto_lakes
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanBuildControl, PlanBuildFailure
@@ -21,7 +21,6 @@ from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
-from app.dataModel.policy.policyEnums import PolicyState
 from app.dataModel.spatial.grid.coordinateTypes import FineZ, GridX, GridY, SurfaceGridCoord
 from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan, GeoWaterPlacementPlan
@@ -29,10 +28,6 @@ from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
-
-
-_DECISIONS = TypeAdapter[tuple[tuple[Category, HydrologyGenerationDecision], ...]](
-    tuple[tuple[Category, HydrologyGenerationDecision], ...])
 
 
 class WaterBodyJob:
@@ -72,19 +67,7 @@ class WaterBodyJob:
             raise PlanBuildFailure((FieldPathError(("placement",),
                 "water planning requires the captured placement topology"),))
         self._require_surface(surface_z, inputs.topology, inputs.z_min, inputs.z_max)
-        try:
-            decisions = _DECISIONS.validate_python(classification_decisions, strict=True)
-            if tuple(category for category, _ in decisions) != tuple(sorted(Category, key=lambda c: c.value)):
-                raise ValueError("GEO fill requires one canonical decision for every water category")
-            modes = {}
-            for category, decision in decisions:
-                mode = decision.require_behavior()
-                if ((mode is Mode.DISABLED and decision.state is not PolicyState.DISABLED)
-                        or (mode is not Mode.DISABLED and decision.state is not PolicyState.READY)):
-                    raise ValueError("GEO fill requires terminal generation decisions")
-                modes[category] = mode
-        except ValueError as error:
-            raise PlanBuildFailure((FieldPathError(("classification_decisions",), str(error)),)) from error
+        modes = geo_execution_modes(classification_decisions)
         if all(mode is Mode.DISABLED for mode in modes.values()):
             return PlanBuildResult[OpenWaterPlan](payload=OpenWaterPlan(
                 coarse_open_water=(), water_bodies=(), physical_unions=(),
@@ -93,7 +76,7 @@ class WaterBodyJob:
         # classification never repeats source admission or synthesizes designed seas.
         return self._materialize(world_uid=world_uid, inputs=inputs, surface_z=surface_z,
             specs=placement.basin_specs, auto_seas=False,
-            auto_lakes=modes[Category.LAKE] is Mode.AUTORESOLVE and BasinKind.LAKE in inputs.allowed_body_kinds,
+            auto_lakes=geo_auto_lakes(inputs, modes),
             allowed_kinds=inputs.allowed_body_kinds, control=control)
 
     def _materialize(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput | GeoHydrologyPlanInput,
@@ -113,7 +96,7 @@ class WaterBodyJob:
             auto_seas=auto_seas, auto_lakes=auto_lakes, allowed_kinds=allowed_kinds,
             ctx=ctx, emit=diagnostics.append)
         control.raise_if_shutdown()
-        cells = water.materialized.by_cell
+        cells = dict(water.materialized.cells)
         return PlanBuildResult[OpenWaterPlan](payload=OpenWaterPlan(coarse_open_water=tuple(
             (SurfaceGridCoord(GridX(x), GridY(y)), cells[(x, y)]) for x, y in sorted(cells, key=lambda cell: (cell[1], cell[0]))),
             water_bodies=water.materialized.bodies, physical_unions=water.physical_unions,

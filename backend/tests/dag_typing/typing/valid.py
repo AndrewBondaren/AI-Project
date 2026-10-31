@@ -13,6 +13,13 @@ from app.application.engine.runtime.dag.lifecycle.executionSnapshotService impor
 from app.application.engine.runtime.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
 from app.application.engine.runtime.prompt.pojo.nodeSection import NodeSection
 from app.application.engine.runtime.prompt.pojo.llmPayload import LLMPayload
+from app.application.engine.runtime.prompt.pojo.llmRepairPayload import LLMRepairPayload
+from app.application.engine.runtime.repair.repairBuilder import RepairBuilder
+from app.application.engine.runtime.repair.dslFailureProjector import DSLFailureProjector
+from app.application.engine.runtime.repair.pojo.nodeFailureContext import NodeFailureContext
+from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
+from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
+from app.application.engine.runtime.dag.executionPlan import LLMGroup
 from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.diagnostics.dagLog import emit
@@ -250,3 +257,29 @@ def verify_payload(
     assert_type(payload.sections, tuple[NodeSection[BaseModel], ...])
     assert_type(payload.to_dict(), dict[str, object])
     assert_type(payload.response_format_schema, dict[str, object])
+
+
+def verify_repair(
+    projector: DSLFailureProjector, builder: RepairBuilder, base: LLMPayload,
+    node: LLMNode[NodeInput, LeafOutput, Never], registration: NodeRegistration[NodeInput, LeafOutput, Never],
+    validation: ValidationResult, other: NodeFailureContext[CompositeOutput],
+) -> None:
+    failure = projector.project(node, registration, identity(), validation, raw_output="{}")
+    assert_type(failure, NodeFailureContext[LeafOutput])
+    assert_type(failure.output_type, type[LeafOutput])
+    assert_type(failure.validation, ValidationResult)
+    payload = builder.build(base, (failure, other))
+    assert_type(payload, LLMRepairPayload)
+    assert_type(payload.errors, tuple[NodeFailureContext[BaseModel], ...])
+    assert_type(payload.to_dict(), dict[str, object])
+
+
+async def verify_llm_execution(
+    executor: DAGExecutor, aggregate: LLMAggregateExecutor, request: LLMRequest,
+    plan: ExecutionPlan, group: LLMGroup, state: ExecutionState, options: LLMExecutionOptions,
+    views: dict[NodeId, PublishedDAGReadView], record: OutputRecord[LeafOutput],
+) -> None:
+    assert_type(await executor.run_llm_phase(plan, state, PlanRevision("r1"), aggregate, request, options=options), LevelDecision)
+    assert_type(await aggregate.execute(plan, group, (identity(),), views, request, options=options), tuple[NodeOutcome[BaseModel, NodeError], ...])
+    assert_type(state.catalog.publish_batch((record,)), None)
+    assert_type(state.levels[0].phase, ExecutionPhase)

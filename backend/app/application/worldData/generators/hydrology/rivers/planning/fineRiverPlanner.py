@@ -65,7 +65,8 @@ class FineRiverPlanner:
             water_bodies=water.water_bodies, resolution_mode=inputs.resolution_mode, z_min=inputs.z_min,
             space=CoordinateSpace.WORLD_FINE_GRID, to_coordinate=_fine, control=control)
         retained = chain((cell for request in requests for segment in request.segments for cell in segment.polyline_cells),
-                         (cell for route in result.payload.routes for segment in route.segments for cell in segment.path))
+                         (cell for route in result.payload.routes for segment in route.segments for cell in segment.path),
+                         (route.receiver_cell for route in result.payload.routes))
         samples = sampling.output_heightmap(retained).surface_z
         control.raise_if_shutdown()
         return PlanBuildResult[FineRiverPlan](payload=FineRiverPlan(routes=result.payload.routes,

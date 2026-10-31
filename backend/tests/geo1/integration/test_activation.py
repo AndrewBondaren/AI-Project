@@ -229,7 +229,7 @@ class SourceMappingProducerTests(TestCase):
         from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
         specs = (self.spec("wet", ((2, 2),)), self.spec("shore", ((3, 2),)))
         result = self.fill({(2, 2): -2, (3, 2): 0}, specs)
-        shore = result.materialized.by_cell[(3, 2)]
+        shore = dict(result.materialized.cells)[(3, 2)]
         self.assertIs(shore.role, HydrologyCellRole.SHORE)
         self.assertEqual(shore.water_body_uid, "wet")
         self.assertEqual(self.mapped(result)["shore"], ())
@@ -237,7 +237,7 @@ class SourceMappingProducerTests(TestCase):
     def test_tied_sources_use_actual_cell_ownership_instead_of_equal_uids(self):
         cells = ((2, 2), (3, 2))
         result = self.fill(dict.fromkeys(cells, -2), (self.spec("a", cells), self.spec("b", cells)))
-        actual = tuple(sorted({result.materialized.by_cell[cell].water_body_uid for cell in cells}))
+        actual = tuple(sorted({dict(result.materialized.cells)[cell].water_body_uid for cell in cells}))
         self.assertEqual(self.mapped(result), {"a": actual, "b": actual})
         self.assertIn("b", {body.water_body_uid for body in result.materialized.bodies})
         self.assertNotEqual(self.mapped(result)["b"], ("b",))
@@ -255,11 +255,11 @@ class SourceMappingProducerTests(TestCase):
         systems = {union.water_system_uid for union in result.physical_unions}
         self.assertTrue(all(not systems.intersection(entry.body_uids) for entry in result.materialized.source_mapping.entries))
         for source, cell in (("a", (2, 2)), ("b", (3, 2))):
-            self.assertEqual(self.mapped(result)[source], (result.materialized.by_cell[cell].water_body_uid,))
+            self.assertEqual(self.mapped(result)[source], (dict(result.materialized.cells)[cell].water_body_uid,))
 
     def test_spill_mapping_uses_final_wet_body_after_the_level_changes(self):
         result = self.fill({(2, 2): 0, (2, 1): 3, (2, 0): 3}, (self.spec("spill", ((2, 2),), level=6),))
-        cell = result.materialized.by_cell[(2, 2)]
+        cell = dict(result.materialized.cells)[(2, 2)]
         self.assertEqual(cell.z_water_level, 3)
         self.assertEqual(self.mapped(result)["spill"], (cell.water_body_uid,))
 
@@ -269,10 +269,10 @@ class SourceMappingProducerTests(TestCase):
         self.assertEqual(result.materialized.source_mapping.entries, ())
 
         result = self.fill({(2, 2): -1}, (self.spec("probe", ((2, 2),), level=-2),), auto=True)
-        actual = result.materialized.by_cell[(2, 2)].water_body_uid
+        actual = dict(result.materialized.cells)[(2, 2)].water_body_uid
         self.assertEqual(self.mapped(result), {"probe": (actual,)})
         self.assertNotEqual(actual, "probe")
-        self.assertIn(actual, result.materialized.uid_remap.values())
+        self.assertIn(actual, dict(result.materialized.uid_aliases).values())
 
     def test_source_mapping_replays_across_order_and_topology(self):
         from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
@@ -283,7 +283,7 @@ class SourceMappingProducerTests(TestCase):
             second = self.fill(dict.fromkeys(cells, -2), tuple(reversed(specs)), mode=mode)
             with self.subTest(mode=mode):
                 self.assertEqual(first.materialized.source_mapping, second.materialized.source_mapping)
-                self.assertEqual(first.materialized.by_cell, second.materialized.by_cell)
+                self.assertEqual(dict(first.materialized.cells), dict(second.materialized.cells))
 
     def test_failed_terrain_resolution_does_not_claim_accepted_sources_are_dry(self):
         from app.application.jsonValidation.resolve import ResolveContext

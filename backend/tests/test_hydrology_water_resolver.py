@@ -47,7 +47,7 @@ class WaterResolverTests(unittest.TestCase):
         union = result.physical_unions[0]
         self.assertEqual(union.member_uids, ("A", "B"))
         self.assertTrue(all(body.parent_system_uid == union.water_system_uid for body in bodies.values()))
-        cells = result.materialized.by_cell
+        cells = dict(result.materialized.cells)
         self.assertEqual(cells[(6, 1)].role, HydrologyCellRole.SHORE)
         self.assertFalse(cells[(6, 1)].liquid_candidate)
         self.assertNotIn((7, 1), cells)  # lower outside region across the dry spillway
@@ -71,14 +71,14 @@ class WaterResolverTests(unittest.TestCase):
         hm = row_map([99, 0, 0, 3, 4, 99])
         result = assemble(hm, [spec("lake", [(1, 1)], 5)])
         self.assertEqual(result.materialized.bodies[0].z_water_level, 5)
-        self.assertTrue(result.materialized.by_cell[(4, 1)].liquid_candidate)
+        self.assertTrue(dict(result.materialized.cells)[(4, 1)].liquid_candidate)
 
     def test_flat_sill_processed_atomically(self):
         hm = row_map([99, 0, 0, 3, 3, 3, -2, 99])
         result = assemble(hm, [spec("lake", [(1, 1)], 10)])
         self.assertEqual(result.materialized.bodies[0].z_water_level, 3)
-        self.assertEqual(result.materialized.by_cell[(3, 1)].role, HydrologyCellRole.SHORE)
-        self.assertNotIn((6, 1), result.materialized.by_cell)
+        self.assertEqual(dict(result.materialized.cells)[(3, 1)].role, HydrologyCellRole.SHORE)
+        self.assertNotIn((6, 1), dict(result.materialized.cells))
 
     def test_dry_sill_at_equal_level_does_not_merge(self):
         hm = row_map([99, 0, 0, 5, 0, 0, 99])
@@ -90,7 +90,7 @@ class WaterResolverTests(unittest.TestCase):
         hm = row_map([-10, -10, -10, 99])
         ocean = assemble(hm, [spec("ocean", [(1, 1)], 0, kind=BasinKind.OCEAN)])
         self.assertEqual(ocean.materialized.bodies[0].z_water_level, 0)
-        self.assertTrue(ocean.materialized.by_cell[(0, 1)].liquid_candidate)
+        self.assertTrue(dict(ocean.materialized.cells)[(0, 1)].liquid_candidate)
         lake = assemble(hm, [spec("lake", [(1, 1)], 0)])
         self.assertEqual(lake.materialized.bodies, ())
 
@@ -98,11 +98,11 @@ class WaterResolverTests(unittest.TestCase):
         hm = row_map([99, 0, 99])
         result = assemble(hm, [spec("tiny", [(1, 1)], 5)])
         self.assertEqual(result.materialized.bodies, ())
-        self.assertEqual(result.materialized.by_cell, {})
+        self.assertEqual(dict(result.materialized.cells), {})
 
     def test_natural_only_high_flat_world_does_not_synthesize_ocean(self):
         hm = flat_heightmap(0, 5, 0, 3, z=10)
-        self.assertEqual(assemble(hm, [], auto=True).materialized.by_cell, {})
+        self.assertEqual(dict(assemble(hm, [], auto=True).materialized.cells), {})
 
     def test_natural_water_seam_has_one_positional_body(self):
         hm = flat_heightmap(0, 5, 0, 3, z=10)
@@ -147,14 +147,14 @@ class WaterResolverTests(unittest.TestCase):
         before = dict(hm.surface_z)
         result = assemble(hm, [spec("ocean", set(hm.surface_z), 0, kind=BasinKind.OCEAN)],
                           mode=WorldTopologyMode.WRAPPED)
-        self.assertEqual(result.materialized.by_cell[(2, 2)].role, HydrologyCellRole.SHORE)
+        self.assertEqual(dict(result.materialized.cells)[(2, 2)].role, HydrologyCellRole.SHORE)
         self.assertEqual(hm.surface_z, before)
 
     def test_partial_snapshot_reports_unresolved_instead_of_inventing_rim(self):
         hm = flat_heightmap(0, 5, 0, 3, z=-2)
         del hm.surface_z[(2, 2)]
         result = assemble(hm, [], auto=True)
-        self.assertEqual(result.materialized.by_cell, {})
+        self.assertEqual(dict(result.materialized.cells), {})
         self.assertEqual(result.physical_unions, ())
 
     def test_physical_water_and_shore_cross_sphere_fold(self):
@@ -162,7 +162,7 @@ class WaterResolverTests(unittest.TestCase):
         hm.surface_z.update({(0, 0): -1, (3, 0): -2})
         result = assemble(hm, [spec("fold-lake", [(0, 0), (3, 0)], 0)],
                           mode=WorldTopologyMode.SPHERE)
-        cells = result.materialized.by_cell
+        cells = dict(result.materialized.cells)
         self.assertTrue(cells[(0, 0)].liquid_candidate)
         self.assertTrue(cells[(3, 0)].liquid_candidate)
         self.assertEqual(cells[(0, 1)].role, HydrologyCellRole.SHORE)
@@ -176,8 +176,8 @@ class WaterResolverTests(unittest.TestCase):
         self.assertTrue(result.materialized.bodies)
         self.assertNotIn("high-lake", {body.water_body_uid for body in result.materialized.bodies})
         self.assertTrue(all(body.z_water_level == 0 for body in result.materialized.bodies))
-        self.assertEqual(result.materialized.by_cell[(2, 1)].role, HydrologyCellRole.SHORE)
-        self.assertFalse(result.materialized.by_cell[(2, 1)].liquid_candidate)
+        self.assertEqual(dict(result.materialized.cells)[(2, 1)].role, HydrologyCellRole.SHORE)
+        self.assertFalse(dict(result.materialized.cells)[(2, 1)].liquid_candidate)
 
     def test_auto_anchor_remap_keeps_shared_parent_identity_consistent(self):
         hm = row_map([99, -1, -5, 2, 0, 0, 99])
@@ -196,10 +196,10 @@ class WaterResolverTests(unittest.TestCase):
         result = assemble(hm, [spec("lake", [(x, 1) for x in range(3, 8)], 20)])
         self.assertEqual(result.materialized.bodies[0].z_water_level, 8)
         self.assertEqual(result.materialized.bodies[0].declared_level, 8)
-        self.assertTrue(result.materialized.by_cell[(3, 1)].liquid_candidate)
-        self.assertTrue(result.materialized.by_cell[(7, 1)].liquid_candidate)
-        self.assertEqual(result.materialized.by_cell[(5, 1)].role, HydrologyCellRole.SHORE)
-        self.assertEqual({entry.water_body_uid for entry in result.materialized.by_cell.values()}, {"lake"})
+        self.assertTrue(dict(result.materialized.cells)[(3, 1)].liquid_candidate)
+        self.assertTrue(dict(result.materialized.cells)[(7, 1)].liquid_candidate)
+        self.assertEqual(dict(result.materialized.cells)[(5, 1)].role, HydrologyCellRole.SHORE)
+        self.assertEqual({entry.water_body_uid for entry in dict(result.materialized.cells).values()}, {"lake"})
 
 
 if __name__ == "__main__":

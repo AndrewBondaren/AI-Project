@@ -1,7 +1,7 @@
 """One final multi-source fill: cells agree with the resolved effective levels."""
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from app.dataModel.hydrology.planning.stages.openWaterPlan import MaterializedWater
 
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.generators.hydrology.water.componentLabel import component_fills
@@ -21,17 +21,6 @@ from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
-
-
-@dataclass(frozen=True)
-class MaterializedWater:
-    by_cell: dict[Coord, MapCellHydrology]
-    bodies: tuple[WaterBody, ...]
-    areas: dict[str, int]
-    floors: dict[str, int]
-    # Auto basin seeds belonging to one final connected body coalesce here.
-    uid_remap: dict[str, str]
-    source_mapping: SourceBodyMapping
 
 
 def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource, ...],
@@ -144,4 +133,6 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
             if (cell := by_cell.get(coord)) is not None and cell.liquid_candidate
             and cell.water_body_uid is not None})))
         for source in sorted(sources, key=lambda source: source.spec.source_uid) if source.authored))
-    return MaterializedWater(by_cell, tuple(bodies[uid] for uid in sorted(bodies)), areas, floors, auto_remap, mapping)
+    return MaterializedWater(tuple((cell, by_cell[cell]) for cell in sorted(by_cell, key=lambda c: (c[1], c[0]))),
+        tuple(bodies[uid] for uid in sorted(bodies)), tuple(sorted(areas.items())),
+        tuple(sorted(floors.items())), tuple(sorted(auto_remap.items())), mapping)

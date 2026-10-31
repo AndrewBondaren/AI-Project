@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import GateSignal, LevelDecision
 from app.dataModel.engine.dag.diagnostics import Index, Timestamp
-from app.dataModel.engine.dag.executionPhase import PythonExecutionPhase
+from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.identity import ExecutionIdentity
 
 
 @dataclass(frozen=True)
 class ExecutionLevelSnapshot:
-    phase: PythonExecutionPhase
+    phase: ExecutionPhase
     pass_number: Index
     level: Index
     decision: LevelDecision

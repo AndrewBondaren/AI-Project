@@ -2131,9 +2131,25 @@ Window не содержит water records и не заменяет final hydrol
 проверяет topology и читает protection из frozen payload, не из water mask.
 Accepted fine fill проверяет ожидаемый ref и frame до любых writes, применяет
 accepted BasinSpec floor через terrain writer и вызывает общий physical water
-resolver. Source admission/placement не повторяются; implicit sources отключены.
+resolver. Source admission/placement не повторяются. Procedural seas не синтезируются
+повторно; AUTORESOLVE озёр и allowed kinds выводятся из тех же terminal category
+decisions, что и coarse GEO execution, через одного hydrology owner.
 Existing physical resolver требует полного fine world evidence: clipped window
 отвергается, не считается implicit dry и не расширяется через I/O. Это ограничение
 операции, не переключение production на dense fine-world planning. Результат —
 existing AssembledWater/MaterializedWater; публикация final coverage и L0/L2
 projection выполняются отдельным atomic GEO cutover без второго water SoT.
+
+
+GEO fine publication связывает exact terrain и native placement envelopes; UID/
+footprint и exact fine terrain dependency/snapshot fingerprint должны совпадать. Physical inputs, accepted
+BasinSpecs, terminal category decisions и change_uid входят в operation key;
+output envelope хранит immutable post-basin FineSurfaceWindow и existing
+AssembledWater. ERROR из upstream/execution исключает successful publication;
+partial proof этим контрактом не вводится. MaterializedWater хранит canonical
+immutable tuples; callers явно строят working indexes, без mutable dict внутри
+payload и без свойств, создающих скрытые полные map copies.
+River planning observation scope и retained output различаются: источник может
+быть полным, но следующие river stages получают только requested path/accepted
+path/receiver samples, без search-only cells. Legacy full-fine helper сохраняет
+полный возврат явно в своём caller; это не transport river planning stages.

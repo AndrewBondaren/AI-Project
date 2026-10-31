@@ -1,9 +1,16 @@
 import re
+from collections.abc import Mapping
 from enum import Enum
+from typing import Protocol
 
 from app.application.engine.validation.validationStatus import ValidationResult
 
 _PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+class DSLPatchSource(Protocol):
+    @property
+    def dsl_patches(self) -> Mapping[str, str]: ...
 
 
 def _fmt_value(v) -> str:
@@ -20,7 +27,7 @@ class DSLResolver:
     def __init__(self, dsl_registry):
         self.dsl_registry = dsl_registry
 
-    def resolve_patches(self, node, validation: ValidationResult) -> list[str]:
+    def resolve_patches(self, node: DSLPatchSource, validation: ValidationResult) -> list[str]:
         """
         Возвращает список dsl_patch ключей для всех ошибок validation.
         Одна ошибка -> один патч (если объявлен на ноде).

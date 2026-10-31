@@ -12729,7 +12729,8 @@ water records. Инвентарь ResolvedWaterPlacement:7 application/dataModel
 это отдельный реальный remaining, не устраняется fine publication metadata.
 В этом аудите implementation не менялась, тесты не запускались. G10-A OPEN.
 
-### G10-A publication review — REVISION CLOSURE / RETAINED HEIGHTS OPEN (2026-10-31)
+### G10-A publication review — FINDINGS FIXED BELOW / CANONICAL JOIN OPEN (2026-10-31)
+Состояние на момент ревью; исправления isolated operation закреплены ниже.
 Подтверждены оба замечания мастера к предыдущему анализу:
 - FineWaterJob проверяет только terrain envelope. specs/physical policy/change_uid
   идут отдельными аргументами; scratch/AssembledWater/diagnostics не являются
@@ -12758,6 +12759,54 @@ identity; fatal empty result не публикует successful coverage; retain
 retention; production strategy не объявлена готовой. Код/тесты в этом review не
 менялись и не запускались. G10-A OPEN; прежняя оценка «достаточно подключить existing
 fine branch» снята как неполная.
+
+### G10-A review fixes: closure / retention / GEO execution parity — IMPLEMENTED (2026-10-31)
+ТЗ: publication review items1/2 + item4; docs/tz_terrain_hydrology.md frozen fine
+publication / sparse retention, plan §6.10/6.20, HY-12 physical resolution.
+Owners/contracts:
+- Existing MaterializedWater/AssembledWater перенесены в dataModel/hydrology/
+  planning/stages/openWaterPlan.py: immutable canonical tuples, final UID/mapping
+  invariants. Callers явно строят working indexes, скрытых dict-properties/cache
+  нет. FineWaterResult — fixed tuple[FineSurfaceWindow,AssembledWater]; нового
+  water record/V2/enum/compatibility bridge не вводится.
+- water/planning/geoExecution.py — общий terminal decision validation и
+  auto_lakes/allowed_kinds owner для coarse и fine. Source admission не повторяется.
+- water/planning/fine/execution.py::FineWaterJob — physical execution из captured
+  GeoHydrologyPlanInput + decisions, shared rules и allowed kinds; ERROR приводит
+  к PlanBuildFailure до publication. Успешный результат содержит post-basin window
+  и существующие physical facts; FALLBACK/NOTICE не понижаются до ERROR.
+- water/planning/fine/publication.py::FineWaterPublicationJob — exact terrain/
+  native PlacementBatchResultV2 envelopes, output proofs, source UID/footprint,
+  world/scope. Placement dependency обязана ссылаться на exact fine window ref,
+  snapshot_revision равна fine output fingerprint, не coarse base fingerprint.
+  specs/physical inputs/decisions/change_uid входят в operation key; deps include
+  terrain + placement refs, output fingerprint covers whole immutable result.
+  Upstream ERROR/unresolved placement также блокируют full publication.
+- WaterBodyPlanner.fill_fine — только delegate, старый unbound tuple API удалён.
+- FineRiverSampling.output_heightmap сохраняет retained cells во всех spaces.
+  FineRiverPlanner retains requested geometry/accepted paths/explicit receivers;
+  поисковые observations не размножаются в downstream records. Legacy
+  fineHydrologyIndex full-fine caller явно сохраняет собственный прежний return.
+- Expanded typing для changed kernels/sampler/service. Existing optional endpoint
+  и integer-image invariants narrowed без rounding/casts; existing shared
+  coordinates/worldTile.expand_coarse_hydro_to_tile generic over Mapping values,
+  runtime math unchanged. Новых файлов в overfull coordinates не добавлено.
+Counts: water/planning5→5 (fine/3, shared geoExecution); stages3→3; fine_water2→4.
+WARN: hydrology root7→7, tests root278→278, coordinates11→11; folders не расширены.
+Evidence: GEO-1 750 OK (новых5), providers129 OK, river/resolver63 OK, sync L0/L2+hills36 OK;
+positive expanded pyright0; negative271 /268 EXPECT покрыты, surplus3 прежний.
+3 mutations (auto_lakes disabled / allowed kinds ignored / full source retained)
+дают по1 assertion failure. Codec/immutable replay, independent inputs invalidation,
+stale fine placement, ERROR/upstream/unresolved guards, H-vs-N retention и receiver
+carve proof проверены. Legacy CoarseFixtureAcceptance smoke остаётся baseline:
+HEAD уже вызывает coarse_snapshot без planning/capture/wait; не исправлялся.
+Manual review: WaterBodyPlanner — delegates only; public pipelines не содержат
+новых domain decisions. Execution/policy/publication/retention у owning jobs;
+DataModel — structural invariants/transport, без generation algorithms.
+Ограничение: full fine solver/post-basin source пока полный window; исправление
+не объявляет dense-world production strategy готовой. G8-B/canonical route→final
+publication/production entry остаются OPEN; старый coarse snapshot нельзя обернуть
+как fine-bound placement. Новых SQL/engine DAG edits/backend/commit/push не было.
 
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.

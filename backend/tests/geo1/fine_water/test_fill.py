@@ -8,7 +8,8 @@ from app.application.worldData.generators.terrain.planning.preWater.terrainBaseP
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.hydrology.bands import HydrologyBands
 from app.dataModel.hydrology.enums.basinKind import BasinKind
-from app.dataModel.hydrology.worldHydrology import WorldHydrology
+from tests.geo1.fine_water.fixtures import physical_inputs, decisions, placement
+from app.dataModel.hydrology.planning.stages.openWaterPlan import FineWaterResult
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
@@ -37,10 +38,12 @@ def basin(uid, cells, space=CoordinateSpace.WORLD_FINE_GRID):
             samples=tuple((cell, -5) for cell in sorted(cells, key=lambda c: (c[1], c[0])))))
 
 
-def fill(window, topology, specs=(), expected=None):
+def fill(window, topology, specs=(), expected=None, *, physical=None, category_decisions=None, accepted=None):
+    physical = physical or physical_inputs(topology)
+    accepted = accepted or placement(window, specs)
     return WaterBodyPlanner().fill_fine(window, expected_surface=expected or window.ref,
-        topology=topology, specs=specs, policy=WorldHydrology(),
-        change_uid="fine-operation", control=Control())
+        placement=accepted, expected_placement=accepted.ref, inputs=physical, specs=specs,
+        classification_decisions=category_decisions or decisions(physical), control=Control())
 
 
 class FineWaterTests(TestCase):
@@ -51,26 +54,29 @@ class FineWaterTests(TestCase):
         before = encode(window, SURFACE_MANIFEST)
         cells = {(x, y) for y in range(1, 15) for x in range(1, 15)}
         spec = basin("accepted", cells)
-        scratch, water, diagnostics = fill(window, topology, (spec,))
-        wet = {cell for cell, value in water.materialized.by_cell.items() if value.liquid_candidate}
+        published = fill(window, topology, (spec,))
+        post, water = published.payload
+        heights = dict(post.surface_z)
+        wet = {cell for cell, value in dict(water.materialized.cells).items() if value.liquid_candidate}
         self.assertEqual(wet, cells - protected)
-        self.assertEqual({cell: scratch.surface_z[cell] for cell in protected},
+        self.assertEqual({cell: heights[cell] for cell in protected},
                          {cell: z for cell, z in window.payload.surface_z if cell in protected})
         self.assertEqual(encode(window, SURFACE_MANIFEST), before)
         self.assertEqual({body.water_body_uid for body in water.materialized.bodies}, {"accepted"})
         self.assertEqual(water.materialized.source_mapping.entries[0].body_uids, ("accepted",))
         restored = decode(before, PlanEnvelope[FineSurfaceWindow], SURFACE_MANIFEST)
         replay = fill(restored, topology, (spec,))
-        self.assertEqual(replay, (scratch, water, diagnostics))
+        self.assertEqual(replay, published)
+        self.assertEqual(decode(encode(published, SURFACE_MANIFEST), PlanEnvelope[FineWaterResult], SURFACE_MANIFEST), published)
 
     def test_touching_sources_use_one_physical_merge_and_mapping_owner(self):
         window, protected, topology = source()
         a = basin("a", {(x, y) for y in range(2, 8) for x in range(2, 8)})
         b = basin("b", {(x, y) for y in range(2, 8) for x in range(8, 14)})
-        _, water, _ = fill(window, topology, (b, a))
+        water = fill(window, topology, (b, a)).payload[1]
         self.assertTrue(any(set(union.member_uids) == {"a", "b"} for union in water.physical_unions))
         self.assertEqual({entry.source_uid for entry in water.materialized.source_mapping.entries}, {"a", "b"})
-        self.assertEqual(fill(window, topology, (a, b))[1], water)
+        self.assertEqual(fill(window, topology, (a, b)).payload[1], water)
 
     def test_revision_and_output_proof_are_required(self):
         window, protected, topology = source()
@@ -79,7 +85,7 @@ class FineWaterTests(TestCase):
             fill(window, topology, expected=previous.ref)
         changed = replace(window.payload, surface_z=tuple((cell, z + 1) for cell, z in window.payload.surface_z))
         with self.assertRaisesRegex(ValueError, "revision"):
-            fill(replace(window, payload=changed), protected, topology)
+            fill(replace(window, payload=changed), topology)
 
     def test_partial_world_evidence_is_rejected_without_implicit_dry(self):
         window, protected, topology = source(cells=coverage(0, 4, 0, 4))
@@ -100,8 +106,8 @@ class FineWaterTests(TestCase):
 
     def test_empty_accepted_sources_do_not_reenable_implicit_water(self):
         window, protected, topology = source(elevation=-10)
-        _, water, _ = fill(window, topology)
-        self.assertEqual(water.materialized.by_cell, {})
+        water = fill(window, topology).payload[1]
+        self.assertEqual(dict(water.materialized.cells), {})
         self.assertEqual(water.materialized.bodies, ())
 
     def test_window_completeness_order_and_recipe_identity(self):

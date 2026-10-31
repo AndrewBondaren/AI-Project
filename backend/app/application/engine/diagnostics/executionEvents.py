@@ -11,7 +11,7 @@ from app.dataModel.engine.dag.diagnostics import (
     CancellationRequest, CancellationSource, CancellationReason, ExecutionDiagnostic,
     ExecutionEventCode, ExecutionSeverity, OutputRequirement,
 )
-from app.dataModel.engine.dag.executionPhase import PythonExecutionPhase
+from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.identity import ExecutionIdentity, NodeId, PlanRevision
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
@@ -19,7 +19,7 @@ from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 class ExecutionEvents:
     def __init__(
-        self, phase: PythonExecutionPhase, revision: PlanRevision, pass_number: int, level: int,
+        self, phase: ExecutionPhase, revision: PlanRevision, pass_number: int, level: int,
         started_at: float, requirements: Mapping[NodeId, tuple[OutputRequirement, ...]],
         sink: Callable[[ExecutionDiagnostic], None], clock: Callable[[], float],
         cancellation: CancellationRequest | None,

@@ -18,6 +18,9 @@ from app.application.engine.runtime.dag.executionState import ExecutionState
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import LevelDecision, NodeOutcome
 from app.application.engine.runtime.execution.nodeRunner import NodeRunner
+from app.application.engine.runtime.dag.llm.groupCoordinator import LLMGroupCoordinator
+from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
+from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
 from app.dataModel.engine.dag.diagnostics import (
     CancellationReason, CancellationRequest, CancellationSource, ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity, Index,
 )
@@ -38,6 +41,17 @@ class DAGExecutor:
         self._executors = dict(executors)
         self._clock = clock
         self._emit = emit
+
+    async def run_llm_phase(
+        self, plan: ExecutionPlan, state: ExecutionState, plan_revision: PlanRevision,
+        aggregate: LLMAggregateExecutor, request: LLMRequest, *, options: LLMExecutionOptions,
+        pass_number: Index = 0, confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None,
+        rerun: Collection[NodeId] = (), cancellation: CancellationRequest | None = None,
+    ) -> LevelDecision:
+        return await LLMGroupCoordinator(aggregate, self._emit, clock=self._clock).run_phase(
+            plan, state, plan_revision, request, options=options, pass_number=pass_number,
+            confirmed_domain_revisions=confirmed_domain_revisions, rerun=rerun, cancellation=cancellation,
+        )
 
     async def run_python_phase(
         self, plan: ExecutionPlan, state: ExecutionState, phase: PythonExecutionPhase,

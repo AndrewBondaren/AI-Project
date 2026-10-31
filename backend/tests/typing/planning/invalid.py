@@ -206,6 +206,7 @@ def invalid_coarse_stage_claim(batch: RiverRouteBatch[FineXY]) -> None:
 
 
 from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.dataModel.placement.result import PlacementBatchResultV2
 from app.application.worldData.generators.hydrology.load.paint.declaredWaterPaintProjector import DeclaredWaterPaintProjector
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyAnchorInput
 
@@ -863,6 +864,7 @@ def invalid_generation_binding_sources(inputs: GeoHydrologyPlanInput, category: 
 
 
 from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.dataModel.placement.result import PlacementBatchResultV2
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesignDecision
 
@@ -1086,6 +1088,7 @@ def invalid_pre_carve_terrain(world: EntityUid, base_input: TerrainBaseInput, re
 
 
 from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+from app.dataModel.placement.result import PlacementBatchResultV2
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
@@ -1093,6 +1096,12 @@ from app.dataModel.hydrology.worldHydrology import WorldHydrology
 
 def invalid_frozen_fine_water(terrain: PlanEnvelope[TerrainPlan], expected: PlanRef, topology: WorldTopology,
                               policy: WorldHydrology, world: EntityUid, control: PlanBuildControl,
-                              coverage: RegionCoverage) -> None:
-    WaterBodyPlanner().fill_fine(terrain, expected_surface=expected, topology=topology, specs=(), policy=policy, change_uid=world, control=control)  # EXPECT: reportArgumentType
+                              coverage: RegionCoverage, placement: PlanEnvelope[PlacementBatchResultV2], physical: GeoHydrologyPlanInput) -> None:
+    WaterBodyPlanner().fill_fine(terrain, expected_surface=expected, placement=placement, expected_placement=placement.ref, inputs=physical, specs=(), classification_decisions=(), control=control)  # EXPECT: reportArgumentType
     FineSurfaceWindow(coverage=coverage, surface_z=terrain.payload.surface_z, topology=topology, protected_cells=frozenset())  # EXPECT: reportArgumentType
+
+
+
+def invalid_frozen_materialized_indexes(result: MaterializedWater) -> None:
+    result.cells[0] = result.cells[0]  # EXPECT: reportIndexIssue
+    result.area_rows[0] = ("source", 1)  # EXPECT: reportIndexIssue

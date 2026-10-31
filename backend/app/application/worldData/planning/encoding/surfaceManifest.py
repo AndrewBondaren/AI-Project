@@ -56,6 +56,8 @@ from app.dataModel.hydrology.declaredLake import DeclaredLake as _MDeclaredLake
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterAnchorInput as _MWaterAnchorInput
 from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype as _MGeographicSubtype
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow as _MFineSurfaceWindow
+from app.dataModel.hydrology.planning.stages.openWaterPlan import MaterializedWater as _MMaterializedWater, AssembledWater as _MAssembledWater, FineWaterResult as _MFineWaterResult
+from app.dataModel.placement.result import PlacementBatchResultV2 as _MPlacementBatchResultV2
 from app.dataModel.topology.worldTopology import WorldTopology as _MWorldTopology
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as _MWorldTopologyMode
 from app.dataModel.topology.worldBounds import WorldBounds as _MWorldBounds
@@ -540,6 +542,11 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (282, _MCategoryWaterGenerationSettings, CanonicalTypeKind.RECORD),
     (283, _MFineSurfaceWindow, CanonicalTypeKind.RECORD),
     (284, _MPlanEnvelope[_MFineSurfaceWindow], CanonicalTypeKind.RECORD),
+    (285, _MMaterializedWater, CanonicalTypeKind.RECORD),
+    (286, _MAssembledWater, CanonicalTypeKind.RECORD),
+    (287, _MPlanEnvelope[_MFineWaterResult], CanonicalTypeKind.RECORD),
+    (288, _MPlacementBatchResultV2, CanonicalTypeKind.RECORD),
+    (289, _MPlanEnvelope[_MPlacementBatchResultV2], CanonicalTypeKind.RECORD),
 
 )))
 

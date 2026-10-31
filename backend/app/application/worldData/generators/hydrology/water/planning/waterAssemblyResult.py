@@ -1,10 +1,10 @@
 """Final physical water identity, parent normalization and domain diagnostics."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import replace
+from app.dataModel.hydrology.planning.stages.openWaterPlan import AssembledWater, MaterializedWater
 
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.worldData.generators.hydrology.water.waterMaterialize import MaterializedWater
 from app.application.worldData.generators.hydrology.water.waterBodyResolver import ResolvedWaterLevels
 from app.application.worldData.generators.hydrology.water.waterSources import WaterSource
 from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
@@ -18,17 +18,11 @@ from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, Pl
 from app.ids.waterSystemIdentity import water_system_uid
 
 
-@dataclass(frozen=True)
-class AssembledWater:
-    materialized: MaterializedWater
-    physical_unions: tuple[PhysicalWaterUnion, ...]
-
-
 def unresolved_water(world_uid: str, error: ValueError, ctx: ResolveContext,
                      emit: Callable[[PlanDiagnostic], None] | None) -> AssembledWater:
     water_issue(ctx, world_uid, str(error), "WATER_TERRAIN_UNRESOLVED",
                 disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
-    return AssembledWater(MaterializedWater({}, (), {}, {}, {}, SourceBodyMapping(entries=())), ())
+    return AssembledWater(MaterializedWater((), (), (), (), (), SourceBodyMapping(entries=())), ())
 
 
 def finalize_water(water: MaterializedWater, resolved: ResolvedWaterLevels, sources: tuple[WaterSource, ...], *,
@@ -36,12 +30,13 @@ def finalize_water(water: MaterializedWater, resolved: ResolvedWaterLevels, sour
                    auto_seas: bool, ctx: ResolveContext,
                    emit: Callable[[PlanDiagnostic], None] | None) -> AssembledWater:
     # Procedural minima of one connected water are one positional body.
+    uid_remap = dict(water.uid_aliases)
     normalized = {}
     aliases = {}
     body_uids = {body.water_body_uid for body in water.bodies}
     raw = {union.water_system_uid: union for union in resolved.unions}
     for union in resolved.unions:
-        members = tuple(sorted({water.uid_remap.get(uid, uid) for uid in union.member_uids}))
+        members = tuple(sorted({uid_remap.get(uid, uid) for uid in union.member_uids}))
         if len(members) > 1 and all(uid in body_uids for uid in members):
             uid = water_system_uid(world_uid, change_uid, members, WaterSystemKind.PHYSICAL_MERGE)
             aliases[union.water_system_uid] = uid
@@ -69,7 +64,7 @@ def finalize_water(water: MaterializedWater, resolved: ResolvedWaterLevels, sour
     if auto_seas and not any(source.spec.z_water_level == policy.default_water_level for source in sources):
         water_issue(ctx, world_uid, "natural-only autoresolve: no ocean depression",
                     "WATER_NO_OCEAN_DEPRESSION", disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
-    if (sum(water.areas.values()) * 2 >= topology.bounds.width * topology.bounds.height
+    if (sum(area for _, area in water.area_rows) * 2 >= topology.bounds.width * topology.bounds.height
             and any(body.kind is not BasinKind.LAKE for body in water.bodies)):
         water_issue(ctx, world_uid, "world is ocean: water covers at least half the world",
                     "WATER_WORLD_OCEAN", disposition=PlanDiagnosticDisposition.NOTICE, emit=emit)

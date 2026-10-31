@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.coordinates.types import GridX, GridY
 from app.application.worldData.generators.terrain.types import ColumnRect
@@ -80,19 +82,19 @@ def iter_fine_chunks(fine_bbox: GridBBox, chunk_size: int):
             )
 
 
-def expand_coarse_hydro_to_tile(
-    coarse_by_cell: dict[tuple[int, int], object],
+def expand_coarse_hydro_to_tile[T](
+    coarse_by_cell: Mapping[tuple[int, int], T],
     tile_gx: int,
     tile_gy: int,
     map_cell: int,
-) -> dict[tuple[int, int], object]:
+) -> dict[tuple[int, int], T]:
     """Copy coarse (Gx,Gy) hydrology to every fine cell in tile."""
     entry = coarse_by_cell.get((tile_gx, tile_gy))
     if entry is None:
         return {}
     x0 = tile_origin_x(tile_gx, map_cell)
     y0 = tile_origin_y(tile_gy, map_cell)
-    out: dict[tuple[int, int], object] = {}
+    out: dict[tuple[int, int], T] = {}
     for ly in range(map_cell):
         for lx in range(map_cell):
             out[(x0 + lx, y0 + ly)] = entry

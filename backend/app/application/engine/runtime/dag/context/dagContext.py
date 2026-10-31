@@ -160,6 +160,37 @@ class DAGContext:
             raise TypeError("error contract does not match execution binding")
 
     def publish[O: BaseModel](self, record: OutputRecord[O]) -> None:
+        self._validate_publication(record)
+        invalidated = self._affected(candidate=(record.identity, record.reads))
+        if record.identity.node_id in invalidated:
+            raise RuntimeError("candidate reads are no longer current after invalidation")
+        self._remove_current(invalidated)
+        self._current[record.identity.node_id] = record
+        self._close(record.identity)
+
+    def publish_batch[O: BaseModel](self, records: tuple[OutputRecord[O], ...]) -> None:
+        nodes = {record.identity.node_id for record in records}
+        if not records or len(nodes) != len(records):
+            raise ValueError("batch requires unique nonempty producers")
+        for record in records:
+            self._validate_publication(record)
+            if any(read.producer in nodes for read in record.reads):
+                raise ValueError("LLM batch cannot read a sibling Output")
+        current = {node: self._record(node).identity for node in self._current}
+        reads = {node: self._record(node).reads for node in self._current}
+        current.update((record.identity.node_id, record.identity) for record in records)
+        reads.update((record.identity.node_id, record.reads) for record in records)
+        invalidated = ResultInvalidation.affected(current, reads)
+        if nodes.intersection(invalidated):
+            raise RuntimeError("batch reads are no longer current after invalidation")
+        # All admission precedes the first write. No await/callback or schema
+        # validation occurs during this coordinator-owned batch commit.
+        self._remove_current(invalidated)
+        for record in records:
+            self._current[record.identity.node_id] = record
+            self._close(record.identity)
+
+    def _validate_publication[O: BaseModel](self, record: OutputRecord[O]) -> None:
         # Metadata/immutability admission only. Output schema and business
         # validation belong to M12/runner, never to this catalog.
         _validate_record(record)
@@ -170,13 +201,6 @@ class DAGContext:
         if not isinstance(record.output, contract.output_type):
             raise TypeError(f"node '{record.identity.node_id}' published an incompatible Output type")
         self._check_reads(record)
-        invalidated = self._affected(candidate=(record.identity, record.reads))
-        if record.identity.node_id in invalidated:
-            raise RuntimeError("candidate reads are no longer current after invalidation")
-        # No await or domain I/O between admission and the coordinator's write.
-        self._remove_current(invalidated)
-        self._current[record.identity.node_id] = record
-        self._close(record.identity)
 
     def invalidate_for_reuse(
         self, confirmed_domain_revisions: Mapping[str, DomainRevision],

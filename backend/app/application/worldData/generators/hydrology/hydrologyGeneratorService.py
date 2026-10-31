@@ -82,11 +82,11 @@ class HydrologyGeneratorService:
                     + ([BasinKind.SEA, BasinKind.OCEAN, BasinKind.INLAND_SEA]
                        if seas and policy.default_seas.enabled else [])),
             )
-            result.cell_index.by_cell.update(water.materialized.by_cell)
+            result.cell_index.by_cell.update(water.materialized.cells)
             result.water_bodies = water.materialized.bodies
             result.physical_unions = water.physical_unions
-            result.water_areas = water.materialized.areas
-            result.water_floors = water.materialized.floors
+            result.water_areas = dict(water.materialized.area_rows)
+            result.water_floors = dict(water.materialized.floor_rows)
             if result.cell_index.by_cell:
                 xs, ys = zip(*result.cell_index.by_cell)
                 result.dirty_bbox = GridBBox(min(xs), max(xs), min(ys), max(ys))

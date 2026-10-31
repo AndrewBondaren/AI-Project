@@ -31,9 +31,11 @@ def _authored_routes(loaded: LoadedDeclaredHydrology, anchors: Mapping[str, Coor
     routes = [list(edge.segment) for edge in loaded.river_edges]
     for river in loaded.river_intents:
         if river.declare_mode is RiverDeclareMode.ENDPOINTS:
-            mouth = river.mouth
+            source, mouth = river.source, river.mouth
+            if source is None or mouth is None:
+                raise ValueError("endpoint sampling requires validated source and mouth")
             target = anchors.get(mouth.location_uid) if mouth.location_uid else (mouth.x, mouth.y)
-            points = [(river.source.x, river.source.y), target]
+            points = [(source.x, source.y), target]
         elif river.declare_mode is RiverDeclareMode.VIA_LOCATIONS:
             points = [anchors.get(uid) for uid in river.route_location_uids]
         else:
@@ -61,8 +63,10 @@ def _planning_cells(routes: Sequence[Sequence[Coord]], topology: WorldTopology,
     cells = set()
     for points in routes:
         for start, end in zip(points, points[1:]):
-            image = unrolled_images(topology, end, anchor=start)[0].coord
-            cells.update(canonical for cell in bresenham_line(*start, *image)
+            ix, iy = unrolled_images(topology, end, anchor=start)[0].coord
+            if not isinstance(ix, int) or not isinstance(iy, int):
+                raise ValueError("grid sampling requires integer topology images")
+            cells.update(canonical for cell in bresenham_line(*start, ix, iy)
                          if (canonical := topology.canonicalize(*cell)) is not None)
         if points and has_water:
             cells.update(_window(topology, points[0], policy.max_path_cells - 1))
@@ -97,11 +101,9 @@ class FineRiverSampling:
 
     def output_heightmap(self, cells: Iterable[Coord]) -> SurfaceHeightmap:
         """Search-only samples must not become unrelated terrain overrides."""
-        if self.space is CoordinateSpace.WORLD_FINE_GRID:
-            return self.heightmap
         retained = set(cells)
-        return replace(self.heightmap, surface_z={cell: z for cell, z in self.heightmap.surface_z.items()
-                                                 if cell in retained})
+        return replace(self.heightmap, surface_z={cell: self.heightmap.surface_z[cell] for cell in sorted(retained, key=lambda c: (c[1], c[0]))
+                                                 if cell in self.heightmap.surface_z})
 
     def sample_requests(self, requests: Sequence[RiverRouteRequest], classify: RiverTypeClassify) -> list[RiverRouteRequest]:
         """Mouth snap can introduce new cells; sample them before final classification."""
