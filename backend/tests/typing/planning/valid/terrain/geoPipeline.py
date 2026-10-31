@@ -397,3 +397,14 @@ def native_final_facts(inputs: GeoHydrologyPlanInput, before: FineSurfaceWindow,
                        routes: GeoHydrologyRoutesPlan, river: RiverReliefPlan, control: PlanBuildControl) -> None:
     assert_type(HydrologyFactsAssembler().assemble_fine(inputs=inputs, before=before, water=water,
         routes=routes, river=river, control=control), PlanBuildResult[GeoHydrologyPlan])
+
+
+
+def published_native_final(world: EntityUid, inputs: GeoHydrologyPlanInput, relief: RiverReliefInput,
+                           specs: tuple[BasinSpec, ...], before: PlanEnvelope[FineSurfaceWindow],
+                           water: PlanEnvelope[FineWaterResult], routes: PlanEnvelope[GeoHydrologyRoutesPlan],
+                           river: PlanEnvelope[RiverReliefPlan], control: PlanBuildControl) -> None:
+    assert_type(HydrologyFactsAssembler().publish_fine(world_uid=world, inputs=inputs, relief_inputs=relief,
+        specs=specs, before=before, expected_before=before.ref, water=water, expected_water=water.ref,
+        routes=routes, expected_routes=routes.ref, river=river, expected_river=river.ref, control=control),
+        PlanEnvelope[GeoHydrologyPlan])

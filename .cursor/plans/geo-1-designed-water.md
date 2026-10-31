@@ -13793,3 +13793,35 @@ upstream diagnostics and publish successful physical coverage without implying
 all-intent routing success. Then atomic G8-B capture/registration/production.
 G10-A OPEN; existing registered/production/L2 paths unchanged; no backend, DAG,
 SQL migrations, commit or push. git diff --check clean.
+
+
+### Task9 — NATIVE FINAL PUBLICATION — VERIFIED ISOLATED (2026-11-01)
+Cleanfe947011. TZ source-join exact W/F/routes/river closure; existing GeoPlan,
+PlanEnvelope/Ref, FineWaterResult and RegionCoverage suffice for this publication.
+Coverage stays accessible through exact successful F dependency; GeoPlan has no
+coverage field yet. Its owning-schema/query cutover remains atomic G10-A, no
+legacy unknown→dry fallback or claim final payload alone proves coverage.
+Owner/file: assembly/final/publication.py::NativeFinalPublicationJob validates
+exact input/output refs, contracts/world/scope, graph W→F→routes→river and physical
+inputs/specs/decisions, delegates final facts, preserves all upstream diagnostics.
+HydrologyFactsAssembler.publish_fine delegates only. Existing native final facts
+and terrain algorithms unchanged; no rerouting/refill, V2 water records or bridge.
+Folders: assembly4 direct unchanged; final2→3; tests geo1/final_publication/2.
+Checks: real chain publication/replay/ref identity, stale/cross-source/tampered/
+physical-input/frame failures before facts, water errors block but route errors
+remain diagnostics, cancellation; GEO/planning and positive/negative typing.
+Done isolated publication; registered GEO/coverage transport/query/production
+cutover and G10-A remain OPEN. No backend/DAG/SQL migrations/commit/push.
+
+Verified: GEO820 OK (+6), planning292 OK, positive pyright0; negative295 diagnostics,
+all292 EXPECT lines covered. Refined six publication tests passed again, including
+one fine-water admission and tampered diagnostics rejected before facts execution.
+Boundary review: publish_fine only forwards typed inputs; publication job owns
+contract/input/output/dependency validation and diagnostic preservation. Existing
+facts/terrain kernels unchanged. Global frozen-source validation/hashing happens
+at publication, not per chunk; no refill, routing or height reconstruction.
+Next: atomic G8-B owning schemas/defaults/capture/registration and production
+entry switch, including explicit final coverage transport/query consumption.
+Exact F dependency supplies source coverage evidence; final payload alone still
+does not prove coverage or all-intent success. G10-A OPEN; registered GEO/L2 and
+production unchanged; no backend, DAG, SQL migrations, commit or push.

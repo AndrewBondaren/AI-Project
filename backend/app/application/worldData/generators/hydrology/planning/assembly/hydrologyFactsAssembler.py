@@ -19,11 +19,31 @@ from app.dataModel.topology.worldTopology import Coord
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
+from app.application.worldData.generators.hydrology.planning.assembly.final.publication import NativeFinalPublicationJob
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.identity.uid import EntityUid
+from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
+
+
 def _failure(message: str) -> PlanBuildFailure:
     return PlanBuildFailure((FieldPathError(("hydrology", "facts"), message),))
 
 
 class HydrologyFactsAssembler:
+    def publish_fine(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
+                     relief_inputs: RiverReliefInput, specs: tuple[BasinSpec, ...],
+                     before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef,
+                     water: PlanEnvelope[FineWaterResult], expected_water: PlanRef,
+                     routes: PlanEnvelope[GeoHydrologyRoutesPlan], expected_routes: PlanRef,
+                     river: PlanEnvelope[RiverReliefPlan], expected_river: PlanRef,
+                     control: PlanBuildControl) -> PlanEnvelope[GeoHydrologyPlan]:
+        return NativeFinalPublicationJob().publish(world_uid=world_uid, inputs=inputs,
+            relief_inputs=relief_inputs, specs=specs, before=before, expected_before=expected_before,
+            water=water, expected_water=expected_water, routes=routes, expected_routes=expected_routes,
+            river=river, expected_river=expected_river, control=control)
+
     def assemble_fine(self, *, inputs: GeoHydrologyPlanInput, before: FineSurfaceWindow,
                       water: FineWaterResult, routes: GeoHydrologyRoutesPlan, river: RiverReliefPlan,
                       control: PlanBuildControl) -> PlanBuildResult[GeoHydrologyPlan]:

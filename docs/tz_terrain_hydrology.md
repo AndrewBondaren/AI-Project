@@ -2225,3 +2225,13 @@ it. Dry shore may become an accepted river bed; canonical liquid cells are retai
 Coarse hydro samples the merged fine facts at the same centers as final heights.
 The pure facts operation returns existing GeoHydrologyPlan without asserting
 successful coverage or all-intent routing; exact refs/coverage require publication.
+
+Native final publication binds exact pre-water W, successful fine water F,
+native routes and native river relief via declared refs. Captured physical
+inputs/specs/terminal decisions and relief inputs must match their operation
+keys. Source terrain/water ERROR prevents publication; routing issues remain
+in final diagnostics and do not imply all-intent completion. Coverage is the
+successful F observation reachable through its exact declared dependency;
+GeoHydrologyPlan itself still has no explicit coverage field. Owning-schema and
+readonly query cutover must make that evidence available before wet/dry/unknown
+claims are enabled in production. No final-envelope-only completeness inference.
