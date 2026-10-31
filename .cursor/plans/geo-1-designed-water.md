@@ -12692,6 +12692,73 @@ readonly query без refill, coarse становится projection; затем
 production/L0/L2 cutover. Сейчас только isolated accepted fine execution,
 coarse production path прежний; весь G10-A OPEN.
 
+### G10-A canonical final publication — SOURCE JOIN AUDIT / DESIGN OPEN (2026-10-31)
+Проверка после accepted fine execution: локальный «добавить coverage + query»
+не является завершённым implementation slice. GeoHydrologyFinalPlanProvider.build
+получает только relief/routes/river-relief/water-placement и вызывает common
+HydrologyFactsAssembler.assemble; actual fine AssembledWater/window не являются
+его dependencies. GeoHydrologyRoutesPlan.base несёт coarse_open_water и sparse
+river samples; FineRiverPlanner сейчас строит fine sampling от coarse surface.
+Объявить этот output complete canonical fine, получить coverage из wet extent,
+подставить пустую coverage/default или запустить повторный fill в reader нельзя.
+Plan §shared final fine-water contract остаётся REOPENED: «Не реализовывать их
+как закрытый контракт до решения мастера». Terrain→hills→carve→fill уже согласован;
+он не определяет автоматически публикацию route/final refs и fine→coarse semantics.
+Целевой следующий атомарный source join для согласования (без новых POJO/enum):
+1. Existing Geo route-stage получает actual fine water/height source одной frozen
+   revision; required coverage и fine rows передаются existing stage contracts.
+   Удаляется независимый coarse water solve для GEO; PC path не получает GEO
+   completeness semantics. Точный fine→coarse projection и его использование
+   coarse river planning должны быть закреплены до кода, без нового rank hardcode.
+2. Existing fine river sampling/river-relief используют actual frozen fine heights
+   и receiving-body facts той же revision. Existing routing/carve kernels
+   переиспользуются; новый procedural river source search HY-RIV-1 не входит.
+3. HydrologyFactsAssembler публикует GeoHydrologyPlan с required coverage и
+   canonical sparse_fine_hydro, физические body UID/mapping того же source;
+   GeoHydrologyFinalPlanProvider только bind refs/delegate. Старый coarse-only
+   GEO publisher заменяется, не остаётся fallback/compatibility bridge.
+4. Readonly HydrologyFineWaterQuery/WaterBodyPlanner query читает этот final
+   envelope: dry только внутри proof, unknown снаружи, без fill/world/L0 reads.
+Owner map перед implementation: stage input/public operations — existing
+water/planning, rivers/planning, relief/planning и hydrology planning/assembly;
+final POJO — hydrology/planning/hydrologyPlan.py; bindings/version/dependency
+changes — dataModel/surfacePlanning + application/worldData/planning/composition.
+Точные поля и signatures требуется завершить вместе, не выбирать по месту.
+G8-B native water records и production entry остаются атомарным G10-A, без V2
+water records. Инвентарь ResolvedWaterPlacement:7 application/dataModel files;
+это отдельный реальный remaining, не устраняется fine publication metadata.
+В этом аудите implementation не менялась, тесты не запускались. G10-A OPEN.
+
+### G10-A publication review — REVISION CLOSURE / RETAINED HEIGHTS OPEN (2026-10-31)
+Подтверждены оба замечания мастера к предыдущему анализу:
+- FineWaterJob проверяет только terrain envelope. specs/physical policy/change_uid
+  идут отдельными аргументами; scratch/AssembledWater/diagnostics не являются
+  опубликованным result envelope. Fine execution kernel IMPLEMENTED не означает
+  замкнутый revision contract water operation. Publisher должен bind accepted
+  placement ref, exact terrain ref и все physical inputs в common key/dependencies,
+  затем result fingerprint; не достаточно зависимости только от terrain/job.
+- Complete input heights != successful water resolution. Existing unresolved_water
+  может вернуть empty + ERROR. Publication gate принадлежит producer/result owner;
+  ошибка не доказывает dry. Partial coverage допустима только с явным proof;
+  не классифицировать execution outcome по тексту/code и не вводить status enum.
+- WORLD_FINE_GRID branch output_heightmap возвращает всю heightmap. Дальше
+  FineRiverPlan.base_surface_z → HydrologyRoutesPlan.fine_base_surface_z →
+  RiverReliefPlan.fine_surface_z → HydrologyPlan.fine_z_overrides сохраняют весь N.
+  _river_beds дополнительно строит dict и tuple полного base. При N=M*S² это
+  несколько full-sized transport/cache records, не прежний sparse river output.
+Before fine sampling cutover: разделить observation scope для routing/search и
+retained output для accepted paths/receiver/carve proof. Generic fine source
+передаётся existing ref; sparse overrides определяются относительно explicit
+bound base, а не превращаются в ещё одну полную surface. Не менять глобальный
+output_heightmap вслепую без инвентаря callers, и не отбрасывать receiver samples.
+Проверки будущего среза: independent spec/policy/change_uid edits меняют operation
+identity; fatal empty result не публикует successful coverage; retained heights
+ограничены нужным route/carve scope при росте мира; full-source observations
+сохраняют прежний routing result. Это не решает отдельно full-world solve/wet rows
+retention; production strategy не объявлена готовой. Код/тесты в этом review не
+менялись и не запускались. G10-A OPEN; прежняя оценка «достаточно подключить existing
+fine branch» снята как неполная.
+
 ### G10-A — атомарное включение GEO-1 production path
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.

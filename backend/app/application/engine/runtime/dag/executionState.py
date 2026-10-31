@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
@@ -13,6 +14,10 @@ from app.application.engine.runtime.execution.nodeOutcome import GateSignal, Lev
 from app.dataModel.engine.dag.identity import ExecutionId, ExecutionIdentity, NodeId, PlanRevision, PlanRevisionValue
 from app.dataModel.engine.dag.diagnostics import Index
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+    from app.application.cancellation.typed.sessionSnapshot import SessionSnapshot
 
 
 class ExecutionState:
@@ -27,6 +32,7 @@ class ExecutionState:
         self._attempt_passes: dict[NodeId, int] = {}
         self._decision = LevelDecision.CONTINUE
         self._active = False
+        self._released = False
         self._plan_revision = plan_revision
         self._pass_number = self._validate_context(plan_revision, pass_number)
 
@@ -47,6 +53,30 @@ class ExecutionState:
     @property
     def is_active(self) -> bool:
         return self._active
+
+    @property
+    def is_released(self) -> bool:
+        return self._released
+
+    @classmethod
+    def from_snapshot[S: BaseModel](cls, snapshot: "SessionSnapshot[S]", registry: NodeRegistry) -> "ExecutionState":
+        state = cls(snapshot.metadata.execution_id, registry,
+                    plan_revision=snapshot.metadata.plan_revision, pass_number=snapshot.metadata.pass_number)
+        state.catalog = DAGContext.from_snapshot(snapshot.catalog, registry)
+        state._statuses = dict(snapshot.statuses)
+        state._attempt_passes = dict(snapshot.attempt_passes)
+        state._traces = list(snapshot.traces)
+        state._levels = list(snapshot.levels)
+        state._decision = snapshot.decision
+        if state.gate != snapshot.gate:
+            raise ValueError("snapshot gate does not match level control")
+        return state
+
+    def release(self) -> None:
+        if self._active:
+            raise RuntimeError("cannot release an active execution phase")
+        self.catalog.release()
+        self._released = True
 
     @property
     def attempt_passes(self) -> tuple[tuple[NodeId, int], ...]:
@@ -75,6 +105,8 @@ class ExecutionState:
         return None
 
     def begin_phase(self, plan_revision: PlanRevision, pass_number: Index = 0) -> None:
+        if self._released:
+            raise RuntimeError("execution ownership has been released")
         if self._active:
             raise RuntimeError("execution already has an active phase writer")
         validated_pass = self._validate_context(plan_revision, pass_number, require_revision=True)

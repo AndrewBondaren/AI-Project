@@ -85,6 +85,41 @@ class DAGContext:
         self._open[node_id] = identity
         return identity
 
+    @classmethod
+    def from_snapshot(cls, snapshot: CatalogSnapshot, registry: NodeRegistry) -> "DAGContext":
+        snapshot.__post_init__()
+        catalog = cls(snapshot.execution_id, registry)
+        bindings = {node: (key, version) for node, key, version in snapshot.contracts}
+        for node, saved in bindings.items():
+            registration = catalog._registrations.get(node)
+            if registration is None:
+                raise ValueError(f"snapshot producer '{node}' is not registered")
+            contract = registration.contract
+            if saved != (contract.contract_id, contract.version):
+                raise ValueError(f"snapshot producer '{node}' contract id/version mismatch")
+            record = snapshot.record(node, contract)
+            error = snapshot.node_error(node, contract)
+            if record is not None:
+                catalog._current[node] = record
+            if error is not None:
+                identity = next(identity for identity in snapshot.error_identities if identity.node_id == node)
+                catalog._errors[node] = (identity, error)
+        if set(bindings) != set(catalog._registrations):
+            raise ValueError("snapshot registered node set mismatch")
+        for node in catalog._current:
+            catalog._check_reads(catalog._record(node))
+        catalog._counters = dict(snapshot.attempt_counters)
+        catalog._closed = {identity.result_key: identity for identity in snapshot.closed_attempts}
+        return catalog
+
+    def release(self) -> None:
+        """Terminal owner release; immutable snapshots/readers retain their own refs."""
+        if not self.is_quiescent:
+            raise RuntimeError("cannot release a catalog with open attempts")
+        self._current.clear()
+        self._errors.clear()
+        self._registrations.clear()
+
     def read_view(self, consumer: NodeId) -> PublishedDAGReadView:
         requirements = self._registrations[consumer].contract.reads
         producers = {req.ref.producer for req in requirements}

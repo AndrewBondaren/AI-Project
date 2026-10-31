@@ -39,7 +39,7 @@ class DSLResolver:
                 result.append(key)
         return result
     
-    def resolve(self, keys: list[str], context: dict | None = None) -> str:
+    def resolve(self, keys: list[str], context: dict[str, object] | None = None) -> str:
         parts = [self.dsl_registry.get(key) for key in keys]
         text = "\n\n".join(parts)
         if context:

@@ -10,6 +10,10 @@ from pydantic import BaseModel
 from app.application.cancellation.typed.sessionSnapshot import SessionSnapshot
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
+from app.application.engine.runtime.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
+from app.application.engine.runtime.prompt.pojo.nodeSection import NodeSection
+from app.application.engine.runtime.prompt.pojo.llmPayload import LLMPayload
+from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.diagnostics.dagLog import emit
 from app.application.engine.diagnostics.events import ReplanDiagnostic
@@ -47,7 +51,7 @@ from app.dataModel.engine.dag.diagnostics import CancellationRequest, Cancellati
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
-    CompositeOutput, FakeExecutor, FakeReadView, LEAF_CONTRACT, LeafOutput, NodeInput,
+    CompositeOutput, FakeExecutor, FakeReadView, LEAF_CONTRACT, LeafOutput, NodeInput, OtherInput,
     OPTIONAL_COMPOSITE, REQUIRED_LEAF, TypedLLMNode, TypedPythonNode,
     RecordingValidator, identity,
     ERROR_CONTRACT, TestNodeError, TestOtherError, TypedErrorNode, GraphBindings,
@@ -221,3 +225,28 @@ def verify_snapshot(state: ExecutionState) -> None:
     assert_type(store.save(snapshot), None)
     assert_type(store.load(state.catalog.execution_id), SessionSnapshot[LeafOutput] | None)
     assert_type(ExecutionSnapshotService[Never]().capture(state), SessionSnapshot[Never])
+
+
+async def verify_restore(snapshot: SessionSnapshot[LeafOutput], registry: NodeRegistry) -> None:
+    service = ExecutionSnapshotService[LeafOutput](Extension())
+    state = await service.restore(snapshot, registry)
+    assert_type(state, ExecutionState)
+    assert_type(service.capture(state), SessionSnapshot[LeafOutput])
+    assert_type(state.release(), None)
+    assert_type(state.is_released, bool)
+
+
+def verify_payload(
+    builder: LLMGroupPayloadBuilder,
+    node: LLMNode[NodeInput, LeafOutput, Never],
+    registration: NodeRegistration[NodeInput, LeafOutput, Never],
+    other: NodeSection[OtherInput],
+) -> None:
+    section = builder.section(node, registration, NodeInput(value=1), language="ru")
+    assert_type(section, NodeSection[NodeInput])
+    assert_type(section.input, NodeInput)
+    payload = builder.build((section, other), player_message="message", language="ru")
+    assert_type(payload, LLMPayload)
+    assert_type(payload.sections, tuple[NodeSection[BaseModel], ...])
+    assert_type(payload.to_dict(), dict[str, object])
+    assert_type(payload.response_format_schema, dict[str, object])

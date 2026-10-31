@@ -10,6 +10,9 @@ from app.application.engine.contracts.executionBindings import ResponseBinding, 
 from app.application.cancellation.typed.sessionSnapshot import SessionSnapshot
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
+from app.application.engine.runtime.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
+from app.application.engine.runtime.prompt.pojo.nodeSection import NodeSection
+from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.dataModel.engine.dag.records import OutputRecord
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
@@ -129,6 +132,27 @@ async def wrong_error_contracts(view: PublishedDAGReadView, catalog: DAGContext,
 
 def wrong_error_policy(error: TestOtherError) -> GateSignal | None:
     return None
+
+
+async def wrong_restore(snapshot: SessionSnapshot[CompositeOutput], registry: NodeRegistry) -> None:
+    await ExecutionSnapshotService[LeafOutput]().restore(snapshot, registry)  # expect: reportArgumentType
+    await ExecutionSnapshotService[LeafOutput]().restore(LeafOutput(value=1), registry)  # expect: reportArgumentType
+
+
+def wrong_payload(
+    builder: LLMGroupPayloadBuilder, node: LLMNode[NodeInput, LeafOutput, Never],
+    registration: NodeRegistration[NodeInput, LeafOutput, Never],
+) -> None:
+    builder.section(
+        node,  # expect: reportArgumentType
+        registration,  # expect: reportArgumentType
+        OtherInput(text="wrong"), language="ru",
+    )
+    builder.section(node, registration, {"value": 1}, language="ru")  # expect: reportArgumentType
+    section = builder.section(node, registration, NodeInput(value=1), language="ru")
+    wrong: NodeSection[OtherInput] = section  # expect: reportAssignmentType
+    builder.build((NodeInput(value=1),), player_message="", language="ru")  # expect: reportArgumentType
+    print(wrong)
 
 
 def wrong_validation() -> None:

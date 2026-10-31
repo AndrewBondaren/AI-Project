@@ -46,7 +46,10 @@
     "../../../../backend/app/application/engine/runtime/dag/context/catalogSnapshot.py",
     "../../../../backend/app/application/engine/runtime/dag/lifecycle/executionSnapshotService.py",
     "../../../../backend/app/application/cancellation/typed/sessionSnapshot.py",
-    "../../../../backend/app/application/cancellation/typed/snapshotStore.py"
+    "../../../../backend/app/application/cancellation/typed/snapshotStore.py",
+    "../../../../backend/app/application/engine/runtime/prompt/llmGroupPayloadBuilder.py",
+    "../../../../backend/app/application/engine/runtime/prompt/pojo/nodeSection.py",
+    "../../../../backend/app/application/engine/runtime/prompt/pojo/llmPayload.py"
   ],
   "extraPaths": [
     "../../.."
@@ -101,6 +104,9 @@
     "../../../../backend/app/application/engine/runtime/dag/context/catalogSnapshot.py",
     "../../../../backend/app/application/engine/runtime/dag/lifecycle/executionSnapshotService.py",
     "../../../../backend/app/application/cancellation/typed/sessionSnapshot.py",
-    "../../../../backend/app/application/cancellation/typed/snapshotStore.py"
+    "../../../../backend/app/application/cancellation/typed/snapshotStore.py",
+    "../../../../backend/app/application/engine/runtime/prompt/llmGroupPayloadBuilder.py",
+    "../../../../backend/app/application/engine/runtime/prompt/pojo/nodeSection.py",
+    "../../../../backend/app/application/engine/runtime/prompt/pojo/llmPayload.py"
   ]
 }

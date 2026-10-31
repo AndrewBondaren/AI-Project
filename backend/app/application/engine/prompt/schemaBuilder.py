@@ -1,7 +1,7 @@
 import copy
 
 
-def build_strict_schema(node_schemas: dict[str, dict]) -> dict:
+def build_strict_schema(node_schemas: dict[str, dict[str, object]]) -> dict[str, object]:
     """
     Combines per-node Pydantic schemas into a single OpenAI strict-mode schema.
 
