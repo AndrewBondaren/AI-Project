@@ -53,6 +53,13 @@ CoarseRiverPlan = RiverRouteBatch[SurfaceGridCoord]
 
 
 class FineRiverPlan(BaseModel):
+    """Accepted routes and retained samples, not an all-intents success proof.
+
+    Routing failures remain in the enclosing build result/envelope diagnostics.
+    An envelope may contain accepted routes alongside rejected declared intents;
+    its existence alone proves neither all-intent success nor river coverage.
+    """
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     routes: tuple[RiverRoute[FineXY], ...]

@@ -24,6 +24,13 @@ FINE_WATER = PlanSlot("fine_water")
 
 
 class FineRiverPublicationJob:
+    """Require successful source water, then publish accepted routes and all issues.
+
+    Routing ERROR diagnostics do not invalidate other accepted routes. Consumers
+    must reconcile declared-intent outcomes explicitly before claiming complete
+    river processing; envelope existence is not that proof.
+    """
+
     def publish(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
                 water: PlanEnvelope[FineWaterResult], expected_water: PlanRef,
                 control: PlanBuildControl) -> PlanEnvelope[FineRiverPlan]:

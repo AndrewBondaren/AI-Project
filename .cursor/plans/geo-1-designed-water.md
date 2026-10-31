@@ -12925,3 +12925,30 @@ Next: decide/implement fine→coarse projection and exact source dependency join
 in existing GEO routes→river-relief→final providers; publish required final
 coverage with merged open-water/river facts. G10-A, G8-B and production remain
 OPEN. Foreign engine/snapshot/logging changes preserved; no SQL/backend/commit.
+
+### G10-A native fine routing — publication review follow-up (2026-10-31)
+Scope: document accepted-route semantics and strengthen receiver acceptance tests;
+publication/routing behavior stays unchanged. TZ: docs/tz_terrain_hydrology.md,
+GEO-1 and river routing; GEO-1 source join remains OPEN.
+Owner map: dataModel/hydrology/planning/stages/riverRoutePlans.py::FineRiverPlan
+documents the hydrology transport guarantee; application hydrology/rivers
+rivers/planning/fine/publication.py::FineRiverPublicationJob documents publication
+admission; tests/geo1/fine_water/test_routing.py::FineRoutingTests owns evidence.
+Invariant: published FineRiverPlan confirms accepted routes, not successful
+processing of every declared river intent. Routing ERROR diagnostics may coexist
+with accepted routes in a published envelope; upstream fine-water ERROR still
+blocks publication. Future final must preserve/reconcile intent outcomes and
+diagnostics explicitly; envelope existence is not proof of all-intent success or
+river coverage. Open-water coverage and accepted river facts are separate proofs.
+Tests: reachable actual fine receiver must produce a route with its physical UID;
+no receiver must produce no route and the specific typed routing failure.
+Mixed-intent publication must retain the accepted route alongside the rejected
+intent's ERROR, including codec round-trip; no change to error admission policy.
+No new files/types/enums; touched folder counts unchanged (stages3, fine2, tests5).
+Checks: fine-water tests, providers regression, planning positive/negative typing.
+VERIFIED: fine-water18 OK, providers129 OK; positive pyright0; negative274,
+all271 EXPECT covered (surplus3 unchanged). Runtime algorithms/publication gates
+unchanged; only contract documentation and acceptance assertions changed.
+Ownership review: no orchestrator or planner implementation changed; publication
+job retains admission ownership, FineRiverPlan remains structural transport.
+Final intent reconciliation/coverage and production join remain OPEN (G10-A).

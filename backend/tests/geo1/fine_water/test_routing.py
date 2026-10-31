@@ -8,6 +8,7 @@ from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
+from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic, RiverRoutingCode, RiverRoutingFailure
 from app.dataModel.hydrology.planning.stages.riverRoutePlans import FineRiverPlan
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
@@ -55,24 +56,51 @@ class FineRoutingTests(TestCase):
         self.assertEqual(decode(encode(result, SURFACE_MANIFEST), PlanEnvelope[FineRiverPlan], SURFACE_MANIFEST), result)
         self.assertEqual(route(inputs, water), result)
 
-    def test_dry_fine_mouth_is_not_made_wet_by_coarse_cell_membership(self):
+    def test_dry_fine_mouth_reaches_actual_fine_receiver_in_same_coarse_cell(self):
         # (14,11) and lake share coarse (0,0), but the endpoint itself is dry.
         _, inputs, water = scenario(mouth=(14, 11))
         endpoint = dict(water.payload[1].materialized.cells).get((14, 11))
         self.assertTrue(endpoint is None or not endpoint.liquid_candidate)
         result = route(inputs, water)
-        for accepted in result.payload.routes:
-            entry = dict(water.payload[1].materialized.cells)[accepted.receiver_cell]
-            self.assertTrue(entry.liquid_candidate)
-            self.assertEqual(entry.water_body_uid, accepted.drainage.receiver_uid)
-            self.assertNotEqual(accepted.receiver_cell, (14, 11))
-        self.assertTrue(result.payload.routes or result.diagnostics)
+        self.assertEqual(len(result.payload.routes), 1)
+        accepted = result.payload.routes[0]
+        self.assertEqual(accepted.river_uid, "river")
+        self.assertEqual(accepted.drainage.receiver_uid, "lake")
+        entry = dict(water.payload[1].materialized.cells)[accepted.receiver_cell]
+        self.assertTrue(entry.liquid_candidate)
+        self.assertEqual(entry.water_body_uid, "lake")
+        self.assertNotEqual(accepted.receiver_cell, (14, 11))
+        self.assertFalse(any(d.disposition is PlanDiagnosticDisposition.ERROR for d in result.diagnostics))
 
-    def test_no_receiving_water_cannot_publish_a_successful_river(self):
+    def test_no_receiving_water_publishes_rejected_intent_with_specific_reason(self):
         _, inputs, water = scenario(lake=False)
         result = route(inputs, water)
         self.assertEqual(result.payload.routes, ())
-        self.assertTrue(result.diagnostics)
+        self.assertEqual(len(result.diagnostics), 1)
+        diagnostic = result.diagnostics[0]
+        self.assertIs(diagnostic.disposition, PlanDiagnosticDisposition.ERROR)
+        self.assertEqual(diagnostic.issue.code, RiverRoutingCode.NO_WATER_BODIES)
+        detail = RiverRouteDiagnostic.model_validate_json(diagnostic.issue.message)
+        self.assertEqual(detail.object_uid, "river")
+        self.assertIs(detail.code, RiverRoutingCode.NO_WATER_BODIES)
+        self.assertIs(detail.reason, RiverRoutingFailure.DRY_MOUTH)
+        self.assertEqual(detail.failure_cell, (11, 11))
+        self.assertIsNone(detail.receiver_uid)
+
+    def test_published_plan_keeps_accepted_route_and_another_intents_error(self):
+        _, inputs, water = scenario()
+        rejected = DeclaredRiver.model_validate(dict(location_uid="rejected", declare_mode="segments",
+            segments=[{"from": dict(x=11, y=11), "to": dict(x=12, y=11), "connection_type": "river"}]))
+        result = route(replace(inputs, declared_rivers=(*inputs.declared_rivers, rejected)), water)
+        self.assertEqual([accepted.river_uid for accepted in result.payload.routes], ["river"])
+        self.assertEqual(result.payload.routes[0].drainage.receiver_uid, "lake")
+        errors = [d for d in result.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR]
+        self.assertEqual(len(errors), 1)
+        detail = RiverRouteDiagnostic.model_validate_json(errors[0].issue.message)
+        self.assertEqual(detail.object_uid, "rejected")
+        self.assertIs(detail.code, RiverRoutingCode.INVALID_SOURCE)
+        self.assertIs(detail.reason, RiverRoutingFailure.SOURCE_IN_WATER)
+        self.assertEqual(decode(encode(result, SURFACE_MANIFEST), PlanEnvelope[FineRiverPlan], SURFACE_MANIFEST), result)
 
     def test_exact_source_proof_world_topology_and_error_are_required(self):
         _, inputs, water = scenario()
