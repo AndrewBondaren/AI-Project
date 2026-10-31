@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from pydantic import TypeAdapter
 
 from app.application.engine.registration.nodeRegistry import NodeRegistry
+from app.application.engine.contracts.executionBindings import ExecutionCursor
 from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
@@ -33,6 +34,7 @@ class ExecutionState:
         self._decision = LevelDecision.CONTINUE
         self._active = False
         self._released = False
+        self._cursor: ExecutionCursor | None = None
         self._plan_revision = plan_revision
         self._pass_number = self._validate_context(plan_revision, pass_number)
 
@@ -68,6 +70,7 @@ class ExecutionState:
         state._traces = list(snapshot.traces)
         state._levels = list(snapshot.levels)
         state._decision = snapshot.decision
+        state._cursor = snapshot.cursor
         if state.gate != snapshot.gate:
             raise ValueError("snapshot gate does not match level control")
         return state
@@ -77,6 +80,22 @@ class ExecutionState:
             raise RuntimeError("cannot release an active execution phase")
         self.catalog.release()
         self._released = True
+
+    @property
+    def cursor(self) -> ExecutionCursor | None:
+        return self._cursor
+
+    def set_cursor(self, cursor: ExecutionCursor) -> None:
+        if self._active or self._released or not self.catalog.is_quiescent:
+            raise RuntimeError("cursor requires a live quiescent execution")
+        cursor.__post_init__()
+        self._cursor = cursor
+
+    def set_plan_context(self, revision: PlanRevision, pass_number: Index) -> None:
+        if self._active or self._released or not self.catalog.is_quiescent:
+            raise RuntimeError("plan context requires a live quiescent execution")
+        validated = self._validate_context(revision, pass_number, require_revision=True)
+        self._plan_revision, self._pass_number = revision, validated
 
     @property
     def attempt_passes(self) -> tuple[tuple[NodeId, int], ...]:

@@ -20,6 +20,9 @@ from app.application.engine.runtime.repair.pojo.nodeFailureContext import NodeFa
 from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
 from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
 from app.application.engine.runtime.dag.executionPlan import LLMGroup
+from app.application.engine.runtime.llmExecutionEngine import LLMExecutionEngine
+from app.application.engine.runtime.responseResolver import ResponseResolver
+from app.application.engine.contracts.executionBindings import ExecutionCursor, LifecycleBinding, PassStage
 from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.diagnostics.dagLog import emit
@@ -283,3 +286,14 @@ async def verify_llm_execution(
     assert_type(await aggregate.execute(plan, group, (identity(),), views, request, options=options), tuple[NodeOutcome[BaseModel, NodeError], ...])
     assert_type(state.catalog.publish_batch((record,)), None)
     assert_type(state.levels[0].phase, ExecutionPhase)
+
+
+async def verify_engine(
+    engine: LLMExecutionEngine[LeafOutput, CompositeOutput], options: LLMExecutionOptions,
+    hooks: LifecycleBinding[LeafOutput], view: DAGReadView, state: ExecutionState,
+) -> None:
+    assert_type(await engine.run(ExecutionId("e1"), TaskType.SCENE_INIT, max_passes=3, options=options), ResolveResult[LeafOutput])
+    assert_type(await engine.resume(ExecutionId("e1"), max_passes=3, options=options), ResolveResult[LeafOutput])
+    assert_type(ResponseResolver(LeafOutput).resolve(hooks, view), ResolveResult[LeafOutput])
+    assert_type(state.set_cursor(ExecutionCursor(TaskType.SCENE_INIT, PassStage.LLM)), None)
+    assert_type(state.cursor, ExecutionCursor | None)

@@ -301,3 +301,11 @@ def frozen_fine_water(world: EntityUid, base_input: TerrainBaseInput, relief_inp
     assert_type(WaterBodyPlanner().fill_fine(window, expected_surface=expected, placement=placement,
         expected_placement=placement.ref, inputs=physical, specs=specs, classification_decisions=decisions, control=control),
         PlanEnvelope[FineWaterResult])
+
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import FineRiverPlan
+
+
+def published_fine_routes(owner: FineRiverPlanner, world: EntityUid, inputs: GeoHydrologyPlanInput,
+                          water: PlanEnvelope[FineWaterResult], expected: PlanRef, control: PlanBuildControl) -> None:
+    assert_type(owner.plan_fine(world_uid=world, inputs=inputs, water=water,
+                expected_water=expected, control=control), PlanEnvelope[FineRiverPlan])

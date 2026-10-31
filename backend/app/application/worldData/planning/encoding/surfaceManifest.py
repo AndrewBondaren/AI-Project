@@ -149,6 +149,7 @@ from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan as 
 from app.dataModel.terrain.relief.planning.reliefPlan import RiverBedRecord as _MRiverBedRecord
 from app.dataModel.spatial.grid.coordinateTypes import FineXY as _MFineXY
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan as _MHydrologyRoutesPlan
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import FineRiverPlan as _MFineRiverPlan
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology as _MMapCellHydrology
 from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind as _MHydrologyShoreKind
 from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink as _MRiverDrainageLink
@@ -547,6 +548,8 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (287, _MPlanEnvelope[_MFineWaterResult], CanonicalTypeKind.RECORD),
     (288, _MPlacementBatchResultV2, CanonicalTypeKind.RECORD),
     (289, _MPlanEnvelope[_MPlacementBatchResultV2], CanonicalTypeKind.RECORD),
+    (290, _MFineRiverPlan, CanonicalTypeKind.RECORD),
+    (291, _MPlanEnvelope[_MFineRiverPlan], CanonicalTypeKind.RECORD),
 
 )))
 

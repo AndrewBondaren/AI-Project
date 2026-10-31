@@ -1105,3 +1105,13 @@ def invalid_frozen_fine_water(terrain: PlanEnvelope[TerrainPlan], expected: Plan
 def invalid_frozen_materialized_indexes(result: MaterializedWater) -> None:
     result.cells[0] = result.cells[0]  # EXPECT: reportIndexIssue
     result.area_rows[0] = ("source", 1)  # EXPECT: reportIndexIssue
+
+from app.dataModel.hydrology.planning.stages.openWaterPlan import FineWaterResult
+
+
+def invalid_published_fine_routes(owner: FineRiverPlanner, world: EntityUid, inputs: GeoHydrologyPlanInput,
+                                  coarse: PlanEnvelope[HydrologyRoutesPlan], raw: FineWaterResult, native: PlanEnvelope[FineWaterResult],
+                                  expected: PlanRef, control: PlanBuildControl) -> None:
+    owner.plan_fine(world_uid=world, inputs=inputs, water=coarse, expected_water=expected, control=control)  # EXPECT: reportArgumentType
+    owner.plan_fine(world_uid=world, inputs=inputs, water=raw, expected_water=expected, control=control)  # EXPECT: reportArgumentType
+    owner.plan_fine(world_uid=world, inputs=inputs, water=native, control=control)  # EXPECT: reportCallIssue

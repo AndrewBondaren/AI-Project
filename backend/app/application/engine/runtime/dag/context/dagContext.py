@@ -5,7 +5,7 @@ from typing import cast
 
 from pydantic import BaseModel, TypeAdapter
 
-from app.application.engine.contracts.outputRef import RequiredOutput
+from app.application.engine.contracts.outputRef import OptionalOutput, RequiredOutput
 from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
@@ -14,7 +14,7 @@ from app.application.engine.runtime.dag.context.resultInvalidation import Result
 from app.application.engine.runtime.validation.contractValidator import ContractValidator
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.identity import (
-    DomainRevision, ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, PlanRevision,
+    DomainRevision, ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, NodeIdValue, PlanRevision,
 )
 from app.dataModel.engine.dag.records import DependencyRead, OutputRecord
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -122,6 +122,21 @@ class DAGContext:
 
     def read_view(self, consumer: NodeId) -> PublishedDAGReadView:
         requirements = self._registrations[consumer].contract.reads
+        return self._view(consumer, requirements)
+
+    def callback_view(
+        self, consumer: NodeId, requirements: tuple[RequiredOutput[BaseModel] | OptionalOutput[BaseModel], ...],
+    ) -> PublishedDAGReadView:
+        TypeAdapter[NodeId](NodeIdValue).validate_python(consumer)
+        requirements = tuple(requirements)
+        producers = {req.ref.producer for req in requirements}
+        if producers.difference(self._registrations):
+            raise KeyError("callback reads an unregistered producer")
+        return self._view(consumer, requirements)
+
+    def _view(
+        self, consumer: NodeId, requirements: tuple[RequiredOutput[BaseModel] | OptionalOutput[BaseModel], ...],
+    ) -> PublishedDAGReadView:
         producers = {req.ref.producer for req in requirements}
         return PublishedDAGReadView(
             consumer, requirements,

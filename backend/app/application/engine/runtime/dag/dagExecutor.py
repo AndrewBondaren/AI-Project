@@ -46,11 +46,11 @@ class DAGExecutor:
         self, plan: ExecutionPlan, state: ExecutionState, plan_revision: PlanRevision,
         aggregate: LLMAggregateExecutor, request: LLMRequest, *, options: LLMExecutionOptions,
         pass_number: Index = 0, confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None,
-        rerun: Collection[NodeId] = (), cancellation: CancellationRequest | None = None,
+        rerun: Collection[NodeId] = (), cancellation: CancellationRequest | None = None, invalidate_reuse: bool = True,
     ) -> LevelDecision:
         return await LLMGroupCoordinator(aggregate, self._emit, clock=self._clock).run_phase(
             plan, state, plan_revision, request, options=options, pass_number=pass_number,
-            confirmed_domain_revisions=confirmed_domain_revisions, rerun=rerun, cancellation=cancellation,
+            confirmed_domain_revisions=confirmed_domain_revisions, rerun=rerun, cancellation=cancellation, invalidate_reuse=invalidate_reuse,
         )
 
     async def run_python_phase(
@@ -58,6 +58,7 @@ class DAGExecutor:
         plan_revision: PlanRevision, *, pass_number: Index = 0,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, rerun: Collection[NodeId] = (),
         cancellation: CancellationRequest | None = None,
+        invalidate_reuse: bool = True,
     ) -> LevelDecision:
         validate_python_phase(phase)
         if cancellation is not None:
@@ -76,10 +77,14 @@ class DAGExecutor:
             if not isinstance(self._executors[registration.executor_cls], registration.executor_cls):
                 raise TypeError(f"executor does not match binding '{node_id}'")
         if phase == ExecutionPhase.POST_LLM and state.decision != LevelDecision.CONTINUE:
-            return state.decision
+            resuming_post = (state.decision == LevelDecision.CANCEL and state.levels
+                             and state.levels[-1].phase == ExecutionPhase.POST_LLM and state.pass_number == pass_number)
+            if not resuming_post:
+                return state.decision
         state.begin_phase(plan_revision, pass_number)
         try:
-            state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
+            if invalidate_reuse:
+                state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
             state.begin_level(())
             for level, node_ids in enumerate(levels):
                 snapshot = await self._run_level(plan, state, phase, plan_revision, pass_number, level, node_ids, rerun, cancellation)

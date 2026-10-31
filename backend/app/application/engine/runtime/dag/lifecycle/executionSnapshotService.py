@@ -79,7 +79,7 @@ class ExecutionSnapshotService(Generic[S]):
         return SessionSnapshot[S](
             metadata=metadata, catalog=catalog, statuses=tuple(sorted(state.statuses.items())),
             attempt_passes=state.attempt_passes, traces=state.traces, levels=state.levels,
-            decision=state.decision, gate=state.gate, extension=payload, extension_contract=extension_contract,
+            decision=state.decision, gate=state.gate, extension=payload, extension_contract=extension_contract, cursor=state.cursor,
         )
 
     @staticmethod

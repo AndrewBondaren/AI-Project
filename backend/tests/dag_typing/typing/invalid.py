@@ -19,6 +19,10 @@ from app.application.engine.runtime.repair.pojo.nodeFailureContext import NodeFa
 from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
 from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
 from app.application.llm.models import ChatMessage
+from app.application.engine.runtime.llmExecutionEngine import LLMExecutionEngine
+from app.application.engine.runtime.responseResolver import ResponseResolver
+from app.application.engine.contracts.executionBindings import ExecutionCursor, LifecycleBinding, PassStage, ResolveResult
+from app.application.engine.taskType import TaskType
 from app.application.engine.nodeTypes.llmNode import LLMNode
 from app.dataModel.engine.dag.records import OutputRecord
 from app.application.engine.contracts.nodeContract import NodeContract
@@ -42,7 +46,7 @@ from app.application.engine.runtime.validation.contractValidator import Contract
 from app.application.engine.runtime.validation.nodeValidationContext import NodeValidationContext
 from app.application.engine.runtime.validation.nodeValidator import NodeValidator
 from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
-from app.dataModel.engine.dag.identity import ContractId, ContractVersion, NodeId, PlanRevision
+from app.dataModel.engine.dag.identity import ContractId, ContractVersion, NodeId, PlanRevision, ExecutionId
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecutionPhase
 from tests.dag_typing.fixtures import (
     CompositeOutput, FakeExecutor, LEAF_CONTRACT, LeafOutput, NodeInput,
@@ -187,6 +191,17 @@ async def wrong_llm_execution(
     await executor.run_llm_phase(plan, state, PlanRevision("r1"), aggregate, request, options={})  # expect: reportArgumentType
     state.catalog.publish_batch((LeafOutput(value=1),))  # expect: reportArgumentType
     LLMExecutionOptions(player_message="", language="ru", repair_iterations=1, repair_mode="maximum")  # expect: reportArgumentType
+
+
+async def wrong_engine(
+    engine: LLMExecutionEngine[LeafOutput, CompositeOutput], options: LLMExecutionOptions,
+    hooks: LifecycleBinding[CompositeOutput], view: DAGReadView,
+) -> None:
+    wrong: ResolveResult[CompositeOutput] = await engine.run(ExecutionId("e1"), TaskType.SCENE_INIT, max_passes=3, options=options)  # expect: reportAssignmentType
+    ResponseResolver(LeafOutput).resolve(hooks, view)  # expect: reportArgumentType
+    ExecutionCursor("scene_init", PassStage.LLM)  # expect: reportArgumentType
+    await engine.resume(ExecutionId("e1"), max_passes=3, options={})  # expect: reportArgumentType
+    print(wrong)
 
 
 def wrong_validation() -> None:

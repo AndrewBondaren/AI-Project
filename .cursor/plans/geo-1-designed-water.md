@@ -12875,3 +12875,53 @@ HY-12/placement/cascade regression. Команды точных suites закр�
 разбиения новых тестов; не объявлять HTTP evidence без разрешённого запуска.
 Done: согласованные критерии выполнены; отдельные HY-9/10/RIV не закрыты
 ложно; план переименован в -done только после реализации и приёмки.
+
+### G10-A native fine river routing — VERIFIED ISOLATED STAGE (2026-10-31)
+Срез source join §2: исполняемый fine river stage от опубликованного FineWaterResult;
+цель — убрать coarse интерполяцию высот/приёмников из native fine routing.
+ТЗ: docs/tz_terrain_generation.md GEO-1 §6.10/§6.20;
+docs/tz_terrain_hydrology.md «GEO-1 — designed water и граница HY-12».
+Owner map до кода:
+- rivers/planning/fineRiverPlanner.py::FineRiverPlanner — public application
+  hydrology planner, только delegates plan/plan_fine; PC signature сохранена.
+- rivers/planning/fine/execution.py::FineRiverJob — application hydrology/rivers;
+  общий existing declared routing/sampling/retention kernel, без policy/water fill.
+- rivers/planning/fine/publication.py::FineRiverPublicationJob — application
+  hydrology/rivers; admission exact FineWaterResult envelope/ref/world/topology,
+  ERROR/output proof, publication PlanEnvelope[FineRiverPlan] с fine_water dep.
+Контракт plan_fine(*,world_uid,inputs:GeoHydrologyPlanInput,
+ water:PlanEnvelope[FineWaterResult],expected_water:PlanRef,control)
+ -> PlanEnvelope[FineRiverPlan]. Required native source, без coarse/default
+ branch. Existing FineRiverPlan/PlanEnvelope/PlanRef/CoordinateSpace используются
+ повторно; новых POJO/enum нет. Routing читает post-basin actual fine heights и
+ actual water identities; сохраняет только route/request/receiver samples H.
+Алгоритмы routing/carve не переписываются. Existing fine planner отвечает за
+ declared rivers; procedural source search HY-RIV-1 не расширяется этим шагом.
+Fine→coarse projection, registration/dependency cutover routes→relief→final,
+required final coverage/query и native G8-B остаются OPEN; этот срез не объявляет
+coarse-only GEO final каноническим. Production не переключается.
+Папки: rivers/planning 3→3, fine новая/2; tests/geo1/fine_water 4→5.
+Проверка: native fine route к узкому бассейну, actual fine obstacle/receiver,
+exact source proof/revision/error/cancellation, immutable replay и H≪N;
+existing GEO/providers/river regression и positive/negative planning pyright.
+Done: native river operation исполняет existing routing от frozen fine source,
+публикует exact source dependency; facade без domain implementation.
+
+Codec owner: application/worldData/planning/encoding/surfaceManifest.py —
+append-only registration existing FineRiverPlan + PlanEnvelope[FineRiverPlan],
+IDs 290/291; no payload shape change or old ID/version reinterpretation.
+
+Evidence: GEO-1 755 OK (+5 real source→fill→route tests), providers129 OK,
+river/resolver63 OK; positive pyright0; negative274 /271 EXPECT covered,
+surplus3 baseline. Mutations native→coarse sampling and sparse→dense output
+оба дают assertion failure. Real 1024-cell source retains10 samples including
+post-basin receiver; source unchanged, codec/replay, stale/ERROR guards verified.
+Manual ownership review: FineRiverPlanner has only two delegates; routing,
+sampling and retention belong to FineRiverJob, admission/revision/publication
+to FineRiverPublicationJob. Existing kernels unchanged; no POJO/enum added.
+Production callers and GeoHydrologyRoutesPlanProvider still use old coarse
+path: new native operation is not yet wired into SurfacePlanningAssembler.
+Next: decide/implement fine→coarse projection and exact source dependency join
+in existing GEO routes→river-relief→final providers; publish required final
+coverage with merged open-water/river facts. G10-A, G8-B and production remain
+OPEN. Foreign engine/snapshot/logging changes preserved; no SQL/backend/commit.

@@ -33,7 +33,7 @@ class LLMGroupCoordinator:
         self, plan: ExecutionPlan, state: ExecutionState, revision: PlanRevision, request: LLMRequest, *,
         options: LLMExecutionOptions, pass_number: Index = 0,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None,
-        rerun: Collection[NodeId] = (), cancellation: CancellationRequest | None = None,
+        rerun: Collection[NodeId] = (), cancellation: CancellationRequest | None = None, invalidate_reuse: bool = True,
     ) -> LevelDecision:
         options.__post_init__()
         if cancellation is not None:
@@ -62,7 +62,8 @@ class LLMGroupCoordinator:
                 return state.decision
         state.begin_phase(revision, pass_number)
         try:
-            state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
+            if invalidate_reuse:
+                state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
             state.begin_level(())
             for level, group in enumerate(plan.llm_groups):
                 snapshot = await self._run_group(plan, state, group, revision, request, options, pass_number, level, rerun, cancellation)

@@ -6,6 +6,7 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel, TypeAdapter
 
 from app.application.engine.runtime.dag.context.catalogSnapshot import CatalogSnapshot
+from app.application.engine.contracts.executionBindings import ExecutionCursor
 from app.application.engine.runtime.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import GateSignal, LevelDecision
@@ -30,6 +31,7 @@ class SessionSnapshot(Generic[S]):
     gate: GateSignal | None
     extension: S | None = field(default=None, repr=False)
     extension_contract: tuple[ContractId, ContractVersion] | None = None
+    cursor: ExecutionCursor | None = None
 
     def __post_init__(self) -> None:
         SnapshotMetadata.model_validate(self.metadata)
@@ -41,6 +43,8 @@ class SessionSnapshot(Generic[S]):
         ).validate_python(self.attempt_passes, strict=True)
         TypeAdapter[LevelDecision](LevelDecision).validate_python(self.decision, strict=True)
         validate_immutable(self)
+        if self.cursor is not None:
+            self.cursor.__post_init__()
         if self.metadata.execution_id != self.catalog.execution_id:
             raise ValueError("snapshot execution identities do not match")
         if self.metadata.attempt_counters != self.catalog.attempt_counters:
