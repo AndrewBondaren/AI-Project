@@ -33,6 +33,7 @@ from app.dataModel import (
     WorldWeatherTypeRegistry,
 )
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
+from app.dataModel.worldEnvironment.worldEnvironmentSettings import WorldEnvironmentSettings
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -140,6 +141,12 @@ def terrain_rows(world: Any) -> list[dict]:
 
 def terrain_system_keys(world: Any) -> set[str]:
     return {e.system_terrain for e in terrain(world).root}
+
+
+def world_environment(world: Any) -> WorldEnvironmentSettings:
+    return resolve_json_blob_world(
+        world, WorldEnvironmentSettings, label=f"world={_uid(world)} world_environment",
+    )
 
 
 def hydrology(world: Any) -> WorldHydrology:

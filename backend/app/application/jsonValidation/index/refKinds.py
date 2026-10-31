@@ -8,6 +8,7 @@ from enum import StrEnum
 class RefKind(StrEnum):
     MATERIAL = "REF-W-MATERIAL"
     LIQUID = "REF-W-LIQUID"
+    GAS = "REF-W-GAS"
     TERRAIN = "REF-W-TERRAIN"
     CLIMATE = "REF-W-CLIMATE"
     ECON_TIER = "REF-W-ECON-TIER"

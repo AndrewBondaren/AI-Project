@@ -63,9 +63,10 @@ def _canonical_rows(world_key: str) -> list[Any]:
     }[world_key]
 
 
-def _material_keys(rows: list[dict[str, Any]]) -> tuple[frozenset[str], frozenset[str]]:
+def _material_keys(rows: list[dict[str, Any]]) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
     materials: set[str] = set()
     liquids: set[str] = set()
+    gases: set[str] = set()
     for row in rows:
         key = row.get("system_material")
         if not key:
@@ -74,7 +75,9 @@ def _material_keys(rows: list[dict[str, Any]]) -> tuple[frozenset[str], frozense
         category = row.get("material_category")
         if category == MaterialCategory.LIQUID or category == MaterialCategory.LIQUID.value:
             liquids.add(str(key))
-    return frozenset(materials), frozenset(liquids)
+        if category == MaterialCategory.GAS or category == MaterialCategory.GAS.value:
+            gases.add(str(key))
+    return frozenset(materials), frozenset(liquids), frozenset(gases)
 
 
 def _row_keys(rows: list[dict[str, Any]], field: str) -> frozenset[str]:
@@ -120,13 +123,14 @@ def build_world_registry_index(
         wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_livestock"),
     ) or []
 
-    materials, liquids = _material_keys(material_rows) if material_rows else (None, None)
+    materials, liquids, gases = _material_keys(material_rows) if material_rows else (None, None, None)
     if partial and "material_registry" not in normalized:
-        materials, liquids = None, None
+        materials, liquids, gases = None, None, None
 
     return WorldRegistryIndex(
         materials=materials,
         liquids=liquids,
+        gases=gases,
         terrains=(
             _row_keys(terrain_rows, "system_terrain")
             if terrain_rows or not partial

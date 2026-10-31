@@ -54,6 +54,12 @@ from app.dataModel.materials import (
     MaterialRegistryEntry,
     WorldMaterialRegistry,
 )
+from app.dataModel.worldEnvironment import (
+    AtmosphereGasComponent,
+    AtmosphereMode,
+    WorldAtmosphereSettings,
+    WorldEnvironmentSettings,
+)
 from app.dataModel.flora import CropKind, CropsTypeEntry, WorldCropsRegistry
 from app.dataModel.livestock import LivestockKind, LivestockTypeEntry, WorldLivestockRegistry
 from app.dataModel.resources import (
@@ -141,6 +147,10 @@ from app.dataModel.masks import LightContributorId, MaskCategoryPolicy, MaskDoma
 from app.dataModel.terrainMasks import WorldTerrainMasks
 
 __all__ = [
+    "AtmosphereGasComponent",
+    "AtmosphereMode",
+    "WorldAtmosphereSettings",
+    "WorldEnvironmentSettings",
     "BAND_COMMON",
     "BAND_MIDDLE",
     "BAND_POOR",

@@ -97,6 +97,9 @@ class World:
     perk_template_registry:         list = json_list_col()
     library_pins:                   list = json_list_col()  # pin-набор мира: пары library_kind/local_uid (tz_template_library_packs §1.1)
 
+    # world environment (ambient declaration; missing remains unresolved)
+    world_environment:             dict = json_col(default_factory=dict)
+
     # generation policy (world template — tz_terrain_hydrology.md / tz_map_light_bake.md)
     hydrology:                      dict = json_col(default_factory=dict)
     terrain_masks:                  dict = json_col(default_factory=dict)

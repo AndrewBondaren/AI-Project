@@ -354,6 +354,7 @@ Plot/building/structure используют свои POJO defaults и вали�
 | SCH-WORLD-CLIMATE | `WorldClimateScalars` | 8 scalar columns | ✅ | ✅ |
 | SCH-WORLD-ECON-TIER | `WorldEconomyTierRegistry` | `economic_tier_registry` | ✅ | ✅ |
 | SCH-WORLD-MATERIAL | `WorldMaterialRegistry` | `material_registry` | ✅ | ✅ |
+| SCH-WORLD-ENVIRONMENT | `WorldEnvironmentSettings` | `world_environment` (atmosphere: vacuum/mixture или unresolved) | ✅ POJO/WorldSlice | ⬜ runtime SP-A2 |
 | SCH-WORLD-RESOURCE | `WorldResourceTypeRegistry` | `resource_type_registry` | ✅ | ✅ |
 | SCH-WORLD-CROPS | `WorldCropsRegistry` | `crops_registry` | ✅ | ✅ |
 | SCH-WORLD-LIVESTOCK | `WorldLivestockRegistry` | `livestock_registry` | ✅ | ✅ |
