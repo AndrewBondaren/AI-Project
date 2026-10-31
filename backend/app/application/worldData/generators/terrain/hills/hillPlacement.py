@@ -7,7 +7,7 @@ SoT: ``docs/tz_world_pack_storage.md`` § L2 open-land hills.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 
 from app.application.worldData.generators.terrain.hills.hillRaster import Coord
 from app.application.worldData.generators.terrain.hills.hillSelection import selected_hills, _salt
@@ -33,19 +33,42 @@ def place_hills(
     Exclusion ownership belongs to the caller's stage; no water facts are read here.
     ``z_band`` is not applied here.
     """
+    def policy_at(key: str) -> HillPolicy | None:
+        entry = terrain_registry.entry_for(key)
+        return None if entry is None else entry.hills
+
+    _place_hills(surface_z, surface_terrain, excluded_cells, policy_at,
+                 seed=seed, z_min=z_min, z_max=z_max)
+
+
+def place_resolved_hills[KeyT: str](
+    surface_z: dict[Coord, int], surface_terrain: Mapping[Coord, KeyT],
+    excluded_cells: Collection[Coord], *, hill_policies: Mapping[KeyT, HillPolicy | None],
+    seed: int, z_min: int, z_max: int,
+) -> None:
+    """Full calculation from resolved policies, without a landcover registry dependency."""
+    _place_hills(surface_z, surface_terrain, excluded_cells, hill_policies.get,
+                 seed=seed, z_min=z_min, z_max=z_max)
+
+
+def _place_hills[KeyT: str](
+    surface_z: dict[Coord, int], surface_terrain: Mapping[Coord, KeyT],
+    excluded_cells: Collection[Coord], policy_at: Callable[[KeyT], HillPolicy | None], *,
+    seed: int, z_min: int, z_max: int,
+) -> None:
     if not surface_z:
         return
     excluded = frozenset(excluded_cells)
     base_z = dict(surface_z)
     for key in sorted(set(surface_terrain.values())):
-        entry = terrain_registry.entry_for(key)
-        if entry is None or entry.hills is None:
+        policy = policy_at(key)
+        if policy is None:
             continue
         _place_consumer(
             surface_z,
             base_z,
             _host_for(surface_z, surface_terrain, excluded, key),
-            entry.hills,
+            policy,
             seed=seed,
             salt=_salt(key),
             z_min=z_min,
@@ -78,7 +101,7 @@ def _place_consumer(
     z_min: int,
     z_max: int,
 ) -> None:
-    if not surface_z:
+    if not surface_z or not host:
         return
     bounds = GridBBox(min(x for x, _ in surface_z), max(x for x, _ in surface_z),
                       min(y for _, y in surface_z), max(y for _, y in surface_z))

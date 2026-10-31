@@ -2165,3 +2165,13 @@ accepted features, не повторяет hosts/selection/подготовку 
 ограничение полного natural расчёта на это окно. Prepared данные и queried
 окно — разные контракты; полный расчёт остаётся эталоном. Этот isolated срез
 не переключает production L2 и не меняет physical water/routing algorithms.
+
+Captured landcover overrides и effective registry принадлежат PreWaterHillHostJob.
+Resolution выполняется один раз на preparation; наружу передаётся immutable tuple
+из TerrainKey и existing frozen HillPolicy | None, без mutable registry. None
+запрещает hills, а не включает policy по умолчанию. Host observations проецируются
+по необходимому tile/scope тем же подготовленным job, не списком hosts всего мира.
+Terrain hills потребляет разрешённые policies; natural terrain job владеет единым
+правилом mountain/ravine exclusions и возвращает PreparedNaturalTerrain публичной
+операцией, без чтения другим job его working fields. Planner только делегирует,
+provider связывает exact dependencies. Полный расчёт сохраняется как эталон.

@@ -8,19 +8,18 @@ from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.dataModel.terrain.hills.acceptedHill import AcceptedHill
 from app.dataModel.terrain.hillPolicy import HillPolicy
 from app.dataModel.terrain.hillShape import HillShape
-from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
 
-def prepare_hills(bounds: GridBBox, terrain: Mapping[Coord, str], excluded: Collection[Coord], *,
-                  registry: WorldTerrainRegistry, seed: int) -> tuple[AcceptedHill, ...]:
+def prepare_hills[KeyT: str](bounds: GridBBox, terrain: Mapping[Coord, KeyT], excluded: Collection[Coord], *,
+                            hill_policies: Mapping[KeyT, HillPolicy | None], seed: int) -> tuple[AcceptedHill, ...]:
     result = []
     for key in sorted(set(terrain.values())):
-        entry = registry.entry_for(key)
-        if entry is not None and entry.hills is not None:
+        policy = hill_policies.get(key)
+        if policy is not None:
             host = {cell for cell, value in terrain.items() if value == key and cell not in excluded}
-            for origin, shape, axis, _ in selected_hills(bounds, host, entry.hills, seed=seed, salt=_salt(key)):
+            for origin, shape, axis, _ in selected_hills(bounds, host, policy, seed=seed, salt=_salt(key)):
                 result.append(AcceptedHill(origin=(FineX(origin[0]), FineY(origin[1])),
-                    radius=int(entry.hills.radius), height=int(entry.hills.height), shape=shape, axis=axis))
+                    radius=int(policy.radius), height=int(policy.height), shape=shape, axis=axis))
     return tuple(result)
 
 

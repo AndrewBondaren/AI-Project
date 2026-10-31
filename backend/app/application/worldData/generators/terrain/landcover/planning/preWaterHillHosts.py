@@ -22,6 +22,7 @@ from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, FineXY, Gri
 from app.dataModel.spatial.regionShape import Point
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.hillPolicy import HillPolicy
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
 from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
@@ -48,10 +49,18 @@ class PreWaterHillHostJob:
         self.profiles = {p.key: ClimateZoneProfile.from_data(p.key, p.values) for p in self.base.profiles}
         self.context = FactConsumerContext(cells=(), terrain=TerrainWorkingFields.from_plan(terrain_base.payload))
         registry, policy = capture_landcover_policy(inputs)
+        # Landcover owns the registry: capture resolves overrides; subsequent
+        # source queries only read it. Publish frozen policies, never its mutable root.
+        self._hill_policies = tuple(sorted(
+            ((entry.system_terrain, entry.hills) for entry in registry.root), key=lambda row: row[0]))
         observations = LandcoverInputs(inputs.topology, self.facts_at, {
             s.region_uid: StateSnapshotEntry(s.current_type, s.tombstone, s.spec_fingerprint)
             for s in inputs.region_states})
         self.sources = CapturedLandcoverSources(world_uid, inputs, observations, registry, policy, self.profile_at)
+
+    def resolved_hill_policies(self) -> tuple[tuple[TerrainKey, HillPolicy | None], ...]:
+        """Revision-wide result of captured overrides; no resolution per tile/query."""
+        return self._hill_policies
 
     def profile_at(self, gx: GridX, gy: GridY) -> ClimateZoneProfile:
         sample = ClimatePlanSampler.sample_prepared(self.base, self.profiles, gx, gy)

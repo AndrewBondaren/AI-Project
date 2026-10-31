@@ -8,7 +8,6 @@ from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult, PlanEnvelope
 from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain
-from app.application.worldData.generators.terrain.planning.preWater.prepared.preparation import NaturalPreparationJob
 from app.application.worldData.generators.terrain.planning.preWater.prepared.materialization import NaturalWindowJob
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
@@ -24,8 +23,8 @@ class PreWaterTerrainPlanner:
                          support_input: SurfaceSupportInput, climate_base: PlanEnvelope[ClimateBasePlan],
                          terrain_base: PlanEnvelope[TerrainPlan], *,
                          control: PlanBuildControl) -> PlanBuildResult[PreparedNaturalTerrain]:
-        return NaturalPreparationJob().prepare(world_uid, base_input, relief_input, support_input,
-                                               climate_base, terrain_base, control)
+        return PreWaterTerrainJob.prepare_revision(world_uid, base_input, relief_input, support_input,
+                                                   climate_base, terrain_base, control)
 
     def materialize(self, prepared: PreparedNaturalTerrain, *, cells: RegionCoverage,
                     control: PlanBuildControl) -> FineSurfaceWindow:

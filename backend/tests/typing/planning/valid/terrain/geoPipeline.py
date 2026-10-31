@@ -321,3 +321,20 @@ def prepared_natural_windows(planner: PreWaterTerrainPlanner, world: EntityUid, 
     assert_type(planner.prepare_revision(world, base_input, relief_input, support, climate, terrain,
                 control=control), PlanBuildResult[PreparedNaturalTerrain])
     assert_type(planner.materialize(prepared, cells=cells, control=control), FineSurfaceWindow)
+
+
+from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostJob
+from app.application.worldData.generators.terrain.hills.hillSelection import prepare_hills
+from app.application.worldData.generators.terrain.hills.hillPlacement import place_resolved_hills
+from app.dataModel.terrain.hillPolicy import HillPolicy
+from app.dataModel.terrain.hills.acceptedHill import AcceptedHill
+from app.dataModel.spatial.grid.gridBBox import GridBBox
+
+
+def resolved_hill_inputs(owner: PreWaterHillHostJob, bounds: GridBBox,
+                         terrain: dict[tuple[int, int], TerrainKey], surface: dict[tuple[int, int], int]) -> None:
+    policies = owner.resolved_hill_policies()
+    assert_type(policies, tuple[tuple[TerrainKey, HillPolicy | None], ...])
+    index = dict(policies)
+    assert_type(prepare_hills(bounds, terrain, (), hill_policies=index, seed=1), tuple[AcceptedHill, ...])
+    assert_type(place_resolved_hills(surface, terrain, (), hill_policies=index, seed=1, z_min=-10, z_max=20), None)

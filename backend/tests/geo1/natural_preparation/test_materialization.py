@@ -113,7 +113,8 @@ class MaterializationTests(TestCase):
         registry = fixture._registry(policy, policy)
         full = {(x, y): 0 for y in range(96) for x in range(96)}
         terrain = dict.fromkeys(full, fixture.plains)
-        accepted = prepare_hills(GridBBox(0, 95, 0, 95), terrain, (), registry=registry, seed=4)
+        accepted = prepare_hills(GridBBox(0, 95, 0, 95), terrain, (),
+            hill_policies={entry.system_terrain: entry.hills for entry in registry.root}, seed=4)
         layout = hillLayout.build_hill_layout(accepted)
         x, y = accepted[0].origin
         with patch.object(hillLayout, "hills_for_window", wraps=hillLayout.hills_for_window) as query:

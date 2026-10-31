@@ -1130,3 +1130,18 @@ def invalid_prepared_natural(planner: PreWaterTerrainPlanner, prepared: Prepared
     planner.materialize(window, cells=cells, control=control)  # EXPECT: reportArgumentType
     planner.materialize(terrain.payload, cells=cells, control=control)  # EXPECT: reportArgumentType
     planner.prepare_revision(world, base_input, relief_input, support, climate, terrain, cells=cells, control=control)  # EXPECT: reportCallIssue
+
+
+from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostJob
+from app.application.worldData.generators.terrain.hills.hillSelection import prepare_hills
+from app.application.worldData.generators.terrain.hills.hillPlacement import place_resolved_hills
+from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
+
+
+def invalid_resolved_hill_inputs(owner: PreWaterHillHostJob, bounds: GridBBox,
+                                 terrain: dict[tuple[int, int], TerrainKey], surface: dict[tuple[int, int], int],
+                                 registry: WorldTerrainRegistry) -> None:
+    policies = owner.resolved_hill_policies()
+    policies[0] = policies[0]  # EXPECT: reportIndexIssue
+    prepare_hills(bounds, terrain, (), hill_policies=registry, seed=1)  # EXPECT: reportArgumentType
+    place_resolved_hills(surface, terrain, (), hill_policies=registry, seed=1, z_min=-10, z_max=20)  # EXPECT: reportArgumentType
