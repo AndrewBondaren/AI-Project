@@ -4,6 +4,8 @@
 
 **Родитель и первый интеграционный трек:** [GEO-1 Designed Water](./geo-1-designed-water.md), G10-A. Обратная ссылка из GEO-1 обязательна. План общий для разных доменов, но первым доказательным потребителем является hydrology. Не переименовывать этот план в GEO-подзадачу, не внедрять generic domain внутрь hydrology. Aerial A4 остаётся OPEN и связанным вопросом, не закрывается записью этого плана.
 
+**Отдельный будущий трек физики:** [PHYSICS-1 — Физическая эволюция пространственных сред](./physics-spatial-dynamics.md). SPATIAL-1 отвечает за то, что/где/как расположено в принятом состоянии, а Physics — за изменение: агрегированные упрощённые pressure/displacement/mixing/propagation и более детальную физику с полной **локальной** материализацией рядом с игроком. Оба режима Physics вне реализации SPATIAL-1; точные алгоритмы и переход между режимами OPEN. Generic spatial read остаётся read-only.
+
 **Профильные ТЗ:** [Materials](../../docs/tz_materials.md), [Hydrology](../../docs/tz_terrain_hydrology.md), [Aerial](../../docs/tz_aerial.md), [Terrain Generation](../../docs/tz_terrain_generation.md), [World Pack](../../docs/tz_world_pack_storage.md), [World State CRUD](./world-state-crud-transition.md), [Layer Boundaries](../rules/layer-boundaries.mdc), [DAG interface](../rules/dag-generator-interface.mdc). При расхождении технической идеи с утверждёнными ТЗ/кодом фиксировать расхождение как OPEN, не молча переписывать доменную семантику.
 
 ## 1. Цель и не-цель
