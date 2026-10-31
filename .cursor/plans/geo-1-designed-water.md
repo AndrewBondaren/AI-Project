@@ -13199,3 +13199,72 @@ Exercise recipe invalidation independently for hosts/exclusions/seed/policy/stat
 kernel-call mocks or same-kernel tests alone do not establish equivalence.
 POJO audit remains binding: no parallel NaturalRecipeV2/host registry/status enum.
 Implementation of recipe delivery/reuse and L0/L2 cutover remains OPEN (G10-A).
+
+### G10-A natural geometry — PREPARE ONCE / BOUNDED WINDOW DELIVERY (2026-10-31)
+Master requires separate revision preparation and requested-window evaluation;
+recipe replay is not permission to rebuild a whole tile/world per chunk.
+This refines the full-tile hills clause above: canonical full-tile selection is
+the geometry reference, NOT a runtime full-tile height-allocation requirement.
+
+Preparation: publish/reuse frozen natural light/mountain/ravine data, captured
+landcover selection and protected geometry for a coherent revision through the
+existing PlanningService/cache lifecycle. Do not cache a live PreWaterTerrainJob
+with control/callables/mutable working maps as a published recipe, add a domain
+singleton cache, or rerun its constructor's global work per L2 request/chunk.
+Hill selection must likewise be fixed once per revision/canonical selection
+scope: candidate lattice/order, accepted centers, shape/axis/policy and footprint
+admission. Runtime windows rasterize selected features, not rerun placement.
+POJO follow-up: existing HillPolicy/HillShape describe knobs, not selected hills;
+MountainLayout is mountain-specific. The earlier source-join type inventory is
+not proof that a prepared hill layout already exists. Audit/extend the owning
+terrain planning contract before adding any record; no parallel V2 snapshot or
+reusing a policy/mountain record as a misleading hill-placement container.
+
+Code/evidence findings:
+- fineTilePrep.prepare_fine_tile receives rects but build_tile_surface_state
+  receives no requested coverage. It builds the full tile before the worker pool.
+  S3000 implies9,000,000 cells even for a small rect. The first gap analysis is
+  followed by another full-state analysis when grade halos are appended.
+- CapturedLandcoverSources.terrain_at allocates/rasterizes a full tile on a cold
+  point lookup. Actual fixture:1 requested host creates256 cells at S16. Merely
+  bounding height output while retaining this hidden work is not bounded delivery.
+- Hill acceptance checks earlier accepted centers greedily; footprint radius
+  does not bound the complete selection dependency. Counterexample using existing
+  kernel: flat96x96/plains, circle radius2/height3/spacing6, seed4; evaluate query
+  [36..59]^2 via crop[24..71]^2 (halo12, aligned lattice).29 query cells differ
+  from full evaluation, including(47,36): full0/local2. Halo12 exceeds radius+
+  spacing; no general safe fixed halo has been established by these probes.
+
+Runtime scope: Q is the UNION of requested rects, represented by existing
+RegionCoverage/CoverageSpan (convert inclusive ColumnRect bounds explicitly).
+Do not inflate disjoint rects to one large bounding rectangle. Expand Q by the
+actual read dependencies of enabled passes; compose sequential neighborhoods,
+not a blindly chosen max halo. Query prepared feature geometry intersecting
+that scope and evaluate only needed fine heights/paint plus required neighbors.
+No scan/rasterization of all prepared features or hidden full host-tile map on
+each small request; prepared lookup structure must support scoped retrieval.
+Apply physical overlays from the same frozen revision exactly, then compute
+needed gaps after all required neighbor heights are available. Gap kernel reads
+four neighbors (radius1); topology seams need the same canonical fine geometry,
+not nearest baked-parent fallback or whichever neighboring chunks happen to exist.
+Missing required observations are not a true world boundary. Grade/other passes
+may require larger composed scopes. Later height changes invalidate affected
+gap cells locally; do not repeat analysis of an unchanged full tile.
+Serial prep must pass Q/dependency scope to the public terrain operation; domain
+jobs own selection/raster/halo/gap rules. Orchestrators only order/bind calls.
+
+Acceptance: full-reference vs bounded-window geometry equality, including hill
+centers outside Q, exclusions/regions, disjoint rects and seams. Check cold and
+warm same-revision reuse/invalidation; instrument prepared-job invocations,
+evaluated/allocated cells, feature visits, copies and actual pack/cache reads.
+For small Q, warm work/storage scales with Q plus algorithm dependencies and
+intersecting features, not S²; fully requested tiles may legitimately cost S².
+Existing grade UID reads iterate all tile chunks and catalog prep uses full tile
+bounds: review these separately when wiring scoped prep, without claiming that
+bounded heightmaps alone remove the complete pre-pool I/O delay.
+No extra per-cell SQL/I/O, dense per-stage copies, alternate hills selection or
+new hill algorithm/defaults under the guise of this optimization. Common kernels
+and exact accepted layout remain the equivalence reference. Full-world physical
+fine resolution is a separate existing limit, unchanged by bounded L2 delivery.
+Only plan changed; small in-memory kernel/host probes ran, no runtime edits or
+production benchmark. Implementation and performance acceptance remain OPEN.
