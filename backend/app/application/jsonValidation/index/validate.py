@@ -13,6 +13,7 @@ from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
+from app.dataModel.worldEnvironment.worldEnvironmentSettings import WorldEnvironmentSettings
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
@@ -85,6 +86,26 @@ def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[Re
             ),
         )
     return checks
+
+
+def _atmosphere_checks(normalized: dict[str, Any], partial: bool) -> list[RefCheck]:
+    if partial and "world_environment" not in normalized:
+        return []
+    environment = normalized.get("world_environment")
+    atmosphere = environment.get("atmosphere") if isinstance(environment, dict) else None
+    if not isinstance(atmosphere, dict):
+        return []
+    return [
+        RefCheck(
+            ref_kind=RefKind.GAS,
+            schema_id=WorldEnvironmentSettings.SCHEMA_ID,
+            path=("world_environment", "atmosphere", "composition", index, "system_material"),
+            value_getter=lambda _data, gas=component: gas.get("system_material"),
+            registry_present_key="material_registry",
+        )
+        for index, component in enumerate(atmosphere.get("composition", []))
+        if isinstance(component, dict)
+    ]
 
 
 def _landcover_checks(normalized: dict[str, Any]) -> list[RefCheck]:
@@ -277,6 +298,7 @@ def validate_ref_w(
     checks = [
         *_climate_scalar_checks(normalized, partial),
         *_hydrology_checks(normalized, partial),
+        *_atmosphere_checks(normalized, partial),
         *_material_tier_checks(normalized, partial),
         *_landcover_checks(normalized),
     ]

@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS worlds (
     perk_template_registry      TEXT,
     library_pins                TEXT,  -- pin-набор мира: пары library_kind/local_uid (tz_template_library_packs §1.1)
 
+    -- world environment (typed ambient/atmosphere declaration; NULL = unresolved)
+    world_environment            TEXT,
+
     -- generation policy (hydrology / caves / terrain masks — tz_terrain_hydrology.md, tz_map_light_bake.md)
     hydrology                   TEXT,
     terrain_masks               TEXT,

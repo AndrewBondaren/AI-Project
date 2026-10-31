@@ -5,6 +5,7 @@ Catalog + runtime ``resolve_*_world``. Import merge → ``worldSliceMerge`` (T-2
 
 from __future__ import annotations
 
+from app.dataModel.worldEnvironment.worldEnvironmentSettings import WorldEnvironmentSettings
 from app.dataModel.races.worldRaceTemplateRegistry import WorldRaceTemplateRegistry
 from app.dataModel.perks.worldPerkTemplateRegistry import WorldPerkTemplateRegistry
 
@@ -321,6 +322,14 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         world_key="climate_zone_registry",
         facade=True,
         wire_adapter=climate_zone_wire_from_raw,
+    ),
+    WorldSlice(
+        schema_id=WorldEnvironmentSettings.SCHEMA_ID,
+        pojo_cls=WorldEnvironmentSettings,
+        wire_kind="json_blob",
+        world_keys=("world_environment",),
+        empty_factory=WorldEnvironmentSettings.canonical_unresolved,
+        facade=True,
     ),
     WorldSlice(
         schema_id=WorldHydrology.SCHEMA_ID,

@@ -14,6 +14,7 @@ class WorldRegistryIndex:
     registry_vocabularies: dict[type, frozenset[str]] = field(default_factory=dict)
     materials: frozenset[str] | None = None
     liquids: frozenset[str] | None = None
+    gases: frozenset[str] | None = None
     terrains: frozenset[str] | None = None
     climate_zones: frozenset[str] | None = None
     economic_tiers: frozenset[str] | None = None
@@ -26,6 +27,7 @@ class WorldRegistryIndex:
         return {
             RefKind.MATERIAL: self.materials,
             RefKind.LIQUID: self.liquids,
+            RefKind.GAS: self.gases,
             RefKind.TERRAIN: self.terrains,
             RefKind.CLIMATE: self.climate_zones,
             RefKind.ECON_TIER: self.economic_tiers,
