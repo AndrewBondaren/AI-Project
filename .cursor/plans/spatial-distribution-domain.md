@@ -61,6 +61,14 @@
 - Reader не выбирает priority материалов, не смешивает среды, не выполняет density/pressure/movement, не материализует `MapCell` и не пишет в World Pack/Snapshot. Typed media projection и физическая materialization solids/objects остаются отдельными операциями с разными контрактами.
 - Это **приёмка архитектурного принципа**, а не утверждение новых POJO/кода, runtime wiring, формата pack wire или закрытие всего шага SP-1.
 
+### Принятое решение SP-1: bootstrap PlanRef и runtime publication (2026-11-01)
+
+- **Две разные идентичности:** frozen `PlanEnvelope/PlanRef` описывает исходный подготовленный результат планирования и его upstream dependencies; существующий `WorldPublicationRef` описывает опубликованное состояние мира. Его логический world CAS — `(pack_hash, snapshot_head)`, `publication_id` защищает смену head от ABA по уже принятому Snapshot-контракту. Не подменять `PlanRef` через `snapshot_head` и не изобретать второй spatial revision store/counter.
+- **Доменное чтение актуального состояния:** согласованный (pinned) опубликованный world view = immutable base Pack + overlay выбранной snapshot-линии; для обычного текущего чтения — один текущий скомпактированный overlay, без replay истории тиков. Исходные неизменённые факты сохраняют provenance планирования; изменения читаются поверх из принятого snapshot state. Историческое чтение не подменяет закреплённую версию на latest.
+- `SpatialSlice[T]` должен трассироваться и к bootstrap source/provenance, и к принятой world publication/state revision. Mixed-revision facts, stale prepared index или непроверенная связь дают контролируемый отказ/unknown по доменному контракту, не silent merge. **Точный вид typed binding, pinning и domain invalidation остаётся SP-0/SP-1 OPEN.**
+- Domain-owned read отвечает за свои факты и согласование base/overlay через утверждённые read/storage contracts. Общий SPATIAL generic — только типизированный read interface, **не WorldStateService**, не WS-посредник и не writer; Snapshot принимает/публикует изменения, но не выбирает или материализует данные для reader. DAG решает когда вызвать доменную операцию, а не собирает её внутренние источники вручную.
+- Это приёмка **принципа связывания ревизий**; не утверждены новые классы, публичные сигнатуры, payload, кэш, SQL/pack I/O или реализация snapshot adapter.
+
 ## 4. Точная интеграция с гидрологией — PRODUCER SEAM
 
 **Решение по точке подключения:** hydrology-owned пространственный read adapter строится **от уже опубликованных, согласованных финальных hydrology facts**, после water + routes + river relief + final, а **не** вызывается из water solver/routing. В коде конкретный publication seam — результат GeoHydrologyFinalPlanProvider.build, собираемый HydrologyFactsAssembler. Источник должен иметь evidence также из native fine-water и actual fine beds той же revision. Adapter/index имеет своего владельца в hydrology, реализует общий read contract. Это архитектурная точка, **не утверждённое имя нового файла/класса**.
@@ -129,7 +137,7 @@ Materials определяет density/viscosity, heat/cool refs и услови
 ## 7. Revision, состояния мира и объём работы
 
 - Bootstrap: frozen PlanEnvelope/PlanRef + точные upstream dependencies, deterministic prepared index. Не держать live job, mutable world registry, callback, SQL connection внутри опубликованного payload.
-- Runtime: одобренные world-state CRUD → patches/snapshots → актуальный world state. Связь с bootstrap revision и invalidation затронутых spatial volumes — открытый контракт. Не считать отсутствие patch автоматическим доказательством актуальности подготовленного индекса.
+- Runtime: одобренные world-state CRUD → patches/snapshots → актуальный world state. **Принятая граница:** frozen bootstrap `PlanRef` отдельно от существующего `WorldPublicationRef`/`(pack_hash, snapshot_head)`; доменный read берёт согласованный pack + snapshot overlay и возвращает проверяемый provenance обоих источников. **OPEN:** точное typed revision binding, согласование overlay и domain invalidation затронутых spatial volumes. Не считать отсутствие patch автоматическим доказательством актуальности подготовленного индекса.
 - Materialization: union запросов XYZ + обоснованные algorithm dependencies/halo, без расширения к одному giant bbox по умолчанию; wrapped/sphere topology seams сохранить. Coverage proof + dry/unknown semantics и контроль stale index.
 - Initial fine-water physical solve сейчас требует полный fine terrain world (FineWaterJob validates complete canonical coverage); новый reader НЕ обещает отмены этой стоимости. Сравнивать **отдельно** cold prepare и warm localized query, allocations, feature visits, cache/pack/SQL I/O. Маленький read_window не может вызвать full-tile host/map creation, пересборку depression tree, full hash/copy, per-cell SQL.
 - **Target storage:** после согласованного initial solve light bake может опубликовать компактные canonical spatial facts/index в immutable World Pack, а L0 map mask — только упрощённую проекцию. Текущий `HydrologyMaskWire` (`role`, `width`) не доказательство fine XYZ/volume coverage, значит он не может быть единственным SoT. Exact pack wire/manifest entry — OPEN после SP-0; не вводить альтернативный hydrology snapshot store.
@@ -174,10 +182,11 @@ Materials определяет density/viscosity, heat/cool refs и услови
 
 ## 10. Открытые решения
 
-**Закрыто 2026-11-01:** форма общего результата — типизированный generic `SpatialSlice[T]` с фактами в собственных POJO доменов; без единого material-filled XYZ payload, без обязательного общего `SpatialFact`. См. §3. Детали конкретного wire и revisions остаются открытыми.
+**Закрыто 2026-11-01 (формат результата):** типизированный generic `SpatialSlice[T]` с фактами в собственных POJO доменов; без единого material-filled XYZ payload, без обязательного общего `SpatialFact`. См. §3.
+
+**Закрыто 2026-11-01 (revision boundary):** `PlanRef` исходного bootstrap не смешивается с `WorldPublicationRef` принятого состояния; domain read использует согласованный base Pack + Snapshot overlay без нового versioning или общего WS read service. Точные POJO, pinning и invalidation остаются OPEN после SP-0/SP-1. См. §3/§7.
 
 - Где именно в World располагаются typed World Environment POJO/config и их CRUD/API, каковы допустимые explicit vacuum/ambient/mixture, room/local overrides, обязательность поля и legacy migration? **Доменный owner World Environment уже принят**, открыты форма и wiring (SP-A1 после SP-A0). Одно наличие `air` в material_registry не ответ.
-- Как связать bootstrap PlanRef и runtime state revision, не меняя generic read в world-state write service?
 - В каком hydro final POJO/PlanSlot публикуется exact native fine open-water coverage и actual final waterbed evidence после river relief? Как не дублировать исходные данные?
 - Кто владеет river surface profile z_water(x,y) и какова его семантика на водопадах/устьях?
 - Какой L2 output contract сохраняет water UID/role/level, если FineTerrainZRun сейчас не умеет; нужен ли новый sidecar, version bump или иной доступный существующий wire?
