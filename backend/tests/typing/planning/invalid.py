@@ -1130,6 +1130,8 @@ def invalid_prepared_natural(planner: PreWaterTerrainPlanner, prepared: Prepared
     planner.materialize(window, cells=cells, control=control)  # EXPECT: reportArgumentType
     planner.materialize(terrain.payload, cells=cells, control=control)  # EXPECT: reportArgumentType
     planner.prepare_revision(world, base_input, relief_input, support, climate, terrain, cells=cells, control=control)  # EXPECT: reportCallIssue
+    planner.prepare_window(prepared, expected_preparation=terrain.ref, cells=cells, control=control)  # EXPECT: reportArgumentType
+    planner.prepare_window(terrain, expected_preparation=terrain.ref, cells=cells, control=control)  # EXPECT: reportArgumentType
 
 
 from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostJob

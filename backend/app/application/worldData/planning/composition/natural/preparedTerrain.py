@@ -13,20 +13,16 @@ from app.dataModel.cache.contracts.cacheContract import CacheContract, CacheCont
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.planning.contracts.planContract import PlanContractMetadata, PlanContractRegistry
 from app.dataModel.planning.contracts.planDependency import PlanDependency, PlanDependencyContract
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
-from app.dataModel.planning.identity.planKey import AlgorithmVersion, SchemaVersion, PlanSlot, PlanScope
+from app.dataModel.planning.identity.planKey import PlanSlot, PlanScope
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
-from app.dataModel.terrain.planning.natural.preparedTerrain import NaturalTerrainInputs, PreparedNaturalTerrain
+from app.dataModel.terrain.planning.natural.preparedTerrain import (
+    NATURAL_TERRAIN_CONTRACT, NaturalTerrainInputs, PreparedNaturalTerrain,
+)
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
-
-
-NATURAL_TERRAIN_CONTRACT = PlanContractMetadata(
-    id=RegistryKey[PlanContractRegistry]("terrain.prepared_natural"),
-    schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1))
 
 
 def register_natural_terrain(registry: PlanRegistry, *,

@@ -16,6 +16,7 @@ from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefP
 from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput
 from app.dataModel.topology.worldTopology import Coord
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.planning.identity.planRef import PlanRef
 
 
 class PreWaterTerrainPlanner:
@@ -31,12 +32,11 @@ class PreWaterTerrainPlanner:
         """Use ready immutable data validated once at the caller's planning boundary."""
         return NaturalWindowJob().materialize(prepared, cells, control)
 
-    def prepare_window(self, world_uid: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
-                       support_input: SurfaceSupportInput, climate_base: PlanEnvelope[ClimateBasePlan],
-                       terrain_base: PlanEnvelope[TerrainPlan], *, cells: RegionCoverage,
+    def prepare_window(self, prepared: PlanEnvelope[PreparedNaturalTerrain], *, expected_preparation: PlanRef,
+                       cells: RegionCoverage,
                        control: PlanBuildControl) -> PlanEnvelope[FineSurfaceWindow]:
-        return PreWaterTerrainWindowJob().prepare(world_uid, base_input, relief_input, support_input,
-                                                  climate_base, terrain_base, cells, control)
+        return PreWaterTerrainWindowJob().prepare(prepared, expected_preparation=expected_preparation,
+                                                  cells=cells, control=control)
 
     def prepare(self, world_uid: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
                 support_input: SurfaceSupportInput, climate_base: PlanEnvelope[ClimateBasePlan],

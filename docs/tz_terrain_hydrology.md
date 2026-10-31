@@ -2175,3 +2175,11 @@ Terrain hills потребляет разрешённые policies; natural terr
 правилом mountain/ravine exclusions и возвращает PreparedNaturalTerrain публичной
 операцией, без чтения другим job его working fields. Planner только делегирует,
 provider связывает exact dependencies. Полный расчёт сохраняется как эталон.
+
+Fine-window publication принимает prepared natural envelope и ожидаемый exact ref,
+проверяет источник на границе одной операции публикации union coverage и сохраняет
+его ref вместе с exact climate/terrain refs в зависимостях окна. Fine-water
+publication требует эту связь; прямые climate/terrain refs без prepared revision
+её не заменяют. Проверка полного prepared envelope не выполняется внутри chunk
+materialization: после admission используется существующая чистая materialize
+операция. Стоимость полной проверки источника не объявляется ограниченной Q.

@@ -99,8 +99,12 @@ class FineReviewTests(TestCase):
         window, _, topology = source(hills=False)
         rows = tuple((cell, 0 if cell in {(8, 8), (9, 8), (8, 9), (9, 9)} else 10)
                      for cell, _ in window.payload.surface_z)
-        window = envelope("pre_water", FineSurfaceWindow(coverage=window.payload.coverage, topology=topology,
-            protected_cells=frozenset(), surface_z=rows), window.dependencies)
+        # Synthetic admitted heights isolate physical policy behavior; preserve
+        # the current source contract and dependency closure.
+        payload = FineSurfaceWindow(coverage=window.payload.coverage, topology=topology,
+            protected_cells=frozenset(), surface_z=rows)
+        window = replace(window, payload=payload, ref=replace(window.ref,
+            output_fingerprint=output_fingerprint(payload, window.dependencies, window.diagnostics, SURFACE_MANIFEST)))
         physical = physical_inputs(topology)
         off = fill(window, topology, physical=physical)
         auto = decisions(physical, auto=True)

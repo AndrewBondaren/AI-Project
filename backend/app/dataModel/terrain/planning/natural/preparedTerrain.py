@@ -3,6 +3,9 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from app.dataModel.planning.identity.planKey import AlgorithmVersion, PlanSlot, SchemaVersion
+from app.dataModel.planning.contracts.planContract import PlanContractMetadata, PlanContractRegistry
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.spatial.grid.coordinateTypes import GridX, GridY
 from app.dataModel.terrain.hills.acceptedHill import HillLayout
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
@@ -14,6 +17,11 @@ from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
 
 type NaturalTerrainInputs = tuple[TerrainBaseInput, ReliefPlanInput, SurfaceSupportInput]
+
+NATURAL_TERRAIN_CONTRACT = PlanContractMetadata(
+    id=RegistryKey[PlanContractRegistry]("terrain.prepared_natural"),
+    schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1))
+PREPARED_NATURAL = PlanSlot("prepared_natural")
 
 
 class NaturalTerrainTile(BaseModel):

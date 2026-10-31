@@ -3,6 +3,7 @@ from app.application.planning.service.planFingerprints import input_fingerprint,
 from app.application.planning.service.planningService import PlanBuildControl, PlanBuildFailure
 from app.application.worldData.generators.hydrology.water.planning.fine.execution import FineWaterJob
 from app.application.worldData.generators.hydrology.water.planning.geoExecution import geo_execution_decisions
+from app.application.worldData.generators.terrain.planning.preWater.terrainWindowJob import PRE_WATER_WINDOW
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
@@ -19,11 +20,12 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.terrain.planning.natural.preparedTerrain import NATURAL_TERRAIN_CONTRACT, PREPARED_NATURAL
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 FINE_WATER_CONTRACT = PlanContractMetadata(id=RegistryKey[PlanContractRegistry]("hydrology.fine_water"),
-    schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1))
+    schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(2))
 PRE_WATER_SURFACE = PlanSlot("pre_water_surface")
 
 
@@ -36,6 +38,10 @@ class FineWaterPublicationJob:
         control.raise_if_shutdown()
         classification_decisions = geo_execution_decisions(classification_decisions)
         specs = tuple(sorted(specs, key=lambda spec: spec.source_uid))
+        source_key = surface.ref.key
+        if (source_key.contract_id != PRE_WATER_WINDOW.id or source_key.schema_version != PRE_WATER_WINDOW.schema_version
+                or source_key.algorithm_version != PRE_WATER_WINDOW.algorithm_version):
+            raise ValueError("fine water requires the prepared-derived terrain window contract")
         for envelope, expected in ((surface, expected_surface), (placement, expected_placement)):
             if envelope.ref != expected or envelope.ref.output_fingerprint != output_fingerprint(
                     envelope.payload, envelope.dependencies, envelope.diagnostics, SURFACE_MANIFEST):
@@ -45,9 +51,14 @@ class FineWaterPublicationJob:
         if errors:
             raise PlanBuildFailure(errors)
         refs = {d.slot: d.ref for d in surface.dependencies}
-        if set(refs) != {SurfacePlanSlot.CLIMATE_BASE, SurfacePlanSlot.TERRAIN_BASE} or any(
+        if set(refs) != {SurfacePlanSlot.CLIMATE_BASE, SurfacePlanSlot.TERRAIN_BASE, PREPARED_NATURAL} or any(
                 ref.key.world_uid != surface.ref.key.world_uid or ref.key.scope != surface.ref.key.scope for ref in refs.values()):
-            raise ValueError("fine water requires coherent frozen climate/terrain dependencies")
+            raise ValueError("fine water requires coherent frozen climate/terrain/prepared dependencies")
+        natural = refs[PREPARED_NATURAL].key
+        if (natural.contract_id != NATURAL_TERRAIN_CONTRACT.id
+                or natural.schema_version != NATURAL_TERRAIN_CONTRACT.schema_version
+                or natural.algorithm_version != NATURAL_TERRAIN_CONTRACT.algorithm_version):
+            raise ValueError("fine water requires the natural preparation contract")
         batch = placement.payload
         unresolved = tuple(FieldPathError(("placement", outcome.identity.source_uid),
             "full fine water publication requires resolved placement evidence")

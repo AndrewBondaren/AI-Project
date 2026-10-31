@@ -13497,3 +13497,56 @@ G10-A, GEO final coverage и Aerial A4 остаются OPEN; перенос т�
 SPATIAL-1 не является разрешением на реализацию. В SPATIAL-1 шаги
 SP-0 (audit) → SP-1/2 (architecture) → SP-H (GEO prerequisite)
 → SP-3 (hydrology reader) → SP-4 (L2 integration) → SP-5 (other domains).
+
+
+### Task3 — PREPARED REVISION → FINE WINDOW PUBLICATION — VERIFIED ISOLATED SLICE (2026-10-31)
+Master's "Далее" continues source-lifecycle work after the responsibility refactor
+now committed in fa503038 (workspace merge c946f781). Preserve SPATIAL-1 notes;
+no SPATIAL/L2/final activation is part of this slice. TZ: tz_terrain_hydrology.md
+frozen natural preparation/materialization contract.
+Reuse PreparedNaturalTerrain, PlanEnvelope/PlanRef/PlanDependency and existing
+FineSurfaceWindow; no new POJO, enum, preparation cache or water records.
+Move unchanged natural contract metadata to its existing owning dataModel module
+for reuse without composition→provider→planner→publication import cycles.
+PreWaterTerrainWindowJob.prepare takes prepared envelope + expected exact ref
+and RegionCoverage union, admits that source once at publication boundary and
+uses NaturalWindowJob for geometry. PreWaterTerrainPlanner.prepare_window only
+delegates; full prepare remains the independent reference. Retain exact climate/
+terrain refs and add prepared_natural dependency. Window identity binds coverage
+and this closure. Fine-water publication requires it and current window metadata;
+no legacy fallback/bridge. Bump window/fine-water algorithm versions for changed
+publication contract; natural metadata, payload schemas and geometry unchanged.
+Ownership: window job owns source admission/publication; natural window job owns
+geometry; provider/planner acquire no domain algorithms or recipe construction.
+Complete-envelope admission is once per publication union operation, not a chunk
+worker operation: reuse existing pure materialize for bounded chunks after source
+admission. No O(Q) claim for full-envelope validation or runtime L2 wiring.
+Files: existing terrainWindowJob/terrainBasePlanner, natural prepared dataModel /
+composition metadata import, hydrology water/fine/publication; migrate all window
+API callers/typing and fine-water source fixture to existing PlanningService.
+Tests: reuse prepared source across scoped publications with no preparation/hosts/
+selection; full-reference equality, exact deps/codec/revision identity; stale,
+tampered, ERROR and foreign-source rejection; missing prepared proof rejected by
+fine water. Existing fine-water→fine-river tests, GEO/planning and typing checks.
+One publication test file makes natural_preparation tests4→5; no new app files.
+Done: actual fine-water public operation consumes a prepared-derived window;
+bounded materialize and full oracle unchanged. G10-A remains OPEN.
+
+Implemented: prepare_window now publishes from an exact prepared envelope and
+retains its ref plus climate/terrain closure. Fine-water rejects old/missing/
+wrong preparation proof; fixtures execute preparation through PlanningService
+before window→physical water→native river tests. No full-terrain constructor,
+host projection or hill selection during publication; full source admission is
+explicitly once per publication union, not a bounded-chunk operation.
+Verified: GEO776 OK (+5), planning292 OK (outside sandbox for Windows asyncio),
+positive pyright0; negative282 diagnostics /279 EXPECT covered, surplus3 unchanged.
+All 20 natural preparation/publication tests pass, including historical GOLDEN,
+policy digests, exact union/full equivalence, codec replay, local-equal/source-
+changed identity, stale/tampered/ERROR/foreign closure rejection. Metadata move
+leaves natural contract and payload schemas unchanged; window/fine-water algorithm
+versions are now2. Manual boundary check: planner delegates, provider unchanged,
+publication binds/admit refs, NaturalWindowJob owns geometry; no new POJO/enum.
+Remaining G10-A: main HydrologyRoutesAssembler.assemble_geo is still coarse-led;
+join this prepared→fine-water source there and carry coherent native samples/facts
+through river-relief/final. Production L2/final/SPATIAL activation remains OPEN.
+No backend, engine DAG, SQL migration files, commit or push.

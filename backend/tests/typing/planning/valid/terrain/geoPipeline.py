@@ -285,6 +285,7 @@ from app.dataModel.placement.result import PlacementBatchResultV2
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
+from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -295,8 +296,9 @@ def frozen_fine_water(world: EntityUid, base_input: TerrainBaseInput, relief_inp
                       terrain: PlanEnvelope[TerrainPlan], cells: RegionCoverage, control: PlanBuildControl,
                       window: PlanEnvelope[FineSurfaceWindow], expected: PlanRef, topology: WorldTopology,
                       specs: tuple[BasinSpec, ...], placement: PlanEnvelope[PlacementBatchResultV2], physical: GeoHydrologyPlanInput,
-                      decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]) -> None:
-    assert_type(PreWaterTerrainPlanner().prepare_window(world, base_input, relief_input, inputs, base, terrain,
+                      decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...],
+                      prepared: PlanEnvelope[PreparedNaturalTerrain]) -> None:
+    assert_type(PreWaterTerrainPlanner().prepare_window(prepared, expected_preparation=prepared.ref,
         cells=cells, control=control), PlanEnvelope[FineSurfaceWindow])
     assert_type(WaterBodyPlanner().fill_fine(window, expected_surface=expected, placement=placement,
         expected_placement=placement.ref, inputs=physical, specs=specs, classification_decisions=decisions, control=control),

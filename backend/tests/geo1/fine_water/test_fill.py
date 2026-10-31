@@ -19,6 +19,7 @@ from app.dataModel.topology.fineTopology import fine_topology
 from tests.geo1.coating.fixtures import envelope
 from tests.geo1.hill_hosts.test_hosts import coverage
 from tests.geo1.terrain_base.fixtures import inputs, Control
+from tests.geo1.natural_preparation.fixtures import ReadyPlans
 
 
 def source(*, cells=None, mountain=False, hills=True, elevation=10):
@@ -26,7 +27,12 @@ def source(*, cells=None, mountain=False, hills=True, elevation=10):
     terrain = values[-1]
     values[-1] = envelope("terrain_base", replace(terrain.payload,
         surface_z=tuple((cell, elevation) for cell, _ in terrain.payload.surface_z)), terrain.dependencies)
-    window = PreWaterTerrainPlanner().prepare_window("world", *values,
+    case = TestCase()
+    try:
+        prepared = ReadyPlans(case, values).build()
+    finally:
+        case.doCleanups()
+    window = PreWaterTerrainPlanner().prepare_window(prepared, expected_preparation=prepared.ref,
         cells=cells or coverage(0, 32, 0, 32), control=Control())
     return window, window.payload.protected_cells, fine_topology(values[2].topology, values[0].grid.fine_span)
 
