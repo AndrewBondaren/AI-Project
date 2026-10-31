@@ -408,3 +408,13 @@ def published_native_final(world: EntityUid, inputs: GeoHydrologyPlanInput, reli
         specs=specs, before=before, expected_before=before.ref, water=water, expected_water=water.ref,
         routes=routes, expected_routes=routes.ref, river=river, expected_river=river.ref, control=control),
         PlanEnvelope[GeoHydrologyPlan])
+
+
+from app.application.worldData.generators.hydrology.query.nativeFinalWaterQuery import NativeFinalWaterQuery
+from app.dataModel.policy.policyFacts import KnownFact, UnknownFact
+
+
+def readonly_native_water(final: PlanEnvelope[GeoHydrologyPlan], water: PlanEnvelope[FineWaterResult],
+                          cell: FineXY, control: PlanBuildControl) -> None:
+    reader = NativeFinalWaterQuery(final, water, expected_final=final.ref, expected_water=water.ref, control=control)
+    assert_type(reader.water_at(cell), KnownFact[EntityUid | None] | UnknownFact)

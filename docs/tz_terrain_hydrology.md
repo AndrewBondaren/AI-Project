@@ -2235,3 +2235,11 @@ successful F observation reachable through its exact declared dependency;
 GeoHydrologyPlan itself still has no explicit coverage field. Owning-schema and
 readonly query cutover must make that evidence available before wet/dry/unknown
 claims are enabled in production. No final-envelope-only completeness inference.
+
+Readonly native water observation admits exact native final and successful fine
+source proofs once per revision, requiring their fine_water/pre_water_surface
+refs to agree. Per-coordinate lookup uses canonical coverage and sorted fine
+facts: liquid/river bed returns KnownFact(actual UID), observed dry/SHORE returns
+KnownFact(None), missing coverage returns UnknownFact. No coarse membership,
+SQL, preparation, full-source scan or fingerprinting occurs per read. The runtime
+reader is not a prepared payload. Production activation remains atomic G10-A.

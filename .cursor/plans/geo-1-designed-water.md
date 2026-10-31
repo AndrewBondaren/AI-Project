@@ -13825,3 +13825,40 @@ entry switch, including explicit final coverage transport/query consumption.
 Exact F dependency supplies source coverage evidence; final payload alone still
 does not prove coverage or all-intent success. G10-A OPEN; registered GEO/L2 and
 production unchanged; no backend, DAG, SQL migrations, commit or push.
+
+
+### Task10 — SOURCE-BOUND READONLY WATER QUERY — VERIFIED ISOLATED (2026-11-01)
+Clean0c70d47e. Source-join audit readonly wet/dry/unknown and successful coverage
+contract in docs/tz_terrain_hydrology.md. No coverage DTO/enum or compatibility
+bridge: reuse KnownFact[EntityUid|None], UnknownFact and existing source coverage.
+Owner/file: hydrology/query/nativeFinalWaterQuery.py::NativeFinalWaterQuery admits
+exact native final + successful fine-water envelope once per revision; queries
+only immutable indexed final facts and source coverage. Missing observation never
+becomes dry; dry SHORE is dry, rivers/open water return their actual identity.
+No SQL, policy, preparation, new source maps or hash/validation per query. The
+query object is revision-scoped runtime reader, never prepared payload/cache SoT.
+Folders query/1 and tests geo1/water_query/2. Proof admission may scan/hash source
+once; per-cell operations must use bisect only. Test actual published pipeline,
+wet/dry/unknown, stale/foreign/tampered/error source, route-error acceptance,
+no per-query validation/iteration, source immutability, GEO and typing.
+Registration/capture/default/schema/production cutover remains atomic OPEN; this
+reader does not activate production or add final payload coverage by fallback.
+
+Boundary review: no planner/orchestrator changes; hydrology owns proof admission
+and water observation semantics. Reader holds immutable rows/spans only, not
+jobs, terrain heights or a parallel snapshot record. Existing KnownFact/UnknownFact
+and HydrologyCellRole reused; river-bed identity is explicit even though its
+liquid_candidate flag is false. Input coordinates are canonical fine coordinates;
+no coarse projection/alias-normalization fallback. Proof validation runs once per
+reader revision; instantiate outside per-cell/chunk loops. Native final coverage
+field and production consumer wiring remain atomic-cutover work, not completed.
+
+Verified: GEO826 OK (+6); after tightening graph shape, all6 query tests passed
+again. Positive pyright0; negative297 diagnostics, all294 EXPECT lines covered.
+Planning suite not repeated: existing execution/providers unchanged. Checks prove
+actual lake/river/dry shore/unknown observations, stale/mixed/error proofs rejected,
+route diagnostics accepted, no full row iteration/hash per read and cancellation.
+Next: atomic G8-B schemas/defaults/capture/GEO registration/production switch,
+including final coverage transport and wiring this reader into production query.
+G10-A OPEN. No production/backend/DAG/SQL migrations/commit/push. Concurrent
+PHYSICS-1 documentation commit91c630fa preserved; git diff --check clean.

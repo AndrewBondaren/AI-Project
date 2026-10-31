@@ -1199,3 +1199,11 @@ def invalid_final_publication(world: EntityUid, inputs: GeoHydrologyPlanInput, r
                               control: PlanBuildControl) -> None:
     HydrologyFactsAssembler().publish_fine(world_uid=world, inputs=inputs, relief_inputs=relief, specs=(), before=before.payload, expected_before=before.ref, water=water, expected_water=water.ref, routes=routes, expected_routes=routes.ref, river=river, expected_river=river.ref, control=control)  # EXPECT: reportArgumentType
     HydrologyFactsAssembler().publish_fine(world_uid=world, inputs=inputs, relief_inputs=relief, specs=(), before=before, expected_before=before.ref, water=water, expected_water=water.ref, routes=routes, expected_routes=routes.ref, river=river, control=control)  # EXPECT: reportCallIssue
+
+
+from app.application.worldData.generators.hydrology.query.nativeFinalWaterQuery import NativeFinalWaterQuery
+
+
+def invalid_water_query(final: PlanEnvelope[GeoHydrologyPlan], water: PlanEnvelope[FineWaterResult], control: PlanBuildControl) -> None:
+    NativeFinalWaterQuery(final, water.payload, expected_final=final.ref, expected_water=water.ref, control=control)  # EXPECT: reportArgumentType
+    NativeFinalWaterQuery(final, water, expected_final=final.ref, control=control)  # EXPECT: reportCallIssue
