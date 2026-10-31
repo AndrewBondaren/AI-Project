@@ -2153,3 +2153,15 @@ River planning observation scope и retained output различаются: ис
 быть полным, но следующие river stages получают только requested path/accepted
 path/receiver samples, без search-only cells. Legacy full-fine helper сохраняет
 полный возврат явно в своём caller; это не transport river planning stages.
+
+Подготовка natural geometry отделяется от materialization окна. Prepared natural
+result связывает existing natural light/mountain layouts, frozen refine inputs,
+защитные интервалы и принятые hills с одной ревизией через PlanningService.
+Выбор hills использует прежние candidate/hash/spacing/host rules в canonical tile
+scope и не зависит от запрошенного L2-окна. Принятые shape/axis/height сохраняются;
+новых shape/space/revision enum нет. Materialization принимает RegionCoverage как
+union интервалов, использует необходимые light samples и пересекающие окно
+accepted features, не повторяет hosts/selection/подготовку и выдаёт точное
+ограничение полного natural расчёта на это окно. Prepared данные и queried
+окно — разные контракты; полный расчёт остаётся эталоном. Этот isolated срез
+не переключает production L2 и не меняет physical water/routing algorithms.

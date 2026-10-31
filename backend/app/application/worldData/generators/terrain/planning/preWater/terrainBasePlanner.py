@@ -6,7 +6,10 @@ from app.application.worldData.generators.terrain.planning.preWater.terrainWindo
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult, PlanEnvelope
+from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain
+from app.application.worldData.generators.terrain.planning.preWater.prepared.preparation import NaturalPreparationJob
+from app.application.worldData.generators.terrain.planning.preWater.prepared.materialization import NaturalWindowJob
 from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
@@ -17,6 +20,18 @@ from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 
 
 class PreWaterTerrainPlanner:
+    def prepare_revision(self, world_uid: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
+                         support_input: SurfaceSupportInput, climate_base: PlanEnvelope[ClimateBasePlan],
+                         terrain_base: PlanEnvelope[TerrainPlan], *,
+                         control: PlanBuildControl) -> PlanBuildResult[PreparedNaturalTerrain]:
+        return NaturalPreparationJob().prepare(world_uid, base_input, relief_input, support_input,
+                                               climate_base, terrain_base, control)
+
+    def materialize(self, prepared: PreparedNaturalTerrain, *, cells: RegionCoverage,
+                    control: PlanBuildControl) -> FineSurfaceWindow:
+        """Use ready immutable data validated once at the caller's planning boundary."""
+        return NaturalWindowJob().materialize(prepared, cells, control)
+
     def prepare_window(self, world_uid: EntityUid, base_input: TerrainBaseInput, relief_input: ReliefPlanInput,
                        support_input: SurfaceSupportInput, climate_base: PlanEnvelope[ClimateBasePlan],
                        terrain_base: PlanEnvelope[TerrainPlan], *, cells: RegionCoverage,

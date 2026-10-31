@@ -13268,3 +13268,201 @@ and exact accepted layout remain the equivalence reference. Full-world physical
 fine resolution is a separate existing limit, unchanged by bounded L2 delivery.
 Only plan changed; small in-memory kernel/host probes ran, no runtime edits or
 production benchmark. Implementation and performance acceptance remain OPEN.
+
+### Task1 — NATURAL DATA POJO / OWNERS / PLANNING AUDIT VERIFIED (2026-10-31)
+Requested scope: natural layouts, hill hosts/exclusions, accepted hills,
+revision/invalidation and their actual PlanningService integration. Audit only;
+no models, schemas, generators or engine code changed. Paths below are relative
+to backend/app. Existing contracts/enum are reused before designing any additions.
+
+1. Natural layouts — semantic/data owner terrain/relief.
+Existing dataModel/terrain/relief/planning/reliefPlan.py: MountainLayout,
+MountainTemplateInput, LightReliefPlan, LightMountainCell, LightRavineCell.
+Producers: generators/terrain/relief/planning/naturalRelief.py mountain_layout /
+light_relief. Inputs already exist as TerrainBaseInput/ReliefPlanInput and frozen
+climate_base/terrain_base. These are reusable leaf contracts, already registered
+in the surface canonical manifest; copying their fields into V2 layouts is wrong.
+ReliefPlan aggregates them WITH post-basin coarse surface. Its PC/GEO provider
+depends on water_placement. The complete ReliefPlan envelope is consequently not
+an upstream pre-water recipe: using it there recreates the phase/dependency cycle.
+Missing: independent prepared natural-data publication before water, with reuse
+of these leaf types and explicit source closure; not another mountain generator.
+
+2. Hill hosts — semantic/data owner landcover; terrain consumes the selected keys.
+Existing dataModel/terrain/relief/surfaceCoating/surfaceSupportInput.py contains
+SurfaceSupportInput, TerrainSupportEntry, LandcoverSupportPolicy with captured
+registry/hills overrides and authored-presence bits, regions, RegionState,
+topology/grid/seed and refine policy. SurfaceSupportCapture captures these values;
+RegionState writes belong to regions/stateChange/consumer.StateChangeConsumer.
+PreWaterHillHostJob uses exact base climate/terrain, not final hydro/local climate.
+Its public operation returns immutable tuple[(FineXY,TerrainKey)] observations.
+Computed ResolvedRegion/StateSnapshotEntry already exist in application terrain/
+landcover/types.py; RegionClaim/ClaimSeed exist in masks/regionRasterContext.py.
+They must be evaluated for reuse/re-homing rather than cloned as new region DTOs.
+CapturedLandcoverSources itself holds mutable region lists, ClaimOwnersIndex and
+full-tile _tiles caches; LandcoverInputs contains a callable and Mapping. These
+live execution objects are not a cacheable frozen recipe. Missing: revision-bound
+prepared landcover selection/lookup boundary; a full host map is not mandatory
+payload for every L2 window. TerrainRegionPlan is generation extent/coverage,
+not the selected landcover/hill-host layout and cannot substitute for it.
+
+3. Exclusions — semantic/data owner terrain natural geometry.
+PreWaterTerrainJob computes exact fine mountain protection into self.protected
+from MountainLayout and ravine exclusions from LightReliefPlan. FineSurfaceWindow
+(dataModel/terrain/sampling) publishes protected_cells for its observed coverage;
+ravine hill exclusion is currently derived inside the job, not a separate frozen
+output. RegionCoverage/CoverageSpan and topology/grid types are already available.
+Missing: prepared exclusion/geometry dependency and scoped lookup available
+without rebuilding the job/global fine sets. Do not add a competing exclusion
+enum/mask or use L0 water exclusions as natural geometry evidence.
+
+4. Accepted hills — semantic/data owner terrain/hills.
+Existing dataModel/terrain/hillPolicy.py + hillShape.py describe knobs/palette,
+not realized hills. terrainMasks imports reexport the same objects. Whole-app
+definition/reference search found no accepted-hill/layout POJO. hillPlacement.py
+keeps accepted centers in local placed; selected shape/axis and raster deltas are
+temporary and only surface_z mutations survive. A policy cannot identify an
+accepted hill; MountainLayout/RiverBedRecord would be misleading substitutes.
+Generic ResolvedPlacementV2/PlacementFootprint also exist, but do not record the
+hill shape/axis/height realization. Moving hills to a different resolver would
+change selection semantics, not merely reuse a DTO; it is not authorized here.
+Missing: one canonical terrain-owned accepted-hill result, bound to recipe and
+canonical selection scope, with scoped retrieval/raster delivery. Reuse existing
+HillShape/HillPolicy/coordinates/revision vocabulary; do not duplicate enums.
+
+5. Revisions/invalidation — common identity/cache mechanism, domain-owned inputs.
+Existing PlanRequest/PlanKey/PlanRef/PlanEnvelope/PlanDependency, world/region
+PlanScope, InputFingerprint/OutputFingerprint/AlgorithmVersion/SchemaVersion
+already provide identity. SurfacePlanningView.revision is a capture digest, not
+the ready natural-layout ref. RegionState.spec_fingerprint identifies its spec
+relationship, not a replacement planning revision protocol.
+Existing input hash binds contract/version, world/scope, typed inputs and exact
+dependencies; output hash binds payload, deps and diagnostics. Geometry edits,
+base refs, region states/hills/seed/topology and relevant version bumps therefore
+must reach a new request key. Old refs remain valid historical artifacts; there
+is no domain-change watcher/reverse-dependency purge inside PlanningService.
+Caller/capture owns current coherent source selection; domains own complete
+input projection/version bumps. Service cannot detect omitted inputs or changed
+kernel code under an unchanged algorithm version. Current window key hashes
+the entire SurfaceSupportInput: correctness is conservative, but material-only
+or unrelated state-field changes can also invalidate geometry (coarse granularity).
+
+6. PlanningService — ready mechanism, missing natural-preparation binding.
+- RegisteredPlanContract + PlanRegistry + PlanDependencyReader validate actual
+  immutable payloads, declared exact deps/world/scope, metadata and hashes.
+  get_or_build provides bounded same-key single-flight/cache hits and independent
+  waiters. Providers cannot recursively call get_or_build; caller composition
+  must prepare prerequisites explicitly and providers require ready dependencies.
+- PreWaterTerrainWindowJob currently invokes PreWaterTerrainJob directly and
+  constructs an envelope manually. PRE_WATER_WINDOW metadata and codec entries
+  exist, but no RegisteredPlanContract/provider/slot for that operation or a
+  separate ready natural preparation exists in the surface registration. Codec
+  registration and a manually constructed PlanRef do not provide cache/single-flight.
+- The current window key includes requested RegionCoverage together with recipe
+  inputs. Each new coverage can redo global preparation. Missing: separation of
+  prepared-recipe identity from the window evaluation identity/coverage.
+- Service caches PlanEnvelope payloads, not retrievable PlanRequest input bodies.
+  A digest cannot deliver the recipe. Required frozen input values/ready layout
+  must be explicitly retained/provided through the lifecycle, not re-read live.
+- "Once per revision" is not an absolute exactly-once execution guarantee:
+  current cache is bounded in-memory LRU; oversize entries are returned without
+  storage, eviction/restart/failure permits a later rebuild. Single-flight is
+  per service instance. A materialization request should obtain/validate ready
+  data once and share it across its chunks, not repeatedly request preparation.
+- Warm cache/dependency reads still recursively validate/hash complete payloads;
+  scoped delivery must account for this cost and artifact size. A mutable domain
+  cache or bypassing provenance checks is not an acceptable optimization.
+- DependencyReader currently requires deps in the request's same world/scope.
+  World-parent→region-child scope transitions are not implicitly supported.
+  Existing WorldPlanScope plus window/tile coverage inputs can be reused; do not
+  invent TileRevision/TileScope merely to conceal an undeclared scope transition.
+
+Result: reuse natural leaf layouts, captured support/region data, spatial/window
+types and all common planning identities. Genuine missing domain data is an
+upstream ready natural preparation (including retained input closure), reusable
+landcover/exclusion access and accepted-hill realization. Missing lifecycle work
+is their registration/dependency composition and bounded window consumer, not a
+new PlanningService, registry, revision enum, climate/coating provider or store.
+Next contract design must assign exact owning paths and decide reuse/move/extend
+for the above application landcover structures before introducing new records.
+Evidence: existing planning service/concurrency suites23 OK, including same-key
+single-flight, stale/dependency rejection, failures/retry and oversize rebuild.
+No new tests or runtime edits; no production/performance acceptance claimed.
+
+### Task2 — PREPARATION / WINDOW MATERIALIZATION — VERIFIED ISOLATED STEP (2026-10-31)
+Authorized slice: one immutable natural preparation independent of L2 windows,
+cached through existing PlanningService; bounded union-window evaluation with
+identical geometry. Existing full calculation stays callable as reference; no L2,
+production, SQL or engine switch. TZ: tz_terrain_hydrology.md frozen fine terrain
+section + preparation/materialization supplement; GEO-1 §6.10/§6.20.
+Contracts/owner map before code (paths relative to backend/app):
+- dataModel/terrain/hills/acceptedHill.py::AcceptedHill and HillLayout: terrain
+  hill realization + immutable spatial tree. Reuse HillShape, FineXY, GridBBox;
+  tree stores each accepted hill once, structural bounding invariants only.
+- dataModel/terrain/planning/natural/preparedTerrain.py::NaturalTerrainTile and
+  PreparedNaturalTerrain: terrain-owned ready natural inputs/light/mountain
+  layout, per-tile protected CoverageSpan intervals and accepted-hill tree.
+  Reuse TerrainBaseInput, LightReliefPlan, MountainLayout, fine WorldTopology,
+  ParentLightRefinePolicy; no duplicate registry/region/mode/revision models.
+- generators/terrain/hills/hillSelection.py: extracted unchanged candidate/hash/
+  spacing/host/shape selection, shared by existing full place_hills and preparation.
+  hillLayout.py owns deterministic tree construction/query and applying clipped
+  accepted geometry. hillRaster.py gains clipping inside existing raster loops;
+  full raster remains the same kernel. hillPlacement.py retains full height path.
+- generators/terrain/planning/preWater/prepared/preparation.py::NaturalPreparationJob
+  owns revision preparation using existing PreWaterTerrainJob natural preparation
+  once, full canonical tile host admission and selected hills. No requested window.
+  PreWaterTerrainJob retains its produced layout/light for reuse; full calculation
+  unchanged. Protected points compressed once to existing CoverageSpan rows.
+- same folder materialization.py::NaturalWindowJob owns union coverage validation,
+  binary lookups of prepared tile/light/protection, hill-tree queries and clipped
+  rasterization; no live sources, host selection, water or new cache. Existing
+  lightSurfaceRefine gains explicit local-cell iteration, unchanged point math.
+- landcover/planning/preWaterHillHosts.py::PreWaterHillHostJob adds project_tile
+  through the same host-selection owner; preparation has no render-window region
+  identity and must not invent a RegionCoverage.region_uid from world_uid.
+- same folder provider.py::NaturalTerrainPlanProvider: require exact base refs,
+  delegate only. composition/natural/preparedTerrain.py owns standalone registration
+  of RegisteredPlanContract[tuple[TerrainBaseInput,ReliefPlanInput,SurfaceSupportInput],
+  PreparedNaturalTerrain] (not production handles), using existing cache/codec.
+- PreWaterTerrainPlanner gains prepare_revision(...)->PlanBuildResult[PreparedNaturalTerrain]
+  and materialize(prepared,*,cells:RegionCoverage,control)->FineSurfaceWindow;
+  both delegates only. Caller validates/reuses ready envelope at planning boundary,
+  then passes the same immutable payload to window operations; no whole-source
+  revalidation or preparation per window. Existing prepare/prepare_window preserved.
+- encoding/surfaceManifest.py append-only IDs292..296 for the four new domain
+  records + prepared envelope. New data is justified by Task1 missing realization;
+  not parallel surface/water records. No new enum or alternate selection algorithm.
+Folders: hills3→5, preWater4→4 (prepared/3), composition5→5 (natural/1),
+dataModel natural/1 + hills/1; tests geo1/natural_preparation/4. Existing folders
+are not expanded beyond5 direct files. Scope and recipes determine preparation
+key, requested RegionCoverage does not. Cache eviction/oversize limits unchanged;
+retained prepared payload can be reused independent of later cache eviction.
+Checks: eight BEFORE-edit full-reference geometry digests captured for all four
+hill shapes with/without mountains; full vs disjoint/small windows including
+negative/seam/ravine/host cases; preparation invoked once across cached requests;
+no calls to preparation/selection/full raster during window materialization;
+evaluated coordinates bounded by requested union. Codec/immutability, invalidation,
+cancel/failure/typing checks, GEO and hills/planning regressions; manual facade
+responsibility review. No claim that full-world initial water solve is bounded.
+
+Implemented: registered immutable preparation independent of query coverage;
+accepted hills indexed once, protected geometry stored as canonical intervals.
+Materialization uses binary light/tile/protection lookups, spatial hill pruning
+and clipped existing raster/refine kernels. No full fine heightmap is built by
+preparation; its existing host/protection work can still be expensive. Window
+operations hold/reuse ready payload and do not invoke preparation or selection.
+Evidence: GEO769 OK (+13), providers129 OK, hills+sync L0/L2 consumers36 OK;
+eight before-edit full-reference digests unchanged; codec/replay/cache reuse,
+eviction-independent ready reuse, captured states/ravines/negative/seam/shape/
+overlap equality verified. Two-cell query evaluates/allocates two refine cells;
+tree query prunes unrelated hills. Unbounded-refine mutation gives assertion
+failure. Positive expanded pyright0; negative277 /274 EXPECT covered, surplus3
+unchanged. Manual review: PreWaterTerrainPlanner and PreWaterHillHostPlanner
+delegate only; NaturalTerrainPlanProvider performs exact lifecycle ref binding;
+registration callbacks only validate/hash. Selection/geometry/indexing remain in
+owning jobs, dataModel validators are structural. No new enum/default/algorithm
+policy; selected values become POJO only in preparation, not the legacy writer.
+No production/L2 entry switched, engine/SQL/backend/commit/push untouched. Next:
+bind prepared revision into fine-window publication and the main GEO source
+lifecycle before route→river-relief→final integration. G10-A remains OPEN.

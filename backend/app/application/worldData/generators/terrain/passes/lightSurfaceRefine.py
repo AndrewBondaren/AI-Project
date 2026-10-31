@@ -1,6 +1,6 @@
 """One light-to-fine height kernel for baked parents and pre-water recipes."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from app.application.worldData.generators.coordinates.worldTile import world_fine_xy
 from app.application.worldData.generators.terrain.noise import cell_z_noise
@@ -32,29 +32,32 @@ def _sample_z_bilinear(side: int, z_at: Callable[[int, int], int], fx: float, fy
 
 def refine_light_surface(gx: int, gy: int, grid: SurfaceGridSettings,
                          z_at: Callable[[int, int], int], *, seed: int, z_min: int, z_max: int,
-                         policy: ParentLightRefinePolicy) -> dict[tuple[int, int], int]:
-    """Refine a complete tile; source ownership and stage belong to the caller."""
+                         policy: ParentLightRefinePolicy,
+                         local_cells: Iterable[tuple[int, int]] | None = None) -> dict[tuple[int, int], int]:
+    """Evaluate full tile or explicit local cells with exactly the same point math."""
     tile_macro, side = grid.fine_span, grid.light_side
     surface_z: dict[tuple[int, int], int] = {}
 
-    for ly in range(tile_macro):
-        for lx in range(tile_macro):
-            xm, ym = world_fine_xy(gx, gy, lx, ly, tile_macro)
-            # Continuous light coords at cell center of meter.
-            fx = (lx + 0.5) * side / tile_macro
-            fy = (ly + 0.5) * side / tile_macro
-            if policy.resample == "nearest":
-                base = float(_sample_z_nearest(side, z_at, fx, fy))
-            else:
-                base = _sample_z_bilinear(side, z_at, fx, fy)
-            base_i = int(round(base))
-            noisy = cell_z_noise(
-                seed, xm, ym, base_i, amplitude=policy.detail_noise_amplitude,
-            )
-            lo = base_i - policy.z_band
-            hi = base_i + policy.z_band
-            z = max(lo, min(hi, noisy))
-            z = max(z_min, min(z_max, z))
-            surface_z[(xm, ym)] = z
+    samples = ((lx, ly) for ly in range(tile_macro) for lx in range(tile_macro)) if local_cells is None else local_cells
+    for lx, ly in samples:
+        if not (0 <= lx < tile_macro and 0 <= ly < tile_macro):
+            raise ValueError("fine sample outside canonical tile")
+        xm, ym = world_fine_xy(gx, gy, lx, ly, tile_macro)
+        # Continuous light coords at cell center of meter.
+        fx = (lx + 0.5) * side / tile_macro
+        fy = (ly + 0.5) * side / tile_macro
+        if policy.resample == "nearest":
+            base = float(_sample_z_nearest(side, z_at, fx, fy))
+        else:
+            base = _sample_z_bilinear(side, z_at, fx, fy)
+        base_i = int(round(base))
+        noisy = cell_z_noise(
+            seed, xm, ym, base_i, amplitude=policy.detail_noise_amplitude,
+        )
+        lo = base_i - policy.z_band
+        hi = base_i + policy.z_band
+        z = max(lo, min(hi, noisy))
+        z = max(z_min, min(z_max, z))
+        surface_z[(xm, ym)] = z
 
     return surface_z

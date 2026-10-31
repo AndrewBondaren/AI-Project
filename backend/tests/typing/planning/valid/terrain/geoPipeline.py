@@ -309,3 +309,15 @@ def published_fine_routes(owner: FineRiverPlanner, world: EntityUid, inputs: Geo
                           water: PlanEnvelope[FineWaterResult], expected: PlanRef, control: PlanBuildControl) -> None:
     assert_type(owner.plan_fine(world_uid=world, inputs=inputs, water=water,
                 expected_water=expected, control=control), PlanEnvelope[FineRiverPlan])
+
+from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain
+from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
+
+
+def prepared_natural_windows(planner: PreWaterTerrainPlanner, world: EntityUid, base_input: TerrainBaseInput,
+                             relief_input: ReliefPlanInput, support: SurfaceSupportInput,
+                             climate: PlanEnvelope[ClimateBasePlan], terrain: PlanEnvelope[TerrainPlan],
+                             prepared: PreparedNaturalTerrain, cells: RegionCoverage, control: PlanBuildControl) -> None:
+    assert_type(planner.prepare_revision(world, base_input, relief_input, support, climate, terrain,
+                control=control), PlanBuildResult[PreparedNaturalTerrain])
+    assert_type(planner.materialize(prepared, cells=cells, control=control), FineSurfaceWindow)

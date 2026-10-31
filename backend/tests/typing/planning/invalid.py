@@ -1115,3 +1115,18 @@ def invalid_published_fine_routes(owner: FineRiverPlanner, world: EntityUid, inp
     owner.plan_fine(world_uid=world, inputs=inputs, water=coarse, expected_water=expected, control=control)  # EXPECT: reportArgumentType
     owner.plan_fine(world_uid=world, inputs=inputs, water=raw, expected_water=expected, control=control)  # EXPECT: reportArgumentType
     owner.plan_fine(world_uid=world, inputs=inputs, water=native, control=control)  # EXPECT: reportCallIssue
+
+from app.application.worldData.generators.terrain.planning.preWater.terrainBasePlanner import PreWaterTerrainPlanner
+from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain
+from app.dataModel.terrain.planning.inputs.terrainBaseInput import TerrainBaseInput
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput
+
+
+def invalid_prepared_natural(planner: PreWaterTerrainPlanner, prepared: PreparedNaturalTerrain,
+                             window: FineSurfaceWindow, terrain: PlanEnvelope[TerrainPlan],
+                             climate: PlanEnvelope[ClimateBasePlan], base_input: TerrainBaseInput,
+                             relief_input: ReliefPlanInput, support: SurfaceSupportInput,
+                             cells: RegionCoverage, world: EntityUid, control: PlanBuildControl) -> None:
+    planner.materialize(window, cells=cells, control=control)  # EXPECT: reportArgumentType
+    planner.materialize(terrain.payload, cells=cells, control=control)  # EXPECT: reportArgumentType
+    planner.prepare_revision(world, base_input, relief_input, support, climate, terrain, cells=cells, control=control)  # EXPECT: reportCallIssue

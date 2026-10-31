@@ -23,6 +23,8 @@ from app.dataModel.terrain.eligibilityRule import EligibilityRule as _MEligibili
 from app.dataModel.terrain.enums.eligibilityOp import EligibilityOp as _MEligibilityOp
 from app.dataModel.terrain.hillPolicy import HillPolicy as _MHillPolicy
 from app.dataModel.terrain.hillShape import HillShape as _MHillShape
+from app.dataModel.terrain.hills.acceptedHill import AcceptedHill as _MAcceptedHill, HillLayout as _MHillLayout
+from app.dataModel.terrain.planning.natural.preparedTerrain import NaturalTerrainTile as _MNaturalTerrainTile, PreparedNaturalTerrain as _MPreparedNaturalTerrain
 from app.dataModel.terrain.enums.terrainFillRole import TerrainFillRole as _MTerrainFillRole
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as _MHydrologyCellRole
 from app.dataModel.climate.planning.inputs.climateLocalInput import ProminenceScale as _MProminenceScale
@@ -550,6 +552,11 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (289, _MPlanEnvelope[_MPlacementBatchResultV2], CanonicalTypeKind.RECORD),
     (290, _MFineRiverPlan, CanonicalTypeKind.RECORD),
     (291, _MPlanEnvelope[_MFineRiverPlan], CanonicalTypeKind.RECORD),
+    (292, _MAcceptedHill, CanonicalTypeKind.RECORD),
+    (293, _MHillLayout, CanonicalTypeKind.RECORD),
+    (294, _MNaturalTerrainTile, CanonicalTypeKind.RECORD),
+    (295, _MPreparedNaturalTerrain, CanonicalTypeKind.RECORD),
+    (296, _MPlanEnvelope[_MPreparedNaturalTerrain], CanonicalTypeKind.RECORD),
 
 )))
 

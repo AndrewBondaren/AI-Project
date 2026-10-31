@@ -94,6 +94,8 @@
     "../../../app/application/worldData/generators/terrain/relief/surfaceCoating",
     "../../../app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py",
     "../../../app/application/worldData/planning/composition/support",
+    "../../../app/application/worldData/planning/composition/natural",
+    "../../../app/dataModel/terrain/hills",
     "../../../app/dataModel/terrain/relief/reliefTemplate.py",
     "../../../app/dataModel/terrain/relief/reliefRoleCase.py",
     "../../../app/dataModel/terrain/relief/reliefTerrainCondition.py",

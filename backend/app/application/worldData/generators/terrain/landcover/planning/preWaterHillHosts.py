@@ -1,6 +1,7 @@
 """Pre-water landcover hosts from captured base facts, before basin carving."""
 
 from dataclasses import replace
+from collections.abc import Iterable
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
@@ -17,7 +18,7 @@ from app.dataModel.climate.enums.climateZone import ClimateZoneProfile
 from app.dataModel.climate.planning.climatePlan import ClimateBasePlan
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
-from app.dataModel.spatial.grid.coordinateTypes import FineX, FineXY, GridX, GridY
+from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, FineXY, GridX, GridY
 from app.dataModel.spatial.regionShape import Point
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
@@ -66,17 +67,25 @@ class PreWaterHillHostJob:
         for span in cells.spans:
             if not bounds.contains(span.x0, span.y) or not bounds.contains(span.x1 - 1, span.y):
                 raise ValueError("pre-water coverage must use canonical fine cells within captured topology")
+        return self._project((FineX(x), span.y) for span in cells.spans for x in range(span.x0, span.x1))
+
+    def project_tile(self, gx: int, gy: int) -> tuple[tuple[FineXY, TerrainKey], ...]:
+        if self.inputs.topology.canonicalize(gx, gy) != (gx, gy):
+            raise ValueError("hill host tile must be canonical")
+        span = self.inputs.grid.fine_span
+        return self._project((FineX(x), FineY(y)) for y in range(gy*span, (gy+1)*span)
+                             for x in range(gx*span, (gx+1)*span))
+
+    def _project(self, cells: Iterable[FineXY]) -> tuple[tuple[FineXY, TerrainKey], ...]:
         if not self.inputs.masks_enabled or not self.sources.policy.enabled:
             return ()
         result: list[tuple[FineXY, TerrainKey]] = []
-        for span in cells.spans:
-            for x in range(span.x0, span.x1):
-                cell = (FineX(x), span.y)
-                terrain = self.sources.terrain_at(cell)
-                if terrain is None:
-                    raise PlanBuildFailure((FieldPathError(("pre_water_hill_hosts", x, span.y),
-                        "landcover host is unresolved from the supplied base facts"),))
-                result.append((cell, terrain))
+        for cell in cells:
+            terrain = self.sources.terrain_at(cell)
+            if terrain is None:
+                raise PlanBuildFailure((FieldPathError(("pre_water_hill_hosts", *cell),
+                    "landcover host is unresolved from the supplied base facts"),))
+            result.append((cell, terrain))
         return tuple(result)
 
 

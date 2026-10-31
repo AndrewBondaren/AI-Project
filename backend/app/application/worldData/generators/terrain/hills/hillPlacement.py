@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 
-from app.application.worldData.generators.terrain.hills.hillRaster import (
-    Coord,
-    raster_hill,
-)
+from app.application.worldData.generators.terrain.hills.hillRaster import Coord
+from app.application.worldData.generators.terrain.hills.hillSelection import selected_hills, _salt
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
@@ -79,57 +78,11 @@ def _place_consumer(
     z_min: int,
     z_max: int,
 ) -> None:
-    if not host:
+    if not surface_z:
         return
-    spacing = int(policy.min_spacing)
-    radius = int(policy.radius)
-    height = int(policy.height)
-    if spacing < 1 or radius < 1 or height < 1:
-        return
-    xs = [x for x, _ in surface_z]
-    ys = [y for _, y in surface_z]
-    x_min, x_max = min(xs), max(xs)
-    y_min, y_max = min(ys), max(ys)
-    placed: list[Coord] = []
-    spacing2 = spacing * spacing
-    for gy in range(y_min, y_max + 1, spacing):
-        for gx in range(x_min, x_max + 1, spacing):
-            ox = gx + _hash32(seed, gx, gy, salt) % spacing
-            oy = gy + _hash32(seed, gx, gy, salt ^ 0x9E3779B9) % spacing
-            origin = (ox, oy)
-            if origin not in host:
-                continue
-            if any(
-                (ox - px) * (ox - px) + (oy - py) * (oy - py) < spacing2
-                for px, py in placed
-            ):
-                continue
-            pool = policy.resolved_shapes()
-            shape = pool[_hash32(seed, ox, oy, salt ^ 0xA5A5A5A5) % len(pool)]
-            axis = _hash32(seed, ox, oy, salt ^ 0x3C6EF35A) % 2
-            delta = raster_hill(
-                origin,
-                radius=radius,
-                height=height,
-                host_cells=host,
-                shape=shape,
-                axis=axis,
-            )
-            if delta is None:
-                continue
-            placed.append(origin)
-            for xy, dz in delta.items():
-                lifted = base_z[xy] + dz
-                surface_z[xy] = max(z_min, min(z_max, max(surface_z[xy], lifted)))
-
-
-def _hash32(seed: int, x: int, y: int, salt: int) -> int:
-    return (int(seed) ^ (x * 73856093) ^ (y * 19349663) ^ (salt * 83492791)) & 0xFFFFFFFF
-
-
-def _salt(key: str) -> int:
-    h = 2166136261
-    for byte in key.encode("utf-8"):
-        h ^= byte
-        h = (h * 16777619) & 0xFFFFFFFF
-    return h
+    bounds = GridBBox(min(x for x, _ in surface_z), max(x for x, _ in surface_z),
+                      min(y for _, y in surface_z), max(y for _, y in surface_z))
+    for _, _, _, delta in selected_hills(bounds, host, policy, seed=seed, salt=salt):
+        for xy, dz in delta.items():
+            lifted = base_z[xy] + dz
+            surface_z[xy] = max(z_min, min(z_max, max(surface_z[xy], lifted)))

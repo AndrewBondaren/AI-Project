@@ -49,6 +49,7 @@ class PreWaterTerrainJob:
         if ctx.errors:
             raise PlanBuildFailure(tuple(ctx.errors))
         light = light_relief(relief_input, terrain_base.payload, layout, self.scale, control)
+        self.layout, self.light = layout, light
         self.light_z = dict(light.base_surface_z)
         self.light_z.update((effect.cell, effect.surface_z) for effect in light.mountain_cells)
         self.light_z.update((effect.cell, effect.surface_z) for effect in light.ravine_cells)
