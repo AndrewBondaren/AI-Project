@@ -1,6 +1,6 @@
 """One mountain layout, coarse pre-river heights and full-extent light projections."""
 
-from collections.abc import Callable
+from app.application.worldData.generators.terrain.relief.planning.river.beds import river_beds as _river_beds
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.generators.terrain.relief.planning.naturalRelief import (
     mountain_layout as _mountain_layout, light_relief as _light_relief,
@@ -12,9 +12,6 @@ from app.application.worldData.generators.terrain.mountains.formPipeline import 
     coarse_footprint_for_entry,
 )
 from app.application.worldData.generators.terrain.reliefObjects.bathymetry import apply_basin_z
-from app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ import river_bed_spec, apply_river_bed_z
-from app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedSpec import RiverBedSpec
-from app.application.worldData.generators.hydrology.types import RiverSegment
 from app.application.worldData.generators.terrain.reliefObjects.depressionDetect import detect_depression_cells
 from app.application.worldData.generators.terrain.reliefObjects.elevationResolve import (
     resolve_mountain_surface_z, resolve_ravine_surface_z,
@@ -39,13 +36,11 @@ from app.dataModel.terrain.planning.inputs.geoWaterPlacementInput import GeoWate
 from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import ReliefPlanInput, RiverReliefInput
 from app.dataModel.terrain.relief.planning.reliefPlan import (
     MountainLayout, ReliefPlan,
-    RiverReliefPlan, RiverBedRecord,
+    RiverReliefPlan,
 )
-from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan, RiverRoute, GeoHydrologyRoutesPlan
+from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyRoutesPlan, GeoHydrologyRoutesPlan
 from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
-from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
-from app.dataModel.topology.worldTopology import Coord, WorldTopology
 from app.dataModel.topology.fineTopology import fine_topology
 from app.dataModel.terrainMasks.mountain.enums import MountainKind
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
@@ -143,43 +138,6 @@ class GeoReliefPlanProvider:
 
 
 
-def _river_beds[S](routes: tuple[RiverRoute[S], ...], base: tuple[tuple[S, FineZ], ...], *,
-                   topology: WorldTopology, world_uid: str, z_min: int,
-                   depths: dict[HydrologyConnectionType, int], to_xy: Callable[[S], Coord],
-                   from_xy: Callable[[Coord], S], control: PlanBuildControl,
-                   ) -> tuple[tuple[tuple[S, FineZ], ...], tuple[RiverBedRecord[S], ...]]:
-    bounds = topology.bounds
-    surface = {to_xy(cell): int(z) for cell, z in base}
-    snapshot = SurfaceHeightmap(world_uid=world_uid,
-        bbox=GridBBox(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max), surface_z=surface)
-    specs: list[RiverBedSpec] = []
-    cells_by_river: dict[str, set[Coord]] = {}
-    for route in routes:
-        control.raise_if_shutdown()
-        receiver = to_xy(route.receiver_cell)
-        targets: set[Coord] = set()
-        for segment in route.segments:
-            path = [to_xy(cell) for cell in segment.path]
-            if any(cell not in surface or topology.canonicalize(*cell) != cell for cell in path):
-                raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.HYDROLOGY_ROUTES.value, route.river_uid),
-                    "river path/receiver requires canonical pre-river heights"),))
-            prepared = RiverSegment(polyline_cells=path, connection_type=segment.connection_type.value,
-                edge_uid=segment.edge_uid, location_uid=segment.location_uid, declared=segment.declared)
-            spec = river_bed_spec(snapshot, prepared, depth_step=depths[segment.connection_type],
-                z_min=z_min, occupied={}, receiver_cell=receiver)
-            specs.append(spec)
-            targets.update(cell for cell, _ in spec.bed_z)
-        if not targets:
-            raise PlanBuildFailure((FieldPathError((SurfacePlanSlot.HYDROLOGY_ROUTES.value, route.river_uid),
-                "accepted river requires nonempty land-bed cells"),))
-        cells_by_river[route.river_uid] = targets
-    # A tributary's receiver may be part of its parent river's bed. That parent
-    # writes it; the tributary's own spec still excludes its terminal receiver.
-    apply_river_bed_z(snapshot, specs)
-    return (tuple((cell, FineZ(surface[to_xy(cell)])) for cell, _ in base),
-        tuple(RiverBedRecord[S](river_uid=route.river_uid, bed_z=tuple(
-            (from_xy(cell), FineZ(surface[cell])) for cell in sorted(cells_by_river[route.river_uid], key=lambda cell: (cell[1], cell[0]))))
-            for route in routes))
 
 
 def _plan_river_relief(inputs: RiverReliefInput, relief: ReliefPlan, routes: HydrologyRoutesPlan,

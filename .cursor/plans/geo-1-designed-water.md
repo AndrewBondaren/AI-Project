@@ -13684,3 +13684,49 @@ production entry cutover. Existing assemble_geo registration remains legacy-led;
 assemble_fine is executable but not a claim of registered/production completion.
 G10-A OPEN; production L2/final/SPATIAL unchanged; no backend, engine DAG changes,
 SQL migration files, commit or push. Concurrent SPATIAL docs commit295961e8 retained.
+
+
+### Task6 — NATIVE RIVER-RELIEF — VERIFIED ISOLATED (2026-11-01)
+After clean2d518aff. Scope: source-join contract review frozen-source/delivery
+closure (terrain owns bed writes), docs/tz_terrain_hydrology.md canonical fine
+source. Implement actual native river-relief before atomic registration; no
+legacy placement bridge, production L2/final, engine DAG or SQL changes.
+Existing POJO inventory confirmed: RiverReliefInput, RiverReliefPlan,
+RiverBedRecord, FineWaterResult, GeoHydrologyRoutesPlan and PlanEnvelope suffice.
+No new fields/DTO/enum. Native coarse_beds is empty: coarse routes are proposals,
+coarse surface is projection of F plus actual fine beds, never another carve.
+Owner map/files: terrain/relief/planning/river/beds.py owns the unchanged generic
+_river_beds kernel extracted from reliefPlanProvider.py (legacy uses same kernel);
+river/execution.py::NativeRiverReliefJob verifies retained samples against F,
+applies kernel only to fine routes and projects post-bed fine geometry.
+river/publication.py::NativeRiverReliefPublicationJob admits exact F/native routes,
+checks same-world/scope/dependencies/input/proof/frame and publishes existing
+RiverReliefPlan, preserving route issues without asserting all-intent success.
+relief/planning/riverReliefPlanner.py::RiverReliefPlanner delegates only.
+terrain/planning/projection/coarseSurface.py accepts sorted sparse FineXY/FineZ
+overlay, verifies observations, uses indexed lookups without copying full F.
+Dependencies are exact fine_water + hydrology_routes refs; input identity binds
+RiverReliefInput and the admitted route input key. No source payload duplication.
+Folders: relief/planning3→4 direct files + river/3; terrain projection1 unchanged;
+tests geo1/native_relief/2. Old full calculation stays comparison reference.
+Checks: actual native source→routes→bed writes, existing kernel oracle, unsampled
+lake receiver preserved, tributary overlap/min writes, coarse projection vs
+independent carve witness, sparse H/source immutability/replay/identity/failures;
+GEO/planning suites, positive+negative typing, unchanged architecture checks.
+Done: native bed stage executable and verified; registered source join/final and
+G10-A remain OPEN. Follow-up atomic registration is not split with a bridge.
+
+Verified: GEO801 OK (+9), planning292 OK; positive pyright0; negative291 diagnostics,
+all288 EXPECT lines covered. Full-kernel oracle, offset fine/coarse disagreement,
+shared-bed minimum/tributary receiver, sparse H working snapshot, exact source/
+route/input/output/frame proofs, re-signed sample mismatch, replay and cancellation.
+Boundary review: RiverReliefPlanner and TerrainProjectionPlanner delegate only;
+NativeRiverReliefJob owns one post-bed geometry operation, publication owns proof/
+identity admission. No private job state, new DTO/enum or full fine map/copy in
+bed execution/projection. Extracted kernel body matches HEAD (name only); legacy
+full reference algorithms unchanged. Global source admission remains once per
+publication, not per sample/chunk; retained data is H plus actual beds/coarse rows.
+Next: same-source native final joins canonical open-water + river facts and B union H
+against exact pre-water W; then atomic G8-B capture/registration/production cutover.
+Existing registered GEO paths and production L2/final/SPATIAL remain unchanged.
+G10-A OPEN; no backend, engine DAG, SQL migrations, commit or push.

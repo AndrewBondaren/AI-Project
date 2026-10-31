@@ -361,3 +361,19 @@ def canonical_source_routes(terrain: TerrainProjectionPlanner, water_owner: Wate
         specs=specs, classification_decisions=decisions, control=control), PlanEnvelope[GeoHydrologyRoutesPlan])
     assert_type(FineRiverPlanner().refine_fine(world_uid=world, inputs=inputs, water=water.payload,
         coarse=coarse, control=control), PlanBuildResult[FineRiverPlan])
+
+
+from app.application.worldData.generators.terrain.relief.planning.riverReliefPlanner import RiverReliefPlanner
+from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
+from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan
+from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY
+
+
+def native_river_beds(owner: RiverReliefPlanner, world: EntityUid, inputs: RiverReliefInput,
+                      physical: GeoHydrologyPlanInput, water: PlanEnvelope[FineWaterResult],
+                      routes: PlanEnvelope[GeoHydrologyRoutesPlan], control: PlanBuildControl,
+                      surface: FineSurfaceWindow) -> None:
+    assert_type(owner.plan_fine(inputs, world_uid=world, routing_inputs=physical, water=water,
+        expected_water=water.ref, routes=routes, expected_routes=routes.ref, control=control), PlanEnvelope[RiverReliefPlan])
+    assert_type(TerrainProjectionPlanner().project_coarse(surface, topology=inputs.topology, grid=inputs.grid,
+        overlay=(((FineX(1), FineY(2)), FineZ(3)),), control=control), TerrainPlan)

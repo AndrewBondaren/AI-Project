@@ -1164,3 +1164,14 @@ def invalid_canonical_projections(terrain: TerrainProjectionPlanner, water_owner
     water_owner.project_fine(water.payload, world_uid=world, expected_water=expected, inputs=inputs, specs=(), classification_decisions=(), control=control)  # EXPECT: reportArgumentType
     assembler.assemble_fine(world_uid=world, inputs=inputs, water=water, specs=(), classification_decisions=(), control=control)  # EXPECT: reportCallIssue
     FineRiverPlanner().refine_fine(world_uid=world, inputs=inputs, water=water, coarse=proposals, control=control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.relief.planning.riverReliefPlanner import RiverReliefPlanner
+
+
+def invalid_native_beds(owner: RiverReliefPlanner, settings: RiverReliefInput, physical: GeoHydrologyPlanInput,
+                        water: PlanEnvelope[FineWaterResult], routes: PlanEnvelope[GeoHydrologyRoutesPlan],
+                        world: EntityUid, control: PlanBuildControl) -> None:
+    owner.plan_fine(settings, world_uid=world, routing_inputs=physical, water=water.payload, expected_water=water.ref, routes=routes, expected_routes=routes.ref, control=control)  # EXPECT: reportArgumentType
+    owner.plan_fine(settings, world_uid=world, routing_inputs=physical, water=water, expected_water=water.ref, routes=routes, control=control)  # EXPECT: reportCallIssue
+    TerrainProjectionPlanner().project_coarse(water.payload[0], topology=settings.topology, grid=settings.grid, overlay=((SurfaceGridCoord(GridX(1), GridY(2)), FineZ(3)),), control=control)  # EXPECT: reportArgumentType

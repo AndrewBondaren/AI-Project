@@ -2203,3 +2203,11 @@ Native route-stage принимает exact fine-water ref и captured inputs/sp
 decisions, проверяет их связь с operation key без повторного policy resolution,
 и публикует existing GeoHydrologyRoutesPlan с fine_water dependency. Регистрация
 этого пути остаётся частью atomic G10-A; legacy placement не адаптируется в native.
+
+Native river-relief applies the existing bed kernel to accepted fine routes and
+retains only their H samples/actual beds. Every retained pre-bed height must equal
+the canonical fine-water observation. Coarse routes remain proposals: native
+RiverReliefPlan.coarse_beds is empty and surface_z samples F plus actual fine beds
+at canonical coarse centers. No independent coarse carve is authoritative.
+The published result binds exact fine_water and native hydrology_routes refs;
+routing diagnostics are preserved and do not prove all-intent completion.
