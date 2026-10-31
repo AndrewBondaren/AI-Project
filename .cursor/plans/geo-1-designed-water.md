@@ -13730,3 +13730,33 @@ Next: same-source native final joins canonical open-water + river facts and B un
 against exact pre-water W; then atomic G8-B capture/registration/production cutover.
 Existing registered GEO paths and production L2/final/SPATIAL remain unchanged.
 G10-A OPEN; no backend, engine DAG, SQL migrations, commit or push.
+
+
+### Task7 — FROZEN HEIGHT DELIVERY DELTA — VERIFIED ISOLATED (2026-11-01)
+Clean3e657d5f. Source-join frozen-source/delivery closure and
+ docs/tz_terrain_hydrology.md: terrain owns B union H relative to exact W.
+Inventory: reuse FineSurfaceWindow, FineXY/FineZ rows, RiverReliefPlan and
+GeoHydrologyRoutesPlan; no new POJO/enum. Final envelope/coverage remains follow-up.
+Owner: terrain/planning/projection/heightDelta.py::FineHeightDeltaJob computes
+B union H from admitted W/F and actual river samples. Validates equal topology,
+coverage/observations, H extent and unchanged non-bed samples; no reconstruction,
+water solve, selection, full fine dict or retained full surface. A pure terrain
+operation, not a new orchestrator. Publication must separately bind exact refs.
+Folders: projection1→2, tests geo1/height_delta/2. Verify baseline reconstruction,
+basin+river overlap, reverted heights, dry/empty H, bad coverage/sample rejection,
+no full iteration copies, cancellation; GEO and typing. G10-A OPEN; no production,
+DAG, backend, SQL migrations, commit or push.
+
+Boundary review: only terrain height-delta implementation added; no planner or
+orchestrator changed. Existing schemas/fields reused, no duplicate water records.
+Pure operation requires admitted immutable data; it does not publish envelopes,
+revalidate refs, resolve water/policy or claim wet/dry/unknown coverage. Working
+memory is B union H output + H bed membership; no N-entry height lookup map.
+
+Verified: GEO808 OK (+7), positive pyright0; negative292 diagnostics, all289
+EXPECT lines covered. Reconstruction oracle, overlap/reversion, empty H, invalid
+observations/samples/beds, one sequential pass per frozen surface and cancellation.
+Planning suite not repeated: existing execution/providers unchanged; GEO covers
+this isolated operation. git diff --check clean. Next: native final facts + exact
+W/F/routes/river dependency closure and successful coverage, then atomic G8-B
+registration/production cutover. G10-A OPEN; no production changes or commit/push.

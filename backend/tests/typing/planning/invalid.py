@@ -1175,3 +1175,10 @@ def invalid_native_beds(owner: RiverReliefPlanner, settings: RiverReliefInput, p
     owner.plan_fine(settings, world_uid=world, routing_inputs=physical, water=water.payload, expected_water=water.ref, routes=routes, expected_routes=routes.ref, control=control)  # EXPECT: reportArgumentType
     owner.plan_fine(settings, world_uid=world, routing_inputs=physical, water=water, expected_water=water.ref, routes=routes, control=control)  # EXPECT: reportCallIssue
     TerrainProjectionPlanner().project_coarse(water.payload[0], topology=settings.topology, grid=settings.grid, overlay=((SurfaceGridCoord(GridX(1), GridY(2)), FineZ(3)),), control=control)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.planning.projection.heightDelta import FineHeightDeltaJob
+
+
+def invalid_height_delta(water: PlanEnvelope[FineWaterResult], river: RiverReliefPlan, control: PlanBuildControl) -> None:
+    FineHeightDeltaJob().compute(water, water.payload[0], samples=(), river=river, control=control)  # EXPECT: reportArgumentType

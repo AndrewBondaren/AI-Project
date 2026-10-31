@@ -377,3 +377,13 @@ def native_river_beds(owner: RiverReliefPlanner, world: EntityUid, inputs: River
         expected_water=water.ref, routes=routes, expected_routes=routes.ref, control=control), PlanEnvelope[RiverReliefPlan])
     assert_type(TerrainProjectionPlanner().project_coarse(surface, topology=inputs.topology, grid=inputs.grid,
         overlay=(((FineX(1), FineY(2)), FineZ(3)),), control=control), TerrainPlan)
+
+
+from app.application.worldData.generators.terrain.planning.projection.heightDelta import FineHeightDeltaJob
+from app.dataModel.spatial.grid.coordinateTypes import FineXY
+
+
+def final_height_delta(before: FineSurfaceWindow, water: FineSurfaceWindow, river: RiverReliefPlan,
+                       samples: tuple[tuple[FineXY, FineZ], ...], control: PlanBuildControl) -> None:
+    assert_type(FineHeightDeltaJob().compute(before, water, samples=samples, river=river, control=control),
+                tuple[tuple[FineXY, FineZ], ...])

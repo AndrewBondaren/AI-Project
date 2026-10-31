@@ -2211,3 +2211,10 @@ RiverReliefPlan.coarse_beds is empty and surface_z samples F plus actual fine be
 at canonical coarse centers. No independent coarse carve is authoritative.
 The published result binds exact fine_water and native hydrology_routes refs;
 routing diagnostics are preserved and do not prove all-intent completion.
+
+Frozen height delivery is terrain-owned: compare admitted pre-water W and
+post-water F with identical topology/coverage in one sequential merge; retain
+B (changed water heights) union H (actual river samples), with H taking precedence.
+Validate H against F and actual bed records; unchanged non-bed samples stay
+unchanged. This pure operation does not prove revision closure or successful
+water coverage: final publication must bind exact source envelopes separately.
