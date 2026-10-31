@@ -1149,3 +1149,18 @@ def invalid_resolved_hill_inputs(owner: PreWaterHillHostJob, bounds: GridBBox,
     policies[0] = policies[0]  # EXPECT: reportIndexIssue
     prepare_hills(bounds, terrain, (), hill_policies=registry, seed=1)  # EXPECT: reportArgumentType
     place_resolved_hills(surface, terrain, (), hill_policies=registry, seed=1, z_min=-10, z_max=20)  # EXPECT: reportArgumentType
+
+
+from app.application.worldData.generators.terrain.planning.projection.coarseSurface import TerrainProjectionPlanner
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
+
+
+def invalid_canonical_projections(terrain: TerrainProjectionPlanner, water_owner: WaterBodyPlanner,
+                                  assembler: HydrologyRoutesAssembler, world: EntityUid, inputs: GeoHydrologyPlanInput,
+                                  coarse: TerrainPlan, water: PlanEnvelope[FineWaterResult], expected: PlanRef,
+                                  proposals: CoarseRiverPlan, control: PlanBuildControl) -> None:
+    terrain.project_coarse(coarse, topology=inputs.topology, grid=inputs.grid, control=control)  # EXPECT: reportArgumentType
+    water_owner.project_fine(water.payload, world_uid=world, expected_water=expected, inputs=inputs, specs=(), classification_decisions=(), control=control)  # EXPECT: reportArgumentType
+    assembler.assemble_fine(world_uid=world, inputs=inputs, water=water, specs=(), classification_decisions=(), control=control)  # EXPECT: reportCallIssue
+    FineRiverPlanner().refine_fine(world_uid=world, inputs=inputs, water=water, coarse=proposals, control=control)  # EXPECT: reportArgumentType

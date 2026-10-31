@@ -9,6 +9,7 @@ from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGen
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision
 from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.stages.openWaterPlan import FineWaterResult
+from app.dataModel.identity.uid import EntityUid
 from app.dataModel.placement.result import PlacementBatchResultV2, ResolvedPlacementV2, UnresolvedPlacementV2
 from app.dataModel.planning.contracts.planContract import PlanContractMetadata, PlanContractRegistry
 from app.dataModel.planning.contracts.planDependency import PlanDependency
@@ -21,6 +22,7 @@ from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.terrain.planning.natural.preparedTerrain import NATURAL_TERRAIN_CONTRACT, PREPARED_NATURAL
+from app.dataModel.topology.fineTopology import fine_topology
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
@@ -30,6 +32,42 @@ PRE_WATER_SURFACE = PlanSlot("pre_water_surface")
 
 
 class FineWaterPublicationJob:
+    @staticmethod
+    def admit_result(water: PlanEnvelope[FineWaterResult], *, expected_water: PlanRef,
+                     world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
+                     control: PlanBuildControl) -> PlanEnvelope[FineWaterResult]:
+        """One water-owned result proof; callers may then reuse its immutable data."""
+        control.raise_if_shutdown()
+        water = PlanEnvelope[FineWaterResult].model_validate(water)
+        key, contract = water.ref.key, FINE_WATER_CONTRACT
+        if (water.ref != expected_water or key.world_uid != world_uid
+                or key.contract_id != contract.id or key.schema_version != contract.schema_version
+                or key.algorithm_version != contract.algorithm_version
+                or water.ref.output_fingerprint != output_fingerprint(
+                    water.payload, water.dependencies, water.diagnostics, SURFACE_MANIFEST)):
+            raise ValueError("fine water requires the exact published revision and output proof")
+        errors = tuple(d.issue for d in water.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
+        if errors:
+            raise PlanBuildFailure(errors)
+        window, assembled = water.payload
+        if window.topology != fine_topology(inputs.topology, inputs.grid.fine_span):
+            raise ValueError("fine water inputs must match the published topology")
+        # Both observations are canonical row-major sequences: join in one pass,
+        # without another full fine height dict just for source admission.
+        occupied = iter(cell for cell, _ in assembled.materialized.cells)
+        next_water = next(occupied, None)
+        for cell, z in window.surface_z:
+            if not inputs.z_min <= z <= inputs.z_max:
+                raise ValueError("fine water heights exceed the captured z bounds")
+            if cell == next_water:
+                next_water = next(occupied, None)
+            elif next_water is not None and (next_water[1], next_water[0]) < (cell[1], cell[0]):
+                raise ValueError("fine water facts must lie within the observed fine surface")
+        if next_water is not None:
+            raise ValueError("fine water facts must lie within the observed fine surface")
+        control.raise_if_shutdown()
+        return water
+
     def publish(self, surface: PlanEnvelope[FineSurfaceWindow], *, expected_surface: PlanRef,
                 placement: PlanEnvelope[PlacementBatchResultV2], expected_placement: PlanRef,
                 inputs: GeoHydrologyPlanInput, specs: tuple[BasinSpec, ...],

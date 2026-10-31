@@ -2,6 +2,7 @@
 
 from app.application.planning.service.planningService import PlanBuildControl
 from app.application.worldData.generators.hydrology.water.planning.fine.publication import FineWaterPublicationJob
+from app.application.worldData.generators.hydrology.water.planning.fine.projection import FineWaterProjectionJob
 from app.application.worldData.generators.hydrology.water.planning.waterBodyJob import WaterBodyJob
 from app.dataModel.hydrology.planning.stages.openWaterPlan import FineWaterResult
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category
@@ -20,6 +21,13 @@ from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 
 
 class WaterBodyPlanner:
+    def project_fine(self, water: PlanEnvelope[FineWaterResult], *, expected_water: PlanRef,
+                     world_uid: EntityUid, inputs: GeoHydrologyPlanInput, specs: tuple[BasinSpec, ...],
+                     classification_decisions: tuple[tuple[Category, HydrologyGenerationDecision], ...],
+                     control: PlanBuildControl) -> PlanBuildResult[OpenWaterPlan]:
+        return FineWaterProjectionJob().project(water, expected_water=expected_water, world_uid=world_uid,
+            inputs=inputs, specs=specs, classification_decisions=classification_decisions, control=control)
+
     def fill_fine(self, surface: PlanEnvelope[FineSurfaceWindow], *, expected_surface: PlanRef,
                   placement: PlanEnvelope[PlacementBatchResultV2], expected_placement: PlanRef,
                   inputs: GeoHydrologyPlanInput, specs: tuple[BasinSpec, ...],

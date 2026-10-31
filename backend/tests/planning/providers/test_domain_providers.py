@@ -1576,7 +1576,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         routes = self.routes()
         river = self.execute(self.river_binding, self.river_inputs, self.river_handles, (self.before, routes))
         path = "app.application.worldData.generators.hydrology."
-        with patch(path + "rivers.planning.coarseRiverPlanner.prepared_declared_river_requests", side_effect=AssertionError("reroute")), patch(
+        with patch(path + "rivers.planning.coarse.execution.prepared_declared_river_requests", side_effect=AssertionError("reroute")), patch(
             path + "water.planning.waterBodyJob.assemble_water_bodies", side_effect=AssertionError("refill")), patch(
             "app.application.worldData.generators.terrain.reliefObjects.riverBed.riverBedZ.apply_river_bed_z",
             side_effect=AssertionError("recarve")):
@@ -2125,7 +2125,7 @@ class RiverOwnerTests(unittest.TestCase):
             self.assertFalse(coarse.payload.routes or coarse.payload.claims)
             self.assertFalse(fine.payload.routes or fine.payload.base_surface_z)
         inputs = f.hydro_inputs.model_copy(update={"rivers": f.hydro_inputs.rivers.model_copy(update={"enabled": False, "autoresolve": True})})
-        with patch("app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner.prepare_procedural_river_requests") as auto:
+        with patch("app.application.worldData.generators.hydrology.rivers.planning.coarse.execution.prepare_procedural_river_requests") as auto:
             coarse = self.coarse(inputs)
         self.assertTrue(coarse.payload.routes)  # existing declare behavior is retained
         auto.assert_not_called()

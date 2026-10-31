@@ -13,6 +13,13 @@ from app.dataModel.spatial.grid.coordinateTypes import FineZ, SurfaceGridCoord
 
 
 class FineRiverPlanner:
+    def refine_fine(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
+                    water: FineWaterResult, coarse: CoarseRiverPlan,
+                    control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
+        """Pure refinement after the caller has admitted the fine-water source."""
+        return FineRiverJob().plan_fine(world_uid=world_uid, inputs=inputs, water=water,
+                                        coarse=coarse, control=control)
+
     def plan(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput | GeoHydrologyPlanInput,
              surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...], water: OpenWaterPlan,
              coarse: CoarseRiverPlan, control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:

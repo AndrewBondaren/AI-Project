@@ -341,3 +341,23 @@ def resolved_hill_inputs(owner: PreWaterHillHostJob, bounds: GridBBox,
     index = dict(policies)
     assert_type(prepare_hills(bounds, terrain, (), hill_policies=index, seed=1), tuple[AcceptedHill, ...])
     assert_type(place_resolved_hills(surface, terrain, (), hill_policies=index, seed=1, z_min=-10, z_max=20), None)
+
+
+from app.application.worldData.generators.terrain.planning.projection.coarseSurface import TerrainProjectionPlanner
+from app.application.worldData.generators.hydrology.planning.assembly.hydrologyRoutesAssembler import HydrologyRoutesAssembler
+from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan
+
+
+def canonical_source_routes(terrain: TerrainProjectionPlanner, water_owner: WaterBodyPlanner,
+                            assembler: HydrologyRoutesAssembler, world: EntityUid,
+                            inputs: GeoHydrologyPlanInput, water: PlanEnvelope[FineWaterResult], expected: PlanRef,
+                            surface: FineSurfaceWindow, specs: tuple[BasinSpec, ...], coarse: CoarseRiverPlan,
+                            decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...],
+                            control: PlanBuildControl) -> None:
+    assert_type(terrain.project_coarse(surface, topology=inputs.topology, grid=inputs.grid, control=control), TerrainPlan)
+    assert_type(water_owner.project_fine(water, world_uid=world, expected_water=expected, inputs=inputs,
+        specs=specs, classification_decisions=decisions, control=control), PlanBuildResult[OpenWaterPlan])
+    assert_type(assembler.assemble_fine(world_uid=world, inputs=inputs, water=water, expected_water=expected,
+        specs=specs, classification_decisions=decisions, control=control), PlanEnvelope[GeoHydrologyRoutesPlan])
+    assert_type(FineRiverPlanner().refine_fine(world_uid=world, inputs=inputs, water=water.payload,
+        coarse=coarse, control=control), PlanBuildResult[FineRiverPlan])

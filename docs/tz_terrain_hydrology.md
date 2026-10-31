@@ -2192,3 +2192,14 @@ Coarse claims не становятся fine receivers; coarse-only parent не 
 приёмник. Повторного поиска procedural sources нет. Каждое procedural proposal
 должно получить accepted fine route либо явную диагностику. Coarse input входит
 в identity native fine operation; отдельный full fine payload в routes не нужен.
+
+Canonical fine→coarse projection использует existing light_cell_center_fine с
+LightGridScale.from_tile(S,1) для высоты и hydro одной клетки. Exact sampled hydro
+сохраняется, включая dry SHORE; отсутствие water facts означает dry только внутри
+наблюдаемой coverage. Missing height/coverage — ошибка, не height0/dry fallback.
+OpenWaterPlan сохраняет все fine physical bodies/unions/source mapping независимо
+от попадания в coarse samples. Projection не выполняет fill или выбор body rank.
+Native route-stage принимает exact fine-water ref и captured inputs/specs/terminal
+decisions, проверяет их связь с operation key без повторного policy resolution,
+и публикует existing GeoHydrologyRoutesPlan с fine_water dependency. Регистрация
+этого пути остаётся частью atomic G10-A; legacy placement не адаптируется в native.

@@ -13610,3 +13610,77 @@ Next: canonical fine→coarse TerrainPlan/OpenWaterPlan projection and exact sou
 join into assemble_geo/registered route stage; do not claim it switched here.
 G10-A OPEN; no backend, engine DAG, SQL migrations, production L2/final/SPATIAL,
 commit or push.
+
+
+### Task5 — CANONICAL PROJECTION / NATIVE ROUTE-STAGE — VERIFIED ISOLATED (2026-11-01)
+Continuation after 9ed3bba6, clean workspace699da0d5; preserve SPATIAL-1 changes.
+TZ: tz_terrain_hydrology.md frozen source/projection contract; source-join review
+center-sample candidate and mandatory exact physical-input closure. Use existing
+TerrainPlan, OpenWaterPlan, GeoHydrologyRoutesPlan and PlanEnvelope; no new POJO,
+enum, parallel water records, full FineWaterResult in route/relief payloads.
+Projection: sample light_cell_center_fine(gx,gy,0,0,LightGridScale.from_tile(S,1))
+for both height and hydro. Preserve exact sampled MapCellHydrology (including dry
+SHORE); absent hydro is dry only for an observed sample. Missing height/coverage
+fails, never zero/dry fallback. Retain ALL physical bodies/unions/source mappings,
+even those not hit by coarse samples. No ranking/majority or another water solve.
+Owners/public operations: terrain/planning/projection/coarseSurface.py contains
+TerrainProjectionPlanner.project_coarse delegate and owning projection job;
+water/planning/fine/projection.py owns water projection and exact source/physical
+input binding; WaterBodyPlanner.project_fine delegates. Reuse one water-owned
+source-admission operation from FineWaterPublicationJob for both native route
+assembly and standalone fine routing, without a second full source hash in the
+native assembly. No dense fine dict/copy for center lookup: bisect immutable rows.
+CoarseRiverPlanner currently embeds algorithms: move its unchanged body into
+rivers/planning/coarse/execution.py::CoarseRiverJob; planner becomes a delegate.
+FineRiverPlanner exposes existing pure fine execution for already admitted source;
+its existing publication API keeps full source proof admission.
+HydrologyRoutesAssembler.assemble_fine orders these public operations, coarse
+proposals, native refinement and existing paint. Publish existing GeoHydrologyRoutesPlan
+in PlanEnvelope with exact fine_water dependency, standalone hydrology.native_routes
+identity, inputs + source ref closure. No geometry/policy algorithms in assembler.
+Check supplied specs and terminal decisions against FINE_WATER_CONTRACT input
+fingerprint; never infer them from hash or resolve category policy again.
+Legacy assemble/assemble_geo and registered GEO bindings remain unchanged until
+atomic native placement/G8-B source cutover; no legacy↔native record bridge or
+silent fallback. New native entry is executable source→route stage, not production
+registration, final facts or L2/SPATIAL activation.
+Files: projection jobs/planner, water/fine admission + WaterBodyPlanner; coarse job /
+planner and affected mock paths; fine public pure delegate/publication admission;
+existing route assembler + nativeRoutesPublication owning publication; new
+geo1/source_projection tests2 files and typing.
+Folders: terrain planning3 direct files unchanged + projection/1; water fine2→3;
+river coarse/1; hydrology assembly3→4; source_projection tests/2. No overfull
+folders or new DTO files.
+Checks: real single-source projection→coarse→native fine, wet body missed by coarse
+sample still receives fine river, multiple bodies/SHORE preserved, no water refill,
+no policy re-resolution, no full source dict in projection, exact input/ref/proof/
+coverage failures, negative/odd/seam coordinate samples, source identity/replay;
+GEO/planning/positive+negative typing. G10-A and registered/final cutover remain OPEN.
+
+Boundary review: TerrainProjectionPlanner, WaterBodyPlanner.project_fine and
+FineRiverPlanner.refine_fine delegate to owning jobs. CoarseRiverPlanner algorithm
+moved byte-identically (class name only) to CoarseRiverJob; historical algorithms,
+seed/hash and routing rules unchanged. HydrologyRoutesAssembler forwards typed
+results and orders operations; it does not classify, resolve policy, sample or
+route. Initial planning boundary test rejected direct envelope/ref construction
+in assembler: publication identity/proof moved to NativeRoutesPublicationJob,
+without weakening the historical architecture test. No mutable job-field reads.
+Projection preserves existing immutable DTOs; no POJO/enum/manifest additions.
+Source admission performs global proof validation + one linear merge without a
+dense fine lookup map; it runs once for native assembly. Projection itself uses
+indexed center lookups; do not claim complete source admission is O(Q).
+
+Verified execution: GEO792 OK (+8); after extracting publication, all eight new
+source_projection tests and unchanged historical architecture check passed again.
+Planning292 OK after the boundary fix; positive pyright0; negative288 diagnostics,
+all285 EXPECT-marked lines covered (including both rules where marked together).
+New cases prove exact sample SHORE, unsampled-body preservation and fine receiver,
+unknown coverage failure, physical-input/ref/proof/world closure, cancellation,
+source-operation identity/replay, no refill/policy resolution, one admission and
+no full iteration/copy in pure height projection. git diff --check clean.
+Next real remainder: atomic native placement/G8-B owning schema/capture/registration
+source join into registered GEO routes, then same-source river-relief/final and
+production entry cutover. Existing assemble_geo registration remains legacy-led;
+assemble_fine is executable but not a claim of registered/production completion.
+G10-A OPEN; production L2/final/SPATIAL unchanged; no backend, engine DAG changes,
+SQL migration files, commit or push. Concurrent SPATIAL docs commit295961e8 retained.
