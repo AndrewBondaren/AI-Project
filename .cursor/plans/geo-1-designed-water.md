@@ -13532,3 +13532,147 @@ spill/merge и принятые basin floors, остаётся ответств�
 новый HY-RIV-1 source search, production cutover и реализация geology/air.
 Предметом следующего согласования является только граница общего интерфейса
 и доменных реализаций; G10-A и final GEO coverage остаются OPEN.
+
+### GEO-1 / OPEN — архитектура пространственного распределения сред и материалов (2026-10-31)
+
+Статус: **согласовано направление и разделение ответственности; конкретные
+POJO, интерфейсы, policy и production wiring остаются OPEN**. Это развитие
+предыдущего пункта GEO-1 / OPEN, а не новый water solver, не закрытие A4
+из tz_aerial.md, не разрешение G10-A или смены L2 authority. Код не менять
+по одному факту внесения этого пункта. До реализации сверить профильные ТЗ
+материалов, гидрологии, воздушного слоя, world state и существующие POJO.
+
+**Базовое разделение.**
+- Materials / WorldMaterialRegistry определяет существующие в мире материалы,
+  категории solid/liquid/gas и их свойства: density, viscosity, temperature
+  transition, damage, transparency и другие. Наличие ключа в реестре не
+  означает пространственного присутствия материала. Разрешение совместимости
+  и смешения разных liquid material types не переносится в Hydrology или в
+  универсальный spatial adapter; действующее HY-12 фиксирует факт разных
+  liquid у членов union, а домен материалов разрешает материал отдельно.
+- World Environment (точный existing owner/POJO ещё проверить) определяет
+  фоновую среду мира/области: возможны газовая среда, иной явно заданный
+  состав либо вакуум. Вакуум — отсутствие среды, НЕ фиктивный
+  MaterialCategory.GAS/MaterialKey. Открытым остаётся, достаточно ли одного
+  ambient материала или нужен профиль/смесь/локальные условия.
+- Terrain / Relief владеет frozen natural fine geometry и конечными
+  абсолютными basin/river bed heights, caves/solid geometry. L0 и L2
+  восстанавливают одну согласованную геометрию из тех же captured inputs.
+- Hydrology владеет размещением и идентичностью водоёмов, wet footprint,
+  уровнем воды, spill/merge, shores, river routing, accepted river beds,
+  source mapping и доказательством coverage. Climate определяет температурное
+  состояние liquid_body по своим контрактам; tick-based movement/pressure/
+  phase transitions исполняет runtime physics по правилам материалов.
+- Geology/ores владеет залежами и изменением состава породы. Gas distribution
+  владеет локальным пространственным распределением дополнительных газов;
+  свойства gas material принадлежат Materials, динамика распространения —
+  runtime physics. Будущие реализации не входят в GEO-1.
+- Общий Spatial Distribution определяет только координатный query, точный
+  membership/coverage, revision/provenance, ограниченные результаты и
+  интерфейс доменных readers. Не выбирает материал, не считает гидрологию,
+  движение газов, генерацию руд или порядок выполнения генераторов.
+- L2 materialization переводит согласованные typed source slices и solid
+  geometry в реальные клетки/column runs. Конфликты occupancy versus
+  replacement versus ambient fill разрешает только отдельная явно согласованная
+  composition policy/application owner; универсальное скрытое правило
+  water>ore>air не вводится. FineTerrainZRun — существующий итоговый wire
+  одного material на z-run, не доказанная модель многокомпонентной газовой смеси.
+  Persist/pack writer не получает физическую логику.
+- DAG/bake/runtime caller выбирает когда и что рассчитывать/читать/материализовать,
+  без импорта реализации kernels. LOD определяется не только близостью игрока,
+  но и тиками, событиями, видимостью, запланированными изменениями и
+  необходимостью подготовить сцену заранее.
+
+**Критическое исправление семантики air.** В docs/tz_materials.md §4
+сейчас описан engine default «нет блока -> air», а docs/tz_aerial.md v1
+считает обычный воздух implicit void. Это НЕ универсальный закон
+для любого мира: planet без атмосферы не может получить стандартный
+воздух через fallback. Различать:
+(1) свободный от solid объём, (2) явный vacuum как отсутствие среды,
+(3) конкретный gas material air с параметрами данного мира,
+(4) фоновую ambient среду, (5) локальные газовые добавки/объёмы.
+Один и тот же material_registry может содержать air для герметичных комнат,
+но иметь vacuum вне них. Отсутствие обязательной ambient-конфигурации
+не равно явному vacuum и не даёт права молча подставить air; missing evidence
+остаётся unresolved. Уточнить в профильном ТЗ world environment, затем
+согласованно исправить противоречащие default statements в tz_materials.md
+и tz_aerial.md. Поддержка vacuum не требует сохранения всех пустых XYZ клеток.
+
+**Предварительный read-only contract, НЕ утверждённые POJO/классы.**
+Обсуждаемый общий интерфейс SpatialFieldReader[T] имеет единственную
+содержательную операцию read_window(window) -> SpatialSlice[T].
+Одна подготовленная, immutable revision-bound source/index может
+обслуживать много окон, без передачи mutable registry/working jobs
+или полных карт на каждый tile. Результат хранит точные coverage,
+typed domain facts и source identity. Плановые PlanRef и runtime
+snapshot/patch revision должны быть связаны явно; общий reader не должен
+навязывать PlanRef как единственный тип версии для динамических газов.
+Отсутствие material row доказывает его отсутствие только внутри
+действительно проверенной coverage; вне неё unknown. Bounding box —
+индекс кандидатов, не точное membership. Предусмотреть holes, seam,
+вертикальные интервалы и, при необходимости, несколько сред в одной
+XYZ-области. Конкретную форму SpatialWindow/SpatialSlice и возможность
+переиспользовать RegionCoverage/CoverageSpan, GridBBox, TerritoryVolume,
+FineTerrainZRun следует проверить отдельно до создания новых POJO/enum.
+
+**Нормативный путь GEO consumer, без нового генератора.**
+FineWaterJob/FineRiverJob и их publication сохраняют действующие physical
+kernels и typed source refs; ни fill, ни routing не должны вызывать
+общий Spatial Distribution reader. Сначала HydrologyFactsAssembler/
+GeoHydrologyFinalPlanProvider обязаны получить и доказать canonical
+fine open-water + accepted river-relief facts в одной revision; текущее
+sparse_fine_hydro только river roles не доказывает dry/complete fine water.
+После финальной публикации hydrology-owned spatial adapter/index
+предоставляет ограниченное чтение open-water geometry (wet/dry,
+water_body_uid, уровень, actual bed) без rerun placement/fill/river routing.
+River bed role сам по себе не определяет z_water(x,y); профиль водной
+поверхности рек остаётся отдельным гидрологическим OPEN контрактом.
+Существующая underwater v1 модель имеет только liquid_body на surface;
+реальные water-column cells — предусмотренное v2 расширение, не готовая
+возможность current columnFillPass. Для L2 window используются одни
+frozen natural heights с accepted physical overlays; parent-L0 upsample
+и z_band-clamped overrides не могут подменять canonical fine geometry.
+FineChunkCompute остаётся caller, а FineChunkPersist — pack owner;
+новый materialization/composition owner не прячется в planner/provider.
+
+**Runtime и стоимость.** Initial physical fine-water resolver по-прежнему
+требует полный world evidence; общий spatial contract не отменяет этот
+CPU/memory scope. После подготовки локальный запрос materializes только
+union requested XYZ windows + доказанные algorithm dependencies; переиспользует
+готовые geometry/placement/index и не выделяет полный tile/world. Физические
+изменения принимаются через согласованные world-state mutation/snapshot/
+patch boundaries, с revision binding и инвалидацией затронутых областей;
+generic query/read не пишет persist и не оркестрирует tick simulation.
+Не создавать per-cell SQL, full-payload hashing/copy и hidden full-tile
+host/terrain/gas scans на каждый небольшой запрос. Сравнивать отдельно
+cold preparation, warm query, memory, feature visits, pack/cache/SQL I/O.
+
+**Открытые архитектурные решения до реализации.**
+1. Owning location и typed контракт ambient medium (vacuum, один газ,
+   смесь/профиль), отсутствие обязательного значения vs explicit vacuum,
+   ограничения world/region/room и правила defaults/migration.
+2. Gas spatial facts: один материал на cell versus несколько компонентов
+   с концентрацией; совместимость с существующим FineTerrainZRun/wire;
+   tick-driven gas distribution, не дублирующее Material physics.
+3. Чистые typed факты readers versus общий interval material payload,
+   XYZ bounds/coverage и точный состав composition policy; запрет
+   скрытого arbitrating priority и ложного air fallback.
+4. Связь frozen bootstrap PlanRef и актуальных runtime snapshot/patch
+   revisions; cache/index lifetime, proof/invalidation и последовательность
+   последующих L2 grade/terrain overlays, влияющих на водное дно.
+5. Hydrology river surface level и полная fine final coverage до
+   water-column/L2 включения. HY-RIV-1 source search остаётся вне scope.
+
+**Приёмка будущего контракта.** Одинаковый material_registry с air:
+atmospheric world получает заданный ambient gas, airless world — vacuum;
+локальный герметичный gas volume на airless world сохраняется; missing
+ambient не превращается в air. Газовые дополнительные компоненты не
+исчезают из-за implicit background. По hydrology проверить точные
+wet/dry/unknown, UID, floor/level, holes, seam и source mapping, а также
+эквивалентность union малых окон полной reference geometry; river volume
+не публиковать без уровня. При read_window нет water solve, ore placement,
+gas simulation, повторного hills selection, full-tile hidden allocation
+или per-cell SQL. Измерить cold/warm overhead; тесты агента без ручной
+контрактной проверки не закрывают приёмку. Все concrete dataModel/interface
+классы и production cutover требуют отдельного согласования мастера.
+G10-A, GEO final coverage и aerial A4 остаются OPEN.
