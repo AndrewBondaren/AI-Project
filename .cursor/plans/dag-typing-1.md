@@ -118,7 +118,7 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 | M33 | NodeKind, NodeCost, PythonNodeError | существующие общие декларации, перенос без изменения поведения; engine/application | E/nodes/nodeKind.py → E/nodeTypes/support/nodeKind.py; E/nodes/pojo/nodeCost.py → E/nodeTypes/support/nodeCost.py; E/nodes/pojo/pythonNodeError.py → E/nodeTypes/support/pythonNodeError.py | старые и новые consumers обновляют imports в A1.2; один владелец каждого типа, без копий/re-export |
 | M34 | ExecutionPhase, PythonExecutionPhase, validate_python_phase | единый enum фаз и admission Python-подмножества; engine/dataModel | D/executionPhase.py (новый) | M03/M10 → общий контракт; stdlib/Pydantic, без application |
 | M35 | NodeError | общая база immutable POJO ошибок операций; engine/dataModel | D/errors/nodeError.py (новый) | test/GEN concrete subclasses → typed binding/outcome/context; Pydantic, без application/TaskType |
-| M36 | PythonNodeError[E] | транспорт POJO ошибки через исключение; engine/application | R/execution/pythonNodeError.py (новый) | Python node → M17; M35, без строковых policy/code fields; legacy M33 до GEN handoff не меняется |
+| M36 | PythonNodeError[E] | транспорт POJO ошибки через исключение; engine/application | R/execution/pythonNodeError.py (новый) | Python node → M17; M35, без строковых policy/code fields; legacy M33 до GEN handoff не меняется, support/pythonNodeError.py удаляется в B2-L08 |
 | M37 | ExecutionEvents | lifecycle metadata → diagnostic POJO, без payload и I/O кроме M22; engine/application | E/diagnostics/executionEvents.py (новый) | M18/M14/M19 → M03/M38 → M22; не policy/executor |
 | M38 | ReplanDiagnostic, LevelDiagnostic, LifecycleDiagnostic | typed application control и snapshot lifecycle события; engine/application | E/diagnostics/events.py (новый) | M37 → M22, первые два наследуют M03; M27 lifecycle без synthetic node identity, native schema reuse |
 | M39 | CatalogSnapshot | immutable экспорт каталога с typed record/error lookup без live bindings; engine/application | R/dag/context/catalogSnapshot.py (новый) | M13 → M20/M21; M01/M02/M07/M15/M35, без registry/callback/executor refs |
@@ -153,7 +153,7 @@ SoT API и поведения: `docs/tz_engine_node_context.md` §§6–12. Об
 | E/nodes/pojo | 7 → 0 | NodeCost/PythonNodeError перенос A1.2; 4 base POJO и NodeResult удаление B2 |
 | E/contracts | 0 → 5 | M06–08, M31–32; без init и side effects |
 | E/registration | 0 → 2 (A1.2), 3 (GEN) | target registry/registration; productionNodes добавляет GEN |
-| E/nodeTypes; E/nodeTypes/support | 0 → 4; 0 → 3 | M10 и перенос M33 |
+| E/nodeTypes; E/nodeTypes/support | 0 → 4; 0 → 3 (A1.2), 2 (B2) | M10 и перенос M33; legacy support/pythonNodeError удаляется B2-L08 после миграции concrete E |
 | R | 0 → 2 | target engine/resolver |
 | R/graphs; R/dag | 0 → 1; 0 → 5 | target compiler; plan/executor/state/trace/snapshot |
 | R/dag/context; R/dag/lifecycle | 0 → 4; 0 → 1 | M13–15/M39 и M20 |
@@ -219,8 +219,68 @@ WARN для существующих >5: E/nodes/pojo 7→0, E/validation 6→2,
 | A3.5 — агрегированное исполнение и repair | §8.5 | M26/M40–41, M18 delegation, M13 publish_batch, M19/M37 phase; T/llm/test_group.py, typing fixtures/config | U(llm,test_group.py), regression, TYPE/DIFF | DONE: один initial call/group, repair в той же conversation с повторной валидацией всех секций, atomic batch admission/commit; cancelled/invalid group без частичной публикации |
 | A3.6 — общий pass/resume loop и response hook | §9.3, §11 | M27–28/M08; M13/M18/M20/M21/M22/M38/M40; T/lifecycle/test_passes.py, typing fixtures/config | U(lifecycle,test_passes.py), regression, TYPE/DIFF | DONE: typed lifecycle cursor/pass bounds/limited hook views, snapshot save/restore events/release; response/effects/transition делегированы; resume не повторяет current группу/завершённые effects |
 | B1 — принять handoff конкретных нод | §4, §11 | план GEN-DAG-1 (его отдельные шаги); T/integration/test_handoff.py | U(integration,test_handoff.py) | все production registrations имеют concrete binding из GEN; domain-read гарантии/refs проверены владельцами; нет смешанного runtime |
-| B2 — удалить общие legacy-каналы | §11 | M30 и predecessor общих компонентов удалить по разделу переключения; конкретный PatchApplier/consumers уже заменены GEN; T/integration/test_cleanup.py | U(integration,test_cleanup.py), ALL | нет старых imports/side-effect refs и свободного доступа; cascade shared_context не затронут; нет aliases/adapters |
+| B2 — удалить общие legacy-каналы | §11; B2.1 ниже | Явный реестр B2-L01…B2-L33: точные legacy/replacement paths, классы/методы/aliases/singletons; concrete PatchApplier/consumers уже заменены GEN; T/integration/test_cleanup.py | U(integration,test_cleanup.py), ALL, TYPE/DIFF; сверка markers с B2.1 | нет старых imports/side-effect refs и свободного доступа; cascade shared_context не затронут; нет aliases/adapters; удаление ещё не выполнено |
 | B3 — общая архитектурная приёмка | §12 | только статус этого плана после проверки итогового кода | ALL, TYPE, DIFF по итоговым файлам | параллелизм, lifecycle, LLM и typing подтверждены; owners/imports/counts соблюдены, baseline delta записана |
+
+### B2.1 — Явный реестр уже заменённых legacy-компонентов (2026-10-31)
+
+Статус: **ожидает GEN-DAG-1 handoff и приёмки B1; удаление не выполнено**. Ниже перечислены только существующие legacy-модули, для которых replacements уже реализованы в A1–A3. В каждом исходнике стоит уникальный `TODO(B2/B2-Lxx)` со ссылкой на этот реестр и фактические replacement paths. Marker означает удаление **модуля целиком**, включая все классы, объявленные методы (в том числе private), dataclass fields/generated methods и module-level aliases/singletons. Методы в списке записаны как `Class.{method,...}`; для dataclass без ручных методов указан класс целиком.
+
+Перед удалением каждого пункта: подтвердить production switch всех его callers, найти imports/строковые IDs/reexports/usages в backend/tests/scripts/docs/rules, обновить оставшиеся ссылки и приёмочные tests; сохранить target и общие helpers. Существование target ещё не означает готовность конкретных domain bindings. Нельзя удалять старый модуль раньше B1 или создавать совместимый alias на target. Данные пользователей и snapshots не удаляются этим реестром.
+
+- **B2-L01** — `backend/app/application/engine/nodes/nodeRegistration.py`. Удалить: `NodeRegistration (класс целиком)`. Замена: `backend/app/application/engine/registration/nodeRegistration.py`.
+- **B2-L02** — `backend/app/application/engine/nodes/nodeRegistry.py`. Удалить: `NodeRegistry.{__init__, register_python, register_llm, _register, get, all, context_fields_union}`; `register_python()`; `register_llm()`; `NODE_REGISTRY`; `register (alias)`. Замена: `backend/app/application/engine/registration/nodeRegistry.py`.
+- **B2-L03** — `backend/app/application/engine/nodes/pojo/baseNode.py`. Удалить: `BaseNode (класс целиком)`. Замена: `backend/app/application/engine/nodeTypes/baseNode.py`.
+- **B2-L04** — `backend/app/application/engine/nodes/pojo/pythonNode.py`. Удалить: `PythonNode.{execute}`. Замена: `backend/app/application/engine/nodeTypes/pythonNode.py`.
+- **B2-L05** — `backend/app/application/engine/nodes/pojo/llmNode.py`. Удалить: `LLMNode (класс целиком)`. Замена: `backend/app/application/engine/nodeTypes/llmNode.py`.
+- **B2-L06** — `backend/app/application/engine/nodes/pojo/compiledNode.py`. Удалить: `CompiledNode (класс целиком)`. Замена: `backend/app/application/engine/nodeTypes/compiledNode.py`.
+- **B2-L07** — `backend/app/application/engine/nodes/pojo/nodeResult.py`. Удалить: `NodeResult (класс целиком)`. Замена: `backend/app/application/engine/nodeTypes/baseNode.py`, `backend/app/application/engine/runtime/execution/nodeOutcome.py`.
+- **B2-L08** — `backend/app/application/engine/nodeTypes/support/pythonNodeError.py`. Удалить: `PythonNodeError (класс целиком)`. Замена: `backend/app/application/engine/runtime/execution/pythonNodeError.py`, `backend/app/application/engine/contracts/nodeContract.py`.
+- **B2-L09** — `backend/app/application/engine/graphs/graphCompiler.py`. Удалить: `GraphCompiler.{__init__, precompile, compile, _compile_nodes, _filter, _split_by_phase, _build_llm_groups, _build_levels, _estimate_cost}`. Замена: `backend/app/application/engine/runtime/graphs/graphCompiler.py`.
+- **B2-L10** — `backend/app/application/engine/dag/executionPlan.py`. Удалить: `LLMGroup (класс целиком)`; `ExecutionPlan (класс целиком)`. Замена: `backend/app/application/engine/runtime/dag/executionPlan.py`.
+- **B2-L11** — `backend/app/application/engine/dag/dagExecutor.py`. Удалить: `DAGExecutor.{__init__, execute, _execute_phase, _should_skip, _run_level, _create_snapshot}`. Замена: `backend/app/application/engine/runtime/dag/dagExecutor.py`.
+- **B2-L12** — `backend/app/application/engine/dag/executionState.py`. Удалить: `ExecutionState.{__init__}`. Замена: `backend/app/application/engine/runtime/dag/executionState.py`, `backend/app/application/engine/runtime/dag/context/dagContext.py`.
+- **B2-L13** — `backend/app/application/engine/dag/executionTrace.py`. Удалить: `ExecutionTrace (класс целиком)`. Замена: `backend/app/application/engine/runtime/dag/executionTrace.py`.
+- **B2-L14** — `backend/app/application/engine/dag/executionLevelSnapshot.py`. Удалить: `ExecutionLevelSnapshot (класс целиком)`. Замена: `backend/app/application/engine/runtime/dag/executionLevelSnapshot.py`.
+- **B2-L15** — `backend/app/application/engine/execution/pythonNodeExecutor.py`. Удалить: `PythonNodeExecutor.{execute}`. Замена: `backend/app/application/engine/runtime/execution/pythonNodeExecutor.py`.
+- **B2-L16** — `backend/app/application/engine/execution/nodeRunner.py`. Удалить: `NodeRunner.{__init__, run}`. Замена: `backend/app/application/engine/runtime/execution/nodeRunner.py`.
+- **B2-L17** — `backend/app/application/engine/execution/llmAggregateExecutor.py`. Удалить: `LLMAggregateExecutor.{__init__, execute, _validate_all}`. Замена: `backend/app/application/engine/runtime/execution/llmAggregateExecutor.py`.
+- **B2-L18** — `backend/app/application/engine/validation/contractValidator.py`. Удалить: `ContractValidator.{validate}`. Замена: `backend/app/application/engine/runtime/validation/contractValidator.py`.
+- **B2-L19** — `backend/app/application/engine/validation/nodeValidator.py`. Удалить: `NodeValidator.{validate}`. Замена: `backend/app/application/engine/runtime/validation/nodeValidator.py`.
+- **B2-L20** — `backend/app/application/engine/validation/llmValidator.py`. Удалить: `LLMValidator.{__init__, validate}`. Замена: `backend/app/application/engine/runtime/validation/llmValidator.py`.
+- **B2-L21** — `backend/app/application/engine/validation/nodeValidationContext.py`. Удалить: `NodeValidationContext (класс целиком)`. Замена: `backend/app/application/engine/runtime/validation/nodeValidationContext.py`.
+- **B2-L22** — `backend/app/application/engine/prompt/llmGroupPayloadBuilder.py`. Удалить: `LLMGroupPayloadBuilder.{__init__, build, _collect_deps}`. Замена: `backend/app/application/engine/runtime/prompt/llmGroupPayloadBuilder.py`.
+- **B2-L23** — `backend/app/application/engine/prompt/pojo/nodeSection.py`. Удалить: `NodeSection (класс целиком)`. Замена: `backend/app/application/engine/runtime/prompt/pojo/nodeSection.py`.
+- **B2-L24** — `backend/app/application/engine/prompt/pojo/llmPayload.py`. Удалить: `LLMPayload.{to_dict, to_user_dict}`. Замена: `backend/app/application/engine/runtime/prompt/pojo/llmPayload.py`.
+- **B2-L25** — `backend/app/application/engine/prompt/pojo/llmRepairPayload.py`. Удалить: `LLMRepairPayload.{to_dict}`. Замена: `backend/app/application/engine/runtime/prompt/pojo/llmRepairPayload.py`.
+- **B2-L26** — `backend/app/application/engine/repair/dslFailureProjector.py`. Удалить: `DSLFailureProjector.{project, _get_error_codes}`. Замена: `backend/app/application/engine/runtime/repair/dslFailureProjector.py`.
+- **B2-L27** — `backend/app/application/engine/repair/repairBuilder.py`. Удалить: `RepairBuilder.{__init__, build}`. Замена: `backend/app/application/engine/runtime/repair/repairBuilder.py`.
+- **B2-L28** — `backend/app/application/engine/repair/repairOrchestrator.py`. Удалить: `RepairOrchestrator.{__init__, repair, _validate_failed, _get_last_validation}`. Замена: `backend/app/application/engine/runtime/repair/repairOrchestrator.py`.
+- **B2-L29** — `backend/app/application/engine/repair/pojo/nodeFailureContext.py`. Удалить: `NodeFailureContext (класс целиком)`. Замена: `backend/app/application/engine/runtime/repair/pojo/nodeFailureContext.py`.
+- **B2-L30** — `backend/app/application/engine/llmExecutionEngine.py`. Удалить: `LLMExecutionEngine.{__init__, run, _apply_task_transition, _build_context, _error_response}`. Замена: `backend/app/application/engine/runtime/dagEngine.py`, `backend/app/application/engine/contracts/executionBindings.py`.
+- **B2-L31** — `backend/app/application/engine/responseResolver.py`. Удалить: `ResolveResult (класс целиком)`; `ResponseResolver.{resolve}`. Замена: `backend/app/application/engine/runtime/responseResolver.py`, `backend/app/application/engine/contracts/executionBindings.py`.
+- **B2-L32** — `backend/app/application/cancellation/sessionSnapshot.py`. Удалить: `SessionSnapshot (класс целиком)`. Замена: `backend/app/application/cancellation/typed/sessionSnapshot.py`.
+- **B2-L33** — `backend/app/application/cancellation/snapshotStore.py`. Удалить: `SnapshotStore.{__init__, save, load, delete}`; `snapshot_store`. Замена: `backend/app/application/cancellation/typed/snapshotStore.py`.
+
+Уточнения по отдельным пунктам:
+
+- B2-L07: NodeResult не заменяется совместимой обёрткой; node возвращает собственный O, runtime использует NodeOutcome[O,E]. Удалить все зависимости от `NodeResult.data` до удаления модуля.
+- B2-L08: это **legacy** PythonNodeError, перенесённый в support при A1.2. Его class-level code/requires_replan/next_task_type/replan_reason/user_message остаются только до миграции concrete ошибок GEN. После handoff удаляется именно этот support-модуль; target runtime/execution/pythonNodeError.py и dataModel NodeError сохраняются. NodeKind/NodeCost в соседних support-файлах не затрагиваются.
+- B2-L30: `_apply_task_transition`, `_build_context`, `_error_response` удаляются со старым engine. Concrete transitions/request/effects/response предоставляет GEN через LifecycleBinding и factories; не переносить старые business mappings в DAGEngine. B2-L31 также удаляет `_OUTPUT_NODE` старого ResponseResolver и старый ResolveResult; target ResolveResult[O] из contracts остаётся.
+- B2-L32/L33: session-ID/global-singleton callers переводятся GEN на typed ExecutionId/store/resume до B1; B2 удаляет только перечисленный Python-код, не пользовательские данные и не сохранённые snapshots.
+
+**В этот реестр не входят:**
+
+- `backend/app/application/engine/repair/patchApplier.py`, concrete nodes/validators/старые contracts и side-effect bootstrap: concrete замена/миграция/удаление принадлежат GEN-DAG-1. World Snapshot.apply ещё не реализован; не отмечать PatchApplier как уже заменённый B2-компонент и не путать его с typed memory resume.
+- `core/container/engine.py`, chat/cancellation HTTP callers: сохраняемые модули, которые GEN переключает точечно, а не файлы на удаление в B2.
+- `engine/taskType.py`, `engine/rules/`, `engine/prompt/{dslResolver,dslRegistry,schemaBuilder}.py`, `engine/validation/{validationStatus,nodeValidationError}.py`, `engine/repair/repairMode.py`, `engine/nodeTypes/support/{nodeKind,nodeCost}.py`: переиспользуются target, `TODO(B2/...)` на них не ставится.
+- `engine/nodes/nodeRuntimeState.py` (M29): не является активным дублирующим production execution path, replacement-класс не создавался; это сохранённый consumer единого NodeStatus и предмет отдельного usage решения. `engine/errors.py` также не включается автоматически в cleanup без самостоятельного usage решения.
+- `engine/graphs/executionPlan.py`: закомментированный исторический файл вне scope этого плана, не путать с активным `engine/dag/executionPlan.py` из B2-L10.
+- Уже удалённые при A1.1/A1.2 исходные NodeStatus/NodeKind/NodeCost/PythonNodeError paths не восстанавливаются ради marker.
+
+Приёмка B2: каждый B2-L01…B2-L33 удалён либо имеет явное пересогласованное решение с владельцем/причиной; нет зависимостей от удалённых символов, legacy aliases/adapters и свободных engine node_results/shared_context. Одноимённый cascade shared_context исключается по смыслу. Выполнить planned `test_cleanup.py`, ALL/TYPE и scoped DIFF. Этот реестр не объявляет B2 выполненным.
+
+Evidence подготовки реестра: проверены существование 33 legacy paths и всех перечисленных target paths, AST inventory классов/методов/functions/singletons и равенство AST до/после markers. Меняется только комментарий в каждом модуле; runtime imports/поведение и файлы production wiring не меняются. Новых тестов для комментариев нет; verification — AST equality, marker/реестр one-to-one и scoped diff --check.
 
 ### Сценарии проверок и исполнения
 

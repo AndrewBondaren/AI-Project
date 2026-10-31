@@ -1,3 +1,7 @@
+# TODO(B2/B2-L02): Удалить legacy-модуль целиком после GEN-DAG-1 handoff/B1 и проверки всех usages.
+# Замена: app.application.engine.registration.nodeRegistry.
+# Реестр классов/методов: .cursor/plans/dag-typing-1.md, раздел B2.1.
+
 from typing import Type
 
 from app.application.engine.nodeTypes.support.nodeKind import NodeKind

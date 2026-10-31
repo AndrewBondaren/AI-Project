@@ -1,3 +1,7 @@
+# TODO(B2/B2-L12): Удалить legacy-модуль целиком после GEN-DAG-1 handoff/B1 и проверки всех usages.
+# Замена: app.application.engine.runtime.dag.executionState, app.application.engine.runtime.dag.context.dagContext.
+# Реестр классов/методов: .cursor/plans/dag-typing-1.md, раздел B2.1.
+
 from __future__ import annotations
 from app.application.engine.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.dag.executionTrace import ExecutionTrace

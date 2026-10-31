@@ -13156,3 +13156,46 @@ additional dense correction loop. This remains a recommendation, not a selected
 contract. POJO inventory remains sufficient; no new model/status/store proposed.
 Only plan changed; evidence scripts used existing kernels/fixtures in memory.
 G10-A remains OPEN; wait for the baseline decision before dependent code changes.
+
+### G10-A natural geometry — FROZEN RECIPE INVARIANT FIXED (2026-10-31)
+Master explicitly requires identical natural geometry from the same frozen recipe
+for pre-water planning and GEO L2. Sharing refine/hills kernels alone is NOT an
+equivalence proof. This fixes a target invariant, not production activation or
+approval of a new storage/recipe model; no runtime code changed by this note.
+Recipe closure reuses existing TerrainBaseInput, ReliefPlanInput,
+SurfaceSupportInput and exact climate_base/terrain_base envelopes. Their actual
+captured values must reach the consumer through the common planning lifecycle;
+PlanRef/input fingerprint cannot be decoded back into missing recipe inputs.
+Same recipe means ALL of the following, including owning rules, not just knobs:
+- Same world/seed, grid/fine topology, z bounds, refine policy and algorithm
+  versions, frozen natural mountain/ravine layout and template/policy inputs.
+- Same PreWaterHillHostJob/CapturedLandcoverSources semantics: facts from
+  climate_base and terrain_base, captured declared regions/region_states,
+  landcover policy, terrain entries, hills policy and authored-null/presence bits.
+  No substitution by parent categorical terrain, final paint_regions_fine,
+  final local climate/water observations or terrain_with_hills(current World).
+- Same fine protected mountain geometry and natural ravine exclusion rule;
+  post-water L0 hydrology is not an alternative natural hill exclusion source.
+- Same canonical full-tile hill evaluation, seed lattice and ordering; requested
+  subwindow clipping happens afterwards. Equal kernels on differently clipped
+  host sets are insufficient, including at negative coordinates/wrapped seams.
+Geometry equality criterion: natural_GEO_L2(recipe, tile/window) equals the
+restriction of the frozen pre-water natural surface to those cells, exactly in
+FineZ. Window refs may differ with coverage; recipe closure/source dependencies
+must remain coherent. Equality is checked BEFORE physical height overlays.
+Later L2 terrain/material paint may change presentation without feeding back
+into hills geometry. A change to geometry-relevant region state/registry/policy
+must invalidate the natural recipe/layout and dependent water/rivers first;
+it cannot silently mutate geometry under an already accepted hydrology ref.
+Then apply accepted basin and river absolute heights exactly, without z_band
+carve clamping or another hills pass. No fill/placement/routing during delivery.
+Owners stay existing terrain natural preparation + landcover hill-host jobs;
+L2 consumes their public result/operation. Do not copy their selection algorithm
+into a second L2 job or add host/exclusion decisions to a planner/orchestrator.
+Acceptance for future join: compare the two public paths on the SAME captured
+recipe with hills/regions/state, mountain/ravine exclusions and topology seams;
+full vs sliced windows agree; parent paint/L0 hydro cannot change natural heights.
+Exercise recipe invalidation independently for hosts/exclusions/seed/policy/state;
+kernel-call mocks or same-kernel tests alone do not establish equivalence.
+POJO audit remains binding: no parallel NaturalRecipeV2/host registry/status enum.
+Implementation of recipe delivery/reuse and L0/L2 cutover remains OPEN (G10-A).
