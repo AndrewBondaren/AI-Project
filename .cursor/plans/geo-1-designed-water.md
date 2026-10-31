@@ -12952,3 +12952,207 @@ unchanged; only contract documentation and acceptance assertions changed.
 Ownership review: no orchestrator or planner implementation changed; publication
 job retains admission ownership, FineRiverPlan remains structural transport.
 Final intent reconciliation/coverage and production join remain OPEN (G10-A).
+
+### G10-A source join — POJO/enum inventory before contract (2026-10-31)
+Prerequisite audit requested by master; no runtime/schema/signature changes.
+TZ: GEO-1 §6.10/§6.20, source join audit above; contract-creation rule applies
+before defining projection/final fields. Git status checked; unrelated ongoing
+DAG/typing/doc changes are outside this audit and preserved.
+Parsed1051 dataModel/generator Python modules: each of14 selected contracts has
+one definition (FineSurfaceWindow, RegionCoverage, CoverageSpan, MaterializedWater,
+AssembledWater, FineRiverPlan, RiverRouteBatch, OpenWaterPlan, HydrologyPlan,
+GeoHydrologyPlan, GeoHydrologyRoutesPlan, MapCellHydrology, SourceBodyMapping,
+CoordinateSpace). No equal multi-value direct StrEnum/IntEnum sets found in
+hydrology/placement/policy/spatial/topology. This is a bounded inventory, not a
+claim that every record in the repository is semantically nonduplicative.
+Reuse map (existing dataModel paths relative to backend/app/dataModel):
+- terrain/sampling/fineSurfaceWindow.py: complete immutable fine heights,
+  coverage/topology/reservations. terrain/planning/terrainPlan.py is coarse;
+  application terrain/types.SurfaceHeightmap is mutable kernel scratch, not
+  another published fine source. Do not add phase-specific surface snapshots.
+- hydrology/planning/stages/openWaterPlan.py: FineWaterResult is an alias of
+  existing window + AssembledWater; MaterializedWater owns cells/body/mapping,
+  AssembledWater adds unions. OpenWaterPlan is the existing coarse projection
+  target. No FineWaterV2/CoarseWaterSnapshot/new body/cell records are needed.
+- hydrology/mapCellHydrology.py, waterBody.py, physicalWaterUnion.py and
+  planning/sourceBodyMapping.py own cell roles/physical identity/source mapping;
+  reuse them in existing final sparse_fine_hydro, not a parallel fine-cell table.
+- hydrology/planning/stages/riverRoutePlans.py + planning/hydrologyPlan.py own
+  accepted routes and H samples; terrain/relief/planning/reliefPlan.py owns actual
+  river beds. Stage-specific input/output transport is not a second solver.
+- terrain/regions/coverageGeometry.py owns RegionCoverage/CoverageSpan geometry.
+  Coverage geometry alone proves neither fill success nor all-intent routing
+  success. Required final coverage must extend existing GeoHydrologyPlan.
+- planning/contracts/planEnvelope.py, planDependency.py and identity/planRef.py
+  own revision/provenance. Join source through exact dependency refs; do not embed
+  another full FineWaterResult/window in route/river-relief records.
+- spatial/grid owns FineXY/SurfaceGridCoord/CoordinateSpace/SurfaceGridSettings;
+  application coordinates.space only reexports the same enum. FineGridCoord has
+  a Z component and is not a duplicate of FineXY. No new resolution/space enum.
+- KnownFact[EntityUid|None]/UnknownFact already express wet/dry/unknown query
+  evidence. Placement WaterPresence is admission evidence, not a new query enum.
+  FineBoundaryWaterCell is an existing coordinate+observed-body projection, not
+  a full role/level/coverage record; do not copy it into a new canonical model.
+Conflicts/constraints to resolve in the next contract review:
+1. Existing body/union/mapping copies across OpenWaterPlan/routes/final are
+   transport projections. Final must derive them from the same fine source ref;
+   adding another canonical holder would create an independent SoT.
+2. BoundaryWaterSnapshot/HydrologyPolicySnapshot carry mapping separately beside
+   a hydrology envelope (generic HydrologyPlan lacks GEO mapping). Their binding
+   validators check refs, not equality with GeoHydrologyPlan.source_mapping.
+   GEO consumer wiring must reconcile these copies with the final source, without
+   inventing another snapshot or silently breaking the PC generic contract.
+3. ResolvedWaterPlacement repeats accepted geometry and kind/liquid/level shared
+   with native placement/metadata/BasinSpec. This is the existing G8-B legacy
+   conflict; migration/removal remains atomic G10-A, no V2 water record/bridge.
+4. OpenWaterPlan/MapCellHydrology hold one value per coarse cell. Multiple fine
+   body identities cannot be preserved there losslessly. Projection selection
+   semantics must be explicit; a new POJO/rank enum would not solve that decision.
+Audit VERIFIED by AST inventory + manual producer/consumer/validator reads;
+tests/typing not rerun because only this execution note changed. Contract review
+and pipeline implementation are next; G10-A remains OPEN.
+
+### G10-A source join — CONTRACT REVIEW / L2 BASELINE CONFLICT (2026-10-31)
+Scope: verify projection/source/delivery semantics after the POJO inventory;
+runtime signatures/algorithms/registration are not changed by this review.
+The earlier shared-final contract retains parent L0 height authority. That clause
+cannot be assumed compatible with a canonical pre-L0 fine height source.
+
+Projection candidate, using existing types and coordinate owner:
+- For canonical macro(gx,gy), span S, sample fine(gx*S+S//2,gy*S+S//2).
+  This is existing coordinates/light/grid.light_cell_center_fine with macro
+  sampling scale LightGridScale.from_tile(S,1), not a new rounding/rank policy.
+  Heights and hydro must use the same canonical sample and the same fine ref.
+- Reuse TerrainPlan rows for coarse heights and OpenWaterPlan for coarse water.
+  At the sample retain exact MapCellHydrology including explicit dry SHORE;
+  absence is dry only inside successful fine-water coverage. Unknown/missing
+  height proof must fail full coarse planning, never fabricate dry/height0.
+- No majority/lowest UID/kind ranking or second water solve. All fine bodies,
+  unions and SourceBodyMapping remain in the physical source even when not hit
+  by coarse samples. A coarse dry cell is not proof that all its fine cells are dry.
+  Actual fixture: macro(0,0), S16 samples dry(8,8), but lake receiver(10,11) is wet.
+  Center examples for macro(-1,-1): S1→(-1,-1), S3→(-2,-2), S16→(-8,-8).
+
+Required source/delivery closure (not additional POJO/enum):
+- Let W be the exact pre-water PlanEnvelope[FineSurfaceWindow], F the published
+  PlanEnvelope[FineWaterResult]. F.pre_water_surface must equal W.ref. Final also
+  needs W to calculate basin height delta B={c | F.window[c] != W[c]}; a hash/ref
+  alone cannot supply the baseline rows. Read W through a declared dependency,
+  not live terrain, SQL, baked L0 or another copy embedded into river records.
+- Fine routing/river relief retain H requested/path/receiver samples from F.
+  River relief only applies existing bed kernels to accepted fine routes. Final
+  heights overlay those actual beds on F; coarse height/hydro delivery is a
+  projection of the resulting fine facts, not independent coarse carve truth.
+- Existing final fine_z_overrides can carry B union H relative to W. This gives
+  O(|B|+|H|) retained height rows, not unconditional O(H): B may cover the world.
+  Comparing already frozen source rows is O(N), no per-cell I/O/re-fill. This
+  sparse representation is correct only if the consumer reconstructs W exactly.
+- Current L2 reconstructs from baked L0, which may already include water relief.
+  It is not established to equal W outside B. Concrete existing-kernel witness:
+  S16/light_side4, nearest/detail_noise0, natural light10; basin at fine(2,2)
+  lowers its sampled parent light cell to-5. Upsample of that changed L0 plus the
+  one-cell basin delta leaves15 other cells wrong; fine(1,1) is-5 instead of10.
+  Thus preserving parent-L0 baseline AND claiming B union H is sufficient would
+  be a false height-completeness proof. Bilinear interpolation is not an escape.
+
+Two reviewable target choices; do not silently select a different L2 authority:
+A (recommended): GEO L2 fine height baseline is W, fetched/reconstructed from its
+exact frozen source/recipe. L0 is its downstream coarse/light representation;
+there is no L0→W dependency. Then final transports B union H without duplicating
+the full fine surface through routes/river-relief/final. PC remains unchanged.
+B: retain baked-L0 baseline. Derive overrides against the actual L2 upsample of
+that final L0, including changes outside basin/river footprints. This needs an
+explicit post-L0 delivery operation/ref (separate from pre-L0 water planning)
+and may retain O(N) correction rows. It must not recreate the L0/fine-water cycle.
+Decision required because the previous plan explicitly preserves parent-L0
+height authority; this audit does not revoke that clause by implication.
+
+Other mandatory join checks exposed by producer/consumer review:
+- CoarseRiverPlanner currently creates procedural routes; native FineRiverJob
+  handles declared intents only. Every accepted coarse procedural proposal must
+  reach native refinement with stable identity, or explicit rejection evidence.
+  Reuse existing RiverRoute/RiverRouteBatch and request/routing kernels; no new
+  procedural source search (HY-RIV-1), UID-prefix dispatch or silent dropping.
+  Fine drainage must root through accepted fine parents/physical bodies; a
+  coarse-only parent is not fine receiver proof.
+- F.payload has heights/water, not terminal classification decisions. Do not
+  re-resolve category policy or pretend its input fingerprint stores retrievable
+  inputs. Registration must bind the same typed (GeoHydrologyPlanInput, specs,
+  terminal decisions) through existing PlanRequest/input fingerprint closure.
+- Final's required RegionCoverage is successful physical fine-water observation,
+  not all-intent routing success. Preserve route issues through existing bundle
+  reporting; accepted-route envelope existence never proves all intents passed.
+  Boundary/policy mapping projections must match the authoritative final mapping.
+Ownership for implementation remains: terrain owns height sampling/deltas;
+hydrology water owns water projection/body mapping; rivers owns proposal
+refinement; terrain river relief owns bed writes; HydrologyFactsAssembler owns
+facts/identity joins. Public planners/providers/SurfacePlanningAssembler only
+bind refs and order calls. No new mixed height+water algorithm in an orchestrator.
+Evidence: actual narrow-lake fixture + existing coordinate/refine kernels executed
+read-only;15-cell baseline counterexample reproduced. No application/tests edits;
+typing/full regressions not rerun for a document-only review. Contract is NOT
+marked cutover-ready; resolve L2 baseline choice before implementing the join.
+G10-A/G8-B/production remain OPEN; unrelated engine changes preserved.
+
+### G10-A L2 baseline — ANALYSIS REQUESTED, NO CHOICE ACCEPTED (2026-10-31)
+Master requested analysis instead of selecting A/B. No L2 authority change is
+approved by the preceding question; implementation stays unchanged.
+Actual consumer: materialize/terrain/terrainBatchOrchestrator.py builds fine_z
+from ParentLightTile, clamps each hydrology override to parent-derived z_band,
+then paints regions and applies hills using L0 hydrology exclusions. Natural
+PreWaterTerrainJob already refines natural light and places hills before fill.
+Current coarseOpenWater light contributor copies a coarse water floor across
+the macro's light cells, so that baked height field is not a reversible natural
+source. These are existing paths; native fine planning is not wired into them.
+
+Additional evidence relevant to BOTH choices:
+- With current default z_band1, a requested absolute floor-5 on baseline10 is
+  delivered as9 by the current consumer clamp. Complete override rows alone do
+  not make the existing consumer an exact physical-height materializer.
+- Reapplying the existing hills kernel per tile to the real frozen natural fine
+  fixture, with the same captured hosts/policy/seed, changes130 cells. Passing an
+  already hill-bearing W/F surface into the unchanged L2 hills pass is invalid.
+  This is a proposed-join counterexample, not a claim that production currently
+  consumes W or already generates hills twice.
+- Physical basin/river heights must be delivered exactly after natural terrain;
+  z_band remains a natural-detail/noise constraint, not a physical carve cap.
+  Hills cannot run again after accepted physical heights. Height writes and
+  ordering belong to terrain jobs, not new logic in TerrainBatchOrchestrator.
+
+A clarified: one captured natural recipe and one accepted physical layout, two
+downstream LOD views. N=natural terrain including hills; P=post-basin fill surface;
+Z=P overlaid with actual accepted river beds. L0=projection(Z); L2 tile=window(Z).
+L2 can reconstruct the matching N tile from frozen inputs/shared kernels and
+overlay existing final basin/river height rows. It does NOT need a new persisted
+full-world fine snapshot, another water solve, or current World/registry reads.
+Re-evaluating the same frozen natural recipe is deterministic materialization,
+not new placement/policy/RNG decisions; no basin/river solve is repeated.
+Required implementation constraints: prepare/reuse common natural light/layout
+once; do not instantiate current PreWaterTerrainJob's full-world preparation
+anew per L2 tile. Preserve exact seed/recipe/version/registry/state dependencies
+and tile-complete hill scope. Parent L0 may still supply categorical/context
+fields, but its post-water height interpolation is not GEO fine geometry SoT.
+This explicitly revises the previous parent-L0 height-authority clause.
+
+B clarified: keep parent-L0 height authority and add a separate post-L0 delivery
+correction C against the COMPLETE actual L2 baseline (including hill/landcover
+stages), not merely the raw upsample. Apply absolute C after those stages without
+carve clamping. Bind it to exact L0 and baseline input revisions. C must cover
+differences outside basin/river footprints; worst-case size O(N). It must never
+feed back into L0/water planning. This preserves the parent baseline mechanism
+at the cost of another delivery artifact, invalidation boundary and potential
+world-sized correction I/O; it does not preserve the current consumer unchanged.
+
+Cost limits: N=M*S², basin changes B and retained river samples H. A can retain
+O(|B|+|H|) height delivery; B additionally needs C, potentially O(N). |B| itself
+can be O(N), so neither choice guarantees sparse output for a world-wide carve.
+The existing physical fine resolver still requires full-world N under either
+choice; recipe delivery does not solve that separate initial CPU/memory limit.
+No latency/SQL improvement is claimed without a benchmark. Avoid repeated
+per-tile whole-world cache loads/preparation and extra dense artifacts first.
+Recommendation after code/evidence review: A with shared frozen natural recipe
+and exact physical overlays; retaining L0 as a derived LOD view avoids an
+additional dense correction loop. This remains a recommendation, not a selected
+contract. POJO inventory remains sufficient; no new model/status/store proposed.
+Only plan changed; evidence scripts used existing kernels/fixtures in memory.
+G10-A remains OPEN; wait for the baseline decision before dependent code changes.

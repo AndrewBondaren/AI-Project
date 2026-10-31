@@ -19,7 +19,7 @@ from app.application.engine.runtime.repair.pojo.nodeFailureContext import NodeFa
 from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
 from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
 from app.application.llm.models import ChatMessage
-from app.application.engine.runtime.llmExecutionEngine import LLMExecutionEngine
+from app.application.engine.runtime.dagEngine import DAGEngine
 from app.application.engine.runtime.responseResolver import ResponseResolver
 from app.application.engine.contracts.executionBindings import ExecutionCursor, LifecycleBinding, PassStage, ResolveResult
 from app.application.engine.taskType import TaskType
@@ -194,7 +194,7 @@ async def wrong_llm_execution(
 
 
 async def wrong_engine(
-    engine: LLMExecutionEngine[LeafOutput, CompositeOutput], options: LLMExecutionOptions,
+    engine: DAGEngine[LeafOutput, CompositeOutput], options: LLMExecutionOptions,
     hooks: LifecycleBinding[CompositeOutput], view: DAGReadView,
 ) -> None:
     wrong: ResolveResult[CompositeOutput] = await engine.run(ExecutionId("e1"), TaskType.SCENE_INIT, max_passes=3, options=options)  # expect: reportAssignmentType

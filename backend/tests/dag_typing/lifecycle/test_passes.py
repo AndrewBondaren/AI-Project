@@ -19,7 +19,7 @@ from app.application.engine.runtime.dag.lifecycle.executionSnapshotService impor
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from app.application.engine.runtime.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.runtime.graphs.graphCompiler import GraphCompiler
-from app.application.engine.runtime.llmExecutionEngine import LLMExecutionEngine
+from app.application.engine.runtime.dagEngine import DAGEngine
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import ExecutionEventCode, ExecutionSeverity
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
@@ -98,7 +98,7 @@ class PassTests(unittest.IsolatedAsyncioTestCase):
         compiler.precompile()
         self.hooks = Hooks(compiler, reads)
         executor = DAGExecutor(self.python.runner, {PythonNodeExecutor: PythonNodeExecutor()}, emit=lambda event: None)
-        self.engine = LLMExecutionEngine(executor, self.group.aggregate, self.group.registry, self.hooks,
+        self.engine = DAGEngine(executor, self.group.aggregate, self.group.registry, self.hooks,
                                          request, self.service, self.store, emit=self.events.append)
 
     async def run_engine(self, **kwargs):

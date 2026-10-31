@@ -31,7 +31,7 @@ O = TypeVar("O", bound=BaseModel)
 S = TypeVar("S", bound=BaseModel)
 
 
-class LLMExecutionEngine(Generic[O, S]):
+class DAGEngine(Generic[O, S]):
     def __init__(
         self, executor: DAGExecutor, aggregate: LLMAggregateExecutor, registry: NodeRegistry,
         binding: LifecycleBinding[O], request: LLMRequest, snapshots: ExecutionSnapshotService[S], store: SnapshotStore[S], *,
