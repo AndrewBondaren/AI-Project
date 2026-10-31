@@ -9,11 +9,14 @@ from app.dataModel.topology.worldTopology import WorldTopology
 from app.application.planning.service.planningService import PlanBuildControl, PlanBuildFailure
 from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import load_prepared_declared_hydrology
 from app.application.worldData.generators.hydrology.rivers.riverPrepare import plan_prepared_routes
+from app.application.worldData.generators.hydrology.rivers.planning.fine.proposals import procedural_requests
 from app.application.worldData.generators.hydrology.rivers.riverRouteRequests import prepared_declared_river_requests
 from app.application.worldData.generators.hydrology.shore.fineRiverSampling import sample_prepared_fine_river_input
 from app.application.worldData.generators.hydrology.types import resolve_scopes
 from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
+from app.dataModel.hydrology.enums.riverSystemRole import RiverSystemRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.planning.hydrologyPlan import RiverRoute
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyPlanInput
 from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.planning.stages.openWaterPlan import OpenWaterPlan, FineWaterResult
@@ -56,23 +59,31 @@ class FineRiverJob:
         return self._route(world_uid=world_uid, inputs=inputs, base=base,
             coarse_hydro=occupied, fine_hydro={}, space=CoordinateSpace.WORLD_SURFACE_GRID,
             topology=fine_topology(inputs.topology, inputs.grid.fine_span),
-            water_bodies=water.water_bodies, control=control)
+            water_bodies=water.water_bodies, proposals=(), control=control)
 
     def plan_fine(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
-                  water: FineWaterResult, control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
+                  water: FineWaterResult, coarse: CoarseRiverPlan,
+                  control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
         control.raise_if_shutdown()
+        declared = {river.location_uid for river in inputs.declared_rivers
+                    if river.system_role is not RiverSystemRole.SYSTEM}
+        proposals = tuple(route for route in coarse.routes if route.river_uid not in declared)
         if not inputs.enabled or HydrologyScope.RIVERS not in resolve_scopes(inputs.scopes):
+            if proposals:
+                raise PlanBuildFailure(tuple(FieldPathError(("coarse", route.river_uid),
+                    "disabled fine routing cannot refine an accepted procedural proposal") for route in proposals))
             return PlanBuildResult[FineRiverPlan](payload=FineRiverPlan(routes=(), base_surface_z=()), diagnostics=())
         window, assembled = water
         return self._route(world_uid=world_uid, inputs=inputs,
             base=dict(window.surface_z), coarse_hydro={}, fine_hydro=dict(assembled.materialized.cells),
             space=CoordinateSpace.WORLD_FINE_GRID, topology=window.topology,
-            water_bodies=assembled.materialized.bodies, control=control)
+            water_bodies=assembled.materialized.bodies, proposals=proposals, control=control)
 
     def _route(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput | GeoHydrologyPlanInput,
                base: Mapping[Coord, int], coarse_hydro: Mapping[Coord, MapCellHydrology],
                fine_hydro: Mapping[Coord, MapCellHydrology], space: CoordinateSpace,
                topology: WorldTopology, water_bodies: tuple[WaterBody, ...],
+               proposals: tuple[RiverRoute[SurfaceGridCoord], ...],
                control: PlanBuildControl) -> PlanBuildResult[FineRiverPlan]:
         loaded = load_prepared_declared_hydrology([], [], list(inputs.declared_rivers), [])
         anchors = {anchor.location_uid: anchor.position for anchor in inputs.anchors if anchor.position is not None}
@@ -83,6 +94,8 @@ class FineRiverJob:
         requests = prepared_declared_river_requests(span, inputs.rivers.mouth_search_radius_fine,
             sampling.heightmap, loaded.river_edges, loaded.river_intents, anchors, sampling.occupied,
             classify, topology, space=CoordinateSpace.WORLD_FINE_GRID)
+        requests.extend(procedural_requests(proposals, span=span, heightmap=sampling.heightmap,
+                                            occupied=sampling.occupied, topology=topology, control=control))
         requests = sampling.sample_requests(requests, classify)
         result = plan_prepared_routes(world_uid=world_uid, span=span, heightmap=sampling.heightmap,
             requests=requests, claims=sampling.occupied, topology=topology, policy=inputs.rivers,

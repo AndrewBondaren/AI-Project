@@ -2183,3 +2183,12 @@ publication требует эту связь; прямые climate/terrain refs 
 её не заменяют. Проверка полного prepared envelope не выполняется внутри chunk
 materialization: после admission используется существующая чистая materialize
 операция. Стоимость полной проверки источника не объявляется ограниченной Q.
+
+Native fine routing принимает explicit CoarseRiverPlan как набор предложений,
+а не fine observations. Declared intents обрабатываются по исходным UID;
+оставшиеся принятые coarse proposals уточняются существующими routing kernels
+на фактических fine heights/water с сохранением river/edge/location identity.
+Coarse claims не становятся fine receivers; coarse-only parent не доказывает
+приёмник. Повторного поиска procedural sources нет. Каждое procedural proposal
+должно получить accepted fine route либо явную диагностику. Coarse input входит
+в identity native fine operation; отдельный full fine payload в routes не нужен.

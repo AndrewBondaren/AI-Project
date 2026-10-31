@@ -1111,10 +1111,12 @@ from app.dataModel.hydrology.planning.stages.openWaterPlan import FineWaterResul
 
 def invalid_published_fine_routes(owner: FineRiverPlanner, world: EntityUid, inputs: GeoHydrologyPlanInput,
                                   coarse: PlanEnvelope[HydrologyRoutesPlan], raw: FineWaterResult, native: PlanEnvelope[FineWaterResult],
-                                  expected: PlanRef, control: PlanBuildControl) -> None:
-    owner.plan_fine(world_uid=world, inputs=inputs, water=coarse, expected_water=expected, control=control)  # EXPECT: reportArgumentType
-    owner.plan_fine(world_uid=world, inputs=inputs, water=raw, expected_water=expected, control=control)  # EXPECT: reportArgumentType
-    owner.plan_fine(world_uid=world, inputs=inputs, water=native, control=control)  # EXPECT: reportCallIssue
+                                  expected: PlanRef, control: PlanBuildControl, proposals: CoarseRiverPlan) -> None:
+    owner.plan_fine(world_uid=world, inputs=inputs, water=coarse, expected_water=expected, coarse=proposals, control=control)  # EXPECT: reportArgumentType
+    owner.plan_fine(world_uid=world, inputs=inputs, water=raw, expected_water=expected, coarse=proposals, control=control)  # EXPECT: reportArgumentType
+    owner.plan_fine(world_uid=world, inputs=inputs, water=native, coarse=proposals, control=control)  # EXPECT: reportCallIssue
+    owner.plan_fine(world_uid=world, inputs=inputs, water=native, expected_water=expected, control=control)  # EXPECT: reportCallIssue
+    owner.plan_fine(world_uid=world, inputs=inputs, water=native, expected_water=expected, coarse=coarse.payload, control=control)  # EXPECT: reportArgumentType
 
 from app.application.worldData.generators.terrain.planning.preWater.terrainBasePlanner import PreWaterTerrainPlanner
 from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain

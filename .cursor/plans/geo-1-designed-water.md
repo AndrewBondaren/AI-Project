@@ -13550,3 +13550,63 @@ Remaining G10-A: main HydrologyRoutesAssembler.assemble_geo is still coarse-led;
 join this prepared→fine-water source there and carry coherent native samples/facts
 through river-relief/final. Production L2/final/SPATIAL activation remains OPEN.
 No backend, engine DAG, SQL migration files, commit or push.
+
+
+### Task4 — ACCEPTED COARSE PROPOSALS → NATIVE FINE REFINEMENT — VERIFIED ISOLATED SLICE (2026-11-01)
+Continuation after c3f8cb8c. Direct assemble_geo cutover would currently discard
+accepted procedural coarse proposals: native fine handles declared intents only.
+Resolve this existing mandatory source-join prerequisite before changing routes'
+registered dependencies or final facts. TZ: tz_terrain_hydrology.md frozen fine
+source/refinement; source-join contract review "Other mandatory join checks".
+POJO audit: reuse CoarseRiverPlan (RiverRouteBatch[SurfaceGridCoord]), RiverRoute,
+RiverPathSegment, existing RiverRouteRequest/RiverSegment, FineRiverPlan and common
+PlanEnvelope identities. No new proposal DTO/enum, water records or duplicate SoT.
+Public FineRiverPlanner.plan_fine and its publication/execution jobs require an
+explicit CoarseRiverPlan. Coarse data is proposals, not fine receiver proof: never
+inject coarse claims/heights into native fine observations. Existing declared
+UID membership identifies already handled declarations; no UID-prefix dispatch
+or using segment.declared as source-origin evidence (endpoint intents may be
+classified with declared=False). Refine remaining accepted proposals using native
+height/water, existing center-coordinate and seam-aware Bresenham primitives,
+existing classification/request ordering/routing/fallback kernels. Preserve river,
+edge/location identity and requested receiver; actual receiver must be fine-proven.
+No procedural source rediscovery. Every supplied procedural proposal yields an
+accepted route or explicit diagnostics; disabled/conflicting input cannot silently
+drop nonempty proposals. Retain only existing requested/path/receiver samples H.
+Ownership: new rivers/planning/fine/proposals.py owns proposal-to-request geometry;
+FineRiverJob owns joint refinement; planner delegates. Publication hashes explicit
+coarse input with inputs and exact fine-water dependency; fine-river algorithm
+version2, unchanged payload schema. Coarse claims are hashed input, never evidence.
+Keep PC/full/coarse algorithms and registration/production/final unchanged.
+Files: fineRiverPlanner; fine execution/publication and proposal operation; update
+all callers/typing. New tests geo1/procedural_refinement/2 files; app fine2→3.
+Checks: real coarse generator output→fine refinement without second source search;
+UIDs, fine classification, rooted parent-before-child claims, rejected coarse-only
+parent, explicit failures, sparse retained samples, codec/key/cancel/frame checks;
+historical declared-only payload/diagnostic digests unchanged with empty proposals.
+Baseline digests before edits: declared1ccb025f9dbc28083d7751293bec109823d7970836ce4eee6c882aef07c8eeb2;
+no_water36204c395f88de16bcce6fd87990059e7554bd1402c26c8879560e4b9beee067;
+dry_moutha5fcf7d389a726efbcfa4eeaca352a9bc9030f7a64826abf6775ee0d22fa4da6.
+Done: public native refinement consumes all supplied accepted procedural proposals
+without inventing fine claims or rerunning discovery. Main assemble_geo/projection/
+registered source join, river-relief/final, production L2/SPATIAL and G10-A OPEN.
+
+Implemented: native FineRiverPlanner.plan_fine now requires explicit CoarseRiverPlan;
+FineRiverJob refines non-declared proposals on fine water/heights, and publication
+hashes their full typed input. Canonical manifest ID297 registers the EXISTING
+CoarseRiverPlan alias for request identity/replay, not a new POJO. Fine-river
+algorithm2/schema1; old PC/coarse/full algorithms and source search unchanged.
+Verified: GEO784 OK (+8), planning292 OK, positive pyright0; negative284 diagnostics
+/281 EXPECT covered, surplus3 unchanged. Eight new refinement tests include real
+coarse autoresolve→fine UID/edge preservation with rediscovery forbidden, fine
+parent-before-child, rejected coarse-only parent, explicit no-water errors,
+native reclassification, input identity/frame/disabled checks, declaration vs
+segment flag and geometry-free system container, negative/wrapped coordinates,
+sphere fold spans1/3/16. Three historical declared-only payload+diagnostic digests
+unchanged; retained samples remain sparse. Manual boundary check: FineRiverPlanner
+delegates only; projection belongs to fine proposals operation; execution owns
+joint routing; publication owns input/proof binding; no mutable job-field reads.
+Next: canonical fine→coarse TerrainPlan/OpenWaterPlan projection and exact source
+join into assemble_geo/registered route stage; do not claim it switched here.
+G10-A OPEN; no backend, engine DAG, SQL migrations, production L2/final/SPATIAL,
+commit or push.

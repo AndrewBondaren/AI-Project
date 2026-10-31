@@ -9,7 +9,7 @@ from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPla
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic, RiverRoutingCode, RiverRoutingFailure
-from app.dataModel.hydrology.planning.stages.riverRoutePlans import FineRiverPlan
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
@@ -28,9 +28,10 @@ def scenario(*, mouth=(11, 11), lake=True):
     return window, inputs, fill(window, topology, specs, physical=inputs)
 
 
-def route(inputs, water, *, expected=None, world="world", control=None):
+def route(inputs, water, *, expected=None, world="world", control=None, coarse=None):
     return FineRiverPlanner().plan_fine(world_uid=world, inputs=inputs, water=water,
-        expected_water=expected or water.ref, control=control or Control())
+        expected_water=expected or water.ref, coarse=coarse or CoarseRiverPlan(routes=(), claims=()),
+        control=control or Control())
 
 
 class FineRoutingTests(TestCase):

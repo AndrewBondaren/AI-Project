@@ -304,13 +304,14 @@ def frozen_fine_water(world: EntityUid, base_input: TerrainBaseInput, relief_inp
         expected_placement=placement.ref, inputs=physical, specs=specs, classification_decisions=decisions, control=control),
         PlanEnvelope[FineWaterResult])
 
-from app.dataModel.hydrology.planning.stages.riverRoutePlans import FineRiverPlan
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan
 
 
 def published_fine_routes(owner: FineRiverPlanner, world: EntityUid, inputs: GeoHydrologyPlanInput,
-                          water: PlanEnvelope[FineWaterResult], expected: PlanRef, control: PlanBuildControl) -> None:
+                          water: PlanEnvelope[FineWaterResult], expected: PlanRef, control: PlanBuildControl,
+                          coarse: CoarseRiverPlan) -> None:
     assert_type(owner.plan_fine(world_uid=world, inputs=inputs, water=water,
-                expected_water=expected, control=control), PlanEnvelope[FineRiverPlan])
+                expected_water=expected, coarse=coarse, control=control), PlanEnvelope[FineRiverPlan])
 
 from app.dataModel.terrain.planning.natural.preparedTerrain import PreparedNaturalTerrain
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult

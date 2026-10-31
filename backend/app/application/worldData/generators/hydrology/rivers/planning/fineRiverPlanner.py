@@ -21,6 +21,7 @@ class FineRiverPlanner:
 
     def plan_fine(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
                   water: PlanEnvelope[FineWaterResult], expected_water: PlanRef,
+                  coarse: CoarseRiverPlan,
                   control: PlanBuildControl) -> PlanEnvelope[FineRiverPlan]:
         return FineRiverPublicationJob().publish(world_uid=world_uid, inputs=inputs,
-            water=water, expected_water=expected_water, control=control)
+            water=water, expected_water=expected_water, coarse=coarse, control=control)
