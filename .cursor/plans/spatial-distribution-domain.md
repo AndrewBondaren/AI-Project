@@ -631,3 +631,884 @@ SPATIAL §§2–11 и архитектурные gates сохранены. Из�
 | [MergedCellView](../../backend/app/dataModel/worldPack/wire/mergeMapCells.py) (строка 65) | [MapCellQueryFacade.get_scene_volume](../../backend/app/application/worldData/mapCells/mapCellQueryFacade.py) (строка 131) | TARGET/OPEN: domain water slices; solid/debug DTO может сохраняться | SP-1/M/R0; не удалять DTO по одному water use case; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
 
 **Evidence 2026-11-01, HEAD `3a714326` + текущий working tree:** `rg` по именам символов и вызовам в `backend/app`, чтение найденных цепочек GEO/read/engine, AST-проверка определений всех символов таблицы. Известные ограничения: runtime не запускался; DI factories не равны доказательству вызова; exhaustive imports/re-exports/строковые IDs, tests/fixtures и динамический wiring ещё не проверены. **LEGACY-AC OPEN**, полнота и отсутствие mixed runtime не доказаны. При следующем уточнении повторить `rg -n` по каждому символу и старому ID, проверить вызывающие методы и registry closure, записать exact target/disposition и evidence.
+
+
+## SP-0 — фактическая карта AS-IS (2026-11-01)
+**Статус выполнения аудита: выполнен статически; приёмка владельцем OPEN.** База `05dbca5d` + working tree. До начала уже изменён `world-generation-plan-dependency-graph.md`; этот файл аудит не меняет. Единственное изменение SP-0 — настоящий раздел owning-плана. Ни код, ни тесты, ни schema, ни регистрации не изменены. Новые архитектурные решения не приняты. Статусы остальных SP-шагов и разрешение на код не меняются.
+### 0.1. Метод и границы evidence
+Прочитаны определения и тела ключевых producer/read/materialize методов; выполнены поиски имён, call sites, строковых node IDs, HTTP routes и регистраций по `backend/app`, `backend/tests`, планам и `frontend/src`. Ниже машинно извлечены объявления и прямые import edges из AST всех Python-файлов `backend/app` без импорта модулей. Это статический caller/import inventory, а не доказательство исполнения на конкретном мире. Backend, solver и runtime не запускались; наличие теста означает только наличие сценария, не его прохождение. Динамические `context[...]`, `node_results[...]`, registry/factory связи описаны отдельно. Отрицательные результаты ограничены названным поиском; runtime closure не объявляется доказанным.
+### 0.2. Producer: legacy против native GEO
+1. **Подключённая factory:** `core/container/worldData.py:surface_planning` → `register_world_plan_providers` (`planning/composition/planProviders.py`) → `WorldPlanProviders`. Регистрация final использует `HydrologyPlan` и `HydrologyFinalPlanProvider`, routes — `HydrologyRoutesPlanProvider` с `WaterBodyPlanner`, `CoarseRiverPlanner`, `FineRiverPlanner`, `DeclaredWaterPaintProjector`. `surfacePlanningCapture` фиксирует входы, `surfacePlanningAssembler` требует refs через planning service; local climate зависит от final. Это фактический путь factory, не новый native cutover.
+2. **Native definitions:** `GeoWorldPlanProviders` типизирует `GeoHydrologyPlan`; `GeoHydrologyFinalPlanProvider` определён в том же provider-модуле. `WaterBodyPlanner.fill_fine`/fine publication → `FineWaterJob.fill`; native final publication связывает fine water, pre-water terrain, routes и river refs. Native final provider регистрируют integration/typing tests (`tests/geo1/integration/test_revisions.py`, `tests/typing/planning/valid/terrain/geoPipeline.py`). Production factory выше его не регистрирует. Не считать тестовую сборку production-активацией G10-A.
+3. `FineWaterJob.fill(window: FineSurfaceWindow, inputs: GeoHydrologyPlanInput, ..., control: PlanBuildControl) -> PlanBuildResult[FineWaterResult]` проверяет точную fine topology и `len(surface_z) == bounds.width * bounds.height`, затем применяет basin floor и `assemble_water_bodies`; даже disabled branch находится после проверки полной поверхности. `FineWaterResult = tuple[FineSurfaceWindow, AssembledWater]`, `MaterializedWater.cells` перечисляет fine факты. Это существующая цена preparation; bounded compact source ею не доказан.
+4. `NativeFinalWaterQuery` принимает два envelope и expected refs, проверяет fingerprints/dependencies/diagnostics и один раз admission coverage. `water_at(FineXY)` возвращает `KnownFact[EntityUid | None] | UnknownFact`: отсутствие строки сухо только внутри observed spans; вне — UnknownFact. Он отвечает XY identity, не XYZ volume/level/material composition; не читает Pack/Snapshot. Найденные внешние consumers — water-query и typing tests.
+5. **Точки будущего cutover, без решения о реализации:** production provider registration; тип final в bundle/working fields и downstream climate/terrain; native facts → durable domain root publisher; cold Pack reader → bounded domain facts. Сегодня последней пары в manifest/read wiring нет. Нельзя доподключить native query рядом с legacy и объявить оба production-маршрутами принятой SPATIAL архитектуры. Точные replacement/disposition принадлежат SP-1/P0/H/R0.
+### 0.3. L0/L2, materialization и потери водных фактов
+`HydrologyWorkingFields.from_plan(HydrologyPlan, SurfaceGridSettings)` строит immutable mappings coarse hydro/surface и tile indices fine z/hydro. `TerrainBatchOrchestrator.build_tile_surface_state` использует fine overrides и parent L0 hydro corridor, merge с sparse fine hydro; `fineTilePrep` готовит контекст до chunk workers. `fineChunkCompute.compute_rect` делает discover/paint, затем `generate_chunk_cells_sync` → `TerrainGeneratorService.generate_surface_chunk` → `run_column_fill`. Water metadata прикрепляется к surface cell, это не liquid volume fill над дном.
+`mapCellToFineTerrainWire` сжимает terrain/material z-runs; `FineTerrainZRun` не имеет hydrology UID/level/composition. Поэтому перенос hydrology в transient MapCell не означает сохранение canonical water в L2 blob. L0 `HydrologyMaskWire`/`WorldMapCellWire` хранит обзорные роли/поля; `WorldMapPackReader.world_map_contribution` на surface_z создаёт dict role/liquid_candidate, ниже — subsurface terrain до n_base, выше — None. Отсюда невозможно восстановить полноценный XYZ water volume.
+`regions/factConsumers/hydrology.contribute` — optional coverage consumer: `not hydro` возвращает None даже при полностью известной сухой surface. При непустом hydro отсутствующие записи считаются dry только при полном попадании context.cells в coarse_surface_z. Это конкретный negative case, не готовая обязательная gameplay error policy.
+### 0.4. Scene/API/engine — разные фактические цепочки
+- **DI:** `PacksWiring.pack_read_services(world_uid)` → `build_pack_read_services` → `MapCellQueryFacade` + `PatchStoreService`, world-map reader, region-state overlay; factory кешируется по world_uid. `MapCellService` получает read factory.
+- **Debug HTTP:** `GET /worlds/{world_uid}/map/scene-volume` (`api/routes/map.py:440`) → `MapCellService.get_scene_volume` → при Pack `gameplay.get_scene_volume_as_map_cells` → `get_scene_volume` → `get_cells` → `_layers_at` + `merge_layer_batches` → `MergedCellView.has_any_data` → `merged_view_to_map_cell` → HTTP serialization. Без Pack service идёт в repository bbox. Scene radius разворачивает все XYZ coordinates окна, загружая patches bbox одним запросом.
+- **Point/batch:** `get_cell` при отсутствии переданного patch читает SQL patch, затем merge. `get_cells` принимает уже загруженный dict координат/patches. Point caller — `PackFineTerrainReadFacade`, также debug facade; debug batch использует `get_cells`. Layers: patch, fine terrain, city structure, location terrain, L0 world map; region overlay и climate применяются после сборки. Это Pack + SQL patch merge, не pinned Snapshot read.
+- **Media loss:** `has_any_data` признаёт hydrology dict данными, поэтому hydrology-only существующий contribution не фильтруется сам по себе. Но отдельного medium slice вне клетки здесь нет: отсутствующие contributions/XYZ выше surface исчезают до фильтра; затем DTO/MapCell serialization передают только cell fields. Будущий SpatialSlice сам по себе в эти результаты не попадёт.
+- **Реальный engine:** `nodes/__init__.py` импортирует terrain nodes; `@register_python` регистрирует `check_terrain/eager_terrain/lazy_terrain/terrain_context/terrain_summary`. `core/container/engine.py` кладёт `map_cell_repo` в context. `eager_terrain.execute` читает `context[map_cell_repo].get_by_location`, сериализует `asdict`; empty при has_terrain вызывает `EagerTerrainEmptyError`. `lazy_terrain` генерирует anchor при отсутствии terrain. `terrain_context` выбирает eager/lazy cells и записывает `shared_context[terrain]`; summary/weather consumers зависят от terrain_context. Этот путь не вызывает debug scene-volume или native water query. Media без MapCell здесь отсутствуют уже на repository input.
+- **Архив/target:** `world-state-crud-ws0-freeze.md`/WS-4 SceneQuery — архивная спецификация, не действующая точка подключения. В `world-domain-patches-snapshots.md` принят прямой `DAG → domain.read(query)`, конкретные consumers/migration перечисляет `gen-dag-1-post-geo-ws.md`. Точные bounded scene Input/Output/errors и owner композиции остаются SP-R0; новый центральный SceneQuery/Facade этим аудитом не проектируется.
+### 0.5. Pack, staging, publication и registration
+`WorldPackWriter` использует `WorldPackPaths`, `TileCodec`, `PackManifestStore`, path-based blob writers и `_atomic_write`; `PackManifestStore.save` пишет temporary file и os.replace. Это атомарная замена файла, не доказательство общей staged publication всех roots. `WorldPackManifest` содержит tiles/chunks/location/settlement/region metadata; domain spatial root ArtifactRef коллекции нет.
+`ArtifactRef` уже различает BLOB/SQL_ROWS, format/version/hash/nbytes/row_count. `ArtifactFormatContract` + `ArtifactFormatRegistryBinding.register(contract, backend)` — существующая точка привязки формата к backend; resolve проверяет identity контракта, registry проверяет версии и exact content model. `IArtifactStaging` имеет open_operation/reserve/seal/finish_preparation/verify/recover/cancel/collect; storage ports и encoding manifest существуют. Ни наличие Protocol, ни canonical type registration не означают подключённый water-root publisher. Production PacksWiring выше не собирает такой publisher. **Точки root-format registration и manifest publication для Hydrology отсутствуют; exact keys/wire/fields не выбирать в SP-0.**
+`WorldPublicationRef` уже содержит world_uid/publication_id/pack_hash/snapshot_head/active_timeline_id/gameplay_started и coherence validator. PlanRef описывает provenance producer, не заменяет этот runtime binding. `IWorldSnapshotApply.apply(PatchSet[S]) -> SnapshotApplyResult` — Protocol; SQL publication stores не превращают текущий MapCellQueryFacade в Snapshot-aware reader.
+### 0.6. Solids, ores, W/L и excavation
+`TerrainGeneratorService.generate_surface` → surface pass → gap analysis → column fill. Fill выбирает surface/subsurface terrain и отдельную magma band, материализует ограниченную глубину; это не стратиграфический geology source. `generate_ores(World, list[MapCell]) -> list[MapCell]` — stub: около 3% subsurface cells, iron либо первый registry material, возвращает material-only клетки. Поиск generate_ores в backend/app нашёл только определение: действующий production caller не подтверждён; удалённый generate-ores HTTP route не восстанавливается по docstring/старой ошибке.
+W0–W3 принадлежат `hydrology-water-systems.md`: PhysicalWaterUnion/WaterSystemKind/UID helpers уже существуют; это producer identity/union facts. W1 systems POJO, W2 dynamic consumer, W3 atomic lifecycle writer нельзя объявлять готовыми по одному physical union. Dry-state/lifecycle, membership и измерения остаются owning W/L контрактами, отдельного SPATIAL writer не найдено/не предлагается.
+Поиск `excavat|digging|terrain_delta` по backend/app обнаружил AccessMechanic.EXCAVATION и MapCellPatchLayerKind.TERRAIN_DELTA; найденная enum-константа не является excavation orchestrator. MapCellService.save_pass/PatchStoreService — текущая patch boundary, field-wise merge не доказывает geometry invalidation или материализацию обнажённых стен/пола/потолка. Исполняемый excavation → geology rematerialization caller этим аудитом не подтверждён. Не объявлять будущий PHYSICS/SP-G путь существующим. Air policy inventory отдельно SP-A0; существующий WorldEnvironmentSettings повторно не проектируется.
+### 0.7. Решения, оставленные OPEN
+SP-1: exact window/result/revision/errors и reuse spatial types; SP-H: compact water preparation/coverage/cost и river volumes; SP-P0: root format/version/key и publisher contract; SP-M/G: composition/lifetime/materialization и solid/void после geometry patch; SP-R0: typed scene consumer и миграция engine repository path; SP-A0: фактическая ambient policy. Для каждого legacy entry ниже disposition пока **сохранить AS-IS; replacement/перенос/удаление не согласованы**. Наличие кандидата reuse не утверждает его target signature. Для SP-0 новые типы/пути/import migrations отсутствуют, file counts после равны текущим. Будущие additions OPEN и требуют пересчёта после freeze. LEGACY-AC и ARCH-ACCEPTED этим статическим аудитом не закрываются.
+### 0.8. Каталоги: непосредственные файлы, включая __init__.py
+- `backend/app/application/artifacts/contracts`: **4 → 4**.
+- `backend/app/application/artifacts/registry`: **2 → 2**.
+- `backend/app/application/worldData/generators/hydrology/materialize`: **2 → 2**.
+- `backend/app/application/worldData/generators/hydrology/planning`: **2 → 2**.
+- `backend/app/application/worldData/generators/hydrology/query`: **1 → 1**.
+- `backend/app/application/worldData/mapCells`: **6 → 6**; >5 WARN, композиция по ответственностям при проектировании.
+- `backend/app/application/worldData/pack/io`: **11 → 11**; >10, новые файлы запрещены до согласованной композиции.
+- `backend/app/application/worldData/pack/read`: **22 → 22**; >10, новые файлы запрещены до согласованной композиции.
+- `backend/app/application/worldData/pack/refine/fine/chunk`: **5 → 5**.
+- `backend/app/application/worldData/pack/refine/fine/prep`: **3 → 3**.
+- `backend/app/application/worldSnapshot/contracts`: **4 → 4**.
+- `backend/app/dataModel/artifacts`: **3 → 3**.
+- `backend/app/dataModel/hydrology/planning`: **3 → 3**.
+- `backend/app/dataModel/hydrology/planning/stages`: **3 → 3**.
+- `backend/app/dataModel/materials`: **4 → 4**.
+- `backend/app/dataModel/planning/contracts`: **5 → 5**.
+- `backend/app/dataModel/planning/identity`: **4 → 4**.
+- `backend/app/dataModel/spatial`: **3 → 3**.
+- `backend/app/dataModel/spatial/grid`: **6 → 6**; >5 WARN, композиция по ответственностям при проектировании.
+- `backend/app/dataModel/terrain/regions`: **5 → 5**.
+- `backend/app/dataModel/terrain/sampling`: **2 → 2**.
+- `backend/app/dataModel/topology`: **6 → 6**; >5 WARN, композиция по ответственностям при проектировании.
+- `backend/app/dataModel/worldPack/meta`: **7 → 7**; >5 WARN, композиция по ответственностям при проектировании.
+- `backend/app/dataModel/worldPack/wire`: **18 → 18**; >10, новые файлы запрещены до согласованной композиции.
+- `backend/app/dataModel/worldSnapshot/identity`: **3 → 3**.
+
+### 0.9. Существующие declarations и прямые import edges
+Ссылки ведут на исходный файл, поля/defaults/сигнатуры извлечены из AST текущего дерева. Validators перечислены как методы; точные тела проверок остаются в linked source, никакая новая семантика им не приписывается. Importer — прямой статический import модуля, не утверждение вызова каждого символа. Полный runtime порядок приведён выше. Owner/layer следует существующему пути: dataModel — значения/контракты домена, application — операции/ports; переносы не выбраны.
+
+#### `backend/app/application/artifacts/contracts/formatBackend.py`
+
+[Исходник](../../backend/app/application/artifacts/contracts/formatBackend.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class ArtifactFormatContract()
+ArtifactFormatContract.key: ArtifactFormatKey
+ArtifactFormatContract.kind: ArtifactKind
+ArtifactFormatContract.supported_versions: frozenset[FormatVersion]
+ArtifactFormatContract.content_model: type[C]
+ArtifactFormatContract.encode: Callable[[C], bytes]
+ArtifactFormatContract.decode: Callable[[bytes, FormatVersion], C]
+ArtifactFormatContract.__post_init__(self) -> None
+class ArtifactBackend(ABC)
+ArtifactBackend.contract(self) -> ArtifactFormatContract[C]
+async ArtifactBackend.write(self, reservation: StagingReservation, content: C) -> None
+async ArtifactBackend.verify(self, ref: ArtifactRef) -> None
+async ArtifactBackend.delete(self, ref: ArtifactRef) -> None
+```
+Прямые importers: `backend/app/application/artifacts/registry/artifactRegistry.py`.
+
+#### `backend/app/application/artifacts/contracts/stagingPort.py`
+
+[Исходник](../../backend/app/application/artifacts/contracts/stagingPort.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class IArtifactStaging(Protocol)
+async IArtifactStaging.open_operation(self, operation_id: EntityUid, world_uid: EntityUid, kind: OperationKind, preparation_fingerprint: RevisionHex) -> OperationLeaseRef
+async IArtifactStaging.reserve(self, lease: OperationLeaseRef, descriptor: ArtifactRef) -> StagingReservation
+async IArtifactStaging.seal(self, reservation: StagingReservation) -> ArtifactRef
+async IArtifactStaging.finish_preparation(self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]) -> OperationRecord
+async IArtifactStaging.verify(self, ref: ArtifactRef, holder: ArtifactHolderRef) -> VerifiedArtifactRef
+async IArtifactStaging.recover(self, operation_id: EntityUid) -> OperationRecord
+async IArtifactStaging.cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord
+async IArtifactStaging.collect(self, operation_id: EntityUid, candidates: tuple[ArtifactRef, ...]) -> GcReport
+```
+Прямые importers: не найдены в backend/app (definition/test-only или import через другую форму требует caller evidence выше).
+
+#### `backend/app/application/artifacts/registry/artifactRegistry.py`
+
+[Исходник](../../backend/app/application/artifacts/registry/artifactRegistry.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class ArtifactFormatRegistryBinding()
+ArtifactFormatRegistryBinding.__init__(self) -> None
+ArtifactFormatRegistryBinding.register(self, contract: ArtifactFormatContract[C], backend: ArtifactBackend[C]) -> None
+ArtifactFormatRegistryBinding.resolve(self, contract: ArtifactFormatContract[C]) -> ArtifactBackend[C]
+ArtifactFormatRegistryBinding.metadata(self, key: ArtifactFormatKey) -> ArtifactFormatMetadata
+ArtifactFormatRegistryBinding.encode(self, contract: ArtifactFormatContract[C], content: C) -> bytes
+ArtifactFormatRegistryBinding.decode(self, contract: ArtifactFormatContract[C], payload: bytes, version: FormatVersion) -> C
+async ArtifactFormatRegistryBinding.verify(self, ref: ArtifactRef) -> None
+async ArtifactFormatRegistryBinding.delete(self, ref: ArtifactRef) -> None
+```
+Прямые importers: не найдены в backend/app (definition/test-only или import через другую форму требует caller evidence выше).
+
+#### `backend/app/application/worldData/generators/hydrology/materialize/hydrologyWorkingFields.py`
+
+[Исходник](../../backend/app/application/worldData/generators/hydrology/materialize/hydrologyWorkingFields.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class HydrologyWorkingFields()
+HydrologyWorkingFields.coarse_hydro: Mapping[Coord, MapCellHydrology]
+HydrologyWorkingFields.coarse_surface_z: Mapping[Coord, int]
+HydrologyWorkingFields.fine_z_overrides: Mapping[Coord, int]
+HydrologyWorkingFields.sparse_fine_hydro: Mapping[Coord, MapCellHydrology]
+HydrologyWorkingFields._fine_z: Mapping[Coord, Mapping[Coord, int]] = field(repr=False)
+HydrologyWorkingFields._fine_hydro: Mapping[Coord, Mapping[Coord, MapCellHydrology]] = field(repr=False)
+HydrologyWorkingFields._empty_z: Mapping[Coord, int] = field(repr=False)
+HydrologyWorkingFields._empty_hydro: Mapping[Coord, MapCellHydrology] = field(repr=False)
+HydrologyWorkingFields.from_plan(cls, plan: HydrologyPlan, grid: SurfaceGridSettings) -> Self
+HydrologyWorkingFields.fine_z_for_tile(self, gx: GridX, gy: GridY) -> Mapping[Coord, int]
+HydrologyWorkingFields.fine_hydro_for_tile(self, gx: GridX, gy: GridY) -> Mapping[Coord, MapCellHydrology]
+```
+Прямые importers: `backend/app/application/worldData/regions/factConsumers/context.py`; `backend/app/application/worldData/regions/inputs/landcoverInputs.py`; `backend/app/application/worldData/planning/composition/surfacePlanningEntry.py`; `backend/app/application/worldData/planning/contracts/surfaceWorkingMaps.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoating/sources.py`.
+
+#### `backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py`
+
+[Исходник](../../backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class HydrologyRoutesPlanProvider()
+HydrologyRoutesPlanProvider.__init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan], water_placement: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan], assembler: HydrologyRoutesAssembler) -> None
+HydrologyRoutesPlanProvider.build(self, request: PlanRequest[HydrologyPlanInput], dependencies: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[HydrologyRoutesPlan]
+class GeoHydrologyRoutesPlanProvider()
+GeoHydrologyRoutesPlanProvider.__init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan], water_placement: RegisteredPlanContract[GeoWaterPlacementInput, GeoWaterPlacementPlan], assembler: HydrologyRoutesAssembler, policy: PolicyResolver) -> None
+GeoHydrologyRoutesPlanProvider.build(self, request: PlanRequest[GeoHydrologyPlanInput], dependencies: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[GeoHydrologyRoutesPlan]
+class HydrologyFinalPlanProvider()
+HydrologyFinalPlanProvider.__init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan], hydrology_routes: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan], river_relief: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan], assembler: HydrologyFactsAssembler) -> None
+HydrologyFinalPlanProvider.build(self, request: PlanRequest[HydrologyFinalInput], dependencies: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[HydrologyPlan]
+class GeoHydrologyFinalPlanProvider()
+GeoHydrologyFinalPlanProvider.__init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan], hydrology_routes: RegisteredPlanContract[GeoHydrologyPlanInput, GeoHydrologyRoutesPlan], river_relief: RegisteredPlanContract[RiverReliefInput, RiverReliefPlan], water_placement: RegisteredPlanContract[GeoWaterPlacementInput, GeoWaterPlacementPlan], assembler: HydrologyFactsAssembler) -> None
+GeoHydrologyFinalPlanProvider.build(self, request: PlanRequest[HydrologyFinalInput], dependencies: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[GeoHydrologyPlan]
+```
+Прямые importers: `backend/app/application/worldData/planning/composition/planProviders.py`.
+
+#### `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py`
+
+[Исходник](../../backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class NativeFinalWaterQuery()
+NativeFinalWaterQuery.__init__(self, final: PlanEnvelope[GeoHydrologyPlan], water: PlanEnvelope[FineWaterResult], *, expected_final: PlanRef, expected_water: PlanRef, control: PlanBuildControl) -> None
+NativeFinalWaterQuery.water_at(self, cell: FineXY) -> KnownFact[EntityUid | None] | UnknownFact
+```
+Прямые importers: не найдены в backend/app (definition/test-only или import через другую форму требует caller evidence выше).
+
+#### `backend/app/application/worldData/mapCells/mapCellQueryFacade.py`
+
+[Исходник](../../backend/app/application/worldData/mapCells/mapCellQueryFacade.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class MapCellQueryFacade()
+MapCellQueryFacade.__init__(self, context: PackReadContext, patch_store: PatchStoreService, world_map_reader: WorldMapPackReader, *, city_raster: SettlementStructureRaster | None=None, region_state_repo: IRegionStateRepository | None=None) -> None
+MapCellQueryFacade.has_pack(self) -> bool
+MapCellQueryFacade.has_pack_for(self, world: World) -> bool
+async MapCellQueryFacade.get_cell(self, world: World, x: int, y: int, z: int, *, patch: CellContribution | None=None) -> MergedCellView
+async MapCellQueryFacade.merge_layer_batches(self, world: World, cells: CellLayers) -> list[MergedCellView]
+async MapCellQueryFacade.get_cells(self, world: World, patches: dict[tuple[int, int, int], CellContribution | None]) -> list[MergedCellView]
+async MapCellQueryFacade.get_scene_volume(self, world: World, x: int, y: int, z: int, *, xy_radius: int=SceneVolumePolicy.canonical_defaults().scene_xy_radius, z_below: int | None=None, z_above: int=SceneVolumePolicy.canonical_defaults().scene_z_above) -> list[MergedCellView]
+async MapCellQueryFacade.get_scene_volume_as_map_cells(self, world: World, x: int, y: int, z: int, **kwargs) -> list[MapCell]
+MapCellQueryFacade.invalidate_city_structure(self) -> None
+async MapCellQueryFacade.get_footprint_terrain(self, world: World, *, x0: int, y0: int, x1: int, y1: int, location_uid: str | None=None) -> list[MapCell]
+```
+Прямые importers: `backend/app/core/container/packs.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorOrchestrator.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorTopologyJob.py`; `backend/app/application/worldData/pack/read/packDebugReadFacade.py`; `backend/app/application/worldData/pack/read/packFineTerrainReadFacade.py`; `backend/app/application/worldData/pack/read/packReadServices.py`.
+
+#### `backend/app/application/worldData/mapCells/mapCellService.py`
+
+[Исходник](../../backend/app/application/worldData/mapCells/mapCellService.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class MapCellReadServiceFactory(Protocol)
+class MapCellService()
+MapCellService.__init__(self, repo: IMapCellRepository, *, read_service_factory: MapCellReadServiceFactory | None=None) -> None
+async MapCellService.bulk_persist_session(self) -> (не аннотирован)
+async MapCellService.has_world_cells(self, world_uid: str) -> bool
+MapCellService.uses_pack_read(self, world: World) -> bool
+MapCellService.pack_read_services(self, world: World) -> PackReadServices | None
+async MapCellService.get_all_for_read(self, world: World) -> list[MapCell]
+async MapCellService.get_tile_cells_for_read(self, world: World, gx: int, gy: int) -> list[MapCell]
+async MapCellService.export_for_debug(self, world: World) -> dict
+MapCellService.world_map_tile_coords(self, world: World) -> list[tuple[int, int]]
+async MapCellService.get_all(self, world_uid: str) -> list[MapCell]
+async MapCellService.export(self, world_uid: str) -> list[dict]
+async MapCellService.import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult
+async MapCellService.clear(self, world_uid: str) -> None
+async MapCellService.get_location_uids_with_cells(self, world_uid: str) -> frozenset[str]
+async MapCellService.has_column_cells(self, world_uid: str, x: int, y: int, *, world: World | None=None) -> bool
+async MapCellService.get_z_slice_for_read(self, world: World, x_min: int, x_max: int, y_min: int, y_max: int, z_min: int, z_max: int) -> list[MapCell]
+MapCellService.reject_legacy_generate_on_pack(self, world: World) -> None
+async MapCellService.get_scene_volume(self, world: World, x: int, y: int, z: int, *, xy_radius: int=SceneVolumePolicy.canonical_defaults().scene_xy_radius, z_below: int | None=None, z_above: int=SceneVolumePolicy.canonical_defaults().scene_z_above) -> list[MapCell]
+async MapCellService.save_generated(self, cells: list[MapCell]) -> ImportResult
+async MapCellService.save_settlement_surface(self, cells: list[MapCell]) -> ImportResult
+async MapCellService.save_pass(self, cells: list[MapCell], layer: LayerKind, *, insert_only: bool=False) -> ImportResult
+async MapCellService.get_z_slice(self, world_uid: str, x_min: int, x_max: int, y_min: int, y_max: int, z_min: int, z_max: int) -> list[MapCell]
+```
+Прямые importers: `backend/app/core/container/worldData.py`; `backend/app/application/worldData/persist/settlementPersistService.py`; `backend/app/application/worldData/render/legacyMapGridRender.py`; `backend/app/application/worldData/render/mapGridRenderService.py`; `backend/app/application/worldData/materialize/climate/climateBatchOrchestrator.py`; `backend/app/application/worldData/materialize/shared/serialPersistQueue.py`.
+
+#### `backend/app/application/worldData/pack/io/worldPackWriter.py`
+
+[Исходник](../../backend/app/application/worldData/pack/io/worldPackWriter.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class WorldPackWriter()
+WorldPackWriter.__init__(self, paths: WorldPackPaths, *, manifest: WorldPackManifest | None=None, codec: TileCodec | None=None, store: PackManifestStore | None=None, bake_defaults: PackBakeDefaults | None=None, parent_light_cache: ParentLightCache | None=None) -> None
+WorldPackWriter.manifest(self) -> WorldPackManifest
+WorldPackWriter.paths(self) -> WorldPackPaths
+WorldPackWriter.parent_light_cache(self) -> ParentLightCache
+WorldPackWriter.bake_defaults(self) -> PackBakeDefaults
+WorldPackWriter.sync_world_metadata(self, world: World, *, cells_per_side: int) -> None
+WorldPackWriter.write_world_map_tile(self, gx: int, gy: int, cells: list[WorldMapCellWire], *, cells_per_side: int) -> str
+WorldPackWriter.write_wilderness_chunk(self, gx: int, gy: int, chunk: FineTerrainChunkWire, *, refine_role: ChunkRefineRole='background') -> str
+WorldPackWriter.merge_grade_cell_slots_tile(self, gx: int, gy: int, cells) -> None
+WorldPackWriter.merge_grade_cell_slots_location(self, location_uid: str, cells) -> None
+WorldPackWriter.write_location_terrain(self, location_uid: str, columns: FineTerrainChunkWire, *, territory_volume) -> str
+WorldPackWriter.encode_settlement_structure_tmp(self, location_uid: str, wire: SettlementStructureWire, *, registry: WorldTransitionTypeRegistry | None=None) -> SettlementStructureTmpRef
+WorldPackWriter.publish_settlement_structure(self, tmp: SettlementStructureTmpRef, *, territory_volume, packed_district_uids: list[str] | None=None, structure_status: SettlementStructureStatus | None=None) -> str
+WorldPackWriter.has_published_settlement(self, location_uid: str) -> bool
+WorldPackWriter.load_settlement_structure_tmp(self, location_uid: str) -> SettlementStructureTmpRef | None
+WorldPackWriter.settlement_structure_tmp_path(self, location_uid: str) -> (не аннотирован)
+WorldPackWriter.write_climate_coarse(self, field: ClimateFieldWire) -> str
+WorldPackWriter.write_climate_tile(self, gx: int, gy: int, field: ClimateFieldWire) -> str
+WorldPackWriter.write_locations_index(self, index: LocationsIndexWire) -> Path
+WorldPackWriter.commit_chunk(self, gx: int, gy: int, cx: int, cy: int, *, content_hash: str | None=None, nbytes: int | None=None, refine_role: ChunkRefineRole | None=None) -> None
+WorldPackWriter.recalc_wilderness_status(self, gx: int, gy: int, *, expected_chunks: int | None=None) -> WildernessRefineStatus
+WorldPackWriter.recalc_manifest_counters(self) -> None
+WorldPackWriter.save_manifest(self) -> None
+WorldPackWriter.pack_storage_path(self, *, db_path: str | None=None, existing: str | None=None) -> str
+```
+Прямые importers: `backend/app/core/container/packs.py`; `backend/app/application/worldData/pack/__init__.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorOrchestrator.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorSkip.py`; `backend/app/application/worldData/pack/climate/climatePackBakeOrchestrator.py`; `backend/app/application/worldData/pack/refine/gridNeighborHalo.py`; `backend/app/application/worldData/pack/refine/chunks/chunkRefineWorker.py`; `backend/app/application/worldData/pack/refine/entry/entryRefineOrchestrator.py`; `backend/app/application/worldData/pack/refine/fine/fineRectDrain.py`; `backend/app/application/worldData/pack/refine/fine/fineScenePathRefine.py`; `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkPersist.py`; `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkRunner.py`; `backend/app/application/worldData/pack/refine/fine/prep/fineTilePrep.py`; `backend/app/application/worldData/pack/bake/detailed/detailedBakeRefine.py`; `backend/app/application/worldData/pack/bake/detailed/detailedBakeScope.py`; `backend/app/application/worldData/pack/bake/detailed/packDetailedBakeOrchestrator.py`; `backend/app/application/worldData/pack/bake/finalize/packBakeFinalize.py`; `backend/app/application/worldData/pack/bake/finalize/packBakePublisher.py`; `backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py`; `backend/app/application/worldData/pack/bake/l0/worldMapBakeOrchestrator.py`.
+
+#### `backend/app/application/worldData/pack/read/mapCellToFineTerrainWire.py`
+
+[Исходник](../../backend/app/application/worldData/pack/read/mapCellToFineTerrainWire.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+cells_to_fine_terrain_chunk(cx: int, cy: int, chunk_columns: int, origin_x: int, origin_y: int, cells: list[MapCell], region_uid_by_xy: dict[tuple[int, int], str] | None=None) -> FineTerrainChunkWire
+```
+Прямые importers: `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkPersist.py`.
+
+#### `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkCompute.py`
+
+[Исходник](../../backend/app/application/worldData/pack/refine/fine/chunk/fineChunkCompute.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+rect_heightmap_from_overlay(heightmap: SurfaceHeightmap, overlay: dict[Coord, int], rect: ColumnRect) -> SurfaceHeightmap
+compute_rect(terrain: TerrainBatchOrchestrator, ctx: FineTileContext, pair: tuple[int, ColumnRect]) -> ChunkComputeResult
+```
+Прямые importers: `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkRunner.py`.
+
+#### `backend/app/application/worldData/pack/refine/fine/prep/fineTilePrep.py`
+
+[Исходник](../../backend/app/application/worldData/pack/refine/fine/prep/fineTilePrep.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+prepare_fine_tile(terrain: TerrainBatchOrchestrator, world: World, locations: list[NamedLocation], writer: WorldPackWriter, mat_ctx: MaterializationContext, surface_bundle: SurfacePlanBundle, tile_gx: int, tile_gy: int, rects: list[ColumnRect], volumes: list[TerritoryVolume], *, refine_role: ChunkRefineRole='scene', phase: str | None=None, relief_templates_by_uid: dict[str, ReliefTemplate] | None=None, stages: GradePipelineStages | None=None, region_state_snapshot: Mapping[str, StateSnapshotEntry], working: SurfaceWorkingMaps) -> FineTileContext
+existing_grade_uids_from_pack(writer: WorldPackWriter, reader: WorldPackReader, tile_gx: int, tile_gy: int, fine_bbox: ColumnRect, chunk_size: int) -> dict[tuple[int, int], str]
+```
+Прямые importers: `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkRunner.py`.
+
+#### `backend/app/application/worldSnapshot/contracts/applyPort.py`
+
+[Исходник](../../backend/app/application/worldSnapshot/contracts/applyPort.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class IWorldSnapshotApply(Protocol)
+async IWorldSnapshotApply.apply(self, patch_set: PatchSet[S]) -> SnapshotApplyResult
+```
+Прямые importers: не найдены в backend/app (definition/test-only или import через другую форму требует caller evidence выше).
+
+#### `backend/app/dataModel/artifacts/references.py`
+
+[Исходник](../../backend/app/dataModel/artifacts/references.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class ArtifactKind(StrEnum)
+class ArtifactFormatRegistry(BaseModel)
+ArtifactFormatRegistry.entries: tuple[ArtifactFormatMetadata, ...]
+ArtifactFormatRegistry.unique_keys(self) -> Self
+type ArtifactFormatKey = RegistryKey[ArtifactFormatRegistry]
+class ArtifactFormatMetadata(BaseModel)
+ArtifactFormatMetadata.key: ArtifactFormatKey
+ArtifactFormatMetadata.supported_versions: frozenset[FormatVersion] = Field(min_length=1)
+class ArtifactRef(BaseModel)
+ArtifactRef.kind: ArtifactKind
+ArtifactRef.format_key: ArtifactFormatKey
+ArtifactRef.format_version: FormatVersion
+ArtifactRef.content_hash: RevisionHex
+ArtifactRef.nbytes: Annotated[StrictInt, Field(ge=0)]
+ArtifactRef.row_count: Annotated[StrictInt, Field(ge=0)] | None = None
+ArtifactRef.representation_fields(self) -> Self
+```
+Прямые importers: `backend/app/db/repositories/sqlite/snapshotCore/operations/operationStore.py`; `backend/app/dataModel/worldSnapshot/metadata/envelope.py`; `backend/app/dataModel/worldSnapshot/results/publication.py`; `backend/app/dataModel/patch/changes/header.py`; `backend/app/dataModel/patch/preconditions/runtime.py`; `backend/app/dataModel/patch/results/sectionResult.py`; `backend/app/dataModel/artifacts/lifecycle/gc.py`; `backend/app/dataModel/artifacts/lifecycle/holders.py`; `backend/app/dataModel/artifacts/lifecycle/lease.py`; `backend/app/dataModel/artifacts/lifecycle/operation/record.py`; `backend/app/application/artifacts/contracts/formatBackend.py`; `backend/app/application/artifacts/contracts/holderPort.py`; `backend/app/application/artifacts/contracts/stagingPort.py`; `backend/app/application/artifacts/encoding/coreManifest.py`; `backend/app/application/artifacts/registry/artifactRegistry.py`; `backend/app/application/artifacts/storage/artifactCatalog.py`; `backend/app/application/artifacts/storage/artifactLeases.py`.
+
+#### `backend/app/dataModel/hydrology/planning/hydrologyPlan.py`
+
+[Исходник](../../backend/app/dataModel/hydrology/planning/hydrologyPlan.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class LakePaint(BaseModel)
+LakePaint.location_uid: EntityUid | None
+LakePaint.shoreline_segments: tuple[tuple[FineXY, FineXY], ...]
+class CoastlinePaint(BaseModel)
+CoastlinePaint.location_uid: EntityUid | None
+CoastlinePaint.segments: tuple[tuple[FineXY, FineXY], ...]
+class SegmentRiverPaint(BaseModel)
+SegmentRiverPaint.edge_uid: EntityUid
+SegmentRiverPaint.location_uid: EntityUid | None
+SegmentRiverPaint.segment: tuple[FineXY, FineXY]
+SegmentRiverPaint.width_fine: FineDelta = Field(strict=True, gt=0)
+class IntentRiverPaint(BaseModel)
+IntentRiverPaint.river_uid: EntityUid
+IntentRiverPaint.path: tuple[FineXY, ...] = Field(min_length=2)
+IntentRiverPaint.width_wire: StrictInt
+IntentRiverPaint.valid_wire_width(cls, value: int) -> int
+class DeclaredWaterPaint(BaseModel)
+DeclaredWaterPaint.lakes: tuple[LakePaint, ...]
+DeclaredWaterPaint.coastlines: tuple[CoastlinePaint, ...]
+DeclaredWaterPaint.segments: tuple[SegmentRiverPaint, ...]
+DeclaredWaterPaint.intents: tuple[IntentRiverPaint, ...]
+class RiverPathSegment(BaseModel, Generic[S])
+RiverPathSegment.path: tuple[S, ...] = Field(min_length=1)
+RiverPathSegment.connection_type: HydrologyConnectionType
+RiverPathSegment.edge_uid: EntityUid | None
+RiverPathSegment.location_uid: EntityUid | None
+RiverPathSegment.declared: StrictBool
+RiverPathSegment.river_connection(self) -> Self
+class RiverRoute(BaseModel, Generic[S])
+RiverRoute.river_uid: EntityUid
+RiverRoute.segments: tuple[RiverPathSegment[S], ...] = Field(min_length=1)
+RiverRoute.receiver_cell: S
+RiverRoute.drainage: RiverDrainageLink
+RiverRoute.confirmed_receiver(self) -> Self
+require_map(rows: tuple[tuple[K, V], ...], order: Callable[[K], tuple[int, ...]]) -> None
+coarse_order(cell: SurfaceGridCoord) -> tuple[int, ...]
+fine_order(cell: FineXY) -> tuple[int, ...]
+require_unique_water(bodies: tuple[WaterBody, ...], unions: tuple[PhysicalWaterUnion, ...]) -> set[str]
+require_rooted_links(links: dict[str, str], roots: set[str]) -> None
+class HydrologyRoutesPlan(BaseModel)
+HydrologyRoutesPlan.coarse_open_water: tuple[tuple[SurfaceGridCoord, MapCellHydrology], ...]
+HydrologyRoutesPlan.water_bodies: tuple[WaterBody, ...]
+HydrologyRoutesPlan.physical_unions: tuple[PhysicalWaterUnion, ...]
+HydrologyRoutesPlan.coarse_routes: tuple[RiverRoute[SurfaceGridCoord], ...]
+HydrologyRoutesPlan.fine_routes: tuple[RiverRoute[FineXY], ...]
+HydrologyRoutesPlan.fine_base_surface_z: tuple[tuple[FineXY, FineZ], ...]
+HydrologyRoutesPlan.declared_paint: DeclaredWaterPaint
+HydrologyRoutesPlan.proven_routes(self) -> Self
+class HydrologyPlan(BaseModel)
+HydrologyPlan.coarse_surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...]
+HydrologyPlan.coarse_hydro: tuple[tuple[SurfaceGridCoord, MapCellHydrology], ...]
+HydrologyPlan.sparse_fine_hydro: tuple[tuple[FineXY, MapCellHydrology], ...]
+HydrologyPlan.fine_z_overrides: tuple[tuple[FineXY, FineZ], ...]
+HydrologyPlan.water_bodies: tuple[WaterBody, ...]
+HydrologyPlan.physical_unions: tuple[PhysicalWaterUnion, ...]
+HydrologyPlan.declared_paint: DeclaredWaterPaint
+HydrologyPlan.consistent_facts(self) -> Self
+class GeoHydrologyPlan(HydrologyPlan)
+GeoHydrologyPlan.source_mapping: SourceBodyMapping
+GeoHydrologyPlan.classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]
+GeoHydrologyPlan.consistent_geo_facts(self) -> Self
+class GeoHydrologyRoutesPlan(BaseModel)
+GeoHydrologyRoutesPlan.base: HydrologyRoutesPlan
+GeoHydrologyRoutesPlan.source_mapping: SourceBodyMapping
+GeoHydrologyRoutesPlan.classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]
+GeoHydrologyRoutesPlan.coherent_sources(self) -> Self
+```
+Прямые importers: `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/dataModel/hydrology/policy/hydrologyPlacementPolicy.py`; `backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py`; `backend/app/dataModel/hydrology/planning/stages/riverRoutePlans.py`; `backend/app/application/worldData/planning/composition/planProviders.py`; `backend/app/application/worldData/planning/contracts/surfacePlanBundle.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/placement/adapters/coastline/attachedCoastline.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/hydro/declaredBasins.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/hydro/declaredRivers.py`; `backend/app/application/worldData/generators/climate/localFieldFromCoarse.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py`; `backend/app/application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py`; `backend/app/application/worldData/generators/terrain/relief/planning/riverReliefPlanner.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoating/sources.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/beds.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/execution.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/publication.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryGeometry.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryPlanner.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryPreparation.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryResult.py`; `backend/app/application/worldData/generators/hydrology/materialize/hydrologyWorkingFields.py`; `backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py`; `backend/app/application/worldData/generators/hydrology/policy/hydrologyPlacementBinding.py`; `backend/app/application/worldData/generators/hydrology/policy/hydrologyPolicyFacts.py`; `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/proposals.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyRoutesAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/nativeRoutesPublication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/nativeFacts.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/publication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/riverFacts.py`; `backend/app/application/worldData/generators/hydrology/load/paint/declaredWaterPaintProjector.py`; `backend/app/application/worldData/generators/climate/planning/climatePlanProvider.py`.
+
+#### `backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py`
+
+[Исходник](../../backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class OpenWaterPlan(BaseModel)
+OpenWaterPlan.coarse_open_water: tuple[tuple[SurfaceGridCoord, MapCellHydrology], ...]
+OpenWaterPlan.water_bodies: tuple[WaterBody, ...]
+OpenWaterPlan.physical_unions: tuple[PhysicalWaterUnion, ...]
+OpenWaterPlan.source_mapping: SourceBodyMapping
+OpenWaterPlan.consistent_water(self) -> Self
+class MaterializedWater()
+MaterializedWater.cells: tuple[tuple[Coord, MapCellHydrology], ...]
+MaterializedWater.bodies: tuple[WaterBody, ...]
+MaterializedWater.area_rows: tuple[tuple[str, int], ...]
+MaterializedWater.floor_rows: tuple[tuple[str, int], ...]
+MaterializedWater.uid_aliases: tuple[tuple[str, str], ...]
+MaterializedWater.source_mapping: SourceBodyMapping
+MaterializedWater.__post_init__(self) -> None
+class AssembledWater()
+AssembledWater.materialized: MaterializedWater
+AssembledWater.physical_unions: tuple[PhysicalWaterUnion, ...]
+AssembledWater.__post_init__(self) -> None
+type FineWaterResult = tuple[FineSurfaceWindow, AssembledWater]
+```
+Прямые importers: `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/generators/terrain/relief/planning/riverReliefPlanner.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/execution.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/publication.py`; `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py`; `backend/app/application/worldData/generators/hydrology/water/waterMaterialize.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterAssemblyResult.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/projection.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarseRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fineRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyRoutesAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/nativeFacts.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/publication.py`.
+
+#### `backend/app/dataModel/materials/materialRegistryEntry.py`
+
+[Исходник](../../backend/app/dataModel/materials/materialRegistryEntry.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class MaterialRegistryEntry(BaseModel)
+MaterialRegistryEntry.system_material: StrictOnWire[RegistryKey[WorldMaterialRegistry]]
+MaterialRegistryEntry.display_name: StrictOnWire[str]
+MaterialRegistryEntry.glossary_ref: DefaultWhenMissing[str | None] = None
+MaterialRegistryEntry.material_category: StrictEnumOnWire[MaterialCategory]
+MaterialRegistryEntry.substrate_kind: DefaultWhenMissing[StrictEnumOnWire[MaterialSubstrateKind] | None] = None
+MaterialRegistryEntry.tags: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+MaterialRegistryEntry.use_type: DefaultWhenMissing[list[str]] = Field(default_factory=list)
+MaterialRegistryEntry.economic_tier: DefaultWhenMissing[EconomyTierKey | None] = None
+MaterialRegistryEntry.hardness: DefaultWhenMissing[Annotated[int, Field(ge=HARDNESS_MIN, le=HARDNESS_MAX)] | None] = constrained_field(default=None)
+MaterialRegistryEntry.density: DefaultWhenMissing[Annotated[int, Field(ge=1)] | None] = constrained_field(default=None)
+MaterialRegistryEntry.heat_conductivity: DefaultWhenMissing[float] = constrained_field(default=0.1, greater_equals=0.0, lesser_equals=1.0)
+MaterialRegistryEntry.viscosity: DefaultWhenMissing[Annotated[float, Field(ge=0.0, le=1.0)] | None] = constrained_field(default=None)
+MaterialRegistryEntry.heat_into: DefaultWhenMissing[str | None] = None
+MaterialRegistryEntry.heat_temp: DefaultWhenMissing[int | None] = None
+MaterialRegistryEntry.cool_into: DefaultWhenMissing[str | None] = None
+MaterialRegistryEntry.cool_temp: DefaultWhenMissing[int | None] = None
+MaterialRegistryEntry.structural_strength: DefaultWhenMissing[Annotated[float, Field(ge=0.0, le=1.0)] | None] = constrained_field(default=None)
+MaterialRegistryEntry.flammable: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.freezable: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.corrodible: DefaultWhenMissing[bool] = True
+MaterialRegistryEntry.meltable: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.mineable: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.transparent: DefaultWhenMissing[float] = constrained_field(default=0.0, greater_equals=0.0, lesser_equals=100.0, strict=True, allow_inf_nan=False)
+MaterialRegistryEntry.breakable: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.temp_damage: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.vision_block: DefaultWhenMissing[bool] = False
+MaterialRegistryEntry.components: DefaultWhenMissing[list[str] | None] = None
+```
+Прямые importers: `backend/app/dataModel/materials/worldMaterialRegistry.py`; `backend/app/dataModel/materials/__init__.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/generators/climate/precipitation.py`; `backend/app/application/worldData/generators/utils/materialResolver.py`.
+
+#### `backend/app/dataModel/planning/contracts/planDependency.py`
+
+[Исходник](../../backend/app/dataModel/planning/contracts/planDependency.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class PlanDependency(BaseModel)
+PlanDependency.slot: PlanSlot = Field(strict=True, min_length=1)
+PlanDependency.ref: PlanRef
+class PlanDependencyContract(BaseModel)
+PlanDependencyContract.slot: PlanSlot = Field(strict=True, min_length=1)
+PlanDependencyContract.contract_id: PlanContractId
+PlanDependencyContract.schema_version: SchemaVersion = Field(strict=True, gt=0)
+PlanDependencyContract.algorithm_version: AlgorithmVersion = Field(strict=True, gt=0)
+PlanDependencyContract.accepts(self, dependency: PlanDependency) -> bool
+require_canonical_dependencies(dependencies: tuple[PlanDependency, ...]) -> tuple[PlanDependency, ...]
+```
+Прямые importers: `backend/app/dataModel/surfacePlanning/surfacePlanBindings.py`; `backend/app/dataModel/planning/contracts/planEnvelope.py`; `backend/app/dataModel/planning/contracts/planRequest.py`; `backend/app/application/worldData/planning/composition/planProviders.py`; `backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/planning/composition/natural/preparedTerrain.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/publication.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainWindowJob.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/nativeRoutesPublication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/publication.py`; `backend/app/application/planning/providers/planProvider.py`; `backend/app/application/planning/providers/planRegistry.py`; `backend/app/application/planning/service/planFingerprints.py`.
+
+#### `backend/app/dataModel/planning/contracts/planEnvelope.py`
+
+[Исходник](../../backend/app/dataModel/planning/contracts/planEnvelope.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class PlanBuildResult(BaseModel, Generic[T])
+PlanBuildResult.payload: T
+PlanBuildResult.diagnostics: tuple[PlanDiagnostic, ...]
+class PlanEnvelope(BaseModel, Generic[T])
+PlanEnvelope.ref: PlanRef
+PlanEnvelope.dependencies: tuple[PlanDependency, ...]
+PlanEnvelope.payload: T
+PlanEnvelope.diagnostics: tuple[PlanDiagnostic, ...]
+```
+Прямые importers: `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py`; `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/dataModel/hydrology/policy/hydrologyPlacementPolicy.py`; `backend/app/application/worldData/planning/composition/planProviders.py`; `backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py`; `backend/app/application/worldData/planning/contracts/surfacePlanBundle.py`; `backend/app/application/worldData/planning/encoding/surfaceEnvelopeCodec.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/planning/composition/natural/preparedTerrain.py`; `backend/app/application/worldData/generators/climate/localFieldFromCoarse.py`; `backend/app/application/worldData/generators/terrain/planning/terrainPlanProvider.py`; `backend/app/application/worldData/generators/terrain/planning/waterPlacementPlanProvider.py`; `backend/app/application/worldData/generators/terrain/regions/regionExtent.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py`; `backend/app/application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py`; `backend/app/application/worldData/generators/terrain/relief/planning/riverReliefPlanner.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/publication.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBaseJob.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBasePlanner.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainWindowJob.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/prepared/provider.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/preWaterHillHosts.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/designPreparation.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/designUniverse.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/proceduralDesignPreparation.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/proceduralWaterSourceAdapter.py`; `backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py`; `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/projection.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarseRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fineRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyRoutesAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/nativeRoutesPublication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/nativeFacts.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/publication.py`; `backend/app/application/worldData/generators/hydrology/load/paint/declaredWaterPaintProjector.py`; `backend/app/application/worldData/generators/climate/planning/climatePlanProvider.py`; `backend/app/application/worldData/generators/assemblers/climateAssembler/passes/anchorCollectPass.py`; `backend/app/application/planning/providers/planProvider.py`; `backend/app/application/planning/providers/planRegistry.py`; `backend/app/application/planning/service/planningService.py`.
+
+#### `backend/app/dataModel/planning/identity/planRef.py`
+
+[Исходник](../../backend/app/dataModel/planning/identity/planRef.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class PlanRef(BaseModel)
+PlanRef.key: PlanKey
+PlanRef.output_fingerprint: OutputFingerprint = Field(strict=True, min_length=32, max_length=32)
+```
+Прямые importers: `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/regions/regionPlanningInput.py`; `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py`; `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py`; `backend/app/dataModel/terrain/designedWater/geometry/waterDesignConstraints.py`; `backend/app/dataModel/terrain/designedWater/preparation/result.py`; `backend/app/dataModel/planning/contracts/planDependency.py`; `backend/app/dataModel/planning/contracts/planEnvelope.py`; `backend/app/dataModel/hydrology/boundaries/attachedCoastline.py`; `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/dataModel/hydrology/policy/hydrologyPlacementPolicy.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/generators/terrain/relief/planning/riverReliefPlanner.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/publication.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBasePlanner.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainWindowJob.py`; `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/projection.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fineRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyRoutesAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/nativeRoutesPublication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/publication.py`; `backend/app/application/planning/service/planningService.py`.
+
+#### `backend/app/dataModel/spatial/facing.py`
+
+[Исходник](../../backend/app/dataModel/spatial/facing.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class Facing(StrEnum)
+CARDINAL_FACINGS: frozenset[Facing] = frozenset({Facing.NORTH, Facing.SOUTH, Facing.EAST, Facing.WEST})
+NS_FACINGS: frozenset[Facing] = frozenset({Facing.NORTH, Facing.SOUTH})
+EW_FACINGS: frozenset[Facing] = frozenset({Facing.EAST, Facing.WEST})
+INTERCARDINAL_FACINGS: frozenset[Facing] = frozenset({Facing.NORTHEAST, Facing.NORTHWEST, Facing.SOUTHEAST, Facing.SOUTHWEST})
+OPPOSITE: dict[Facing, Facing] = {Facing.NORTH: Facing.SOUTH, Facing.SOUTH: Facing.NORTH, Facing.EAST: Facing.WEST, Facing.WEST: Facing.EAST, Facing.NORTHEAST: Facing.SOUTHWEST, Facing.NORTHWEST: Facing.SOUTHEAST, Facing.SOUTHEAST: Facing.NORTHWEST, Facing.SOUTHWEST: Facing.NORTHEAST}
+_COMPACT: dict[str, Facing] = {'N': Facing.NORTH, 'S': Facing.SOUTH, 'E': Facing.EAST, 'W': Facing.WEST, 'NE': Facing.NORTHEAST, 'NW': Facing.NORTHWEST, 'SE': Facing.SOUTHEAST, 'SW': Facing.SOUTHWEST}
+COMPACT_LETTER: dict[Facing, str] = {facing: letter for letter, facing in _COMPACT.items()}
+parse_facing(value: str | Facing | None) -> Facing | None
+coerce_facing_wire(value: object) -> Facing | None
+parse_facing_or_default(value: str | Facing | None, *, default: Facing) -> Facing
+CARDINAL_WALL_OUTWARD_DELTA: dict[Facing, tuple[int, int]] = {Facing.NORTH: (0, +1), Facing.SOUTH: (0, -1), Facing.EAST: (+1, 0), Facing.WEST: (-1, 0)}
+CARDINAL_DELTA_TO_FACING: dict[tuple[int, int], Facing] = {delta: facing for facing, delta in CARDINAL_WALL_OUTWARD_DELTA.items()}
+GRID_OUTWARD_DELTA: dict[Facing, tuple[int, int]] = {**CARDINAL_WALL_OUTWARD_DELTA, Facing.NORTHEAST: (1, 1), Facing.NORTHWEST: (-1, 1), Facing.SOUTHEAST: (1, -1), Facing.SOUTHWEST: (-1, -1)}
+GRID_DELTA_TO_FACING: dict[tuple[int, int], Facing] = {delta: facing for facing, delta in GRID_OUTWARD_DELTA.items()}
+cardinal_facing_for_delta(delta: tuple[int, int] | None) -> Facing | None
+opposite(facing: Facing) -> Facing
+is_meridional_edge(facing: Facing) -> bool
+is_latitudinal_edge(facing: Facing) -> bool
+is_corner(facing: Facing) -> bool
+snap_bbox_edge_to_grid(facing: Facing, rel_x: int, rel_y: int, step_x: int, step_y: int, n_cols: int, n_rows: int) -> tuple[int, int]
+```
+Прямые importers: `backend/app/dataModel/spatial/__init__.py`; `backend/app/dataModel/topology/topologyGeometry.py`; `backend/app/dataModel/topology/worldBounds.py`; `backend/app/dataModel/topology/worldTopology.py`; `backend/app/dataModel/worldPack/wire/fineTerrainChunkWire.py`; `backend/app/dataModel/worldPack/wire/settlementStructureWire.py`; `backend/app/dataModel/worldPack/wire/worldMapCellWire.py`; `backend/app/dataModel/validation/diagnostics/runtimeIssueContext.py`; `backend/app/dataModel/terrain/relief/gradeRimRay.py`; `backend/app/dataModel/terrain/relief/gradeSlot.py`; `backend/app/dataModel/terrain/relief/planning/reliefPlan.py`; `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py`; `backend/app/dataModel/spatial/grid/lightGridScale.py`; `backend/app/dataModel/locations/structure/building/staircaseSpec.py`; `backend/app/dataModel/locations/structure/room/entryPoint.py`; `backend/app/dataModel/locations/structure/room/shapeParams.py`; `backend/app/dataModel/locations/settlement/area/perimeterBarrier.py`; `backend/app/dataModel/locations/settlement/district/districtTopologySlot.py`; `backend/app/application/worldData/debugStructureRotations.py`; `backend/app/application/worldData/facingArrows.py`; `backend/app/application/worldData/masks/regionRasterizer.py`; `backend/app/application/worldData/placement/geometry.py`; `backend/app/application/worldData/render/gradeRayDump.py`; `backend/app/application/worldData/render/mapSymbols.py`; `backend/app/application/worldData/render/structureAsciiSymbols.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorUids.py`; `backend/app/application/worldData/render/regions/regionOutline.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/pack/read/mapCellToFineTerrainWire.py`; `backend/app/application/worldData/pack/refine/fineGradeSurface.py`; `backend/app/application/worldData/pack/refine/gridNeighborHalo.py`; `backend/app/application/worldData/pack/refine/detailed/fronts/detailedGradeFrontUid.py`; `backend/app/application/worldData/pack/refine/detailed/grade/detailedGradeCatalog.py`; `backend/app/application/worldData/pack/refine/detailed/grade/detailedGradeResult.py`; `backend/app/application/worldData/pack/refine/detailed/grade/detailedJobUid.py`; `backend/app/application/worldData/pack/bake/lightGrid/cell.py`; `backend/app/application/worldData/pack/bake/lightGrid/worldSeam.py`; `backend/app/application/worldData/materialize/terrain/terrainBatchOrchestrator.py`; `backend/app/application/worldData/generators/barrier/perimeter.py`; `backend/app/application/worldData/generators/barrier/ribbonFence.py`; `backend/app/application/worldData/generators/coordinates/gridRay.py`; `backend/app/application/worldData/generators/structure/structureGeneratorService.py`; `backend/app/application/worldData/generators/structure/structureOrientation.py`; `backend/app/application/worldData/generators/terrain/terrainGeneratorService.py`; `backend/app/application/worldData/generators/terrain/landcover/types.py`; `backend/app/application/worldData/generators/terrain/mountains/rangeSideFill.py`; `backend/app/application/worldData/generators/terrain/passes/columnFillPass.py`; `backend/app/application/worldData/generators/terrain/passes/parentLightTerrain.py`; `backend/app/application/worldData/generators/terrain/relief/discover/fronts.py`; `backend/app/application/worldData/generators/terrain/relief/discover/neighbors.py`; `backend/app/application/worldData/generators/terrain/relief/discover/packSenders.py`; `backend/app/application/worldData/generators/terrain/relief/discover/seam.py`; `backend/app/application/worldData/generators/terrain/relief/discover/types.py`; `backend/app/application/worldData/generators/terrain/relief/geom/facing.py`; `backend/app/application/worldData/generators/terrain/relief/geom/terrainDescent.py`; `backend/app/application/worldData/generators/terrain/relief/mountain/sideGradeDecision.py`; `backend/app/application/worldData/generators/terrain/relief/planning/naturalRelief.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoating/geometry.py`; `backend/app/application/worldData/generators/terrain/relief/validate/emptySlotDiagram.py`; `backend/app/application/worldData/generators/terrain/relief/validate/gradeCellRays.py`; `backend/app/application/worldData/generators/terrain/relief/validate/gradeCellSlotValidate.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/mergeSublocations.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/seedGrid.py`; `backend/app/application/worldData/generators/structure/layout/layoutEngine.py`; `backend/app/application/worldData/generators/structure/layout/layoutEntry.py`; `backend/app/application/worldData/generators/structure/passages/builder.py`; `backend/app/application/worldData/generators/structure/passages/corridorConnector.py`; `backend/app/application/worldData/generators/structure/passages/doorPlacer.py`; `backend/app/application/worldData/generators/structure/passages/doorValidator.py`; `backend/app/application/worldData/generators/structure/passages/entry.py`; `backend/app/application/worldData/generators/structure/passages/shared.py`; `backend/app/application/worldData/generators/structure/passages/wallBreachPlacer.py`; `backend/app/application/worldData/generators/structure/passages/wallOpening.py`; `backend/app/application/worldData/generators/structure/passages/wallOpeningResolver.py`; `backend/app/application/worldData/generators/structure/room/roomFactory.py`; `backend/app/application/worldData/generators/structure/room/roomInstance.py`; `backend/app/application/worldData/generators/structure/shape/shapes.py`; `backend/app/application/worldData/generators/structure/staircase/embeddedUpperLayout.py`; `backend/app/application/worldData/generators/structure/staircase/facingHelper.py`; `backend/app/application/worldData/generators/structure/staircase/shaftPlacer.py`; `backend/app/application/worldData/generators/structure/staircase/undergroundTunnel.py`; `backend/app/application/worldData/generators/structure/staircase/uShape/facingResolver.py`; `backend/app/application/worldData/generators/structure/staircase/uShape/uShape.py`; `backend/app/application/worldData/generators/structure/staircase/uShape/uShapeHelper.py`; `backend/app/application/worldData/generators/structure/staircase/uShape/uShapeValidator.py`; `backend/app/application/worldData/generators/structure/staircase/verticalLadder/verticalLadderHelper.py`; `backend/app/application/worldData/generators/road/layouts/gridLayout.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryGeometry.py`; `backend/app/application/worldData/generators/assemblers/areaAssembler/areaSlot.py`; `backend/app/application/worldData/generators/assemblers/areaAssembler/areaThreshold.py`; `backend/app/application/worldData/generators/assemblers/buildingAssembler/structureContext.py`; `backend/app/application/worldData/generators/assemblers/buildingAssembler/vastHullAssembler.py`; `backend/app/application/worldData/generators/assemblers/districtAssembler/connectionEntry.py`; `backend/app/application/worldData/generators/assemblers/settlementAssembler/buildingCache.py`; `backend/app/application/worldData/generators/assemblers/settlementAssembler/planner/streets.py`; `backend/app/application/worldData/generators/assemblers/districtAssembler/planner/areaSlots.py`; `backend/app/application/worldData/generators/assemblers/districtAssembler/planner/barrierInset.py`; `backend/app/application/worldData/generators/assemblers/districtAssembler/planner/frontage.py`; `backend/app/application/worldData/generators/assemblers/districtAssembler/planner/types.py`; `backend/app/application/worldData/generators/assemblers/areaAssembler/planner/areaBarriers.py`; `backend/app/application/worldData/generators/assemblers/areaAssembler/planner/areaPaths.py`; `backend/app/application/worldData/generators/assemblers/areaAssembler/planner/measureApproach.py`; `backend/app/application/worldData/generators/assemblers/areaAssembler/planner/resolveThreshold.py`; `backend/app/application/artifacts/encoding/coreManifest.py`; `backend/app/api/routes/debug.py`.
+
+#### `backend/app/dataModel/spatial/grid/coordinateSpace.py`
+
+[Исходник](../../backend/app/dataModel/spatial/grid/coordinateSpace.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class CoordinateSpace(StrEnum)
+```
+Прямые importers: `backend/app/dataModel/terrain/designedWater/draft.py`; `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/planning/waterPlacementPlan.py`; `backend/app/dataModel/terrain/relief/bathymetry/basinSpec.py`; `backend/app/dataModel/terrain/relief/bathymetry/floorProfile.py`; `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py`; `backend/app/dataModel/terrain/designedWater/preparation/result.py`; `backend/app/dataModel/spatial/grid/__init__.py`; `backend/app/dataModel/hydrology/boundaries/attachedCoastline.py`; `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/placement/adapters/water.py`; `backend/app/application/worldData/generators/coordinates/space.py`; `backend/app/application/worldData/generators/terrain/planning/waterPlacementPlanProvider.py`; `backend/app/application/worldData/generators/terrain/regions/coverageMeasure.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/basinZ.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/floorProfile.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/placementPreparation.py`; `backend/app/application/worldData/generators/hydrology/autoresolve/proceduralRiverAutoresolve.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryGeometry.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/proposals.py`.
+
+#### `backend/app/dataModel/spatial/grid/coordinateTypes.py`
+
+[Исходник](../../backend/app/dataModel/spatial/grid/coordinateTypes.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+type FineXY = tuple[FineX, FineY]
+class SurfaceGridCoord()
+SurfaceGridCoord.gx: GridX
+SurfaceGridCoord.gy: GridY
+class FineGridCoord()
+FineGridCoord.x: FineX
+FineGridCoord.y: FineY
+FineGridCoord.z: FineZ
+class SurfaceGridRect()
+SurfaceGridRect.gx0: GridX
+SurfaceGridRect.gy0: GridY
+SurfaceGridRect.gx1: GridX
+SurfaceGridRect.gy1: GridY
+SurfaceGridRect.as_tuple(self) -> tuple[int, int, int, int]
+class FineGridRect()
+FineGridRect.x0: FineX
+FineGridRect.y0: FineY
+FineGridRect.x1: FineX
+FineGridRect.y1: FineY
+FineGridRect.z: FineZ
+FineGridRect.as_tuple(self) -> tuple[int, int, int, int, int]
+class LightCellRef()
+LightCellRef.gx: int
+LightCellRef.gy: int
+LightCellRef.tx: int
+LightCellRef.ty: int
+LightCellRef.as_absolute(self, side: int) -> tuple[int, int]
+```
+Прямые importers: `backend/app/dataModel/terrain/designedWater/draft.py`; `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/hills/acceptedHill.py`; `backend/app/dataModel/terrain/planning/terrainPlan.py`; `backend/app/dataModel/terrain/regions/coverageGeometry.py`; `backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py`; `backend/app/dataModel/terrain/relief/bathymetry/floorProfile.py`; `backend/app/dataModel/terrain/relief/planning/reliefPlan.py`; `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py`; `backend/app/dataModel/terrain/relief/planning/inputs/reliefPlanInput.py`; `backend/app/dataModel/terrain/planning/inputs/geoWaterPlacementInput.py`; `backend/app/dataModel/terrain/planning/inputs/terrainBaseInput.py`; `backend/app/dataModel/terrain/planning/inputs/waterPlacementInput.py`; `backend/app/dataModel/terrain/planning/natural/preparedTerrain.py`; `backend/app/dataModel/terrain/designedWater/fields/field.py`; `backend/app/dataModel/terrain/designedWater/fields/plateLayout.py`; `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py`; `backend/app/dataModel/terrain/designedWater/preparation/result.py`; `backend/app/dataModel/spatial/grid/__init__.py`; `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/dataModel/hydrology/planning/hydrologyPlan.py`; `backend/app/dataModel/hydrology/sources/proceduralWaterSource.py`; `backend/app/dataModel/hydrology/sources/waterSourceMetadata.py`; `backend/app/dataModel/hydrology/planning/inputs/geoHydrologyPlanInput.py`; `backend/app/dataModel/hydrology/planning/inputs/hydrologyPlanInput.py`; `backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py`; `backend/app/dataModel/hydrology/planning/stages/riverRoutePlans.py`; `backend/app/dataModel/climate/planning/climatePoints.py`; `backend/app/dataModel/climate/planning/inputs/climateBaseInput.py`; `backend/app/application/worldData/masks/footprint.py`; `backend/app/application/worldData/regions/factConsumers/climate.py`; `backend/app/application/worldData/planning/composition/surfacePlanningCapture.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/placement/adapters/water.py`; `backend/app/application/worldData/placement/adapters/waterTypes.py`; `backend/app/application/worldData/pack/climate/climatePackBakeOrchestrator.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/climate.py`; `backend/app/application/worldData/materialize/terrain/terrainBatchOrchestrator.py`; `backend/app/application/worldData/generators/climate/anchorAssign.py`; `backend/app/application/worldData/generators/climate/climatePoleField.py`; `backend/app/application/worldData/generators/climate/poleResolve.py`; `backend/app/application/worldData/generators/climate/tierResolve.py`; `backend/app/application/worldData/generators/coordinates/types.py`; `backend/app/application/worldData/generators/terrain/hills/hillSelection.py`; `backend/app/application/worldData/generators/terrain/planning/terrainPlanProvider.py`; `backend/app/application/worldData/generators/terrain/regions/coverageMeasure.py`; `backend/app/application/worldData/generators/terrain/regions/shapeCoverage.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/floorProfile.py`; `backend/app/application/worldData/generators/terrain/relief/planning/naturalRelief.py`; `backend/app/application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoating/sources.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/beds.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/execution.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBaseJob.py`; `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py`; `backend/app/application/worldData/generators/terrain/planning/projection/heightDelta.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/prepared/materialization.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/capturedSources.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/preWaterHillHosts.py`; `backend/app/application/worldData/generators/terrain/designedWater/fields/plateFieldGenerator.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/proceduralWaterSourceAdapter.py`; `backend/app/application/worldData/generators/terrain/designedWater/strategies/authoredRegionStrategy.py`; `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/continentalNoiseStrategy.py`; `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/plateNoiseStrategy.py`; `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/plateStrategy.py`; `backend/app/application/worldData/generators/hydrology/materialize/hydrologyWorkingFields.py`; `backend/app/application/worldData/generators/hydrology/placement/waterPlacementPass.py`; `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py`; `backend/app/application/worldData/generators/hydrology/sources/waterSourceMetadataFactory.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/projection.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarseRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fineRiverPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/proposals.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/nativeFacts.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/riverFacts.py`; `backend/app/application/worldData/generators/hydrology/load/paint/declaredWaterPaintProjector.py`; `backend/app/application/worldData/generators/climate/materialize/climateWorkingFields.py`; `backend/app/application/worldData/generators/climate/planning/basePoleLayout.py`; `backend/app/application/worldData/generators/climate/planning/climatePlanSampler.py`; `backend/app/application/worldData/generators/assemblers/climateAssembler/passes/anchorCollectPass.py`.
+
+#### `backend/app/dataModel/spatial/grid/gridBBox.py`
+
+[Исходник](../../backend/app/dataModel/spatial/grid/gridBBox.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class GridBBox()
+GridBBox.x_min: int
+GridBBox.x_max: int
+GridBBox.y_min: int
+GridBBox.y_max: int
+GridBBox.diagonal(self) -> float
+```
+Прямые importers: `backend/app/dataModel/terrain/hills/acceptedHill.py`; `backend/app/dataModel/terrain/planning/terrainPlan.py`; `backend/app/dataModel/terrain/planning/inputs/terrainBaseInput.py`; `backend/app/dataModel/spatial/grid/__init__.py`; `backend/app/dataModel/climate/planning/climatePlan.py`; `backend/app/dataModel/climate/planning/inputs/climateBaseInput.py`; `backend/app/application/worldData/planning/composition/surfacePlanningCapture.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/pack/climate/climateCoarseBake.py`; `backend/app/application/worldData/generators/climate/climatePoleField.py`; `backend/app/application/worldData/generators/climate/poleResolve.py`; `backend/app/application/worldData/generators/coordinates/antipode.py`; `backend/app/application/worldData/generators/coordinates/worldTile.py`; `backend/app/application/worldData/generators/hydrology/hydrologyGeneratorService.py`; `backend/app/application/worldData/generators/hydrology/riverNetworkAssembler.py`; `backend/app/application/worldData/generators/hydrology/types.py`; `backend/app/application/worldData/generators/terrain/types.py`; `backend/app/application/worldData/generators/terrain/hills/hillLayout.py`; `backend/app/application/worldData/generators/terrain/hills/hillPlacement.py`; `backend/app/application/worldData/generators/terrain/hills/hillRaster.py`; `backend/app/application/worldData/generators/terrain/hills/hillSelection.py`; `backend/app/application/worldData/generators/terrain/passes/bbox.py`; `backend/app/application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/beds.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBaseJob.py`; `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/prepared/materialization.py`; `backend/app/application/worldData/generators/hydrology/placement/waterPlacementPass.py`; `backend/app/application/worldData/generators/hydrology/shore/fineRiverSampling.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/climate/planning/basePoleLayout.py`; `backend/app/application/worldData/generators/climate/planning/climatePlanProvider.py`; `backend/app/application/worldData/generators/climate/planning/climatePlanSampler.py`.
+
+#### `backend/app/dataModel/spatial/grid/gridSettings.py`
+
+[Исходник](../../backend/app/dataModel/spatial/grid/gridSettings.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class SurfaceGridSettings(BaseModel)
+SurfaceGridSettings.fine_span: StrictInt = Field(gt=0)
+SurfaceGridSettings.light_side: StrictInt = Field(gt=0)
+```
+Прямые importers: `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/regions/regionPlanningInput.py`; `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceSupportInput.py`; `backend/app/dataModel/terrain/relief/planning/inputs/reliefPlanInput.py`; `backend/app/dataModel/terrain/planning/inputs/geoWaterPlacementInput.py`; `backend/app/dataModel/terrain/planning/inputs/terrainBaseInput.py`; `backend/app/dataModel/terrain/planning/inputs/waterPlacementInput.py`; `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py`; `backend/app/dataModel/terrain/designedWater/geometry/waterDesignConstraints.py`; `backend/app/dataModel/terrain/designedWater/preparation/result.py`; `backend/app/dataModel/hydrology/boundaries/attachedCoastline.py`; `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/dataModel/hydrology/planning/inputs/geoHydrologyPlanInput.py`; `backend/app/dataModel/hydrology/planning/inputs/hydrologyPlanInput.py`; `backend/app/application/worldData/regions/inputs/landcoverInputs.py`; `backend/app/application/worldData/planning/composition/surfacePlanningCapture.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/planning/composition/support/surfaceSupportCapture.py`; `backend/app/application/worldData/pack/bake/lightGrid/bakeContext.py`; `backend/app/application/worldData/generators/terrain/passes/lightSurfaceRefine.py`; `backend/app/application/worldData/generators/terrain/passes/parentLightUpsample.py`; `backend/app/application/worldData/generators/terrain/regions/coverageMeasure.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/applyReliefObjectsZ.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/basinZ.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/floorProfile.py`; `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/designPreparation.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/designUniverse.py`; `backend/app/application/worldData/generators/hydrology/materialize/hydrologyWorkingFields.py`.
+
+#### `backend/app/dataModel/spatial/grid/lightGridScale.py`
+
+[Исходник](../../backend/app/dataModel/spatial/grid/lightGridScale.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+light_span_for(tile_macro: int, side: int) -> int
+class LightGridScale()
+LightGridScale.tile_macro: int
+LightGridScale.side: int
+LightGridScale.light_span: int
+LightGridScale.from_tile(cls, tile_macro: int, side: int) -> LightGridScale
+LightGridScale.rim_tx_ty(self, facing: Facing) -> tuple[tuple[int, int], ...]
+```
+Прямые importers: `backend/app/dataModel/worldPack/wire/worldMapCellsPerTile.py`; `backend/app/application/worldData/masks/regionRasterContext.py`; `backend/app/application/worldData/pack/read/wildernessRegionReadService.py`; `backend/app/application/worldData/pack/bake/lightGrid/coords.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/landcover/apply.py`; `backend/app/application/worldData/materialize/terrain/terrainBatchOrchestrator.py`; `backend/app/application/worldData/generators/terrain/landcover/materializer.py`; `backend/app/application/worldData/generators/terrain/landcover/types.py`; `backend/app/application/worldData/generators/terrain/relief/planning/naturalRelief.py`; `backend/app/application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBaseJob.py`; `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/capturedSources.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/projection.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/proposals.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/nativeFacts.py`; `backend/app/application/worldData/generators/coordinates/light/grid.py`.
+
+#### `backend/app/dataModel/spatial/regionShape.py`
+
+[Исходник](../../backend/app/dataModel/spatial/regionShape.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class RegionShapeKind(StrEnum)
+class EdgeNoise(BaseModel)
+EdgeNoise.amplitude: int = Field(ge=0)
+EdgeNoise.scale: int = Field(gt=0)
+class RegionShapeBase(BaseModel)
+RegionShapeBase.edge_noise: EdgeNoise | None = None
+RegionShapeBase.projected(self, divisor: int) -> Self
+class BboxShape(RegionShapeBase)
+BboxShape.kind: Literal[RegionShapeKind.BBOX] = RegionShapeKind.BBOX
+BboxShape.x_min: int
+BboxShape.y_min: int
+BboxShape.x_max: int
+BboxShape.y_max: int
+BboxShape.ordered_bounds(self) -> Self
+BboxShape.contains(self, x: float, y: float) -> bool
+BboxShape.bbox(self) -> Bounds
+BboxShape.area(self) -> float
+BboxShape.projected(self, divisor: int) -> BboxShape
+class EllipseShape(RegionShapeBase)
+EllipseShape.kind: Literal[RegionShapeKind.ELLIPSE] = RegionShapeKind.ELLIPSE
+EllipseShape.cx: int
+EllipseShape.cy: int
+EllipseShape.rx: int = Field(gt=0)
+EllipseShape.ry: int = Field(gt=0)
+EllipseShape.contains(self, x: float, y: float) -> bool
+EllipseShape.bbox(self) -> Bounds
+EllipseShape.area(self) -> float
+EllipseShape.projected(self, divisor: int) -> EllipseShape
+class PolygonShape(RegionShapeBase)
+PolygonShape.kind: Literal[RegionShapeKind.POLYGON] = RegionShapeKind.POLYGON
+PolygonShape.vertices: tuple[Point, ...] = Field(min_length=3)
+PolygonShape.simple_ring(self) -> Self
+PolygonShape.contains(self, x: float, y: float) -> bool
+PolygonShape.bbox(self) -> Bounds
+PolygonShape.area(self) -> float
+PolygonShape.projected(self, divisor: int) -> PolygonShape
+class AnchorRadiusShape(RegionShapeBase)
+AnchorRadiusShape.kind: Literal[RegionShapeKind.ANCHOR_RADIUS] = RegionShapeKind.ANCHOR_RADIUS
+AnchorRadiusShape.anchor_uid: str = Field(min_length=1)
+AnchorRadiusShape.radius: int = Field(gt=0)
+AnchorRadiusShape.contains(self, x: float, y: float) -> bool
+AnchorRadiusShape.bbox(self) -> Bounds
+AnchorRadiusShape.area(self) -> float
+AnchorRadiusShape.projected(self, divisor: int) -> AnchorRadiusShape
+class CorridorShape(RegionShapeBase)
+CorridorShape.kind: Literal[RegionShapeKind.CORRIDOR] = RegionShapeKind.CORRIDOR
+CorridorShape.path: tuple[Point, ...] = Field(min_length=2)
+CorridorShape.width: int = Field(gt=0)
+CorridorShape.nonzero_path(self) -> Self
+CorridorShape.distance(self, x: float, y: float) -> float
+CorridorShape.contains(self, x: float, y: float) -> bool
+CorridorShape.bbox(self) -> Bounds
+CorridorShape.area(self) -> float
+CorridorShape.projected(self, divisor: int) -> CorridorShape
+```
+Прямые importers: `backend/app/ids/regionIdentity.py`; `backend/app/dataModel/hydrology/declaredBasin.py`; `backend/app/dataModel/placement/intent.py`; `backend/app/dataModel/terrainMasks/landcoverRegionsCategoryPolicy.py`; `backend/app/dataModel/terrainMasks/regions/specs.py`; `backend/app/dataModel/terrain/regions/regionPlanningInput.py`; `backend/app/application/worldData/masks/regionIdentity.py`; `backend/app/application/worldData/masks/regionRasterContext.py`; `backend/app/application/worldData/masks/regionRasterizer.py`; `backend/app/application/worldData/masks/regionRasterNoise.py`; `backend/app/application/worldData/regions/inputs/landcoverInputs.py`; `backend/app/application/worldData/regions/stateChange/contracts.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/placement/adapters/coastlineShape.py`; `backend/app/application/worldData/placement/adapters/lakeShape.py`; `backend/app/application/worldData/placement/adapters/waterShape.py`; `backend/app/application/worldData/generators/terrain/landcover/collect.py`; `backend/app/application/worldData/generators/terrain/landcover/finePaint.py`; `backend/app/application/worldData/generators/terrain/landcover/types.py`; `backend/app/application/worldData/generators/terrain/regions/regionExtent.py`; `backend/app/application/worldData/generators/terrain/regions/shapeCoverage.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/claim.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/mergeSublocations.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/seedGrid.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/capturedSources.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/preWaterHillHosts.py`.
+
+#### `backend/app/dataModel/terrain/regions/coverageGeometry.py`
+
+[Исходник](../../backend/app/dataModel/terrain/regions/coverageGeometry.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class CoverageSpan(TerrainRegionModel)
+CoverageSpan.y: Annotated[FineY, Field(strict=True)]
+CoverageSpan.x0: Annotated[FineX, Field(strict=True)]
+CoverageSpan.x1: Annotated[FineX, Field(strict=True)]
+CoverageSpan.nonempty_interval(self) -> Self
+class RegionCoverage(TerrainRegionModel)
+RegionCoverage.region_uid: EntityUid
+RegionCoverage.spans: tuple[CoverageSpan, ...]
+RegionCoverage.canonical_intervals(self) -> Self
+```
+Прямые importers: `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/regions/regionPlanningInput.py`; `backend/app/dataModel/terrain/regions/terrainRegionsSnapshot.py`; `backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py`; `backend/app/dataModel/terrain/planning/natural/preparedTerrain.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/generators/terrain/regions/coverageMeasure.py`; `backend/app/application/worldData/generators/terrain/regions/regionExtent.py`; `backend/app/application/worldData/generators/terrain/regions/shapeCoverage.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBaseJob.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBasePlanner.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainWindowJob.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/prepared/materialization.py`; `backend/app/application/worldData/generators/terrain/landcover/planning/preWaterHillHosts.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineWaterSourceAdapter.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/designUniverse.py`.
+
+#### `backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py`
+
+[Исходник](../../backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class FineSurfaceWindow(BaseModel)
+FineSurfaceWindow.coverage: RegionCoverage
+FineSurfaceWindow.surface_z: tuple[tuple[FineXY, Annotated[FineZ, Field(strict=True)]], ...]
+FineSurfaceWindow.topology: WorldTopology
+FineSurfaceWindow.protected_cells: frozenset[Coord]
+FineSurfaceWindow.complete_surface(self) -> Self
+```
+Прямые importers: `backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBasePlanner.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainWindowJob.py`; `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py`; `backend/app/application/worldData/generators/terrain/planning/projection/heightDelta.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/prepared/materialization.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/water/planning/fine/publication.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/nativeFacts.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/publication.py`.
+
+#### `backend/app/dataModel/topology/worldTopology.py`
+
+[Исходник](../../backend/app/dataModel/topology/worldTopology.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class NeighborResult(BaseModel)
+NeighborResult.coord: Coord
+NeighborResult.edge_crossing: bool
+NeighborResult.invert_dy: bool
+class SeamPair(BaseModel)
+SeamPair.owner: Coord
+SeamPair.other: Coord
+SeamPair.owner_facing: Facing
+SeamPair.other_facing: Facing
+SeamPair.invert_dy: bool
+class WorldTopology(BaseModel)
+WorldTopology.mode: WorldTopologyMode = Field(default_factory=lambda: WorldTerrainScalars.canonical_defaults().world_topology_mode)
+WorldTopology.bounds: WorldBounds
+WorldTopology.resolve_bounds(cls, bounds: WorldBounds, info: ValidationInfo) -> WorldBounds
+WorldTopology.grid_neighbor(self, x: int, y: int, facing: Facing) -> Coord | None
+WorldTopology.neighbor(self, x: int, y: int, facing: Facing) -> NeighborResult | None
+WorldTopology.antagonist_tile(self, x: int, y: int, facing: Facing) -> Coord | None
+WorldTopology.canonicalize(self, x: int, y: int) -> Coord | None
+WorldTopology.seam_pairs(self) -> tuple[SeamPair, ...]
+```
+Прямые importers: `backend/app/dataModel/hydrology/riverDrainageLink.py`; `backend/app/dataModel/hydrology/riverRouting.py`; `backend/app/dataModel/hydrology/waterfallDrop.py`; `backend/app/dataModel/placement/batch.py`; `backend/app/dataModel/topology/fineTopology.py`; `backend/app/dataModel/topology/topologyGeometry.py`; `backend/app/dataModel/terrain/designedWater/draft.py`; `backend/app/dataModel/terrain/designedWater/input.py`; `backend/app/dataModel/terrain/planning/waterPlacementPlan.py`; `backend/app/dataModel/terrain/regions/regionPlanningInput.py`; `backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py`; `backend/app/dataModel/terrain/relief/bathymetry/basinSpec.py`; `backend/app/dataModel/terrain/relief/bathymetry/floorProfile.py`; `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceSupportInput.py`; `backend/app/dataModel/terrain/relief/planning/inputs/reliefPlanInput.py`; `backend/app/dataModel/terrain/planning/inputs/geoWaterPlacementInput.py`; `backend/app/dataModel/terrain/planning/inputs/waterPlacementInput.py`; `backend/app/dataModel/terrain/planning/natural/preparedTerrain.py`; `backend/app/dataModel/terrain/designedWater/fields/field.py`; `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py`; `backend/app/dataModel/terrain/designedWater/geometry/waterDesignConstraints.py`; `backend/app/dataModel/hydrology/boundaries/attachedCoastline.py`; `backend/app/dataModel/hydrology/boundaries/boundaryWaterSnapshot.py`; `backend/app/dataModel/hydrology/planning/inputs/geoHydrologyPlanInput.py`; `backend/app/dataModel/hydrology/planning/inputs/hydrologyPlanInput.py`; `backend/app/dataModel/hydrology/planning/stages/openWaterPlan.py`; `backend/app/application/worldData/masks/regionRasterContext.py`; `backend/app/application/worldData/masks/regionRasterizer.py`; `backend/app/application/worldData/masks/regionRasterNoise.py`; `backend/app/application/worldData/placement/geometry.py`; `backend/app/application/worldData/render/regions/regionOutline.py`; `backend/app/application/worldData/regions/inputs/landcoverInputs.py`; `backend/app/application/worldData/planning/composition/surfacePlanningCapture.py`; `backend/app/application/worldData/planning/composition/surfacePlanningEntry.py`; `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; `backend/app/application/worldData/planning/composition/support/surfaceSupportCapture.py`; `backend/app/application/worldData/placement/adapters/coastlineShape.py`; `backend/app/application/worldData/placement/adapters/lakeShape.py`; `backend/app/application/worldData/placement/adapters/water.py`; `backend/app/application/worldData/placement/adapters/waterTypes.py`; `backend/app/application/worldData/pack/bake/lightGrid/bakeContext.py`; `backend/app/application/worldData/generators/hydrology/hydrologyGeneratorService.py`; `backend/app/application/worldData/generators/hydrology/riverNetworkAssembler.py`; `backend/app/application/worldData/generators/hydrology/waterBodyAssembler.py`; `backend/app/application/worldData/generators/terrain/hills/hillLayout.py`; `backend/app/application/worldData/generators/terrain/landcover/finePaint.py`; `backend/app/application/worldData/generators/terrain/landcover/types.py`; `backend/app/application/worldData/generators/terrain/materialize/terrainWorkingFields.py`; `backend/app/application/worldData/generators/terrain/planning/waterPlacementPlanProvider.py`; `backend/app/application/worldData/generators/terrain/regions/coverageMeasure.py`; `backend/app/application/worldData/generators/terrain/regions/shapeCoverage.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/applyReliefObjectsZ.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/basinZ.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/distanceField.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/bathymetry/floorProfile.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/riverBed/riverBedSpec.py`; `backend/app/application/worldData/generators/terrain/reliefObjects/riverBed/riverBedZ.py`; `backend/app/application/worldData/generators/terrain/relief/surfaceCoating/geometry.py`; `backend/app/application/worldData/generators/terrain/relief/planning/river/beds.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBaseJob.py`; `backend/app/application/worldData/generators/terrain/planning/preWater/terrainBasePlanner.py`; `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/mergeSublocations.py`; `backend/app/application/worldData/generators/terrain/landcover/autoresolve/seedGrid.py`; `backend/app/application/worldData/generators/terrain/designedWater/fields/noiseFieldGenerator.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineConstraintPreparer.py`; `backend/app/application/worldData/generators/terrain/designedWater/preparation/placementPreparation.py`; `backend/app/application/worldData/generators/hydrology/autoresolve/proceduralRiverAutoresolve.py`; `backend/app/application/worldData/generators/hydrology/boundaries/boundaryGeometry.py`; `backend/app/application/worldData/generators/hydrology/geom/polylineRasterize.py`; `backend/app/application/worldData/generators/hydrology/load/buildHydrologyMasterInput.py`; `backend/app/application/worldData/generators/hydrology/load/resolveHydrologyTopology.py`; `backend/app/application/worldData/generators/hydrology/materialize/hydrologyWorkingFields.py`; `backend/app/application/worldData/generators/hydrology/placement/waterPlacementPass.py`; `backend/app/application/worldData/generators/hydrology/rivers/classifyRiverSegments.py`; `backend/app/application/worldData/generators/hydrology/rivers/resolveDeclaredRiverPath.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverBedProfile.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverGeometry.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverMouth.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverNetworkPlanner.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverReceivers.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverRequestOrder.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverRouteRequests.py`; `backend/app/application/worldData/generators/hydrology/rivers/riverRouteSearch.py`; `backend/app/application/worldData/generators/hydrology/shore/fineHydrologyIndex.py`; `backend/app/application/worldData/generators/hydrology/shore/fineRiverSampling.py`; `backend/app/application/worldData/generators/hydrology/shore/waterSideFootprint.py`; `backend/app/application/worldData/generators/hydrology/water/componentLabel.py`; `backend/app/application/worldData/generators/hydrology/water/depressionTree.py`; `backend/app/application/worldData/generators/hydrology/water/levelFill.py`; `backend/app/application/worldData/generators/hydrology/water/shoreDerive.py`; `backend/app/application/worldData/generators/hydrology/water/waterClassifier.py`; `backend/app/application/worldData/generators/hydrology/water/waterMaterialize.py`; `backend/app/application/worldData/generators/hydrology/water/waterSources.py`; `backend/app/application/worldData/generators/hydrology/waterfalls/riverDrops.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterAssemblyResult.py`; `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py`; `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/proposals.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py`; `backend/app/application/worldData/generators/hydrology/planning/assembly/final/riverFacts.py`.
+
+#### `backend/app/dataModel/worldPack/meta/worldPackManifest.py`
+
+[Исходник](../../backend/app/dataModel/worldPack/meta/worldPackManifest.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class ChunkRef(BaseModel)
+ChunkRef.cx: int
+ChunkRef.cy: int
+ChunkRef.refine_role: ChunkRefineRole | None = None
+ChunkRef.content_hash: str | None = None
+ChunkRef.bytes: int | None = None
+class TileManifestEntry(ClimateBakeStatusMixin)
+TileManifestEntry.gx: int
+TileManifestEntry.gy: int
+TileManifestEntry.world_map_path: str | None = None
+TileManifestEntry.world_map_hash: str | None = None
+TileManifestEntry.wilderness_refine_status: WildernessRefineStatus = 'absent'
+TileManifestEntry.chunks: list[ChunkRef] = Field(default_factory=list)
+class SettlementStructureEntry(BaseModel)
+SettlementStructureEntry.location_uid: str
+SettlementStructureEntry.territory_volume: TerritoryVolume
+SettlementStructureEntry.structure_path: str | None = None
+SettlementStructureEntry.structure_hash: str | None = None
+SettlementStructureEntry.bytes: int | None = None
+SettlementStructureEntry.structure_status: SettlementStructureStatus = 'absent'
+SettlementStructureEntry.packed_district_uids: list[str] = Field(default_factory=list)
+class LocationTerrainEntry(ClimateBakeStatusMixin)
+LocationTerrainEntry.location_uid: str
+LocationTerrainEntry.territory_volume: TerritoryVolume
+LocationTerrainEntry.terrain_path: str | None = None
+LocationTerrainEntry.terrain_hash: str | None = None
+LocationTerrainEntry.z_band: str | None = None
+LocationTerrainEntry.bytes: int | None = None
+class WorldPackManifest(BaseModel)
+WorldPackManifest.SCHEMA_ID: ClassVar[str] = 'SCH-WORLD-PACK-MANIFEST'
+WorldPackManifest.pack_version: str = PACK_WIRE_VERSION
+WorldPackManifest.world_uid: str
+WorldPackManifest.content_hash: str | None = None
+WorldPackManifest.codec_version: int = PACK_CODEC_VERSION
+WorldPackManifest.payload_format: str = 'json'
+WorldPackManifest.registry_hash: str | None = None
+WorldPackManifest.bake_mode: BakeMode = 'light'
+WorldPackManifest.fine_cells_per_map_cell: int = FINE_CELLS_PER_MAP_CELL_DEFAULT
+WorldPackManifest.world_map_cells_per_tile: int = WORLD_MAP_CELLS_PER_TILE
+WorldPackManifest.fine_cell_size: int = FINE_CELL_SIZE
+WorldPackManifest.map_subsurface_depth: int = 0
+WorldPackManifest.location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)
+WorldPackManifest.settlement_structure_entries: list[SettlementStructureEntry] = Field(default_factory=list)
+WorldPackManifest.wilderness_region_entries: list[WildernessRegionEntry] = Field(default_factory=list)
+WorldPackManifest.tiles: list[TileManifestEntry] = Field(default_factory=list)
+WorldPackManifest.world_map_cells: int = 0
+WorldPackManifest.wilderness_tiles_total: int = 0
+WorldPackManifest.wilderness_chunks_baked: int = 0
+validator WorldPackManifest._reject_removed_size_keys
+WorldPackManifest.valid_region_index(cls, entries: list[WildernessRegionEntry]) -> list[WildernessRegionEntry]
+WorldPackManifest.wilderness_region_entry(self, region_uid: str) -> WildernessRegionEntry | None
+WorldPackManifest.tile_entry(self, gx: int, gy: int) -> TileManifestEntry | None
+WorldPackManifest.chunk_ref(self, gx: int, gy: int, cx: int, cy: int) -> ChunkRef | None
+WorldPackManifest.location_entry(self, location_uid: str) -> LocationTerrainEntry | None
+WorldPackManifest.settlement_structure_entry(self, location_uid: str) -> SettlementStructureEntry | None
+```
+Прямые importers: `backend/app/dataModel/worldPack/__init__.py`; `backend/app/dataModel/worldPack/bake/detailedBakeScope.py`; `backend/app/dataModel/worldPack/bake/wildernessRefineStatus.py`; `backend/app/dataModel/worldPack/wire/settlementStructureStatus.py`; `backend/app/application/worldData/mapCells/mapCellQueryFacade.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorSkip.py`; `backend/app/application/worldData/pack/io/packManifestStore.py`; `backend/app/application/worldData/pack/io/wildernessRegionIndexWriter.py`; `backend/app/application/worldData/pack/io/worldPackReader.py`; `backend/app/application/worldData/pack/io/worldPackWriter.py`; `backend/app/application/worldData/pack/refine/fine/fineRectDrain.py`; `backend/app/application/worldData/pack/refine/fine/fineScenePathRefine.py`; `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkRunner.py`; `backend/app/application/worldData/pack/refine/fine/prep/fineTileContext.py`; `backend/app/application/worldData/pack/refine/fine/prep/fineTilePrep.py`; `backend/app/application/worldData/pack/bake/detailed/detailedBakeScope.py`; `backend/app/application/worldData/pack/bake/finalize/packCompletenessClassifier.py`.
+
+#### `backend/app/dataModel/worldPack/wire/fineTerrainChunkWire.py`
+
+[Исходник](../../backend/app/dataModel/worldPack/wire/fineTerrainChunkWire.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class FineTerrainZRun(BaseModel)
+FineTerrainZRun.z0: int
+FineTerrainZRun.z1: int
+FineTerrainZRun.system_terrain: str
+FineTerrainZRun.system_material: str | None = None
+FineTerrainZRun.cells(self) -> list[tuple[int, int, int]]
+class FineTerrainColumnWire(BaseModel)
+FineTerrainColumnWire.lx: int
+FineTerrainColumnWire.ly: int
+FineTerrainColumnWire.runs: list[FineTerrainZRun]
+FineTerrainColumnWire.system_facing: Facing | None = None
+FineTerrainColumnWire.system_grade_uid: str | None = None
+FineTerrainColumnWire.region_uid: str | None = None
+validator FineTerrainColumnWire._parse_facing
+class FineTerrainChunkWire(BaseModel)
+FineTerrainChunkWire.SCHEMA_ID: ClassVar[str] = 'SCH-FINE-TERRAIN-CHUNK-WIRE'
+FineTerrainChunkWire.cx: int
+FineTerrainChunkWire.cy: int
+FineTerrainChunkWire.chunk_columns: int
+FineTerrainChunkWire.columns: list[FineTerrainColumnWire]
+validator FineTerrainChunkWire._positive_chunk
+```
+Прямые importers: `backend/app/dataModel/worldPack/__init__.py`; `backend/app/application/worldData/render/fineTerrainAsciiKernel.py`; `backend/app/application/worldData/render/pack/locationCityPackRenderer.py`; `backend/app/application/worldData/render/pack/locationTerrainPackRenderer.py`; `backend/app/application/worldData/render/pack/wildernessTilePackRenderer.py`; `backend/app/application/worldData/pack/io/packBlobWire.py`; `backend/app/application/worldData/pack/io/worldPackReader.py`; `backend/app/application/worldData/pack/io/worldPackWriter.py`; `backend/app/application/worldData/pack/read/fineTerrainDecodeCache.py`; `backend/app/application/worldData/pack/read/mapCellToFineTerrainWire.py`; `backend/app/application/worldData/pack/read/packRenderReadFacade.py`; `backend/app/application/worldData/pack/read/terrainContributions.py`; `backend/app/application/worldData/pack/refine/gridNeighborHalo.py`; `backend/app/application/worldData/pack/refine/fine/prep/fineTilePrep.py`.
+
+#### `backend/app/dataModel/worldPack/wire/hydrologyMaskWire.py`
+
+[Исходник](../../backend/app/dataModel/worldPack/wire/hydrologyMaskWire.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class WorldMapHydrologyRole(IntEnum)
+WorldMapHydrologyRole.from_wire(cls, value: int | str | WorldMapHydrologyRole | None) -> WorldMapHydrologyRole
+WorldMapHydrologyRole.to_fine_role(self) -> HydrologyCellRole | None
+WorldMapHydrologyRole.merge_rank(self) -> int
+WorldMapHydrologyRole.merge(cls, a: WorldMapHydrologyRole, b: WorldMapHydrologyRole) -> WorldMapHydrologyRole
+class HydrologyMaskWire(BaseModel)
+HydrologyMaskWire.SCHEMA_ID: ClassVar[str] = 'SCH-HYDROLOGY-MASK-WIRE'
+HydrologyMaskWire.role: WorldMapHydrologyRole = WorldMapHydrologyRole.NONE
+HydrologyMaskWire.width: int | None = None
+validator HydrologyMaskWire._clamp_width
+```
+Прямые importers: `backend/app/dataModel/worldPack/__init__.py`; `backend/app/dataModel/worldPack/wire/worldMapCellWire.py`; `backend/app/dataModel/hydrology/planning/hydrologyPlan.py`; `backend/app/application/worldData/masks/terrainMerge.py`; `backend/app/application/worldData/render/light/lightMapCells.py`; `backend/app/application/worldData/render/worldMap/worldMapMacroRender.py`; `backend/app/application/worldData/pack/read/worldMapPackReader.py`; `backend/app/application/worldData/pack/bake/l0/worldMapHydrology.py`; `backend/app/application/worldData/pack/bake/lightGrid/bake.py`; `backend/app/application/worldData/pack/bake/lightGrid/cell.py`; `backend/app/application/worldData/pack/bake/log/worldMap.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/hydro/coarseOpenWater.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/hydro/declaredBasins.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/hydro/declaredRivers.py`; `backend/app/application/worldData/pack/bake/lightGrid/contributors/hydro/raster.py`; `backend/app/application/worldData/generators/hydrology/shore/parentLightHydroCorridor.py`; `backend/app/application/worldData/generators/hydrology/load/paint/declaredWaterPaintProjector.py`.
+
+#### `backend/app/dataModel/worldPack/wire/territoryVolume.py`
+
+[Исходник](../../backend/app/dataModel/worldPack/wire/territoryVolume.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class TerritoryVolume(BaseModel)
+TerritoryVolume.SCHEMA_ID: ClassVar[str] = 'SCH-TERRITORY-VOLUME'
+TerritoryVolume.x0: int
+TerritoryVolume.y0: int
+TerritoryVolume.z0: int
+TerritoryVolume.x1: int
+TerritoryVolume.y1: int
+TerritoryVolume.z1: int
+validator TerritoryVolume._normalize_bounds
+TerritoryVolume.contains(self, x: int, y: int, z: int) -> bool
+empty_inclusive(a0: int, a1: int, b0: int, b1: int) -> int
+volumes_conflict(vol_a: TerritoryVolume, vol_b: TerritoryVolume, policy: TerritoryVolumePolicy) -> bool
+inside_location_volume(x: int, y: int, z: int, volumes: list[TerritoryVolume]) -> bool
+```
+Прямые importers: `backend/app/dataModel/worldPack/__init__.py`; `backend/app/dataModel/worldPack/meta/worldPackManifest.py`; `backend/app/application/worldData/locations/settlementMapOccupancy.py`; `backend/app/application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py`; `backend/app/application/worldData/render/pack/locationCityPackRenderer.py`; `backend/app/application/worldData/render/pack/locationTerrainPackRenderer.py`; `backend/app/application/worldData/pack/read/locationTerritoryVolumes.py`; `backend/app/application/worldData/pack/read/packRenderReadFacade.py`; `backend/app/application/worldData/pack/refine/fine/fineRectDrain.py`; `backend/app/application/worldData/pack/refine/fine/fineScenePathRefine.py`; `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkGeom.py`; `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkPersist.py`; `backend/app/application/worldData/pack/refine/fine/chunk/fineChunkRunner.py`; `backend/app/application/worldData/pack/refine/fine/prep/fineTileContext.py`; `backend/app/application/worldData/pack/refine/fine/prep/fineTilePrep.py`; `backend/app/application/worldData/pack/bake/detailed/detailedBakeScope.py`.
+
+#### `backend/app/dataModel/worldSnapshot/identity/publication.py`
+
+[Исходник](../../backend/app/dataModel/worldSnapshot/identity/publication.py). Статус: existing, reuse-кандидат / точное изменение OPEN.
+
+```text
+class WorldPublicationRef(BaseModel)
+WorldPublicationRef.world_uid: EntityUid
+WorldPublicationRef.publication_id: EntityUid
+WorldPublicationRef.pack_hash: RevisionHex | None
+WorldPublicationRef.snapshot_head: WorldSnapshotRef | None
+WorldPublicationRef.active_timeline_id: EntityUid | None
+WorldPublicationRef.gameplay_started: bool
+WorldPublicationRef.coherent_refs(self) -> Self
+class PlayerHeadExpectation(BaseModel)
+PlayerHeadExpectation.player_uid: EntityUid
+PlayerHeadExpectation.expected_head: PlayerSnapshotRef | None
+PlayerHeadExpectation.coherent_refs(self) -> Self
+```
+Прямые importers: `backend/app/db/repositories/sqlite/snapshotCore/publications/playerPublicationStore.py`; `backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py`; `backend/app/dataModel/worldSnapshot/results/apply.py`; `backend/app/dataModel/worldSnapshot/results/publication.py`; `backend/app/dataModel/patch/request/patchSet.py`; `backend/app/application/worldSnapshot/contracts/context.py`; `backend/app/application/worldSnapshot/storage/publicationStore.py`; `backend/app/application/patch/encoding/patchSetCodec.py`; `backend/app/application/artifacts/encoding/coreManifest.py`.
