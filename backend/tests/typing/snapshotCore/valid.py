@@ -216,6 +216,13 @@ async def explicit_world_claim(operations: IOperationStore, digest: RevisionHex)
 
 
 from app.db.database import Database
+from app.application.artifacts.staging.artifactStaging import ArtifactStagingService, TypedArtifactStager
+from app.application.artifacts.lifecycle.artifactGc import ArtifactGarbageCollector
+from app.application.artifacts.contracts.stagingPort import IArtifactStaging
+from app.application.artifacts.contracts.holderPort import IArtifactHolders
+from app.application.artifacts.storage.artifactCatalog import IArtifactCatalog
+from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
+from app.application.publication.service.operationLedger import OperationLedger
 from pathlib import Path
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
 from app.application.artifacts.storage.artifactLeases import IArtifactLeases
@@ -241,6 +248,16 @@ def sqlite_composition(db: Database) -> tuple[IPublicationCommitStore, IWorldPub
 def blob_composition(db: Database, contract: ArtifactFormatContract[bytes],
                      leases: IArtifactLeases) -> ArtifactBackend[bytes]:
     return ContentAddressedBlobBackend(Path(db.path).resolve().parent / "artifacts", contract, leases)
+
+
+def artifact_application(registry: ArtifactFormatRegistryBinding, catalog: IArtifactCatalog,
+                         leases: IArtifactLeases, holders: IArtifactHolders, operations: IOperationStore,
+                         log: ArtifactLifecycleLog, contract: ArtifactFormatContract[bytes]) -> IArtifactStaging:
+    ledger = OperationLedger(operations, leases)
+    gc = ArtifactGarbageCollector(registry, catalog, holders, log)
+    staging: IArtifactStaging = ArtifactStagingService(registry, catalog, leases, holders, gc, ledger, log)
+    typed: TypedArtifactStager[bytes] = TypedArtifactStager(contract, 1, registry, staging)
+    return staging
 
 
 from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance

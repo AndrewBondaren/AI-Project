@@ -15,6 +15,7 @@ class ArtifactFormatRegistryBinding:
         self._verify: dict[ArtifactFormatKey, Callable[[ArtifactRef], Awaitable[None]]] = {}
         self._delete: dict[ArtifactFormatKey, Callable[[ArtifactRef], Awaitable[None]]] = {}
         self._metadata: dict[ArtifactFormatKey, ArtifactFormatMetadata] = {}
+        self._checks: dict[ArtifactFormatKey, Callable[[ArtifactRef], None]] = {}
 
     def register[C: bytes | BaseModel](self, contract: ArtifactFormatContract[C], backend: ArtifactBackend[C]) -> None:
         contract.__post_init__()
@@ -40,6 +41,7 @@ class ArtifactFormatRegistryBinding:
             await backend.delete(ref)
 
         self._bindings[contract.key] = (contract, backend)
+        self._checks[contract.key] = check
         self._verify[contract.key] = verify
         self._delete[contract.key] = delete
         self._metadata[contract.key] = ArtifactFormatMetadata(key=contract.key, supported_versions=contract.supported_versions)
@@ -84,6 +86,11 @@ class ArtifactFormatRegistryBinding:
     async def verify(self, ref: ArtifactRef) -> None:
         self.metadata(ref.format_key)
         await self._verify[ref.format_key](ref)
+
+    def validate(self, ref: ArtifactRef) -> None:
+        ref = ArtifactRef.model_validate(ref, strict=True)
+        self.metadata(ref.format_key)
+        self._checks[ref.format_key](ref)
 
     async def delete(self, ref: ArtifactRef) -> None:
         self.metadata(ref.format_key)

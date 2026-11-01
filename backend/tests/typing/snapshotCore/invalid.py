@@ -114,12 +114,26 @@ def different_lifecycle_types(world: WorldSnapshotRef, player: PlayerSnapshotRef
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
+from app.application.artifacts.staging.artifactStaging import TypedArtifactStager
+from collections.abc import Callable
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.application.worldSnapshot.contracts.commitScope import CommitScope, CommitReadScope, IDomainCommitBinding
 from app.application.worldSnapshot.contracts.context import SnapshotValidationContext, SnapshotApplyContext
 from app.application.worldSnapshot.storage.commitStore import IPublicationCommitStore
 from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
 from tests.snapshotCore.support.fakeSection import FakeSection, FakeSectionHandler, FakePrepared
+
+
+async def invalid_typed_stage(stager: TypedArtifactStager[bytes], lease: OperationLeaseRef,
+                              content: FakePrepared) -> None:
+    await stager.stage(lease, content)  # EXPECT: reportArgumentType
+
+
+def invalid_row_projection(contract: ArtifactFormatContract[FakePrepared]) -> None:
+    bad: Callable[[FakePrepared], str] = lambda value: "two"
+    contract_with_wrong_count = ArtifactFormatContract(key=contract.key, kind=contract.kind,
+        supported_versions=contract.supported_versions, content_model=FakePrepared,
+        encode=contract.encode, decode=contract.decode, row_count=bad)  # EXPECT: reportArgumentType
 
 
 def write_capability(scope: CommitScope) -> None:

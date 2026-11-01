@@ -18,6 +18,7 @@ class ArtifactFormatContract[C: bytes | BaseModel]:
     content_model: type[C]
     encode: Callable[[C], bytes]
     decode: Callable[[bytes, FormatVersion], C]
+    row_count: Callable[[C], int] | None = None
 
     def __post_init__(self) -> None:
         TypeAdapter(ArtifactFormatKey).validate_python(self.key, strict=True)
@@ -27,9 +28,13 @@ class ArtifactFormatContract[C: bytes | BaseModel]:
             raise ValueError("artifact format needs versions and pure codecs")
         model = self.content_model
         if self.kind is ArtifactKind.BLOB:
+            if self.row_count is not None:
+                raise TypeError("BLOB does not have a row count projection")
             if model is not bytes:
                 raise TypeError("BLOB content must be bytes")
         else:
+            if not callable(self.row_count):
+                raise TypeError("SQL_ROWS requires a domain row count projection")
             if not isinstance(model, type) or not issubclass(model, BaseModel) or model is BaseModel:
                 raise TypeError("SQL_ROWS requires a concrete frozen row-set model")
             if (model.model_config.get("frozen") is not True or model.model_config.get("strict") is not True
@@ -46,7 +51,10 @@ class ArtifactBackend[C: bytes | BaseModel](ABC):
 
     @abstractmethod
     async def write(self, reservation: StagingReservation, content: C) -> None:
-        """Check reservation/fence before writing; never overwrite published content."""
+        """Own/drain the fenced writer claim; never overwrite published content.
+
+        The typed stager does not acquire a second claim around this call.
+        """
         ...
 
     @abstractmethod

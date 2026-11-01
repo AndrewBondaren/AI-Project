@@ -500,8 +500,15 @@ descriptor нельзя заполнить догадкой о будущем р
 `verify(ref)` / `delete(ref)`; C — concrete bytes либо frozen domain row set,
 не object/dict. `ArtifactFormatContract[C]` связывает format key, kind,
 versions, concrete content model и pure canonical codec. Это application
-binding; dataModel metadata остаётся без executable codec. Реестр регистрирует
-contract/backend с одним C, проверяет ключ/тип перед dispatch, без публичного
+binding; dataModel metadata остаётся без executable codec.
+
+Доменный binding также владеет `row_count(content)` для SQL_ROWS: pure
+функция возвращает strict int >= 0 по prepared content. Для BLOB callback
+отсутствует и descriptor.row_count=None. Typed stager вызывает projection
+до reserve; доменный backend отдельно сверяет число сохранённых строк при
+verify. SQL COUNT или разбор доменного POJO в общем stager не вводится.
+
+Реестр регистрирует contract/backend с одним C, проверяет ключ/тип перед dispatch, без публичного
 untyped payload. `TypedArtifactStager[C].stage(lease, content: C) -> ArtifactRef`
 делегирует encode/hash/reserve/write/seal общему механизму; domain producer
 получает только binding своего C. Это application staging, не generator API.

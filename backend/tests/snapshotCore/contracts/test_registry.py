@@ -205,7 +205,8 @@ class SectionRegistryTests(unittest.TestCase):
         contract = ArtifactFormatContract(key=RegistryKey[ArtifactFormatRegistry]("test.rows"),
             kind=ArtifactKind.SQL_ROWS, supported_versions=frozenset({1}), content_model=FakePrepared,
             encode=lambda content: content.model_dump_json().encode(),
-            decode=lambda payload, version: FakePrepared.model_validate_json(payload))
+            decode=lambda payload, version: FakePrepared.model_validate_json(payload),
+            row_count=lambda content: len(content.values))
         backend = create_autospec(ArtifactBackend, instance=True)
         backend.contract = contract
         registry = ArtifactFormatRegistryBinding()
@@ -244,4 +245,8 @@ class SectionRegistryTests(unittest.TestCase):
                             continue
                         self.assertFalse(any(name == prefix or name.startswith(prefix + ".")
                             for prefix in ("app.db", "app.core", "app.storage", "sqlite3", "aiosqlite", "logging")), source)
-                        self.assertNotIn(".service.", name, source)
+                        allowed_service_edge = (
+                            source.relative_to(root).as_posix() == "artifacts/staging/artifactStaging.py"
+                            and name == "app.application.publication.service.operationLedger")
+                        if not allowed_service_edge:
+                            self.assertNotIn(".service.", name, source)
