@@ -614,3 +614,9 @@ BaseModel для output ноды учитывает GEN-DAG, оно не тре�
 ownership-correction блоки и зеркальная вводная спецификация. Существующие
 SPATIAL §§2–11 и архитектурные gates сохранены. Изменена только документация;
 реализация SPATIAL/engine DAG не выполнялась, G10-A/SPATIAL OPEN.
+
+### Уточнение приёмки SP-R0/SP-P3W и области water — GRAPH-Q02/Q03/Q04 (2026-11-01)
+
+- **SP-R0:** SP-1 + SP-M разрешают начало проектирования. Приёмка дополнительно требует совместно согласованного domain-owned scene/read и GEN-P0 consumer contract: owner композиции, typed Input/Output/error, pinned revision, exact POJO/enum/file map и handoff конкретным callers. В графе это `SCENE-READ-FREEZE` — alias совместного результата дизайна, не новая реализация. Он не требует принятия всего GEN-P0 или production cutover; GEN-P0 использует этот результат для своих concrete bindings. Exact contracts остаются OPEN.
+- **SP-P3W:** помимо SP-P3I + SP-P2 + SP-H требуется принятый DAG/World Pack контракт вызова staged publisher из light-bake entrypoint (`PACK-ENTRY-CONTRACT`). До кода перечислить entrypoint/caller, owner, exact typed input/output/errors, revision/manifest binding и правила publication/rollback. Isolated root-publication proof использует этот контракт; production bake E2E остаётся GEN-BAKE. Контракт OPEN; ни весь GEN cutover, ни обходной legacy publisher не становятся prerequisite/заменой.
+- **River scope:** SP-3/SP-R для open-water ocean/lake не принимают river-volume query. Речной z_water(x,y), профиль/POJO/wire и отдельное reader/E2E evidence требуют GEO/Hydrology SP-H2. До их приёмки речная volumetric activation отложена; нельзя выводить liquid thickness из одного RIVER_BED/UID. SP-H2 не блокирует ocean/lake path. Exact river contracts остаются OPEN.

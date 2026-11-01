@@ -195,3 +195,9 @@ GEN-DAG-1 владеет **всеми конкретными** Input/Output ра
 ### GEN-P0: положение SP-R2 относительно единого cutover — OPEN (2026-11-01)
 
 SPATIAL §8 требует SP-R1 до активации SP-R2. До production switch P0 обязан перечислить water node IDs/callers и зафиксировать их включение в первый атомарный cutover либо последующее расширение. В первом случае SP-R1 и готовые concrete bindings обязательны до switch, SP-R2 принимается в составе того же переключения. Во втором нужны явный перечень отложенных consumers и evidence полноты первого switch: все действующие callers мигрированы, обязательный scene read работает без legacy runtime/SQL-water/L0 fallback. Позднее расширение не разрешено по умолчанию. Выбор OPEN блокирует production switch, но не независимые inventory/contracts/isolated bindings. Это уточнение gate полноты GEN-P0, не новые ноды/API и не частичная миграция. См. [WORLD-PLAN-GRAPH-1 §4.1](./world-generation-plan-dependency-graph.md).
+
+### Evidence для GRAPH-Q01/Q02/Q03/Q07 (2026-11-01)
+
+GEN-P0 сопоставляет node IDs/callers с совместным `SCENE-READ-FREEZE` (SP-R0), publication entrypoint contract (`PACK-ENTRY-CONTRACT`, SP-P3W) и необходимостью source-revision-set binding Snapshot §6/шаг 5. Это contract-level handoff, не требование завершить production GEN для проектирования этих портов. Exact contracts и source-aware consumer matrix OPEN.
+
+Для варианта позднего SP-R2 недостаточно запрета legacy fallback: предъявить для всех действующих scene callers поведение cold-Pack ocean без water cells, accepted Snapshot и typed missing/unsupported outcomes. Unsupported допустим лишь для явно отложенной необязательной функции; обязательные water facts нельзя молча исключить из scene response. Если действующий caller требует такие facts, water binding входит в первый атомарный cutover после SP-R1. До inventory и evidence выбор остаётся OPEN и production switch BLOCKED.

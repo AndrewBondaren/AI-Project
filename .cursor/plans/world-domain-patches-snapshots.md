@@ -2445,3 +2445,9 @@ Scoped diff --check — PASS. Правки через apply_patch; чужие и
 Старый TODO(snapshot) со ссылкой на WS §7 остаётся исторической ссылкой в
 runtime до отдельной синхронизации callers. Он не возвращает общий WS read
 contract в архитектуру. Архивные документы не источник новых implementation требований.
+
+### Уточнение навигационных gates GRAPH-Q01/Q05 (2026-11-01)
+
+`SN-APPLY-HANDLER` в WORLD-PLAN-GRAPH-1 означает принятый применимый доменный SectionHandler/apply/commit operation с composition и Snapshot.apply. Он **не включает** Snapshot-aware read overlay SP-3S: reader следует после принятия apply path и имеет отдельную приёмку. SN-RUNTIME не доказывает готовность reader и не зависит от приёмки SP-3S.
+
+Source revision-set binding остаётся отдельным шагом 5 после World Source Versioning 2–3 (§6). До приёмки source-aware consumer owner обязан перечислить используемые source refs, capture/pinning/retention, dependency validation и evidence согласованного binding. Применимость к SP-3S/SP-R или конкретной GEN operation фиксируется по её контракту; пока применимость не определена, такой source-aware consumer не принимается. Core 4C2–4C4 и неизменённый immutable base-Pack read этим автоматически не блокируются. Матрица конкретных consumers и exact binding **OPEN**; общего Snapshot.apply для закрытия недостаточно.
