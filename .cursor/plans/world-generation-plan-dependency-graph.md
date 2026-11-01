@@ -10,12 +10,28 @@
 |---|---|
 | [GEO-1](./geo-1-designed-water.md) — `.cursor/plans/geo-1-designed-water.md` | Hydrology canonical final source: water identity, levels, resolved membership/connectivity, final bed/geometry, proven coverage, refs/revisions. Task1–10 verified isolated; **Task11 design OPEN, G10-A production cutover OPEN**. Контракт данных и representation выбираются **до следующего зависимого producer code step**. |
 | [SPATIAL-1](./spatial-distribution-domain.md) — `.cursor/plans/spatial-distribution-domain.md` | Общая typed read форма и требования к bounded query/materialization; конкретный Hydrology reader/index принадлежит Hydrology. **SP-0/1/P0/M и остальные необходимые freeze — OPEN**. Water Pack/root steps отдельно от runtime Snapshot и gameplay. |
-| [Domain Patches & Snapshots](./world-domain-patches-snapshots.md) — `.cursor/plans/world-domain-patches-snapshots.md` | Принята архитектурная основа domain.read, domain PatchSet, immutable pack и Snapshot-owned apply; **runtime publication ещё не готова**. По §8.14 4C2-H требует приёмки, 4C2-O не начат, последующие 4C3+ заблокированы собственными gates. |
+| [Domain Patches & Snapshots](./world-domain-patches-snapshots.md) — `.cursor/plans/world-domain-patches-snapshots.md` | **Актуальный owning-план Snapshot** (наряду с нормативным [World Snapshot ТЗ](../../docs/tz_world_snapshot.md)): архитектура принята, core/runtime **не DONE**. 4C2-R и 4C2-H реализованы, ждут архитектурной приёмки; 4C2-O не начат, 4C3+ blocked. После GEN-DAG остаётся отдельный B-2 gate первичного bake (§1.1). |
 | [DAG-TYPING-1](./dag-typing-1.md) — `.cursor/plans/dag-typing-1.md` | Общая typed инфраструктура `NodeContract`, OutputRef, runtime, NodeRegistry, parallelism: **A1–A3 implemented/verified**, **B1–B3 не завершены**, B зависит от конкретной интеграции GEN-DAG-1. |
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | Concrete node Input/Output и factories, вызовы публичных доменных операций и production migration. **DRAFT/DEFERRED**: требуются принятый GEO-1, необходимые Patch/Snapshot contracts/runtime gates, готовая typed infrastructure и собственная per-node приёмка. |
 | [PHYSICS-1](./physics-spatial-dynamics.md) — `.cursor/plans/physics-spatial-dynamics.md` | Будущая физическая эволюция (PH-AGG/PH-LOCAL), через DAG → доменный patch → Snapshot. **Границы согласованы, алгоритмы/контракты/код OPEN**; **не prerequisite** для GEO bootstrap, water Pack read или GEN-DAG generator cutover. |
 
 **Дополнительные внешние контракты (не равны самостоятельным новым задачам SPATIAL):** [World Pack storage](../../docs/tz_world_pack_storage.md), [World Snapshot](../../docs/tz_world_snapshot.md), [World Source Versioning](./world-source-versioning.md). Их owners должны принимать staged immutable publication, source revisions и runtime apply в своих треках. Архивные WS-0/WS-4 **не gate и не SoT**.
+
+### 1.1. Актуальный Snapshot: конкретные шаги, два publication пути и зависимость B-2
+
+**Единственный действующий план реализации Snapshot:** [Domain Patches & Snapshots, §8.3 и §8.14](./world-domain-patches-snapshots.md); нормативные семантика и staged-граница — [World Snapshot ТЗ](../../docs/tz_world_snapshot.md). `WorldPublicationRef` — pinned состояние; это не `PlanRef`, не `ArtifactRef` и не результат DAG-ноды. Эта карта **не** воскрешает архивный WS или параллельный Snapshot implementation.
+
+| Gate owning Snapshot | Текущий статус / что именно разблокирует |
+|---|---|
+| **SN-CORE / 4C2-R + 4C2-H → 4C2-O → 4C3 → 4C4** | `4C2-R` и `4C2-H` реализованы, но **ждут архитектурной приёмки**; `4C2-O` **НЕ НАЧАТ**. `4C3` запрещён до приёмки R/H и O. Далее artifact adapters `4C3`, physical BLOB backend `4C4` — по собственным code gates. |
+| **SN-STAGE / 4D1 + 4D3 + 4E2** | Shared artifact staging/lease/GC `4D1`, **pregame** `PreparedPackActivation/GameplayStart` `4D3`, core composition `4E2`. Внешний **accepted staged Pack publication port** нужен `SP-P2W`; одних DTO и изолированных тестов недостаточно. |
+| **SN-RUNTIME / 4D2 + 4E2 + применимый domain handler** | `Snapshot.apply` `4D2`, composition и принятое доменное применение/overlay дают runtime gate для `SP-3S`, `SP-4R`, `SP-R1` и нужных GEN-DAG операций. Нельзя подменять его SessionSnapshot из DAG-TYPING или Pack pregame activation. |
+| **SN-B-2 / GEN-DAG bake integration acceptance** | [Snapshot §7.2](./world-domain-patches-snapshots.md) требует перенести L0 → C23 / bake orchestration в GEN-DAG для **полной приёмки Snapshot-плана**. Это **поздний E2E gate после GEN-DAG**, а не prerequisite `GEN-DAG ← весь Snapshot DONE`. |
+
+**Порядок реализации внутри Snapshot уже зафиксирован §8.3.8:** после R/H/O следуют `4C3 → 4C4 → 4D1 → 4D2 → 4D3 → 4E2 → первый concrete domain handler`. **Семантическая независимость pregame CAS от runtime Snapshot.apply не разрешает менять этот code-order:** нельзя объявлять `4D3` выполненным раньше `4D2` без изменения и приёмки owning-плана. Внешним consumer-gate служит **фактически принятый port/handler**, а не только номер достигнутого подшага.
+
+**Отсутствие цикла:** достаточные core ports/handlers Snapshot → GEN-DAG production; затем GEN-DAG bake integration → Snapshot B-2 E2E приёмка. Не требовать «весь Snapshot DONE» на вход GEN-DAG, иначе получится ложный цикл.
+
 
 ## 2. Смысл стрелок и отсутствие ложных циклов
 
@@ -34,17 +50,21 @@
 flowchart TD
     G["GEO-1: принят G10-A"] --> H["SP-H: producer proof"]
     S["SPATIAL SP-0/1/P0"] --> P1["SP-P1: Pack schema"]
-    P1 --> T["SP-P2R + SP-P2W → SP-P2"]
+    P1 --> PR["SP-P2R: read/verify"]
+    P1 --> PW["SP-P2W: staged publication"]
+    ST["SN-STAGE: accepted pregame port"] --> PW
+    PR --> P2["SP-P2: transport accepted"]
+    PW --> P2
     H --> I["SP-P3I: compact root"]
     P1 --> I
     I --> W["SP-P3W: root publication"]
-    T --> W
+    P2 --> W
     W --> R["SP-P3 → SP-3 → SP-4"]
 ```
 
 **Точные исключения и дополнительные внешние gates:**
 
-1. `SP-P2W` требует отдельно принятого **staged World Pack/pregame publication port**, включая manifest CAS, hash/format/revision и rollback. Это не разрешает runtime mutation базового pack.
+1. `SP-P2W` требует отдельно принятого **staged World Pack/pregame publication port** (`SN-STAGE`, owning Snapshot 4D1/4D3/4E2 и профильный World Pack contract), включая manifest CAS, hash/format/revision и rollback. `SP-P2R` может проверять read/verify независимо после SP-P1; **он не ждёт SN-STAGE**. В текущем Snapshot code-order 4D3 следует за 4D2, но pregame activation **не является runtime Snapshot.apply**.
 2. `SP-P3I` требует одновременно `SP-H` (принятый G10-A), `SP-P0` и `SP-P1`; `SP-P3W` требует `SP-P3I` и `SP-P2`. Отдельный physical source GEO и transport/index/publish steps SPATIAL **не дублируют друг друга**.
 3. `SP-3` — Hydrology-owned bounded immutable-base reader, **не** универсальный Spatial solver. `SP-4` — только base/pre-game L2; не считать его доказательством runtime Snapshot-aware read.
 4. Текущий `FineWaterJob.fill` требует полного fine-покрытия как **AS-IS cost**; целевой source/representation/precision/budget остаются OPEN в GEO. Маленький `read_window` не запускает fill/routes и не сканирует весь мир.
@@ -57,22 +77,23 @@ flowchart TD
 flowchart TD
     A["DAG-TYPING A1–A3"] --> GEN["GEN-DAG: конкретные ноды и cutover"]
     G["GEO G10-A"] --> GEN
-    P["Patch/Snapshot runtime apply"] --> GEN
-    P --> S["SP-3S: pinned water overlay"]
+    SN["SN-RUNTIME: accepted Snapshot.apply + owner handler"] --> GEN
+    SN --> S["SP-3S: pinned water overlay"]
     BASE["SP-P3 / SP-3"] --> S
     S --> R1["SP-R1: typed scene composition"]
     R0["SP-R0: read contract freeze"] --> R1
     GEN --> B["DAG-TYPING B1–B3"]
+    GEN --> SB["SN-B-2: bake E2E acceptance"]
     GEN --> R2["GEN-DAG water binding / SP-R2"]
     R1 --> R2
     R2 --> E["SP-R: gameplay E2E"]
 ```
 
-- `SP-3S` требует принятого runtime Snapshot apply и `SP-3`; `SP-4R` отдельно требует `SP-4 + SP-3S`. **SP-4R не prerequisite водного SP-R gameplay-read**, если consumer работает с типизированными media slices без per-cell materialization.
+- `SP-3S` требует принятого `SN-RUNTIME` (Snapshot 4D2/4E2 и необходимого Hydrology-owned handler/overlay) и `SP-3`; `SP-4R` отдельно требует `SP-4 + SP-3S`. **SP-4R не prerequisite водного SP-R gameplay-read**, если consumer работает с типизированными media slices без per-cell materialization.
 - `SP-R1` требует `SP-R0 + SP-3S`; `SP-R2` — внешний owning GEN-DAG gate для реальных engine/LLM/UI callers после `SP-R1`; `SP-R` — cold-Pack + accepted Snapshot + real consumer E2E, **не** debug API.
 - GEN-DAG может готовить node inventory/contracts и isolated implementation, когда их локальные gates приняты, но **production migration** остаётся заблокирована по его собственному плану до принятого GEO, необходимых Patch/Snapshot gates и явной команды владельца. Не писать неизвестные доменные POJO в GEN-DAG ради ускорения.
 - Runtime reader: `DAG → domain.read(window, WorldPublicationRef) → typed domain result`; после игры базовый pack не переписывается, accepted changes проходят `domain.patch → PatchSet → Snapshot`. `NodeOutput` текущего исполнения DAG **не является** canonical persisted source или заменой `WorldPublicationRef`.
-- **DAG-TYPING B** — cleanup/handoff после принятой GEN-интеграции, не prerequisite для завершения GEO и не разрешение держать два production runtimes.
+- **DAG-TYPING B** — cleanup/handoff после принятой GEN-интеграции, не prerequisite для завершения GEO и не разрешение держать два production runtimes. Также **SN-B-2** в Snapshot §7.2 принимает реальную DAG-оркестрацию bake **после GEN**, не до: полный `Snapshot DONE` нельзя требовать от GEN на входе.
 
 ## 5. Реестр направленных gate-зависимостей (для машинной и ручной проверки)
 
@@ -81,24 +102,27 @@ flowchart TD
 | Совместные GEO + SPATIAL инварианты и representation/price-quality | Следующий зависящий hydrology producer code step | **Contract freeze:** GEO владеет water source POJO; SPATIAL — требованиями read/window. Нет concrete GEN-DAG node freeze. |
 | GEO G10-A accepted | SP-H → SP-P3I → SP-3 | **Hard:** canonical native final facts, fine coverage и exact dependencies с отключением legacy production route. |
 | SPATIAL SP-0/1/P0/P1 | SP-P3I и SP-P2 transport | **Hard локальных steps:** exact file/POJO/enum/codec/storage signatures; не зависимость всей SPATIAL от GEO на фазе архитектуры. |
-| World Pack staged/pregame port accepted | SP-P2W → SP-P2 → SP-P3W | **External hard:** immutable BLOB/ref/manifest CAS + cold round-trip; не runtime Snapshot apply. |
+| **SN-CORE**: 4C2-R/H architecture acceptance → 4C2-O accepted | 4C3 → 4C4 → 4D1 → 4D2 → 4D3 → 4E2 | **Hard owning-плана:** отдельные последовательные code gates; не параллелить внутренние шаги без изменения Snapshot-плана. |
+| **SN-STAGE**: accepted World Pack staged/pregame port (Snapshot 4D1/4D3/4E2 и World Pack owner) | SP-P2W → SP-P2 → SP-P3W | **External hard:** immutable BLOB/ref/manifest CAS + cold round-trip; не runtime Snapshot.apply. В действующем code-order 4D3 идёт после 4D2; семантика pregame отдельно от runtime. |
 | SP-P3I и SP-P2 accepted | SP-P3W → SP-P3 → SP-3 | **Hard:** один published Hydrology root; domain reader не получает fake coverage/L0 fallback. |
 | SP-M + SP-3 accepted | SP-4 bootstrap L2 | **Hard только для base L2:** не ждать GEN-DAG, air migration или runtime Snapshot. |
-| Domain Patches runtime Snapshot apply accepted + SP-3 | SP-3S → SP-R1 / SP-4R | **Hard для runtime:** pinned revision, overlay и invalidation; `SP-4R` дополнительно ждёт SP-4. |
-| DAG-TYPING A1–A3 + GEO accepted + необходимые Patch/Snapshot gates | GEN-DAG concrete production integration | **Hard:** stage-specific, не весь DAG-TYPING B и не весь SPATIAL; свои per-node contracts и отдельный cutover. |
+| **SN-RUNTIME**: Snapshot 4D2/4E2 + необходимый Hydrology domain handler/overlay accepted; SP-3 | SP-3S → SP-R1 / SP-4R | **Hard для runtime:** pinned WorldPublicationRef, accepted patches, overlay и invalidation; `SP-4R` дополнительно ждёт SP-4. |
+| DAG-TYPING A1–A3 + GEO G10-A accepted + **необходимые** SN-CORE/SN-RUNTIME ports и domain handlers | GEN-DAG concrete production integration | **Hard:** stage-specific, **не** весь Snapshot DONE (B-2 закрывается после GEN), не DAG-TYPING B и не весь SPATIAL; свои per-node contracts и отдельный cutover. |
 | GEN-DAG accepted concrete production integration | DAG-TYPING B1–B3 | **Handoff:** remove legacy common channels после реальных usages. Нельзя делать B предварительным gate GEN-DAG. |
+| GEN-DAG accepted bake orchestration / L0 → C23 production evidence | **SN-B-2**, финальная приёмка Snapshot §7.2 | **Late acceptance:** проверка actual job DAG и pack activation, **не** входное требование `Snapshot DONE` к GEN-DAG. |
 | SP-R1 + GEN-DAG water consumer binding (SP-R2) + SP-3S | SP-R gameplay E2E | **Hard:** реальный engine/LLM/UI read media-only воды без MapCell/SQL water fallback и mixed revisions. |
 | PHYSICS-1 future + принятые domain/DAG/Snapshot public operations | Будущие PH-AGG/PH-LOCAL changes | **Future only:** нет ребра обратно в GEO G10-A, immutable Pack read или GEN-DAG generator bootstrap. |
 
 ## 6. Практический приоритет (не подмена hard gates)
 
 1. **P0 — совместная архитектура:** GEO canonical source semantics, Task11 coarse/fine coordinate+revision, выбор compact representation/cost-quality; SPATIAL contract/reuse/layout review. **До кода:** все нужные POJO/enum/target paths согласованы в owning plans.
-2. **P1 — GEO-1 G10-A:** закончить единственный native final producer и его production acceptance, без самостоятельного compact Pack writer и без изменения engine DAG ради обхода.
-3. **P2 — водный SPATIAL:** принять storage-root/transport и Hydrology-owned bounded reader + base L2 `SP-P*`, `SP-3`, `SP-4`. Независимые Pack steps могут идти раньше P1 по собственным gates.
-4. **P3 — GEN-DAG-1:** concrete ноды/единый production cutover, когда GEO и необходимые Patch/Snapshot gates реально приняты; GEN architecture/inventory допустим заранее.
-5. **P4 — runtime water gameplay:** SP-3S/R1, GEN-DAG water binding SP-R2, SP-R E2E и, отдельно, SP-4R для runtime L2. PHYSICS/Gas/Geology/Air остаются самостоятельными треками.
+2. **P0-S — актуальный Snapshot (параллельный критический путь):** принять архитектурно 4C2-R/H, выполнить и принять 4C2-O, затем последовательно 4C3/4C4/4D1/4D2/4D3/4E2 и нужные domain handlers. Эта ветка не ждёт GEO; `SN-STAGE` и `SN-RUNTIME` разблокируют **разные** downstream steps. `SN-B-2` ожидает будущей GEN-DAG bake-интеграции.
+3. **P1 — GEO-1 G10-A:** закончить единственный native final producer и его production acceptance, без самостоятельного compact Pack writer и без изменения engine DAG ради обхода.
+4. **P2 — водный SPATIAL:** принять storage-root/transport и Hydrology-owned bounded reader + base L2 `SP-P*`, `SP-3`, `SP-4`. `SP-P2R` и `SP-P3I` допускают независимую работу по локальным gates; публикация ждёт `SN-STAGE`, `SP-P2` и `SP-P3I`.
+5. **P3 — GEN-DAG-1:** concrete ноды/единый production cutover, когда GEO и необходимые `SN-RUNTIME`/Patch gates реально приняты; GEN architecture/inventory допустим заранее. **Полное Snapshot DONE не prerequisite.**
+6. **P4 — runtime water gameplay:** SP-3S/R1, GEN-DAG water binding SP-R2, SP-R E2E и, отдельно, SP-4R для runtime L2. PHYSICS/Gas/Geology/Air остаются самостоятельными треками.
 
-**Не забыть внешний критический путь:** в [Patch/Snapshot §8.14](./world-domain-patches-snapshots.md) 4C2-H ожидает приёмки, 4C2-O не начат; 4C3+ и runtime apply не считать DONE без своих evidence. Его можно вести параллельно GEO/SPATIAL, не смешивая ответственность.
+**Не забыть внешний критический путь:** в [Patch/Snapshot §8.13–8.14](./world-domain-patches-snapshots.md) `4C2-R` и `4C2-H` реализованы, но ожидают архитектурной приёмки; `4C2-O` не начат, `4C3+` и runtime apply не считать DONE без своих evidence. Эту **последовательную внутри Snapshot** ветку можно вести параллельно GEO/SPATIAL по матрице §8. `Snapshot B-2` закрывается лишь после реальной GEN-DAG bake-интеграции.
 
 ## 7. Поддержание графа, обратные ссылки и приёмка
 
@@ -125,5 +149,28 @@ flowchart TD
 - [ ] GEN-DAG owns concrete node I/O; Hydrology owns water facts/read/index; SPATIAL owns generic contract/projection boundary; World Pack/Snapshot владеют публикацией и применением.
 - [ ] Все OPEN/blocked statuses соответствуют owning plans; **план не разрешает код** и не закрывает отсутствие exact POJO/enum/file freeze.
 - [ ] Проверка Markdown/Mermaid/ссылок и фактического наличия обратных ссылок прошла после публикации.
+- [ ] SN-CORE, SN-STAGE, SN-RUNTIME и SN-B-2 различены; отсутствует ложное ребро «весь Snapshot DONE → GEN-DAG», а также неразрешённый параллелизм 4D2/4D3.
+- [ ] У каждого разрешённого параллельного набора §8 указаны локальные стартовые gates, точка схождения и запрет до приёмки prerequisite.
 
 **Открытые вопросы, не закрываемые этой картой:** GEO Task11 coordinate/snapshot + compact membership/cost; SPATIAL SP-0/1/P0 точные POJO/format/paths; staged Pack publication port и runtime Snapshot apply; GEN-DAG concrete node bindings/cutover; SP-R0/R1 owner gameplay composition. Все решения принимаются в owning plans.
+
+
+## 8. Матрица допустимой параллельности: конкретные шаги после gates
+
+**Как читать:** «можно параллельно» означает **независимость по архитектурным prerequisites**, не распоряжение запустить несколько кодовых изменений сразу. Каждый code step выполняется по своему owning-плану, с точными contract/POJO/enum/file freeze и отдельным разрешением мастера. Отдельные owners могут вести архитектурный анализ одновременно; code-группы с общими файлами/consumer cutover требуют сверки import/caller map перед стартом. Условный gate `OPEN` не считается выполненным.
+
+| Когда / стартовый gate | Какие конкретные работы можно вести независимо | Где обязательная синхронизация / что ещё запрещено |
+|---|---|---|
+| **Сейчас, без production-кода:** текущие accepted architecture baselines | **GEO:** Task11 и выбор compact semantics/representation; **SPATIAL:** SP-0 audit, SP-1/M/P0 contract work после локальных prerequisites; **Snapshot:** архитектурная приёмка 4C2-R/H; **GEN-DAG:** read-only node inventory и mapping зависимостей; **DAG-TYPING:** документальный handoff A→GEN. | Нельзя начать GEO producer code до соответствующего POJO freeze; Snapshot 4C2-O ждёт приёмки R/H; GEN production ждёт GEO и нужные Snapshot ports. Не путать параллельный **дизайн** с параллельным разрешением на код. |
+| **После приёмки Snapshot 4C2-R/H** | Snapshot **4C2-O** как **один** собственный атомарный code step может идти одновременно с GEO контрактной/кодовой веткой и независимыми SPATIAL SP-0/1/P0 работами (при их собственных gates). | `4C3` не стартует до принятого `4C2-O`. Внутри Snapshot правило «один подшаг за заход» сохраняется, **4C2-O и 4C3 не параллелить**. |
+| **После SPATIAL SP-0/1/P0 и принятия exact Pack format/POJO** | `SP-P1` (после собственного P0), затем `SP-P2R` (после P1) может разрабатываться независимо от **GEO G10-A** и последовательной ветки Snapshot `4C3+`; кодовые steps только по отдельным разрешениям. | `SP-P2W` дополнительно ждёт **SN-STAGE**; `SP-P3I` ждёт `SP-H/GEO G10-A` и `SP-P1`. Нельзя начать их из-за одного наличия generic contract. |
+| **После GEO G10-A/ SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
+| **После Snapshot SN-CORE, затем собственных 4C3/4C4/4D1/4D2/4D3/4E2 gates** | **SN-STAGE** после фактической приёмки pregame port может разблокировать `SP-P2W`; **SN-RUNTIME** после `4D2/4E2` и нужных domain handlers может разблокировать `SP-3S` и необходимые runtime GEN-DAG bindings. GEO G10-A/SP-P3I/Pack read остаются независимыми до своих точек схождения. | **Не разрешено** выполнять 4D2 и 4D3 параллельно по текущему Snapshot §8.3.8, хотя их семантика различна. `4D3` ≠ `Snapshot.apply`; `4D2` без принятого composition/domain handler ≠ готовый SN-RUNTIME. |
+| **После SP-P3/SP-3, SP-M; runtime Snapshot ещё может быть OPEN** | `SP-4` **bootstrap/base L2** и GEN-DAG read-only/contract design, не зависящий от runtime Snapshot, могут идти независимо. Допустимы собственные независимые SP-A air и SP-G geology architecture steps после их локальных gates. | `SP-3S`, `SP-4R` и `SP-R1` **не** активировать до SN-RUNTIME. Полный GEN production не проводить до GEO и необходимых Snapshot gates. |
+| **После SP-3S + SP-R0 и принятых GEN-DAG runtime prerequisites** | `SP-R1` (typed scene composition) и **независимая** concrete GEN-DAG подготовка/production migration по owning-плану могут идти одновременно, если их файлы/контракты не пересекаются и каждый gate принят. `SP-4R` отдельно возможен после SP-4+SP-3S. | `SP-R2` обязательно ждёт **SP-R1** и принятый GEN-DAG node binding; `SP-R` E2E — после SP-R2. `SP-4R` не prerequisite для media-only gameplay SP-R. |
+| **После принятой GEN-DAG production/bake integration** | **DAG-TYPING B1–B3** handoff/legacy cleanup и **Snapshot SN-B-2** проверка реального bake могут идти как независимые owning acceptance tracks; `SP-R2` — по отдельному water-consumer gate после SP-R1. | Не принимать весь DAG-TYPING или Snapshot DONE **до** соответствующего GEN-DAG handoff/E2E. При пересечении engine файлов — отдельная согласованная миграция, не одновременное изменение одних callers. |
+| **Вне критического water path** | **PHYSICS-1** contract research, **SP-A** air/world-settings и **SP-G** geology architecture могут идти независимо при своих prerequisites. | Не делать PHYSICS, атмосферу, газы или геологию обязательными gates для GEO G10-A, base water Pack/read либо GEN-DAG generator bootstrap. Код этих веток — только по собственному freeze/разрешению. |
+
+**Явно запрещённые «параллельности» и ложные условия:** `Snapshot 4C2-O || 4C3`, `Snapshot 4D2 || 4D3` в существующем implementation-order, `SP-P3W` до `SP-P3I + SP-P2`, `SP-R2` до `SP-R1`, `DAG-TYPING B` до GEN handoff, `Snapshot B-2` как обязательный вход GEN, `SP-4R` как обязательный вход `SP-R`, full SPATIAL/PHYSICS/air как gate GEO. Изменить такие dependencies вправе только принятие обновлённого owning-плана.
+
+**Правило актуализации:** после закрытия каждого named gate обновить статус/доказательство в owning-плане, затем пересмотреть соответствующую строку этой матрицы; не выводить `DONE` из одной стрелки или тестов другого трека.
