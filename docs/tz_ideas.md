@@ -2,7 +2,7 @@
 
 **Тип:** living registry / backlog идей (не player-facing).  
 **Статус:** концепция ✅ · **impl — по фазам**, не блокирует текущий цикл (generators, JSON validation, DAG topology).  
-**Обновлено:** 2026-10-30 (ID-9: план проработки ролей LLM взят в работу).
+**Обновлено:** 2026-11-01 (ID-13/15/20: предреализационный обзор аналогов, без принятия зависимостей и контрактов).
 
 **Связанные документы:**
 
@@ -26,6 +26,10 @@
 | [MnesOS](https://github.com/neolaw84/MnesOS) | Director/Narrator split, cartridge distribution, BYOK |
 | [Project Lunar](https://github.com/horizonfps/project-lunar) | Witness filter, plot-lock, scene notebook |
 | [Omnia](https://github.com/sortedcord/omnia) | Patch merging, world tick, tiered NPC LOD |
+| [MemGPT](https://research.memgpt.ai/) / [Letta memory architecture](https://github.com/letta-ai/skills/blob/main/letta/agent-development/references/memory-architecture.md) | Инициируемый моделью поиск в долговременной памяти, paging контекста, явные memory tools (ID-15) |
+| [LangGraph Agentic RAG](https://docs.langchain.com/oss/python/langgraph/agentic-rag) | LLM выбирает search vs respond, формирует запрос; ограниченные циклы проверки результатов и повторного поиска (ID-20) |
+| [Generative Agents (Park et al., 2023)](https://arxiv.org/abs/2304.03442) | Память NPC: observations, relevance/recency/importance, reflection; сравнить с Facts/Beliefs и ID-15 |
+| [Graphiti (Zep)](https://github.com/getzep/graphiti) | Временной граф событий/фактов, provenance, гибридный поиск; не подменяет canonical world state и проверку доступа (ID-13/15) |
 
 ---
 
@@ -1182,6 +1186,25 @@ ID-13 отвечает за адресацию и lazy disclosure событий
 
 **Связи:** ID-13, ID-15, [tz_engine_flow.md](./tz_engine_flow.md), [tz_world_snapshot.md](./tz_world_snapshot.md).
 
+### Предреализационный обзор аналогов для ID-13 / ID-15 / ID-20 (2026-11-01)
+
+**Решение:** перед проектированием точных typed API/POJO/enum и реализацией **по возможности** прочитать релевантные первичные источники/фрагменты кода ниже и зафиксировать, какие механизмы можно переиспользовать концептуально. Это **исследовательская подготовка**, а не разрешение на реализацию, дополнительные домены/зависимости или перенос чужой архитектуры. Если внешний источник недоступен, отметить это в preflight; его недоступность сама по себе не блокирует работу после внутренних contract gates.
+
+| Источник | Какие части проверить до реализации | Что не переносить автоматически |
+|---|---|---|
+| [MemGPT / Letta](https://github.com/letta-ai/skills/blob/main/letta/agent-development/references/memory-architecture.md) ([исследование](https://research.memgpt.ai/)) | Explicit agent-initiated archival/conversation search, контекст по запросу, сохранение session, бюджет инструментов/контекста | Редактируемую моделью память как источник истины, свободный доступ к любым NPC-событиям; внешняя память не заменяет world_history и знания NPC |
+| [LangGraph Agentic RAG](https://docs.langchain.com/oss/python/langgraph/agentic-rag) | Условный выбор моделью `search` vs `respond`, генерацию query, валидацию релевантности, bounded retry/repair и продолжение после tool result | Второй orchestrating DAG, обязательный retrieval на каждый ход или отдельного LLM-агента; сохранить принятые роли движка и путь проверки ID-20 |
+| [Generative Agents](https://arxiv.org/abs/2304.03442) | Memory stream NPC, выбор воспоминаний по релевантности/давности/значимости, reflection и связь памяти с планированием | Свободную генерацию канонических фактов через воспоминания; наблюдения/слухи NPC не равны объективным событиям (ID-1/2/3) |
+| [Graphiti](https://github.com/getzep/graphiti) | Episodes, temporal validity/provenance, hybrid retrieval, group partition, работу с изменившейся историей; сопоставить с hash-graph/expand ID-13 | Ни граф, ни group_id не являются проверкой полномочий. Reference MCP/REST servers Graphiti не предоставляют production auth; NPC-access filter обязателен **до** поиска/ранжирования |
+
+**Что зафиксировать в preflight-отчёте перед freeze контрактов:**
+
+1. Краткая матрица `аналог → подходящий паттерн → наш существующий owner/contract → принять/не принимать/OPEN`; не копировать стороннюю модель данных без проверки текущих доменов и `dataModel`.
+2. Разделение: **LLM выбирает, когда/что запросить**; самостоятельный retrieval-домен исполняет поиск; **движок** определяет доступную память и допустимый payload. Домен Retrieval/RAG не превращается в DAG-ноду, owner canonical facts, NPC beliefs или Snapshot.
+3. Для ID-13/15 отдельно проверить двухшаговый `search_events → expand(hash)`, ограничение whitelist, неизменность hash/refs, provenance и отсутствие утечек скрытого факта через заголовок, индекс, граф, score/ранжирование; точные API остаются черновыми.
+4. Для ID-20 проверить decision/repair loop технической Intent-ноды, лимиты вызовов, неоднозначное намерение, forced retrieval по валидации, согласованность с текущей веткой после rollback; не считать поиск подтверждением совершённого действия.
+5. Проверить совместимость с существующим engine DAG, распределением LLM-ролей, конвейером Snapshot/Patches и typed contract freeze. Перед кодом определить POJO/enum, точные read/operation seams и negative cases; `ID-13/15/20` остаются `open` до отдельной приёмки.
+
 ---
 
 ## Todo (документ)
@@ -1192,6 +1215,7 @@ ID-13 отвечает за адресацию и lazy disclosure событий
 | DOC-2 | При impl ID-6 — секция manifest в [tz_json_import.md](./tz_json_import.md) | open |
 | DOC-3 | При impl ID-4 — поле `scene_notebook` в [tz_engine_node_context.md](./tz_engine_node_context.md) | open |
 | DOC-4 | При impl ID-13 — вынести в `tz_events.md` (graph hash + expand protocol) | open |
+| DOC-5 | Перед contract freeze/impl ID-13/15/20 — пройти доступный обзор аналогов из одноимённого раздела и зафиксировать выводы; недоступные источники отметить | open |
 
 ---
 
@@ -1213,3 +1237,4 @@ ID-13 отвечает за адресацию и lazy disclosure событий
 | 0.6 | 2026-09 | ID-9 expanded: configurable LLM roles — Intent, NPC, Background Planner / GM, Narrator; role-specific context/knowledge boundaries |
 | 0.7 | 2026-09 | ID-9: model-specific DSL profiles + deterministic fallback exact model → family/type → role default |
 | 1.1 | 2026-10-30 | ID-9: начата проработка отдельного плана LLM-ролей, добавлена ссылка; без изменения статуса реализации |
+| 1.2 | 2026-11-01 | ID-13/15/20: обзор Letta/MemGPT, LangGraph, Generative Agents, Graphiti как research gate перед контрактами/реализацией; без новых зависимостей и изменения статусов |
