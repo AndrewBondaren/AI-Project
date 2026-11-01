@@ -3,7 +3,7 @@
 from pydantic import TypeAdapter
 
 from app.application.publication.errors import PublicationInfrastructureError
-from app.application.worldSnapshot.contracts.commitScope import CommitScope
+from app.application.worldSnapshot.contracts.commitScope import CommitScope, CommitReadScope
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
 from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled, OperationRecord
@@ -14,11 +14,11 @@ from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.results.publication import PackActivationResult, GameplayStarted
 from app.db.models.snapshotCore.operationRows import (
-    PublicationOperationRow, PublicationRequestRow, PublicationOperationEventRow,
+    PublicationOperationRow, PublicationRequestRow, PublicationOperationEventRow, PublicationOutcomeRow,
 )
 from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
 from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
-from app.db.repositories.sqlite.shared.validation.rowValues import _UID, _HASH, _fields, _wire
+from app.db.repositories.sqlite.shared.validation.rowValues import _UID, _HASH, _values, _wire
 from app.ids.deterministicIds import runtime_uid
 
 
@@ -37,27 +37,27 @@ class SqliteOperationStore:
         self._access, self._registry, self._commits = access, access.registry, commits
         self._codec, self._evidence, self._artifacts = codec, evidence, artifacts
 
-    async def _event(self, operation_id, scope):
-        row = await self._access.one(scope,
+    async def _event(self, operation_id: EntityUid, scope: CommitReadScope | CommitScope) -> PublicationOperationEventRow:
+        row = await self._access.one_row(scope, PublicationOperationEventRow,
             "SELECT * FROM publication_operation_events WHERE operation_id=? ORDER BY event_seq DESC LIMIT 1", (operation_id,))
         if row is None:
             raise PublicationInfrastructureError("missing operation lifecycle event")
-        _fields(row, uids=("event_id", "operation_id"), optional_uids=("predecessor_id",), positives=("event_seq", "fence"))
-        phase = _wire(OperationPhase, row["phase"])
-        if row["operation_id"] != operation_id:
+        _values(uids=(row.event_id, row.operation_id), optional_uids=(row.predecessor_id,), positives=(row.event_seq, row.fence))
+        phase = _wire(OperationPhase, row.phase)
+        if row.operation_id != operation_id:
             raise PublicationInfrastructureError("event owner mismatch")
-        if row["predecessor_id"] is None:
-            if row["event_seq"] != 1 or row["fence"] != 1 or phase not in (OperationPhase.PREPARING, OperationPhase.APPLYING):
+        if row.predecessor_id is None:
+            if row.event_seq != 1 or row.fence != 1 or phase not in (OperationPhase.PREPARING, OperationPhase.APPLYING):
                 raise PublicationInfrastructureError("invalid operation event root")
         else:
-            parent = await self._access.one(scope, "SELECT * FROM publication_operation_events WHERE event_id=?", (row["predecessor_id"],))
+            parent = await self._access.one_row(scope, PublicationOperationEventRow, "SELECT * FROM publication_operation_events WHERE event_id=?", (row.predecessor_id,))
             if parent is None:
                 raise PublicationInfrastructureError("missing operation predecessor")
-            _fields(parent, uids=("event_id", "operation_id"), optional_uids=("predecessor_id",), positives=("event_seq", "fence"))
-            parent_phase = _wire(OperationPhase, parent["phase"])
-            if parent["operation_id"] != operation_id or row["event_seq"] != parent["event_seq"] + 1:
+            _values(uids=(parent.event_id, parent.operation_id), optional_uids=(parent.predecessor_id,), positives=(parent.event_seq, parent.fence))
+            parent_phase = _wire(OperationPhase, parent.phase)
+            if parent.operation_id != operation_id or row.event_seq != parent.event_seq + 1:
                 raise PublicationInfrastructureError("operation chain mismatch")
-            same_fence = row["fence"] == parent["fence"]
+            same_fence = row.fence == parent.fence
             allowed = {
                 OperationPhase.PREPARING: (OperationPhase.READY, OperationPhase.TERMINAL),
                 OperationPhase.READY: (OperationPhase.APPLYING, OperationPhase.TERMINAL),
@@ -65,29 +65,29 @@ class SqliteOperationStore:
                 OperationPhase.RECOVERY_REQUIRED: (OperationPhase.TERMINAL,),
                 OperationPhase.TERMINAL: (),
             }
-            resume = (row["fence"] == parent["fence"] + 1 and phase is OperationPhase.READY
+            resume = (row.fence == parent.fence + 1 and phase is OperationPhase.READY
                       and parent_phase in (OperationPhase.APPLYING, OperationPhase.RECOVERY_REQUIRED))
             if not ((same_fence and phase in allowed[parent_phase]) or resume):
                 raise PublicationInfrastructureError("stored operation phase/fence transition mismatch")
         return row
 
-    async def _load(self, operation_id, scope) -> OperationRecord | None:
-        row = await self._access.one(scope, "SELECT * FROM publication_operations WHERE operation_id=?", (operation_id,))
+    async def _load(self, operation_id: EntityUid, scope: CommitReadScope | CommitScope) -> OperationRecord | None:
+        row = await self._access.one_row(scope, PublicationOperationRow, "SELECT * FROM publication_operations WHERE operation_id=?", (operation_id,))
         if row is None:
             return None
-        _fields(row, uids=("operation_id", "world_uid"), hashes=("preparation_fingerprint",))
+        _values(uids=(row.operation_id, row.world_uid), hashes=(row.preparation_fingerprint,))
         event = await self._event(operation_id, scope)
-        request = await self._access.one(scope, "SELECT * FROM publication_requests WHERE operation_id=?", (operation_id,))
+        request = await self._access.one_row(scope, PublicationRequestRow, "SELECT * FROM publication_requests WHERE operation_id=?", (operation_id,))
         if request is not None:
-            _fields(request, uids=("operation_id",), hashes=("publication_fingerprint",))
-        terminal = await self._access.one(scope, "SELECT * FROM publication_outcomes WHERE operation_id=?", (operation_id,))
+            _values(uids=(request.operation_id,), hashes=(request.publication_fingerprint,))
+        terminal = await self._access.one_row(scope, PublicationOutcomeRow, "SELECT * FROM publication_outcomes WHERE operation_id=?", (operation_id,))
         refs = await self._artifacts.read(scope.read_scope if isinstance(scope, CommitScope) else scope, operation_id)
         result = None if terminal is None else self._codec.decode(terminal)
         if result is not None:
             await self._evidence.check(scope, result)
-        return OperationRecord(operation_id=row["operation_id"], world_uid=row["world_uid"], kind=_wire(OperationKind, row["kind"]),
-            preparation_fingerprint=row["preparation_fingerprint"], publication_fingerprint=None if request is None else request["publication_fingerprint"],
-            phase=_wire(OperationPhase, event["phase"]), fence=event["fence"], leased_artifacts=refs,
+        return OperationRecord(operation_id=row.operation_id, world_uid=row.world_uid, kind=_wire(OperationKind, row.kind),
+            preparation_fingerprint=row.preparation_fingerprint, publication_fingerprint=None if request is None else request.publication_fingerprint,
+            phase=_wire(OperationPhase, event.phase), fence=event.fence, leased_artifacts=refs,
             terminal=result)
 
     async def read(self, operation_id: EntityUid) -> OperationRecord | None:
@@ -125,7 +125,7 @@ class SqliteOperationStore:
                 previous = await self._event(operation_id, scope)
                 fence = record.fence
                 await self._access.insert(scope, PublicationOperationEventRow(event_id,
-                    operation_id, previous["event_id"], previous["event_seq"] + 1, OperationPhase.APPLYING.value, fence))
+                    operation_id, previous.event_id, previous.event_seq + 1, OperationPhase.APPLYING.value, fence))
             return PublicationOwner(lease=OperationLeaseRef(operation_id=operation_id, world_uid=world_uid, kind=kind,
                 preparation_fingerprint=preparation_fingerprint, fence=fence))
 
@@ -147,7 +147,7 @@ class SqliteOperationStore:
         event_id = _UID.validate_python(runtime_uid(), strict=True)
         await self._access.insert(scope, terminal_row)
         await self._access.insert(scope, PublicationOperationEventRow(event_id,
-            operation_id, previous["event_id"], previous["event_seq"] + 1, OperationPhase.TERMINAL.value, record.fence))
+            operation_id, previous.event_id, previous.event_seq + 1, OperationPhase.TERMINAL.value, record.fence))
 
     async def record_terminal(self, scope: CommitScope, outcome: SnapshotApplyResult | PackActivationResult | GameplayStarted | OperationCancelled) -> None:
         self._registry.check(scope, True)

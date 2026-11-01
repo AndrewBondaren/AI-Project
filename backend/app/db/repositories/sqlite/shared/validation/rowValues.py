@@ -36,6 +36,30 @@ def _fields(row: Mapping, *, uids=(), optional_uids=(), positives=(), hashes=(),
         raise PublicationInfrastructureError("invalid persisted scalar") from error
 
 
+def _values(*, uids: tuple[object, ...] = (), optional_uids: tuple[object, ...] = (),
+            positives: tuple[object, ...] = (), hashes: tuple[object, ...] = (),
+            optional_hashes: tuple[object, ...] = (), booleans: tuple[object, ...] = ()) -> None:
+    """Validate typed row attributes without repeating SQL column names."""
+    try:
+        for value in uids:
+            _UID.validate_python(value, strict=True)
+        for value in optional_uids:
+            if value is not None:
+                _UID.validate_python(value, strict=True)
+        for value in positives:
+            _POS.validate_python(value, strict=True)
+        for value in hashes:
+            _HASH.validate_python(value, strict=True)
+        for value in optional_hashes:
+            if value is not None:
+                _HASH.validate_python(value, strict=True)
+        for value in booleans:
+            if type(value) is not int or value not in (0, 1):
+                raise ValueError("raw SQL boolean must be integer 0/1")
+    except (ValueError, TypeError) as error:
+        raise PublicationInfrastructureError("invalid persisted scalar") from error
+
+
 def _wire[E: StrEnum](kind: type[E], value: object) -> E:
     if type(value) is not str:
         raise PublicationInfrastructureError("SQL enum must be a wire string")

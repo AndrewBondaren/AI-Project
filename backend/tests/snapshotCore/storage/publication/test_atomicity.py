@@ -21,7 +21,7 @@ from tests.snapshotCore.support.fixtures import (
 
 class AtomicSnapshotCommitTests(unittest.TestCase):
     def test_terminal_codec_and_historical_evidence_boundaries(self):
-        from dataclasses import asdict
+        from dataclasses import replace
         from app.application.publication.errors import PublicationInfrastructureError
         from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
 
@@ -30,13 +30,13 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
                 await live_started(bundle)
                 _, result = await live_tick(bundle)
                 codec = StoredTerminalCodec()
-                row = asdict(codec.encode(result))
+                row = codec.encode(result)
                 self.assertEqual(codec.decode(row), result)
                 for changes in ({"outcome_checksum": "0" * 64}, {"outcome_kind": "unknown"},
                                 {"format_version": 2}, {"operation_id": "other"},
                                 {"category": "conflict"}):
                     with self.subTest(changes=changes), self.assertRaises((PublicationInfrastructureError, ValueError)):
-                        codec.decode({**row, **changes})
+                        codec.decode(replace(row, **changes))
                 # A newer head must not invalidate the earlier terminal's historical refs.
                 await live_tick(bundle, "next")
                 async with bundle[1].read_scope() as scope:
@@ -45,6 +45,40 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
                     with self.assertRaises(PublicationInfrastructureError):
                         await bundle[-1]._evidence.check(scope, forged)
                 self.assertEqual((await bundle[-1].read("tick")).terminal, result)
+        run_async(check())
+
+    def test_typed_row_boundary_shape_values_and_scope(self):
+        from app.application.publication.errors import PublicationInfrastructureError
+        from app.db.models.snapshotCore.operationRows import PublicationOperationRow
+        from app.db.repositories.sqlite.shared.validation.rowValues import _values
+
+        async def check():
+            async with live_database() as bundle:
+                await live_started(bundle)
+                access = bundle[2]._access
+                sql = "SELECT * FROM publication_operations ORDER BY operation_id"
+                async with bundle[1].read_scope() as scope:
+                    rows = await access.all_rows(scope, PublicationOperationRow, sql)
+                    self.assertTrue(rows)
+                    self.assertTrue(all(isinstance(row, PublicationOperationRow) for row in rows))
+                    self.assertEqual(await access.one_row(scope, PublicationOperationRow, sql), rows[0])
+                    self.assertIsNone(await access.one_row(scope, PublicationOperationRow, sql + " LIMIT 0"))
+                    self.assertEqual(await access.all_rows(scope, PublicationOperationRow, sql + " LIMIT 0"), [])
+                    for read in (access.one_row, access.all_rows):
+                        with self.assertRaises(PublicationInfrastructureError):
+                            await read(scope, PublicationOperationRow, "SELECT operation_id FROM publication_operations")
+                    # Mapping must preserve invalid scalars for strict boundary validation.
+                    corrupt = await access.one_row(scope, PublicationOperationRow,
+                        "SELECT 5 AS operation_id, world_uid, kind, preparation_fingerprint FROM publication_operations LIMIT 1")
+                    self.assertIsNotNone(corrupt)
+                    with self.assertRaises(PublicationInfrastructureError):
+                        _values(uids=(corrupt.operation_id,))
+                    async with live_database(bundle[0].path, seed=False) as other:
+                        with self.assertRaises(PublicationInfrastructureError):
+                            await other[2]._access.one_row(scope, PublicationOperationRow, sql)
+                for read in (access.one_row, access.all_rows):
+                    with self.assertRaises(PublicationInfrastructureError):
+                        await read(scope, PublicationOperationRow, sql)
         run_async(check())
 
     def test_artifact_read_leaf_active_release_and_scope_guards(self):

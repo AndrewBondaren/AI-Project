@@ -250,6 +250,21 @@ from app.dataModel.worldSnapshot.metadata.envelope import SnapshotEnvelope
 from dataclasses import asdict
 
 
+async def typed_operation_rows(access: ScopedSqliteAccess, scope: CommitReadScope) -> None:
+    from typing import assert_type
+    from app.db.models.snapshotCore.operationRows import PublicationOperationRow
+    from app.db.models.artifacts.catalogRows import ArtifactCatalogRow
+
+    row = await access.one_row(scope, PublicationOperationRow, "SELECT * FROM publication_operations")
+    assert_type(row, PublicationOperationRow | None)
+    if row is not None:
+        assert_type(row.operation_id, str)
+    rows = await access.all_rows(scope, ArtifactCatalogRow, "SELECT * FROM artifact_catalog")
+    assert_type(rows, list[ArtifactCatalogRow])
+    for artifact in rows:
+        assert_type(artifact.nbytes, int)
+
+
 def history_provenance_projection(metadata: SnapshotEnvelope, base: SnapshotEnvelope | None,
                                  receipts: tuple[SectionApplyReceipt, ...], world: WorldSnapshotMetadata,
                                  codec: SnapshotEnvelopeCodec) -> SnapshotEnvelope:

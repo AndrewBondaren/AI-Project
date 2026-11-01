@@ -1,7 +1,8 @@
 """Checked single-row/rowset IO; transaction policy belongs to the caller."""
 
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
-from app.db.mapper import to_row
+from app.db.mapper import to_row, from_row
+from app.application.publication.errors import PublicationInfrastructureError
 from app.db.repositories.sqlite.shared.capabilities.scopeRegistry import SqliteScopeRegistry
 
 
@@ -21,6 +22,24 @@ class ScopedSqliteAccess:
         async with conn.execute(sql, values) as cursor:
             self.registry.check(scope)
             return [dict(row) for row in await cursor.fetchall()]
+
+    async def one_row[T](self, scope: CommitReadScope | CommitScope, model: type[T],
+                         sql: str, values: tuple[object, ...] = ()) -> T | None:
+        row = await self.one(scope, sql, values)
+        if row is None:
+            return None
+        try:
+            return from_row(model, row)
+        except (KeyError, IndexError, TypeError, ValueError) as error:
+            raise PublicationInfrastructureError("invalid persisted row shape") from error
+
+    async def all_rows[T](self, scope: CommitReadScope | CommitScope, model: type[T],
+                          sql: str, values: tuple[object, ...] = ()) -> list[T]:
+        rows = await self.all(scope, sql, values)
+        try:
+            return [from_row(model, row) for row in rows]
+        except (KeyError, IndexError, TypeError, ValueError) as error:
+            raise PublicationInfrastructureError("invalid persisted row shape") from error
 
     async def insert(self, scope: CommitScope, row) -> None:
         conn = self.registry.check(scope, True)[3]
