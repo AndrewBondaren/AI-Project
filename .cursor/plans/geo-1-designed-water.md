@@ -2,6 +2,8 @@
 
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
+**Контроль интеграции:** [оставшиеся пробелы и условия handoff со Spatial](#оставшиеся-пробелы-интеграции-geo-1--hydrology--spatial-2026-11-02); статусы обновляются по evidence owning-плана.
+
 ## Контракт исходных фактов Hydrology — нормативное место
 
 Статус: **архитектура/представление OPEN; точные POJO/enum ещё не заморожены**.
@@ -13579,9 +13581,12 @@ fineTilePrep принимает SurfacePlanBundle, не GeoSurfacePlanBundle.
 Не активировать до контракта geometry/physics revision и pack-read replay.
 
 G10-A, GEO final coverage и Aerial A4 остаются OPEN; перенос текста в
-SPATIAL-1 не является разрешением на реализацию. В SPATIAL-1 шаги
-SP-0 (audit) → SP-1/2 (architecture) → SP-H (GEO prerequisite)
-→ SP-3 (hydrology reader) → SP-4 (L2 integration) → SP-5 (other domains).
+SPATIAL-1 не является разрешением на реализацию. Историческая сокращённая последовательность SPATIAL здесь заменена актуальной
+картой: SP-0 (DONE) → SP-1 → GEO-SPATIAL-CONTRACT; затем G10-A → SP-H
+и отдельно SP-P0 → SP-P1. SP-P3I требует SP-H + SP-P1; SP-P3W требует
+SP-P3I + SP-P2 + PACK-ENTRY-CONTRACT; SP-P3 → SP-3, а SP-4 требует SP-3 + SP-M.
+Полные внешние prerequisites transport/publication — в SPATIAL §8 и WORLD-PLAN-GRAPH-1 §3/5.
+Другие домены не являются обязательным продолжением water cutover.
 
 
 ### Task3 — PREPARED REVISION → FINE WINDOW PUBLICATION — VERIFIED ISOLATED SLICE (2026-10-31)
@@ -14043,3 +14048,38 @@ G10-A OPEN. Только документация, без изменения cod
 **Выход:** один совместно согласованный пакет решений с взаимными ссылками на GEO Task11/source contract и SPATIAL SP-1/storage requirements; owners подтверждают свои части, статус принятия отражается в обоих планах и графе. До этого зависимый GEO producer code/cutover и приёмка зависимого storage freeze SP-P0 заблокированы. SP-P0 может проектироваться параллельно; он не является prerequisite этого согласования. Exact contracts не выбирать при реализации.
 
 **Разблокирует:** GEO G10-A после собственных code gates и SP-P0 acceptance после собственных требований. Pack schema/transport/root/read реализуются далее по SP-P1/P2/P3/SP-3; GEO не ждёт полного SPATIAL DONE, runtime Snapshot, PHYSICS или GEN cutover. Production switch не объединяется с read activation одним неатомарным mega-step.
+
+
+**Сверка 2026-11-02:** этот совместный раздел фиксирует обязательства и критерии согласования, но не заменяет exact contract. SP-1 §14 содержит точный проект shared API (НА ПРИЁМКЕ); Hydrology payload/source representation и coordinate/revision mapping Task11 остаются OPEN. Для приёмки GEO-SPATIAL-CONTRACT нужны взаимные ссылки на конкретные поля/типы, единицы/границы, ошибки, revisions и target/legacy file/caller map; общего перечисления требований недостаточно. Root schema/codec/version/migration принимаются отдельно в SP-P0. Статусы приёмки этим уточнением не закрываются.
+
+
+### Hydrology legacy/read migration — 2026-11-02
+
+Проверенная карта HSP-01…HSP-10 с явными ссылками на definitions/callers и gate каждого перехода: [SPATIAL: Hydrology → Spatial](./spatial-distribution-domain.md#hydrology--spatial-проверенные-legacy-пути-и-места-перехода-2026-11-02). GEO owns producer cutover G10-A; SP-P3/SP-3 — root/read; SP-M/SP-4 — L2 consumer; SP-3S/SP-4R — runtime. HydrologyWorkingFields и L0 hard corridor являются legacy water source/read, но имеют соседних consumers, поэтому blanket deletion запрещён. NativeFinalWaterQuery не объявлен legacy или готовым Spatial API. Карта статически проверена; exact replacements, dynamic closure и production evidence OPEN. До кода затронутого шага закрыть его HSP dispositions; глобальный LEGACY-AC не закрыт.
+
+
+## Оставшиеся пробелы интеграции GEO-1 / Hydrology / Spatial (2026-11-02)
+
+**Статус: OPEN; это контрольный список интеграции, не новые implementation gates.** Нормативные статусы внешних шагов проверять в [актуальном owning-плане Spatial, §8](./spatial-distribution-domain.md#8-последовательный-план-работ-и-блокировки). Ссылка ведёт на действующий план, а не на снимок статусов. Приёмка SP-0 не означает готовность SP-1 или реализации Spatial.
+
+| Пробел | Где закрывается / ссылка | Условие закрытия в GEO |
+|---|---|---|
+| Canonical water representation: wet/dry/unknown, UID, level/bed, связность и стоимость | GEO «Контракт исходных фактов Hydrology» + GEO-SPATIAL-CONTRACT; [Spatial §12/13 и §8](./spatial-distribution-domain.md) | Принято представление и его compatibility с bounded read; точность/preparation/read cost обоснованы |
+| Coarse P2 → fine water и exact source revisions | GEO Task11 + совместный контракт | Принято решение A/B либо отдельно обоснованное изменение; явные coordinate mapping и refs, без подмены coarse proof fine proof |
+| Exact Hydrology payload и общий read API | GEO domain freeze + [Spatial SP-1 §14](./spatial-distribution-domain.md#14-sp-1--exact-shared-read-contract-проект-на-согласование) | Поля/типы/единицы/границы/errors/coverage/source refs и target/import map приняты; проект SP-1 пока НА ПРИЁМКЕ |
+| Реальный producer join | GEO G10-A → Spatial SP-H | Production placement → native water → routes/beds → final/query принят; isolated fixtures недостаточно |
+| Compact root, schema/codec/version/index/budgets и публикация | [Spatial §8: SP-P0/P1/P2R/P2W/P3I/P3W/P3](./spatial-distribution-domain.md#8-последовательный-план-работ-и-блокировки), PACK-ENTRY-CONTRACT и SN-STAGE | Приняты exact storage/publication contracts и cold-Pack root evidence; эти шаги не подменяют GEO producer |
+| Concrete Hydrology reader | Spatial §8 SP-3 | Приняты exact class/path/signature/dependencies и bounded Pack read; NativeFinalWaterQuery.water_at не объявляется готовым XYZ/Pack reader |
+| Переключение L2 и соседних consumers | Spatial §8 SP-M/SP-4; [карта HSP-01…HSP-10](./spatial-distribution-domain.md#hydrology--spatial-проверенные-legacy-пути-и-места-перехода-2026-11-02) | Для каждого затронутого caller принят replacement/retain/remove; L0 hard corridor больше не water SoT; Climate/Landcover/coating и fine_z geometry не сломаны |
+| Доказательство миграции | GEO G10-A/SP-H и Spatial SP-P3/SP-3/SP-4 по своим scopes | Cold-Pack replay без legacy water working maps/L0-as-truth и без повторного solve; dry/unknown, bounded cost, mixed refs negative cases; единственный активный canonical source, legacy closure |
+| Runtime overlay/invalidation/source binding | Spatial SP-3S/SP-4R, Snapshot и Q01 applicability; gameplay отдельно SP-R0/R1/R2 | Приняты pin/overlay/invalidation и конкретные runtime consumers; base-read не считается runtime-read |
+| River-volume и z_water(x,y) | GEO/Hydrology SP-H2 + отдельные Spatial reader/E2E evidence | River bed/UID не заменяют water surface/volume; river activation отдельна от начального ocean/lake scope |
+
+**Когда Spatial готов для следующего действия GEO:**
+
+- До зависимого producer code: приняты SP-1 и GEO-SPATIAL-CONTRACT плюс собственный GEO exact freeze. Полного Spatial DONE ждать не нужно.
+- Для проверки передачи accepted source: после G10-A/SP-H и SP-P0/P1 готовить SP-P3I, далее публикацию только по полным gates SP-P3W/P3. Exact entrypoint и staged port обязательны.
+- Для base L2 water cutover: приняты SP-3 и SP-M, затем SP-4. SP-M может проектироваться раньше по своим prerequisites, он не обязан ждать SP-3.
+- Для runtime L2: отдельно SP-3S + SP-4 → SP-4R по owning gates; rivers и Physics не становятся скрытым prerequisite ocean/lake base path.
+
+**Правило handoff:** когда закрывается нужный Spatial gate, обновить соответствующую строку здесь ссылкой на его acceptance evidence (раздел/дата/точный scope), сверить HSP callers и общий граф. До появления evidence строка остаётся OPEN; фраза «Spatial готов» без named gate недостаточна. Автоматический мониторинг этим документом не создаётся. Ни одна внешняя приёмка не закрывает GEO G10-A автоматически.
