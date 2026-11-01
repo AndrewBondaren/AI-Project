@@ -1,83 +1,20 @@
 # SPATIAL-1 — Пространственное распределение сред и материалов
 
 
-## Первый обязательный шаг — POJO-контракт Hydrology / SPATIAL / DAG
+## Порядок принятия контракта
 
-**До дальнейшей реализации compact hydrology producer сначала зафиксировать и
-согласовать POJO на уровне междоменного контракта.** Reuse inventory и описание
-семантики не считаются готовым POJO-контрактом. Статус freeze: **OPEN**.
+**Сначала семантические инварианты → обоснованное представление и цена/качество
+→ точные POJO/enum и файлы → отдельное разрешение на реализацию.** Freeze до кода
+обязателен; freeze физических source-полей до выбора представления не требуется.
 
-Контракт описывается сразу с двух сторон: **Hydrology output → объявленные
-DAG outputs/inputs → будущий SPATIAL input / domain-owned read contract**.
-Не создавать отдельный Spatial-сервис или прямые вызовы между доменами.
-
-Обязательный результат первого шага — единая спецификация:
-1. Для каждого POJO/enum: reuse / изменение существующего / обоснованно новый;
-   точное имя, файл, домен-владелец, producer и consumers. За основу взять уже
-   сверенную reuse-карту SPATIAL §§3/7 V1-D/14, не параллельную модель.
-2. Полный состав полей и строгие типы, единицы/coordinate space, topology,
-   nullable/default semantics, обязательность, immutable guarantees, validators,
-   инварианты и диагностируемые ошибки. Одного списка названий недостаточно.
-3. Output Hydrology: принятые identity/material/levels, compact membership и
-   connectivity, связь с final geometry/bed, доменная семантика coverage и
-   отсутствия, mapping/diagnostics/provenance. Не объявлять обязательный общий
-   SpatialCoverage и не копировать перечисленные fine-карты в новый source POJO.
-4. Input будущего consumer: typed source/geometry/publication binding и формат
-   bounded запроса/результата. Зафиксировать XYZ/interval boundaries и различие
-   диагностического unresolved и typed failure обязательного gameplay read.
-   Concrete generic window/slice POJO разрешается только при доказанной нужде.
-5. DAG binding на существующих NodeContract/RequiredOutput/OutputRecord:
-   точные типы output/input и правила их соответствия, read evidence и проверки
-   согласованности ревизий. Node output — BaseModel; tuple FineWaterResult не
-   использовать напрямую. Engine execution identity, bootstrap PlanRef,
-   ArtifactRef и runtime WorldPublicationRef не подменяют друг друга.
-6. Canonical Pack representation по уже принятому варианту Б: domain-root
-   ArtifactRef, typed format/version и связи с accepted Snapshot. Указать,
-   какие поля/форматы фиксируются этим контрактом, какие относятся к отдельному
-   SP-P0 freeze; ни одно OPEN обязательное поле текущего контракта не скрывать.
-7. Проверки контракта: positive/negative примеры, mixed/stale/missing данные,
-   dry/absent semantics, topology/seams, precision и bounded-cost требования;
-   migration/version и file/import map для всех затронутых типов.
-
-**Gate:** пока необходимые POJO/поля/enum/инварианты и binding не приняты явно,
-producer implementation и зависимый cutover не начинаются. Существующие
-WaterBody/PhysicalWaterUnion/SourceBodyMapping, CoverageSpan и ref infrastructure
-переиспользуются по смыслу; новые records/enums/adapters без обоснования запрещены.
-
-Текущий scope — эта спецификация и после её приёмки hydrology-owned producer.
-**Реализация самого SPATIAL, generic reader/index, L2 materialization и engine
-DAG в текущий scope не входит.** Запись gate не утверждает concrete POJO и не
-означает ARCH-ACCEPTED/CODE-READY. G10-A и SPATIAL-1 остаются OPEN.
-
-Producer-контракт и согласованный freeze ведутся совместно с [GEO-1](./geo-1-designed-water.md); две независимые версии контракта не создаются.
-
-
-
-## Принятая интеграционная граница с Hydrology — только через DAG (2026-11-01)
-
-**Hydrology output → объявленная DAG dependency → SPATIAL input. Прямого
-runtime-вызова Hydrology из SPATIAL и обратного вызова нет.** DAG/caller выбирает
-момент запуска публичных операций, связывает outputs/inputs и передаёт exact
-source refs/artifacts и согласованные geometry/coverage/revision inputs.
-
-Hydrology остаётся владельцем принятого compact water source и physical facts;
-будущий SPATIAL принимает immutable source одной revision через свой input
-contract и отвечает за spatial read/representation и ограниченную materialization.
-Read не запускает producer, fill, routing, policy или новый placement. Нельзя
-искать live/latest source, смешивать ревизии либо превращать окно потребителя
-в новую область hydrology resolution. Materialization запрашивает DAG/caller;
-обязательного full-basin/full-world fine-разворачивания нет.
-
-Сейчас совместно описываются обе стороны контракта и их DAG binding (coordinate
-space/topology, geometry/membership, UID/levels/beds, coverage/unknown, provenance,
-invalidation/errors). Конкретные POJO/representation проверяются по existing
-inventory, без параллельных source records. Развивается hydrology producer;
-**сам SPATIAL, generic reader/index, L2 materialization и engine DAG сейчас
-не реализуются и не переключаются.** Направление принято, детали контрактов и
-реализация SPATIAL остаются OPEN. Полная фиксация producer-границы:
-[начало GEO-1](./geo-1-designed-water.md).
-
-
+Этот план — нормативное место generic read (§3), spatial representation/Pack
+(§7), materialization (§5/12) и их собственной контрактной приёмки. Hydrology
+output описывается только в [GEO-1, начале плана](./geo-1-designed-water.md);
+конкретные ноды/оркестрация — только в [GEN-DAG-1](./gen-dag-1-post-geo-ws.md).
+[Соответствие, порядок freeze и пути — §13](#13-соответствие-контрактов-и-порядок-freeze).
+Не копировать одну спецификацию POJO между планами. SPATIAL — общий контракт,
+Hydrology реализует собственный reader/index. Статус architecture/POJO freeze
+OPEN; эта запись не является разрешением на реализацию SPATIAL или DAG.
 
 **Приоритетный совместный вопрос с GEO-1 — OPEN:** определить компактный water
 source и ограниченную materialization без обязательного full-basin/full-world
@@ -138,6 +75,23 @@ fine-разворачивания. [Формулировка и варианты
 - Generic read не должен превращаться в materializer. Materialization/composition — отдельная app-level ответственность, если такой слой действительно необходим; не делать его внутри provider/planner или внутри гидрологии.
 - **Материализация сред — ограниченная проекция согласованного source view**, условно `project(source_facts, snapshot_overlay, window)`: выход относится только к запросу и полностью трассируется к source/revision. Это семантическое подмножество фактов, **не** требование наследовать модель metadata/Plan POJO или делать `MapCell` из каждого газа/жидкости. Выход может быть оконным набором интервалов/составов и временным cache-only результатом; повторный запрос не должен создавать новый world-state change.
 - **Geology materialization отличается от media projection:** из стратиграфических/3D inclusion facts и актуальной solid/void geometry выдаёт физические solid-ячейки/поверхности для ограниченного L2-окна. Изменившаяся после раскопки геометрия определяет, какие стороны пород стали открытыми; reader геологии не копает и не изменяет рельеф. Постройки/другие объекты сохраняют собственные физические materialization contracts.
+
+**SPATIAL Input/Read:** определить минимальные данные и гарантии для bounded
+XYZ-чтения: принятый domain source, согласованная geometry, pinned публикация,
+coordinate space/topology и ограниченное окно/union; typed результат и ошибки
+неполных/несогласованных данных. Hydrology реализует этот общий контракт своим
+reader. Повторные generate/fill/spill/merge/routing для чтения запрещены;
+source загружается из сохранённого описания по owning storage/read contracts,
+а не требуется как fresh NodeOutput текущего DAG execution.
+
+**Canonical source и materialized view — разные представления.** Нормативный
+состав authoritative water facts определяется только [GEO-1](./geo-1-designed-water.md).
+Materialized view — запрошенная потребителем часть этих фактов, представленная
+клетками, интервалами или объёмами той же согласованной revision. Она не является
+второй истиной, не изменяет исходный source и не требует раскрывать весь бассейн.
+Read slice может оставаться компактным; физическое раскрытие в клетки — отдельная
+materialization operation по потребности consumer (§5/12). Освобождение view не
+отменяет принятые facts/patches, её повторное построение не запускает resolution.
 
 ### Принятое решение SP-1: типизированный generic-результат (2026-11-01)
 
@@ -590,55 +544,68 @@ S^2 fine клеток всего бассейна ни до P2, ни после 
 production не менялись; SPATIAL-1, G10-A и точные контракты остаются OPEN.
 
 
-## 13. Hydrology input contract — POJO audit proposal (2026-11-01)
+## 13. Соответствие контрактов и порядок freeze
 
-[Detailed inventory and producer/DAG/consumer proposal — GEO-1 execution section](./geo-1-designed-water.md).
-Existing WaterBody/PhysicalWaterUnion/SourceBodyMapping, coordinate/topology types,
-CoverageSpan and KnownFact/UnknownFact are reuse candidates. RegionCoverage has
-region identity and only geometric evidence; it is not successful water coverage.
-MapCellHydrology is surface-top metadata; TerritoryVolume is existing location
-XYZ AABB with inclusive/normalizing wire semantics, not an automatically accepted
-generic spatial window. FineGridRect has one z, not a volume. Do not create
-parallel role/coverage/UID/volume records before resolving these actual semantics.
+Это таблица связей, не копия доменных POJO. Каждая спецификация имеет одного
+нормативного владельца; остальные планы ссылаются на неё.
 
-The future required input is one accepted compact hydrology source plus exact
-final geometry context delivered through DAG-declared outputs. Reuse NodeContract,
-RequiredOutput/OutputRef, DAGReadView and OutputRecord/DependencyRead. A static
-OutputRef is not the source revision; ArtifactRef is content identity, PlanRef is
-plan provenance, WorldSnapshotRef is world-history context. No new integration
-registry/envelope or direct Hydrology service call. Output schemas are BaseModel;
-current FineWaterResult tuple cannot be the node's output_type directly.
+| Предмет | Нормативный владелец | Проверяемое соответствие |
+|---|---|---|
+| **Hydrology Output:** принятые water facts / canonical source | [GEO-1, начальный контракт](./geo-1-designed-water.md) | Typed water payload реализует семантические требования общего read, сохраняет identity/levels/geometry и source meaning |
+| **SPATIAL Input/Read:** bounded XYZ-запрос/результат | SPATIAL §3 | Domain-owned Hydrology reader реализует общий typed контракт; нет отдельного Spatial service/универсального coverage solver |
+| Reuse исходных сущностей | SPATIAL §7 V1-D | GEO выбирает reuse/migrate/new с обоснованием по этой карте; WorldPublicationRef не подменён PlanRef/WorldSnapshotRef |
+| Root representation/Pack format | SPATIAL §7, SP-P0 | Domain payload регистрируется существующим ArtifactRef/format механизмом принятого варианта Б; exact wire/versions freeze после выбора представления |
+| Локальная materialization | SPATIAL §5/12 | Application consumer использует согласованные bounded slices; окно не меняет water resolution и не требует materialize всего мира |
+| **DAG Binding:** typed передача результатов/зависимостей; concrete node contracts | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) | Композиция принятых доменных POJO без копирования полей; RequiredOutput обозначает зависимость ноды, не public domain.read |
+| Runtime changes/publication | [Domain Patches](./world-domain-patches-snapshots.md), [PHYSICS-1](./physics-spatial-dynamics.md) | Typed запрос Physics и domain patch отделены от read; Snapshot принимает изменения |
 
-Compact connectivity, physical-success coverage, river water surface, window/
-vertical interval conventions and artifact format remain OPEN. DAG execution
-coherence alone proves none of these physical facts. This audit describes future
-SPATIAL input/output semantics; no SPATIAL/DAG/application/POJO implementation is
-authorized or performed. First freeze hydrology-owned representation; common
-spatial/index/materialization implementation remains outside the current scope.
+Для **DAG Binding** сейчас согласуются требования typed передачи/ссылок,
+зависимостей и revision consistency без прямой междоменной оркестрации. Это
+третья часть согласования, а не ещё одна копия WaterFacts. Конкретные имена
+нод, их Input/Output POJO, RequiredOutput declarations и wiring фиксирует GEN-DAG
+после доменных контрактов. Bootstrap передача результатов и gameplay domain.read
+различаются в путях ниже; цикл зависимостей GEO ↔ GEN-DAG не вводится.
 
+**Порядок архитектурной приёмки:** (1) инварианты, (2) выбор представления с
+ценой/качеством и geometry/coordinate/revision решениями, (3) точный freeze
+POJO/enum/файлов соответствующим владельцем, (4) разрешение на код. Никаких
+TBD обязательных полей при code-ready; до окончания архитектуры поля допустимо
+оставлять OPEN вместо преждевременного утверждения. Каждый последующий шаг
+проверяется по замороженному контракту, изменение которого требует явного review.
+GEN-DAG получает доменные контракты после GEO; его конкретный node freeze не
+является входным gate GEO producer. Общие engine требования совместимости
+учитываются без предварительного проектирования конкретных нод в GEO.
 
-## 14. Сверка §13 с существующим reuse-планом (2026-11-01)
+**Разные пути исполнения** (имена операций/типов концептуальные, не freeze классов):
 
-§13 — частичный hydrology/DAG inventory. Он дополняет, но не заменяет принятую
-reuse-карту §3 и §7 V1-D и не переоткрывает вариант Б World Pack. Уточнения имеют
-приоритет над неполными формулировками audit proposal в GEO-1.
+```text
+Bootstrap:
+DAG → Hydrology.generate/final (canonical facts)
+    → Hydrology-owned compact representation → immutable Pack domain-root
 
-| Сущности/решение | Результат сверки |
-|---|---|
-| RegionCoverage/CoverageSpan, GridBBox, FineSurfaceWindow, PreparedNaturalTerrain, WaterBody/MaterializedWater, PlanEnvelope/PlanRef, TerritoryVolume | Уже были кандидатами reuse; новый аудит подтверждает ограничения семантики, не обосновывает дубли |
-| FineTerrainZRun / HydrologyMaskWire | Были упущены в сводке; это производные terrain/L0 representations, не canonical water UID/level/coverage source |
-| WorldPublicationRef | Обязательное дополнение к аудиту: pinned Pack + Snapshot publication, включая publication_id; одного WorldSnapshotRef недостаточно |
-| ArtifactRef(BLOB), ArtifactFormatContract, ArtifactFormatRegistryBinding, WorldPackManifest | Storage вариант Б уже принят; reuse существующих refs/codec/registry/staging. OPEN точные domain-root field/format/schema и внутренний индекс, не выбор нового storage |
-| RegionIndexBounds | Существующий консервативный XY index candidate внутри домена; не общий manifest partition/bounds и не dry proof |
-| HydrologyWorkingFields / factConsumers hydrology | Reuse ограниченной source absence semantics, не хранения; известный fully-dry/empty-hydro нюанс остаётся SP-0 negative case |
-| KnownFact/UnknownFact | Допустимы для соответствующих наблюдений/preview; required gameplay invalid/missing/stale/mixed read — typed failure + ERROR, не успешный generic unknown |
-| SpatialSlice[T] и domain readers | Общая typed abstraction уже принята; generic coverage/proof record/service и отдельный spatial orchestrator не требуются. DAG связывает операции, домен владеет reader/source semantics |
-| MapCellQueryFacade/PatchStoreService, IWorldSnapshotApply | Current Pack+SQL merge не равен готовому target Pack+accepted Snapshot; новый Snapshot adapter не создаётся этим аудитом |
-| WorldEnvironmentSettings и связанные POJO | Уже существуют и остаются reuse baseline SP-A; не дублировать в hydrology/spatial source |
+Gameplay:
+DAG → Hydrology.read_window(window, WorldPublicationRef)
+    → SpatialSlice[WaterFacts] → gameplay composition / L2 consumer
 
-Новые полезные уточнения audit: BaseModel output_type у NodeContract (tuple
-FineWaterResult напрямую не годится), floor recipe/BasinSpec не являются resolved
-wet-connectivity source, DAG OutputRef не равен PlanRef/ArtifactRef/publication.
-Дальнейший freeze контракта использует одну согласованную reuse-карту, а не две
-параллельные модели. Ни общий coverage POJO, ни новый registry/revision store,
-ни конкретные source/window/slice классы этой сверкой не утверждены.
+Physical changes:
+Physics → DAG → Hydrology.patch → Snapshot
+```
+
+Gameplay reader использует сохранённый Pack и принятый Snapshot overlay pinned
+публикации. Новая генерация или fresh Hydrology NodeOutput в том же execution
+не требуется. Domain-owned reader реализует общий SPATIAL контракт; read не
+выполняет patch/physics/fill. DAG — единственный междоменный orchestrator.
+Typed failures обязательного gameplay read и диагностический preview/unresolved
+различаются по §3; KnownFact/UnknownFact не навязываются как универсальный результат.
+
+Сверка reuse подтвердила уже перечисленные POJO; добавленный audit не вводит
+дубликаты. FineTerrainZRun/L0 mask остаются производными, не water SoT;
+TerritoryVolume не становится generic window без обоснования. Ограничение
+BaseModel для output ноды учитывает GEN-DAG, оно не требует замены доменного
+результата или создания node-wrapper внутри GEO. NativeFinalWaterQuery не
+объявляется готовым runtime Pack+Snapshot/XYZ reader.
+
+Редакционная консолидация 2026-11-01: удалены повторные audit/reconciliation/
+ownership-correction блоки и зеркальная вводная спецификация. Существующие
+SPATIAL §§2–11 и архитектурные gates сохранены. Изменена только документация;
+реализация SPATIAL/engine DAG не выполнялась, G10-A/SPATIAL OPEN.
