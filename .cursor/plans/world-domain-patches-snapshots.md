@@ -2483,6 +2483,69 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 **Приёмка владельца 2026-11-01:** R/H приняты по результатам этого архитектурного ревью. **Следующее действие:** реализация только O (evidence ниже). Общая приёмка 4C2 и переход к 4C3 по-прежнему требуют отдельного завершения/приёмки 4C2-O; это ревью не даёт команды начинать его. Runtime Snapshot/services/handlers и полный legacy closure не проверялись как готовая реализация.
 
 
+### DB-FIELDS-1 — ревизия строковых имён полей SQL rows (2026-11-01)
+
+**Статус: OPEN, замечание мастера после ревью 4C2-O.** Предыдущее функциональное ревью O не покрыло статическую защищённость имён полей. Его 108 PASS не закрывают этот долг; O не объявляется принятым данной записью. Поручение — пометка и ревизия, без разрешения на реализацию нового API или миграцию SQL.
+
+**Предмет:** хардкоды имён колонок в Python (`row["operation_id"]`, `row["phase"]`, списки имён в `_fields(...)`), а не хранение строковых значений в SQLite. `TEXT` для UID/enum/hash допустим; перевод значений на другой SQL-тип и массовая замена `str` на enum не являются целью. SQL identifiers в запросах и mapper metadata также требуют явной границы владения, но не механической замены всех строк на enum/константы.
+
+#### Ревизия текущего состояния
+
+- `db/models/snapshotCore/*Rows.py`, `db/models/artifacts/*Rows.py`: frozen dataclass rows уже существуют. На запись `ScopedSqliteAccess.insert()` использует общий `to_row()` и metadata модели; на чтение `one()/all()` возвращают `dict(row)` без row-типа. Поэтому adapters повторяют строковые имена и ручные проверки. Аннотация `Mapping[str, Any]` не защищает от опечаток/рассинхронизации колонок.
+- `db/mapper.py: from_row()` уже восстанавливает dataclass, но сам по себе **не выполняет строгую runtime-валидацию** scalar/enum/checksum/provenance. Простая замена dict на этот mapper недостаточна: нельзя потерять существующие boundary checks.
+- `sqlite/base.py: BaseRepository[T].fetch_one/fetch_all()` уже возвращают модели через `from_row`; единообразия с новым scoped read нет. `where`/`order` остаются SQL-строками: inventory должен различать составление SQL и последующий доступ к данным строки.
+- `shared/validation/rowValues.py: _fields()` принимает голый `Mapping` и наборы строковых имён; это отдельный источник дублирования schema knowledge. `_wire()` проверяет значения enum — это полезная проверка, не дефект строкового имени поля.
+- AST-инвентарь текущего дерева: **151 обращение с literal string subscript в 12 файлах** `db/repositories/sqlite/`; из них Snapshot core — 136 в 7 файлах, artifacts — 6 в 1 файле. Это поисковые кандидаты, включая обращения не к SQL rows; не число доказанных дефектов. SQL-текст, `.get(...)`, списки `_fields` и динамические ключи в этот счёт не включены.
+
+| Файл относительно `backend/app/db/repositories/sqlite/` | Literal-key subscripts | Что проверить |
+|---|---:|---|
+| `snapshotCore/operations/operationStore.py` | 25 | Operation/request/event rows, predecessor checks и lifecycle transitions |
+| `snapshotCore/operations/terminalCodec.py` | 8 | Terminal row versus serialized body; имена JSON body не смешивать с SQL columns |
+| `snapshotCore/operations/publicationEvidence.py` | 2 | Historical publication evidence |
+| `artifacts/operationArtifacts.py` | 6 | Typed projection active-holder/catalog JOIN, aliases и ArtifactRef validation |
+| `snapshotCore/history/rowProjection.py` | 17 | World/player history projection, payload/checksum checks |
+| `snapshotCore/history/snapshotHistoryStore.py` | 24 | History rows, refs, parent chain |
+| `snapshotCore/publications/worldPublicationStore.py` | 42 | World publication rows, CAS и participants |
+| `snapshotCore/publications/playerPublicationStore.py` | 18 | Player publication rows и refs |
+| `messageRepository.py` | 3 | Классифицировать SQL row/прочие mappings |
+| `playerRepository.py` | 4 | Классифицировать SQL row/промежуточный dataclass dict |
+| `sessionRepository.py` | 1 | Классифицировать SQL row/прочие mappings |
+| `worldRepository.py` | 1 | Классифицировать SQL row/прочие mappings |
+
+#### Следующий ограниченный шаг и приёмка
+
+#### DB-FIELDS-1A — proposed freeze первого атомарного изменения
+
+**Статус: ПОДГОТОВЛЕН К СОГЛАСОВАНИЮ до кода.** Команда мастера «Делаем» разрешает работу над DB-FIELDS-1; ниже конкретизирован ранее открытый typed-read contract. Требование предварительного согласования точных сигнатур — `.cursor/rules/code-gates.mdc`, гейт 2. Нормативная семантика: `docs/tz_world_snapshot.md`, staged artifacts / путь записи и сбор патчей; §8.11 и §8.14 этого плана. DDL, serialized payload и публичные application ports не меняются.
+
+**Цель и scope 1A:** общий typed read boundary и его первые consumers `SqliteOperationStore`, `StoredTerminalCodec`, `SqliteOperationArtifacts`; остальные history/publication/evidence consumers переходят следующими атомарными шагами после приёмки 1A. Это граница одного reviewable изменения, не закрытие всего DB-FIELDS-1.
+
+**Reuse POJO:** все поля/типы/defaults существующих `PublicationOperationRow`, `PublicationRequestRow`, `PublicationOperationEventRow`, `PublicationOutcomeRow` из `db/models/snapshotCore/operationRows.py` и `ArtifactCatalogRow` из `db/models/artifacts/catalogRows.py` сохраняются дословно. SQL-wire `str` остаются по исключению `contract-creation.mdc` для `db/models`; domain enum conversion по-прежнему `_wire`. Новые POJO/enum не нужны: все SELECT этого scope возвращают целые записи; artifact JOIN уже выбирает `c.*`. Partial projections не приводятся к этим моделям.
+
+**Владелец механизма:** DB infrastructure, `db/repositories/sqlite/shared/access/scopedAccess.py`, existing `ScopedSqliteAccess`:
+
+- `async one_row[T](self, scope: CommitReadScope | CommitScope, model: type[T], sql: str, values: tuple[object, ...] = ()) -> T | None`.
+- `async all_rows[T](self, scope: CommitReadScope | CommitScope, model: type[T], sql: str, values: tuple[object, ...] = ()) -> list[T]`.
+- Обе операции используют прежние one/all и registry checks, затем общий `db.mapper.from_row(model, row)`; missing row → None. Shape/mapping failures (`KeyError`, `IndexError`, `TypeError`, `ValueError`) → `PublicationInfrastructureError` с chained cause; sqlite/registry ошибки не маскируются. Поля не coerce; строгая semantic validation остаётся у consumer. Старые one/all пока нужны непереведённым consumers и tests; это явно временный legacy, не второй целевой API.
+
+**Владелец scalar validation:** `db/repositories/sqlite/shared/validation/rowValues.py`, новая функция `_values(*, uids: tuple[object, ...] = (), optional_uids: tuple[object, ...] = (), positives: tuple[object, ...] = (), hashes: tuple[object, ...] = (), optional_hashes: tuple[object, ...] = (), booleans: tuple[object, ...] = ()) -> None`. Те же `_UID`, `_HASH`, `_POS`, strict flags и integer 0/1 checks, но принимает **значения атрибутов**, не имена колонок; failure → прежний `PublicationInfrastructureError`. `_fields` временно сохраняется для прочих adapters и удаляется после последнего caller; новая функция не получает Mapping и не знает SQL schema.
+
+**Consumers/callers и compatibility:**
+
+- `operations/operationStore.py: SqliteOperationStore._event` возвращает `PublicationOperationEventRow`, `_load` получает full typed rows для operation/request/event/outcome. `row[...]`, `parent[...]`, `event[...]`, `previous[...]` заменяются атрибутами; `_fields` — `_values` с теми же scalar checks. Все публичные operation methods и lifecycle/fence/transaction decisions неизменны.
+- `operations/terminalCodec.py: StoredTerminalCodec.decode(self, row: PublicationOutcomeRow)` возвращает прежний result union; все discriminator/version/checksum/row-body checks сохранены. Caller — `_load`; прямые codec tests переводятся с dict fixtures на `PublicationOutcomeRow` и `dataclasses.replace`, включая corrupt values без coercion.
+- `artifacts/operationArtifacts.py: SqliteOperationArtifacts.read` использует `all_rows(..., ArtifactCatalogRow, ...)`, прежний SQL/order/DISTINCT, `_values(uids=(artifact.artifact_id,))`, строгий `ArtifactRef`/enum construction.
+- `operations/publicationEvidence.py: SqlitePublicationEvidence.check`, history/publication stores и их partial SELECT остаются explicit legacy следующего шага; не заменять marker на full row без отдельного решения. Existing interfaces/DI/production Container не меняются.
+
+**Проверки и Done 1A:** existing `tests/snapshotCore` suite, positive/negative Pyright gates; добавить focused boundary regression для typed full-row read, missing row, malformed shape, strict corrupted values и foreign/expired scope. Проверить отсутствие literal-key subscripts и `_fields` в трёх переведённых consumers; literals внутри SQL/discriminator maps не являются нарушением. Full suite baseline переснять по текущему дереву (соседний 4C4 уже добавил tests). Нельзя объявлять DB-FIELDS-1 DONE: остаются evidence/history/publication и классификация прочих mappings.
+
+1. Уточнить inventory по SQL-row accesses, `.get`, `_fields`, JOIN aliases и metadata; дополнить проверку общего `sqlite/base.py`, mapper и bulkSql (последние два вне sqlite subtree). Определить владельца каждого row/projection и всех callers, включая будущий 4C3.
+2. До кода согласовать точные row/projection types и typed read/decode boundary. Повторно использовать существующие POJO там, где они соответствуют SELECT; для JOIN/partial SELECT нужна явная проекция. Не размножать string constants вместо типизированной модели.
+3. В согласованном scope adapters после boundary работают с атрибутами typed rows. Raw column lookup локализован в mapper/decoder; имена SQL и metadata сверяются с моделью. Сохранены scope/transaction registry checks, scalar/enum validation, provenance, checksum, CAS/fence/idempotency и прежняя семантика ошибок на повреждённых данных.
+4. Доказательства: caller/import inventory, статическая проверка typed attribute access, существующие corruption/transaction regression gates; дополнительные тесты только для новых реальных boundary risks. Отдельно зафиксировать остатки вне scope и disposition. Ни 4C3, ни 4C4 автоматически не закрывают DB-FIELDS-1.
+
+**Хранение сейчас (по исходникам, не аудит live-БД):** SQLite через aiosqlite; DDL `0001_initial.sql` объявляет 633 `TEXT`, 149 `INTEGER`, 13 `REAL`, 3 `BLOB` колонки (подсчёт деклараций). `TEXT` включает обычные строки, UID/hash/enum wire values и JSON; mapper сериализует отмеченные JSON-поля через `json.dumps`, bool metadata — в INTEGER 0/1, bytes используются для BLOB. Ограничения SQL (`CHECK`, FK, UNIQUE) и adapter validation действуют отдельно; Python POJO/enum не хранятся как объекты классов. Этот подсчёт не доказывает фактические `typeof()` значений или версию применённой схемы production.
+
 ### Evidence 4C2-O — 2026-11-01
 
 4C2-R/H приняты мастером по архитектурному ревью от 2026-11-01. Выполнен только O по §8.14; статус O — реализован, подготовлен к приёмке владельцем.
