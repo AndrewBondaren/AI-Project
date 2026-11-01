@@ -513,3 +513,7 @@ Q05/Q06/Q08 исправлены документально. Q02/Q03 получ�
 - [dag-typing-1: legacy inventory](./dag-typing-1.md#legacy-inventory--предварительный-требует-уточнения)
 - [gen-dag-1-post-geo-ws: legacy inventory](./gen-dag-1-post-geo-ws.md#legacy-inventory--предварительный-требует-уточнения)
 - [physics-spatial-dynamics: legacy inventory](./physics-spatial-dynamics.md#legacy-inventory--предварительный-требует-уточнения)
+
+### Уточнение Physics ↔ Hydrology/W/L — 2026-11-01
+
+Bootstrap confluence/fill/spill/merge остаются Hydrology; runtime физическое изменение объёма/потока/пересыхание — Physics; Hydrology принимает water facts, W/L отвечает за membership/identity/history без второго solver. Конкретные символы и callers сведены в раздел «Разделение водных алгоритмов» [PHYSICS](./physics-spatial-dynamics.md), [GEO](./geo-1-designed-water.md) и [W/L](./hydrology-water-systems.md). Нормативная граница — [Hydrology ТЗ](../../docs/tz_terrain_hydrology.md) и [Physics ТЗ](../../docs/tz_physics.md). Это уточнение PH-0/PH-PUBLISH/Q10, не новый hard edge и не закрытие runtime/legacy acceptance. W/L — owning consumer истории, не новый prerequisite генерации воды.

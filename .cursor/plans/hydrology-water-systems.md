@@ -104,3 +104,16 @@ Done: реальная вода обновляет систему; старые 
 ## Scope
 
 HY-12 даёт физическую воду и её факты; W-трек — связанную динамическую систему. HY-10 отвечает за L0 bands/wire, GEO-1 — designed water/continental field. Эти треки не являются скрытыми задачами W0–W3. Не менять DAG и не коммитить.
+
+### Разделение водных алгоритмов — evidence 2026-11-01, требует уточнения runtime contracts
+
+| Существующий символ и caller | Подтверждённая роль | Решение / уточнение |
+|---|---|---|
+| [order_river_requests](../../backend/app/application/worldData/generators/hydrology/rivers/riverRequestOrder.py), caller [riverPrepare.py](../../backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py) | Порядок terminal receiver dependencies, DRAINAGE_CYCLE | Остаётся Hydrology bootstrap; не solver runtime слияния потоков. |
+| [drains_to_basin](../../backend/app/application/worldData/generators/hydrology/rivers/riverReceivers.py), caller [riverRouteSearch.py](../../backend/app/application/worldData/generators/hydrology/rivers/riverRouteSearch.py) | Проверка подтверждённого drainage до бассейна | Остаётся Hydrology; применимость runtime validation требует отдельного bounded/revision contract. |
+| [resolve_water_levels](../../backend/app/application/worldData/generators/hydrology/water/waterBodyResolver.py), caller [waterBodyAssembler.py](../../backend/app/application/worldData/generators/hydrology/waterBodyAssembler.py) | Статический контакт фронтов, union, уровни/rim и inherited levels; нет dt/flux budget | Сохранить bootstrap. Не запускать как второй runtime solver после Physics; geometric helper reuse — только после PH-0 review, без копии level policy. |
+| [materialize_water](../../backend/app/application/worldData/generators/hydrology/water/waterMaterialize.py), caller [waterBodyAssembler.py](../../backend/app/application/worldData/generators/hydrology/waterBodyAssembler.py) | Fill по разрешённым уровням, классификация, minimum-cell filter | Отсутствие тела в результате не доказывает runtime засуху. Bounded runtime projection и её conservation semantics OPEN. |
+
+Эти пути **не объявлены legacy Physics** и не назначены к удалению. Подтверждены определения и прямые call sites поиском `rg` и чтением resolver/materializer/order; полный production closure ещё OPEN. Источник разделения — [Hydrology ТЗ](../../docs/tz_terrain_hydrology.md), раздел «Граница Hydrology / Physics / Water Systems: впадение, merge и пересыхание». Physics рассчитывает runtime изменение; Hydrology валидирует/готовит water facts; W/L обновляет metadata/history; DAG организует общую preparation/commit группу через Snapshot. Exact APIs и физические модели остаются OPEN.
+
+Уточнение W0: вход изменения содержит подтверждённые water facts; inherited level/primary/оценка объёма для ranking не являются расчётом динамики. Consumer не вызывает bootstrap resolver для вычисления расхода/пересыхания. Dry/restore, identity и successors сохраняют ранее принятые правила; exact wet/dry POJO и общая atomic group ещё OPEN.

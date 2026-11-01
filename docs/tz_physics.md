@@ -169,3 +169,7 @@ C.temperature += delta
 - [World Environment / Aerial](./tz_aerial.md) — ambient/vacuum contracts.
 - [Typed DAG Node Context](./tz_engine_node_context.md) — declared `deps`, typed Input/Output, barrier и параллелизм engine DAG.
 - [World plan graph](../.cursor/plans/world-generation-plan-dependency-graph.md) — межплановые gates (не runtime causal DAG и не owner формул).
+
+## Граница водной динамики и гидрологии — 2026-11-01
+
+Нормативное разделение: [Hydrology: впадение, merge и пересыхание](./tz_terrain_hydrology.md#граница-hydrology--physics--water-systems-впадение-merge-и-пересыхание-2026-11-01). Physics owns runtime перенос/потерю/поступление объёма и физическое изменение при контакте; Hydrology сохраняет bootstrap routing/fill/spill и принимает подготовленные runtime water facts через DAG. W/L изменяет только membership/identity/history по подтверждённым изменениям, не рассчитывает физическую причину засухи или расход. Статический max-level/rim resolver не подменяет runtime conservation solver. Exact forcing/volume/units/typed requests и atomic preparation/commit OPEN; существующий алгоритм нельзя копировать в новый solver без PH-0 reuse review.
