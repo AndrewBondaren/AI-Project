@@ -1,3 +1,6 @@
+from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence import SqlitePublicationEvidence
+from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
 """Real task/database/lifetime/read-only capability checks, without domain handlers."""
 
 import asyncio
@@ -33,7 +36,8 @@ class CommitCapabilityTests(unittest.TestCase):
                         with self.assertRaises(ValueError):
                             factory(commits, second[2]._access)
                     with self.assertRaises(ValueError):
-                        SqliteOperationStore(commits, world, players, second[2]._access)
+                        SqliteOperationStore(commits, second[2]._access, StoredTerminalCodec(),
+                            operations._evidence, operations._artifacts)
                     # A second registry for the same Database is also a different authority.
                     with self.assertRaises(ValueError):
                         SqliteWorldPublicationStore(commits, ScopedSqliteAccess(SqliteScopeRegistry(db)))
@@ -97,7 +101,7 @@ class CommitCapabilityTests(unittest.TestCase):
                 await live_started(first)
                 async with live_database(first[0].path, seed=False) as second:
                     with self.assertRaises(ValueError):
-                        SqliteOperationStore(first[1], second[2], first[3], first[2]._access)
+                        SqlitePublicationEvidence(first[1], second[2], first[3], first[2]._access)
                     async with first[1].transaction("scope") as scope:
                         expected = await first[2].read("w1", scope=scope.read_scope)
                         with self.assertRaises(PublicationInfrastructureError):

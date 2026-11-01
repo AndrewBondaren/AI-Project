@@ -1,3 +1,6 @@
+from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence import SqlitePublicationEvidence
+from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
 """Positive core identity and nominal registry-key contracts (4A1)."""
 
 from app.dataModel.artifacts.references import (
@@ -227,7 +230,8 @@ def sqlite_composition(db: Database) -> tuple[IPublicationCommitStore, IWorldPub
     world = SqliteWorldPublicationStore(commits, access)
     players = SqlitePlayerPublicationStore(commits, access)
     history = SqliteSnapshotHistoryStore(commits, access)
-    operations = SqliteOperationStore(commits, world, players, access)
+    operations = SqliteOperationStore(commits, access, StoredTerminalCodec(),
+        SqlitePublicationEvidence(commits, world, players, access), SqliteOperationArtifacts(access))
     return sqlite_ports(commits, world, players, history, operations)
 
 

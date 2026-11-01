@@ -4,6 +4,7 @@ import sqlite3
 import unittest
 import asyncio
 import threading
+from contextlib import closing
 from unittest.mock import patch
 from app.application.publication.errors import UnknownCommitOutcome
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationPhase, OperationKind
@@ -14,11 +15,64 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.db.mapper import from_row, to_row
 from tests.snapshotCore.support.fixtures import (
     CORE_MODELS, new_database, started, tick, stage, operation, insert, snapshot_values,
-    run_async, live_database, live_started, live_tick,
+    run_async, live_database, live_started, live_tick, close_writers,
 )
 
 
 class AtomicSnapshotCommitTests(unittest.TestCase):
+    def test_terminal_codec_and_historical_evidence_boundaries(self):
+        from dataclasses import asdict
+        from app.application.publication.errors import PublicationInfrastructureError
+        from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+
+        async def check():
+            async with live_database() as bundle:
+                await live_started(bundle)
+                _, result = await live_tick(bundle)
+                codec = StoredTerminalCodec()
+                row = asdict(codec.encode(result))
+                self.assertEqual(codec.decode(row), result)
+                for changes in ({"outcome_checksum": "0" * 64}, {"outcome_kind": "unknown"},
+                                {"format_version": 2}, {"operation_id": "other"},
+                                {"category": "conflict"}):
+                    with self.subTest(changes=changes), self.assertRaises((PublicationInfrastructureError, ValueError)):
+                        codec.decode({**row, **changes})
+                # A newer head must not invalidate the earlier terminal's historical refs.
+                await live_tick(bundle, "next")
+                async with bundle[1].read_scope() as scope:
+                    await bundle[-1]._evidence.check(scope, result)
+                    forged = result.model_copy(update={"operation_id": "missing"})
+                    with self.assertRaises(PublicationInfrastructureError):
+                        await bundle[-1]._evidence.check(scope, forged)
+                self.assertEqual((await bundle[-1].read("tick")).terminal, result)
+        run_async(check())
+
+    def test_artifact_read_leaf_active_release_and_scope_guards(self):
+        from app.application.publication.errors import PublicationInfrastructureError
+        from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
+
+        async def check():
+            async with live_database() as bundle:
+                with closing(sqlite3.connect(bundle[0].path)) as conn, conn:
+                    _, hold, _, _ = stage(conn)
+                    close_writers(conn)
+                leaf = SqliteOperationArtifacts(bundle[2]._access)
+                async with bundle[1].read_scope() as scope:
+                    refs = await leaf.read(scope, "stage")
+                    self.assertEqual(len(refs), 1)
+                    async with live_database(bundle[0].path, seed=False) as other:
+                        with self.assertRaises(PublicationInfrastructureError):
+                            await other[-1]._artifacts.read(scope, "stage")
+                with self.assertRaises(PublicationInfrastructureError):
+                    await leaf.read(scope, "stage")
+                self.assertEqual(refs, (await bundle[-1].read("stage")).leased_artifacts)
+                with closing(sqlite3.connect(bundle[0].path)) as conn, conn:
+                    insert(conn, "artifact_holder_events", **{**hold, "event_id": "released",
+                           "predecessor_id": hold["event_id"], "event_seq": 2, "event_kind": "release"})
+                async with bundle[1].read_scope() as scope:
+                    self.assertEqual(await leaf.read(scope, "stage"), ())
+        run_async(check())
+
     def setUp(self):
         self.conn = new_database()
         self.addCleanup(self.conn.close)

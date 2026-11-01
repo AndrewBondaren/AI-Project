@@ -2,45 +2,40 @@
 
 from pydantic import TypeAdapter
 
-from app.application.encoding.canonicalCodec import content_digest, encode, decode, merge_manifests
 from app.application.publication.errors import PublicationInfrastructureError
 from app.application.worldSnapshot.contracts.commitScope import CommitScope
-from app.application.worldSnapshot.encoding.coreManifest import SNAPSHOT_CORE_SCHEMA
-from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
 from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled, OperationRecord
 from app.dataModel.artifacts.lifecycle.operation.claim import PublicationOwner, PublicationBusy, PublicationTerminal, OperationClaim
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
-from app.dataModel.patch.values import FormatVersion
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
-from app.dataModel.worldSnapshot.results.publication import PackActivationResult, PackActivationDisposition, GameplayStarted
+from app.dataModel.worldSnapshot.results.publication import PackActivationResult, GameplayStarted
 from app.db.models.snapshotCore.operationRows import (
-    PublicationOperationRow, PublicationRequestRow, PublicationOperationEventRow, PublicationOutcomeRow,
+    PublicationOperationRow, PublicationRequestRow, PublicationOperationEventRow,
 )
 from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
 from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
 from app.db.repositories.sqlite.shared.validation.rowValues import _UID, _HASH, _fields, _wire
-from app.db.repositories.sqlite.shared.validation.blobIntegrity import _checked_blob
-from app.db.repositories.sqlite.snapshotCore.publications.worldPublicationStore import SqliteWorldPublicationStore
-from app.db.repositories.sqlite.snapshotCore.publications.playerPublicationStore import SqlitePlayerPublicationStore
 from app.ids.deterministicIds import runtime_uid
 
 
+from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence import SqlitePublicationEvidence
+from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
+
+
 class SqliteOperationStore:
-    def __init__(self, commits: SqlitePublicationCommitStore, world: SqliteWorldPublicationStore,
-                 players: SqlitePlayerPublicationStore, access: ScopedSqliteAccess, manifest: CanonicalSchemaManifest = SNAPSHOT_CORE_SCHEMA) -> None:
-        if access.registry is not commits.registry:
-            raise ValueError("adapter/access must share the coordinator's registry")
-        self._access, self._registry = access, access.registry
-        if (world._commits is not commits or players._commits is not commits
-                or world._access is not access or players._access is not access):
-            raise ValueError("operation/publication adapters must share one commit coordinator")
-        self._commits, self._world, self._players = commits, world, players
-        self._manifest = merge_manifests(SNAPSHOT_CORE_SCHEMA, manifest)
+    def __init__(self, commits: SqlitePublicationCommitStore, access: ScopedSqliteAccess,
+                 codec: StoredTerminalCodec, evidence: SqlitePublicationEvidence,
+                 artifacts: SqliteOperationArtifacts) -> None:
+        if (access.registry is not commits.registry or evidence._commits is not commits
+                or evidence._access is not access or artifacts._access is not access):
+            raise ValueError("operation dependencies must share one commit coordinator and access")
+        self._access, self._registry, self._commits = access, access.registry, commits
+        self._codec, self._evidence, self._artifacts = codec, evidence, artifacts
 
     async def _event(self, operation_id, scope):
         row = await self._access.one(scope,
@@ -76,46 +71,6 @@ class SqliteOperationStore:
                 raise PublicationInfrastructureError("stored operation phase/fence transition mismatch")
         return row
 
-    async def _terminal_refs(self, result, scope):
-        marker = await self._access.one(scope, "SELECT publication_id FROM world_publications WHERE operation_id=?", (result.operation_id,))
-        if marker is not None:
-            _fields(marker, uids=("publication_id",))
-        if isinstance(result, SnapshotApplyResult) and result.category is SnapshotApplyOutcomeKind.COMMITTED:
-            actual = None if marker is None else await self._world._by_id(marker["publication_id"], scope)
-            refs = result.committed
-            if refs is None or actual is None or actual != refs.publication or actual.snapshot_head != refs.world_snapshot:
-                raise PublicationInfrastructureError("committed outcome does not match historical publication")
-            players = await self._players._for_operation(result.operation_id, scope)
-            if players != tuple(sorted(refs.player_snapshots, key=lambda ref: ref.player_uid)):
-                raise PublicationInfrastructureError("committed player participants mismatch")
-        elif isinstance(result, (PackActivationResult, GameplayStarted)):
-            actual = await self._world._by_id(result.publication.publication_id, scope)
-            if actual != result.publication:
-                raise PublicationInfrastructureError("terminal publication mismatch")
-            inactive = isinstance(result, PackActivationResult) and result.disposition is PackActivationDisposition.READY_INACTIVE
-            if (inactive and marker is not None) or (not inactive and (marker is None or marker["publication_id"] != actual.publication_id)):
-                raise PublicationInfrastructureError("terminal publication disposition mismatch")
-        else:
-            snapshot = await self._access.one(scope, "SELECT snapshot_id FROM world_snapshots WHERE operation_id=?", (result.operation_id,))
-            if marker is not None or snapshot is not None or await self._players._for_operation(result.operation_id, scope):
-                raise PublicationInfrastructureError("refusal/cancellation cannot hide committed state")
-
-    async def _decode_terminal(self, row, scope):
-        _fields(row, uids=("operation_id",), positives=("format_version",), hashes=("outcome_checksum",))
-        TypeAdapter(FormatVersion).validate_python(row["format_version"], strict=True)
-        if row["format_version"] != 1:
-            raise PublicationInfrastructureError("unsupported outcome format")
-        expected = {"snapshot_apply": SnapshotApplyResult, "pack_activation": PackActivationResult,
-                    "gameplay_start": GameplayStarted, "cancelled": OperationCancelled}.get(row["outcome_kind"])
-        if expected is None:
-            raise PublicationInfrastructureError("unknown terminal storage discriminator")
-        result = decode(_checked_blob(row["outcome_data"], row["outcome_checksum"]), expected, self._manifest)
-        category = _wire(SnapshotApplyOutcomeKind, row["category"]) if row["category"] is not None else None
-        if result.operation_id != row["operation_id"] or category != (result.category if isinstance(result, SnapshotApplyResult) else None):
-            raise PublicationInfrastructureError("terminal row/body mismatch")
-        await self._terminal_refs(result, scope)
-        return result
-
     async def _load(self, operation_id, scope) -> OperationRecord | None:
         row = await self._access.one(scope, "SELECT * FROM publication_operations WHERE operation_id=?", (operation_id,))
         if row is None:
@@ -126,20 +81,14 @@ class SqliteOperationStore:
         if request is not None:
             _fields(request, uids=("operation_id",), hashes=("publication_fingerprint",))
         terminal = await self._access.one(scope, "SELECT * FROM publication_outcomes WHERE operation_id=?", (operation_id,))
-        held = await self._access.all(scope, """SELECT DISTINCT c.* FROM artifact_catalog c JOIN artifact_holder_events h
-            ON h.artifact_id=c.artifact_id WHERE h.holder_kind='operation' AND h.operation_id=? AND h.event_kind='acquire'
-            AND NOT EXISTS (SELECT 1 FROM artifact_holder_events n WHERE n.predecessor_id=h.event_id)
-            ORDER BY c.kind,c.format_key,c.format_version,c.content_hash""", (operation_id,))
-        refs = []
-        for artifact in held:
-            _fields(artifact, uids=("artifact_id",))
-            refs.append(ArtifactRef(kind=_wire(ArtifactKind, artifact["kind"]), format_key=artifact["format_key"],
-                format_version=artifact["format_version"], content_hash=artifact["content_hash"],
-                nbytes=artifact["nbytes"], row_count=artifact["row_count"]))
+        refs = await self._artifacts.read(scope.read_scope if isinstance(scope, CommitScope) else scope, operation_id)
+        result = None if terminal is None else self._codec.decode(terminal)
+        if result is not None:
+            await self._evidence.check(scope, result)
         return OperationRecord(operation_id=row["operation_id"], world_uid=row["world_uid"], kind=_wire(OperationKind, row["kind"]),
             preparation_fingerprint=row["preparation_fingerprint"], publication_fingerprint=None if request is None else request["publication_fingerprint"],
-            phase=_wire(OperationPhase, event["phase"]), fence=event["fence"], leased_artifacts=tuple(refs),
-            terminal=None if terminal is None else await self._decode_terminal(terminal, scope))
+            phase=_wire(OperationPhase, event["phase"]), fence=event["fence"], leased_artifacts=refs,
+            terminal=result)
 
     async def read(self, operation_id: EntityUid) -> OperationRecord | None:
         operation_id = _UID.validate_python(operation_id, strict=True)
@@ -192,19 +141,11 @@ class SqliteOperationStore:
         if not isinstance(outcome, OperationCancelled) and record.phase is not OperationPhase.APPLYING:
             raise ValueError("publication outcome requires a claimed applying operation")
         OperationRecord.model_validate({**record.model_dump(), "phase": OperationPhase.TERMINAL, "terminal": outcome}, strict=True)
-        await self._terminal_refs(outcome, scope)
-        data = encode(outcome, self._manifest)
-        if isinstance(outcome, SnapshotApplyResult):
-            tag, category = OperationKind.SNAPSHOT_APPLY.value, outcome.category.value
-        elif isinstance(outcome, PackActivationResult):
-            tag, category = OperationKind.PACK_ACTIVATION.value, None
-        elif isinstance(outcome, GameplayStarted):
-            tag, category = OperationKind.GAMEPLAY_START.value, None
-        else:
-            tag, category = "cancelled", None
+        await self._evidence.check(scope, outcome)
+        terminal_row = self._codec.encode(outcome)
         previous = await self._event(operation_id, scope)
         event_id = _UID.validate_python(runtime_uid(), strict=True)
-        await self._access.insert(scope, PublicationOutcomeRow(operation_id, tag, category, 1, data, content_digest(data).hex()))
+        await self._access.insert(scope, terminal_row)
         await self._access.insert(scope, PublicationOperationEventRow(event_id,
             operation_id, previous["event_id"], previous["event_seq"] + 1, OperationPhase.TERMINAL.value, record.fence))
 

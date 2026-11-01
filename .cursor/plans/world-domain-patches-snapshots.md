@@ -1588,9 +1588,9 @@ repositories/sqlite/shared/validation/blobIntegrity.py
 repositories/sqlite/snapshotCore/operations/operationStore.py
   SqliteOperationStore
 repositories/sqlite/snapshotCore/operations/terminalCodec.py
-  StoredTerminalCodec (target 4C2-O, §8.14; outcome wire/row projection)
+  StoredTerminalCodec (4C2-O, §8.14; outcome wire/row projection)
 repositories/sqlite/snapshotCore/operations/publicationEvidence.py
-  SqlitePublicationEvidence (target 4C2-O; исторические publication refs)
+  SqlitePublicationEvidence (4C2-O; исторические publication refs)
 repositories/sqlite/snapshotCore/publications/worldPublicationStore.py
   SqliteWorldPublicationStore
 repositories/sqlite/snapshotCore/publications/playerPublicationStore.py
@@ -1600,7 +1600,7 @@ repositories/sqlite/snapshotCore/history/snapshotHistoryStore.py
 repositories/sqlite/snapshotCore/history/rowProjection.py
   encode_history_row, decode_history_row (4C2-H; pure SQL projection)
 repositories/sqlite/artifacts/operationArtifacts.py
-  SqliteOperationArtifacts (target 4C2-O; read-only operation-held refs)
+  SqliteOperationArtifacts (4C2-O; read-only operation-held refs)
 repositories/sqlite/artifacts/catalogStore.py
   SqliteArtifactCatalog
 repositories/sqlite/artifacts/leaseStore.py
@@ -1848,7 +1848,7 @@ composition root ещё не объявляются: GEN-DAG-1 gates сохра�
   к исходной карте; target с 4C2-R — 84 source modules/51 packages.
 - Дополнение 4C2-H/4C2-O (§8.14): application/worldSnapshot/validation —
   новый пакет 0→2; snapshotCore/history 2→3, operations 2→4.
-  sqlite/artifacts пока отсутствует: 4C2-O создаёт __init__ + operationArtifacts
+  sqlite/artifacts: 4C2-O создал __init__ + operationArtifacts
   (0→2), итог с будущим 4C3 — 5 вместо 4. Новых файлов в sqlite root нет.
   Target всей карты с этими дополнениями — 89 source modules/52 packages
   (+5 modules и один новый пакет validation к target 4C2-R; пакет artifacts
@@ -2229,7 +2229,7 @@ test_leases/test_gc (4C3), test_capabilities при появлении scope imp
 
 ### 8.12. Реализация 4C2 — SQLite publication/operation adapters (2026-10-30)
 
-Статус: **ФУНКЦИОНАЛЬНО РЕАЛИЗОВАНО; АРХИТЕКТУРНАЯ ПРИЁМКА НЕ ЗАКРЫТА — 4C2-R (§8.13), 4C2-H/4C2-O (§8.14)**. По §8.3 добавлены SqlitePublicationCommitStore/SqliteCommitScopeBinding, world/player publication CAS, snapshot history и operation store; общий errors.py. Согласованное добавление world_uid в claim_publication синхронизировано с портом/ТЗ/typing. Boundary validation 56 полей 4C2 по §8.11: internal UID, enum/tag, strict numbers/raw bool, UTC/hash/version/bytes и row↔DTO coherence; checksum проверяется до decode.
+Статус: **ФУНКЦИОНАЛЬНО РЕАЛИЗОВАНО; R/H ПРИНЯТЫ 2026-11-01; АРХИТЕКТУРНАЯ ПРИЁМКА O ОЖИДАЕТСЯ (§8.14)**. По §8.3 добавлены SqlitePublicationCommitStore/SqliteCommitScopeBinding, world/player publication CAS, snapshot history и operation store; общий errors.py. Согласованное добавление world_uid в claim_publication синхронизировано с портом/ТЗ/typing. Boundary validation 56 полей 4C2 по §8.11: internal UID, enum/tag, strict numbers/raw bool, UTC/hash/version/bytes и row↔DTO coherence; checksum проверяется до decode.
 Проверка из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **95 PASS**, включая existing Pyright (positive 0 diagnostics, negative ровно **42** ожидаемых diagnostics). Реальные Database/GuardedConnection/aiosqlite workers, две SQLite connections, FULL synchronous в runtime tests; только schema setup ускорен OFF. Сетевой wakeup event loop заменён bounded polling в test fixture; production loop/driver не менялись.
 CAS race — один победитель; world/player/history/outcome commit/rollback вместе; preparing/busy/ready/terminal retry и immutable ID/world/preparation/request bindings — PASS. Cancellation до commit, во время COMMIT и ROLLBACK дожидается worker; lost COMMIT acknowledgement закрывает/quarantine connection, включая уже ожидающих gate callers, запрещает refusal и восстанавливает terminal через свежую connection — PASS. Task/database/lifetime/read-only/forged/nested scope, persisted corruption и constructed/copied invalid DTO до writes — PASS.
 Прежняя положительная архитектурная отметка о commitScope **снята**: проверка классов <300 строк не выявила смешение ответственностей всего модуля. Domain CRUD/planning/materialization отсутствуют, raw connection handler не получает; эти факты и функциональный baseline сохраняются, но композицию модуля не оправдывают. Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все правки через apply_patch; чужие изменения сохранены. Production БД, services, Container/DAG не менялись; backend не запускался, commit агентом не создавался. **Переход к 4C3 заблокирован до 4C2-R и повторной архитектурной приёмки**.
@@ -2328,7 +2328,7 @@ Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все изме
 
 ### 8.14. 4C2-H / 4C2-O — history provenance и композиция operation/history stores
 
-Статус: **4C2-H РЕАЛИЗОВАНО, ПОДГОТОВЛЕНО К РЕВЬЮ; 4C2-O НЕ НАЧАТ** (2026-10-30, запрос мастера «Выполняй», один подшаг за заход).
+Статус: **4C2-R/H ПРИНЯТЫ мастером 2026-11-01 по архитектурному ревью; 4C2-O РЕАЛИЗОВАН, ПОДГОТОВЛЕН К ПРИЁМКЕ**. 4C3 не начат и заблокирован до приёмки O.
 Основание: ревью мастером operationStore/snapshotHistoryStore после 4C2-R;
 tz_world_snapshot «Operation storage, CAS и capability ports» и правило
 соответствия refs receipt назначенным snapshots/участникам. Эти подшаги
@@ -2362,7 +2362,7 @@ formats/IDs сохраняются. Общая архитектурная при
 #### Target владельцы и направления импортов
 
 Пути относительно backend/app/. Компоненты 4C2-H материализованы по карте;
-компоненты 4C2-O остаются target. Добавление других именованных компонентов
+компоненты 4C2-O материализованы 2026-11-01. Добавление других именованных компонентов
 требует предварительной правки карты.
 
 | Владелец / точный путь | Обязанность, контракт и границы |
@@ -2413,7 +2413,7 @@ DataModel не получает IO/application imports, новые DTO/пара�
 
 Done каждого подшага: regression/contract/typing проверки зелёные, карта
 совпадает с кодом, evidence обновлён и мастер повторно принял обязанности.
-**4C3 заблокирован до приёмки 4C2-H и завершения/приёмки 4C2-O.**
+**4C2-R/H приняты 2026-11-01; 4C3 заблокирован до приёмки реализованного 4C2-O.**
 
 Evidence 4C2-H: regression H1 сначала воспроизвёл принятие current state без receipt; теперь world/player cases и неподтверждённый старый state отклоняются до INSERT. validate_receipt_provenance проверяет assigned refs, operation/section/receipt uniqueness, симметрию новых state/history и достижимость из точного pinned base; rowProjection владеет pure strict row↔envelope/checksum projection. Публичные ports, DTO, SQL и canonical formats/IDs сохранены.
 Из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **106 PASS** (99 + 7 history tests), existing Pyright positive **0** / negative **48** (45 + 3 EXPECT). Проверены реальные multi-participant world/player history append/read, retained base, empty tick, strict copied inputs, JSON/row round-trip и immutable rows; прежние CAS/atomicity/cancellation/quarantine/recovery проверки сохранены.
@@ -2468,6 +2468,8 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 
 ### Архитектурное ревью 4C2-R/H — 2026-11-01
 
+Ниже сохранён результат ревью до решения владельца; актуальная приёмка R/H и evidence реализации O зафиксированы далее.
+
 **Результат: новых блокирующих замечаний в scope R/H не выявлено; рекомендованы к приёмке владельцем, DONE не присвоен.** Проверено текущее дерево на HEAD `8d1eda09`; существующие изменения SPATIAL/графа не затрагивались. 4C2-O не начат, его известная композиционная задолженность O1 не переоткрывается как дефект R/H и не считается исправленной.
 
 - R: [SqlitePublicationCommitStore._transaction/read_scope](../../backend/app/db/repositories/sqlite/snapshotCore/commitScope.py) содержит lifecycle/order, [SqliteScopeRegistry.issue/check/revoke](../../backend/app/db/repositories/sqlite/shared/capabilities/scopeRegistry.py) — capabilities, [SqliteTransactionDriver._acknowledge/commit/rollback/close](../../backend/app/db/repositories/sqlite/shared/transactions/transactionDriver.py) — worker acknowledgement, [ScopedSqliteAccess.one/all/insert](../../backend/app/db/repositories/sqlite/shared/access/scopedAccess.py) — row IO. Binding и validation leaves сверены; shared не импортирует concrete stores/Container. Четыре adapters проверяют тождество registry с coordinator; fixtures собирают один DI-набор. Counts shared/capabilities/transactions/access/validation = 1/3/2/2/3.
@@ -2475,4 +2477,17 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 - Проверки из backend: `../.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **106 PASS**, включая existing positive/negative Pyright gate, H1 до INSERT, multi-participant history, strict projection, actual CAS/atomicity, capabilities/DI, cancellation/lost acknowledgement/quarantine/recovery. Тесты используют временные fixtures; сервер и production DB не запускались.
 - Scope legacy review: старые helper-обязанности commitScope перенесены в названные shared owners; compatibility reexports этих helpers отсутствуют, текущие imports/call sites adapters и tests просмотрены через `rg`. History policy/projection вызываются adapter и тестами, второго публичного history adapter не добавлено. Это проверка локальной R/H миграции, **не** закрытие общего LEGACY-AC Snapshot, future Container wiring или production cutover. Известный SqliteOperationStore O1 остаётся на 4C2-O.
 
-**Следующее действие:** приёмка R/H владельцем. Общая приёмка 4C2 и переход к 4C3 по-прежнему требуют отдельного завершения/приёмки 4C2-O; это ревью не даёт команды начинать его. Runtime Snapshot/services/handlers и полный legacy closure не проверялись как готовая реализация.
+**Приёмка владельца 2026-11-01:** R/H приняты по результатам этого архитектурного ревью. **Следующее действие:** реализация только O (evidence ниже). Общая приёмка 4C2 и переход к 4C3 по-прежнему требуют отдельного завершения/приёмки 4C2-O; это ревью не даёт команды начинать его. Runtime Snapshot/services/handlers и полный legacy closure не проверялись как готовая реализация.
+
+
+### Evidence 4C2-O — 2026-11-01
+
+4C2-R/H приняты мастером по архитектурному ревью от 2026-11-01. Выполнен только O по §8.14; статус O — реализован, подготовлен к приёмке владельцем.
+
+StoredTerminalCodec владеет pure encode/decode terminal row: discriminator/category/version, strict row/body/checksum и existing manifest. SqlitePublicationEvidence владеет historical marker/world/player checks и запретом скрыть publication отказом/cancellation; _by_id/_for_operation локализованы здесь. SqliteOperationArtifacts владеет прежним DISTINCT active-holder read, strict ArtifactRef validation и SQL sorting; принимает read scope, не содержит writer/GC/UOW. OperationStore сохраняет identity/lifecycle/fence, terminal idempotency и operation/event integrity, получает все три зависимости явным DI и проверяет единые coordinator/access. Query выполняется в прежнем scope; новые DTO/ports/SQL/formats не вводились.
+
+До изменений проверены repository-wide callers: production Container ещё не подключает adapter; обновлены fixtures, capability tests и positive typing composition. Compatibility reexports и старые _terminal_refs/_decode_terminal отсутствуют. Импорт artifacts → snapshotCore stores отсутствует. Counts с __init__: operations 4, history 3, artifacts 2, validation 2; sqlite root не расширен. Общий target карты остаётся 89 source modules/52 packages (включает будущие шаги).
+
+Проверки: исходный baseline 106 PASS; после выделения владельцев 106 PASS; итоговый suite с двумя новыми regression tests — 108 PASS, включая existing Pyright positive 0 / negative 48 EXPECT. Новые проверки: terminal round-trip/checksum/tag/version/row-body corruption; historical evidence после продвижения latest head и mismatch operation; реальные active/released holds, operation record integration, expired/foreign scopes. Existing CAS/atomicity/fence/retry/cancellation/quarantine/recovery gates сохранены. Scoped diff --check — PASS.
+
+Production Container/DAG/БД и services не менялись, сервер не запускался, commit не создавался. Чужие изменения SPATIAL сохранены. **Остановка перед 4C3; приёмка O мастером ожидается.**
