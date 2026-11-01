@@ -38,6 +38,9 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 
 ## 3. Два будущих режима Physics как уровни физической детализации
 
+**Уточнение LOD (решение пользователя 2026-11-01):** caller — **DAG-нода**; DAG по типизированным настройкам выбирает одну из **трёх зон** физической детализации: **FAR** (дальняя), **MEDIUM** (чуть дальше ближайшей сцены) и **NEAR** (непосредственно рядом с игроком). Это *зоны orchestration policy*, а не три обязательных solver: рабочая исходная карта **FAR → PH-AGG с самым грубым пространственным/временным бюджетом; MEDIUM → PH-AGG с более точным/частым bounded расчётом; NEAR → PH-LOCAL**. Она является исходной архитектурной рекомендацией, не freeze численных допусков/частот и не запрет событийного PH-LOCAL вне NEAR. Границы, частота, non-distance criteria, overrides, область и owner конкретного settings POJO **OPEN PH-ORCH/PH-LOD**. Сверять с уже существующими conceptual near/medium/far в [Lazy Simulation](../../docs/tz_lazy_simulation.md), но не переносить автоматически старые `map_cells`/per-cell assumptions или LS-T2/LS-T3 неопределённости в Physics. Два physical compute mode и три zone tier — разные оси; не вводить `PhysicsDetailLevel` с неоднозначной семантикой. 
+
+
 ### PH-AGG — агрегированный физический LOD
 
 - Возможны упрощённые расчёты давления, вытеснения, смешения и распространения жидкостей/газов по **компактным пространственным фактам** без обязательного per-cell представления целого мира.
@@ -111,7 +114,7 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 
 | Точный target file / тип | Ответственность и freeze prerequisite |
 |---|---|
-| `backend/app/dataModel/physics/enums/physicsDetailLevel.py` — `PhysicsDetailLevel` | Закрытое различение PH-AGG/PH-LOCAL **по принятому смыслу**, но exact values/serialization, default/error semantics — после PH-0/PH-LOD |
+| `backend/app/dataModel/physics/enums/physicsComputeMode.py` — `PhysicsComputeMode` | Закрытый **способ вычисления** PH-AGG/PH-LOCAL, не enum трёх orchestration zones; exact enum values/serialization, default/error semantics — после PH-0/PH-LOD. FAR/MEDIUM/NEAR определяются DAG/settings-owning контрактом, существующие типы сначала аудитировать |
 | `backend/app/dataModel/physics/physicsComputeRequest.py` — `PhysicsComputeRequest` | Только declarative scope/process/time/bound publication/version/mode invocation; конкретные поля/refs/units/validators и reuse существующих types — отдельно frozen до кода |
 | `backend/app/dataModel/physics/physicsComputeResult.py` — `PhysicsComputeResult` | Typed output proposals для owning-domain operations, transient physics view, diagnostics/provenance; union domain request types/handler contracts после PH-PUBLISH и DAG-TYPING |
 | `backend/app/dataModel/physics/physicsDynamicState.py` — `PhysicsDynamicState` (**условный слот**) | Только если PH-0/PH-HANDOFF докажут необходимость возобновляемого динамического состояния (скорости/фазы/потоки и т. п.) и Snapshot ownership; **не** дублирует authoritative liquid volume, water level/footprint или свойства Materials |
@@ -124,13 +127,22 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 
 ### PH-ORCH — внешний запуск и связь с DAG (отдельное архитектурное решение, OPEN)
 
-**Принятая граница:** только DAG/caller владеет *когда* инициировать физический расчёт, координацией междоменных операций и публикацией: `Physics → typed proposals → DAG → public domain change operations (Hydrology/Geometry/Objects/Gas/...) → prepared PatchSet → Snapshot`. Physics сам не вызывает эти write-операции, не принимает prepared patch и не делает Snapshot/SQL/Pack commit. Один solver substep **не** равен DAG node; внутренние численные циклы/связь физических процессов остаются внутри Physics и не превращают DAG в numerical engine. Вместе с этим DAG не вычисляет physics, не выбирает material rules и не импортирует внутренние solver files.
+**Частично согласовано пользователем (2026-11-01):**
+
+1. **Production trigger:** запрос Physics приходит **из DAG-ноды**. API/debug/action caller входит через тот же DAG, а не вызывает Physics/solver напрямую. Конкретный event/tick scheduler и runtime graph, а также typed node/class registration ещё не утверждены.
+2. **LOD ownership:** **DAG + типизированные настройки** выбирают FAR/MEDIUM/NEAR зону. Это внешняя policy, не логика PhysicsService, Spatial Reader или Material Registry. Дистанция — один фактор; размеры зон, world-specific settings location/owner, время/бюджет и event/observability overrides ещё OPEN. Исходное отображение 3 zones → 2 compute modes зафиксировано в §3 как проект для приёмки, не новый третий solver.
+3. **Вопрос о Node Input/Output — архитектурный ответ на основе принятого DAG-TYPING-1:** каждая Physics DAG-нода обязана иметь typed `NodeContract` с Input/Output Pydantic POJO; она сама подготавливает Input, явно читает публичные доменные read contracts и может использовать typed Output объявленных зависимостей. Если `PhysicsComputeRequest` и `PhysicsComputeResult` имеют **ту же семантику**, разрешён reuse как node I/O; если node input — композиция нескольких доменных POJO, она живёт в `dataModel/engine/nodes/<группа>/` и вложенно использует доменные типы, не копируя их поля. Большие slices — refs по явно принятому контракту, не гигантский `DAGContext`. **Точные node IO поля, requirement refs, data-read placement/сигнатуры и соотношение Node Input с Physics domain request остаются OPEN для подтверждения пользователем и owning GEN-DAG/Physics freeze**, это пока не решение добавить отдельные дублирующие POJO.
+4. **Параллелизм вычислений, порядок процессов и overlapping scope:** оставлен OPEN по прямому ответу пользователя. Ни scheduler, ни sequential-only DAG, ни параллельный writer не утверждены.
+
+
+
+**Принятая граница:** production-запрос приходит **из DAG-ноды**; DAG владеет *когда* инициировать физический расчёт, координацией междоменных операций и публикацией: `Physics → typed proposals → DAG → public domain change operations (Hydrology/Geometry/Objects/Gas/...) → prepared PatchSet → Snapshot`. Physics сам не вызывает эти write-операции, не принимает prepared patch и не делает Snapshot/SQL/Pack commit. Один solver substep **не** равен DAG node; внутренние численные циклы/связь физических процессов остаются внутри Physics и не превращают DAG в numerical engine. Вместе с этим DAG не вычисляет physics, не выбирает material rules и не импортирует внутренние solver files.
 
 **Открытые именно orchestration-вопросы, не зашивать их в PhysicsService:**
 
-1. **Trigger/scheduler:** world tick, elapsed-time lazy batch, событие, action, принудительный scene request; что должно работать вдали и как учитывается wall/world time без global per-cell tick.
-2. **LOD policy owner и invocation:** кто решает область, scope, частоту, PH-AGG/PH-LOCAL, бюджет и observability (не только player distance); кто подготавливает bounded local materialization; как не допустить двух write-owners для одной величины/интервала.
-3. **Input/read seam:** NodeContract/dependencies, объявленные read-only domain facts, `WorldPublicationRef`, geometry/material revision, world time; получает ли Physics domain-owned slices через инъекцию публичных readers или DAG-нода их читает и передаёт typed input — выбрать **после PH-0 + DAG-TYPING/GEN-DAG**, не собирать ручной MapCell/SQL payload и не строить второй read-orchestrator.
+1. **Trigger/scheduler:** DAG-нода принята как вызывающая сторона; OPEN, **по какому** world tick, elapsed-time lazy batch, событию, action или scene request она вызывается, какие таймеры/условия работают вдали и как учитывается world time без global per-cell tick.
+2. **LOD policy / invocation:** owner принят — DAG + настройки, уровни зон FAR/MEDIUM/NEAR. OPEN: точный owning settings POJO/path/API, границы, scope/частота/budget/observability, priority/override вне distance, способ передачи выбранной зоны + compute mode и bounded L2 materialization, единственность write-owner для области/интервала.
+3. **Input/read seam:** DAG-TYPING уже требует typed node Input/Output и явные domain reads внутри ноды; рекомендуемый reuse `PhysicsComputeRequest/Result` — по совпадению семантики. **OPEN для подтверждения:** exact NodeContract/deps, `WorldPublicationRef`, geometry/material revision, world time, способ передачи bounded slices/refs к domain Physics compute, concrete node I/O, полная карта читателей/потребителей после PH-0 + GEN-DAG. Не собирать ad-hoc MapCell/SQL payload и не строить второй read-orchestrator.
 4. **Последовательность/параллельность:** какие физические процессы должны обмениваться результатами *внутри одного* compute, какие независимые bounded scopes можно считать параллельно; запрет перекрывающихся writes, double flux, data races и циклических DAG-deps.
 5. **Output/commit:** точные typed destination requests/response, validation, одно атомарное принятие связанных изменений по pinned revision, retry/idempotency/CAS, stale/conflicting effect reconciliation и rollback без частичного изменения мира. Typed errors принадлежат источнику.
 6. **PH-HANDOFF и gameplay:** удержание aggregate/local shared truth, локальных consequences и transient scene frame на одном времени/revision; reload/replay; запрет обязательного snapshot на каждый быстрый substep/гребень волны.
@@ -170,7 +182,7 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 |---|---|---|
 | PH-0 | Аудит имеющейся runtime физики, Materials §4–6, L2, Snapshot/Patches и реальных вызывающих слоёв | OPEN |
 | PH-ARCH | Freeze целевой file/class map, process ownership, shared algorithms/helpers, exact POJO/enum/typed errors и направление импортов после PH-0 | DRAFT / REVIEW; код BLOCKED |
-| PH-ORCH | Отдельное архитектурное решение о trigger/LOD/reader invocation, DAG NodeContract/deps, bounded materialization, parallelism, commit/retry/PH-HANDOFF | OPEN; код BLOCKED |
+| PH-ORCH | DAG-node production trigger и DAG+settings как LOD owner с тремя зонами **согласованы**; typed node IO как принцип уже принят DAG-TYPING, exact Physics node contract, read binding, parallelism, commit/retry/PH-HANDOFF — отдельная приёмка | PARTIAL; OPEN на конкретных контрактах; код BLOCKED |
 | PH-AGG | Агрегированные операции/алгоритмы, цена–качество, область воздействия и изменение compact facts | OPEN |
 | PH-LOCAL | Детальная физика **материализованной воды** и иных сред в ограниченной области, без требования глобального per-cell bake; алгоритмы и рабочие буферы — отдельная будущая приёмка | OPEN |
 | PH-LOD | Будущая точка выбора физического LOD и bounded materialization вне solver; критерии, владелец policy и typed invocation seam, без внедрения LOD сейчас | OPEN (deferred) |
@@ -193,11 +205,11 @@ PH-ARCH выше задаёт **кандидатные** exact paths/class respo
 10. Какие компактные PH-AGG wave/sea-state facts и локальные PH-LOCAL результаты нужны, как отличить временный гребень волны от нагона, затопления и permanent Hydrology water-state change, как согласовать shore/bathymetry без global per-cell bake?
 11. Что хранить для детерминированного восстановления шторма: world time, forcing, seed/phase, checkpoints активной локальной физики; как сохранить один pinned time/revision для collision, scene read, LLM narration и последующих патчей?
 12. Как доказать PH-HANDOFF на морском сценарии (высота/направление волн, корабль у LOD-границы, повторный вход, cold reload, несколько областей) и отсутствие повторного физического ущерба/потерянных последствий?
-13. Где должен находиться owner будущей LOD-политики; какими typed входами caller/DAG передаст Physics выбранную точность, область и требования к materialization, не встраивая критерии LOD в solver, SPATIAL или Hydrology и не утверждая новый POJO до типизации DAG?
+13. Owner LOD выбран — DAG + типизированные настройки с FAR/MEDIUM/NEAR зонами. **OPEN:** конкретный POJO/settings placement, критерии/бюджет/границы и как typed Input DAG-ноды передаст Physics выбранную точность, область и materialization requirements, не встраивая policy в solver, SPATIAL или Hydrology.
 14. Какие конкретные существующие code paths/physical kernels PH-0 должен **reuse, migrate или удалить**, чтобы PH-ARCH file/class map не создала новый solver параллельно действующему? Какие process owners действительно нужны первыми?
 15. Какой exact typed material capability/property contract, range/units/validation и процессная классификация позволят добавлять материалы без правки Physics, а новые физические свойства — без изменения DAG и чужих фактов?
 16. Какие конкретные поля PhysicsComputeRequest/Result/DetailLevel, typed source errors и, если необходим, PhysicsDynamicState допустимы после PH-0, и кто предоставляет pinned read-only facts перед compute?
-17. Как PH-ORCH связывается с принятыми DAG NodeContract/NodeRegistry, не вводя DAG-nodes на каждый solver substep, и как работает concurrent bounded scope/overlap/cancellation/commit?
+17. Как PH-ORCH связывается с принятыми DAG NodeContract/NodeRegistry при **DAG-node-only** вызове Physics, не вводя DAG-nodes на каждый solver substep, и как работает **OPEN** concurrent bounded scope/overlap/cancellation/commit?
 
 ## 8. Критерий приёмки текущей стадии
 
@@ -205,7 +217,7 @@ PH-ARCH выше задаёт **кандидатные** exact paths/class respo
 
 Штормовой пример из §5 — **показательный сценарий для будущей приёмки**, а не реализованный тест или дополнительное разрешение на код: вода доступна без океанического per-cell bake, временные волны не пишутся как серия Snapshot, реальные последствия проходят через DAG и домены, а gameplay/physics используют согласованные время и ревизию. Формулы, внешний контракт выбора физического LOD и переход между режимами пока OPEN.
 
-PH-ARCH теперь содержит **проверяемую проектную карту файлов и классов**, а PH-ORCH — отдельный список решений DAG-интеграции. Это пока не freeze: для всех предложенных POJO/enum/signatures и external readers/handlers остаются gates, перечисленные выше. До следующих решений **PH-0/ARCH/ORCH/AGG/LOCAL/LOD/HANDOFF/PUBLISH остаются OPEN**. Ни один производственный файл, существующий физический алгоритм или нормативный ТЗ этим планом не переписывается.
+PH-ARCH теперь содержит **проверяемую проектную карту файлов и классов**; PH-ORCH частично определён: production caller — DAG-нода, LOD zone owner — DAG/settings, три зоны FAR/MEDIUM/NEAR, без обязательного третьего solver. Typed node IO опирается на DAG-TYPING, но exact Physics contracts и параллелизм ещё OPEN. Это пока не freeze: для всех предложенных POJO/enum/signatures и external readers/handlers остаются gates, перечисленные выше. До следующих решений **PH-0/ARCH/ORCH/AGG/LOCAL/LOD/HANDOFF/PUBLISH остаются OPEN**. Ни один производственный файл, существующий физический алгоритм или нормативный ТЗ этим планом не переписывается.
 
 ## Legacy inventory — предварительный, требует уточнения
 
