@@ -2232,14 +2232,14 @@ test_leases/test_gc (4C3), test_capabilities при появлении scope imp
 
 ### 8.12. Реализация 4C2 — SQLite publication/operation adapters (2026-10-30)
 
-Статус: **ФУНКЦИОНАЛЬНО РЕАЛИЗОВАНО; R/H ПРИНЯТЫ 2026-11-01; АРХИТЕКТУРНАЯ ПРИЁМКА O ОЖИДАЕТСЯ (§8.14)**. По §8.3 добавлены SqlitePublicationCommitStore/SqliteCommitScopeBinding, world/player publication CAS, snapshot history и operation store; общий errors.py. Согласованное добавление world_uid в claim_publication синхронизировано с портом/ТЗ/typing. Boundary validation 56 полей 4C2 по §8.11: internal UID, enum/tag, strict numbers/raw bool, UTC/hash/version/bytes и row↔DTO coherence; checksum проверяется до decode.
+Статус: **ФУНКЦИОНАЛЬНО РЕАЛИЗОВАНО; R/H ПРИНЯТЫ 2026-11-01; 4C2-O ПРИНЯТ МАСТЕРОМ 2026-11-02 (§8.14); 4C3 ЕЩЁ НЕ НАЧАТ**. По §8.3 добавлены SqlitePublicationCommitStore/SqliteCommitScopeBinding, world/player publication CAS, snapshot history и operation store; общий errors.py. Согласованное добавление world_uid в claim_publication синхронизировано с портом/ТЗ/typing. Boundary validation 56 полей 4C2 по §8.11: internal UID, enum/tag, strict numbers/raw bool, UTC/hash/version/bytes и row↔DTO coherence; checksum проверяется до decode.
 Проверка из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **95 PASS**, включая existing Pyright (positive 0 diagnostics, negative ровно **42** ожидаемых diagnostics). Реальные Database/GuardedConnection/aiosqlite workers, две SQLite connections, FULL synchronous в runtime tests; только schema setup ускорен OFF. Сетевой wakeup event loop заменён bounded polling в test fixture; production loop/driver не менялись.
 CAS race — один победитель; world/player/history/outcome commit/rollback вместе; preparing/busy/ready/terminal retry и immutable ID/world/preparation/request bindings — PASS. Cancellation до commit, во время COMMIT и ROLLBACK дожидается worker; lost COMMIT acknowledgement закрывает/quarantine connection, включая уже ожидающих gate callers, запрещает refusal и восстанавливает terminal через свежую connection — PASS. Task/database/lifetime/read-only/forged/nested scope, persisted corruption и constructed/copied invalid DTO до writes — PASS.
 Прежняя положительная архитектурная отметка о commitScope **снята**: проверка классов <300 строк не выявила смешение ответственностей всего модуля. Domain CRUD/planning/materialization отсутствуют, raw connection handler не получает; эти факты и функциональный baseline сохраняются, но композицию модуля не оправдывают. Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все правки через apply_patch; чужие изменения сохранены. Production БД, services, Container/DAG не менялись; backend не запускался, commit агентом не создавался. **Переход к 4C3 заблокирован до 4C2-R и повторной архитектурной приёмки**.
 
 ### 8.13. 4C2-R — разделение ответственностей commitScope
 
-Статус: **РЕАЛИЗОВАНО; ПОДГОТОВЛЕНО К ПОВТОРНОМУ АРХИТЕКТУРНОМУ РЕВЬЮ** (2026-10-30).
+Статус: **РЕАЛИЗОВАНО; ПРИНЯТО МАСТЕРОМ 2026-11-01**. Первоначально (2026-10-30) ожидалось повторное ревью.
 Запрос мастера: зафиксировать проблему и решение в плане, затем «выполняй». Это отдельный
 подшаг перед 4C3, без совмещения с artifact adapters и без изменения
 принятых публичных contracts. Основание — §8.3.3 и §8.11 этого плана,
@@ -2327,16 +2327,16 @@ Done: публичные contracts и поведение сохранены, п�
 Evidence 4C2-R: реализации перенесены по таблице, compatibility reexports отсутствуют; четыре adapters и fixtures переведены на явный DI одного registry/access, coordinator получает Database/registry/driver. Container/4E2 не менялся; его будущая композиция использует этот же набор.
 Из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **99 PASS** (baseline 95 + 4); existing Pyright — positive **0**, negative **45** ожидаемых (42 прежних + 3 shared capability/DI checks). Сохранены реальные two-connection CAS, atomicity, cancellation COMMIT/ROLLBACK, lost COMMIT acknowledgement/queued quarantine и recovery; добавлены DI identity/refusal, driver owner guard, import-direction и lost ROLLBACK acknowledgement + failed close/quarantine/recovery.
 Проверка ответственностей: SqlitePublicationCommitStore (включая _transaction/_quarantine) содержит только lifecycle/order/cancellation; SqliteScopeRegistry владеет issuance/check/revoke, SqliteTransactionDriver — worker drain/close, ScopedSqliteAccess — row IO, validation leaves — scalars/bytes. В coordinator нет SQL row IO, registry state или worker callbacks; shared не импортирует concrete stores/Container. Фактические package counts 1/3/2/2/3 совпали с §8.3.7; классы 12–64 строки, но архитектурный вывод основан на обязанностях, а не размере.
-Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все изменения через apply_patch; чужие изменения сохранены, backend не запускался, commit не создавался. **Остановка перед 4C3; повторная приёмка мастером ожидается.**
+Scoped `git -c core.whitespace=cr-at-eol diff --check` — PASS. Все изменения через apply_patch; чужие изменения сохранены, backend не запускался, commit не создавался. **Историческая остановка перед 4C3; повторная приёмка R состоялась 2026-11-01. 4C3 не реализован.**
 
 ### 8.14. 4C2-H / 4C2-O — history provenance и композиция operation/history stores
 
-Статус: **4C2-R/H ПРИНЯТЫ мастером 2026-11-01 по архитектурному ревью; 4C2-O РЕАЛИЗОВАН, ПОДГОТОВЛЕН К ПРИЁМКЕ**. 4C3 не начат и заблокирован до приёмки O.
+Статус: **4C2-R/H ПРИНЯТЫ мастером 2026-11-01 по архитектурному ревью; 4C2-O РЕАЛИЗОВАН И ПРИНЯТ мастером 2026-11-02**. 4C3 не начат; принятие O снимает именно этот prerequisite, но не заменяет отдельный 4C3 contract/legacy preflight и разрешение на код.
 Основание: ревью мастером operationStore/snapshotHistoryStore после 4C2-R;
 tz_world_snapshot «Operation storage, CAS и capability ports» и правило
 соответствия refs receipt назначенным snapshots/участникам. Эти подшаги
 не являются реализацией 4C3/4D1. Публичные ports, DTO, DDL и canonical
-formats/IDs сохраняются. Общая архитектурная приёмка 4C2 остаётся открытой;
+formats/IDs сохраняются. Подшаги 4C2-R/H/O приняты по отдельным решениям владельца; общий SN-CORE остаётся OPEN до 4C3 и необходимой интеграции;
 положительная проверка commitScope в §8.13 не распространяется на эти классы.
 
 #### Подтверждённые проблемы
@@ -2416,12 +2416,12 @@ DataModel не получает IO/application imports, новые DTO/пара�
 
 Done каждого подшага: regression/contract/typing проверки зелёные, карта
 совпадает с кодом, evidence обновлён и мастер повторно принял обязанности.
-**4C2-R/H приняты 2026-11-01; 4C3 заблокирован до приёмки реализованного 4C2-O.**
+**4C2-R/H приняты 2026-11-01, 4C2-O принят 2026-11-02; 4C3 остаётся не начатым до отдельного code-ready/preflight и явного разрешения на код.**
 
 Evidence 4C2-H: regression H1 сначала воспроизвёл принятие current state без receipt; теперь world/player cases и неподтверждённый старый state отклоняются до INSERT. validate_receipt_provenance проверяет assigned refs, operation/section/receipt uniqueness, симметрию новых state/history и достижимость из точного pinned base; rowProjection владеет pure strict row↔envelope/checksum projection. Публичные ports, DTO, SQL и canonical formats/IDs сохранены.
 Из backend: `.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **106 PASS** (99 + 7 history tests), existing Pyright positive **0** / negative **48** (45 + 3 EXPECT). Проверены реальные multi-participant world/player history append/read, retained base, empty tick, strict copied inputs, JSON/row round-trip и immutable rows; прежние CAS/atomicity/cancellation/quarantine/recovery проверки сохранены.
 Архитектурная проверка SqliteSnapshotHistoryStore, _validate_parent/_world_for_player, policy/_same_owner и projection: policy импортирует только Pydantic/dataModel, projection не получает DB/access/scope, store владеет pinned SQL relation reads и делегирует provenance/wire mapping. Counts validation/history/tests-publication = **2/3/4**, __init__ application пустой; 85 строк класса не использованы как доказательство архитектуры.
-Scoped diff --check — PASS. Правки через apply_patch; чужие изменения сохранены, backend не запускался, commit не создавался. **Остановка перед 4C2-O; приёмка 4C2-H мастером ожидается.**
+Scoped diff --check — PASS. Правки через apply_patch; чужие изменения сохранены, backend не запускался, commit не создавался. **Историческая остановка перед 4C2-O; 4C2-H принят 2026-11-01, 4C2-O — 2026-11-02.**
 
 ## 9. Норматив и совместимость
 
@@ -2480,12 +2480,12 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 - Проверки из backend: `../.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **106 PASS**, включая existing positive/negative Pyright gate, H1 до INSERT, multi-participant history, strict projection, actual CAS/atomicity, capabilities/DI, cancellation/lost acknowledgement/quarantine/recovery. Тесты используют временные fixtures; сервер и production DB не запускались.
 - Scope legacy review: старые helper-обязанности commitScope перенесены в названные shared owners; compatibility reexports этих helpers отсутствуют, текущие imports/call sites adapters и tests просмотрены через `rg`. History policy/projection вызываются adapter и тестами, второго публичного history adapter не добавлено. Это проверка локальной R/H миграции, **не** закрытие общего LEGACY-AC Snapshot, future Container wiring или production cutover. Известный SqliteOperationStore O1 остаётся на 4C2-O.
 
-**Приёмка владельца 2026-11-01:** R/H приняты по результатам этого архитектурного ревью. **Следующее действие:** реализация только O (evidence ниже). Общая приёмка 4C2 и переход к 4C3 по-прежнему требуют отдельного завершения/приёмки 4C2-O; это ревью не даёт команды начинать его. Runtime Snapshot/services/handlers и полный legacy closure не проверялись как готовая реализация.
+**Приёмка владельца 2026-11-01:** R/H приняты по результатам этого архитектурного ревью. **Следующее действие на дату этого R/H-ревью:** реализация только O (evidence ниже); O позднее реализован и принят мастером 2026-11-02. 4C3 остаётся отдельной не начатой реализацией со своим code gate; это историческое R/H-ревью не являлось разрешением на неё. Runtime Snapshot/services/handlers и полный legacy closure не проверялись как готовая реализация.
 
 
 ### DB-FIELDS-1 — ревизия строковых имён полей SQL rows (2026-11-01)
 
-**Статус: OPEN, замечание мастера после ревью 4C2-O.** Предыдущее функциональное ревью O не покрыло статическую защищённость имён полей. Его 108 PASS не закрывают этот долг; O не объявляется принятым данной записью. Поручение — пометка и ревизия, без разрешения на реализацию нового API или миграцию SQL.
+**Статус DB-FIELDS-1: OPEN; его атомарный DB-FIELDS-1A ПРИНЯТ мастером 2026-11-02.** Историческое замечание после ревью 4C2-O касалось статической защищённости SQL field names; первоначальные 108 PASS не закрывали его. Последующая приёмка O и 1A — отдельные решения владельца, не закрывающие оставшийся DB-FIELDS-1. Поручение — пометка и ревизия, без разрешения на реализацию нового API или миграцию SQL.
 
 **Предмет:** хардкоды имён колонок в Python (`row["operation_id"]`, `row["phase"]`, списки имён в `_fields(...)`), а не хранение строковых значений в SQLite. `TEXT` для UID/enum/hash допустим; перевод значений на другой SQL-тип и массовая замена `str` на enum не являются целью. SQL identifiers в запросах и mapper metadata также требуют явной границы владения, но не механической замены всех строк на enum/константы.
 
@@ -2516,7 +2516,7 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 
 #### DB-FIELDS-1A — согласованный freeze первого атомарного изменения
 
-**Статус: РЕАЛИЗОВАН, ПОДГОТОВЛЕН К РЕВЬЮ (2026-11-02).** Точный контракт согласован командой мастера «Делай» после представления freeze. Нормативная семантика: `docs/tz_world_snapshot.md`, staged artifacts / путь записи и сбор патчей; §8.11 и §8.14 этого плана. DDL, serialized payload и публичные application ports не меняются.
+**Статус: РЕАЛИЗОВАН И ПРИНЯТ МАСТЕРОМ 2026-11-02 в scope DB-FIELDS-1A.** Точный контракт согласован командой мастера «Делай» после представления freeze. Нормативная семантика: `docs/tz_world_snapshot.md`, staged artifacts / путь записи и сбор патчей; §8.11 и §8.14 этого плана. DDL, serialized payload и публичные application ports не меняются.
 
 **Цель и scope 1A:** общий typed read boundary и его первые consumers `SqliteOperationStore`, `StoredTerminalCodec`, `SqliteOperationArtifacts`; остальные history/publication/evidence consumers переходят следующими атомарными шагами после приёмки 1A. Это граница одного reviewable изменения, не закрытие всего DB-FIELDS-1.
 
@@ -2539,7 +2539,7 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 
 **Проверки и Done 1A:** existing `tests/snapshotCore` suite, positive/negative Pyright gates; добавить focused boundary regression для typed full-row read, missing row, malformed shape, strict corrupted values и foreign/expired scope. Проверить отсутствие literal-key subscripts и `_fields` в трёх переведённых consumers; literals внутри SQL/discriminator maps не являются нарушением. Full suite baseline переснять по текущему дереву (соседний 4C4 уже добавил tests). Нельзя объявлять DB-FIELDS-1 DONE: остаются evidence/history/publication и классификация прочих mappings.
 
-**Evidence 1A (2026-11-02):** добавлены typed one_row/all_rows и value-based validation; три согласованных consumer используют существующие dataclass rows и attribute access. Поиск literal-key subscripts, `_fields` и raw one/all в этих трёх файлах — совпадений нет; прочие callers raw API сохранены по плану. Snapshot suite — **116 tests, OK (1 skipped)**, включая typing gates; новый boundary regression проверяет full/missing/invalid-shape rows, отсутствие scalar coercion, foreign/expired scopes. Сохранены terminal corruption tests через typed dataclass replace. Production wiring/DDL не менялись; DB-FIELDS-1 остаётся OPEN, 1A ждёт приёмки.
+**Evidence 1A (2026-11-02):** добавлены typed one_row/all_rows и value-based validation; три согласованных consumer используют существующие dataclass rows и attribute access. Поиск literal-key subscripts, `_fields` и raw one/all в этих трёх файлах — совпадений нет; прочие callers raw API сохранены по плану. Snapshot suite — **116 tests, OK (1 skipped)**, включая typing gates; новый boundary regression проверяет full/missing/invalid-shape rows, отсутствие scalar coercion, foreign/expired scopes. Сохранены terminal corruption tests через typed dataclass replace. Production wiring/DDL не менялись; DB-FIELDS-1 остаётся OPEN, 1A принята мастером 2026-11-02.
 
 1. Уточнить inventory по SQL-row accesses, `.get`, `_fields`, JOIN aliases и metadata; дополнить проверку общего `sqlite/base.py`, mapper и bulkSql (последние два вне sqlite subtree). Определить владельца каждого row/projection и всех callers, включая будущий 4C3.
 2. До кода согласовать точные row/projection types и typed read/decode boundary. Повторно использовать существующие POJO там, где они соответствуют SELECT; для JOIN/partial SELECT нужна явная проекция. Не размножать string constants вместо типизированной модели.
@@ -2550,7 +2550,7 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 
 ### Evidence 4C2-O — 2026-11-01
 
-4C2-R/H приняты мастером по архитектурному ревью от 2026-11-01. Выполнен только O по §8.14; статус O — реализован, подготовлен к приёмке владельцем.
+4C2-R/H приняты мастером по архитектурному ревью от 2026-11-01. Выполнен только O по §8.14; статус O — реализован и принят владельцем 2026-11-02.
 
 StoredTerminalCodec владеет pure encode/decode terminal row: discriminator/category/version, strict row/body/checksum и existing manifest. SqlitePublicationEvidence владеет historical marker/world/player checks и запретом скрыть publication отказом/cancellation; _by_id/_for_operation локализованы здесь. SqliteOperationArtifacts владеет прежним DISTINCT active-holder read, strict ArtifactRef validation и SQL sorting; принимает read scope, не содержит writer/GC/UOW. OperationStore сохраняет identity/lifecycle/fence, terminal idempotency и operation/event integrity, получает все три зависимости явным DI и проверяет единые coordinator/access. Query выполняется в прежнем scope; новые DTO/ports/SQL/formats не вводились.
 
@@ -2558,11 +2558,11 @@ StoredTerminalCodec владеет pure encode/decode terminal row: discriminato
 
 Проверки: исходный baseline 106 PASS; после выделения владельцев 106 PASS; итоговый suite с двумя новыми regression tests — 108 PASS, включая existing Pyright positive 0 / negative 48 EXPECT. Новые проверки: terminal round-trip/checksum/tag/version/row-body corruption; historical evidence после продвижения latest head и mismatch operation; реальные active/released holds, operation record integration, expired/foreign scopes. Existing CAS/atomicity/fence/retry/cancellation/quarantine/recovery gates сохранены. Scoped diff --check — PASS.
 
-Production Container/DAG/БД и services не менялись, сервер не запускался, commit не создавался. Чужие изменения SPATIAL сохранены. **Остановка перед 4C3; приёмка O мастером ожидается.**
+Production Container/DAG/БД и services не менялись, сервер не запускался, commit не создавался. Чужие изменения SPATIAL сохранены. **Остановка перед 4C3; O принят мастером 2026-11-02. 4C3 остаётся не начатым до своего отдельного code-go.**
 
 ### Evidence 4C4 — BLOB backend, 2026-11-01
 
-Статус: **ПРИНЯТ мастером 2026-11-01 («от меня приемка прошла») в scope BLOB backend; concrete 4C3 integration открыта**. Прямое поручение мастера «делай 4C4», пока соседний шаг проходит review, разрешает отдельную реализацию через existing ports. O/4C3 не объявляются принятыми; SN-CORE и 4D1 не закрыты.
+Статус: **ПРИНЯТ мастером 2026-11-01 («от меня приемка прошла») в scope BLOB backend; concrete 4C3 integration открыта**. Прямое поручение мастера «делай 4C4», пока соседний шаг проходит review, разрешает отдельную реализацию через existing ports. На дату 4C4 O/4C3 не были приняты; позднее O принят 2026-11-02, а 4D1/4D1-L приняты в port-scope. Concrete 4C3 integration и SN-CORE по-прежнему OPEN.
 
 `app/storage/artifacts/blobBackend.py: ContentAddressedBlobBackend` реализует существующий `ArtifactBackend[bytes]`. Явный DI: absolute root `Path(Database.path).resolve().parent / "artifacts"`, typed bytes format contract и IArtifactLeases; пример композиции проверяется positive typing fixture, production Container не подключался. Backend владеет writer claim через leases.writer и повторно проверяет lease перед temp и перед final placement. Будущая staging composition должна учитывать это владение, не открывать второй claim вокруг backend.write. Delete сохраняет existing port precondition: вызывающий GC держит общий catalog/holder/writer guard и повторно проверяет live-set; backend не принимает lifecycle-решения и не пишет SQL seal/deleted facts.
 
@@ -2578,7 +2578,7 @@ Existing Pyright positive gate расширен новым backend и typed DI c
 
 **Согласование 2026-11-02:** мастер «хорошо, зафиксируй и делай» принял freeze с поправкой: `row_count: Callable[[C], int] | None = None` размещается в existing `ArtifactFormatContract[C]` (application/artifacts/contracts/formatBackend.py) рядом с encode/decode. Для SQL_ROWS callable обязателен, возвращает strict int >=0; для BLOB только None. У TypedArtifactStager constructor параметра row_count нет; остальные параметры/методы прежние. Это binding-only callback без новой dataModel/serialization/ID. Existing SQL_ROWS test registration мигрирует на доменную функцию `len(content.values)`. Registry получает `validate(ref: ArtifactRef) -> None` — переиспользование existing registered descriptor checks перед reserve. Эти уточнения заменяют соответствующие proposed пункты ниже. Реализация разрешена через existing ports; concrete 4C3 отсутствует в текущем checkout, integration/lock proof остаётся открытой и не объявляется выполненной fixture-тестами.
 
-Статус: **СОГЛАСОВАН с поправкой row_count выше; РЕАЛИЗОВАН ЧЕРЕЗ PORTS**, evidence ниже. ТЗ: [staged artifacts / путь записи](../../docs/tz_world_snapshot.md), существующие IArtifactStaging/ArtifactBackend и §8.3 этого плана. Ниже сохранено исходное предложение; согласованная поправка выше заменяет отдельный constructor callback. Concrete 4C3 integration и SN-CORE ещё не приняты.
+Статус: **СОГЛАСОВАН с поправкой row_count выше; РЕАЛИЗОВАН И ПРИНЯТ МАСТЕРОМ 2026-11-02 в scope application ports/staging/GC/ledger**, evidence ниже. Это приёмка изолированного 4D1, а не интеграционного gate. ТЗ: [staged artifacts / путь записи](../../docs/tz_world_snapshot.md), существующие IArtifactStaging/ArtifactBackend и §8.3 этого плана. Ниже сохранено исходное предложение; согласованная поправка выше заменяет отдельный constructor callback. Concrete 4C3 integration и SN-CORE ещё не приняты.
 
 - `application/artifacts/staging/artifactStaging.py`: `ArtifactStagingService.__init__(registry: ArtifactFormatRegistryBinding, catalog: IArtifactCatalog, leases: IArtifactLeases, holders: IArtifactHolders, gc: ArtifactGarbageCollector, ledger: OperationLedger, log: ArtifactLifecycleLog) -> None`. Публичные async методы — дословно IArtifactStaging из [stagingPort.py](../../backend/app/application/artifacts/contracts/stagingPort.py), без изменения сигнатур. Reserve проверяет format/descriptor и lease, seal проверяет полный content и writable lease до catalog.seal; verify требует sealed + exact held ref под catalog.guard. Open/finish/cancel/recover делегируют существующим owners. Publication/compute отсутствуют.
 - Тот же файл: `TypedArtifactStager[C: bytes | BaseModel].__init__(contract: ArtifactFormatContract[C], format_version: FormatVersion, row_count: Callable[[C], int | None], registry: ArtifactFormatRegistryBinding, staging: IArtifactStaging) -> None`; `async stage(lease: OperationLeaseRef, content: C) -> ArtifactRef`. Версия фиксируется binding, descriptor строится из existing canonical encode/content_digest, nbytes и pure callback row_count. BLOB callback возвращает None, SQL_ROWS — strict int >=0; никакой introspection доменных rows. Stage использует prepared content, не materialize; выполняет reserve → registered backend.write → seal. Новый callback — предлагаемое решение отсутствующего источника row_count, требует согласования.
@@ -2595,7 +2595,7 @@ Writer ownership: backend.write владеет своим writer claim (4C4); ty
 
 ### Evidence 4D1 — 2026-11-02
 
-**Evidence 4D1-L:** подключён existing LEASE_RELEASED только после strict matching OperationCancelled из cancel; other terminal/finish/recover не эмитируют release. Новые regression tests проверяют correlation, drain ordering, отказ/unknown/cancellation/mismatch и logging sink failure. Из backend unittest discover snapshotCore — **126 tests, OK (1 skipped)** (124 + 2), existing Pyright **0/50 EXPECT**, diff --check PASS. Сигнатуры/DTO/enum/production wiring сохранены; concrete 4C3 integration по-прежнему OPEN. Остановка перед 4D2.
+**Evidence 4D1-L (ПРИНЯТО МАСТЕРОМ 2026-11-02 в scope logging follow-up):** подключён existing LEASE_RELEASED только после strict matching OperationCancelled из cancel; other terminal/finish/recover не эмитируют release. Новые regression tests проверяют correlation, drain ordering, отказ/unknown/cancellation/mismatch и logging sink failure. Из backend unittest discover snapshotCore — **126 tests, OK (1 skipped)** (124 + 2), existing Pyright **0/50 EXPECT**, diff --check PASS. Сигнатуры/DTO/enum/production wiring сохранены; concrete 4C3 integration по-прежнему OPEN. Остановка перед 4D2.
 
 **4D1-L, отдельный follow-up 2026-11-02:** по поручению мастера после вопроса о lifecycle logging подключить existing `ArtifactLogActivity.LEASE_RELEASED` в existing ArtifactStagingService.cancel после успешного fenced OperationCancelled. Reuse всех полей ArtifactLogRecord и enum, новых событий/API/DTO нет. Поля operation/world/preparation/request берутся из strict returned OperationRecord, artifact_hash=None (operation-level release). До эмиссии проверить operation_id/fence против запроса; cancelled result подтверждает closed admission/drain и release operation holds, published/retention holds сохраняются. Other terminal, error/cancellation/unknown outcome, finish_preparation и recover не дают нового release event. Повтор успешного cancel может повторить observation в логах: лог не authoritative event journal, API не возвращает признак впервые применённого перехода. Log sink failure не меняет durable результат. Проверки в existing test_staging.py: correlation, нет event до drain/при отказе/unknown/other terminal/recover; logging failure; existing typing 0/50. Это follow-up 4D1, не начало 4D2.
 
@@ -2603,4 +2603,20 @@ Writer ownership: backend.write владеет своим writer claim (4C4); ty
 
 Из backend: `../.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **124 tests, OK (1 skipped)**; добавлено 8 lifecycle tests, прежние проверки сохранены. Existing Pyright gate повторно PASS после новых typed DI fixtures: positive **0**, negative **50 EXPECT** (48 + 2). Covered: real BLOB staging через controlled lifecycle ports, failure before/after seal + retry/recovery без prepared content, cancel drain/GC/retention, ready_inactive retention hold, descriptor/type/count errors, corruption, terminal recovery, ordinary IO failure vs cancellation/unknown outcome. Existing архитектурный test сохраняет запрет concrete imports; единственный разрешённый service edge — agreed staging → OperationLedger. Scoped diff --check — PASS.
 
-Concrete 4C3 adapters в checkout отсутствуют: SQL integration и проверка lock ownership на actual adapters остаются **OPEN**, fixture-тесты их не заменяют. Просмотрены SQL guards 0001: writer acquire требует active operation hold; release hold запрещён до закрытия admission/drain claims; это обосновывает GC live-set invariant без нового read-port, но ещё не доказывает actual adapter locking. Backend.write владеет/drain claim; seal получает отдельный claim и делегирует fenced append catalog.seal; GC/verified read используют catalog.guard, а storage calls должны исполняться внутри него без competing UOW/nested guard. Сервер не запускался, commit не создавался. **Подготовлено к ревью; остановка перед 4D2.**
+Concrete 4C3 adapters в checkout отсутствуют: SQL integration и проверка lock ownership на actual adapters остаются **OPEN**, fixture-тесты их не заменяют. Просмотрены SQL guards 0001: writer acquire требует active operation hold; release hold запрещён до закрытия admission/drain claims; это обосновывает GC live-set invariant без нового read-port, но ещё не доказывает actual adapter locking. Backend.write владеет/drain claim; seal получает отдельный claim и делегирует fenced append catalog.seal; GC/verified read используют catalog.guard, а storage calls должны исполняться внутри него без competing UOW/nested guard. Сервер не запускался, commit не создавался. **Реализованный port-scope 4D1 и logging follow-up 4D1-L приняты мастером 2026-11-02; concrete 4C3 integration и общий 4D1 integration gate остаются OPEN. 4D2 НЕ НАЧАТ и не разблокирован этой приёмкой.**
+
+## Актуальный статус выполненных Snapshot-итераций — приёмка владельца 2026-11-02
+
+Пользователь подтвердил, что выполненные им и агентами итерации уже **приняты владельцем**, а записи «НА ПРИЁМКЕ» не были своевременно обновлены. Эта запись синхронизирует **текущие** статусы; исходные отчёты и датированные ожидания ревью выше остаются историческим evidence. Приёмка изолированного port/backend scope не закрывает неисполненный downstream integration gate.
+
+| Шаг | Текущий статус | Не закрывается этой приёмкой |
+|---|---|---|
+| 4C2-R / 4C2-H | **DONE**, ранее приняты 2026-11-01 | 4C3/общий SN-CORE |
+| 4C2-O | **DONE / ПРИНЯТ**, 2026-11-02, реализованный operation/terminal/evidence scope | 4C3 implementation и его собственные code/legacy gates |
+| DB-FIELDS-1A | **DONE / ПРИНЯТ**, 2026-11-02, typed row boundary и первые три consumers | Остальные шаги DB-FIELDS-1, который остаётся OPEN |
+| 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
+| 4D1 / 4D1-L | **ПРИНЯТ**, 2026-11-02, реализация через существующие ports и LEASE_RELEASED logging follow-up | Concrete 4C3 integration, проверка фактического lock/claim ownership и интеграционная приёмка полного 4D1 gate |
+| 4C3 | **НЕ НАЧАТ**, contract/legacy preflight и отдельная команда на код ещё требуются | Не выводить DONE из 4C4/4D1 |
+| 4D2 | **НЕ НАЧАТ / BLOCKED** | Нужны принятые SN-CORE и полный 4D1 integration gate; никакой Snapshot.apply реализации эта запись не подтверждает |
+
+**SN-CORE, SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN** до своих реальных producer/consumer evidence. Отдельная приёмка выполненных компонентов не разрешает пропустить 4C3, изменить установленный порядок будущих шагов или считать 4D2 начатым.
