@@ -2,7 +2,7 @@
 
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
-Статус: **архитектурные границы согласованы; алгоритмы, контракты и реализация OPEN** (2026-11-01). Этот документ пока фиксирует **только владельцев ответственности и границу интеграции**. Он не разрешает создание нового solver, POJO, DAG-нод, storage или production cutover без отдельной архитектурной приёмки.
+Статус: **архитектурные границы согласованы; алгоритмы, контракты и реализация OPEN** (2026-11-01). Этот документ фиксирует владельцев ответственности, границу интеграции и **предварительную PH-ARCH file/class map с отдельным PH-ORCH gate**. Новые solver, POJO, DAG-ноды, storage или production cutover не разрешены без PH-0, точного freeze и отдельной архитектурной приёмки.
 
 **Связанный план:** [SPATIAL-1 — Пространственное распределение сред и материалов](./spatial-distribution-domain.md). SPATIAL-1 отвечает за достоверное компактное представление и bounded XYZ-чтение того, **что, где и как расположено**; PHYSICS-1 — за будущую **физическую эволюцию** этого состояния.
 
@@ -74,6 +74,70 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 
 Правила [World Snapshot](../../docs/tz_world_snapshot.md) о разделении **планирования мутации и материализации** обязательны и для Physics: Snapshot может хранить план изменения до физической материализации, если такой режим будет утверждён. Не объявлять полный physical simulation result обязательным условием каждого snapshot.
 
+
+### PH-ARCH — структура Physics, классы, общие алгоритмы (архитектурная карта DRAFT, 2026-11-01)
+
+**Статус: DRAFT / REVIEW; не contract/POJO freeze и не CODE-READY.** Пользователь требует до имплементации явные папки, exact class ownership, отдельные общие helpers/algorithms и самостоятельную приёмку оркестрации. PH-0 и полный actual-call-graph ещё OPEN: карта ниже — **целевая композиция**, а не доказательство, что указанные классы уже существуют или разрешены к созданию. После PH-0 нужно принять/исправить каждую строку с evidence, точными typed signatures, входами/выходами/errors и file counts; никаких production изменений по этой таблице сейчас.
+
+**Инвариант Materials ↔ Physics.** `MaterialRegistryEntry` / `WorldMaterialRegistry` / `MaterialCategory` остаются единственным владельцем material identity, category, физических параметров и их defaults/validation; Physics только **потребляет их typed read contract**. Добавление нового материала с поддерживаемым набором свойств не меняет Physics или DAG; добавление новой физической характеристики требует явной версии owning Materials-контракта и, если требуется, нового/расширенного **алгоритма внутри Physics**. Physics не создаёт копию material registry, `MaterialPhysicsRegistryV2`, таблицы `system_material -> solver` или `if material == "water"/"lava"/"oil"` для поведения, выводимого из свойств. Особое физическое поведение возможно лишь как отдельно утверждённый typed capability/process contract, не скрытая проверка имени. Новое пространственное представление вещества/новый владелец фактов при необходимости согласуются отдельно: Physics не становится хранилищем чужой среды.
+
+**Две независимые оси:** (а) физический процесс (жидкости, газы, тепло, механика, устойчивость), (б) детализация `PH-AGG` или `PH-LOCAL`. Это **один Physics-домен и одна семантика результата**, но не требование одного универсального численного solver: алгоритмы разной точности могут различаться и пользоваться общими законами, units/budgets и проверками сохранения. Никаких per-material классов или отдельного Physic-и-LOD домена.
+
+#### Target file map — Python application (пути repo-relative; новые, пока не созданы)
+
+| Точный target file / класс | Единственная ответственность | Явные запреты/зависимости |
+|---|---|---|
+| `backend/app/application/physics/physicsService.py` — `PhysicsService` | Стабильный публичный доменный compute-entry; validation уже выбранных mode/scope/time/revision bindings, передача в нужное domain compute исполнение и выдача typed результата | Не выбирает **когда/где** запускать физику, не определяет LOD policy, не вызывает Hydrology/другой write-domain, не materialize, не собирает PatchSet, не пишет Snapshot; не содержит формул |
+| `backend/app/application/physics/background/backgroundPhysicsCompute.py` — `BackgroundPhysicsCompute` | Один bounded PH-AGG расчёт по компактным domain facts и интервалу мирового времени; применяет принятые process rules и возвращает последствия | Не планирует глобальные тики/ивенты и не перебирает мир per-XYZ, не обновляет Pack/SQL или чужие facts |
+| `backend/app/application/physics/local/localPhysicsCompute.py` — `LocalPhysicsCompute` | Один bounded PH-LOCAL расчёт по подготовленной local projection/materialized input; управляет только **внутренними численными substeps**, отдаёт transient scene physics и persistent-effect proposals | Не выбирает область LOD и не выполняет L2 materialization самостоятельно; микрошаги не DAG-ноды/не snapshots |
+| `backend/app/application/physics/processes/processSelector.py` — `PhysicsProcessSelector` | По типизированным свойствам и заявленному физическому воздействию определяет применимые физические процессы в рамках **уже выбранного** mode; не по system_material имени | Не LOD policy, не world scheduler, не чтение SQL, не production fallback |
+| `backend/app/application/physics/processes/liquid/liquidRules.py` — pure rules/functions; `aggregateLiquidSolver.py` — `AggregateLiquidSolver`; `localLiquidSolver.py` — `LocalLiquidSolver` | Общее описание liquid laws/assumptions отдельно от 2 алгоритмов: PH-AGG — связные объёмы/границы/перетоки; PH-LOCAL — локальная динамика, давление, взаимодействие | Не копируют GEO fill/spill/merge, не становятся Hydrology или автором water UID/footprint; точные equations/volume model OPEN |
+| `backend/app/application/physics/processes/stability/stabilityRules.py` — pure rules/functions; `aggregateStabilitySolver.py` — `AggregateStabilitySolver`; `localStabilitySolver.py` — `LocalStabilitySolver` | Устойчивость по нагрузкам/опорам и приближённые/локальные failure outcomes (склоны, своды, конструкции) | Не владеют Terrain/Relief solid/void, geology composition, building/object write или material registry |
+| `backend/app/application/physics/processes/mechanics/mechanicsRules.py` — pure rules/functions; `aggregateMechanicsSolver.py` — `AggregateMechanicsSolver`; `localMechanicsSolver.py` — `LocalMechanicsSolver` | Динамика тел и передача взаимодействий; подробные столкновения локальны, агрегированное движение/воздействие только при подтверждённой необходимости | Не смешивать с structural support; объектные идентичности/повреждения подтверждает их домен |
+| `backend/app/application/physics/processes/gas/gasRules.py` — pure rules/functions; `aggregateGasSolver.py` — `AggregateGasSolver`; `localGasSolver.py` — `LocalGasSolver` | Газовая динамика/диффузия по свойствам и известной ambient policy; агрегат/локальный solver | World Environment объявляет ambient/vacuum, Gas Distribution владеет локальными фактами; SP-A и SP-5A — prerequisites для production газа |
+| `backend/app/application/physics/processes/thermal/thermalRules.py` — pure rules/functions; `aggregateThermalSolver.py` — `AggregateThermalSolver`; `localThermalSolver.py` — `LocalThermalSolver` | Теплообмен и thermal thresholds, агрегированный или локальный шаг; выдаёт предложение о phase/material transition | Не меняет Materials registry и не переписывает directly чужие placed-material facts |
+| `backend/app/application/physics/shared/materialRequirements.py` — pure functions | Проверка полноты требуемых физическим процессом полей существующего typed `MaterialRegistryEntry`; reuse defaults/enum без второго view-контракта | Не конструирует неявные material defaults, не назначает новый material category |
+| `backend/app/application/physics/shared/conservation.py` — pure functions | Общие проверки conservation/invariants и явной погрешности, включая source/sink accounting, до выпуска результатов | Не authoritative ledger воды/газа; точные units/error budget OPEN |
+| `backend/app/application/physics/shared/timeIntegration.py` — pure functions | Общие численные правила elapsed-time/substeps, time/revision coherence и повторяемости вычисления | Не world scheduler и не Snapshot tick manager |
+| `backend/app/application/physics/shared/boundaryFlux.py` — pure functions | Общие расчётные boundary exchange / accounting между bounded областями и при смене детализации там, где физический процесс это допускает | Не LOD ownership/policy; process-specific geometry остаётся у процесса/домена |
+| `backend/app/application/physics/handoff/physicsLODReconciler.py` — `PhysicsLODReconciler` | PH-HANDOFF: reconciliation PH-AGG/PH-LOCAL, сохранение причинности, времени, volume/flux/effects и запрет double-apply | Не выбирает дистанцию/LOD, не публикует patch и не хранит второй world state |
+| `backend/app/application/physics/effects/physicsOutcomeAssembler.py` — `PhysicsOutcomeAssembler` | Чистая композиция typed process outcomes в один Physics result: proposed domain changes, transient view/continuation и диагностика по принятому контракту | Не принимает доменные решения/UID, не вызывает public change-operation, не создаёт PatchSet |
+
+**Процессы = композиционные extension slots, не все новые классы для первого code step.** Начальные доказательные процессы — `liquid` (Hydrology) и `stability` (обвал, Terrain/objects); `mechanics`, `gas`, `thermal` остаются в target-layout для предотвращения монолитного PhysicsService, но их собственные source contract, формулы, valid domain writer и implementation gate OPEN. Добавление процесса — новый owner в соответствующем `processes/<process>/`, не изменение логики DAG и не новый общий «helpers.py».
+
+**Helpers vs algorithms:** `shared/` содержит только действительно повторяемые *чистые* численные механизмы; физический закон/конкретный numerical kernel остаётся в `processes/<process>/`. Helper для одного процесса держать рядом с ним, не переносить в shared только по названию. Reuse `dataModel/topology`, source coverage/revision, existing geometry и Materials contracts; не переписывать topology/геометрию, не импортировать внутренние Hydrology/Geology/Gas kernels для обхода публичной границы. Оркестраторы/facades не должны выбирать domain policy или содержать numerical implementation; класс >300 строк — повод пересмотреть ответственность, но меньший размер не доказывает чистоту.
+
+#### Target file map — typed dataModel (проект, поля/enum ещё OPEN)
+
+| Точный target file / тип | Ответственность и freeze prerequisite |
+|---|---|
+| `backend/app/dataModel/physics/enums/physicsDetailLevel.py` — `PhysicsDetailLevel` | Закрытое различение PH-AGG/PH-LOCAL **по принятому смыслу**, но exact values/serialization, default/error semantics — после PH-0/PH-LOD |
+| `backend/app/dataModel/physics/physicsComputeRequest.py` — `PhysicsComputeRequest` | Только declarative scope/process/time/bound publication/version/mode invocation; конкретные поля/refs/units/validators и reuse существующих types — отдельно frozen до кода |
+| `backend/app/dataModel/physics/physicsComputeResult.py` — `PhysicsComputeResult` | Typed output proposals для owning-domain operations, transient physics view, diagnostics/provenance; union domain request types/handler contracts после PH-PUBLISH и DAG-TYPING |
+| `backend/app/dataModel/physics/physicsDynamicState.py` — `PhysicsDynamicState` (**условный слот**) | Только если PH-0/PH-HANDOFF докажут необходимость возобновляемого динамического состояния (скорости/фазы/потоки и т. п.) и Snapshot ownership; **не** дублирует authoritative liquid volume, water level/footprint или свойства Materials |
+
+Новые POJO/enum **не утверждены одним перечислением имён**: exact fields, signatures, typed errors, identity, validation, units, version/serialization, migration, existing POJO reuse и consumers обязаны быть закрыты в PH-ARCH/PH-PUBLISH до соответствующей code-итерации. Нельзя использовать `dict[str, Any]`, свободный `str` kind, дублирующий `MaterialPhysicalProfile` или новый generic Spatial/WorldState façade вместо недостающего контракта. Physical result не есть PatchSet, transient view не canonical state, сохранение всего local solver buffer не предписывается.
+
+**Folder counts / правило композиции:** все указанные каталоги `application/physics` и `dataModel/physics` сейчас отсутствуют (добавления только target). При точном layout с `__init__.py` непосредственно: `application/physics` — 2 файла; `background`/`local`/`handoff`/`effects` — по 2; `processes` — 2 (`__init__.py` и `processSelector.py`), каждый из `liquid`/`stability`/`mechanics`/`gas`/`thermal` — по 4; `shared` — 5; `dataModel/physics` — 3 (4 с условным `physicsDynamicState.py`), `dataModel/physics/enums` — 2. Ни один непосредственный каталог не превышает WARN-порог 5 файлов и лимит 10. При изменении карты пересчитать **все** служебные файлы/импорты до кода. Изменения существующих `application/engine`, L2 или domain-read folders требуют отдельной проверенной file map, не включены в этот layout.
+
+**Направление импортов:** `dataModel/physics` → typed existing `dataModel` semantics; `application/physics/processes`/`shared`/`handoff`/`effects` → types + pure helpers и **только публичные read/compute ports**; `PhysicsService` → свои mode compute; внешняя DAG-нода → **публичный PhysicsService и typed result**, никогда → kernels/jobs. Ни один физический модуль не импортирует конкретные DAG-ноды, Snapshot writer, HTTP routes, L2 persist или чужие приватные generators. Read-only получение domain facts через approved interface и то, кто связывает reader с compute invocation, — отдельный PH-ORCH contract, не неявный direct Physics→Hydrology command.
+
+### PH-ORCH — внешний запуск и связь с DAG (отдельное архитектурное решение, OPEN)
+
+**Принятая граница:** только DAG/caller владеет *когда* инициировать физический расчёт, координацией междоменных операций и публикацией: `Physics → typed proposals → DAG → public domain change operations (Hydrology/Geometry/Objects/Gas/...) → prepared PatchSet → Snapshot`. Physics сам не вызывает эти write-операции, не принимает prepared patch и не делает Snapshot/SQL/Pack commit. Один solver substep **не** равен DAG node; внутренние численные циклы/связь физических процессов остаются внутри Physics и не превращают DAG в numerical engine. Вместе с этим DAG не вычисляет physics, не выбирает material rules и не импортирует внутренние solver files.
+
+**Открытые именно orchestration-вопросы, не зашивать их в PhysicsService:**
+
+1. **Trigger/scheduler:** world tick, elapsed-time lazy batch, событие, action, принудительный scene request; что должно работать вдали и как учитывается wall/world time без global per-cell tick.
+2. **LOD policy owner и invocation:** кто решает область, scope, частоту, PH-AGG/PH-LOCAL, бюджет и observability (не только player distance); кто подготавливает bounded local materialization; как не допустить двух write-owners для одной величины/интервала.
+3. **Input/read seam:** NodeContract/dependencies, объявленные read-only domain facts, `WorldPublicationRef`, geometry/material revision, world time; получает ли Physics domain-owned slices через инъекцию публичных readers или DAG-нода их читает и передаёт typed input — выбрать **после PH-0 + DAG-TYPING/GEN-DAG**, не собирать ручной MapCell/SQL payload и не строить второй read-orchestrator.
+4. **Последовательность/параллельность:** какие физические процессы должны обмениваться результатами *внутри одного* compute, какие независимые bounded scopes можно считать параллельно; запрет перекрывающихся writes, double flux, data races и циклических DAG-deps.
+5. **Output/commit:** точные typed destination requests/response, validation, одно атомарное принятие связанных изменений по pinned revision, retry/idempotency/CAS, stale/conflicting effect reconciliation и rollback без частичного изменения мира. Typed errors принадлежат источнику.
+6. **PH-HANDOFF и gameplay:** удержание aggregate/local shared truth, локальных consequences и transient scene frame на одном времени/revision; reload/replay; запрет обязательного snapshot на каждый быстрый substep/гребень волны.
+
+До принятия PH-ORCH **не создавать** `PhysicsOrchestrator` в Physics, новый global scheduler, отдельный runtime DAG или конкретную Physics-ноду/NodeContract по догадке. Конкретный engine file map, регистрации/NodeRegistry/deps, typed I/O и activation gates должны быть внесены в owning DAG-план после принятия DAG-TYPING; Physics-owning план фиксирует только публичный domain seam. Обязательны независимые приёмочные сценарии «пустой мир без физического события», «фоновый переток/обвал → domain patch после reload», «PH-AGG→LOCAL→AGG без double application», «конкурирующие события/overlap», «обязательный read не запускает solver» и «новый материал с прежними свойствами не меняет Physics/DAG».
+
+
 ## 5. Что уже есть в профильных ТЗ
 
 - В [Materials §4–6](../../docs/tz_materials.md) описаны свойства материалов, направление слоения по плотности, flow/gas behaviour, теплопередача, переходы и формула давления для v2. Это **существующие нормативные требования/наброски**, а не новая реализация в этом плане. При дальнейшей работе сверить их с реальным кодом, World settings и целевыми двумя режимами Physics.
@@ -105,13 +169,15 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 | Трек | Предмет последующей архитектурной приёмки | Статус |
 |---|---|---|
 | PH-0 | Аудит имеющейся runtime физики, Materials §4–6, L2, Snapshot/Patches и реальных вызывающих слоёв | OPEN |
+| PH-ARCH | Freeze целевой file/class map, process ownership, shared algorithms/helpers, exact POJO/enum/typed errors и направление импортов после PH-0 | DRAFT / REVIEW; код BLOCKED |
+| PH-ORCH | Отдельное архитектурное решение о trigger/LOD/reader invocation, DAG NodeContract/deps, bounded materialization, parallelism, commit/retry/PH-HANDOFF | OPEN; код BLOCKED |
 | PH-AGG | Агрегированные операции/алгоритмы, цена–качество, область воздействия и изменение compact facts | OPEN |
 | PH-LOCAL | Детальная физика **материализованной воды** и иных сред в ограниченной области, без требования глобального per-cell bake; алгоритмы и рабочие буферы — отдельная будущая приёмка | OPEN |
 | PH-LOD | Будущая точка выбора физического LOD и bounded materialization вне solver; критерии, владелец policy и typed invocation seam, без внедрения LOD сейчас | OPEN (deferred) |
 | PH-HANDOFF | Переходы aggregate ↔ local, сохранение объёма/принятых последствий, reconcile/инвалидация ревизий, отсутствие видимых скачков | OPEN |
 | PH-PUBLISH | Доменные typed changes, согласование с Water Systems/Gas/Geometry, публикация и восстановление после Snapshot | OPEN |
 
-Эти направления пока **не** задают sequence steps, параметры LOD, классы, конфиги, wire, RPC или порядок cutover. Последовательную декомпозицию на шаги и тесты делать только после PH-0 и отдельной архитектурной приёмки.
+PH-ARCH выше задаёт **кандидатные** exact paths/class responsibilities, но не принятые POJO/сигнатуры или разрешение на code step; другие направления пока **не** задают sequence steps, параметры LOD, конфиги, wire, RPC или порядок cutover. Последовательную декомпозицию на кодовые шаги и тесты делать только после PH-0, PH-ARCH/PH-ORCH decisions и отдельной архитектурной приёмки.
 
 ## 7. Открытые вопросы (не решать этим документом)
 
@@ -128,6 +194,10 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 11. Что хранить для детерминированного восстановления шторма: world time, forcing, seed/phase, checkpoints активной локальной физики; как сохранить один pinned time/revision для collision, scene read, LLM narration и последующих патчей?
 12. Как доказать PH-HANDOFF на морском сценарии (высота/направление волн, корабль у LOD-границы, повторный вход, cold reload, несколько областей) и отсутствие повторного физического ущерба/потерянных последствий?
 13. Где должен находиться owner будущей LOD-политики; какими typed входами caller/DAG передаст Physics выбранную точность, область и требования к materialization, не встраивая критерии LOD в solver, SPATIAL или Hydrology и не утверждая новый POJO до типизации DAG?
+14. Какие конкретные существующие code paths/physical kernels PH-0 должен **reuse, migrate или удалить**, чтобы PH-ARCH file/class map не создала новый solver параллельно действующему? Какие process owners действительно нужны первыми?
+15. Какой exact typed material capability/property contract, range/units/validation и процессная классификация позволят добавлять материалы без правки Physics, а новые физические свойства — без изменения DAG и чужих фактов?
+16. Какие конкретные поля PhysicsComputeRequest/Result/DetailLevel, typed source errors и, если необходим, PhysicsDynamicState допустимы после PH-0, и кто предоставляет pinned read-only facts перед compute?
+17. Как PH-ORCH связывается с принятыми DAG NodeContract/NodeRegistry, не вводя DAG-nodes на каждый solver substep, и как работает concurrent bounded scope/overlap/cancellation/commit?
 
 ## 8. Критерий приёмки текущей стадии
 
@@ -135,7 +205,7 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 
 Штормовой пример из §5 — **показательный сценарий для будущей приёмки**, а не реализованный тест или дополнительное разрешение на код: вода доступна без океанического per-cell bake, временные волны не пишутся как серия Snapshot, реальные последствия проходят через DAG и домены, а gameplay/physics используют согласованные время и ревизию. Формулы, внешний контракт выбора физического LOD и переход между режимами пока OPEN.
 
-До следующих решений **весь PH-0/AGG/LOCAL/LOD/HANDOFF/PUBLISH остаётся OPEN**. Ни один производственный файл, существующий физический алгоритм или нормативный ТЗ этим планом не переписывается.
+PH-ARCH теперь содержит **проверяемую проектную карту файлов и классов**, а PH-ORCH — отдельный список решений DAG-интеграции. Это пока не freeze: для всех предложенных POJO/enum/signatures и external readers/handlers остаются gates, перечисленные выше. До следующих решений **PH-0/ARCH/ORCH/AGG/LOCAL/LOD/HANDOFF/PUBLISH остаются OPEN**. Ни один производственный файл, существующий физический алгоритм или нормативный ТЗ этим планом не переписывается.
 
 ## Legacy inventory — предварительный, требует уточнения
 
