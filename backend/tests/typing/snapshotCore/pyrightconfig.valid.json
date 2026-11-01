@@ -16,6 +16,7 @@
     "../../../app/db/models/snapshotCore",
     "../../../app/db/models/artifacts",
     "../../../app/db/repositories/sqlite/snapshotCore",
-    "../../../app/db/repositories/sqlite/shared"
+    "../../../app/db/repositories/sqlite/shared",
+    "../../../app/storage/artifacts"
   ]
 }

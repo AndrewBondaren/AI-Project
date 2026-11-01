@@ -297,7 +297,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | 4C2-O | 4C2-R, 4C2-H | НА ПРИЁМКЕ | ГОТОВ К АНАЛИЗУ: архитектурное review | Реализован только O; 108 PASS (baseline 106), typing 0/48; evidence в owning-плане. [Snapshot §8.14](./world-domain-patches-snapshots.md) |
 | 4C2-R | Внешние условия / критерии owning-плана | DONE | ПРИНЯТ | Принят мастером 2026-11-01 по архитектурному ревью. [Snapshot §8.13–8.14](./world-domain-patches-snapshots.md) |
 | 4C3 | 4C2-O | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
-| 4C4 | 4C3 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
+| 4C4 | 4C3 | РЕАЛИЗОВАН, НА ПРИЁМКЕ | ЖДЁТ ИНТЕГРАЦИИ / ПРИЁМКИ | По прямому поручению мастера 2026-11-01 реализован отдельно через existing ports, пока соседний шаг проходит review. BLOB tests + typing; интеграционная проверка с concrete 4C3 остаётся открытой. Статусы O/4C3 не закрываются этим шагом. [Snapshot evidence 4C4](./world-domain-patches-snapshots.md) |
 | 4D1 | SN-CORE | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | 4D2 | 4D1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | 4D3 | 4D2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |

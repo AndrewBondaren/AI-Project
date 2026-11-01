@@ -1928,6 +1928,9 @@ Existing positive/negative pyright setup используется через ext
 10. **4C4 — physical artifact storage:** storage/artifacts/blobBackend.py;
    no-clobber hash writes, durable seal verification, missing/corrupt bytes,
    отказ/отмена до и после final file placement, существующий hash mismatch.
+   Реализация 2026-11-01 — см. evidence 4C4 ниже; отдельное прямое поручение
+   мастера разрешило этот шаг через existing ports во время review соседнего
+   шага. Его приёмка и concrete 4C3 integration этим не подменяются.
 11. **4D1 — shared artifact application:** registry/staging/GC и
    OperationLedger (registry из 4B1 переиспользуется); crash before/after seal,
    cancel vs writer/GC, resume
@@ -2491,3 +2494,17 @@ StoredTerminalCodec владеет pure encode/decode terminal row: discriminato
 Проверки: исходный baseline 106 PASS; после выделения владельцев 106 PASS; итоговый suite с двумя новыми regression tests — 108 PASS, включая existing Pyright positive 0 / negative 48 EXPECT. Новые проверки: terminal round-trip/checksum/tag/version/row-body corruption; historical evidence после продвижения latest head и mismatch operation; реальные active/released holds, operation record integration, expired/foreign scopes. Existing CAS/atomicity/fence/retry/cancellation/quarantine/recovery gates сохранены. Scoped diff --check — PASS.
 
 Production Container/DAG/БД и services не менялись, сервер не запускался, commit не создавался. Чужие изменения SPATIAL сохранены. **Остановка перед 4C3; приёмка O мастером ожидается.**
+
+### Evidence 4C4 — BLOB backend, 2026-11-01
+
+Статус: **РЕАЛИЗОВАН, ПОДГОТОВЛЕН К РЕВЬЮ; concrete 4C3 integration/приёмка открыты**. Прямое поручение мастера «делай 4C4», пока соседний шаг проходит review, разрешает отдельную реализацию через existing ports. O/4C3 не объявляются принятыми; SN-CORE и 4D1 не закрыты.
+
+`app/storage/artifacts/blobBackend.py: ContentAddressedBlobBackend` реализует существующий `ArtifactBackend[bytes]`. Явный DI: absolute root `Path(Database.path).resolve().parent / "artifacts"`, typed bytes format contract и IArtifactLeases; пример композиции проверяется positive typing fixture, production Container не подключался. Backend владеет writer claim через leases.writer и повторно проверяет lease перед temp и перед final placement. Будущая staging composition должна учитывать это владение, не открывать второй claim вокруг backend.write. Delete сохраняет existing port precondition: вызывающий GC держит общий catalog/holder/writer guard и повторно проверяет live-set; backend не принимает lifecycle-решения и не пишет SQL seal/deleted facts.
+
+Paths состоят из private hash namespace (format key/version) и validated content hash; UID/key напрямую путями не становятся. Temp имеет private operation/fence hash и случайный suffix; resolved paths проверяются на containment и redirected components. Write строго сверяет canonical bytes, digest, размер и descriptor; temp flush/fsync, closed-file digest verification, no-clobber final placement. POSIX: link без overwrite + fsync directory; Windows: MoveFileExW без REPLACE_EXISTING с WRITE_THROUGH и fsync через writable non-truncating descriptor. Existing hash path только проверяется, corrupt content не ремонтируется. Verify проверяет полный файл и размер; missing/corrupt явно отклоняются. Physical write не означает SQL seal. Отказ/отмена после placement оставляет недостижимые bytes для последующего guarded lifecycle/GC, без публикации.
+
+Файловый IO идёт в worker; отмена, включая повторную, дожидается его остановки до release writer claim. Temp cleanup выполняется и при отказе/отмене до final, и после final. Идемпотентное delete удаляет только validated backend path; каталог и domain history не меняются.
+
+Проверки из backend: `../.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — **115 tests, OK (1 skipped)**: прежние 108 сохранены, добавлено 7 BLOB tests. Покрыты concurrent dedupe двух operations, повтор/restart, missing/corrupt и existing hash mismatch без overwrite, wrong descriptor, stale fence до IO и между temp/final, fsync failure, отказ до/после placement, cancellation до/после placement с повторной отменой и drain claim, containment/relative root. Symlink integration case пропущен: Windows host не разрешает создание symlink. Lifecycle admission в новых тестах контролируется fixture; реальную SQL 4C3 integration это не доказывает. POSIX branch и power-loss durability на этом Windows host не исполнялись; проверены Windows filesystem operations и injected IO failures.
+
+Existing Pyright positive gate расширен новым backend и typed DI composition: **0 errors**; negative gate сохраняет **48 EXPECT**. `git diff --check` — PASS. Responsibility/import review: storage → application ports/dataModel; application не импортирует concrete storage; production Container/DAG/services/DDL не менялись. Source counts: storage root 1 (__init__), storage/artifacts 2 (__init__ + blobBackend), по карте §8.3. Сервер не запускался, commit не создавался. **Остановка после 4C4, без 4D1.**
