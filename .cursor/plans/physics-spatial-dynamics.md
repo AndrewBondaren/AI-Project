@@ -136,3 +136,16 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 Штормовой пример из §5 — **показательный сценарий для будущей приёмки**, а не реализованный тест или дополнительное разрешение на код: вода доступна без океанического per-cell bake, временные волны не пишутся как серия Snapshot, реальные последствия проходят через DAG и домены, а gameplay/physics используют согласованные время и ревизию. Формулы, внешний контракт выбора физического LOD и переход между режимами пока OPEN.
 
 До следующих решений **весь PH-0/AGG/LOCAL/LOD/HANDOFF/PUBLISH остаётся OPEN**. Ни один производственный файл, существующий физический алгоритм или нормативный ТЗ этим планом не переписывается.
+
+## Legacy inventory — предварительный, требует уточнения
+
+**Статус: OPEN / НЕ ПРИНЯТ.** Scope — этот owning-план в WORLD-PLAN-GRAPH-1. Определения символов и приведённые call sites/factories найдены; таблица — начальный inventory, не полный аудит production wiring. Наличие target файла не означает включение target в production. Все строки требуют уточнения replacement, полного closure callers/регистраций и конкретного отключения/переноса/удаления; код не менять по этой таблице.
+
+| AS-IS / legacy-кандидат: определение | Caller / DI / registration | Target / граница замены | Gate и оставшаяся проверка |
+|---|---|---|---|
+| [MapCellQueryFacade.get_scene_volume_as_map_cells](../../backend/app/application/worldData/mapCells/mapCellQueryFacade.py) (строка 155) | [MapCellService.get_scene_volume](../../backend/app/application/worldData/mapCells/mapCellService.py) (строка 166) | TARGET/OPEN: SP-R0/R1 typed media response; legacy-кандидат только для заменяемого water read | SP-R2/SP-R; whole facade не объявлен к удалению; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+| [PatchApplier.apply](../../backend/app/application/engine/repair/patchApplier.py) (строка 8) | [LLMExecutionEngine.run](../../backend/app/application/engine/llmExecutionEngine.py) (строка 23) | TARGET/OPEN: Snapshot/domain apply; старый метод меняет node_results/status, не world commit | GEN/Snapshot; не смешивать repair с world patches; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+
+**Отдельный legacy Physics solver не выявлен предварительным поиском** `physics|Physics|PH-AGG|PH-LOCAL` в `backend/app`; найдены главным образом comments/docstrings. Строки выше — внешние read/apply зависимости SPATIAL/GEN/Snapshot, не legacy Physics и не разрешение переносить их в Physics. До приёмки проверить динамические регистрации, алгоритмы под другими именами и фактические callers PH-AGG/PH-LOCAL.
+
+**Evidence 2026-11-01, HEAD `3a714326` + текущий working tree:** `rg` по именам символов и вызовам в `backend/app`, чтение найденных цепочек GEO/read/engine, AST-проверка определений всех символов таблицы. Известные ограничения: runtime не запускался; DI factories не равны доказательству вызова; exhaustive imports/re-exports/строковые IDs, tests/fixtures и динамический wiring ещё не проверены. **LEGACY-AC OPEN**, полнота и отсутствие mixed runtime не доказаны. При следующем уточнении повторить `rg -n` по каждому символу и старому ID, проверить вызывающие методы и registry closure, записать exact target/disposition и evidence.

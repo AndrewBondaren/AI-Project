@@ -198,6 +198,22 @@ SPATIAL §8 требует SP-R1 до активации SP-R2. До production 
 
 ### Evidence для GRAPH-Q01/Q02/Q03/Q07 (2026-11-01)
 
-GEN-P0 сопоставляет node IDs/callers с совместным `SCENE-READ-FREEZE` (SP-R0), publication entrypoint contract (`PACK-ENTRY-CONTRACT`, SP-P3W) и необходимостью source-revision-set binding Snapshot §6/шаг 5. Это contract-level handoff, не требование завершить production GEN для проектирования этих портов. Exact contracts и source-aware consumer matrix OPEN.
+GEN-P0 сопоставляет node IDs/callers с пакетом совместных контрактов, принимаемым в SP-R0, publication entrypoint contract (`PACK-ENTRY-CONTRACT`, SP-P3W) и необходимостью source-revision-set binding Snapshot §6/шаг 5. Это contract-level handoff, не требование завершить production GEN для проектирования этих портов. Exact contracts и source-aware consumer matrix OPEN.
 
 Для варианта позднего SP-R2 недостаточно запрета legacy fallback: предъявить для всех действующих scene callers поведение cold-Pack ocean без water cells, accepted Snapshot и typed missing/unsupported outcomes. Unsupported допустим лишь для явно отложенной необязательной функции; обязательные water facts нельзя молча исключить из scene response. Если действующий caller требует такие facts, water binding входит в первый атомарный cutover после SP-R1. До inventory и evidence выбор остаётся OPEN и production switch BLOCKED.
+
+Уточнение GRAPH-Q09: GEN-P0 участвует в проектировании SP-R0 требованиями concrete consumers и mapping node IDs/callers; domain owners подтверждают свои read/revision contracts. SPATIAL фиксирует совместное evidence и приёмку SP-R0 в своей карте §8. Принятый пакет SP-R0 используется для соответствующих concrete bindings GEN-P0. Это передача результата архитектурного шага, не отдельный внешний freeze и не зависимость SP-R0 от полного завершения GEN-P0. Exact contracts и приёмка остаются OPEN.
+
+## Legacy inventory — предварительный, требует уточнения
+
+**Статус: OPEN / НЕ ПРИНЯТ.** Scope — этот owning-план в WORLD-PLAN-GRAPH-1. Определения символов и приведённые call sites/factories найдены; таблица — начальный inventory, не полный аудит production wiring. Наличие target файла не означает включение target в production. Все строки требуют уточнения replacement, полного closure callers/регистраций и конкретного отключения/переноса/удаления; код не менять по этой таблице.
+
+| AS-IS / legacy-кандидат: определение | Caller / DI / registration | Target / граница замены | Gate и оставшаяся проверка |
+|---|---|---|---|
+| [LLMExecutionEngine.run](../../backend/app/application/engine/llmExecutionEngine.py) (строка 23) | [EngineWiring.llm_engine](../../backend/app/core/container/engine.py) (строка 202) | [DAGEngine](../../backend/app/application/engine/runtime/dagEngine.py) (строка 34) — target исходник существует, activation отдельно | GEN-CUTOVER → DAG-TYPING B; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+| [PatchApplier.apply](../../backend/app/application/engine/repair/patchApplier.py) (строка 8) | [LLMExecutionEngine.run](../../backend/app/application/engine/llmExecutionEngine.py) (строка 23) | TARGET/OPEN: Snapshot/domain apply; старый метод меняет node_results/status, не world commit | GEN/Snapshot; не смешивать repair с world patches; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+| [LazyTerrainNode.execute](../../backend/app/application/engine/nodes/pojo/python/terrain/lazyTerrainNode.py) (строка 57) | [module registration](../../backend/app/application/engine/nodes/__init__.py) | TARGET/OPEN: публичные domain operations + exact node bindings GEN-P0 | единый cutover; module registration/import требует полного closure audit; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+
+Дополнительный entrypoint для уточнения B-2: [bake_world_pack](../../backend/app/api/routes/map.py) (строка 99) — существующий route. Требует отдельного trace стадий/публикации до Pack writer и целевого DAG job; полная цепочка здесь пока не подтверждена.
+
+**Evidence 2026-11-01, HEAD `3a714326` + текущий working tree:** `rg` по именам символов и вызовам в `backend/app`, чтение найденных цепочек GEO/read/engine, AST-проверка определений всех символов таблицы. Известные ограничения: runtime не запускался; DI factories не равны доказательству вызова; exhaustive imports/re-exports/строковые IDs, tests/fixtures и динамический wiring ещё не проверены. **LEGACY-AC OPEN**, полнота и отсутствие mixed runtime не доказаны. При следующем уточнении повторить `rg -n` по каждому символу и старому ID, проверить вызывающие методы и registry closure, записать exact target/disposition и evidence.

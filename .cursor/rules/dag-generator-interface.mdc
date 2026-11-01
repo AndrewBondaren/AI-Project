@@ -24,11 +24,13 @@ alwaysApply: true
 
 Правка L0/L2 generate или C11/C22 **не** меняет bake-оркестратор — только реализации за контрактом. HTTP `generate-settlement` — другой caller C11. Без шага 2 город после detailed неиграбелен. Интерьеры не входят.
 
-Очередь чужих доменов (surface → climate → …) — на DAG/debug handlers, не внутри generator (`layer-boundaries.mdc`).
+Очередь чужих доменов (surface → climate → …) — в DAG; debug handler вызывает тот же граф, не оркестрирует стадии самостоятельно (`layer-boundaries.mdc`).
 
 **Debug HTTP симулирует вызов как в DAG** (мастер, 2026-09-23): handler — тонкая обёртка; зовёт **тот же** интерфейс оркестратора, что позже вызовет нода. Не отдельная debug-семантика и не второй движок.
 
-**Атомарность — в caller/DAG** (мастер, 2026-09-23): единица materialization = **один вызов оркестратора** (C19: `.tmp` → SQL tx → `os.replace`) — caller триггерит целиком, не дробит internals на ноды/фазы. Атомарность хода — `pending_patches` → `PatchApplier.apply`; результат materialization в `pending_patches` **не** кладётся (bulk, не per-turn diff).
+**Атомарная доменная операция:** caller/DAG вызывает materialization целиком через стабильный контракт, не дробит internals на ноды/фазы. Домены готовят результаты и инициируют staging объёмных immutable artifacts через доменный staging port; pure compute не пишет опубликованное состояние.
+**Целевой lifecycle:** по [Snapshot ТЗ](../../docs/tz_world_snapshot.md), § «Staged artifacts и точки публикации» и § «Путь записи и сбор патчей», до gameplay DAG оркестрирует staged Pack publication/activation (immutable manifest@hash, без snapshot от bake). После gameplay базовый pack заморожен: домены готовят typed patches и refs результатов, **DAG собирает PatchSet**, только Snapshot применяет его через доменные handlers и выполняет commit. Snapshot сам materialization не запускает. Bulk results передаются artifact refs, не раскладываются в per-cell patches.
+**Legacy до соответствующего cutover:** C19 `.tmp` → SQL tx → `os.replace` и `pending_patches` → `PatchApplier.apply` описывают прежние пути, не целевой commit-контракт и не разрешение нового обходного writer. Миграция — по owning GEN-DAG/Pack/Snapshot gates; эта правка правила не объявляет runtime готовым.
 
 ## Gate (сейчас, не целевая схема)
 

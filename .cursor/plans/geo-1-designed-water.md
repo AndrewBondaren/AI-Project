@@ -14002,3 +14002,15 @@ Task11 — evidence нерешённых вопросов, не утверждё
 Принято требование POJO/enum freeze ДО кода, но ПОСЛЕ семантики и обоснования
 представления. Reuse и различие ревизий сохранены, параллельного контракта нет.
 G10-A OPEN. Только документация, без изменения code/POJO/tests/DAG.
+
+## Legacy inventory — предварительный, требует уточнения
+
+**Статус: OPEN / НЕ ПРИНЯТ.** Scope — этот owning-план в WORLD-PLAN-GRAPH-1. Определения символов и приведённые call sites/factories найдены; таблица — начальный inventory, не полный аудит production wiring. Наличие target файла не означает включение target в production. Все строки требуют уточнения replacement, полного closure callers/регистраций и конкретного отключения/переноса/удаления; код не менять по этой таблице.
+
+| AS-IS / legacy-кандидат: определение | Caller / DI / registration | Target / граница замены | Gate и оставшаяся проверка |
+|---|---|---|---|
+| [WaterBodyPlanner.plan_geo](../../backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py) (строка 46) | [HydrologyRoutesAssembler.assemble_geo](../../backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyRoutesAssembler.py) (строка 70) | TARGET/OPEN: native canonical final producer; exact replacement по G10-A | G10-A; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+| [WaterBodyJob.plan_geo](../../backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py) (строка 57) | [WaterBodyPlanner.plan_geo](../../backend/app/application/worldData/generators/hydrology/water/planning/waterBodyPlanner.py) (строка 46) | TARGET/OPEN: native water pipeline | G8-B/G10-A; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+| [HydrologyRoutesAssembler.assemble_geo](../../backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyRoutesAssembler.py) (строка 70) | [GeoHydrologyRoutesPlanProvider.build](../../backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py) (строка 59) | TARGET/OPEN: atomic source/provider binding; reuse assembler уточнить | G10-A; registration также требует проверки; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+
+**Evidence 2026-11-01, HEAD `3a714326` + текущий working tree:** `rg` по именам символов и вызовам в `backend/app`, чтение найденных цепочек GEO/read/engine, AST-проверка определений всех символов таблицы. Известные ограничения: runtime не запускался; DI factories не равны доказательству вызова; exhaustive imports/re-exports/строковые IDs, tests/fixtures и динамический wiring ещё не проверены. **LEGACY-AC OPEN**, полнота и отсутствие mixed runtime не доказаны. При следующем уточнении повторить `rg -n` по каждому символу и старому ID, проверить вызывающие методы и registry closure, записать exact target/disposition и evidence.
