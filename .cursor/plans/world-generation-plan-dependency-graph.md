@@ -318,7 +318,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SN-CORE | 4C4 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SN-RUNTIME | SN-APPLY-HANDLER | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SN-STAGE | 4E2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
-| SP-0 | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | ГОТОВ К АНАЛИЗУ: inventory | Архитектурный аудит OPEN; начало полного SP-0 не подтверждено, частичный legacy inventory не равен приёмке. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| SP-0 | Внешние условия / критерии owning-плана | НА ПРИЁМКЕ | ГОТОВ К АНАЛИЗУ: review evidence | Основной статический аудит выполнен; дополнена сквозная HTTP/CLI bake-трасса до producer и записи/финализации Pack, уточнён legacy caller/disposition evidence (2026-11-01). Приёмка владельцем и LEGACY-AC OPEN; отсутствие смешанного runtime не доказано, DONE не присвоен. [SPATIAL SP-0, §0.10–0.12](./spatial-distribution-domain.md#010-сквозная-bake-трасса-уточнение-по-ревью-2026-11-01) |
 | SP-1 | SP-0 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-3 | SP-P3, SP-1, SP-H | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-3S | SN-RUNTIME, SP-3 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
