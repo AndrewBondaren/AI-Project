@@ -185,9 +185,30 @@ SPATIAL-1 и его domain-owned readers отвечают на запрос о �
 | PH-ORCH | **Согласованы** DAG-node production trigger, DAG+settings как LOD owner FAR/MEDIUM/NEAR, явные domain reads и typed Input/Output через DAG-ноду с Physics compute-only. Exact node/domain POJO signatures, source refs/read coherence, parallelism, commit/retry/PH-HANDOFF — отдельная приёмка | PARTIAL; код BLOCKED до точного freeze |
 | PH-AGG | Агрегированные операции/алгоритмы, цена–качество, область воздействия и изменение compact facts | OPEN |
 | PH-LOCAL | Детальная физика **материализованной воды** и иных сред в ограниченной области, без требования глобального per-cell bake; алгоритмы и рабочие буферы — отдельная будущая приёмка | OPEN |
-| PH-LOD | Будущая точка выбора физического LOD и bounded materialization вне solver; критерии, владелец policy и typed invocation seam, без внедрения LOD сейчас | OPEN (deferred) |
+| PH-LOD | DAG + settings как owner и три зоны FAR/MEDIUM/NEAR **приняты**; exact thresholds/criteria/typed invocation/bounded materialization вне solver и handoff — OPEN | PARTIAL / deferred; код BLOCKED |
 | PH-HANDOFF | Переходы aggregate ↔ local, сохранение объёма/принятых последствий, reconcile/инвалидация ревизий, отсутствие видимых скачков | OPEN |
 | PH-PUBLISH | Доменные typed changes, согласование с Water Systems/Gas/Geometry, публикация и восстановление после Snapshot | OPEN |
+
+
+### Зависимости для WORLD-PLAN-GRAPH-1 — gate-level contract (2026-11-01)
+
+**Owner — PHYSICS-1; в граф передаются только границы и направленные prerequisites, а не алгоритмы/POJO.** Дизайн перечисленных треков может идти параллельно в пределах собственных constraints; ниже условия **архитектурной приёмки названного результата или будущей runtime activation**, не требование выполнять все работы одной непрерывной цепочкой. Ни одна строка не разрешает производство кода, создание класса или DAG-ноды до PH-0, exact POJO/enum/file freeze и отдельной команды. Граф не может объявить PH DONE вместо owning evidence.
+
+| Consumer gate | Необходимые producer gates | Что принимается; что не подменяется |
+|---|---|---|
+| **PH-ARCH** | PH-0 | Проверенная target file/class map, reuse vs replacement существующей физики, общие helpers/algorithms, typed contract/POJO/enum inventory; DRAFT пока PH-0 OPEN |
+| **PH-ORCH** | PH-0, DT-A (принятая базовая DAG-TYPING A1–A3) | Exact input/output DAG-ноды, source read bindings, LOD settings seam, не очередной доменный scheduler; production caller только DAG-нода |
+| **PH-AGG**, **PH-LOCAL** | PH-ARCH | Соответствующие process algorithms/typed input/output/units/error budgets после архитектурной приёмки; алгоритмический дизайн не ждёт runtime Snapshot или GEN cutover |
+| **PH-LOD** | PH-ORCH | Exact DAG + settings FAR/MEDIUM/NEAR policy, bounded scope/time/budget/materialization seam; две compute strategies PH-AGG/PH-LOCAL, не обязательный третий solver |
+| **PH-HANDOFF** | PH-AGG, PH-LOCAL, PH-LOD | Reconciliation при переходах, time/revision/flux/volume/effects, без duplicate ownership |
+| **PH-PUBLISH** | PH-ARCH, PH-ORCH | Domain-effect type map, public target change operations, retries/versions/typed errors и Snapshot handoff; не утверждает сам runtime apply |
+| **PH-AGG-RUNTIME** (**future water-first acceptance, не code step**) | PH-AGG, PH-ORCH, PH-PUBLISH, SP-3S, SN-RUNTIME | Реальная DAG-нода, pinned water base+accepted overlay read, ограниченный aggregate compute, domain-owned prepared water patch → Snapshot; **дополнительно OPEN:** concrete PH node binding к принятому production DAG, Hydrology runtime change contract, CAS/idempotency |
+| **PH-LOCAL-RUNTIME** (**future water-first acceptance, не code step**) | PH-AGG-RUNTIME, PH-LOCAL, PH-LOD, PH-HANDOFF, PH-PUBLISH, SP-4R | Подробный bounded local water/geometry/objects compute с актуальной revision, substeps без per-step Snapshot, переходы без double-apply; L2 runtime materialization отдельно от Physics |
+| **PH-GAMEPLAY-E2E** (**future water-first acceptance, не code step**) | PH-LOCAL-RUNTIME, SP-R | Действительный engine/player/LLM scene consumer видит тот же accepted world state и физический frame/time, persistent damage после reload; SP-R gameplay **не** зависит от PH-GAMEPLAY-E2E |
+
+**Ограничение scope:** SP-3S/SP-4R/SP-R water gates в этой карте гарантируют только утверждённый water scope (на первом этапе ocean/lake, не river-volume без GEO SP-H2); gas, geology, structural stability, thermal и weather forcing потребуют собственных профильных read/write gates, **не** становятся обязательными для water-first runtime Physics или GEO cutover. Material registry и source world environment policy — отдельные accepted inputs к соответствующему процессу, а не общий full SPATIAL/air/geology DONE prerequisite.
+
+**GEN-DAG seam не объявлен автоматически принятым:** DAG-TYPING DT-A уже даёт generic typed infrastructure; конкретная Physics-нода и её Input/Output/read/operation bindings остаются за owning engine integration acceptance. Вопрос: входит ли Physics в первый GEN-DAG cutover или является последующим расширением — **OPEN PH-ORCH + GEN-P0**; поэтому не вводить без выбора безусловное ребро `GEN-CUTOVER → PH-AGG-RUNTIME` либо обратное. Пока exact accepted PH-node binding отсутствует, PH-AGG-RUNTIME **BLOCKED**, даже если все перечисленные в таблице обязательные prerequisites приняты. Аналогично PH-PUBLISH не становится DONE из одного общего Snapshot.apply.
 
 PH-ARCH выше задаёт **кандидатные** exact paths/class responsibilities, но не принятые POJO/сигнатуры или разрешение на code step; другие направления пока **не** задают sequence steps, параметры LOD, конфиги, wire, RPC или порядок cutover. Последовательную декомпозицию на кодовые шаги и тесты делать только после PH-0, PH-ARCH/PH-ORCH decisions и отдельной архитектурной приёмки.
 
