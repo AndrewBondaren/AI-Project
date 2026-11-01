@@ -1,11 +1,15 @@
 # ТЗ: Материалы
 
+**Граница домена:** Materials владеет material identity, свойствами, defaults/validation, refs и принятием изменений свойств через будущий публичный Materials contract. Физические законы, формулы, процессы и соответствие `свойство → формула/эффект` принадлежат отдельному [ТЗ Physics](./tz_physics.md). Изменение material property может быть результатом Physics, но Physics не мутирует `WorldMaterialRegistry` или состояние размещённого вещества напрямую. Точные typed mutation API, scope и revision semantics — OPEN; это не разрешение на код.
+
 ## 1. Scope
 
-`material_registry` — единый реестр всех материалов мира. Используется одновременно:
-- физикой локаций (течение, горение, замерзание)
-- генератором зданий (выбор по `use_type`, `economic_tier`)
-- `ExcavationNode` (добыча по `hardness`, `mineable`)
+`material_registry` — единый **Materials-owned** реестр определений материалов мира. Его typed свойства потребляют независимо:
+- [Physics](./tz_physics.md) — для вычисления воздействия (течение, горение, замерзание, разрушение), без владения реестром или физическими уравнениями внутри Materials;
+- генератор зданий — для выбора по `use_type`, `economic_tier`;
+- `ExcavationNode` — для добычи по `hardness`, `mineable`.
+
+**Изменяемость:** физическое воздействие может изменить свойства материала или локальное состояние размещённого вещества. Изменение определения материала для всего мира и изменение одного экземпляра/объёма **не эквивалентны**. Materials принимает изменения собственных material properties по утверждённой операции, а локальное состояние/размещение — через профильного владельца в согласовании с Materials; exact owner/POJO/patch/version для mutable local state OPEN. Подробный маршрут — [Physics §7](./tz_physics.md).
 
 ---
 
@@ -61,26 +65,26 @@ canonical entries обновлены явно, runtime не выполняет �
 | `system_material` | string | все | Уникальный ключ |
 | `display_name` | string | LLM, UI | Отображаемое название |
 | `glossary_ref` | string\|null | LLM | nullable; ref → `lore_registry`; лор-описание |
-| `material_category` | string | физика | Физическое состояние: `solid`, `liquid`, `gas` |
+| `material_category` | string | Physics и другие consumers | Категория материала: `solid`, `liquid`, `gas`; eligibility физических процессов определена в [Physics §2–3](./tz_physics.md) |
 | `tags` | string[] | генератор зданий | Классификация: `construction`, `metal`, `crafted`, `refined`, `raw`, `organic`, `consumable`, `mineral`, `magic` + кастомные |
 | `use_type` | string[] | генератор зданий, дороги | `wall`, `floor`, `column`, `door`, `gate`, `railing`, `ceiling`, `roof`, `road`, `any` |
 | `economic_tier` | string\|null | генератор зданий | ref → `economic_tier_registry`; null для liquid/gas |
 | `hardness` | int (1–5)\|null | ExcavationNode | Твёрдость; null для liquid/gas |
-| `density` | int | физика | Плотность; слоение жидкостей, плавучесть твёрдых |
-| `heat_conductivity` | float (0.0–1.0) | физика | Тепловая проводимость; 0.0 = не проводит (фиксированный источник тепла), 1.0 = мгновенная передача |
-| `viscosity` | float (0.0–1.0)\|null | физика | Вязкость. Только для `material_category: "liquid"`. Скорость течения: 0.0 = мгновенно, 1.0 = почти не течёт. null для solid/gas |
-| `heat_into` | string\|null | физика | ref → `system_material`; во что переходит при нагреве выше `heat_temp`. null = не реагирует на жар |
-| `heat_temp` | int\|null | физика | Порог нагрева (в единицах engine temperature); null если `heat_into` не задан |
-| `cool_into` | string\|null | физика | ref → `system_material`; во что переходит при охлаждении ниже `cool_temp`. null = не реагирует на холод |
-| `cool_temp` | int\|null | физика | Порог охлаждения (в единицах engine temperature); null если `cool_into` не задан |
-| `structural_strength` | float (0–1)\|null | физика | Прочность конструкции; null для liquid/gas |
-| `flammable` | bool | физика | Горит при контакте с огнём. Default: false |
-| `corrodible` | bool | физика | Поддаётся коррозии/кислоте. Default: true |
+| `density` | int | Physics | Плотность как свойство Materials; применение в слоении/плавучести/давлении — [Physics §2/§4](./tz_physics.md), единицы OPEN |
+| `heat_conductivity` | float (0.0–1.0) | Physics | Нормированное свойство теплопроводности; формула, температура и source semantics — [Physics §2/§5](./tz_physics.md) |
+| `viscosity` | float (0.0–1.0)\|null | Physics | Коэффициент вязкости для liquid; null для solid/gas. Зависимость скорости течения от коэффициента — [Physics §2/§4](./tz_physics.md), не Materials |
+| `heat_into` | string\|null | Physics / Materials | ref → `system_material`; допустимая цель перехода при нагреве выше `heat_temp`. null — переход не задан; исполнение — [Physics §4.2](./tz_physics.md) |
+| `heat_temp` | int\|null | Physics / Materials | Порог нагрева в engine temperature; null если `heat_into` не задан. Формула применения — [Physics §5](./tz_physics.md) |
+| `cool_into` | string\|null | Physics / Materials | ref → `system_material`; допустимая цель перехода при охлаждении ниже `cool_temp`. null — переход не задан; исполнение — [Physics §4.2](./tz_physics.md) |
+| `cool_temp` | int\|null | Physics / Materials | Порог охлаждения в engine temperature; null если `cool_into` не задан. Формула применения — [Physics §5](./tz_physics.md) |
+| `structural_strength` | float (0–1)\|null | Physics, construction consumers | Прочность материала; null для liquid/gas. Формула failure/нагрузки — [Physics §2/§3](./tz_physics.md) |
+| `flammable` | bool | Physics / damage consumer | Признак горючести; trigger и реакция — [Physics §2/§5](./tz_physics.md). Default: false |
+| `corrodible` | bool | Physics / placed-state owner | Признак восприимчивости к коррозии; изменение вещества/объекта — [Physics §2/§7](./tz_physics.md). Default: true |
 | `mineable` | bool | физика | Добывается инструментом. Default: false |
-| `transparent` | number (0–100) | физика | Процент прозрачности: 0 — непрозрачен, 100 — полностью прозрачен; дробные значения допустимы. Default: 0 |
-| `breakable` | bool | физика | Разрушается от удара (хрупкие материалы). Переводит ячейку в состояние `broken`. Default: false |
-| `temp_damage` | bool | физика | только liquid/gas. Наносит температурный урон при контакте |
-| `vision_block` | bool | физика | только liquid/gas. Блокирует видимость |
+| `transparent` | number (0–100) | scene/vision consumer | Прозрачность в процентах; 0 — непрозрачен, 100 — полностью прозрачен, дробные значения допустимы. Default: 0; FOV — внешний consumer |
+| `breakable` | bool | Physics / placed-state owner | Признак допустимости разрушения. Конкретное изменение локального состояния и `broken` semantics — [Physics §2/§7](./tz_physics.md). Default: false |
+| `temp_damage` | bool | Physics / damage consumer | Признак контактного температурного урона, только liquid/gas; не объявляет материал источником тепла — [Physics §2/§5](./tz_physics.md) |
+| `vision_block` | bool | scene/vision consumer | Признак блокирования видимости для liquid/gas; алгоритм FOV не принадлежит Physics |
 | `components` | string[]\|null | крафт | Компоненты для `crafted`/`refined` материалов |
 
 `material_category` фиксирован в движке. `tags` расширяются через `worlds.material_tag_registry` (N+1).
@@ -96,7 +100,7 @@ canonical entries обновлены явно, runtime не выполняет �
 | `mineable` | `false` | только явно добываемые добываются |
 | `transparent` | `0` | материал непрозрачен по умолчанию |
 | `breakable` | `false` | только хрупкие разрушаются от удара |
-| `heat_conductivity` | `0.1` | воздух — базовый уровень конвекции |
+| `heat_conductivity` | `0.1` | Базовый default свойства; не означает наличие воздуха/атмосферы и не задаёт физический solver. См. [Physics §5/§6](./tz_physics.md) |
 | `viscosity` | `null` | только liquid-материалы имеют вязкость |
 | `heat_into` | `null` | |
 | `heat_temp` | `null` | |
@@ -111,86 +115,39 @@ canonical entries обновлены явно, runtime не выполняет �
 
 ## 4. Физика по категориям
 
-> **Пустая ячейка (нет блока)** — движок использует запись `air` из `material_registry`. Это правило движка, не поле реестра. Поскольку `material_registry` хранится per-world, свойства воздуха (плотность, проводимость, вязкость) настраиваются на уровне мира.
-
-| `material_category` | Физика движка |
-|---|---|
-| `solid` | падает если `g > 0` и нет опоры снизу; всплывает если `density < liquid.density`; горит если `flammable`; переходит в другой материал если `cool_into` задан; разрушается кислотой если `corrodible`; переходит в другой материал если `heat_into` задан; добывается если `mineable`; имеет прозрачность `transparent` процентов (0 — непрозрачен, 100 — полностью прозрачен) |
-| `liquid` | течёт вниз по z; слоение: более плотная жидкость опускается ниже; утопание; температурный урон если `temp_damage`; блокирует видимость если `vision_block` |
-| `gas` | движение по z определяется `density` относительно соседей: тяжелее → оседает вниз, легче → поднимается; блокирует видимость если `vision_block`; токсичность если `temp_damage` |
+**Физические правила перенесены в [ТЗ Physics §2–3](./tz_physics.md).** Здесь Materials задаёт только `material_category`, свойства/ссылки и их ограничения (§2–3). Применимость процессов, формулы, консервация/ошибки и различие PH-AGG/PH-LOCAL принадлежат Physics. Старое правило «пустая клетка = air» **не универсально**: фактическую ambient/vacuum policy определяет World Environment/SPATIAL SP-A; Materials не создаёт воздух из отсутствия блока.
 
 ### 4.1 Переходы между состояниями материалов
 
-Каждый материал несёт два ref-поля:
-
-| Материал | `heat_into` | `cool_into` |
-|---|---|---|
-| `iron_ore` | `molten_iron` | null |
-| `molten_iron` | null | `iron` |
-| `iron` | `molten_iron` | null |
-| `wood` | `charcoal` | null |
-| `charcoal` | `ash` | null |
-| `ash` | null | null |
-| `water` | `steam` | `ice` |
-| `steam` | `superheated_steam` | `water` |
-| `lava` | null | `stone` |
-
-Движок читает `heat_into`/`cool_into`, находит целевой материал в `material_registry` и заменяет ячейку. Целевой материал должен существовать в реестре — движок не создаёт его автоматически.
-
-Температурный порог, при котором происходит переход — открытый вопрос (см. секцию 8).
-
----
+Ссылки `heat_into`/`cool_into` и пороги `heat_temp`/`cool_temp` остаются **полями Materials**; таблица примеров и расчёт применения/смены размещённого material identity перенесены в [Physics §4.2](./tz_physics.md). Целевой материал должен существовать в Materials registry. Изменение локального вещества не меняет автоматически определение материала во всём мире.
 
 ### 4.2 Тепловая диффузия (v1)
 
-Каждый тик симуляции для каждой ячейки `C`:
-
-```
-delta = Σ (neighbor.temperature - C.temperature) × neighbor.material.heat_conductivity × dt
-C.temperature += delta
-```
-
-`dt` — конфигурационный параметр мира (хранится в `world` наряду с `material_registry`). Позволяет замедлить или ускорить теплообмен для конкретного мира.
-
-Ячейки с `temp_damage: true` (лава, огонь) — **фиксированные источники тепла**:
-- их `temperature` не обновляется диффузией (они задают температуру, а не получают)
-- всегда излучают в соседей через формулу выше
-- `heat_conductivity: 0.0` означает, что ячейка не поглощает тепло от соседей — только отдаёт
+Исходная формула, `dt`, source semantics и их OPEN-ограничения перенесены в [Physics §5](./tz_physics.md). Materials определяет только свойства, но не исполняет per-cell тик или теплообмен.
 
 ---
 
 ## 5. Физика жидкостей
 
+**Нормативный владелец законов течения, слоения, давления и фазовых переходов — [Physics §4](./tz_physics.md).** Materials предоставляет типизированные свойства.
+
 ### 5.1 Гравитационное течение (v1)
 
-Жидкость течёт вниз по z при каждом тике. Слоение: более плотная жидкость опускается ниже.
-
-Скорость течения обратно пропорциональна `viscosity`: вода (`viscosity: 0.1`) течёт быстро, лава (`viscosity: 0.9`) — медленно. Конкретная формула (тики на шаг) — конфигурация движка.
+[Physics §4.1](./tz_physics.md): гравитация, density/viscosity и разные PH-AGG/PH-LOCAL вычисления. Формула скорости OPEN.
 
 ### 5.2 Переход solid → liquid
 
-Когда ячейка достигает порога нагрева, движок читает `heat_into` и заменяет материал. Целевой материал (например, `molten_iron`) — отдельная запись в реестре с `material_category: "liquid"` и своим `viscosity`. Обратный переход: `cool_into` при охлаждении ниже порога.
+[Physics §4.2](./tz_physics.md): свойства/ссылки остаются Materials-owned; изменение конкретного размещения/объекта — отдельный domain change.
 
 ### 5.3 Давление (v2)
 
-Давление — **формула**, не данные. Вычисляется в рантайме из высоты столба жидкости над ячейкой:
-
-```
-pressure(cell) = sum(density * height for fluid_cells above)
-```
-
-При давлении > 0 жидкость может течь вверх (затопление снизу, трубы). Отложено.
+[Physics §4.3](./tz_physics.md): перенесён исходный эскиз формулы и ограничения его точности/единиц. Не делать глобальный SQL/Grade per-cell read.
 
 ---
 
 ## 6. Физика газов
 
-Газ движется по z в зависимости от `density` относительно окружения:
-- `density` газа > `density` окружающего воздуха → оседает вниз
-- `density` газа < `density` окружающего воздуха → поднимается вверх
-
-`vision_block: true` → блокирует линию обзора.  
-`temp_damage: true` → урон персонажам в ячейке каждый тик.
+Законы распространения газов, их связь с `density`, ambient/vacuum и взаимодействиями перенесены в [Physics §6](./tz_physics.md). `vision_block` / `temp_damage` остаются свойствами Materials; соответствующий scene/damage consumer не является Materials solver.
 
 ---
 
@@ -223,7 +180,7 @@ pressure(cell) = sum(density * height for fluid_cells above)
 - ниже `cool_temp` или выше `heat_temp` → `liquid_mult = 0` (снег/град — runtime через `weather_type_registry`)
 - outer 10% полосы — smoothstep (как tier temp blend)
 
-Fallback: `water` → первый `liquid` в registry → built-in `{ cool_temp: 0, heat_temp: 100 }`.  
+Fallback: `water` → первый `liquid` в registry → built-in `{ cool_temp: 0, heat_temp: 100 }`.
 При fallback — `logger.warning` (once per world); каждый расчёт — `logger.debug`. См. [`tz_climate.md`](./tz_climate.md) § precipitation.
 
 Не привязывать к 0°C / 100°C на уровне движка — только к полям материала.
@@ -238,11 +195,13 @@ Fallback: `water` → первый `liquid` в registry → built-in `{ cool_tem
 | Целевой материал при переходе (`heat_into`/`cool_into`) — ref-поля на записи | закрыт |
 | Пример реестра неполный: `charcoal`, `ash`, `molten_iron`, `steam`, `ice`, `superheated_steam` упомянуты в `heat_into`/`cool_into` но отсутствуют в примере — добавить или вынести в отдельное приложение? | открыт |
 | `breakable` — поле есть в таблице, но отсутствует в JSON-схеме и примере реестра; уточнить семантику и добавить | открыт |
-| `flammable` + `heat_into`: при воспламенении движок применяет `heat_into` для определения продукта или отдельная логика? | открыт |
-| `dt` (шаг диффузии) per-world — поле не добавлено в модель `World` и миграцию | открыт |
-| Формула скорости течения через `viscosity` — конкретные тики на шаг | открыт |
-| Давление жидкостей (затопление снизу, трубы) | v2 |
-| Структурная целостность — обрушение стен без опоры | нет ТЗ |
+| `flammable` + `heat_into`: при воспламенении применяется transition ref или отдельная реакция? | [Physics §5/§9](./tz_physics.md) — OPEN, не решается Materials |
+| `dt`/тепловой шаг: per-world settings POJO и сопоставление Physics time/LOD | [Physics §5/§9](./tz_physics.md) — OPEN; поля World не выдуманы |
+| Формула скорости течения с `viscosity`, численные units и budgets | [Physics §4.1/§9](./tz_physics.md) — OPEN |
+| Давление/затопление снизу/трубы (v2) | [Physics §4.3/§9](./tz_physics.md) — будущий gate |
+| Структурная целостность/обрушение без опоры | [Physics §3/§9](./tz_physics.md) — будущий gate |
+| Может ли Physics изменить **само определение материала** (world-wide свойства) и какой public Materials change contract/версия принимает это? | OPEN Materials + PH-PUBLISH; явный scope и Snapshot |
+| Как моделируются **локально изменяемые** свойства/состояния вещества: Materials-owned property, placed-media/object state или вычисляемое effective property; кто хранит local state? | OPEN Materials + соответствующий domain owner + Physics; не смешивать с глобальным registry |
 
 ## 9. Технический долг зоны материалов
 
