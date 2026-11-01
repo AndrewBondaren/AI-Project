@@ -1,5 +1,6 @@
 # GEO-1 — designed water: общие стратегии и каскад параметров
 
+**Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
 ## Контракт исходных фактов Hydrology — нормативное место
 

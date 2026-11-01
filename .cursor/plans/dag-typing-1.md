@@ -1,5 +1,7 @@
 # DAG-TYPING-1 — общесистемная типизация engine DAG
 
+**Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
+
 **Статус:** DRAFT — самостоятельный **план реализации** общесистемной типизации DAG. Принципы Input/Output, DAGContext и решения исполнения ниже согласованы 2026-10-30 до подготовки ТЗ. **Сначала согласуются и реализуются архитектурные изменения инфраструктуры, только затем мигрируются ноды.** Документ не разрешает изменять код без отдельного согласования с мастером.
 **Область:** весь существующий engine DAG — Python-ноды, LLM-ноды, NodeRegistry, DAGContext, execution runtime, replan/resume/repair и диагностика. **Не часть GEN-DAG-1:** интеграция генератора с DAG остаётся самостоятельной задачей; граница работ и зависимость точки переключения явно заданы в пункте 8 и разделе «Стык планов без совместимого слоя».
 **Нормативные документы:** `docs/tz_engine_node_context.md` (подробные решения и ответственность), `.cursor/rules/engine-nodes.mdc`, `.cursor/rules/contract-creation.mdc`, `.cursor/rules/dataModel-no-hardcode.mdc`, `.cursor/rules/type-kind-str-fields.mdc`, `docs/tz_json_validation.md`. Для стыка генератора: `.cursor/plans/gen-dag-1-post-geo-ws.md`.

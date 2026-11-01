@@ -1,5 +1,7 @@
 # GEN-DAG-1 — Передача оркестрации генерации в engine DAG (после GEO-1 и принятия новой архитектуры patches/snapshots)
 
+**Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
+
 **Статус:** DRAFT / DEFERRED. Только фиксация архитектурного намерения; не разрешение на имплементацию.
 **Входные gates:** завершён и принят GEO-1; принята архитектура `.cursor/plans/world-domain-patches-snapshots.md` и согласованы необходимые для DAG интеграции Patch/PatchSet/Snapshot контракты; архивный WS не является gate; отдельное согласование с мастером перед изменениями DAG.
 **Типизация engine DAG:** самостоятельный план `.cursor/plans/dag-typing-1.md`; настоящая задача включает генераторную интеграцию и конкретные контракты всех рабочих DAG-нод; общая типизированная инфраструктура остаётся в DAG-TYPING-1.

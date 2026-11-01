@@ -1,5 +1,6 @@
 # SPATIAL-1 — Пространственное распределение сред и материалов
 
+**Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
 ## Порядок принятия контракта
 
