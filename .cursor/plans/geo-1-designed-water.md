@@ -13862,3 +13862,66 @@ Next: atomic G8-B schemas/defaults/capture/GEO registration/production switch,
 including final coverage transport and wiring this reader into production query.
 G10-A OPEN. No production/backend/DAG/SQL migrations/commit/push. Concurrent
 PHYSICS-1 documentation commit91c630fa preserved; git diff --check clean.
+
+
+### Task11 — ATOMIC CUTOVER COORDINATE/SNAPSHOT AUDIT — DESIGN OPEN (2026-11-01)
+Clean7a52dcd1; analysis requested before choosing a boundary. No application,
+POJO or tests changed; production/G10-A remain OPEN. This audit supersedes the
+assumption that registration alone can now connect existing native leaf stages.
+Confirmed mismatch: placementPreparation.py:57-58 permits only WORLD_SURFACE_GRID
+P2; procedural preparation fixes that space at132. WaterDesignUniverse.capture
+binds batch.snapshot_revision to pre_hydrology TerrainPlan output proof. Fine
+water publication.py:109-115 instead requires batch snapshot of exact fine W and
+spec.footprint equal accepted native footprint. These cannot be wired unchanged.
+Floor is NOT another blocker: WaterDesignInput requires procedural recipe in
+fine_topology; BasinFloorEvaluator explicitly supports coarse sampling of that
+same fine recipe and native fine evaluation. No new recipe/seed/field algorithm.
+Queue semantics: dependencies.py:84 orders by (-specificity,-original_area,uid).
+Read-only heap witness: water area1 vs competitor2, same specificity -> competitor;
+water-only S16 area conversion1→256 -> water. One coarse cell expands to256 fine
+cells (negative cell-1 maps[-16,-1]); pre-P2 expansion affects all candidates,
+constraints, batch topology and competition units, not just the water adapter.
+Alternative A: all joint P2 geometry fine before resolution. Requires consistent
+migration of every competitor/constraint/area and fine batch snapshot; potential
+S^2 footprint growth. Not a routine G8-B record migration; needs separate scope.
+Alternative B (recommended proposal, NOT activated): keep one canonical coarse
+P2 outcome; terrain/hydrology owning BasinSpec writer derives fine physical
+footprint after resolve. No second placement outcome/water record or fabricated
+acceptance. Fine fill must verify exact deterministic projection rather than
+raw footprint equality. Coarse spatial competition remains intentionally coarse.
+Snapshot closure for B: W -> explicit TerrainPlan projection C -> design/P2(C)
+-> physical fine specs(F). Bind C to W via exact refs; fine publication consumes
+W plus accepted placement and C, checking batch.snapshot_revision=C.output proof.
+Do not relabel C.ref as W.ref or accept arbitrary snapshot_revision. Existing
+TerrainPlan/FineSurfaceWindow/ResolvedPlacementV2/metadata/BasinSpec suffice;
+coordinate-space proof must be explicit in the owning contract, not inferred
+from naked integer tuples. G8-B removes legacy ResolvedWaterPlacement atomically.
+Fix scope after contract acceptance: designUniverse/designPreparation input and
+source ref binding; owning native basin spec production; FineWaterPublicationJob
+snapshot/footprint admission + version; owning Geo placement transport/capture/
+registration/production entry and versions. No orchestrator algorithms/bridges.
+Acceptance must include REAL prepare_designed_water -> one PlacementSession/P2
+-> native spec writer -> FineWater publication -> routes/beds/final/query. Current
+fine_water/fixtures.py:35-38 synthesizes accepted native outcomes from specs;
+existing passing isolated tests do not establish this missing production join.
+Read-only inspection and queue/cardinality probe verified; suites not repeated
+because runtime/tests unchanged. Next: settle this contract from the analysis,
+then implement the atomic scope. No code/SQL/DAG/backend/commit/push changes.
+
+
+### G10-A / SPATIAL-1 — WATER MATERIALIZATION SCOPE REVIEW (2026-11-01)
+По запросу владельца зафиксирована возможность bounded materialization воды:
+[SPATIAL-1 §12](./spatial-distribution-domain.md#12-уточнение-возможность-материализации-воды-и-граница-с-geo-1-2026-11-01).
+Большая часть representation/index/window/materialization/L2 integration работы
+принадлежит SPATIAL-1; физические water facts остаются Hydrology, dynamics Physics.
+Текущий full-world fine fill и перечисленные fine water maps — existing/reference
+implementation, не утверждённая обязательная target materialization всего бассейна.
+Task11 coarse-P2→fine-writer recommendation остаётся предложением, не принятой
+архитектурой: до выбора coordinate seam пересмотреть producer scope и compact
+source/coverage. Ни fine P2, ни post-P2 projection сами по себе не разрешают
+обязательное S^2 раскрытие всего accepted footprint. Source truth/fine precision
+и materialized cells — разные требования. Новый вход SP-H/SP-0 перед cutover;
+не чинить этот разрыв compatibility bridge или локальным повторным fill в reader.
+Точные POJO/API/producer algorithms, budgets и порядок реализации требуют анализа;
+новых моделей не вводилось. Изменены только два плана; код/тесты/ТЗ не менялись,
+suites не запускались. SPATIAL-1/G10-A OPEN; production не переключён.

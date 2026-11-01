@@ -32,7 +32,7 @@
 | Runtime physics + domain changes | Физические изменения, material transitions, tick-based movement; подготовка типизированных доменных изменений для PatchSet | Не мутирует immutable planning sources за спиной reader, не публикует состояние в обход Snapshot |
 | Snapshot / Patches | Атомарное принятие подготовленных изменений и истории; согласованный runtime overlay поверх базовых фактов | Не рассчитывает hydrology/geology/gas, не запускает materialization и не превращает обычный read в patch |
 | World Pack / storage | Иммутабельные компактные spatial artifacts исходного bake, staged blobs/refs и доменное физическое хранение по утверждённым контрактам; SQL может держать metadata/refs/heads | Не выбирает геологический состав, water level или materialization policy; не делает per-cell SQL обязательным представлением сред |
-| Application L2 composition/materialization | Раздельные режимы: (а) временная bounded-проекция liquid/gas/ambient фактов без обязательной per-cell записи; (б) физическая solid-материализация geology в запрошенной области, включая обнажённые раскопкой стены/пол/потолок; (в) обычная материализация построек/объектов по их контрактам. Композиция работает после согласования геометрии и patches | Не дублирует hydrology/geology/gas/physics algorithms, не превращает query в изменение мира и не подменяет materialization объектов одной generic media-проекцией |
+| Application L2 composition/materialization | Раздельные режимы: (а) временная bounded-проекция liquid/gas/ambient фактов без обязательной per-cell записи и отдельная явная локальная материализация воды по потребности consumer (см. §12); (б) физическая solid-материализация geology в запрошенной области, включая обнажённые раскопкой стены/пол/потолок; (в) обычная материализация построек/объектов по их контрактам. Композиция работает после согласования геометрии и patches | Не дублирует hydrology/geology/gas/physics algorithms, не превращает query в изменение мира и не подменяет materialization объектов одной generic media-проекцией |
 | DAG / bake / caller | Когда вызывать публичные domain operations, какие окна запросить и когда materialize | Не импортирует детали kernels и не самостоятельно «решает» water/ore/air |
 
 Тонкие planning providers только require/ref-binding и делегирование. В generic reader нет SQL, pack I/O, lifecycle orchestration или кэша живых чужих jobs. Domain physical rules принадлежат доменным исполнителям; generic composition policy не может скрыто считать density/viscosity/pressure или пересортировывать ownership. **Hydrology публикует физические water facts; W/L хранит жизненный цикл и динамическое членство, но не геометрию.** Materials предоставляет свойства материала, а решение о смешении/перераспределении объёмов имеет отдельного утверждаемого владельца. Geology отвечает за состав solid, Terrain/Relief — за принятую геометрию solid/void; согласовать это с действующим `generate-surface`/`generate-ores` до cutover. **Нормативная граница атмосферы:** World Environment — поддомен World и владелец объявления/настройки фоновой среды; Climate — потребитель, Materials — владелец свойств газов, Gas Distribution — локальных газовых фактов. Отдельный самостоятельный домен Atmosphere не требуется для одного world-config; будущая сложная атмосферная динамика не передаётся Climate автоматически.
@@ -192,3 +192,61 @@ Materials определяет density/viscosity, heat/cool refs и услови
 Только когда согласованы: минимальный typed shared contract, POJO reuse, источник truth и placement read seam после final hydrology, точное место L2 consumer, **отдельные materialization policies для media и физической geology/solid**, точные Hydrology↔W/L/Runtime границы, compact pack source vs L0 view vs Snapshot overlay, **проверенный текущий air policy inventory, принятый owner World Environment (поддомен World, а не Climate), новая typed ambient/vacuum policy с согласованными location/API/settings, legacy migration и отдельным SP-A2 cutover**, composition policy owner, plan/runtime revisions, форма корректного serialized output, негативные доказательства и cost budget. Операции и API остаются в собственных слоях; новую физику/оркестрацию внутрь интерфейса не добавлять. На текущей дате **SP-0/A0/1/2/A1/M/H/3/4/A2/G/5 остаются OPEN**. GEO-1 G10-A, final coverage и Aerial A4 не объявлять завершёнными.
 
 Изменения этого документа: planning only, без production code, POJO, migrations, tests, schema или runtime cutover.
+
+
+## 12. Уточнение: возможность материализации воды и граница с GEO-1 (2026-11-01)
+
+Зафиксировано по запросу владельца: **вода допускает явную материализацию**,
+когда она нужна конкретному consumer. Это возможность spatial/application пути,
+а не требование заранее создавать fine/XYZ-клетки всего бассейна или мира.
+Основная работа по форме пространственного представления, индексам, ограниченным
+окнам, выбору режима выдачи и L2 integration принадлежит SPATIAL-1 (SP-0/1/M/3/4).
+Новая жидкостная динамика остаётся PHYSICS-1, не переносится в generic reader.
+
+Три разные операции не смешивать:
+- **Physical resolution / подготовка принятого источника:** Hydrology владеет
+  fill/spill/merge, связностью, фактическими уровнями/UID, wet/dry/unknown и
+  согласованием basin/river facts с Terrain. Подготовка может требовать анализа
+  всего связного бассейна; из этого не следует обязанность хранить все fine клетки.
+- **Оконное пространственное чтение:** SPATIAL читает уже принятую revision,
+  возвращает точные domain slices/intervals и coverage. Никакого нового fill,
+  выбора уровня, routing или мутации мира в read_window.
+- **Материализация воды по запросу:** application materialization использует
+  hydrology-owned spatial implementation через общий SPATIAL-контракт, разворачивая
+  необходимые water cells/columns/volumes в ограниченной XYZ-области. Готовность
+  geometry/levels/material UID и соседние зависимости определяются профильными
+  контрактами. SPATIAL отвечает за границу/представление, Hydrology — за смысл
+  water facts; оркестратор только вызывает публичные операции.
+
+SP-M/SP-4 должны явно предусмотреть временную medium projection и, отдельно,
+явную локальную материализацию воды для consumers, которым недостаточно slices
+(в том числе PH-LOCAL). Конкретные POJO, cell/column/interval формат, API и условия
+persist OPEN после SP-0. Отдельный постоянный cell store не вводится автоматически;
+существующие World Pack / Snapshot boundaries сохраняются. Освобождение временной
+материализации не отменяет принятые изменения мира. Полная локальная materialization
+для Physics не означает full-world/full-basin fine materialization.
+
+**Полнота fine evidence не равна dense enumeration:** source обязан достоверно
+отвечать wet/dry/unknown, UID, level и geometry в пределах заявленной coverage,
+но конкретное компактное представление и доказательство точности ещё требуют
+SP-H/GEO producer review. Нельзя объявить произвольную compact mask достаточной
+или просто заменить solver локальным flood по запрошенному окну.
+
+Связанный новый входной вопрос SP-H/SP-0: текущий FineWaterJob.fill требует полной
+fine terrain мира и возвращает перечисленные fine факты. Это существующий
+исполняемый/reference путь, **не утверждённая обязательная целевая модель** для
+больших водоёмов. До G10-A production cutover пересогласовать producer scope,
+representation/coverage, стоимость preparation и bounded materialization.
+Нельзя закреплять обязательное раскрытие каждого принятого coarse footprint в
+S^2 fine клеток всего бассейна ни до P2, ни после него только ради стыковки типов.
+Решение о placement coordinate space само по себе эту проблему не закрывает.
+
+Приёмка дополнения: compact source и materialization выбранных/disjoint окон
+дают те же водные UID, уровни, membership и дно на одинаковой revision; reader
+не запускает solver, маленький запрос не разворачивает весь бассейн/мир; фактически
+измерены размер retained source, размер materialized окна и объём зависимостей.
+Стоимость domain preparation измеряется отдельно, без ложного обещания O(window)
+для глобальной hydrology операции. River volume остаётся заблокирован SP-H2.
+
+Только уточнение архитектурного направления/распределения работ. Код, POJO и
+production не менялись; SPATIAL-1, G10-A и точные контракты остаются OPEN.
