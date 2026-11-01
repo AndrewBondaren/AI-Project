@@ -5,7 +5,7 @@
 **Связанные материалы:** [ID-14 — bounded NPC reaction turn](../../docs/tz_ideas.md), [Execution Engine Flow](../../docs/tz_engine_flow.md), [Perception](../../docs/tz_perception.md), [Lazy Simulation](../../docs/tz_lazy_simulation.md).  
 **Фаза:** подготовка отдельного доменного ТЗ; реализация, изменение DAG-нод и миграции в этот план пока не входят.  
 **Блокер исполнения ID-9:** до завершения и приёмки общей инфраструктурной фазы **DAG-TYPING-1 A1–A3** не уточнять конкретные Pydantic Input/Output-контракты рабочих LLM-нод и не начинать реализацию распределения ролей. Обсуждение принципов и структуры ролей остаётся допустимым.  
-**Зависимости:** [DAG-TYPING-1](dag-typing-1.md), [typed node contracts](../../docs/tz_engine_node_context.md), [GEN-DAG-1](gen-dag-1-post-geo-ws.md), [ID-20 — адаптивный контекст Intent](../../docs/tz_ideas.md).
+**Зависимости:** [DAG-TYPING-1](dag-typing-1.md), [typed node contracts](../../docs/tz_engine_node_context.md), [GEN-DAG-1](gen-dag-1-post-geo-ws.md), [ID-13/15/20 — event graph, память NPC и адаптивный context retrieval](../../docs/tz_ideas.md).
 
 ## Цель
 
@@ -101,6 +101,19 @@
 3. **IntentDetection** (`TECHNICAL`) — первый изолированный LLM-вызов, который получает исходный подготовленный контекст, может запросить недостающие сведения структурированным `ContextRequest` и продолжить после `ContextPatch` в пределах бюджета/валидации ID-20.
 
 **Открыто для последующей работы:** конкретный Pydantic Input/Output, набор и admission контекстных Python-нод, выбор начального исторического окна, типизированный публичный API домена RAG и его триггеры, typed request/patch protocol, роль текущей LLM-реализации `context_snap_gatherer` в миграции. Не утверждать её переделку в Python до отдельного решения о конкретных нодах/GEN-DAG-1. Эти вопросы **не блокируют сначала выполняемую архитектуру ролей**.
+
+### Отложенный preflight RAG / Event Retrieval — изучить аналоги до контрактов (2026-11-01)
+
+**Когда:** только **после** завершения и приёмки распределения ролей (жёсткий порядок выше), но **до** утверждения typed API/POJO/enum и начала реализации самостоятельного RAG-домена. Это исследовательский пункт будущего RAG-трека, **не новая стадия P0–P7 реализации LLM-ролей** и не разрешение начинать ContextSnap/RAG раньше. Полный перечень и учёт решения — [Ideas ID-13/15/20, DOC-5](../../docs/tz_ideas.md).
+
+| Первичный референс | Посмотреть нужные механизмы, если доступны | Обязательная граница нашего движка |
+|---|---|---|
+| [MemGPT / Letta](https://github.com/letta-ai/skills/blob/main/letta/agent-development/references/memory-architecture.md) ([paper](https://research.memgpt.ai/)) | Вызов агентом `archival_memory_search`, поиск по запросу, восстановление контекста в одной сессии, расходы/лимиты tool calls | RAG не становится authoritative memory мира; доступная память NPC определяется движком, а не поисковым инструментом |
+| [LangGraph Agentic RAG](https://docs.langchain.com/oss/python/langgraph/agentic-rag) | `search` vs `respond` как решение LLM, query/tool result, relevance validation, повторный поиск с конечным бюджетом | Не вводить второй orchestrating DAG или обязательный retrieval на каждый Intent; пользоваться согласованными validation/repair seams |
+| [Generative Agents](https://arxiv.org/abs/2304.03442) | Память и подбор воспоминаний NPC по времени/значимости/релевантности; связь retrieval с последующим поведением | Различать canonical facts, личные observations и beliefs; поиск не может раскрывать неполученную персонажем информацию |
+| [Graphiti](https://github.com/getzep/graphiti) | Temporal event/fact graph, provenance, hybrid search, partition и актуальность после изменений | `group_id` не заменяет actor access control; reference servers без production auth; фильтровать знания **до** ранжирования, учитывать ветки/rollback |
+
+**Ожидаемый результат перед последующим freeze RAG:** короткая матрица «что применимо / что не применимо / owner / OPEN», решение о read/search и двухступенчатом `search_events → expand(hash)`, критерии доступа и budget/repair, негативные сценарии утечки знаний NPC и stale-событий после rollback, затем согласование конкретных контрактов с мастером. Изучение **по возможности**: недоступный источник отметить в preflight, не объявляя это самостоятельным блокером. Никаких сторонних библиотек, новых POJO или архитектурных переносов этим пунктом не утверждается.
 
 ## Этапы проработки
 
