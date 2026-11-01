@@ -17,7 +17,7 @@ from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingRe
 from app.dataModel.artifacts.lifecycle.holders import ArtifactHolderRef, VerifiedArtifactRef
 from app.dataModel.artifacts.lifecycle.gc import GcReport
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
-from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord
+from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancelled
 from app.dataModel.artifacts.events import ArtifactLogRecord, ArtifactLogActivity
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.patch.values import FormatVersion
@@ -79,7 +79,15 @@ class ArtifactStagingService:
         return await self._ledger.recover(operation_id)
 
     async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord:
-        return await self._ledger.cancel(operation_id, fence)
+        record = OperationRecord.model_validate(await self._ledger.cancel(operation_id, fence), strict=True)
+        if isinstance(record.terminal, OperationCancelled):
+            if record.operation_id != operation_id or record.fence != fence:
+                raise PublicationInfrastructureError("cancelled record differs from requested operation/fence")
+            self._log.emit(ArtifactLogRecord(activity=ArtifactLogActivity.LEASE_RELEASED,
+                operation_id=record.operation_id, world_uid=record.world_uid,
+                preparation_fingerprint=record.preparation_fingerprint,
+                request_fingerprint=record.publication_fingerprint, artifact_hash=None))
+        return record
 
     async def collect(self, operation_id: EntityUid, candidates: tuple[ArtifactRef, ...]) -> GcReport:
         return await self._gc.collect(operation_id, candidates)

@@ -24,5 +24,9 @@ class IArtifactLeases(Protocol):
         """Read terminal/commit markers before permitting an explicit fenced resume."""
         ...
     async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord:
-        """Prove no publication, close admission and drain claims before cancelling."""
+        """Prove no publication, close admission and drain claims before cancelling.
+
+        OperationCancelled confirms release of this fenced operation's holds;
+        published/retention holds survive. Other terminal results do not assert release.
+        """
         ...

@@ -22,6 +22,9 @@ from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingRe
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
 from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancelled
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactFormatRegistry
+from app.dataModel.artifacts.events import ArtifactLogActivity
+from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
+from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
@@ -150,6 +153,8 @@ class ArtifactStagingTests(unittest.TestCase):
             holder = OperationHolder(lease=self.state.lease)
             self.assertEqual((await self.service.verify(ref, holder)).ref, ref)
             self.assertEqual((await self.service.finish_preparation(self.state.lease, (ref,))).phase, OperationPhase.READY)
+            self.assertFalse(any(call.args[0].activity is ArtifactLogActivity.LEASE_RELEASED
+                                 for call in self.log.emit.call_args_list))
             # A ready_inactive pack keeps an artifact retention hold after cancellation.
             retained = ArtifactRetentionHolder(artifact=ref)
             self.state.holds[ref].add(retained)
@@ -202,10 +207,18 @@ class ArtifactStagingTests(unittest.TestCase):
             cancelling = asyncio.create_task(self.service.cancel("op", 1))
             await asyncio.sleep(0)
             self.assertFalse(cancelling.done())
+            self.assertFalse(any(call.args[0].activity is ArtifactLogActivity.LEASE_RELEASED
+                                 for call in self.log.emit.call_args_list))
             self.assertEqual((await self.gc.collect("op", (ref,))).retained, (ref,))
             release.set()
             await writing
             await cancelling
+            released = [call.args[0] for call in self.log.emit.call_args_list
+                        if call.args[0].activity is ArtifactLogActivity.LEASE_RELEASED]
+            self.assertEqual(len(released), 1)
+            self.assertEqual((released[0].operation_id, released[0].world_uid,
+                              released[0].preparation_fingerprint, released[0].request_fingerprint,
+                              released[0].artifact_hash), ("op", "world", "a" * 64, None, None))
             self.assertEqual((await self.gc.collect("op", (ref,))).deleted, (ref,))
             self.assertEqual((await self.gc.collect("op", (ref,))).deleted, (ref,))
             with self.assertRaises(FileNotFoundError):
@@ -286,4 +299,46 @@ class ArtifactStagingTests(unittest.TestCase):
             for fence in (True, 0, -1):
                 with self.assertRaises(ValueError):
                     await self.ledger.cancel("op", fence)
+        run_async(check())
+
+    def test_release_logging_requires_confirmed_matching_cancellation(self):
+        async def check():
+            for error in (ValueError("stale"), asyncio.CancelledError(), UnknownCommitOutcome("unknown")):
+                with patch.object(self.ledger, "cancel", side_effect=error):
+                    with self.assertRaises(type(error)):
+                        await self.service.cancel("op", 1)
+                self.log.emit.assert_not_called()
+            # A non-cancelled observation does not assert a release.
+            with patch.object(self.ledger, "cancel", return_value=self.state.record()):
+                await self.service.cancel("op", 1)
+            self.log.emit.assert_not_called()
+            terminal = await self.state.cancel("op", 1)
+            refusal = terminal.model_copy(update={"publication_fingerprint": "b" * 64,
+                "terminal": SnapshotApplyResult(operation_id="op", request_fingerprint="b" * 64,
+                    category=SnapshotApplyOutcomeKind.REJECTED, committed=None,
+                    diagnostics=(FieldPathError(path=(), message="refused"),))})
+            with patch.object(self.ledger, "cancel", return_value=refusal):
+                await self.service.cancel("op", 1)
+            self.log.emit.assert_not_called()
+            for changes in ({"fence": 2}, {"operation_id": "other", "terminal":
+                    OperationCancelled(operation_id="other", reason=terminal.terminal.reason)}):
+                mismatch = terminal.model_copy(update=changes)
+                with patch.object(self.ledger, "cancel", return_value=mismatch):
+                    with self.assertRaises(PublicationInfrastructureError):
+                        await self.service.cancel("op", 1)
+                self.log.emit.assert_not_called()
+            self.operations.read.return_value = terminal
+            await self.service.recover("op")
+            self.log.emit.assert_not_called()
+            await self.service.cancel("op", 1)
+            self.assertEqual(self.log.emit.call_args.args[0].activity, ArtifactLogActivity.LEASE_RELEASED)
+        run_async(check())
+
+    def test_release_logging_sink_failure_preserves_cancelled_result(self):
+        async def check():
+            self.service._log = ArtifactLifecycleLog()
+            with patch("app.application.artifacts.logging.artifactLog._LOGGER.log", side_effect=OSError("sink")):
+                result = await self.service.cancel("op", 1)
+            self.assertIsInstance(result.terminal, OperationCancelled)
+            self.assertEqual(result.phase, OperationPhase.TERMINAL)
         run_async(check())
