@@ -153,7 +153,7 @@ materialization operation по потребности consumer (§5/12). Осв�
 
 **Два последовательных переключения, без смешивания:** (1) **G10-A producer cutover** заменяет старый production-route одним canonical native final source; после gate старый `plan_geo`-маршрут не должен оставаться вторым вызываемым production-поставщиком той же гидрологии. (2) **SP-P2R/P2W → SP-P2; SP-P3I/P3W → SP-P3 → SP-3 storage/read gates**, затем независимые **SP-4 bootstrap L2 / SP-4R runtime L2** и **SP-R1/R2 → SP-R gameplay-read gate** вводят canonical Hydrology root и bounded reader по разным owners; L0 mask и terrain L2 могут существовать как **производные проекции**, но не как резервный source truth. До каждого gate старый путь допускается только как явно помеченный временный путь, **не** как незаявленная подмена и не в смеси с native facts другого `PlanRef`. Переиспользуемые чистые алгоритмические helpers не равны второму end-to-end producer; отдельный callable production fallback на legacy запрещён.
 
-**Стоимость initial solve:** полное fine-покрытие остаётся CPU/RAM-стоимостью при подготовке новой source revision. `FineWaterJob.fill` не выполняет per-cell SQL и не пишет Pack самостоятельно; гарантия «считать при initial generation → один раз опубликовать компактный source на принятую revision → читать многократно» считается выполненной **только после доказанного pack round-trip и закрытого cutover**, а не по факту наличия `PlanEnvelope`/RAM cache. Изменение исходной revision допускает отдельный повторный bake, но не повторное вычисление при каждом L2-окне.
+**Стоимость initial solve (AS-IS, не целевое требование):** текущий `FineWaterJob.fill` требует полного fine-покрытия исходной topology и несёт соответствующую CPU/RAM-стоимость на source revision; он не пишет per-cell SQL и не публикует Pack самостоятельно. Это **ограничение существующего алгоритма, не контракт целевого compact source**: способ подготовки, компактное представление, стоимость и допустимая точность остаются OPEN в GEO-1 до producer cutover (§12, SP-H). Гарантия «считать при initial generation → один раз опубликовать компактный source на принятую revision → читать многократно» считается выполненной **только после доказанного pack round-trip и закрытого cutover**, а не по факту наличия `PlanEnvelope`/RAM cache. Изменение исходной revision допускает отдельный повторный bake, но не повторное вычисление при каждом L2-окне.
 
 **Блокер SP-H1 (обязателен до первого reader):** завершить предусмотренный GEO-1 G10-A маршрут native fine water → native fine routes → actual river relief → canonical final facts и явно сохранить fine open-water wet/dry, UID/уровень, берег, исходную/финальную bed geometry, source_mapping и диагностику в согласованном контракте. Точную форму POJO/PlanSlot/версионирования определить в GEO-1; нельзя сохранять только coarse маску и маркировать fine dry.
 
@@ -491,8 +491,10 @@ Materials определяет density/viscosity, heat/cool refs и услови
 Зафиксировано по запросу владельца: **вода допускает явную материализацию**,
 когда она нужна конкретному consumer. Это возможность spatial/application пути,
 а не требование заранее создавать fine/XYZ-клетки всего бассейна или мира.
-Основная работа по форме пространственного представления, индексам, ограниченным
-окнам, выбору режима выдачи и L2 integration принадлежит SPATIAL-1 (SP-0/1/M/3/4).
+Общий контракт ограниченной пространственной выдачи, режимы projection/materialization
+и L2 integration проектируются в SPATIAL-1 (SP-0/1/M/3/4). **Hydrology владеет
+compact water source, подготовленным индексом и реализацией доменного reader**;
+SPATIAL не создаёт самостоятельный runtime-сервис или второй индекс.
 Новая жидкостная динамика остаётся PHYSICS-1, не переносится в generic reader.
 
 Три разные операции не смешивать:
@@ -500,9 +502,11 @@ Materials определяет density/viscosity, heat/cool refs и услови
   fill/spill/merge, связностью, фактическими уровнями/UID, wet/dry/unknown и
   согласованием basin/river facts с Terrain. Подготовка может требовать анализа
   всего связного бассейна; из этого не следует обязанность хранить все fine клетки.
-- **Оконное пространственное чтение:** SPATIAL читает уже принятую revision,
-  возвращает точные domain slices/intervals и coverage. Никакого нового fill,
-  выбора уровня, routing или мутации мира в read_window.
+- **Оконное пространственное чтение:** Hydrology-owned reader реализует общий
+  SPATIAL read-контракт и читает принятую revision, возвращая typed domain
+  slices/intervals с доменной семантикой coverage/absence/unknown. В `read_window`
+  нет нового fill, выбора уровня, routing или мутации мира; generic SPATIAL
+  контракт сам не определяет wet/dry.
 - **Материализация воды по запросу:** application materialization использует
   hydrology-owned spatial implementation через общий SPATIAL-контракт, разворачивая
   необходимые water cells/columns/volumes в ограниченной XYZ-области. Готовность
