@@ -1,6 +1,6 @@
 # WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1
 
-**Статус:** архитектурная карта межплановых gates, v6.2 (2026-11-01), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.3 (2026-11-02), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Назначение:** показать зависимости **конкретных этапов**, а не объявлять один большой план prerequisite другого. Нормативный источник контрактов, статусов и доказательств приёмки — **соответствующий owning-план**; эта карта не вводит новые API, владельцев, типы, численные budgets, путь хранения, обязательный глобальный порядок и не меняет его решение. При конфликте сначала исправить и согласовать owning-план, затем синхронизировать эту карту.
 
@@ -51,6 +51,9 @@ flowchart TD
     G["GEO-1: принят G10-A"] --> H["SP-H: producer proof"]
     S0["SP-0"] --> S1["SP-1"]
     S1 --> P0["SP-P0"]
+    S1 --> J["GEO-SPATIAL-CONTRACT: accepted joint boundary"]
+    J --> G
+    J --> P0
     S1 --> M["SP-M"]
     P0 --> P1["SP-P1: Pack schema"]
     P1 --> PR["SP-P2R: read/verify"]
@@ -78,6 +81,14 @@ flowchart TD
 4. Текущий `FineWaterJob.fill` требует полного fine-покрытия как **AS-IS cost**; целевой source/representation/precision/budget остаются OPEN в GEO. Маленький `read_window` не запускает fill/routes и не сканирует весь мир.
 5. `SP-P0/P1/P2R` и часть Pack-инфраструктуры могут проектироваться/приниматься независимо от G10-A, если их **собственные** prerequisites и code-gates закрыты; не превращать порядок таблицы SPATIAL в глобальную последовательную блокировку.
 6. Единственный canonical base source на принятую revision: Hydrology facts → immutable Pack domain-root `ArtifactRef` (вариант Б), без SQL materialization всех water cells и без второго активного legacy producer после G10-A cutover.
+
+### 3.1. Явное согласование GEO-1 → Spatial read
+
+**GEO-SPATIAL-CONTRACT** — совместный architecture acceptance gate, закреплённый в одноимённых разделах [GEO](./geo-1-designed-water.md) и [SPATIAL](./spatial-distribution-domain.md). Направление принято: GEO/Hydrology производит canonical facts; Hydrology публикует compact root и реализует Spatial reader; L2/gameplay/Physics потребляют domain facts. Реализация SPATIAL целиком не является входным условием GEO.
+
+Сейчас совместно анализируются Task11 и проект SP-1 на базе принятого SP-0. Для приёмки joint gate требуется принятый SP-1 и evidence coordinate/topology mapping, coverage/wet-dry семантики, source/runtime revisions, source→root совместимости, bounded-read стоимости и legacy cutover boundaries. Решение Task11 входит в этот результат, а не требует заранее выполненного G10-A. Exact contracts и выбор A/B Task11 остаются OPEN.
+
+Порядок приёмки: SP-1 → GEO-SPATIAL-CONTRACT → G10-A и SP-P0 (параллельные downstream branches после собственных gates). Дизайн storage возможен раньше; joint gate не ждёт SP-P0, runtime/GEN/Physics. Его приёмка не закрывает остальные producer/root/transport/reader implementation gates. Это формализация уже обязательного совместного review §3, не новый solver/API.
 
 ## 4. Runtime и engine DAG: отдельные ветки
 
@@ -176,6 +187,9 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | Producer gate | Consumer gate |
 |---|---|
 | SP-0 | SP-1 |
+| SP-1 | GEO-SPATIAL-CONTRACT |
+| GEO-SPATIAL-CONTRACT | G10-A |
+| GEO-SPATIAL-CONTRACT | SP-P0 |
 | SP-1 | SP-P0 |
 | SP-1 | SP-M |
 | SP-1 | SP-R0 |
@@ -306,11 +320,12 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | DT-B1 | GEN-CUTOVER | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [DAG-TYPING execution evidence A3.6 / этап B](./dag-typing-1.md) |
 | DT-B2 | DT-B1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [DAG-TYPING execution evidence A3.6 / этап B](./dag-typing-1.md) |
 | DT-B3 | DT-B2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [DAG-TYPING execution evidence A3.6 / этап B](./dag-typing-1.md) |
-| G10-A | Внешние условия / критерии owning-плана | ЧАСТИЧНО | ГОТОВ К АНАЛИЗУ: Task11 | Task1–10 isolated evidence; coordinate/source freeze и production cutover OPEN. [GEO Task11 / G10-A](./geo-1-designed-water.md) |
+| G10-A | GEO-SPATIAL-CONTRACT | ЧАСТИЧНО | ГОТОВ К АНАЛИЗУ: Task11 | Task1–10 isolated evidence; coordinate/source freeze и production cutover OPEN. [GEO Task11 / G10-A](./geo-1-designed-water.md) |
 | GEN-BAKE | GEN-CUTOVER | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
 | GEN-CONTRACTS | Внешние условия / критерии owning-плана | ЧАСТИЧНО | ГОТОВ К АНАЛИЗУ: GEN-P0 | Inventory/preflight есть; exact node contracts, Q07 и legacy closure OPEN. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
 | GEN-CUTOVER | DT-A, GEO-ACCEPTED, GEN-CONTRACTS, GEN-PORTS | НЕ УТОЧНЁН | BLOCKED | GEO, concrete contracts/ports, Q07 (положение SP-R2) и legacy closure OPEN; дополнительно условие §4.1. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
 | GEN-PORTS | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | BLOCKED | Нужные конкретным нодам ports/handlers и Q01 applicability не заморожены; generic Snapshot.apply недостаточен. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
+| GEO-SPATIAL-CONTRACT | SP-1 | ЧАСТИЧНО: направление согласовано | ГОТОВ К АНАЛИЗУ: совместный review; приёмка BLOCKED | SP-1 на приёмке; Task11 coordinate/source choice, coverage/representation/refs и exact freeze OPEN. [GEO](./geo-1-designed-water.md) + [SPATIAL](./spatial-distribution-domain.md), одноимённые разделы. |
 | GEO-ACCEPTED | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | BLOCKED | Полная приёмка GEO OPEN; G10-A не равен автоматически завершению GEO. [GEO Task11 / G10-A](./geo-1-designed-water.md) |
 | PACK-ENTRY-CONTRACT | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | ГОТОВ К АНАЛИЗУ: совместный contract review | Q03: accepted publication/bake entrypoint contract отсутствует; не требуется полный GEN cutover для дизайна. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SN-APPLY-HANDLER | 4E2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
@@ -326,7 +341,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SP-4R | SP-3S, SP-4 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-H | G10-A | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-M | SP-1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
-| SP-P0 | SP-1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| SP-P0 | SP-1, GEO-SPATIAL-CONTRACT | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P1 | SP-P0 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P2 | SP-P2R, SP-P2W | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P2R | SP-P1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
@@ -350,7 +365,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 
 ## 6. Практический приоритет (не подмена hard gates)
 
-1. **P0 — совместная архитектура:** GEO canonical source semantics, Task11 coarse/fine coordinate+revision, выбор compact representation/cost-quality; SPATIAL contract/reuse/layout review. **До кода:** все нужные POJO/enum/target paths согласованы в owning plans.
+1. **P0 — совместная архитектура / GEO-SPATIAL-CONTRACT:** GEO canonical source semantics, Task11 coarse/fine coordinate+revision, выбор compact representation/cost-quality; SPATIAL contract/reuse/layout review. **До кода:** все нужные POJO/enum/target paths согласованы в owning plans.
 2. **P0-S — актуальный Snapshot (параллельный критический путь):** R/H приняты 2026-11-01, O принят 2026-11-02; выполнить отдельный 4C3 preflight/implementation, затем принять интеграцию уже выполненных 4C4/4D1 scopes перед 4D2/4D3/4E2 и нужными domain handlers. Эта ветка не ждёт GEO; `SN-STAGE` и `SN-RUNTIME` разблокируют **разные** downstream steps. `SN-B-2` ожидает будущей GEN-DAG bake-интеграции.
 3. **P1 — GEO-1 G10-A:** закончить единственный native final producer и его production acceptance, без самостоятельного compact Pack writer и без изменения engine DAG ради обхода.
 4. **P2 — водный SPATIAL:** принять storage-root/transport и Hydrology-owned bounded reader + base L2 `SP-P*`, `SP-3`, `SP-4`. `SP-P2R` и `SP-P3I` допускают независимую работу по локальным gates; публикация ждёт `SN-STAGE`, `SP-P2` и `SP-P3I`.
@@ -469,7 +484,7 @@ print('PASS:', len(edges), 'edges; base and separate cutover alternatives')
 | **Сейчас, без production-кода:** текущие accepted architecture baselines | **GEO:** Task11 и выбор compact semantics/representation; **SPATIAL:** SP-0 audit, SP-1/M/P0 contract work после локальных prerequisites; **Snapshot:** 4C3 code-ready preflight, синхронизация DB-FIELDS-1A и 4D1 integration evidence; **GEN-DAG:** read-only node inventory и mapping зависимостей; **DAG-TYPING:** документальный handoff A→GEN. | Нельзя начать GEO producer code до соответствующего POJO freeze; Snapshot R/H/O приняты; 4C3 ждёт собственного code-go/legacy freeze; GEN production ждёт GEO и нужные Snapshot ports. Не путать параллельный **дизайн** с параллельным разрешением на код. |
 | **После приёмки Snapshot 4C2-R/H** | Snapshot **4C2-O** как **один** собственный атомарный code step может идти одновременно с GEO контрактной/кодовой веткой и независимыми SPATIAL SP-0/1/P0 работами (при их собственных gates). | `4C3` не стартует до принятого `4C2-O`. Внутри Snapshot правило «один подшаг за заход» сохраняется, **4C2-O и 4C3 не параллелить**. |
 | **После SPATIAL SP-0/1/P0 и принятия exact Pack format/POJO** | `SP-P1` (после собственного P0), затем `SP-P2R` (после P1) может разрабатываться независимо от **GEO G10-A** и последовательной ветки Snapshot `4C3+`; кодовые steps только по отдельным разрешениям. | `SP-P2W` дополнительно ждёт **SN-STAGE**; `SP-P3I` ждёт `SP-H/GEO G10-A` и `SP-P1`. Нельзя начать их из-за одного наличия generic contract. |
-| **После GEO G10-A/ SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2 и принятого PACK-ENTRY-CONTRACT; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
+| **После GEO-SPATIAL-CONTRACT, GEO G10-A/SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2 и принятого PACK-ENTRY-CONTRACT; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
 | **После SN-CORE (до 4C4 включительно), затем 4D1/4D2/4D3/4E2** | **SN-STAGE** после фактической приёмки pregame port может разблокировать `SP-P2W`; **SN-RUNTIME** после `4D2/4E2` и нужных domain handlers может разблокировать `SP-3S` и необходимые runtime GEN-DAG bindings. GEO G10-A/SP-P3I/Pack read остаются независимыми до своих точек схождения. | **Не разрешено** выполнять 4D2 и 4D3 параллельно по текущему Snapshot §8.3.8, хотя их семантика различна. `4D3` ≠ `Snapshot.apply`; `4D2` без принятого composition/domain handler ≠ готовый SN-RUNTIME. |
 | **После SP-P3/SP-3, SP-M; runtime Snapshot ещё может быть OPEN** | `SP-4` **bootstrap/base L2** и GEN-DAG read-only/contract design, не зависящий от runtime Snapshot, могут идти независимо. Допустимы собственные независимые SP-A air и SP-G geology architecture steps после их локальных gates. | `SP-3S`, `SP-4R` и `SP-R1` **не** активировать до SN-RUNTIME. Полный GEN production не проводить до GEO и необходимых Snapshot gates. |
 | **После SP-3S + принятого SP-R0 (с совместным evidence контрактов) и принятых GEN-DAG runtime prerequisites** | `SP-R1` (typed scene composition) и **независимая** concrete GEN-DAG подготовка по owning-плану могут идти одновременно; production migration зависит от решения §4.1 и не считается независимой от SP-R1 по умолчанию, если их файлы/контракты не пересекаются и каждый gate принят. `SP-4R` отдельно возможен после SP-4+SP-3S. | `SP-R2` обязательно ждёт **SP-R1** и принятый GEN-DAG node binding; `SP-R` E2E — после SP-R2. `SP-4R` не prerequisite для media-only gameplay SP-R. |
@@ -520,3 +535,5 @@ Q05/Q06/Q08 исправлены документально. Q02/Q03 получ�
 ### Уточнение Physics ↔ Hydrology/W/L — 2026-11-01
 
 Bootstrap confluence/fill/spill/merge остаются Hydrology; runtime физическое изменение объёма/потока/пересыхание — Physics; Hydrology принимает water facts, W/L отвечает за membership/identity/history без второго solver. Конкретные символы и callers сведены в раздел «Разделение водных алгоритмов» [PHYSICS](./physics-spatial-dynamics.md), [GEO](./geo-1-designed-water.md) и [W/L](./hydrology-water-systems.md). Нормативная граница — [Hydrology ТЗ](../../docs/tz_terrain_hydrology.md) и [Physics ТЗ](../../docs/tz_physics.md). Это уточнение PH-0/PH-PUBLISH/Q10, не новый hard edge и не закрытие runtime/legacy acceptance. W/L — owning consumer истории, не новый prerequisite генерации воды.
+
+**Evidence v6.3:** совместный gate синхронизирован с GEO/SPATIAL, диаграммой bootstrap, реестром рёбер и статусами. Направление согласовано, exact freeze OPEN; никаких новых runtime API или code changes.

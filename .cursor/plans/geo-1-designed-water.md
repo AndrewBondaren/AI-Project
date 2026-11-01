@@ -14025,3 +14025,21 @@ G10-A OPEN. Только документация, без изменения cod
 | [materialize_water](../../backend/app/application/worldData/generators/hydrology/water/waterMaterialize.py), caller [waterBodyAssembler.py](../../backend/app/application/worldData/generators/hydrology/waterBodyAssembler.py) | Fill по разрешённым уровням, классификация, minimum-cell filter | Отсутствие тела в результате не доказывает runtime засуху. Bounded runtime projection и её conservation semantics OPEN. |
 
 Эти пути **не объявлены legacy Physics** и не назначены к удалению. Подтверждены определения и прямые call sites поиском `rg` и чтением resolver/materializer/order; полный production closure ещё OPEN. Источник разделения — [Hydrology ТЗ](../../docs/tz_terrain_hydrology.md), раздел «Граница Hydrology / Physics / Water Systems: впадение, merge и пересыхание». Physics рассчитывает runtime изменение; Hydrology валидирует/готовит water facts; W/L обновляет metadata/history; DAG организует общую preparation/commit группу через Snapshot. Exact APIs и физические модели остаются OPEN.
+
+### GEO-SPATIAL-CONTRACT — совместное согласование producer/read boundary (2026-11-02)
+
+**Направление согласовано пользователем; exact contract OPEN.** GEO-1/Hydrology остаётся producer исходных water facts. Целевой путь: canonical GEO final → Hydrology-owned immutable Pack root → Hydrology-owned reader по общему Spatial-контракту → L2/gameplay/Physics. SPATIAL не становится solver, вторым producer или центральным orchestrator; runtime overlay требует отдельных Snapshot gates.
+
+**Начало работы:** использовать принятый SP-0, проект SP-1 §14 и GEO Task11; совместный дизайн возможен сейчас. **Приёмка результата:** принятый SP-1 и совместное evidence GEO/SPATIAL по пунктам ниже. Task11 coordinate/source decision входит в этот результат; не требовать G10-A или SP-P0 DONE на входе. Это именованный результат существующего совместного review, не новый implementation step.
+
+| Согласуемая граница | Ответственный / evidence до приёмки |
+|---|---|
+| Координаты, topology и окно | GEO фиксирует coarse P2 → fine physical source и точные proof refs Task11; SPATIAL — совместимость с принятой query/window семантикой SP-1. World-fine query не требует автоматически переводить всех участников P2 на fine grid. Вариант A/B Task11 здесь не выбран. |
+| Полнота и семантика воды | Hydrology определяет UID, wet/dry/unknown, уровни/bed/shore и coverage; reader сохраняет эти различия. Ocean/lake scope отдельно от river-volume SP-H2. Ни отсутствие записи, ни L0 mask не заменяют доказательство dry. |
+| Revisions и publication | Отдельно exact source PlanRefs/dependencies и runtime WorldPublicationRef; описать привязку source к root/index и запрет mixed revisions. Source-aware binding applicability остаётся Q01, accepted Snapshot не подразумевается. |
+| Представление и стоимость | GEO обосновывает source representation/precision и цену подготовки; SPATIAL/Hydrology reader — bounded read без fill/route/full-world scan. Зафиксировать совместимость source с будущим компактным root без нового solve; exact codec/schema/shards и численные budgets замораживает SP-P0/профильный owner. |
+| Типы, файлы и миграция | Сослаться на reuse/new POJO/enum и exact paths в owning freeze; сверить legacy producer/read callers, один source на revision и отдельные точки producer cutover, root publication, reader activation. Наличие native class не доказывает production binding. |
+
+**Выход:** один совместно согласованный пакет решений с взаимными ссылками на GEO Task11/source contract и SPATIAL SP-1/storage requirements; owners подтверждают свои части, статус принятия отражается в обоих планах и графе. До этого зависимый GEO producer code/cutover и приёмка зависимого storage freeze SP-P0 заблокированы. SP-P0 может проектироваться параллельно; он не является prerequisite этого согласования. Exact contracts не выбирать при реализации.
+
+**Разблокирует:** GEO G10-A после собственных code gates и SP-P0 acceptance после собственных требований. Pack schema/transport/root/read реализуются далее по SP-P1/P2/P3/SP-3; GEO не ждёт полного SPATIAL DONE, runtime Snapshot, PHYSICS или GEN cutover. Production switch не объединяется с read activation одним неатомарным mega-step.
