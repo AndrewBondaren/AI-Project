@@ -32,6 +32,14 @@ alwaysApply: true
 **Целевой lifecycle:** по [Snapshot ТЗ](../../docs/tz_world_snapshot.md), § «Staged artifacts и точки публикации» и § «Путь записи и сбор патчей», до gameplay DAG оркестрирует staged Pack publication/activation (immutable manifest@hash, без snapshot от bake). После gameplay базовый pack заморожен: домены готовят typed patches и refs результатов, **DAG собирает PatchSet**, только Snapshot применяет его через доменные handlers и выполняет commit. Snapshot сам materialization не запускает. Bulk results передаются artifact refs, не раскладываются в per-cell patches.
 **Legacy до соответствующего cutover:** C19 `.tmp` → SQL tx → `os.replace` и `pending_patches` → `PatchApplier.apply` описывают прежние пути, не целевой commit-контракт и не разрешение нового обходного writer. Миграция — по owning GEN-DAG/Pack/Snapshot gates; эта правка правила не объявляет runtime готовым.
 
+## GEN-DAG-1 — обязательный совместный дизайн нового графа (мастер 2026-11-02)
+
+**Все старые concrete-ноды/регистрации под удаление на едином cutover, кроме `check_scene`: её реализация переделывается.** Старые 15 NodeId и `deps` используются только для трассировки AS-IS/сценарного coverage; нет автоматической миграции 1:1. Новый граф, порядок/trigger, candidate NodeId и границы public domain pipelines не определяются агентом самостоятельно.
+
+**GEN-NODE-JOINT-REVIEW обязателен перед кодом:** агент вместе с мастером строит и корректирует Mermaid-карту зависимостей/фаз/параллельных веток, трассирует nested domain calls, обсуждает для каждого публичного pipeline keep/split/remove и **почему**, назначает каждой новой ноде точные typed Input/Output/Error POJO, deps/read/provenance, operation/effects/Snapshot owner. После явного согласия мастер + агент реализуют только конкретно утверждённый срез; агент показывает diff и вложенную цепочку, получает per-node acceptance до следующего среза. Изменение карты, I/O/deps или pipeline boundary требует повторной совместной приёмки. Тесты и прежний план не заменяют согласия. SoT: [GEN-DAG-1: GEN-NODE-JOINT-REVIEW](../plans/gen-dag-1-post-geo-ws.md).
+
+**Существующие bake-последовательности и debug/caller записи ниже** — исторические или действующие domain contracts для анализа, **не утверждённые будущие DAG-ноды или обязательные старые deps**. Публичные методы, которые остаются атомарными операциями домена, и их связь с новым DAG нужно доказать мастеру; internals одной операции не выделяются в ноды автоматически.
+
 ## Gate (сейчас, не целевая схема)
 
 **Gate: DAG** — агент не правит `engine/nodes/` без мастера. Пока bake **не wired** в DAG.
