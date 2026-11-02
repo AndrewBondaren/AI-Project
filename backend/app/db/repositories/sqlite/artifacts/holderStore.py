@@ -25,6 +25,15 @@ from app.ids.deterministicIds import runtime_uid
 
 
 class SqliteArtifactHolders:
+    """SQLite holder adapter; handoff is one atomic storage operation.
+
+    Keep holder SQL, owner validation and hold transfer here. The caller owns
+    publication order and the borrowed transaction; do not add snapshot
+    creation, domain apply, materialization, backend IO or lease lifecycle.
+    4C3-B review gate: audit metadata/catalog dependencies for orchestration
+    creep; passing tests alone does not close this gate.
+    """
+
     def __init__(self, scopes: SqliteArtifactScope, operations: SqliteOperationStore,
                  artifacts: SqliteOperationArtifacts, history: SqliteSnapshotHistoryStore) -> None:
         self._catalog = SqliteArtifactCatalog(scopes, operations, artifacts)

@@ -20,6 +20,15 @@ from app.ids.deterministicIds import runtime_uid
 
 
 class SqliteArtifactCatalog:
+    """SQLite catalog/storage-fact adapter, not a lifecycle orchestrator.
+
+    Keep SQL and integrity checks for this port here; delegate transaction
+    mechanics and holder writes to their owners. Do not add planning,
+    materialization, backend IO, writer lifecycle, cancel/drain or recovery.
+    4C3-B review gate: audit the lease/writer chain checks against these
+    ownership boundaries; passing tests alone does not close this gate.
+    """
+
     def __init__(self, scopes: SqliteArtifactScope, operations: SqliteOperationStore,
                  artifacts: SqliteOperationArtifacts) -> None:
         if (operations._commits is not scopes.commits or operations._access is not scopes.access
