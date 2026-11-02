@@ -15373,3 +15373,94 @@ Code allowlist — только четыре файла; этот раздел �
 CanonicalWaterSourceJob, Spatial reader, codecs/Pack/production wiring и
 downstream evidence не начаты результатом I1. Наличие validated source records
 не доказывает authoritative происхождение/connectivity предъявленных facts.
+
+#### I1.7. Независимое архитектурное ревью текущей реализации (2026-11-02)
+
+**Verdict: требуется исправление I1-R1 перед повторным предъявлением.** Это
+review verdict, не пользовательская приёмка GEO-I1. G10-A остаётся OPEN.
+Проверен текущий source.py/test_source_models.py против принятого EF-1.4/1.5,
+F2 EF-1.10 и ограниченного scope I1.1–I1.5. HEAD при проверке — ba283c66;
+прежнее evidence I1.6 не использовано вместо новых запусков.
+
+**I1-R1 [P2] — malformed immutable nested records выходят за ValidationError boundary.**
+`backend/app/dataModel/hydrology/query/source.py:125–130`: before-validator
+обращается к `bed.coverage.spans`, полям span и распаковывает surface rows до
+проверки их типов/формы. `_record(bed, FineSurfaceWindow)` проверяет полноту и
+immutable значения транзитивно, но не соответствие вложенного значения объявленному
+типу. Поэтому frozen forged records проходят эту стадию, после чего возникают
+не перехватываемые Pydantic исключения. Это нарушает I1.3/F2: invalid in-process
+data должны отклоняться через ValidationError, включая model_copy/model_construct.
+Caller с обработкой ValidationError вместо ожидаемого отказа получает исключение.
+
+Новые воспроизведения из backend, на existing factories test_source_models:
+
+```python
+source(bed=bed().model_copy(update={"surface_z": (1,)}))
+# TypeError: cannot unpack non-iterable int object
+source(bed=bed().model_copy(update={"coverage": run()}))
+# AttributeError: 'WaterMembershipRun' object has no attribute 'spans'
+source(bed=bed().model_copy(update={"coverage": bed().coverage.model_copy(
+    update={"spans": (1,)})}))
+# AttributeError: 'int' object has no attribute 'y'
+```
+
+Требуемое исправление: проверить actual RegionCoverage/CoverageSpan и форму
+surface rows до доступа/распаковки с ValueError для invalid input, сохранив strict
+проверки до legacy normalization. Добавить адресные negative tests с
+`assertRaises(ValidationError)` для этих трёх входов и позитивный контроль.
+Не подменять это broad catch Exception и не менять существующие модели ради I1.
+Изменения кода в рамках данного review не выполнялись.
+
+**Остальные результаты сверки:**
+
+- Exact required fields/config/issue enum соответствуют EF-1; payload без
+  provenance, defaults новых records нет. Actual space/mode, strict integers,
+  ready bounds и even sphere width проверяются до legacy normalization.
+  Transitive immutable checker действительно проверяет missing/extra fields:
+  дополнительные пробы forged coverage/span/mapping-entry с extra field дали
+  ValidationError, тихой потери extra в этих случаях не обнаружено.
+- Coverage полная row-major через FineSurfaceWindow; canonical observed cells и
+  protection сохраняются. Wet runs sorted/disjoint/merged, внутри coverage с
+  известным body и bed<effective level. Dry complement не заполняется по высоте;
+  explicit empty mapping не превращается в unknown. Z bounds проверяются для
+  bed и effective body/union/shore levels; declared_level не приравнивается к
+  effective. Seam корректно ограничен canonical bed coverage.
+- Body/union UID order/uniqueness, member/child/parent closure, reciprocal edges,
+  ancestor member inclusion/effective levels и cycles проверены; source mapping
+  проверяет существование body refs и сохраняет empty entries. Shore — observed
+  unique row-major non-liquid SHORE вне wet membership, с проверкой body/level.
+  Дополнительных блокирующих расхождений этих invariants не найдено.
+- Existing negative tests содержательны: большинство cross-record cases требуют
+  конкретного сообщения, fixtures достигают проверяемого invariant. Однако
+  `test_revalidates_forged_outer_and_nested_records` и coverage tests не покрывают
+  неверную immutable форму вложенных rows/models: все 19 tests проходят при I1-R1.
+  Проба surface row неправильной длины отдельно дала ValidationError (ValueError
+  от unpack), что не закрывает TypeError для scalar row.
+- Connectivity/origin, captured liquid registry membership и сохранение exact
+  captured protection не доказываются records без producer inputs; это явные
+  границы I1, не новые требования запустить producer.
+
+**Новое evidence текущего review:**
+
+- Из backend: `.venv/Scripts/python.exe -m unittest
+  tests.geo1.canonical_source.test_source_models
+  tests.geo1.integration.test_surface_validation
+  tests.test_hydrology_water_body_uid -q` — **47 tests OK**, штатные WarningError
+  diagnostics; полный regression suite не запускался.
+- `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
+  backend/app/dataModel/hydrology/query/source.py` — **0 errors, 0 warnings**.
+- Отдельные inline Python probes дали три escape failures выше; это negative
+  evidence, не прошедшие regression tests. Probe с wrong-arity row корректно
+  отклонён ValidationError. Проверки extra fields также отклонены ValidationError.
+- Повторный `rg` трёх новых symbols в backend/app — только source.py definitions/
+  internal refs; imports source.py не содержат application/storage/engine/Pack.
+  Оба packages имеют по два .py файла, markers пустые. Production wiring нового
+  source не обнаружен. Общий commit 5132e03a содержит также посторонние изменения
+  Snapshot/docs: весь commit нельзя объявлять четырёхфайловым I1 diff; scope review
+  ограничен records/tests и их callers. Исходные working-tree изменения трёх
+  GEN-DAG/dependency plans не затрагивались.
+
+Producer, fine P2 migration, G10-A cutover и Pack этим review не начаты и не
+разрешены. Source provenance, production join, cold-Pack и downstream evidence
+не заявлены. GEO-I1 остаётся без пользовательской приёмки независимо от будущего
+исправления I1-R1; G10-A этим review не закрывается.

@@ -2171,3 +2171,285 @@ Retention closure для публикации — `unique(root_ref + все root
 3. **Source вне V1 caps:** публикация явно отклоняется, текущий active Pack сохраняется. Факты не обрезаются. Paged-root проектируется отдельным format scope при подтверждённой потребности, без скрытого расширения V1 в implementation.
 
 Это **частичная пользовательская приёмка трёх решений**, не полный SP-P0 freeze, не приёмка всех деталей §15.10 и не закрытие P0-R1/R2/R3 без verification. Остаются source/storage schema lock и IDs closure, проверка parser limits/guards/rollout и отдельные downstream ports/evidence. G10-A не prerequisite P0 design. SP-P1, реализация, публикация и runtime activation не разрешаются этой записью и не начаты.
+
+### 15.12. Повторное ревью SP-P0 после частичной приёмки (2026-11-02)
+
+**Verdict: полный storage freeze НЕ ГОТОВ; P0-R1/R2/R3 полностью не закрыты.** Проверены §§15.9–15.11 и текущие declarations/codecs/callers, а не только обещанные paths. Это документальный review, без SP-P1, реализации, публикации и runtime activation. Решения §15.11 сохраняются: bounded bytes/structure — scope P0; heap/time SLA — downstream acceptance; legacy mutation V2 запрещена; превышение caps означает отказ без потери фактов и без смены active Pack.
+
+#### 15.12.1. P0-R1 — частично закрыт, P1 blocker полного freeze
+
+**Закрытая проектная часть:** source schema owner/version/handoff и формула replay определены §15.10.1 корректно. `application/planning/service/planFingerprints.py:output_fingerprint` действительно хеширует `(payload, dependencies, diagnostics)`. Отдельный SHA-256 artifact bytes не заменяет этот fingerprint. Предлагаемые source IDs 60004/60007/60008 и storage IDs 60001–60006 не конфликтуют с проверенным SURFACE_MANIFEST (1–297); общий 60004 назначен одному WaterMembershipRun. SHA-256 surfaceManifest.py по-прежнему совпадает с §15.4. Это проверка назначений, не готовая registration/shape closure.
+
+**Остаётся:** §15.10.1 задаёт правила будущего lock, но не предъявляет полный exact lock транзитивных record fields/types/defaults/enum values. Требование implementer предъявить его перед implementation acceptance не закрывает документальный exact-schema gate до storage freeze. Нужна проверяемая baseline-таблица closure для source/envelope/root/shard, с существующими IDs, включая generic-specializations, diagnostic context unions и nested refs; нельзя ограничиться перечислением верхних имён или hash файла assignments. Golden bytes/negative execution остаются SP-P1, сам точный roster/shapes требуется до freeze. Отдельного runtime registry или новых DTO-копий не требуется.
+
+**Поправка фактической базы:** `dataModel/hydrology/query/source.py` уже содержит WaterMembershipRun и CanonicalOpenWaterSource, включая immutable/strict admission, R1 ordering, body/union graph, dry mapping и SHORE checks. Утверждение §15.10 о ещё не реализованных EF-1 types для этих двух классов устарело. Однако SURFACE_MANIFEST их не регистрирует; sourceSchema.py/packSchema.py и bounded storage codec отсутствуют. Наличие domain records не означает готовность producer fingerprint handoff. Lock надо сверять с этими actual declarations. Например MapCellHydrology имеет восемь fields, включая optional RiverDrainageLink; WaterBody имеет defaults и extra=ignore. Outer frozen storage model не фиксирует их форму и не заменяет nested admission.
+
+**Canonical reconstruction — документально закрыто уточнением §15.10.2.** Existing RegionCoverage запрещает adjacent spans; глобальный merge coverage необходим и указан. FineSurfaceWindow требует exact row-major samples и protected subset. Порядок merge coverage → surface/shore → same-body runs → original envelope сохраняет dry observed geometry, explicit empty mapping и fixed WORLD_FINE_GRID; floor partition для отрицательных XY обратим. Coverage gaps/seam нельзя склеивать через отсутствующие координаты. Reject duplicates/overlap вместо dict overwrite указан. Equality при build и replay при полном cold audit достаточны как проект source→encoding proof; root-only/selected-shard read не выдают себя за полный audit. Исполнение этого proof остаётся downstream.
+
+#### 15.12.2. P0-R2 — structural design уточнён, numerical admission остаётся OPEN
+
+**Закрытая проектная часть:** opt-in boundedCanonicalDecode, pre-model scan, offset traversal, byte/depth/node/container/schema caps, exact expected top-level type и error dispositions названы. Existing `canonicalCodec.py:_decode_one` действительно рекурсивен, копирует body slices/parts и не имеет этих counters; объявлять его уже bounded нельзя. Existing encode получает record fields динамически из model_fields: shape lock из P0-R1 нужен и здесь. Старые fingerprint callers не требуется молча переключать на новый decoder.
+
+**До freeze не предъявлена требуемая §15.10.3 fixture-проверка предложенных чисел.** Минимальный, типичный и граничный profiles должны иметь byte/node/depth/container counts по exact closure, а также явные expected accept/refuse. Новых storage codecs в этом review не создавалось, golden/adversarial decoder execution не заявляется. Проверить нужно оба ограничения: wire caps и derived field limits; byte cap сам по себе не доказывает structural admission.
+
+Конкретная проверка совместимости по existing TLV: один surface sample `(FineXY,z)` содержит пять nodes; 4096 samples дают 20480 nodes без enclosing fields. Record MapCellHydrology с восемью полями требует минимум 28 nodes (record wrapper, tuple, type ID, fields tuple и восемь field tuples/name/value); shore row вместе с XY требует ещё четыре, то есть ≥32 nodes. 4096 shore rows дают ≥131072 nodes ещё **до** G1/coverage/root fields, enum wrappers и прочего shard metadata. Следовательно полный observed 64×64 tile с 4096 допустимыми SHORE facts превышает shard ceiling 131072 nodes, хотя каждый individual collection cap соблюдён. Это не противоречие §15.11: simultaneous caps могут отклонять такой source, и факты нельзя обрезать. Но это существенный fixture для выбора/приёмки чисел: 4096 field cap не обещает admission 4096 shores. Требуется явно подтвердить желаемый допустимый профиль либо пересмотреть предложенные числа в отдельном согласовании; молчаливо повышать их нельзя.
+
+Heap/time SLA не являются blocker этого узкого P0 verdict. Отдельно downstream остаются bounded stream IO до полного read (SP-P2R), parser implementation/golden parity/adversarial tests, cold/warm/concurrent heap/time measurements и production SLA acceptance. Отсутствие этих implementation evidence не подменяет оставшийся P0 численный design check.
+
+#### 15.12.3. P0-R3 — version policy закрыта в проекте, mutation inventory неполон (P1)
+
+Exact versions 1.0.0/2.0.0, historical missing-version policy, duplicate keys, V1 spatial_roots presence rejection, V2 required tuple transport и legacy-save refusal в §15.10.4 определены. Existing PackManifestStore действительно выполняет json.loads → permissive model_validate; WorldPackManifest.pack_version остаётся str с V1 default. Dispatcher/guards пока проектируются; их отсутствие не самостоятельный дефект выполнения P0.
+
+Constructor guard до ensure_dirs и повторный guard save_manifest до counters/hash, затем store guard до temp/replace покрывают loaded/injected V2 для обычного writer. Указанные finalize/refinement/materialization dispositions соответствуют существующим callers. В WorldPackWriter имеются также climate, location/index, grade sidecars, wilderness и settlement tmp/publish mutations; они должны оставаться под тем же lifetime запретом V2, а не только проверкой в самом конце save. Factory `core/container/packs.py` создаёт writers; injected mutable manifest и уже живой V1 writer нельзя считать вечным доказательством V1 namespace после concurrent activation. Exclusive ownership должен исключать такую гонку на весь mutation lifetime, а не только остановить old executable. Это уточнение реализации принятого запрета, не предложение preserve-roots rewrite.
+
+**Новый незакрытый entrypoint:** `application/worldData/pack/import_/packImportService.py:PackImportService.import_zip` вызывает `ZipFile.extractall(paths.root)` до какого-либо version admission. `api/routes/worlds.py:import_world_pack` (`POST /worlds/{world_uid}/pack/import`) передаёт ему текущие world pack paths. Этот путь вообще не вызывает WorldPackWriter или PackManifestStore и способен перезаписать V2 manifest/blobs архивом V1, либо занести V2 через legacy import. Constructor/save guards его не защищают. В caller/file map §15.6/15.10 требуется добавить эти два paths и exact disposition: legacy import обязан отказать V2 target/incoming V2 до первой mutation destination и участвовать в namespace exclusivity; V2 import возможен только отдельным accepted owning path. Способ предварительной inspection/staging и отказа нельзя заменить проверкой manifest после extractall. Код import в этом review не меняется.
+
+**Rollout:** §15.10.4 документально задаёт правильные prerequisites — guards/readers, drain old writers, запрет rollback writing V2, retained V1 namespace. Feasibility ещё не доказана полным inventory: import и уже живые writers также должны попасть в fencing/exclusive-ownership scope. До freeze требуется точное проектное ownership/disposition для этих путей; actual deployment/drain/fencing evidence относится к publisher activation. os.replace не CAS. Непринятые Snapshot adapters не считаются доказательством exclusivity.
+
+#### 15.12.4. Retention и границы полного freeze
+
+**Retention closure определена документально:** unique(root + все shard artifacts), непрерывный staging→publication/retained hold, last-holder release для shared artifacts, неизменность active closure при CAS failure, независимость от touched tiles/cache. Upstream PlanRefs остаются provenance, не обязательными cold-read blobs. Это закрывает алгоритмическую недосказанность retention §15.9; существующий blob backend verify не является bounded read, delete требует внешнего GC guard/live-set recheck. Exact closure handoff port/signature, CAS/GC/pin evidence остаются owning SP-P3W/lifecycle freeze; они не объявляются реализованными и не требуют запуска runtime сейчас. Полный storage/publication freeze без их отдельного принятия не заявляется.
+
+Оставшиеся **P0 design blockers**: (1) полный source/storage shape+IDs closure вместо обещания будущего lock; (2) fixture/count compatibility и приёмка предложенных byte/structural чисел; (3) закрытый mutation map с ZIP import, lifetime guards и namespace ownership. **Downstream blockers полного storage/publication freeze:** accepted bounded IO и closure handoff ports, реализация codec/reconstruction и golden/negative/cold-audit evidence, retention/CAS/GC/fencing evidence. Heap/time SLA остаются отдельным downstream production acceptance согласно §15.11 и не переоткрывают принятое разделение scope. Ни SP-P1, ни публикация, ни runtime данным verdict не разрешены.
+
+## 16. SP-M — materialization/projection contract (2026-11-02)
+
+**Статус: документальный проект НА СОГЛАСОВАНИЕ. Не freeze, не CODE-READY.**
+Проверены записанные приёмки §14.14 и GEO EF-1.14: SP-1 принят в scope
+§14.12, GEO EF-1 — EF-1.12, отдельно принята GEO-SPATIAL-CONTRACT compatibility.
+Это разрешает проектирование SP-M, но не reader activation/consumer cutover.
+SP-P0 (§15, включая частичные решения §15.11) остаётся storage proposal:
+ни tiles/shards/caps/IDs, ни V2 publisher не prerequisites этого контракта.
+GEN-DAG draft и Snapshot adapters не являются готовыми ports. Изменена только
+эта документация; существующие незакоммиченные изменения других планов не затронуты.
+
+### 16.1. Повторный AS-IS аудит и границы evidence
+
+Статически прочитаны implementations ниже; это уточнение SP-0/HSP inventory,
+не runtime/dynamic caller closure и не доказательство production readiness.
+Пути таблиц — от `backend/app/`.
+
+| Existing type/operation | Подтверждённая связь и фактическое ограничение |
+|---|---|
+| `materialize/terrain/terrainBatchOrchestrator.py:TileSurfaceState` | heightmap, n_eff, optional XY MapCellHydrology, terrain/facing/grade/region maps. Frozen dataclass содержит mutable dict; не immutable XYZ media snapshot |
+| тот же `TerrainBatchOrchestrator.build_tile_surface_state` | Upsample → clamp working fine_z к parent z_band → paint_regions_fine → place_hills → merge_hydro_hard_corridor → gaps. В одном body несколько доменных операций. Это не G1 bed и не bounded water read |
+| `pack/refine/fine/prep/fineTilePrep.py:prepare_fine_tile` | Создаёт полный tile state, затем halo/catalog; результат FineTileContext. Маленький rect не означает маленькую preparation |
+| `pack/refine/fine/prep/fineTileContext.py` | FineTileContext держит World/working/bundle/state/catalog; ChunkComputeResult держит list[MapCell] и grade/seam/timing outputs. Ни одного media slice поля нет |
+| `pack/refine/fine/chunk/fineChunkCompute.py:compute_rect` | discover_and_paint → rect_heightmap_from_overlay → generate_chunk_cells_sync. Projection должна быть после geometry admission, а не внутри column fill |
+| `generators/terrain/terrainGeneratorService.py:generate_surface_chunk` | Передаёт heightmap/n_eff/maps в run_column_fill, возвращает list[MapCell]; hydrology_by_cell сейчас unparameterized dict |
+| `generators/terrain/passes/columnFillPass.py:run_column_fill` | Solid [z_bottom,z_top] inclusive. Hydrology stamp только z_top; SHORE меняет coating, RIVER_BED может заменить terrain на liquid_body. Не физический water volume |
+| `pack/refine/fine/chunk/fineChunkPersist.py:FineChunkPersist.persist_rect` | Принимает ChunkComputeResult, partition/wire/grade persist. Сохраняется writer terrain/object результатов, не получает media persist обязанность |
+| `dataModel/worldPack/wire/fineTerrainChunkWire.py` | FineTerrainZRun inclusive; этот wire не расширяется на liquid/gas. Отсутствие column/run не dry verdict |
+| `materialize/surface/materializationContext.py` | MaterializationContext — scheduling/persist policy, MaterializationJobReport — counters. Не носитель source revision или media facts |
+| `generators/terrain/oresGenerator.py:generate_ores`; `cavesGenerator.py:generate_caves` | Stub passes возвращают отдельные MapCell deltas: ore system_material, cave open_space; cave пропускает ore markers. Это не geology strata/occupancy contracts |
+| `generators/structure/structureGeneratorService.py`; `persist/settlementPersistService.py` | Самостоятельные structure generation и legacy persist. Не переводятся в общий media materializer; MapCellQueryFacade остаётся existing read path до SP-R0 |
+
+HSP-01/05/06/08/09/10 dispositions из legacy ledger сохраняются: producer switch
+в GEO, native XY query не Pack reader, L0 approximation не coverage, bootstrap
+fill/routes не read operation. HSP-02/03/04/07 уточнены ниже. Source records GEO-I1
+не означают готовность WaterWindowFacts/reader/Pack ports: accepted contract и
+наличие executable implementation проверяются отдельно перед SP-4.
+
+### 16.2. Три выхода, без универсального materializer
+
+1. **Water-only временная projection:** exact output уже принят в GEO EF-1.4/1.5:
+   `SpatialReadResult[WaterWindowFacts]`, success — `SpatialSlice[WaterWindowFacts]`.
+   Не вводить дубликат WaterProjection DTO, MaterializedWorld, media MapCell или
+   общий status enum. Slice живёт рядом с terrain result, не внутри terrain wire.
+2. **Solid/geology:** текущий executable terrain contract остаётся
+   `generate_surface_chunk(...) -> list[MapCell]`, writer — FineChunkPersist.
+   Это bounded skeleton, не обещание полной толщи/strata. SP-G обязан отдельно
+   принять exact geology source/material payload, occupancy и exposed face output
+   (стены/пол/потолок после excavation). До этого new geology POJO/path/signature
+   **OPEN**, SP-5G BLOCKED; нельзя считать отсутствие cell отсутствием solid.
+3. **Objects/structures:** сохраняется самостоятельный structure/settlement output
+   и writer. Их physical occupancy/material identity не выводятся из воды и не
+   заменяются WaterWindowFacts. Переработка их API не входит в water SP-M.
+
+Scope предлагаемой приёмки SP-M: exact water projection и decomposition ниже,
+разделение трёх выходов и обязательства SP-G/object owners. **Полный exact geology
+freeze этим документом не заявляется.** Gas/ambient overlap и atmosphere policy
+остаются SP-2/SP-A; water не ждёт их, dry не означает air/vacuum.
+
+### 16.3. Exact water contract и lifetime
+
+Публичная операция reuse SP-1:
+`async read_window(request: SpatialReadRequest) -> SpatialReadResult[WaterWindowFacts]`
+на `SpatialFieldReader[WaterWindowFacts]`. Media projection — этот read с доменной
+XYZ clipping semantics, не дополнительный solve или скрытый второй read API.
+Concrete Pack reader construction/import остаётся SP-3; prepared bootstrap reader
+GEO EF-1.5 — отдельный owner, не подстановка вместо cold-Pack evidence.
+
+Вход — strict admitted SP-1 request с exact world/frame/topology, union half-open
+XYZ boxes, revision, mode, request_id. L2 `ColumnRect` inclusive переводится в XY
+[x_min,x_max+1)×[y_min,y_max+1); Z задаётся caller явно half-open, не берётся из
+n_eff/существующих cells. Empty/invalid bounds проходят existing SP-1 validators.
+Base bootstrap принимает canonical source PlanRef; Pack implementation — только
+его отдельно принятый pinned publication contract. Подмена одного вида revision
+другим или latest-head lookup в worker запрещены.
+
+Payload reuse exact GEO declarations (не старый предварительный WaterColumnFact):
+
+| Record | Required fields / validation |
+|---|---|
+| `WaterVolumeRun` | y:FineY; x0,x1:FineX; z0,z1,bed_z,level_z:FineZ; body_uid:EntityUid. [x0,x1)×[y,y+1)×[z0,z1); bed_z+1≤z0<z1≤level_z+1, bed_z<level_z |
+| `WaterWindowFacts` | runs:tuple[WaterVolumeRun,...]; bodies:tuple[WaterBody,...]; unions:tuple[PhysicalWaterUnion,...]; unknown_boxes:tuple[SpatialBox,...] |
+| `SpatialSlice[WaterWindowFacts]` | request exact echo; payload; nonempty tuple source_refs; tuple issues. SourceRefs stable по source, не список touched shards |
+| `SpatialReadFailure` | request; nonempty errors:tuple[SpatialReadError,...], каждая reason + FieldPathError. Без payload, primary reason, first-error suppression |
+
+Immutable strict/nested admission, sorted canonical runs/tables, UID closure,
+no overlap, exact clip/unknown partition и runtime integer checks — **reuse**
+SP-1 §§14.7/14.9–14.12 и GEO EF-1.4/1.5/1.10, не упрощённая новая версия validators.
+Liquid identity берётся из body tables; registry подтверждает свойства/ключ,
+но не наличие воды. Union UID не заменяет физический body_uid.
+
+Read/temporary view не меняет source, cells, PatchSet или manifest. Eviction
+теряет только производное view; повторный запрос того же source/window даёт те
+же факты. Cache key включает полный revision/source binding, frame/window и mode;
+не только tile/XY/world. Конкретный cache implementation не обязателен SP-M.
+Lifetime: source pin удерживает owning caller на время всей compute операции,
+projection не продлевает pin скрытым latest lookup; worker не выпускает parent
+ownership. Exact IO/retention ports и budgets принимаются отдельно в SP-3/Pack.
+Cancellation сохраняется cancellation; defects не превращаются в dry.
+
+### 16.4. Wet/dry/unknown, failures и physical boundaries
+
+| Ситуация | Обязательный результат |
+|---|---|
+| Authoritative wet membership, bed=3 level=10, query Z=[7,9) | run z0=7,z1=9, bed_z=3,level_z=10; physical boundaries не clipping |
+| Та же колонка, query=[3,4) или [11,12), внутри known vertical scope | Нет water run; known absence open water в этом XYZ окне, не «вся колонка сухая» |
+| Authoritative observed dry XY и known Z | Success без runs, unknown_boxes=(), issues=(); body/union tables пусты при полностью dry request; source_refs остаются |
+| XY вне coverage либо Z вне [source.z_min,source.z_max+1) | Unknown exact complement query union; не dry и не extrapolation по bed/level |
+| Unknown в REQUIRED | SOURCE_INCOMPLETE Failure без partial payload; worker не публикует результат как water-complete |
+| Unknown в PREVIEW | Success с точными unknown_boxes и issues; preview не допускается как completed production L2 water result |
+| Missing/corrupt/stale source | Failure также в PREVIEW; отсутствие artifact не legitimate unknown coverage |
+| SHORE или RIVER_BED | Surface/geometry observation, не water occupancy. River liquid volume вне open-water scope SP-H2 |
+
+XYZ присутствие только `(bed,level]`, в integer half-open форме
+[bed+1,level+1). Сам bed solid; уровень включён. Разрыв между disjoint query boxes
+не заполняется, topology seam не склеивается в interval за canonical bounds.
+Ни bed<level без membership, ни L0 role, ни соседняя мокрая клетка не доказывают wet.
+
+Failure reasons reuse SP-1: FRAME_MISMATCH, REVISION_MISMATCH,
+SOURCE_MISSING/CORRUPT/INCOMPLETE/UNAVAILABLE, UNSUPPORTED_FORMAT,
+DOMAIN_REJECTED, RESOURCE_LIMIT по exact owning mapping. Все обнаруженные errors
+сохраняются; невыполненные dependent checks не генерируют ошибки. Geometry mismatch
+на L2 composition boundary — отказ admission до read/materialize; не выдуманный
+water absence и не новый shared enum variant.
+
+### 16.5. Terrain/water authority и приоритеты
+
+**Порядок authority, а не смешивание по material priority:**
+
+- Final geometry G1 из accepted GEO source задаёт physical bed на observed domain,
+  включая dry. Parent-light upsample остаётся фоновой recipe за пределами такой
+  geometry authority. На authoritative domain запрещено clamp bed к L0 z_band,
+  повторно поднимать его hills или заменять локальным grade без согласования.
+- Landcover/coating выбирает surface role/material на уже согласованной geometry;
+  SHORE coating не solid→liquid conversion. TerrainRegistry merge_rank не сравнивает
+  water body с породой и не разрешает физический overlap.
+- Discover/grade/halo выполняются до projection. Если grade/halo меняет G1 sample,
+  L2 admission отказывает до публикации этого rect. Нельзя просто clip water о
+  новый top или пересчитать level. Изменение требует owning geometry/hydrology
+  revision и отдельной публикации. Decoration без изменения bed допустима.
+- Solid occupancy и water volume не должны конфликтовать. Конфликт отвергается,
+  вода не стирает terrain, terrain не скрывает authoritative wet. Строительство,
+  excavation/caves и runtime patches требуют принятой changed occupancy и water
+  compatibility; SP-4 base не обещает их поддержку через Snapshot draft.
+- Open water не назначает terrain `liquid_body` на bed. Persisted legacy hydrology
+  annotation не используется как volume source. RIVER_BED compatibility остаётся
+  отдельным явно scoped legacy river path до SP-H2, не второй ocean/lake source.
+
+Уровень/bed никогда не восстанавливаются из максимального persisted MapCell.z:
+solid skeleton может быть неполон по глубине. Shore rows и сухой G1 bed не входят
+в WaterWindowFacts; это отдельные geometry/coating inputs. Их production delivery
+принимается GEO/SP-4, не добавлением скрытого метода generic reader.
+
+### 16.6. Exact decomposition и file/import map для SP-4
+
+Предлагается отделить existing domain operations от orchestration, не переносить
+их в generic Spatial. Новые файлы ниже **предлагаемые, сейчас не созданы**.
+Имена обозначают узкие domain operations; ни один файл не orchestrates весь мир.
+
+| Path от backend/app | Symbols / responsibility / разрешённые imports |
+|---|---|
+| `materialize/terrain/tileSurfaceState.py` (new) | Перенести единственный TileSurfaceState и refresh_tile_gaps; retain existing fields для staged migration. Imports terrain types/gapAnalysis, MapCellHydrology/Facing/World; no IO/Hydrology kernels |
+| `generators/terrain/passes/fineSurfaceBase.py` (new) | `build_fine_surface_base(world:World,parent:ParentLightTile,policy:ParentLightRefinePolicy)->SurfaceHeightmap`: existing parent upsample geometry, без hydro clamp. Reuse parentLightUpsample; authoritative G1 overlay/admission — external required boundary ниже |
+| existing `generators/terrain/landcover/finePaint.py` | paint_regions_fine — landcover operation; source inputs prepare_landcover_inputs остаются owner. Не импортирует Pack water reader |
+| existing `generators/terrain/hills.py` | place_hills — terrain operation. На authoritative G1 protected domain caller обязан исключить geometry edits; L0-only mask не proof такой защиты |
+| existing `materialize/terrain/terrainBatchOrchestrator.py` | build_tile_surface_state — validate/delegate/assemble; вызывает public terrain base, landcover, hills, gaps. Не содержит loops clamp/merge water, не вызывает fill/routes/reader construction. generate_chunk_cells_sync delegates terrain fill |
+| existing `pack/refine/fine/prep/fineTilePrep.py` и `fineTileContext.py` | Job-level admission готовых geometry refs и reader handle до worker pool; подготовка каталога/halo отдельно от water. Не считать SurfaceWorkingMaps water source. Exact new context fields требуют закрытия внешнего geometry binding перед implementation |
+| existing `pack/refine/fine/chunk/fineChunkCompute.py` | После grade и geometry compatibility получает отдельный SpatialReadResult[WaterWindowFacts] по ready reader; terrain cells и media result передаются раздельно. Ошибки не идут в FineChunkPersist как успешный completion |
+| existing `pack/refine/fine/chunk/fineChunkPersist.py` | Persist только existing cells/grades; media slice не сериализуется в terrain chunk/SQL. Writer capability проверяется до mutations; SP-P0 proposal не предоставляет эту capability |
+| `dataModel/spatial/read/{reader,request,result,failure,window}.py` | Reuse принятых SP-1 declarations, не новый materialize protocol. Shared не импортирует Hydrology/Pack/Snapshot/application |
+| `dataModel/hydrology/query/window.py` | Reuse GEO EF-1 WaterVolumeRun/WaterWindowFacts; imports shared SpatialBox + hydrology body/union/coordinates; не MapCell/persist |
+
+Обязательные import migrations при SP-4: все прямые imports TileSurfaceState и
+refresh_tile_gaps из terrainBatchOrchestrator перевести на tileSurfaceState; перед
+кодом получить полный `rg` closure (включая tests/halo/discover), временный re-export
+не считать завершённой миграцией. fineChunkCompute импортирует shared protocol и
+Hydrology query payload, не concrete codec/solver; wiring concrete reader — SP-3
+и owning caller, не GEN draft. Domain source/ref validation остаётся у owners.
+
+Folder counts проверены для materialize: terrain **3→4** Python files с __init__,
+surface **4→4**, shared **5→5** (WARN). Новая операция fineSurfaceBase добавляет
+один файл existing passes: **9→10** с __init__ (WARN, достигается ceiling);
+перед implementation перепроверить count при concurrent изменениях. Любое дальнейшее
+добавление требует согласовать layout до кода. Никаких новых eager __init__ exports. Shared/GEO declarations не считаются
+новыми SP-M файлами и не дублируются в другом каталоге.
+
+**Открытая physical boundary — явно не готовый port:** нужен typed admitted G1
+geometry handoff (coverage + exact bed + source PlanRef/dependency binding) к L2,
+а также protected-domain input для hills/grade/halo. Semantic payload reuse
+FineSurfaceWindow и canonical source ref; он не извлекается из water runs (dry bed
+тоже обязателен). Exact constructor/API/failure transport этого handoff и owning
+public path должны быть согласованы GEO/SP-4 до code-step. Не использовать для
+этого SP-P0 shard layout или непринятый Snapshot adapter. Соответственно полная
+SP-4 input/ChunkComputeResult signature пока **BLOCKED**, а не фиктивно frozen.
+
+### 16.7. Порядок legacy consumer cutover и acceptance
+
+1. GEO G10-A/SP-H предъявляют accepted source/proof и отдельно production geometry
+   handoff. HSP-01/06 producer switch не равен L2 switch. SP-P ветка независимо
+   принимает/реализует свой transport; SP-3 предъявляет cold reader, не fill on read.
+2. До water activation SP-4 реализует согласованное HSP-04 decomposition и closes
+   geometry/context/result signatures из §16.6. Fine_z HSP-02 уходит с water-read
+   ролью **раздельно**: geometry не удаляется без замены dry/wet G1 bed.
+3. Переключить HSP-02/03 ocean/lake L2 truth на один ready source/revision. Убрать
+   hard corridor как water veto и surface liquid stamping для этого scope.
+   River compatibility не объявляется новой open-water projection. Нельзя silently
+   fallback к L0/working maps при SOURCE_MISSING или dry success.
+4. HSP-07 сохраняет ClimatePackBakeOrchestrator fine_z, SupportSources,
+   prepare_landcover_inputs/LandcoverObservations и factConsumers/hydrology до
+   отдельных owner mappings. L0 mask у paint_regions_fine/place_hills остаётся
+   legacy policy input до проверки exact canonical observation/protection mapping;
+   поэтому их сохранение само по себе не закрывает SP-4 geometry acceptance.
+5. После caller/import closure удалять ставшие ненужными water paths/helpers;
+   HydrologyWorkingFields целиком не удалять. HSP-08 L0 projections сохранить,
+   HSP-09 cleanup отдельно GEO; HSP-10 solve остаётся producer-only.
+6. SP-3S/SP-4R отдельно принимают runtime overlay/changed geometry; SP-R0/R1/R2 —
+   scene/gameplay contracts и actual node bindings. Base acceptance не включает их.
+
+SP-4 evidence: cold read без working-map water/fill/routes; dry source и unknown
+различаются; wet вне L0 corridor сохраняется; bed не clamp; level включён, bed
+исключён; clipped физические границы неизменны; split windows/seams и chunk order
+не меняют результат; grade/halo conflict отказывает до publication; no per-cell
+water persist; eviction/re-read идентичен. Failure injection missing/corrupt/stale
+не даёт dry; preview не отмечает worker complete. Terrain inclusive codec golden
+сохраняется; tests hard-corridor заменяются проверками новой authority, соседние
+Climate/Landcover и river assertions сохраняют отдельный scope. Полный source solve
+допустим при preparation, не при каждом tile/window; numerical SLA не утверждаются.
+
+### 16.8. Предъявляемое решение и остаточные blockers
+
+На согласование предъявлены exact reuse water output/error/lifetime, wet/dry/unknown
+и physical interval, правила geometry authority/отказа при конфликте, decomposition
+HSP-04, file/import proposal и последовательность HSP dispositions. Это не приёмка
+SP-P0 и не разрешение implementation/cutover.
+
+До полного SP-M freeze остаются explicit review points: принять либо уточнить
+G1 handoff/public API и context/result transport (§16.6); проверить passes layout;
+согласовать protected-domain migration hills/landcover/grade. Geology exact types
+принимаются SP-G, gas — своими owners. **Предъявление не закрывает эти пункты и не
+маркирует SP-M принятым.** Следующее действие — согласование документального scope
+и указанных physical boundaries пользователем; код не начат.
