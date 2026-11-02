@@ -1379,29 +1379,30 @@ Exact POJO/files/owner bindings ещё требуют приёмки. Измен
 
 Потребляющие операции: L0 light/full и L2 detailed preparation при необходимости surface plan. Exact DAG consumer bindings OPEN; существующие ноды, их Input/Output, callers/callees и родство не изменяются. Reader не готовит планы и не поставляет pipeline настройки. Внутренний pipeline согласованного surface planning остаётся в домене; никаких новых NodeId этим разделом не вводится.
 
-## 18. Единственный активный full-bake и переиспользование результата
+## 18. Единственная изменяющая bake-операция мира и переиспользование результата
 
-**Решение пользователя:** нет необходимости дважды запускать одинаковый full-bake. Используется одна нода full_bake_initialization; запрещено параллельное дублирование full операции. Наличие одного NodeId само по себе не обеспечивает этот запрет между executions/процессами.
+**Решение пользователя, согласовано с §4.3.2:** в первой версии допускается одна активная изменяющая bake-операция на world_uid: full, light или detailed preparation. Эквивалентные запросы присоединяются к существующей операции; неэквивалентные конфликтующие запросы получают типизированный BakeConflict без автоматической очереди. Наличие одного NodeId само по себе не обеспечивает этот запрет между executions/процессами. Full по-прежнему выполняется через full_bake_initialization; правило не объединяет разные виды bake в одну ноду.
 
 ### 18.1. Контракт повторного запроса
 
-- Если требуемый full уже опубликован, актуален и покрывает запрос — вернуть existing data/refs и accepted publication, без нового compute/publish.
-- Если соответствующий full уже выполняется — не запускать вторую операцию. Вернуть/использовать identity существующей операции; дальнейший wait/completion привязан к ней.
-- Если подходящего готового/активного результата нет — атомарно зарегистрировать операцию и допустить один запуск через существующую full_bake_initialization.
+- Если требуемый результат bake уже опубликован, актуален и покрывает запрос — вернуть existing data/refs и accepted publication, без нового compute/publish; актуальность проверяется по доменному контракту соответствующего вида bake.
+- Если эквивалентная bake-операция уже выполняется — не запускать вторую операцию. Вернуть/использовать identity существующей операции; дальнейший wait/completion каждого invocation привязан к ней.
+- Если готового результата нет и мир занят неэквивалентной изменяющей bake-операцией — вернуть BakeConflict без автоматической очереди.
+- Если подходящего готового/активного результата нет и мир свободен — атомарно зарегистрировать операцию и допустить один запуск через ноду соответствующего вида bake; для full это full_bake_initialization.
 - Error/неизвестное состояние не подменяется готовностью. Crash/retry не создаёт вторую работу, пока не подтверждены завершение/потеря владельца прежней операции по принятому recovery contract.
 
 ### 18.2. Граница запрета параллелизма
 
-Предлагаемая область exclusivity — full-bake одного world_uid, включая обращения разных сессий, DAG executions и worker процессов. Full разных миров не ограничивается этим правилом автоматически. Detailed preparation не запрещается только по наличию full, если выполнены её реальные domain prerequisites и publication consistency.
+Принятая область exclusivity — все самостоятельные изменяющие bake-операции одного world_uid, включая обращения разных сессий, DAG executions и worker процессов. Активный full исключает самостоятельный light/detailed bake того же мира; разные scope не снимают ограничение первой версии. Bake разных миров не ограничиваются этим правилом автоматически. Независимые внутренние задачи одной операции могут выполняться параллельно под общей operation identity; они не захватывают мир как новые самостоятельные операции. Чтение уже опубликованных данных не является новой изменяющей bake-операцией.
 
-Переиспользуется только подходящая работа: совпадают source/preparation semantics и scope покрывает запрос. Другой source revision/несовместимый scope нельзя присоединить к старой операции и выдать её результат за актуальный. При несовместимом активном запросе нужна объявленная busy/conflict либо очередь, а не второй concurrent full; точная policy остаётся OPEN.
+К выполняемой операции присоединяется только эквивалентный запрос по ключу §4.3.2: world_id, вид bake, scope, исходная ревизия и влияющие на результат параметры. Одного покрытия scope недостаточно для объявления двух активных запросов эквивалентными. Другой source revision/несовместимый scope нельзя присоединить к старой операции и выдать её результат за актуальный. При неэквивалентном активном запросе возвращается BakeConflict; автоматическая очередь не вводится. Эта policy согласована и не является OPEN.
 
 Admission атомарный: «прочитать running, затем отдельно запустить» имеет race и не выполняет требование. In-memory bool/локальный asyncio.Lock не является гарантией между процессами. Декларация node concurrency и durable operation admission должны быть приняты как один контракт runtime/domain binding; deps регулируют порядок одного execution, а не dedup разных executions.
 
 ### 18.3. Завершение
 
-Full child отдаёт prepared result родителю world_initialization. После успешной публикации родитель/runtime фиксирует terminal accepted result для той же operation identity. Повторные запросы читают эту запись/accepted domain result. До публикации compute-complete не считается full-ready. Exact durable operation store/worker/notification binding ещё требует приёмки.
+Для каждого вида bake terminal accepted result фиксируется для той же operation identity только после успешной доменной публикации. Повторные запросы читают эту запись/accepted domain result с проверкой актуальности. До публикации compute-complete не считается readiness. В full-flow child отдаёт prepared result родителю world_initialization, после публикации родитель/runtime фиксирует terminal accepted result. Exact durable operation store/worker/notification binding ещё требует приёмки.
 
-Existing Artifact lifecycle OperationRecord/PublicationBusy/PublicationTerminal — reuse candidates для совместимого lifecycle, но текущий OperationKind объявляет snapshot_apply/pack_activation/gameplay_start, а не full-bake preparation. Не выдавать publication claim за готовую cross-execution compute exclusivity и не создавать параллельный store без анализа owner. Exact full operation key/fingerprint/lease/recovery POJO и files OPEN.
+Existing Artifact lifecycle OperationRecord/PublicationBusy/PublicationTerminal — reuse candidates для совместимого lifecycle, но текущий OperationKind объявляет snapshot_apply/pack_activation/gameplay_start, а не bake preparation. Не выдавать publication claim за готовую cross-execution compute exclusivity и не создавать параллельный store без анализа owner. Exact bake operation key/fingerprint/lease/recovery POJO и files OPEN; это не переоткрывает согласованную policy BakeConflict без очереди.
 
 Это уточнение исполнения и повторных вызовов; родство, callers и graph edges не менялись. Код не создавался.
