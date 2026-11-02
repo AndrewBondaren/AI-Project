@@ -265,9 +265,59 @@ SP-R2 не принимается этим документом: `check_scene` �
 6. Exact engine/application owner split и handoff DAG-TYPING-1 при необходимости generic runtime расширения. GEN не реализует второй executor внутри родителя или генератора.
 7. Функциональное evidence: обычная выдача select_child завершает HTTP, следующий запрос продолжает выбор, process restart восстанавливает его, отмена не маскируется user wait, terminal Output выдаётся ровно при согласованном завершении.
 
-Ни один вариант в этом списке не выбран автоматически. До explicit acceptance родительские concrete bindings и integration/cutover BLOCKED этим контрактным пробелом; read-only проектирование и domain-read requirements продолжаются.
+Решением пользователя в §4.3.1 выбрана resumable invocation-модель внутри одного execution; композиция отдельных executions для этого flow не выбирается. Остальные exact contracts этого списка требуют проработки. Родительские concrete bindings и integration/cutover BLOCKED до реализации и проверки runtime; read-only проектирование и domain-read requirements продолжаются.
 
-### 4.3. Отдельные неизменённые gates
+### 4.3. GEN-CALL-IDENTITY — CALL/RETURN и идентичность вызова
+
+**P1 / OPEN / архитектурный BLOCKER реализации родительских нод.** Gate отдельный от ожидания пользовательского ввода: даже без HTTP continuation два вызова одной ноды требуют самостоятельной идентичности и маршрутизации результата.
+
+Проверенный runtime: `NodeContract` объявляет Input/Output/Error и reads, `PythonNode.execute(input)` возвращает Output, `GraphCompiler` компилирует статические зависимости по NodeId, а `DAGEngine` управляет run/resume/pass. Эти контракты не предоставляют полноценный CALL/RETURN между DAG-нодами. В `dataModel/engine/dag/identity.py` ключ результата содержит `execution_id + node_id + attempt`; отдельный вызов в нём не представлен. Retry/attempt не должен неявно обозначать новый логический вызов.
+
+Контрольный сценарий: `select_start_location → world_creation` проверяет light и при missing обеспечивает full; последующий `load_player_into_world → world_creation` обеспечивает detailed. Это два самостоятельных вызова с разными Input и результатами, даже если callee NodeId совпадает. Описание сценария не закрывает OPEN runtime binding и декларацию caller route.
+
+До реализации родителей требуется утвердить и реализовать на уровне DAG runtime:
+
+1. Типизированный CALL/RETURN: допустимый caller/callee, передача Input, адресат Output/Error, ожидание и продолжение caller. Статический RequiredOutput сам по себе не является вызовом.
+2. При одном execution — отдельную стабильную invocation identity (exact POJO/owner OPEN), связь с caller invocation и область адресации результатов/reads. Повторная попытка сохраняет identity вызова; новый вызов получает новую identity. Одного изменения ключа результата недостаточно: state, scheduling, publication, reuse и snapshots должны различать вызовы.
+3. Для текущего flow выбран один resumable execution (§4.3.1). Меж-execution handoff не входит в этот срез; его нельзя подразумевать готовым механизмом передачи результатов.
+4. Семантику retry, duplicate dispatch/return, cancellation и restart/resume: восстановление того же вызова без подмены его новым и без выдачи результата другому caller; границы reuse с учётом Input и domain evidence.
+5. Приёмочное evidence: оба вызова world_creation с разными Input получают собственные результаты; retry одного не затрагивает другой; после restart результат возвращается исходному caller; Error/cancellation маршрутизируются согласно принятому контракту. Для выбранной модели разных executions отдельно проверяется handoff.
+
+Owner — generic DAG runtime / DAG-TYPING-1, затем concrete bindings GEN. Прямой вызов `callee.execute()` из родителя или локальный executor внутри генератора этот gate не закрывает. Закрытие lifecycle gate §4.2 не закрывает GEN-CALL-IDENTITY автоматически.
+
+### 4.3.1. Принятое решение: invocation runtime и параллельные CALL
+
+**Согласовано пользователем; реализация OPEN.** Этот раздел фиксирует выбор модели и уточняет OPEN формулировки §§4.2–4.3. Exact Python API, POJO и storage schema ещё проектируются; приведённые имена новых сущностей — проектные.
+
+- Один execution содержит самостоятельные invocation. `node_id` — определение ноды; `invocation_id` — конкретный вызов; `attempt` — попытка этого вызова. Ключ результата: `execution_id + invocation_id + attempt`. Запись вызова сохраняет node_id, caller_invocation_id, Input и continuation. Retry сохраняет invocation_id, новый CALL получает новый. State, scheduling, reads, publication, reuse и snapshots учитывают invocation scope.
+- `NodeContract.calls` объявляет допустимые типизированные targets с Input/Output/Error; компилятор проверяет регистрацию и совместимость. Декларация не запускает callee, не создаёт статическую deps и не меняет родство. Нода возвращает CALL с target, Input и сериализуемым continuation-состоянием; runtime доставляет Success/Failure в типизированное продолжение caller. Python coroutine не сохраняется, прямой callee.execute из родителя не используется.
+- Создание вызова и перевод caller в ожидание сохраняются согласованно. Duplicate dispatch не создаёт второй invocation; duplicate RETURN не продолжает caller повторно. Restart восстанавливает исходный вызов и его адресата. Идемпотентность внешних эффектов обеспечивается отдельно через стабильную доменную operation identity.
+- Группа CALL поддерживает параллельное исполнение существующим scheduler с общим лимитом. Первая версия — join ALL; результаты сопоставляются со стабильными ключами запросов, а не порядком завершения. Exact error/cancellation policy группы требуется закрепить до реализации. Ожидающий caller освобождает worker slot, чтобы дочерние вызовы могли исполняться. Независимые deps внутри каждого invocation также допускают параллелизм.
+- Два invocation одной ноды могут выполняться одновременно; состояние вызова не хранится в изменяемом self экземпляра ноды. В стартовом flow light/full и detailed последовательны из-за зависимости по accepted_base.
+- WAIT_INPUT — самостоятельное сохраняемое ожидание, не cancellation. HTTP завершается промежуточным ответом; следующий запрос по проверенной correlation продолжает тот же execution/invocation. Exact API binding и сохранение interaction остаются задачами §4.2.
+
+Размещение в `backend/app/application/engine/`: `contracts/` — декларации вызовов и continuation; новый `runtime/invocations/` — создание вызовов, доставка результатов и продолжение caller; существующий `runtime/dag/` — scheduler invocation; `runtime/execution/` — обработка CALL/ожидания/завершения; `runtime/dag/lifecycle/` — snapshot/restore. Identity и сохраняемые модели — `backend/app/dataModel/engine/dag/`. Второй executor не создаётся.
+
+Первый проверяемый срез: родитель дважды вызывает одну тестовую ноду с разными Input; затем retry, Error, duplicate dispatch/return и restart между CALL/RETURN. Дополнительно проверяются параллельная группа, изоляция результатов и отсутствие starvation из-за занятых ожидающими родителями слотов. После этого подключаются world_creation и HTTP continuation.
+
+### 4.3.2. Принятое решение: повторный bake одного мира
+
+**Согласовано пользователем; реализация OPEN.** Invocation identity сама по себе не предотвращает два самостоятельных запуска bake. Нужен общий сохраняемый реестр доменных bake-операций в БД, доступный всем executions и worker-процессам, с атомарной регистрацией/захватом операции.
+
+1. Первый full bake регистрирует operation и начинает работу. Второй вызов для того же мира с эквивалентными входами присоединяется к выполняемой operation; новый bake не запускается. Каждый invocation получает результат или ошибку общей операции через собственный RETURN.
+2. `invocation_id` различает DAG-вызовы; `operation_id` — фактическую bake-операцию; ключ эквивалентности определяет допустимость совместного ожидания. Он учитывает world_id, вид bake, scope, ревизию исходных данных и параметры, влияющие на результат. Exact состав и канонизация — контракт сервиса bake.
+3. Конфликтующие записи блокируются отдельно от эквивалентности: различные параметры не разрешают одновременную перезапись одного мира. Неэквивалентный конфликтующий запрос получает типизированный BakeConflict; автоматическая очередь не вводится. Exact область конфликтов определяется доменом bake.
+4. Отмена одного ожидающего invocation отсоединяет его, не отменяя операцию, нужную другим. Согласовано пользователем: если ожидающих больше нет, bake продолжается до завершения и публикации; явная отмена самой операции — отдельное действие.
+5. Recovery worker опирается на persisted operation state и lease. Просроченный worker лишается права публикации через проверку действующего владения (fencing); одного истечения lease без защиты записи недостаточно.
+6. DAG runtime отвечает за вызовы/ожидание/RETURN. Сервис bake отвечает за эквивалентность, конфликты, operation ownership, идемпотентность эффектов и публикацию. Реестр не размещается в памяти ноды. Exact путь сервиса и схема БД уточняются по существующим domain/storage boundaries перед кодом.
+
+Приёмка: два одновременных эквивалентных запроса из разных executions/workers запускают один bake и получают один operation result; неэквивалентный конфликт отклоняется; отмена одного waiter не прерывает другого; после падения worker операция восстанавливается, а старый владелец не может опубликовать результат. Присоединение определено для выполняемой операции; reuse уже завершённого bake требует отдельной проверки актуальности результата.
+
+Уточнения пользователя: при ошибке в параллельной группе ожидаются все результаты; родитель получает типизированный результат каждого вызова и решает, можно ли продолжать. Это уточняет error policy join ALL в §4.3.1.
+
+**Отмена направления пользователем:** параллельные самостоятельные full bake и light bake одного мира не проектируются и не реализуются; исследовательская задача по этому направлению отменена. Предложение выделить light/wilderness из full ради их параллельного запуска не считается принятым. Сохраняется согласованное правило первой версии: одна изменяющая bake-операция на мир; эквивалентные запросы присоединяются к ней, остальные конфликтующие получают BakeConflict без автоматической очереди. Общая поддержка параллельных DAG-вызовов и независимых задач внутри одной bake-операции не отменена.
+
+### 4.4. Отдельные неизменённые gates
 
 SP-R2 — отдельное решение, не закрыто readiness checks. RepairPatchApplier относится к публикации execution results; World Snapshot — к данным мира. Settings implementation (§6), public generator read methods (§9), player position/load completion и parent/child lifecycle — разные owner gates, не взаимозаменяемые проверки.
 
@@ -1328,3 +1378,30 @@ Exact POJO/files/owner bindings ещё требуют приёмки. Измен
 Зафиксировано target имя **ISurfacePlanningPipeline.prepare_surface_plan**, owner — surface planning. Требование реализации вынесено в [GEN-SURFACE-PLAN](./generator-public-surface-planning.md), долг [GEN-PLAN-1](../../docs/tz_generator_technical_debt.md#gen-plan-1); карта потребителей — [generator_public_method](./generator_public_method.md#публичные-preparation-pipelines--отдельные-domain-owned-интерфейсы).
 
 Потребляющие операции: L0 light/full и L2 detailed preparation при необходимости surface plan. Exact DAG consumer bindings OPEN; существующие ноды, их Input/Output, callers/callees и родство не изменяются. Reader не готовит планы и не поставляет pipeline настройки. Внутренний pipeline согласованного surface planning остаётся в домене; никаких новых NodeId этим разделом не вводится.
+
+## 18. Единственный активный full-bake и переиспользование результата
+
+**Решение пользователя:** нет необходимости дважды запускать одинаковый full-bake. Используется одна нода full_bake_initialization; запрещено параллельное дублирование full операции. Наличие одного NodeId само по себе не обеспечивает этот запрет между executions/процессами.
+
+### 18.1. Контракт повторного запроса
+
+- Если требуемый full уже опубликован, актуален и покрывает запрос — вернуть existing data/refs и accepted publication, без нового compute/publish.
+- Если соответствующий full уже выполняется — не запускать вторую операцию. Вернуть/использовать identity существующей операции; дальнейший wait/completion привязан к ней.
+- Если подходящего готового/активного результата нет — атомарно зарегистрировать операцию и допустить один запуск через существующую full_bake_initialization.
+- Error/неизвестное состояние не подменяется готовностью. Crash/retry не создаёт вторую работу, пока не подтверждены завершение/потеря владельца прежней операции по принятому recovery contract.
+
+### 18.2. Граница запрета параллелизма
+
+Предлагаемая область exclusivity — full-bake одного world_uid, включая обращения разных сессий, DAG executions и worker процессов. Full разных миров не ограничивается этим правилом автоматически. Detailed preparation не запрещается только по наличию full, если выполнены её реальные domain prerequisites и publication consistency.
+
+Переиспользуется только подходящая работа: совпадают source/preparation semantics и scope покрывает запрос. Другой source revision/несовместимый scope нельзя присоединить к старой операции и выдать её результат за актуальный. При несовместимом активном запросе нужна объявленная busy/conflict либо очередь, а не второй concurrent full; точная policy остаётся OPEN.
+
+Admission атомарный: «прочитать running, затем отдельно запустить» имеет race и не выполняет требование. In-memory bool/локальный asyncio.Lock не является гарантией между процессами. Декларация node concurrency и durable operation admission должны быть приняты как один контракт runtime/domain binding; deps регулируют порядок одного execution, а не dedup разных executions.
+
+### 18.3. Завершение
+
+Full child отдаёт prepared result родителю world_initialization. После успешной публикации родитель/runtime фиксирует terminal accepted result для той же operation identity. Повторные запросы читают эту запись/accepted domain result. До публикации compute-complete не считается full-ready. Exact durable operation store/worker/notification binding ещё требует приёмки.
+
+Existing Artifact lifecycle OperationRecord/PublicationBusy/PublicationTerminal — reuse candidates для совместимого lifecycle, но текущий OperationKind объявляет snapshot_apply/pack_activation/gameplay_start, а не full-bake preparation. Не выдавать publication claim за готовую cross-execution compute exclusivity и не создавать параллельный store без анализа owner. Exact full operation key/fingerprint/lease/recovery POJO и files OPEN.
+
+Это уточнение исполнения и повторных вызовов; родство, callers и graph edges не менялись. Код не создавался.

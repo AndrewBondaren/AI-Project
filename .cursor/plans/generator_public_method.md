@@ -29,7 +29,9 @@
 
 Capture boundary, exact types/files и baseline/GEO choice требуют domain freeze. Readers не получают обязанности подготовки или передачи настроек. Имена остальных ещё не разобранных pipeline interfaces не назначаются автоматически.
 
-## GBR-1 — синхронизированная карта exact proposal
+## GBR-1 — историческая карта exact proposal
+
+**Заменена поправками GBR-2 ниже; старые classes/fields не действующий freeze.**
 
 Нормативный проект, включая поля/enum/errors/lifetime и сценарии:
 [GEN-BAKE-READ §§5–12](./generator-public-bake-reads.md#5-exact-contract-freeze-proposal-gbr-1-2026-11-02).
@@ -59,8 +61,7 @@ read_wilderness_l2 за PackTerrainBakeReader, но операция **не до
 принятым именам и требует отдельной приёмки. Fake NamedLocation запрещена.
 Pin/absence/retention/GC, coverage producer receipt, immutable C23 publication join,
 C11 evidence и coordinate API — конкретные внешние OPEN §11. Snapshot draft adapters
-не готовые ports. SP-1/GEO EF-1 и частные SP-P0 §15.17 учтены; SP-P0 целиком/SP-M
-не приняты. Ни код, ни bindings, ни публикация/cutover не разрешены этой картой.
+не готовые ports. SP-1/GEO EF-1 и частные SP-P0 §15.17 учтены; P0/M имеют отдельные документальные приёмки Spatial §§15.19/16.16; executable ports не приняты. Ни код, ни bindings, ни публикация/cutover не разрешены этой картой.
 
 ## Актуализация: принятое решение о видимой композиции
 
@@ -95,3 +96,34 @@ existing detailed scope, exact coordinate read API OPEN. Full consumer L0+C23
 вызов domain reader, без SQL/storage в нодах. Не каждому методу нужна отдельная нода.
 Сначала reuse и контракт, затем concrete map. Это принятая архитектура, не freeze
 предыдущих proposed классов. CRUD evidence: [инвентаризация](./generator-domain-crud-inventory.md).
+
+## GBR-2 — актуальный proposal и gates (2026-11-02)
+
+**Независимый review: REVISE BEFORE ACCEPTANCE; D1–D7 НЕ ПРИНЯТЫ.** Приоритетные поправки, контрпримеры, actual evidence и решения на согласование — [GEN-BAKE-READ §17.10](./generator-public-bake-reads.md#1710-независимое-adversarial-review-d1d7-2026-11-02). R0 review выполнен с замечаниями; acceptance и executable freeze не закрыты. Старые строки реестра о full как одном L0+topology API — историческое требование consumer, не разрешение скрытой композиции.
+
+[Owning §17](./generator-public-bake-reads.md#17-gbr-2--продолжение-исследования-и-согласованный-предмет-review-2026-11-02) заменяет противоречащие строки GBR-1. **READY FOR DOCUMENT REVIEW, NOT ACCEPTED / NOT CODE-READY.** Архитектура domain readers и видимой композиции принята ранее, следующие exact решения ещё на согласовании.
+
+| Consumer requirement (не accepted binding) | Proposed public operation | Output / gate |
+|---|---|---|
+| read_world_light_bake | PackL0BakeReader.read_light_bake(WorldLight) | Found[LightBakeData] / Missing + typed error; product anchor/endpoint set, shared artifacts; GBR-R5-L |
+| read_scoped_light_bake | тот же метод, RequestLight explicit boxes/target | Requested tiles не сужаются до world-light; whole world readiness не вход; GBR-R5-L |
+| check_full_bake | PackL0BakeReader.read_full_bake + separate topology-domain read | **Предложено:** method возвращает FullL0BakeData; consumer full=L0+C23 в видимой DAG composition на одной pin. Не hidden PackFullBakeReader. GBR-R5-L+R5-C |
+| check_detailed_bake, NamedLocation | PackTerrainBakeReader.read_location_l2 | Owner-resolved terrain refs/dependencies; не C11 readiness. GBR-R5-T |
+| coordinate/wilderness requirement | Отдельная explicit operation того же terrain domain reader; имя OPEN | Scope XYZ без fake UID; отдельная приёмка, не blocker NamedLocation |
+
+Reuse existing WorldPublicationRef/ArtifactRef; explicit source/frame/scope и typed Found/Missing/Error. Ref resolution тем же domain reader возвращает immutable domain data, не file paths/reader/SQL. Caller заранее обеспечивает durable retention; read валидирует и заимствует transient access, durable holds не пишет. Exact pin остаётся пригодной при смене head, если retention/source requirements соблюдены; current-head admission отдельно.
+
+Новая file/factory map — owning §17.6; первоначальные PackFullBakeReader/full_bake field и inline Pack→topology composition отозваны. packReadServices остаётся composition root для L0/terrain; topology factory/domain contracts отдельны. Exact external receipt types/imports и leaf projections ещё R1/R2, не скрытые готовые ports.
+
+Этапы: GBR-R0 документальный review → R1 external semantic contracts → R2 exact freeze → независимые R3L/R3T/R3C по своим prerequisites → R4 cold/lifecycle evidence → R5 совместный GEN handoff. Код каждого этапа требует отдельной команды; no cutover. Межплановые proposed edges/parallelism, сценарии и решения D1–D7 — owning §§17.7–17.9. Общий граф не изменён.
+
+Поправки review к этой краткой карте (всё на согласовании):
+
+- `read_full_bake` проверяет full L0 required scope, включая bounded scope, переиспользует совместимые published tiles без требования последнего `bake_mode=full`. Consumer full видимо соединяет L0+C23; missing одной части не скрывает Error другой, no-settlements требует authoritative applicability census. Exact GEN composition/CALL bindings ещё не приняты.
+- Existing WorldPublicationRef/ArtifactRef и VerifiedArtifactRef/holders — reuse candidates, не готовые pin/read ports. Нужны accepted publication membership, immutable locator/format mapping и retention всей closure. Manifest hash и mutable current paths этого не обеспечивают.
+- External lifecycle удерживает closure до всех consumers и drain; read/resolve только borrow validated fenced access. Durable handoff новому owner подтверждается до release старого. Resolve принимает access evidence, exact pin и subset scope; stale/loss/out-of-scope — Error, не missing. Current-head admission отдельно от exact read и terminal placement CAS.
+- Предложено исправить primary-only reason: required index/climate/sidecars также data components; ноль primary при существующей части комплекта — incomplete. Absent означает отсутствие всего required data; допустимая пустота требует proof. Unknown owner/invalid target не missing terrain; authoritative XYZ partition и absence observation обязательны.
+- Immutable whole/part/leaf projections сохраняют L0 cell fields, L2 column facing/grade/region и terrain/material runs с coverage и coordinate binding; mutable wire lists не output. Пропущенная колонка не air без format evidence. Exact types и field parity ещё R2.
+- Coordinate operation terrain reader — отдельный slice X без выбранного имени API, fake NamedLocation или нового bake kind. Required XYZ не берётся из remaining-work wilderness planner; named/wilderness backing precedence и parent dependencies определяет published layout.
+
+Уточнённый порядок: R1/R2/R4/R5 по relevant L/T/C/X slice; C23 тоже требует R2-C, coordinate — R2-X/R3X/R4-X. Конкретные edges — owning §17.10.3, только предложение координатору. R5-L(light)→light binding; R5-L(full)+R5-C→full composition; R5-T→named terrain; R5-X→coordinate terrain. Нет whole-plan gates, world completeness→scoped или C11→terrain read. Applicable C11 остаётся detail readiness/placement gate. Runtime cold/GC/cancel/resume/ref-resolution evidence не получено. Изменены только документы; production POJO/ports, bindings, публикация и cutover не начаты.

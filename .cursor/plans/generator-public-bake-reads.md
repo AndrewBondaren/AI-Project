@@ -1,10 +1,12 @@
 # GEN-BAKE-READ — публичное чтение результатов bake
 
-**Памятка агента:** перед продолжением прочитать [шпаргалку границ и исправлений](./gen-bake-read-agent-cheatsheet.md). Актуальные решения пользователя — §§13–14; исходные proposals не являются принятым freeze.
+**Памятка агента:** перед продолжением прочитать [шпаргалку границ и исправлений](./gen-bake-read-agent-cheatsheet.md). Актуальные решения пользователя — §§13–15; текущая проверка и поправки proposal — §17; исходные proposals не являются принятым freeze.
 
 **Статус:** EXACT CONTRACT PROPOSAL / НА ПРИЁМКЕ, 2026-11-02. Локальные решения и внешние OPEN contracts — §§5–12; freeze пользователем не принят. Поручение пользователя: отдельное требование к генератору вне scope GEN-DAG с mapping нода → публичный метод → техдолг. Только документы; код и cutover не разрешены.
 
 **Owner:** генераторный домен / Pack read и владельцы topology. GEN-DAG задаёт требования потребителей и реализует bindings после приёмки публичных контрактов. DAG не собирает результаты из файлов, manifest и SQL самостоятельно.
+
+**Актуальный независимый review:** §17.10 имеет приоритет над противоречащими формулировками proposal ниже. D1–D7 не приняты; R0 document review выполнен с замечаниями, acceptance не закрыта.
 
 ## 1. Обязательная карта
 
@@ -24,7 +26,7 @@
 Пока это смысловые сигнатуры, не новые Python POJO/порты с неподтверждёнными типами:
 
 1. `read_light_bake(world identity, publication expectation, required L0 scope)` → полученные L0 данные/immutable domain refs либо факт отсутствия/неполноты требуемого scope.
-2. `read_full_bake(world identity, publication expectation, required full scope)` → полный согласованный результат L0 и требуемой topology либо факт отсутствия/неполноты. Точный состав topology и граница owning read operation требуют совместной приёмки Pack/topology owners; отсутствие settlement делает topology неприменимой, а не missing.
+2. `read_full_bake(world identity, publication expectation, required full scope)` → proposed full L0 результат. Consumer full требует отдельной видимой композиции с C23; D1 и её совместный контракт ещё на согласовании (§17.10).
 3. `read_location_l2(world identity, publication expectation, location identity, required L2 scope/LOD)` → terrain L2 данные/immutable domain refs либо факт отсутствия/неполноты. Домен разрешает owning terrain scope для district/building/room, не требует файл по любому leaf UID.
 
 Общий успешный результат: discriminated found/missing. found содержит non-null data или проверенные разрешимые refs на полный required scope; missing — подтверждённое отсутствие с конкретным missing scope, reason absent/incomplete. Не только ready bool или проценты прогресса.
@@ -61,7 +63,9 @@ Bulk остаётся в immutable artifacts с domain-owned refs. Нода не
 
 **Light readers:** группа light_bake_readers содержит read_world_light_bake и read_scoped_light_bake; смысловые I/O/Error/DoD — [§9.5 реестра нод](./gen-dag-node-dependency.md#95-light_bake_readers--выходные-контракты-и-definition-of-done). Обе читают L0 и обязательные связанные index/climate/metadata для своего coverage. Общий domain reader допустим. check_light_bake сохраняет прежнее родство; replacement bindings новых нод OPEN, нового parent NodeId нет. NamedLocation entry использует scoped reader; world complete не его prerequisite.
 
-## 5. Exact contract freeze proposal GBR-1 (2026-11-02)
+## 5. Первоначальный exact proposal GBR-1 (2026-11-02)
+
+**Историческая редакция: отмены §§13–15 и поправки §17 имеют приоритет, особенно full composition, refs, lifetime и file map.**
 
 **НА ПРИЁМКЕ, не принят.** §§5–12 заменяют прежние «определить на freeze»
 для локальных проектных решений. Внешние ports перечислены в §11 как OPEN;
@@ -266,8 +270,7 @@ nonempty declared ref с потерянным blob — Error.
 
 ## 9. Spatial / GEO / C11 compatibility
 
-Приняты SP-1 §14.12/14.14, GEO EF-1.12/14 и joint compatibility; SP-P0 целиком и
-SP-M не приняты. Bake coverage — наличие опубликованных artifact частей; Spatial
+Приняты SP-1 §14.12/14.14, GEO EF-1.12/14 и joint compatibility. Актуальные отдельные документальные приёмки Spatial — §15.19 (P0 design) и §16.16 (M); executable storage/read/materialization не приняты. §15.17 сам по себе не полный freeze. Bake coverage — наличие опубликованных artifact частей; Spatial
 coverage — wet/dry/unknown query facts. Ни world light/full, ни L2 found не дают
 Spatial known/dry и не делают L0 canonical water source. Required water evidence
 для consumer надо получать по принятому SP-1 read contract/EF-1 source revision;
@@ -524,3 +527,223 @@ prepare→PlanningService.get_or_build (cache miss может build). Progress p
 Read/decode errors conflated с absence: load/require_parent_light,
 PackReadContext.climate_tile_field. Render/gameplay/debug file-absence fallback
 отмечены отдельно; arbitrary errors им без evidence не приписываются.
+
+## 17. GBR-2 — продолжение исследования и согласованный предмет review (2026-11-02)
+
+**Verdict: READY FOR DOCUMENT REVIEW; NOT ACCEPTED / NOT CODE-READY.** Это новая редакция существующего проекта, не параллельный план. Предложения ниже требуют решения пользователя и владельцев внешних contracts. Архитектурные решения §§13–15 сохраняются; прежние противоречащие signatures/композиция/file map §§5–12 заменяются этим разделом, не являются альтернативами реализации.
+
+### 17.1. Baseline, повторная проверка и dispositions
+
+Прочитаны отчёты §§5–16, agent cheatsheet, consumer §§8–9/9.5/16, последние Spatial/Snapshot записи и отдельный LIGHT-HYDRO-ROUTE report. Git history owning: 6336c2a7, e468119d, e2835a91, ab53ad2c. На входе два разрешённых файла чисты; чужие изменения physics-spatial-dynamics, общего графа и untracked generator-light-hydrology-route-trace сохранены. Шпаргалка устарела в части P0/M приёмки; нормативны последние owning-записи. Статическая проверка не означает независимый runtime PASS.
+
+Повторно прочитаны реальные тела methods из ledger §5.1, wire types и factory. Уточнения:
+
+- WorldPackReader._decode_file → TileCodec.decode → kind-specific parse; read_location_terrain/read_wilderness_chunk используют cache UID/coordinates. Manifest reread по mtime/size не обеспечивает snapshot. Файлы читаются целиком; bounded verified stream не доказан. Retain codec/parser algorithms после отдельного format/limit audit; **replace binding/cache/error admission** для публичного пути, не reuse reader instance из legacy context.
+- parentLightLoad.load_parent_light ловит FileNotFoundError/OSError/ValueError → None; require переводит None в MissingParentLightError. Cache (world,gx,gy) не pin. Retain preparation callers из §5.1; replace только public binding. Remove helper запрещён до отдельного closure всех preparation/halo/climate callers.
+- PackLoadingProgressFacade → probe_extent → classifier; classifier вызывает PackTilePlanner.plan дважды и сравнивает manifest paths, обрезает missing list до 64, при empty index использует anchored SQL locations. **Это не bake**, но также не authoritative published read. Retain progress routes [map.py](../../backend/app/api/routes/map.py); исключить из public read graph.
+- PackFineTerrainReadFacade.read_location_terrain при entry absent возвращает debug status, при пропавшем blob — column_count=0; read_merged_cell вызывает gameplay.get_cell. Retain debug/gameplay callers; не переносить их semantics в новый контракт. Никакое значение ok/100%/column_count не completeness proof.
+- [FineTerrainChunkWire](../../backend/app/dataModel/worldPack/wire/fineTerrainChunkWire.py) frozen только сверху; columns/runs — lists, z-runs inclusive. Manifest hashes optional, lists mutable, paths не refs. Retain decode schemas; public immutable projection/verified refs обязательны. Conversion run z1→exclusive z1+1 проводится на domain boundary, не в DAG; отсутствие колонки не доказывает covered empty.
+- [settlementOutdoorTopology](../../backend/app/application/worldData/settlementOutdoor/settlementOutdoorTopology.py): topology_census пропускает district без frozen slot; should_skip_topology может вернуть true для authored children; load_topology_slots использует templates/context и возвращает assembler DistrictSlot. Caller [settlementOutdoorPackingJob](../../backend/app/application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py) — packing, не public read. Retain helpers; replace их роль readiness proof immutable topology reader. Remove только после отдельной C23 caller migration. C24 settlement.zst не C23 receipt.
+- Existing [WorldPublicationRef](../../backend/app/dataModel/worldSnapshot/identity/publication.py) уже имеет world_uid/publication_id/pack_hash/snapshot_head/active_timeline_id/gameplay_started. Existing [ArtifactRef](../../backend/app/dataModel/artifacts/references.py) уже имеет kind/format_key/format_version/content_hash/nbytes/row_count. **Reuse этих identities**, не новые строковые publication_id/artifact_id/digest DTO из §7. Наличие типов не доказывает namespace pinning или доступность bytes.
+
+Все legacy entries §5.1 получают общий transition gate: accepted method + independent parity/negative/caller evidence → explicit consumer migration → usage closure → возможное remove. В этом проекте ни одного безусловного remove production helper нет. Direct API→generator route из нового trace относится к GEN cutover owner, не удаляется в read-треке.
+
+### 17.2. Ownership и устранение full-composition конфликта — решение на согласование
+
+Предлагается сохранить три запрошенных имени с точным разделением:
+
+1. **read_light_bake** — Pack-owned L0 reader: WorldLight использует опубликованный product anchor∪hydro-endpoint set; RequestLight требует все explicit boxes независимо от world-light set. Index/coarse climate/metadata обязательны в обоих случаях.
+2. **read_full_bake** — второй метод того же Pack L0 reader, читает **L0 full producer result** для WorldBounds либо bounded boxes, возвращает FullL0BakeData. Не вызывает light reader/C23 reader и не обещает consumer full readiness. Общий private decode/coverage алгоритм допустим.
+3. **read_location_l2** — terrain reader с NamedLocation identity, explicit volumes и published owner mapping. Terrain-only; applicable C11 отдельно.
+
+Consumer `check_full_bake` требует результат **FullL0 + C23**. Его композиция остаётся видимой в DAG через public read operations; полное соответствие input publication/source/frame обязательно. Pack reader не принимает готовый C23 result ради скрытого агрегирования. `FullBakeData(light,topology)` §7 больше не output public Pack method; это требование будущей совместной GEN composition, exact node contract OPEN. Предложение именования устраняет противоречие, но пользователь должен явно согласовать семантику read_full_bake; автоматически менять consumer bindings нельзя.
+
+Topology domain reader выдаёт whole settlement closure либо его domain-owned parts (district slot/node/edge) по одной revision; whole может быть refs. Empty census даёт NOT_APPLICABLE, incomplete authored topology — missing, contradictory published census — error. Pack не определяет C23 numerical/topology correctness и не читает live SQL вместо versioned closure.
+
+Coordinate/wilderness: существующий detailed scope подтверждён, но три операции не покрывают вход без UID. Предлагаемый **следующий контрактный выбор**, не новое имя API: тот же terrain reader должен иметь отдельную explicit coordinate operation с common L2 result без target UID, по canonical XYZ union и published chunk layout. Не overload read_location_l2 и не возвращать отозванное имя read_wilderness_l2 как принятое. Приёмка названия/сигнатуры с GEN owner — design blocker coordinate ветви, не blocker NamedLocation implementation.
+
+### 17.3. Required coverage: источник истины и допустимая пустота
+
+Published coverage receipt предлагается как immutable Pack artifact, связанный с pack_hash, source/frame revision, format/grid/topology и producer operation identity. Содержит product light set, world bounds, declared artifact mapping и produced coverage; hierarchy/ownership и settlement applicability — refs на отдельно принадлежащие доменам versioned census. Receipt не запускает planner. Expected request boxes приходят от caller; domain проверяет их принадлежность target по pinned census и рассчитывает tile intersection чистой арифметикой. Нельзя вычислять expected только из фактически записанных tiles: capped debug bake иначе станет complete.
+
+Для L2 receipt содержит exact covered XY×Z unions и empty-coverage declarations, terrain-owner identity, parent L0/source dependencies и required sidecars по versioned terrain format. Parent coverage dependency относится только к requested terrain; whole-world L0 не нужен. Grade-dependent sidecars, если format объявляет их required, проверяются как closure; fine climate отдельно от terrain readiness, C11 отдельно. No runs может означать air/empty лишь по explicit coverage/format semantics, не по размеру списка.
+
+No publication не требует несуществующего manifest: request должен иметь source-bound expected-scope evidence от capture owner; для WorldLight это product expected-set receipt, для named leaf — hierarchy/scope receipt. Отсутствие этих evidence → PUBLICATION_UNAVAILABLE/OWNERSHIP_UNRESOLVED, не fabricated empty missing_scope. Их выпуск относится к preparation/capture, read лишь проверяет. Не опубликованное required artifact → missing; declared reference, отсутствующий в storage, → error.
+
+Seams: canonical split boxes по принятому topology/frame, отрицательные координаты floor division; не соединять split в гигантский AABB. Никакого скрытого halo. Full C23 applicability пересечение settlement territory с requested scope, затем whole closure settlement. Unrequested world tiles не сканируются. Shared обязательные index/climate проверяются даже для scoped read.
+
+### 17.4. Exact semantic Input/Output/Error delta (всё PROPOSED)
+
+Reuse EntityUid/RevisionHex, WorldPublicationRef/ArtifactRef по ссылкам §17.1. Existing types не расширяются этим документом. Boxes/TileKey из §10 сохраняют half-open integer semantics; strict bool rejection, nonempty normalized disjoint union, frame/topology обязательны. Domain normalization выдаёт canonical representation либо INVALID_SCOPE, не сужает scope.
+
+```text
+BakeIdentity(world_uid: EntityUid, source_revision: RevisionHex, frame_revision: RevisionHex)
+PinnedBake(publication: WorldPublicationRef, coverage_ref: ArtifactRef,
+           retention: ExternalRetentionEvidence)
+NoBake(expected_scope: ExpectedScopeEvidence, absence: ExternalAbsenceEvidence)
+PublicationExpectation = PinnedBake | NoBake
+LightReadRequest(identity, publication, coverage: WorldLight | RequestLight)
+FullReadRequest(identity, publication, scope: WorldBounds | tuple[FineBox2D,...])
+LocationL2ReadRequest(identity, publication, target_uid: EntityUid,
+                      volumes: tuple[FineBox3D,...], lod: Literal[TERRAIN_L2])
+VerifiedBakeRef(artifact: ArtifactRef, identity: BakeIdentity,
+                publication: WorldPublicationRef, part: BakePartScope)
+FullL0BakeData(tiles: tuple[VerifiedBakeRef,...], locations_index: VerifiedBakeRef,
+               coarse_climate: VerifiedBakeRef, metadata: VerifiedBakeRef)
+LightBakeData = та же форма данных L0, semantics различаются request/evidence
+LocationL2BakeData(target_uid: EntityUid, owners: tuple[OwnerVolume,...],
+                   terrain: tuple[VerifiedBakeRef,...], dependencies: tuple[VerifiedBakeRef,...])
+BakeReadEvidence(request_scope_digest: RevisionHex, coverage_ref: ArtifactRef,
+                 verified_refs: tuple[ArtifactRef,...], retention: ExternalRetentionEvidence)
+Found[T](identity, publication: WorldPublicationRef, resolved_scope, data:T, evidence)
+Missing(identity, publication: PublicationExpectation, requested_scope,
+        reason: ABSENT|INCOMPLETE, missing_scope: tuple[MissingBakePart,...])
+```
+
+ExternalRetentionEvidence/ExternalAbsenceEvidence/ExpectedScopeEvidence — **незакрытые external type slots**, не предлагаемые production classes или произвольные str. Их semantic obligations ниже точны, import/format принимает owner. NoBake missing не содержит фиктивный resolved_scope из manifest. Existing `WorldPublicationRef.pack_hash=None` требует отдельного подтверждения absence; сам None не proof. Snapshot head не добавляет runtime overlay к baked data.
+
+Public signatures: `async read_light_bake(request, *, control)` / `read_full_bake(request, *, control)` / `read_location_l2(request, *, control)` → соответствующий Found|Missing. Control — invocation-only cooperative cancellation, не сериализуемый request field; concrete existing cancellation binding проверяется на implementation preflight. Exceptions: BakeReadError с code + immutable tuple[Cause(part, code, diagnostic_id)], identity и expectation; никакого payload/storage path. Используется enum §7 плюс **RESOURCE_LIMIT** для явного refusal из-за лимита; unsupported format отдельно от corrupt. MissingBakePart — tagged variants вместо свободных nullable combinations: Tile(gx,gy), Singleton(INDEX|CLIMATE|METADATA), Terrain(owner_uid,box), Dependency(ArtifactRef). C23 missing принадлежит topology result, не Pack full method.
+
+Поправка review D5 (§17.10), на согласовании: ABSENT означает отсутствие всех required data components; proper subset комплекта, включая index/climate/required sidecars, означает INCOMPLETE. Receipt/retention не data components. Правило «no primary→ABSENT» отозвано как противоречащее GEN §9.1. Valid zero expected set с полными shared artifacts и empty evidence→found. Error проверенных requested declarations имеет приоритет над missing; error collection не обещает исчерпывающий IO после fatal access/limit failure. Стабильный порядок diagnostic causes, cancellation отдельно от result.
+
+Immutable refs разрешаются **тем же domain reader** по exact publication + ArtifactRef + requested sub-scope. Исправленный proposed resolution contract D6: `resolve(ref, scope, access_evidence, *, control)` проверяет subset verified part и действующую fenced retention, возвращает immutable domain projection либо typed error, никогда missing для уже verified declared ref. Минимальные формы L0 cell и L2 column/run сохраняют domain fields/registry identities и covered-empty evidence; storage wire lists напрямую не экспортируются. Exact per-domain leaf projections — R2, field preservation obligations — §17.10. До него whole-ref output нельзя объявлять готовым публичным resolvable API.
+
+### 17.5. Pinning, cancellation и resume — исправление read-only lifetime
+
+Варианты: (a) удерживать coroutine lease после return — отвергнут, не переживает restart; (b) read создаёт durable hold — отвергнут, скрытая запись; (c) **external lifecycle заранее удерживает publication closure**, read только заимствует validated access — предложено. Retention evidence обязано связывать owner operation, world, exact publication/closure, validity/release authority. Выпуск/renew/release — отдельные публичные lifecycle операции owner, видимые orchestration; не внутренний side effect read. Existing artifact holders являются строительными блоками, не принятым read-retention port.
+
+Внутри read: request admission → validate borrowed retention/absence → namespace guard → receipts/census → requested declarations decode/hash/coverage → result → release только transient resources. Cache только memory, key publication+ArtifactRef+decode version. Вся closure уже защищена на входе, поэтому cancellation между final check и delivery не создаёт orphan durable hold. При отмене worker IO должен завершиться/drain до освобождения namespace guard; не считать Task.cancel остановкой file worker. Lifecycle caller владеет eventual release при успехе/отмене/краше, read не делает скрытый rollback или release чужого hold.
+
+Resume: persist request/ref/evidence, external owner подтверждает retention, read повторно проверяет exact pin. **Head advanced не равен stale:** retained old publication допустима при exact-pin policy. Требование current head проверяет внешний consumer/publication admission отдельно; mismatch→PUBLICATION_STALE. Истёкший hold→REF_STALE; storage loss под действующим hold→DECLARED_ARTIFACT_MISSING. Нельзя автоматически перейти на latest. Read не обещает атомарного «current forever» после return; перед placement нужен собственный accepted publication/UOW gate.
+
+Подготовка missing создаёт новую publication: downstream повторно читает нужные части на новой compatible pin; нельзя compose старый L0 и новый C23 без owner-certified compatibility. Full pair проверяется по одному publication/source/frame; несовпадение→SOURCE_MISMATCH/PUBLICATION_STALE, не missing.
+
+### 17.6. Пересмотренная class/factory/file/import map
+
+Это **proposal**, не freeze. Prefixes A/D как §10; legacy files не удаляются. Retain PackReadServices как composition root, но не прокидывать его legacy context/planning/gameplay новым readers. Factory принимает конкретные accepted external dependencies позже; никакого getattr/optional fallback.
+
+| Proposed file | Symbols / imports / counts |
+|---|---|
+| D/worldPack/read/bakeReadRequest.py | Requests/scopes/identity; imports existing identity, snapshot publication, artifacts; no application control token |
+| D/worldPack/read/bakeReadResult.py | Found/Missing, domain refs, evidence; imports request + artifacts; no db/wire lists |
+| D/worldPack/read/bakeReadEnums.py | discriminators/error codes; без registry/router |
+| D/worldPack/read/bakeReadError.py | Exception + typed Cause; imports enums/request, no result→error reverse dependency |
+| A/pack/read/bake/l0Reader.py | PackL0BakeReader.read_light_bake/read_full_bake/resolve; injected pinned artifact access + coverage/census validation; no public domain read nesting |
+| A/pack/read/bake/terrainReader.py | PackTerrainBakeReader.read_location_l2/resolve; explicit owner mapping + terrain closure; no preparation |
+| A/pack/read/bake/coverage.py | pure required-vs-produced operations, canonical boxes, admission; no planner/SQL/IO |
+| A/settlementOutdoor/read/topologyReader.py | SettlementTopologyRead owned C23 payload/projections; own domain contracts, не import Pack FullBakeData; external versioned topology storage binding OPEN |
+| existing A/pack/read/packReadServices.py + core/container/packs.py | explicit l0_bake/terrain_bake composition after external contract acceptance; full_bake facade field НЕ добавляется; topology factory belongs topology composition, не hidden Pack nested read |
+
+Current direct counts: A/pack/read 22→22; new bake 0→3; A/settlementOutdoor 15→15, new read 0→1; D/worldPack/read 0→4. Empty package markers при требовании repo policy добавляют по одному в каждый новый каталог (итого +3), до code preflight проверить policy. §10 old 22→25 и PackFullBakeReader отменены. Topology public type file/leaf projections и concrete external adapters **ещё не заморожены**; counts здесь честно относятся к локальному предложению, не всему production footprint. New folders не освобождают от проверки ответственности/размера файлов.
+
+### 17.7. Сквозная проверка proposal (walkthrough, не тесты)
+
+| Сценарий | Проверенная логическая цепочка / stop |
+|---|---|
+| NamedLocation A ready, world B missing | Published target territory→RequestLight(A)→shared metadata/index/climate + A artifacts→found. B не читается; world-complete не вход |
+| NamedLocation light missing | Missing exact A→consumer world_creation готовит full вне read→новая accepted pin→FullL0 и C23 reads→detail. Старый missing не превращается в found по job counter |
+| Coordinates/wilderness | Trusted canonical box→FullL0+C23→coordinate terrain operation→C11 applicability→placement. Пока coordinate API не принят, ветвь BLOCKED; NamedLocation API не обход |
+| Empty world-light / no settlements | Receipt expected tiles=(), shared artifacts valid→found; topology census empty→NOT_APPLICABLE. Empty manifest без receipt не found |
+| L2 sparse empty | Explicit coverage+format empty semantics→found; пустые lists без coverage→error. Water dry/wet не используется |
+| Mixed missing + corrupted declared tile | Validate all accessible requested declarations→typed corruption; отсутствующий другой undeclared tile не скрывает error |
+| Hash/format/world/source mismatch | Declared missing→DECLARED_ARTIFACT_MISSING; wrong hash/coordinates→CORRUPT_ARTIFACT; unknown format→UNSUPPORTED_FORMAT; foreign world→WORLD_MISMATCH; stale scope/source→SOURCE_MISMATCH |
+| Leaf room + ambiguous owner | Traverse pinned census, cycle/overlap without explicit split→OWNERSHIP_UNRESOLVED; не nearest anchor и не файл по room UID |
+| Terrain ready / C11 missing | Terrain found сохраняется, detail placement не разрешён; C11 read отдельный owner gate |
+| Cancel mid-read / after final validation | Drain transient IO, close borrowed access; external retained closure остаётся caller-owned до его cleanup, no new durable hold/read result |
+| Restart + head moved | Reacquire existing retained exact pin→resolve old refs допустим; consumer current policy отдельно. Истёкший hold→REF_STALE |
+| Full results разных publications | Composition отказывает до downstream; no latest merge. Re-read на compatible accepted pin |
+| Limits / unsupported seam | RESOURCE_LIMIT/INVALID_SCOPE/format refusal, без truncation facts и giant AABB; actual numeric budgets должны быть приняты до runtime |
+
+### 17.8. Атомарные этапы и предложение интеграции в общий граф
+
+Gate IDs ниже локальные proposals GEN-BAKE-READ, не новые GEN nodes. Общий граф не изменяется этим заданием.
+
+| Этап / статус | Prerequisites | Scope / критерий приёмки / stop |
+|---|---|---|
+| GBR-R0 — исследование, REVIEW READY | existing consumers §§8–9/16 | Evidence §§17.1–7; снять локальные противоречия, принять решения §17.9. Не code |
+| GBR-R1 — external semantic agreements, OPEN | R0 review, named owners | Publication/retention/absence, coverage/hierarchy receipt и topology join; exact existing/new types/imports. Не ждать весь Snapshot DONE |
+| GBR-R2 — exact method/leaf/file freeze, OPEN | принятые R0 решения + relevant R1 contracts | Три methods, immutable cell/column projections/resolve, closed errors и complete files/counts. Coordinate отдельный slice. Не bindings |
+| GBR-R3L — L0 read implementation, NOT STARTED | R2-L, accepted pinned access/coverage producer + отдельная команда | light world/scoped + full L0, negative/empty/hash/limit/no-write tests; остановка на приёмке domain methods |
+| GBR-R3T — named terrain implementation, NOT STARTED | R2-T, pinned ownership/terrain coverage, команда | Named leaf/volume closure; отдельные tests; не C11/coordinate/cutover |
+| GBR-R3C — topology read, NOT STARTED | topology-owner exact contract, accepted versioned storage/retention, команда | C23 closure/applicability; никакого live SQL fallback; owner acceptance |
+| GBR-R4 — lifecycle/cold integration, OPEN | соответствующие R3 + concrete lifecycle ports | restart/resume/drain/GC/race, declared-loss, mixed-publication negatives, actual resolver; не выводить PASS из unit mocks |
+| GBR-R5 — consumer handoff, OPEN | accepted relevant R4 + совместный GEN contract | Передать verified public operations; GEN independently implements bindings. Не production switch |
+
+Parallel: R1 publication и topology/coverage исследования независимы; R3L/R3T/R3C могут выполняться после своих gates с раздельными файлами, shared DTO/factory меняет один writer. Whole world readiness не prerequisite scoped slice; topology не prerequisite light/L2; C11 не prerequisite terrain read, но prerequisite applicable placement. Coordinate extension не блокирует три named операции. SP-M не prerequisite L0 design; implementation canonical L2 source compatibility предъявляется только там, где consumer использует canonical SP-4 output.
+
+**Предложение координатору графа:** добавить отдельную ветвь R0→R1→R2→{R3L,R3T,R3C applicable}→R4→R5, с пооперационными gates вместо общего «GEN-BAKE-READ DONE». Рёбра external accepted pin/retention→R3 соответствующей ветви; published scope/ownership→R3T; versioned C23→R3C; R5-L→concrete light binding, R5-L+R5-C→full composition binding, R5-T→named L2 binding. C11→detail consumer readiness, не R3T. GEN совместный design параллелен; GEN cutover не prerequisite R0–R4. Нужные publication ports могут опираться на Snapshot stages, но B PASS не accepted port; B-2 E2E не вход GBR (иначе ложный цикл). Эти межплановые рёбра предъявлены, не применены и не приняты.
+
+External status: Spatial §15.17 requirements, §15.18 diagnostic closure/§15.19 design acceptance и §16.16 materialization acceptance учтены **только в их документальных scopes**. Численные Hydrology TLV caps не распространяются автоматически на L0/terrain formats; их budgets отдельно. GEO-I1 independent PASS не producer/Pack acceptance. Snapshot B повторный PASS не пользовательская приёмка и не lifetime integration. Ни один из этих статусов не закрывает GBR-R1/R4.
+
+### 17.9. Решения на предметное согласование и следующий шаг
+
+**Локальные design decisions:** D1 read_full_bake означает full L0 producer result, consumer full=C23+L0 видимо в DAG; D2 reuse WorldPublicationRef/ArtifactRef вместо строковых дублей; D3 caller-owned pre-acquired retention, reads без durable writes; D4 exact pin отдельно от current-head policy; D5 source-bound coverage/ownership receipts и primary-data absent/incomplete; D6 общий domain resolver и immutable leaf projections; D7 coordinate operation отдельно без fake UID/самовольного имени.
+
+**External contracts:** exact receipt/retention/absence types и lifecycle authority, versioned topology join, published leaf ownership/coverage producer. Это блокеры executable contract freeze, а не повод отложить исследованные D1–D7. **Runtime proofs:** bounded IO, cancellation drain, crash/GC/retention, decoder/format parity, cold scope completeness — будущие проверки, не нерешённые варианты дизайна.
+
+Следующий разрешённый шаг: предметное согласование D1–D7 и cross-owner semantic R1 review, затем заполнение точных external type/import slots и immutable leaf projections R2. Не создавать production POJO/ports/code, не включать bindings и не публиковать мир. Пользовательская приёмка отдельно от этого verdict. Координатору предъявить §17.8 как готовое предложение графа; данный трек не правит чужие owning-планы.
+
+### 17.10. Независимое adversarial review D1–D7 (2026-11-02)
+
+**Verdict: REVISE BEFORE ACCEPTANCE; NOT ACCEPTED / NOT CODE-READY.** Статический review actual types/callers/storage flow выполнен заново, без принятия выводов §17.7 за доказательство. D1–D7 сохраняются решениями на согласование **с поправками ниже**. R0 review выполнен, но R0 acceptance и R1/R2 не закрыты. Ни runtime PASS, ни принятие пользователем из этого не следуют. Изменены только этот документ и реестр методов; межплановые изменения ниже — предложения владельцам.
+
+#### 17.10.1. Проверяемое evidence и границы вывода
+
+Пути в таблице относительно `backend/app/`; symbols позволяют воспроизвести поиск независимо от смещения строк.
+
+| Evidence | Проверенный факт / следствие |
+|---|---|
+| `dataModel/worldSnapshot/identity/publication.py::WorldPublicationRef.coherent_refs` | Проверяет world/head и started constraints, допускает pinned branch point; не делает IO, CAS, ancestry или retention. `pack_hash=None` возможен до started, не доказательство отсутствия bake |
+| `dataModel/artifacts/references.py::ArtifactRef` | Content identity, format/version, bytes и row count; ни locator, ни world/publication membership. `SQL_ROWS` тоже допустим: нельзя проектировать resolver только как filesystem blob lookup |
+| `dataModel/artifacts/lifecycle/holders.py::VerifiedArtifactRef`, `application/artifacts/staging/artifactStaging.py::verify` | Уже есть ref+holder и проверка sealed/held под catalog guard. Reuse candidate, но verified object не гарантирует будущую retention или publication closure |
+| `application/artifacts/storage/artifactCatalog.py::IArtifactCatalog.guard`, `contracts/holderPort.py`, `contracts/formatBackend.py::ArtifactBackend` | Guard общий для holders/writers/GC; есть verify/delete/write, но этот backend contract не даёт public typed domain read. Наличие artifact staging не означает готовый resolver |
+| `application/worldData/pack/io/worldPackWriter.py::_atomic_write`, `write_locations_index`, `save_manifest` | Replace blob по текущему path, index пишет JSON, manifest hash вычисляется отдельно. Это не immutable namespace на publication и не атомарная публикация всех artifacts. Hash manifest не locator и не proof bytes retention |
+| `pack/io/worldPackReader.py::read_location_terrain/read_wilderness_chunk/_decode_file` | Lookup по UID/coordinate path, cache без publication, decode всего файла. `pack/read/packFineTerrainReadFacade.py` и `packRenderReadFacade.py` реально вызывают эти методы; их caller migration обязательна отдельно, не автоматический reuse instance |
+| `dataModel/worldPack/meta/worldPackManifest.py::TileManifestEntry/LocationTerrainEntry/ChunkRef` | Hash optional, mutable lists, territory_volume и z_band не exact produced XYZ coverage; нет leaf ownership census или versioned C23 closure |
+| `dataModel/worldPack/wire/fineTerrainChunkWire.py` | Column/run типы находятся здесь (не в отдельном fineTerrainColumnWire.py); chunk и runs содержат lists. z-runs inclusive; `cells()` использует min/max, поэтому сам helper не доказывает валидность упорядоченных runs |
+| `pack/bake/plan/packTileCollect.py::light_l0_tiles/world_bounds_l0_tiles`, `pack/bake/detailed/detailedBakeScope.py::_wilderness_plan/wilderness_tiles` | Light anchor∪endpoint; full world bounds. Wilderness preparation пропускает complete tiles и ограничивает max_tiles; список оставшейся работы нельзя использовать как expected read scope |
+| `settlementOutdoor/settlementOutdoorTopology.py::topology_census/has_frozen_c23_districts` | Census отбрасывает district без frozen slot; пустой результат не доказывает отсутствие settlements. SQL rows и DistrictSlot не immutable published C23 read |
+
+Consumer cross-check: GEN-DAG §§8–9 требуют requested stage, data/разрешимые refs, nonempty missing scope и отдельный Error; §9.3 требует L0+C23, §9.4 — leaf→owner и coordinate target; §9.5 — partial world/scoped independence и shared index/climate/metadata; §16 — Named light→при missing full, coordinates full→detail, terrain не C11 readiness. §9.5 ещё содержит OPEN anchor/territory rule: **предложить владельцу** синхронизировать его с принятыми уточнениями §§14–15 и product anchor∪endpoint; reader сам правило не расширяет. GEN документ здесь не изменён.
+
+#### 17.10.2. Контрпримеры, варианты и сквозные поправки
+
+**D1 — поддержать направление, исправить composition contract.** Контрпример: L0 missing, C23 declared blob потерян; early return missing запускает подготовку вместо остановки на storage error. Другой: light anchor tiles complete, но full scope содержит ещё tile — вызов light не доказывает full. Hidden Pack aggregate отвергнут архитектурой §§13–15; заменить full на world-light нельзя. Предложение: `read_full_bake` проверяет full L0 **required bounded scope**, не требует исторического запуска full job или `bake_mode=full`; совместимые ранее опубликованные tiles переиспользуются. WorldBounds — лишь один вариант scope, не глобальный prerequisite. Full consumer видимо получает L0 и applicable C23 с одной pin/source/frame, возвращает found только при обоих complete, union missing при отсутствии ошибок. Не short-circuit по L0 missing до проверки применимого C23; fatal Error допускает остановку IO, но не missing. Empty applicability требует authoritative census, не filtered topology_census. C23 applicability/whole closure решает topology domain, не арифметика в DAG. Предложить GEN owner exact composite result/error policy и CALL/RETURN bindings, не новые NodeIds здесь. Cancel ждёт drain обоих reads; resume сохраняет обе части и pin, повторно валидирует их, не смешивает старую часть с новым head.
+
+**D2 — reuse принять только как identity reuse.** Контрпример: два мира используют одинаковые bytes ArtifactRef; ref валиден по hash, но чужой для requested publication. Или manifest старой pin сохранён, а `world_map.zst` заменён новым bake. String DTO дублирует identity; raw path привязывает DAG к storage; одного ArtifactRef недостаточно. Предложение: domain envelope связывает existing ArtifactRef с exact publication, source/frame, semantic part и receipt membership. Owning storage обеспечивает immutable locator/namespace mapping и registry format binding для BLOB/SQL_ROWS, без live rows fallback. Нельзя предполагать, что pack_hash равен content_hash конкретного blob или canonical manifest без принятого mapping/hash contract. Coverage receipt не должен включать собственный hash через pack_hash циклически: предложить двухуровневый immutable receipt content + publication root, который связывает receipt ref и pack identity; exact encoding принимает owner. Retention покрывает root, receipts/census, locators и всю closure, не только tiles. На resume descriptor/membership проверяются вновь; существующий VerifiedArtifactRef переиспользовать, если accepted holder semantics подходят, не создавать параллельный holder DTO по умолчанию.
+
+**D3 — externally owned retention требует fencing до конца чтения.** Контрпример: is_held=true при admission, caller release/expiry сразу после него, GC удаляет bytes во время decode либо до resolve после RETURN. Durable acquire внутри read нарушает read-only, удержание coroutine не переживает crash. Предложение: lifecycle owner заранее создаёт/передаёт hold на closure; borrowed access атомарно проверяет membership/hold и блокирует deletion/release либо гарантирует drain до их действия. Конкретная техника (catalog guard или owner-fenced read guard) требует acceptance и bounded lifetime; одной финальной проверки недостаточно. Read не renew/release durable hold. Caller release только после всех consumers и drain; при передаче результата новому owner сначала durable handoff с acknowledgement, затем release прежнего owner. Crash cleanup отличает незавершённый handoff от завершённого, eventual GC не зависит от завершения coroutine. Borrow/close и memory cache допустимы без durable writes. Expiry до borrow→REF_STALE; утрата declared bytes под действующей защитой→Error. Нужен отдельный read-only access contract, staging verify не подставляется как готовый порт.
+
+**D4 — exact pin и current policy надо передавать раздельно.** Контрпример: head P→Q во время долгого read; повторная проверка current на каждом blob случайно отвергает coherent P или смешивает Q. Альтернатива «всегда latest» ломает resume; «current при старте навсегда current» не защищает placement. Предложение: read и resolve всегда exact P; отдельное admission evidence фиксирует policy, comparison point, expected source и P. Current-head admission только наблюдение в определённой точке, terminal placement требует собственного CAS/UOW. Если нужна гарантия до RETURN, owner обязан дать fence, иначе такая гарантия не заявляется. Head moved сам по себе не stale для retained exact pin. Историческая pin не доказывает актуальность mobile target/source: explicit source requirement может отказать независимо от head. Policy refusal и source mismatch не missing, cancel не меняет policy, resume не повышает pin до latest автоматически.
+
+**D5 — изменить primary-only reason и ownership/absence proof.** Контрпример: tiles отсутствуют, index/climate опубликованы; §17.4 называет это ABSENT, хотя GEN §9.1 определяет часть комплекта как INCOMPLETE. Другой: комната удалена/не существует в pinned hierarchy — это не missing terrain с просьбой rebake. Третий: territory_volume присутствует, но половина Z никогда не produced; нельзя found по bounding box. Предложение заменить правило §17.4: ABSENT — ни одного required data component не опубликовано, INCOMPLETE — proper subset комплекта (включая required sidecars); receipts/retention сами не считаются data. Пустое primary set даёт found только при доказанной допустимой пустоте и всех shared components. Любая повреждённая requested declaration→Error до missing; scope unknown/недоказанная absence→Error, не пустой missing_scope. Удалённый/foreign target→invalid target/world/source error, неизвестный mapping→OWNERSHIP_UNRESOLVED, валидный target с неопубликованным owner terrain→missing. Owner census задаёт exhaustive partition requested XYZ, explicit overlaps precedence/splits и no-owner empty semantics; nearest anchor/filtered pins запрещены. NoBake evidence фиксирует world/source/frame/scope и точку отсутствия; concurrent publication делает его историческим наблюдением, подготовка использует отдельный CAS и recheck. Evidence нельзя бесконечно replay как current absence после resume. Exact отсутствие артефакта в authoritative publication отличается от потери declared bytes. Это предложение совместной синхронизации semantics с GEN owner, не самостоятельное изменение GEN.
+
+**D6 — resolver пока не executable contract; поправить lifetime и проекции.** Контрпример: `resolve(ref, scope)` §17.4 не принимает retention, хотя hold мог закончиться; либо scope расширен за verified part и прочитаны чужие данные; shallow-frozen columns позволяют mutate cached runs следующему consumer. Вариант eager whole-world decode не нужен; manifest-only refs не удовлетворяют GEN §9.1. Предложение signature semantics: `resolve(ref, requested_subscope, access_evidence, *, control)` на том же domain reader, subset verified part, exact publication/format/membership/hold admission; никакого durable token в ref. Результат — immutable projection + exact coverage/provenance, Error при loss/stale/out-of-scope, не missing. Immutable materialized data можно хранить после release, но повторное IO требует нового accepted access на ту же pin; валидность ref не бесконечна.
+
+Leaf freeze R2 должен включать field preservation table, а не только название DTO: L0 cell — tx/ty, surface_z, terrain/region/dominant identity, hydrology role/width, climate id, location pin, facing/grade; L2 column — world/local coordinate binding, facing/grade/region, tuple runs terrain/material и explicit covered Z; run half-open conversion inclusive z1→z1+1 с проверкой ranges/overlap/limits. Registry/index refs pinned к тому же source. Отсутствующая колонка не air без coverage rule; несовместимый wire version не заполняется defaults. Whole/part/cell projections должны совпадать по значениям, coverage и пустоте, mutable wire lists не выдаются наружу. Проверка пригодности refs до Found включает accessible verified content/accepted immutable sealed verification, не только catalog entry; bounded IO refusal→RESOURCE_LIMIT, без ложного Found. Cancel во время resolve drain-ит access, resume заново проверяет его.
+
+**D7 — отдельный coordinate контракт обоснован, но XYZ не равен готовому existing reader.** Контрпример: wilderness_tiles для complete tile возвращает []; read принимает это за пустой required set и found. Или coordinate volume пересекает location terrain и wilderness chunks, оба заявлены, но с разными parent source. Overload с fake UID отвергнут; новый bake kind не нужен. Предложение отдельной explicit coordinate operation terrain reader оставить на приёмке, общий L2 payload без обязательного target UID, с trusted anchor/frame/topology, canonical half-open XYZ union и authoritative layout/ownership. Layout выбирает named/wilderness backing и precedence, не исключает location volumes молча; incompatible dependencies→Error, непроизведённые volumes→missing. Scope берётся из запроса, не remaining-work planner/max_tiles. Seam split, negative floor division, requested Z и parent L0 dependencies одинаковы с named read. Coordinate API/preparation binding — отдельный delivery slice, block только координатного entry; terrain found не доказывает applicable C11/позицию. Resume сохраняет coordinate provenance, scope digest и exact pin; chunk re-layout на новом head не переинтерпретирует старый ref.
+
+#### 17.10.3. Исправленный порядок gates и межплановые предложения
+
+§17.8 не означает одну линейную очередь всего трека. Предлагается индексировать R1/R2/R4/R5 по L (L0), T (named terrain), C (C23), X (coordinates). R0 documentary review evidence готов; принятие D1–D7 отдельно. Для каждого среза: relevant R1 owner semantic/type agreement → R2 exact method/result/errors/leaf/import/limits freeze → отдельно разрешённый R3 → R4 actual cold resolver/lifecycle proof → R5 совместная GEN карточка/handoff. C23 также требует R2-C, coordinate — R2-X/R3X/R4-X, а не неявное расширение R3T. Ни один R3 не начат этим review. Старые folder counts §17.6 — provisional footprint, не complete freeze (projection/storage/type reuse ещё могут их изменить).
+
+| Proposed edge / gate | Почему ровно это, а не целый план |
+|---|---|
+| Accepted immutable publication membership+locator/hash+borrow/hold contract → соответствующий R2/R3 | Snapshot B PASS или весь Snapshot DONE не эквивалент нужному порту; R1 discussion не ждёт implementation |
+| Producer expected/produced coverage artifacts и source/frame agreement → R3L/T/X по scope | Read не выпускает receipt. Producer contract можно проектировать параллельно R1; нужны реальные publishable artifacts к R4, не bootstrap всех миров |
+| Published hierarchy/owner partition → R3T; coordinate layout → R3X | Whole-world completeness не prerequisite. Parent L0 closure только для requested terrain |
+| Versioned C23 applicability+closure+publication join → R2-C/R3C | C23 не блокирует R3L/T/X terrain; C24 settlement blob не замена C23 |
+| R5-L(light) → respective light binding; R5-L(full)+R5-C → full composite binding | Нет edge «весь GBR DONE→весь GEN». Full missing/error aggregation и CALL bindings принимает GEN, не helper reader |
+| R5-T → named terrain binding; R5-X → coordinate terrain binding | Coordinate не блокирует NamedLocation. Согласованные bounded full/C23/base contracts отдельно нужны coordinate entry |
+| Applicable C11 evidence → detail readiness/placement integration | Не C11→terrain read. Spatial compatibility только для реально требуемого downstream canonical source, не весь Spatial→L0 |
+
+Предъявить координатору как **замену** общего R0→R1→R2 fan-out и уточнение пооперационных §17.8 edges; общие gate IDs не вводят whole-plan dependency. GEN §§8–9/9.5/16 consumer design идёт параллельно; concrete binding ждёт только своего accepted handoff, cutover — внешняя отдельная приёмка. Нет обратного GEN cutover→read ports или Snapshot E2E→GBR цикла.
+
+R4 minimum evidence для каждого применимого среза: complete scoped/partial world; optional/required empty; zero-primary с shared components; missing+declared-loss; foreign membership при одинаковом hash; retained P после Q; expired hold; release/GC race в borrow и после RETURN; crash до/после handoff ACK; cancel обоих full reads/resolve и drain; restart с тем же scope/pin; whole/part/leaf parity; sparse Z hole и overlapping owners; coordinate seam/negative tiles. Это будущие integration acceptance cases, **не выполненные тесты**. Unit mocks не доказывают storage lifetime.
+
+#### 17.10.4. Конкретный пакет решений на согласование
+
+Предлагается согласовать D1 с full-L0 scoped semantics и отдельной C23 error/missing composition; D2 с existing identities плюс owner membership/locator и ацикличным receipt root; D3 с fenced borrowed access, external durable handoff и drain; D4 с отдельным current admission/CAS и retained exact reads; D5 с component-based absent/incomplete, exhaustive ownership и point-in-time absence; D6 с access-aware resolver и field-preserving immutable leaf projections; D7 с отдельной coordinate operation/layout без имени, fake UID или нового bake kind. Альтернативы и причины отказа приведены выше, а не оставлены одним OPEN ledger.
+
+До приёмки нельзя объявлять эти решения freeze. После принятия следующий документальный результат — R1 owner agreements и R2 exact slots/projections по отдельным срезам. Код, production POJO/ports, новые bindings, publication и cutover остаются за stop boundary. Review не принимает ни D1–D7, ни межплановые рёбра от имени пользователя.
