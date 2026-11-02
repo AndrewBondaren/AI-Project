@@ -14420,3 +14420,38 @@ projection/admission contract и не разрешение producer code/G10-A c
 Следующие открытые решения: G1/G2 для exact final geometry и Z convention;
 затем exact POJO/API/version/file/caller freeze и evidence по согласованным gates.
 Producer code, G10-A cutover и самостоятельная приёмка этим выбором не разрешены.
+
+### 10. Exact geometry G1 и вертикальная граница — решения пользователя (2026-11-02)
+
+На предложение G1 для первого этапа пользователь ответил «1. Ок»;
+на предложение `bed_z < z ≤ level_z` — «2. Согласен».
+Эта запись заменяет OPEN выбора G1/G2 и Z convention в предыдущих разделах.
+
+- **Выбран G1:** сохранять готовые точные высоты принятого final bed. Допускается
+  lossless compression samples/runs; нельзя подменять их approximate L0 heights,
+  clamped L2 surface или повторным solve. Exact retained geometry должна быть
+  связана с тем же final source/dependency graph, что и water membership.
+  G2 recipe+overrides не выбран для первого этапа. Codec, shard layout и размер
+  retained geometry scope остаются предметом exact storage/domain freeze,
+  но не поводом молча перейти на G2.
+- **Принята дискретная граница:** `bed_z < z ≤ level_z`, эквивалентный half-open
+  interval `[bed_z+1, level_z+1)`. Клетка bed_z принадлежит дну; первый water cell
+  — bed_z+1, последний — level_z. Ненулевой water column требует bed_z < level_z.
+  Это volume convention для resolved wet membership, не способ вывести membership
+  только из высот. Shore и river bed сами по себе liquid volume не создают.
+- До exact freeze сверить существующие surface-top/FineTerrainZRun/MapCell
+  consumers и vertical bounds с принятой convention, включая clipping к окну
+  и верхнюю exclusive границу. Найденное расхождение оформить как явный migration
+  disposition; convention не менять молча и сдвиг на один слой не скрывать.
+
+Сводка выбранного направления: общий fine P2 (A); резервирование всей области
+преобразования, включая острова; exact membership row runs (R1); exact final bed
+(G1); дорогая однократная full-fine preparation допустима; bounded window reads;
+open-water scope, explicit unknown и complement dry в доказанном scope;
+canonical geometry имеет приоритет в L2; water Z interval `(bed,level]`.
+
+Два оставшихся пользовательских выбора закрыты. Техническая проработка exact
+POJO/validators/API/versions/source refs, полного fine P2 caller inventory,
+storage budgets и surface-top compatibility продолжается как документационный
+scope. Это не приёмка всего GEO-SPATIAL-CONTRACT/SP-1/SP-P0, не разрешение producer
+code и не запуск G10-A cutover. Acceptance остаётся за пользователем.
