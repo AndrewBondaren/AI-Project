@@ -47,8 +47,7 @@ Found содержит проверенные разрешимые immutable ref
 missing содержит nonempty exact absent/incomplete scope. Valid empty — found.
 Declared artifact loss, stale/wrong-world/corruption/unsupported/read failure — Error.
 
-World light = authoritative location anchor/territory ∪ полная declared hydro
-geometry tile coverage, не world_bounds, не endpoints-only collector. Request
+World light сохраняет existing light_bake: static location anchor tiles ∪ declared hydro endpoint tiles; не world_bounds и без расширения на territories/interiors. Request
 light проверяет весь request scope плюс обязательные index/climate/metadata;
 world completeness не блокирует NamedLocation. Full = required L0 + применимые
 целые C23 settlement closures; нет settlements → NOT_APPLICABLE, не missing.
@@ -78,3 +77,21 @@ publication/retention. Строка read_full_bake сохраняет требо
 уровень/имя aggregate API и concrete binding OPEN, скрытый Pack composite запрещён.
 PackLightBakeReader/PackTerrainBakeReader и topology-owner domain read остаются
 proposed targets. Это принятие архитектурного принципа, не всего contract freeze.
+
+**Актуальное уточнение пользователя:** сохраняются light_bake/full_bake/detailed_bake;
+новые bake kinds не вводятся. Source-backed semantics и отменённые расширения —
+[GEN-BAKE-READ §14](./generator-public-bake-reads.md#14-уточнение-семантики-по-генератору-без-новых-bake-сущностей).
+Предложение read_wilderness_l2 отозвано как выбранное решение: wilderness уже
+existing detailed scope, exact coordinate read API OPEN. Full consumer L0+C23
+композиция не приписывается body L0 full producer. Class/POJO map пока proposal,
+не разрешение создания новых production сущностей.
+
+## Принятая архитектура readers
+
+[GEN-BAKE-READ §15](./generator-public-bake-reads.md#15-принятая-архитектура-domain-readers-2026-11-02):
+у каждого домена публичный reader с domain-owned typed contracts от целой сущности
+через часть до минимальной доменной единицы. Whole entity допускает metadata+refs;
+все уровни согласованы по revision. Consumers CALL публичные read-ноды; внутри них
+вызов domain reader, без SQL/storage в нодах. Не каждому методу нужна отдельная нода.
+Сначала reuse и контракт, затем concrete map. Это принятая архитектура, не freeze
+предыдущих proposed классов. CRUD evidence: [инвентаризация](./generator-domain-crud-inventory.md).

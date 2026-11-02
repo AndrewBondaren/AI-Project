@@ -10,6 +10,8 @@
 |---|---|---|---|
 | `ISurfacePlanningPipeline` | `prepare_surface_plan` | Согласованный immutable surface-plan bundle для captured inputs, с source/dependency evidence и diagnostics | Подготовка L0 light/full и L2 detailed, когда соответствующей операции нужен surface plan; exact DAG binding OPEN |
 
+Target реализация — `SurfacePlanningPipeline`; публичный интерфейс `ISurfacePlanningPipeline`, метод `prepare_surface_plan`. Суффикс `Pipeline` явно обозначает доменную последовательность одной операции.
+
 Имя интерфейса и метода — target требование. Сейчас этих символов в коде нет. Существующие `SurfacePlanningEntry`, `SurfacePlanningCapture`, `SurfacePlanningAssembler` — evidence и кандидаты внутренней реализации, а не интерфейсы для прямого импорта в engine.
 
 Новая нода подготовки планов не назначается. Таблица не меняет I/O, callers/callees и родство `light_bake_initialization`, `full_bake_initialization`, `detailed_bake_initialization` или readers. Конкретный node → interface binding согласуется отдельно. Light readers не становятся потребителями preparation pipeline и не поставляют ему настройки.
@@ -66,3 +68,23 @@ Pipeline не принимает решений о выборе старта, mi
 - [ ] Принять domain implementation; отдельно согласовать concrete consumer bindings. Не переводить автоматически debug/production callers и не менять родство.
 
 Долг: [GEN-PLAN-1](../../docs/tz_generator_technical_debt.md#gen-plan-1). Реестр: [generator_public_method](./generator_public_method.md). Owning DAG-план: [GEN-DAG-1](./gen-dag-1-post-geo-ws.md).
+
+## 8. Декомпозиция существующих оркестраторов — граница DAG / Pipeline
+
+**Точная формулировка пользователя:** упрощение — декомпозиция оркестратора в линейные pipeline, где оркестратор находится в DAG. Не сохранять генераторную оркестрацию под новым именем. Публичные domain interfaces/implementations имеют суффикс Pipeline.
+
+| Существующий компонент | Что требуется разобрать / выделить | Судьба оркестрации |
+|---|---|---|
+| `WorldSurfaceMaterializationOrchestrator` | Разделить управление light/full/detailed и последовательностями L0/C23, L2/C11 от domain compute pipelines | Межоперационное управление переносится в DAG; прежняя orchestration-обёртка под удаление после принятой замены/cutover |
+| `PackMaterializationOrchestrator` | Разделить surface planning, climate, L0, фоновые jobs и publication; линейные domain pipeline должны иметь отдельные принятые результаты | Управление самостоятельными операциями переносится в DAG; старый composite pipeline не оборачивается целиком новым интерфейсом |
+| `PackDetailedBakeOrchestrator` | Выделить линейные вычислительные pipeline для принятых detail-операций; отделить самостоятельные climate/grade effects. Exact decomposition OPEN | Оркестрация отдельных операций принадлежит DAG; кандидат внутреннего refine pipeline не считается принятым без I/O/Error/DoD |
+| `WorldMapBakeOrchestrator` | Кандидат декомпозиции в линейный L0 compose/preparation Pipeline; отделить effects и получить staged result. Exact interface/method name OPEN | Внутренние contributors/растеризация могут остаться стадиями одной операции; межоперационные решения не остаются в генераторе |
+| `SurfacePlanningAssembler` / `SurfacePlanningEntry` | Согласованная внутренняя подготовка единого bundle оформляется как `SurfacePlanningPipeline` за `ISurfacePlanningPipeline.prepare_surface_plan`; capture boundary остаётся OPEN | Providers/cache/внутренние зависимости обслуживают одну операцию; управление этим pipeline вместе с соседними публичными операциями находится в DAG |
+
+Карта отмечает направление декомпозиции, а не принимает exact срезы всех перечисленных классов. Для ещё не разобранных pipeline имена/методы/I/O/Error/DoD фиксируются отдельно. «Сохранить оркестратор» не является исходом; сохраняться могут вычисления внутри принятого линейного pipeline. Никакие DAG-ноды, родство или production callers этой картой не меняются.
+
+## Подоменные разборы
+
+- [LIGHT-RELIEF — классы рельефа, подтверждённые вызовы и границы pipeline](./generator-light-relief-classes.md). Статический аудит; runtime execution не подтверждается этим документом.
+
+- [LIGHT-RELIEF-REVIEW — отдельная ревизия рельефа light_bake](./generator-light-relief-review.md). Подтверждённые расхождения AS-IS/target и незакрытые вопросы.

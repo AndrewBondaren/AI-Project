@@ -15536,3 +15536,60 @@ invariants остаются в существующих validators.
 **Результат: GEO-I1 НА ПОВТОРНОЙ ПРИЁМКЕ.** Producer, fine P2 migration,
 G10-A cutover, Pack и downstream activation не начаты. Исправление validation
 boundary не доказывает provenance/connectivity и не закрывает downstream gates.
+
+#### I1.9. Независимая проверка исправления I1-R1 (2026-11-02)
+
+**Verdict: PASS — I1-R1 устранён; GEO-I1 предъявлен пользователю на приёмку.**
+Это независимый review verdict, не пользовательская приёмка. Проверена текущая
+реализация исправления e3b52630 при HEAD e468119d против I1.2–I1.5 и исходных
+воспроизведений I1.7. Дополнительных дефектов в проверенном scope не обнаружено;
+production code и tests в ходе этой проверки менять не потребовалось.
+
+Прослежен actual flow: constructor/model_validate → before `_admit_nested` →
+immutable completeness → actual FineSurfaceWindow/WorldTopology/WorldBounds →
+actual mode/strict bounds/even sphere → actual RegionCoverage → tuple spans →
+actual CoverageSpan → strict coordinates → tuple surface rows и arity=2 →
+coordinate tuple/strict height → frozenset protection/coordinate tuples.
+Только после этих guards выполняются model_dump и strict nested model_validate,
+затем typed source fields и `_consistent_source`. Mapping проходит typed
+revalidation до обхода entries; bodies/unions и shore проходят actual record и
+strict level/role guards. Existing WorldTopology.resolve_bounds и
+MapCellHydrology._normalize_wire изучены: sphere normalization и shore repair не
+могут исправить соответствующие forged входы до admission guards.
+
+Проверен diff исправления: broad catch отсутствует, coercion/clamp/sorting repair
+не добавлены; sorted/set используются для сравнения canonical order, не записи
+исправленных facts. Общие модели и immutable helper не менялись. Model_copy и
+model_construct сами остаются unchecked Pydantic APIs: гарантия действует при
+повторном model_validate, что явно проверено tests и независимыми probes.
+
+Новое evidence этого review:
+
+- Из backend: `.venv/Scripts/python.exe -m unittest
+  tests.geo1.canonical_source.test_source_models
+  tests.geo1.integration.test_surface_validation
+  tests.test_hydrology_water_body_uid -q` — **50 tests OK** (22 source tests),
+  со штатными hydrology WarningError diagnostics.
+- `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
+  backend/app/dataModel/hydrology/query/source.py` — **0 errors, 0 warnings**.
+- Три исходных malformed payload × nested copy/construct × outer constructor/
+  copy/construct readmission: **18 negative probes**, каждый даёт ValidationError
+  с целевым сообщением; **3 valid entry-path probes** сохраняют exact source.
+- Дополнительная рекурсивная матрица замен полей source и вложенных records
+  immutable значениями None/int/bool/str/tuple/frozenset/чужим frozen record:
+  **351 probe**, 332 ValidationError, 19 допустимых входов; ни одного escaped
+  TypeError/AttributeError или другого исключения. Это дополнительная диагностика,
+  не доказательство исчерпывающего перебора и не новые regression tests.
+- Проверены актуальные адресные tests: 9 исходных subcases требуют целевого
+  сообщения; 27 neighboring shapes требуют ValidationError; позитивный контроль
+  сохраняет bed/wet facts. Остальные strict/topology/union/mapping/shore cases
+  проходят в том же запуске.
+- Поиск symbols в backend/app снова показывает только source.py. Оба packages
+  имеют по два .py файла, markers пустые. Production callers не подключены.
+
+Изменён только этот owning-план. Посторонние working-tree изменения не затронуты;
+общий git diff --check сообщает whitespace в уже изменённом постороннем
+generator-public-surface-planning.md, поэтому глобальный clean diff не заявлен.
+Полная suite, authoritative provenance/connectivity и cold-Pack не проверялись.
+Producer, fine P2 migration, G10-A и Pack не начаты; downstream gates остаются
+открыты. **GEO-I1 — НА ПРИЁМКЕ, ожидает решения пользователя.**

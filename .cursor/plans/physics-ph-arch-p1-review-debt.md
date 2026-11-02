@@ -100,3 +100,7 @@ Source links `#L` фиксируют проверенные места на да
 ## 7. Документальная доработка P2 — на повторное review
 
 [PH-ARCH P2](./physics-spatial-dynamics.md#ph-arch-p2--уточнённый-freeze-proposal-после-p16) содержит proposed dispositions: 01 → P2.2 (init/resume/Time/zero step), 02 → P2.3 (closed outcomes/completeness), 03 → P2.4 (typed pair binding/group coupling/versions), 04 → P2.1/P2.6 (balance/version ownership и полный common layout, Time external). Статус всех четырёх: **DOCUMENTED PROPOSAL / AWAITING REVIEW**, не CLOSED. Внешние Time/material/read/publication types и concrete kernel specializations остаются OPEN; A–E, units и PH-ARCH целиком не приняты автоматически. Никаких готовых ports или runtime guarantees P2 не заявляет.
+
+## 8. Adversarial review P2.8 — P2.9 на согласование
+
+[Owning P2.9](./physics-spatial-dynamics.md) уточняет verdict P2.8: checkpoint validation без S мог пропустить потерянную динамику, а group-owned memory не была замкнута в requires_memory. Предложены S-aware checkpoint validator и explicit group_memory; relational request/output/candidate checks отделены от доверенного внешнего acceptance. Контрпримеры wrong checkpoint, parent/result swap, capture refresh, effects без acceptance, continuation-only, zero/stateless/coupled и partial failure разобраны по конкретным gates. P2-01…05 документально адресованы уточнённым предложением и ожидают согласования D1–D5; external Time/material/kernel/acceptance guarantees остаются OPEN. PH-ARCH/PH-ORCH/runtime не приняты, код не менялся.

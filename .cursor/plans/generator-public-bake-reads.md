@@ -1,5 +1,7 @@
 # GEN-BAKE-READ — публичное чтение результатов bake
 
+**Памятка агента:** перед продолжением прочитать [шпаргалку границ и исправлений](./gen-bake-read-agent-cheatsheet.md). Актуальные решения пользователя — §§13–14; исходные proposals не являются принятым freeze.
+
 **Статус:** EXACT CONTRACT PROPOSAL / НА ПРИЁМКЕ, 2026-11-02. Локальные решения и внешние OPEN contracts — §§5–12; freeze пользователем не принят. Поручение пользователя: отдельное требование к генератору вне scope GEN-DAG с mapping нода → публичный метод → техдолг. Только документы; код и cutover не разрешены.
 
 **Owner:** генераторный домен / Pack read и владельцы topology. GEN-DAG задаёт требования потребителей и реализует bindings после приёмки публичных контрактов. DAG не собирает результаты из файлов, manifest и SQL самостоятельно.
@@ -83,7 +85,7 @@ Bulk остаётся в immutable artifacts с domain-owned refs. Нода не
 | [settlementOutdoorTopology](../../backend/app/application/worldData/settlementOutdoor/settlementOutdoorTopology.py): topology_census, should_skip_topology, load_topology_slots ← [settlementOutdoorPackingJob](../../backend/app/application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py) | SQL district payloads, skeleton/context, восстановление DistrictSlot; skip authored children не readiness proof | Retain packing helpers; не public immutable topology reader |
 | [settlementOutdoorOrchestrator](../../backend/app/application/worldData/settlementOutdoor/settlementOutdoorOrchestrator.py): plan_topology/materialize | compute/persist, invalidate; не read | Исключить из reads; отдельный topology owner read ниже |
 | WorldPackReader.read_settlement_structure → [PackRenderReadFacade](../../backend/app/application/worldData/pack/read/packRenderReadFacade.py), [settlementStructureRaster](../../backend/app/application/worldData/pack/read/settlementStructureRaster.py), [transitionReadService](../../backend/app/application/worldData/transitions/transitionReadService.py) | C24 structure/interior transitions не C23 topology receipt | Retain; не выводить C23 или C11 completeness из наличия settlement.zst |
-| [packTileCollect](../../backend/app/application/worldData/pack/bake/plan/packTileCollect.py): location_anchor_tiles, declared_hydro_tiles, light_l0_tiles, world_bounds_l0_tiles | light anchor-only и endpoints-only hydro; full world_bounds; debug cap не coverage | Legacy planning policy; target coverage ниже требует отдельного producer handoff, read не вызывает collector |
+| [packTileCollect](../../backend/app/application/worldData/pack/bake/plan/packTileCollect.py): location_anchor_tiles, declared_hydro_tiles, light_l0_tiles, world_bounds_l0_tiles | light anchor-only и endpoints-only hydro; full world_bounds; debug cap не coverage | Действующая семантика light/full; сохраняется без расширения coverage. Read не запускает preparation |
 | [detailedBakeScope](../../backend/app/application/worldData/pack/bake/detailed/detailedBakeScope.py) | territory_volume_for_location и wilderness rect selection; нет общего leaf→owner published resolver | Reuse coordinate conventions; не вызывать preparation и не считать готовым ownership port |
 
 Готовые узкие contracts: kind-checked blob decode, wire schemas
@@ -121,18 +123,15 @@ payload/admission. Нельзя поручить C23 WorldPackReader.read_settle
 request [z0,z1) в wire явно проверяется. Scope nonempty и bounded; пустой запрос
 INVALID_SCOPE, но пустые данные внутри корректного scope допустимы.
 
-**WorldLightCoverage:** не world_bounds и не то, что уже listed в manifest.
-Нормативный expected set = macro tiles, пересекающие published authoritative
-NamedLocation anchor/territory union и declared hydrology geometry union.
-Anchor включает свой tile; при наличии territory берётся вся territory, не один
-anchor. Для authored water берутся все пересечённые tiles сегментов/полигонов,
-включая interior declared basin/lake, не только endpoints/shore vertices.
-Auto oceans/auto rivers не расширяют light scope. Geometry здесь coverage demand,
-не water occupancy и не повторный fill. Seam geometry использует accepted topology
-frame. Producer сохраняет canonical sorted unique tile set и source fingerprint
-в coverage receipt; reader только проверяет receipt. Изменение anchor-only policy
-явно предъявляется на приёмку; старый collector не объявляется эквивалентным.
-
+**World light coverage (параметр чтения существующего light_bake):** expected set
+сохраняет семантику `packTileCollect.light_l0_tiles`: tiles static location anchors
+∪ tiles endpoints declared coastline/lake shoreline/river segments, при включённой
+hydrology. Territories, intermediate segment tiles и polygon interiors автоматически
+не добавляются. Это намеренная оптимизация light_bake, не incomplete full_bake.
+Положительный max_tiles — debug cap; product default uncapped. World read проверяет
+полный product light set, не объявляет capped debug output complete.
+Expected set должен быть связан с source revision; read не запускает preparation.
+Опубликованный coverage receipt — proposed consistency mechanism, не новый bake mode.
 **RequestLightCoverage:** обязательный explicit union boxes + target identity
 если NamedLocation. Домен проверяет соответствие required request territory
 выбранному target; отсутствие complete world не prerequisite. Нельзя молча
@@ -332,7 +331,7 @@ A/pack/bake/plan **4→4**. Новый D/worldPack/read **0→4** без __init_
 | Owner / OPEN | Требуемая внешняя поверхность / критерий закрытия |
 |---|---|
 | Publication / Snapshot + Pack lifecycle | acquire_exact(world_uid, publication_id, root_digest) → read lease immutable namespace+closure; observe_absence(world_uid, head_revision, receipt) → verified absence; retain/reacquire/release(receipt), cancellation-safe lease.close. Exact accepted type/import/retention duration/GC authority пока отсутствуют. Требуется concurrency proof со всеми writers §15.17; Snapshot draft не заменяет его |
-| Pack coverage producer | Published receipt: identity, grid/frame, canonical expected world-light tile set, full bounds, hierarchy/terrain-owner census, source digest, artifact completeness coverage. Producer обязан покрывать territory/segments/interiors §6, не endpoint-only collector; требуется schema/version и producer evidence до public read implementation |
+| Pack coverage producer | Published receipt: identity, grid/frame, canonical expected world-light tile set, full bounds, hierarchy/terrain-owner census, source digest, artifact completeness coverage. Producer сохраняет существующий light anchor/endpoint set и отдельно full bounds; требуется schema/version и producer evidence до public read implementation |
 | Settlement topology owner | read_published_topology(lease, settlement_uids tuple, source_revision) → verified immutable C23 closure refs либо exact missing settlement IDs; отказ stale/corrupt отдельно. Closure включает district census/slots, CITY nodes+edges/gates и применимость; empty authored layout требует явного authored closure receipt, не should_skip_topology=true. Exact transport/version/publication join ещё не принят |
 | C11 / structure owner | Отдельный applicability + readiness read evidence по target/required scope/source/publication, причины missing и valid no-interior. Ни L2 read, ни full не владеют этим решением. До приёмки нельзя объявлять ready detailed по одному terrain found |
 | GEN consumer / coordinate requirement | Принять отдельный read_wilderness_l2 с request identity/publication/XYZ union/TERRAIN_L2; output как L2 coverage refs с target=coordinates без owner NamedLocation. Отдельно согласовать preparation, trusted provenance и caller; здесь не добавлены новые nodes/CALLs |
@@ -359,7 +358,7 @@ A/pack/bake/plan **4→4**. Новый D/worldPack/read **0→4** без __init_
 | Concurrent write | target namespace writer/drain exclusion не доказан→activation blocked; mtime повторное чтение не обеспечивает atomic publication |
 
 Пользовательская приёмка требуется по конкретным решениям: (1) владельцы и
-композиция §5.2; (2) расширенное world-light territory+geometry coverage и scoped
+композиция §5.2; (2) существующее world-light anchor/endpoint coverage и scoped
 правило §6; (3) explicit publication/absence и immutable ref lifetime §§7–8;
 (4) full=C23 closure, L2 leaf ownership и отдельный coordinate requirement;
 (5) errors/valid empty и §9 boundaries; (6) target map/counts и external OPEN §11.
@@ -445,3 +444,83 @@ GEN contract freeze: в owning GEN документы здесь изменен�
 разрешает реализацию. Новый acceptance scenario: execution trace обязан показывать
 самостоятельные light/C23 CALLs, их inputs/publication, outputs и cancellation/resume;
 дублирующей скрытой full-композиции в Pack нет.
+
+## 14. Уточнение семантики по генератору; без новых bake-сущностей
+
+**Решение пользователя:** сохранить существующие light_bake, full_bake,
+detailed_bake. World/request coverage — параметры чтения, не новые виды bake.
+Предложение расширить light до territories/full hydro geometry отозвано.
+Этот раздел имеет приоритет над несовместимыми первоначальными предложениями.
+
+| Существующая операция | Подтверждённое поведение | Source |
+|---|---|---|
+| light_bake | L0 на tiles static anchors ∪ declared hydro endpoints; cap только debug. Общий pipeline также пишет coarse climate/index, fine climate зависит от policy | [packTileCollect](../../backend/app/application/worldData/pack/bake/plan/packTileCollect.py), [PackTilePlanner](../../backend/app/application/worldData/pack/bake/plan/packTilePlanner.py), [PackMaterializationOrchestrator](../../backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py) |
+| full_bake | Тот же L0 pipeline, все macro tiles world_bounds/resolved AABB, без light cap; full path применяет world seam. Не автоматический весь L2 | [PackMaterializationOrchestrator.materialize_full_pack](../../backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py), [WorldMapBakeOrchestrator](../../backend/app/application/worldData/pack/bake/l0/worldMapBakeOrchestrator.py) |
+| detailed_bake | Existing scope=location либо wilderness. Location: territory volume индексированной location, только пересекающие rects. Wilderness: explicit tile либо незавершённые L0 tiles с optional cap, whole-tile rects. Parent L0 обязателен | [DetailedBakeRequest](../../backend/app/dataModel/worldPack/bake/detailedBakeScope.py), [detailedBakeScope](../../backend/app/application/worldData/pack/bake/detailed/detailedBakeScope.py), [detailedBakeRefine](../../backend/app/application/worldData/pack/bake/detailed/detailedBakeRefine.py) |
+
+Detailed scope resolver пропускает location, отсутствующую в pack index; это
+legacy job skip, не доказательство successful public read. Leaf→owner разрешение
+остаётся OPEN и не приписывается этому resolver. Detailed location по default
+дополняет fine climate; grade stages optional. Manifest bake_mode хранит light/full,
+detailed не становится третьим значением этого поля (PackBakeApiMode допускает
+light/full/detailed). Это техническое различие representation, не новая сущность.
+
+Требование consumer full-check получить L0 + C23 не означает, что сам
+materialize_full_pack строит C23: исследованный body строит L0. C23 остаётся
+самостоятельной read operation с видимой композицией §13. Аналогично terrain L2
+не доказывает C11: контракт DetailedBakeRequest описывает L2 then applicable C11,
+но наличие terrain artifacts не является evidence завершения этой цепочки.
+
+Request scope не меняет производственную семантику light: он определяет, какую
+часть существующих L0 результатов требует consumer. Full world bounds и proposed
+bounded consumer full requirement различаются явно; bounded read не переименовывает
+и не превращает full_bake producer в новую scoped bake operation.
+
+Предложение отдельного имени read_wilderness_l2 **отозвано как выбранное решение**.
+Wilderness — уже existing scope detailed_bake; нужно согласовать чтение его
+результатов с coordinate input, не новый bake kind и не фиктивная NamedLocation.
+Точный public read signature (расширение existing detailed-result read или отдельный
+узкий read port) остаётся предметом приёмки; автоматически API не расширяется.
+Названия новых классов/POJO в §10 — только первоначальные proposals: они не
+разрешают ввод новых сущностей без проверки reuse existing generator contracts.
+
+## 15. Принятая архитектура domain readers (2026-11-02)
+
+Пользователь принял архитектурное предложение: у каждого домена публичный
+reader, возвращающий принадлежащий этому домену типизированный контракт.
+Чтение поддерживает уровни от целой сущности через её часть/окно до минимальной
+доменной единицы. Минимальная единица определяется смыслом домена, а не единым
+универсальным cell DTO. Это принятие архитектуры, не concrete class/API freeze.
+
+1. Явные операции reader соответствуют семантике домена; один универсальный
+   метод или одинаковый набор CRUD/read методов всем доменам не навязывается.
+2. Контракт сообщает identity, revision/publication/provenance, фактический scope,
+   данные либо проверенные immutable refs, valid empty/absence/errors.
+3. Целая сущность может возвращаться metadata+refs, без eager загрузки всего bulk.
+   Части/минимальные элементы читаются тем же domain reader в согласованной версии.
+4. Публичные read-ноды вызывают domain readers; consumers вызывают read-ноды через
+   engine CALL/RETURN. Композиция самостоятельных domain reads видна в DAG.
+   Один внутренний метод reader не требует автоматически отдельной ноды.
+5. SQL/filesystem/decode принадлежат domain infrastructure. Read не выполняет
+   preparation/generation/repair/write. Существующий метод со словом read/get
+   не считается подходящим без проверки фактических nested calls.
+6. Сначала сущности/уровни/существующий reuse, затем exact contracts/methods и
+   только затем class/file/node map. Предложенная ранее карта §10 не является
+   разрешением создать новые классы в обход этого порядка.
+7. Архитектура не вводит новый bake kind, central reader/router/registry, общий
+   WS CRUD и не меняет принятые Patch/Snapshot responsibilities.
+
+CRUD исследован отдельно: [инвентаризация генераторов и domain storage](./generator-domain-crud-inventory.md).
+Это статическое исследование, не новый owning implementation plan. Изменения
+[Patch/Snapshot owning](./world-domain-patches-snapshots.md), графа и GEN-DAG не внесены.
+
+## 16. Перепроверка read reuse
+
+Явные методовые метки, nested call evidence и исправление прежнего обобщения —
+[CRUD inventory §8](./generator-domain-crud-inventory.md#8-повторная-проверка-read-candidates--явный-exclusion-ledger-2026-11-02).
+Confirmed preparation: WildernessRegionReadService.outline→require_plan_inputs→
+prepare→PlanningService.get_or_build (cache miss может build). Progress probe_extent
+**не** вызывает preparation: только capture/report/probe, затем classifier tile plan.
+Read/decode errors conflated с absence: load/require_parent_light,
+PackReadContext.climate_tile_field. Render/gameplay/debug file-absence fallback
+отмечены отдельно; arbitrary errors им без evidence не приписываются.
