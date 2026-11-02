@@ -265,3 +265,6 @@ GEN-P0 сопоставляет node IDs/callers с пакетом совмес�
 
 
 **Rename 2026-11-02, прямое поручение пользователя:** PatchApplier переименован в RepairPatchApplier (repair/repairPatchApplier.py), включая DI и caller; поведение сохранено. RepairPatchApplier не выполняет сам repair: применяет очередь успешных LLM outputs, в том числе без repair, к execution state. World Snapshot относится к применению/сохранению данных мира и истории. Замена одного другим запрещена. Это локальный rename, не GEN production cutover и не приёмка typed replacement.
+
+
+**Нормативный sync 2026-11-02 — GEN-ALIGN-01/03/05:** после проверки текстов и статических callers исправлены engine-nodes.mdc (generic vs concrete owner), tz_world_generation_dag.md (все старые карты/backlog/G1–G5 — исторические, не автоматический target), project-context.mdc (legacy registration, доступный GEN-P0 и отдельные code/cutover gates). pending_patches/RepairPatchApplier явно отделены от записи мира через World Snapshot; замена запрещена. Эти документальные расхождения исправлены, но новый граф, per-node contracts, runtime/legacy closure и общая приёмка остаются OPEN. SP-R2 не назначен обязательным для первого cutover: решение по сценариям принимает GEN-P0.

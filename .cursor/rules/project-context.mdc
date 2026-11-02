@@ -28,13 +28,13 @@ N+1 / `system_*` — инструмент **мастера**, не игрока.
 
 `api/routes` → `application/chat` → `application/engine` → `application/worldData` → `db` → `core` (Container, config)
 
-## Движок
+## Движок — существующий legacy AS-IS
 
 `ChatService` → `LLMExecutionEngine` → passes → `repair_patch_applier` → `ResponseResolver`.
 
 Фазы: **pre_llm** (gate/replan) → **llm** (repair) → **post_llm** (фиксация). Ноды: `@register_python` / `@register_llm` → `NODE_REGISTRY`.
 
-Repos в ноды через `context`. **Цель:** вся логика на нодах; engine — тонкий рантайм. Flow: `docs/tz_engine_flow.md`.
+Repos через `context` — существующий legacy путь, не контракт новых нод. Target: DAG-TYPING-1 — generic runtime; GEN-DAG-1 — совместно проектируемые concrete ноды/I/O/Error и public domain bindings. DAG выбирает операции, домены владеют алгоритмами. Старые decorators/registry и связи не переносятся автоматически. Flow: `docs/tz_engine_flow.md`.
 
 ## Мир
 
@@ -55,10 +55,10 @@ Feature-slices: `session`, `chat`, `settings`. Игрок: `/` → `/new` → `/
 ## Практика при изменениях
 
 - **Границы слоёв:** генераторы — только generation; API — только HTTP; LLM payload / orchestration — DAG и chat (см. `layer-boundaries.mdc`)
-- Side effects → `pending_patches`, commit после passes
+- Legacy `pending_patches` содержит успешные LLM outputs; `RepairPatchApplier` обновляет execution state после passes и не пишет мир. World effects проходят отдельные domain Patch/PatchSet → World Snapshot contracts. Заменять RepairPatchApplier на World Snapshot запрещено.
 - Автотестов почти нет — осторожно с engine/DAG
 - **Не стартовать backend** (`python start.py`, `uvicorn`, `npm run backend`) — сервер поднимает **мастер/пользователь**; агент только пишет код и подсказывает, что запустить для smoke через HTTP
-- **DAG-ноды (`application/engine/nodes/`)** — **не менять агенту**. Wiring и правки нод — **только совместно с мастером** и **только после** полного smoke/приёмки генераторов + persist (см. `docs/tz_world_generation_dag.md` § «Gate: DAG»). До gate: generators, orchestrators, `MapCellService`, debug HTTP (`map.py`).
+- **DAG-ноды и wiring — только совместно с мастером по GEN-NODE-JOINT-REVIEW.** Документальный GEN-P0 доступен сейчас. Isolated target bindings — после явной локальной приёмки графа/I/O/E и domain gates, без production routing. Единый production cutover требует GEO, необходимых Snapshot/port gates и согласования по GEN-DAG-1. Исторический G1–G5 не является новым безусловным prerequisite документального P0.
 - Не коммитить без явной просьбы
 
 ## Schema / migrations (мастер — до явной отмены)

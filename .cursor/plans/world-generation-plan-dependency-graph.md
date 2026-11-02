@@ -576,3 +576,6 @@ Bootstrap confluence/fill/spill/merge остаются Hydrology; runtime физ
 
 
 **GRAPH-Q11 / GEN-ALIGN-02, уточнение 2026-11-02:** по решению пользователя в DAG-TYPING-1 и tz_engine_node_context.md §8.2 исправлен порядок: новые node I/O/E → error POJO/files → implementation/handoff. Требование миграции ровно 15 ошибок снято; этот нормативный подпункт исправлен. Остальные GEN-ALIGN и общая приёмка GEN-CONTRACTS OPEN.
+
+
+**Нормативный sync 2026-11-02 — GEN-ALIGN-01/03/05:** после проверки текстов и статических callers исправлены engine-nodes.mdc (generic vs concrete owner), tz_world_generation_dag.md (все старые карты/backlog/G1–G5 — исторические, не автоматический target), project-context.mdc (legacy registration, доступный GEN-P0 и отдельные code/cutover gates). pending_patches/RepairPatchApplier явно отделены от записи мира через World Snapshot; замена запрещена. Эти документальные расхождения исправлены, но новый граф, per-node contracts, runtime/legacy closure и общая приёмка остаются OPEN. SP-R2 не назначен обязательным для первого cutover: решение по сценариям принимает GEN-P0.

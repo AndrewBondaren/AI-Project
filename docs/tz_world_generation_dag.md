@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус документа:** **черновик — не утверждён.** Карта нод, trigger paths (master / lazy / player), player build — рабочая спека до ревью.  
+> **Статус документа:** исторические AS-IS сведения и неутверждённые предложения. Все списки NodeId/deps, sequence diagrams, backlog и приоритеты ниже — не целевой граф. Новый состав и контракты совместно утверждаются в [GEN-DAG-1](../.cursor/plans/gen-dag-1-post-geo-ws.md), GEN-NODE-JOINT-REVIEW; только check_scene сохраняет назначение с переработкой. Старые ноды удаляются после проверки сценариев при cutover.
 > **Impl:** новые ноды и wiring materialization — **отложены**; проектируем **отдельно с мастером**. До сессии — generators + debug API (`map.py`), см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+.
 >
 > **Актуальный норматив 2026-10-29:** Debug API вызывает тот же engine DAG и не имеет
@@ -14,11 +14,13 @@ metadata:
 > Описанные ниже прямые debug handlers/path 2 — legacy, не целевая архитектура
 > и не разрешение создавать новый debug pipeline. Миграция — GEN-DAG-1.
 
-## Gate: DAG (жёсткое правило)
+## Gate: DAG — актуальная граница и исторический G1–G5
 
 **Агент не правит** `application/engine/nodes/` (регистрация, deps, execute, wiring в container/DAG) **без явной совместной сессии с мастером.**
 
-**Предусловие** — мастер закрыл **полное тестирование генераторов** (не «частичный smoke»):
+**Актуальный порядок:** совместный документальный GEN-P0 доступен сейчас; isolated bindings требуют собственной приёмки графа/I/O/E и domain gates без production routing. Production cutover требует принятого GEO, необходимых Snapshot/port gates и явного разрешения по GEN-DAG-1.
+
+**Историческое предложение G1–G5 ниже** сохраняется для анализа coverage, не задаёт автоматически prerequisites нового графа или документального GEN-P0. Применимые проверки выбираются в совместном review:
 
 | Gate | Содержание | Где в ТЗ |
 |---|---|---|
@@ -28,7 +30,7 @@ metadata:
 | G4 | TR-PAR determinism (workers 1 vs N) на реальном fixture | § TR-PAR-4 |
 | G5 | Мастер явно снимает gate в чате / ТЗ | — |
 
-**До gate:** target-спека нод ниже — **контракт на будущее**, не backlog агента. Реализация gameplay load — `MapCellService` + debug routes; ноды `check_terrain` / `eager_terrain` / `lazy_terrain` подключаются **после** G1–G5.
+**Историческая карта ниже не является target-контрактом или backlog.** MapCellService/debug и перечисленные старые ноды служат AS-IS evidence; необходимость новых read/preparation нод и их зависимостей определяется GEN-P0, без обязательного подключения старых ID после G1–G5.
 
 **Исключения (всё равно с мастером):** climate nodes уже в engine — не рефакторить «заодно»; новые ноды materialization (`generate_surface`, …) — только post-gate.
 
