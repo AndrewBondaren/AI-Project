@@ -792,6 +792,16 @@ Read ownership gaps: public immutable light multi-tile result, full/topology res
 
 **Output missing:** исходный required scope, reason absent/incomplete и конкретные недостающие компоненты/покрытие. Найденная часть не выдаётся за полный found.
 
+#### Зафиксированная граница Light reader
+
+Обе light-reader ноды читают **уже опубликованный light-комплект** своего coverage через публичный domain read: publication/manifest → необходимые artifacts либо проверенные разрешимые refs. Доступ к storage, decode и проверки refs выполняет домен, а не DAG-нода.
+
+- read_world_light_bake проверяет весь обязательный light-набор мира; read_scoped_light_bake — весь явно требуемый scope запроса. Они проверяют полноту и согласованность данных и возвращают found/missing/Error согласно карточкам выше.
+- Настройки/source evidence нужны reader только в объёме принятого coverage/актуальности read-контракта. Reader не читает все настройки мира для других операций и не является их общим producer. Planning, compose и publication получают собственные необходимые inputs через свои bindings; маршрутизировать их inputs через Light reader запрещено без отдельного разрешения.
+- Reader не подготавливает surface plans, не определяет pipeline генерации, не запускает light/full/detailed preparation и не публикует данные. Missing — результат чтения; реакция на него принадлежит отдельно согласованному DAG flow.
+
+Это фиксация согласованных обязанностей, не расширение поведения. Любое дальнейшее изменение зафиксированных нод требует явного разрешения пользователя; см. правило frozen-node-contracts.mdc.
+
 #### Общие ошибки, эффекты и приёмка
 
 - Error: invalid world/scope, incompatible publication/source revisions, corruption/decode/hash/format failure, недоступный либо пропавший declared artifact. Ошибка чтения не превращается в missing.

@@ -2799,6 +2799,62 @@ heap/time/concurrency SLA measurements и отдельная production acceptan
 Без этих owning gates нет полного storage/publication/runtime readiness.
 SP-P1, production-код, consumer cutover и публикация не начаты этим исследованием.
 
+### 15.17. Зафиксированные требования по решению пользователя (2026-11-02)
+
+Основание: после рекомендаций по diagnostic roster, caps и namespace exclusion
+пользователь поручил: «Хорошо, зафиксируй требования». Приняты требования ниже,
+**не полный SP-P0 freeze и не разрешение SP-P1**. В этом scope запись заменяет
+предложенный статус соответствующих решений §§15.13–15.16; §15.11 сохраняется.
+
+1. **Diagnostic closure сузить до фактических Hydrology producers.** Широкий
+   roster из 57 StrEnum не принимается как окончательный source/storage admission
+   contract. Требуется проследить producer emissions, включая переносимые upstream
+   diagnostics, и зафиксировать конечный перечень concrete fallback_action и
+   fallback_reason enum-классов с IDs/values и допустимыми связями с producers.
+   Общий FieldPathError/RuntimeIssueContext менять для этого не требуется.
+   Неизвестный concrete enum означает явный admission refusal до fingerprint/
+   publication; запрещены string coercion, удаление diagnostic или замена fallback.
+   Существующая таблица snapshot остаётся audit inventory/ID baseline, а не
+   автоматическим allowlist. Итоговые source/storage roster и counts пересчитать
+   после сужения; прежние 86/89 не считать окончательным minimal closure.
+
+2. **Принят shard structural cap 262144 TLV nodes вместо 131072.** Сохраняются
+   shard 4 MiB, root 16 MiB/524288 nodes, depth64, container65536 и field caps4096;
+   все ограничения действуют одновременно. Измеренные full4096SHORE profiles
+   (177072 nodes; с protection189360) проходят новый node cap и 4 MiB.
+   Это не обещание admission любых 4096 records с произвольными nested/string
+   значениями. Root entries65536 — только collection ceiling, не гарантированная
+   вместимость; результат 14157 refs относится только к измеренному synthetic
+   profile. Превышение любого cap означает отказ без обрезания facts и без смены
+   active Pack. Paged-root не вводится. Численные heap/time SLA остаются downstream.
+
+3. **Принят обязательный lifetime exclusion всего Pack namespace.** Он охватывает
+   все mutation sinks §15.15: construction/dirs, worker writes, ZIP import,
+   background/refinement/materialization jobs, sidecars, settlement tmp→publish,
+   manifest/finalize/cleanup. Проверка только constructor/save недостаточна.
+   Namespace identity учитывает resolved path, а не только world UID.
+   Для первого rollout поддерживается один supervisor с исключительным доступом
+   к записи. Process-local lock не доказывает межпроцессное exclusion; deployment
+   с несколькими writers требует отдельно доказанного механизма до activation.
+   V2 activation запрещена, пока существует writer/job, способный продолжить
+   запись в target namespace. Новые admissions остановлены, живые jobs/workers
+   drained или завершены с подтверждением прекращения writes; exclusive owner
+   повторно проверяет head до activation. После activation legacy writes в V2
+   не возобновляются. ZIP проверяет incoming и target до первой destination mutation
+   под тем же exclusion. Snapshot draft не считается готовым решением ownership.
+
+**Остаточные документальные требования до полного freeze:** предъявить узкий
+producer-backed diagnostic closure и сверить source/storage lock с результатом
+открытого GEO-I1-R1. Наличие records или codec sizing probes не закрывает R1 и не
+означает принятую реализацию source. При изменении declarations/validators/IDs
+повторить затронутые closure/probes и актуализировать lock. Неизменившиеся
+подтверждённые counts не требуется объявлять новым benchmark.
+
+**Downstream отдельно:** exact ownership API/cleanup integration, bounded parser
+и verified byte IO, golden/negative/source replay и concurrency/race evidence,
+closure handoff/pin/CAS/GC/publication ports, operational drain/access proof,
+production SLA и activation принимаются по owning gates §15.16. Принятие этих
+требований не подменяет их evidence. Код, consumer cutover и публикация не начаты.
 
 ## 16. SP-M — materialization/projection contract (2026-11-02)
 
