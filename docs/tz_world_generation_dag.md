@@ -1,12 +1,13 @@
 ---
 name: tz-world-generation-dag
-description: "Сходимость генераторов мира (climate, terrain, road, structure) в engine DAG — library pattern, ноды, triggers"
+description: "Исторические AS-IS карты generator/DAG и прежние предложения, не target backlog. Текущие ноды: GEN-DAG-NODE-DEPENDENCY и GEN-DAG-1"
 metadata:
   node_type: memory
   type: project
 ---
 
 > **Статус документа:** исторические AS-IS сведения и неутверждённые предложения. Все списки NodeId/deps, sequence diagrams, backlog и приоритеты ниже — не целевой граф. Новый состав и контракты совместно утверждаются в [GEN-DAG-1](../.cursor/plans/gen-dag-1-post-geo-ws.md), GEN-NODE-JOINT-REVIEW; только check_scene сохраняет назначение с переработкой. Старые ноды удаляются после проверки сценариев при cutover.
+> **Карта текущего среза:** [GEN-DAG-NODE-DEPENDENCY](../.cursor/plans/gen-dag-node-dependency.md); public reads — [GEN-BAKE-READ](../.cursor/plans/generator-public-bake-reads.md), [generator_public_method](../.cursor/plans/generator_public_method.md). Новые target имена из этих планов не считаются реализованными; OPEN не закрываются старым текстом ниже.
 > **Impl:** новые ноды и wiring materialization — **отложены**; проектируем **отдельно с мастером**. До сессии — generators + debug API (`map.py`), см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+.
 >
 > **Актуальный норматив 2026-10-29:** Debug API вызывает тот же engine DAG и не имеет
@@ -32,7 +33,7 @@ metadata:
 
 **Историческая карта ниже не является target-контрактом или backlog.** MapCellService/debug и перечисленные старые ноды служат AS-IS evidence; необходимость новых read/preparation нод и их зависимостей определяется GEN-P0, без обязательного подключения старых ID после G1–G5.
 
-**Исключения (всё равно с мастером):** climate nodes уже в engine — не рефакторить «заодно»; новые ноды materialization (`generate_surface`, …) — только post-gate.
+**Историческая оговорка, не target backlog:** наличие climate nodes в legacy engine не разрешает их рефакторинг. Упоминание generate_surface и других прежних ID не определяет новый состав; разрешения выдаются только по совместным node cards GEN-DAG-1.
 
 ---
 
@@ -40,8 +41,8 @@ metadata:
 
 | Документ | О чём |
 |---|---|
-| **Этот TZ** | Какие generator-модули существуют, **какие ноды** их вызывают, **когда** (master / lazy / player) |
-| [`tz_engine_flow.md`](./tz_engine_flow.md) | Pass loop, repair, RepairPatchApplier — **механика движка** |
+| **Этот TZ** | Исторические модули/callers и прежние предложения; не источник нового состава нод, triggers или deps |
+| [`tz_engine_flow.md`](./tz_engine_flow.md) | Исторический legacy pass/repair/results flow; не target runtime specification |
 | [`DAG-TYPING-1`](../.cursor/plans/dag-typing-1.md), [`tz_engine_node_context.md`](./tz_engine_node_context.md) | Общесистемные POJO Input/Output и `DAGContext`; не доменные Context-поля |
 | Domain TZ | climate, terrain, building, city, roads, connections |
 | [`tz_logging.md`](./tz_logging.md) | sinks; скрипты = консьюмер `script/{stem}`, bake на сервере |
@@ -51,6 +52,8 @@ metadata:
 ---
 
 ## Принцип: Generator library + DAG callers
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 ```mermaid
 flowchart TB
@@ -77,16 +80,18 @@ flowchart TB
   dag --> persist
 ```
 
-**Инварианты:**
+**Исторические тезисы прежней схемы (не норматив target):**
 
 1. **Generator** — pure: `(World, …) → cells / layout / graph`. Без async, без SQL, без `ExecutionState`.
-2. **Node** — routing, repos, `pending_patches`, **когда** вызывать какой модуль.
+2. В прежней схеме **Node** связывала routing, repos и pending_patches. Это AS-IS evidence, **не целевое разрешение repository writes**. Target-нода вызывает публичные domain reads/operations; result publication, prepared effects и world commit имеют разные owners.
 3. **Один generator — много callers:** master eager, lazy first visit, player construction — **разные ноды**, один `StructureGeneratorService.generate_from_template`.
 4. **Не Dwarf Fortress:** игрок не designation'ит tile; действие → **node** → **кусок generator API** → patch.
 
 ---
 
 ## Модули генераторов (4 домена)
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 ```
 app/application/worldData/generators/
@@ -114,6 +119,8 @@ app/application/worldData/generators/
 
 ## Три trigger-path (кто вызывает DAG)
 
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
+
 | Path | Когда | Типичные ноды / entry | Persist |
 |---|---|---|---|
 | **Master** | JSON-редактор **настроек мира**; import bundle | world generation nodes (target) | bulk upsert / chunked |
@@ -126,6 +133,8 @@ Master и player используют **те же** generator functions, что 
 ---
 
 ## Три входа (целевая картина, утверждено 2026-06)
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 Один и тот же generator library, **три разрешённых способа вызова** — не смешивать:
 
@@ -186,6 +195,8 @@ flowchart LR
 ---
 
 ## Карта нод ↔ generators
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 ### Реализовано (engine)
 
@@ -374,6 +385,8 @@ context["materialization_ctx"] = MaterializationContext(free_cores=free_cores)
 
 ## Settlement stack в DAG (как сходятся road + structure)
 
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
+
 Один вызов `lazy_settlement` / `generate_settlement_geometry` оркестрирует **внутри** assembler hierarchy — **не** отдельные DAG-ноды на каждый слой в v1:
 
 ```
@@ -393,6 +406,8 @@ SettlementAssembler
 
 ## Player build vs procedural (общая модель)
 
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
+
 | Шаг | Node responsibility | Generator chunk |
 |---|---|---|
 | 1 Gate | template exists? footprint free? tier/materials? | read registries |
@@ -408,6 +423,8 @@ Excavation — **отдельная node** + material `hardness` ([`tz_materials
 
 ## Coordinate spaces (граница нод)
 
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
+
 | Space | Generators | DAG note |
 |---|---|---|
 | `WORLD_SURFACE_GRID` | climate eager, wilderness terrain | `generate_climate` |
@@ -420,6 +437,8 @@ Excavation — **отдельная node** + material `hardness` ([`tz_materials
 
 ## Контракты Input/Output engine DAG (самостоятельный DAG-TYPING-1)
 
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
+
 Целевое решение от 2026-10-30: каждая нода объявляет типизированные Input/Output, сама подготавливает Input и использует существующие `deps` для зависимостей исполнения. Общие `TerrainContext`/`StructureContext` как обязательные поля `ExecutionState` — историческое предложение, **не утверждённый целевой канал**. Не реализовывать ноды и новый wiring до отдельного gate с мастером.
 
 План общесистемной типизации: [DAG-TYPING-1](../.cursor/plans/dag-typing-1.md); подробное ТЗ: [`tz_engine_node_context.md`](./tz_engine_node_context.md). GEN-DAG-1 решает только генераторную интеграцию; порядок внедрения планов согласовывается отдельно.
@@ -427,6 +446,8 @@ Excavation — **отдельная node** + material `hardness` ([`tz_materials
 ---
 
 ## Приоритет реализации нод
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 | P | Ноды | Зависимость |
 |---|---|---|
@@ -440,6 +461,8 @@ Generator-side work **может** опережать ноды (как climate e
 ---
 
 ## Дыры: settlement в DAG
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 Не алгоритм застройки ([`tz_city_generation.md`](./tz_city_generation.md)) и не протокол pack ([`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md)). Здесь — **когда** нода зовёт generate и **куда** пишет. Агент ноды не трогает (§ Gate: DAG).
 
@@ -460,6 +483,8 @@ Generator-side work **может** опережать ноды (как climate e
 
 ## Связанные документы
 
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
+
 - [`tz_climate.md`](./tz_climate.md) — три процесса, `ClimateRecalcRequest`, **Climate LOD**, volume A/B/C
 - [`tz_lazy_simulation.md`](./tz_lazy_simulation.md) — LOD зоны near/medium/far
 - [`tz_terrain_generation.md`](./tz_terrain_generation.md) — multi-pass terrain skeleton ✅; world generation pass order
@@ -475,6 +500,8 @@ Generator-side work **может** опережать ноды (как climate e
 ---
 
 ## Changelog
+
+> **ИСТОРИЧЕСКИЙ РАЗДЕЛ / НЕ TARGET:** перечисленные NodeId/deps, последовательности, backlog и приоритеты не назначают работу новому DAG. Действующие domain contracts проверяются в своих owning-ТЗ; concrete-ноды — только по совместному GEN-P0.
 
 | Дата | Изменение |
 |---|---|

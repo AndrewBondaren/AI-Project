@@ -1,15 +1,26 @@
 ---
 name: tz-engine-flow
-description: "Полный flow выполнения движка от сообщения пользователя до ответа — фазы, ответственность нод, repair, patch"
+description: "Исторический legacy AS-IS engine flow и прежние предложения; не спецификация target runtime/нод. Target: GEN-DAG-1, DAG-TYPING-1, tz_engine_node_context"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 633eddca-8d16-4119-94ab-ef548d071851
 ---
 
-# ТЗ: Execution Engine Flow
+# ТЗ: Execution Engine Flow — legacy AS-IS
+
+> **Статус всего прежнего flow ниже: историческое evidence, не TO-BE инструкция.** Описания LLMExecutionEngine, mutable state/shared_context, pending_patches, first-wins replan, прямых repository writes и SceneContextBuilderNode не определяют новый runtime, целевые NodeId/deps или порядок разработки. Некоторые фрагменты — прежний псевдокод/проектные предложения; их соответствие фактическому коду проверяется отдельным caller audit.
+>
+> **Текущие владельцы:** [GEN-DAG-1 / GEN-NODE-JOINT-REVIEW](../.cursor/plans/gen-dag-1-post-geo-ws.md) — конкретные ноды и cutover; [GEN-DAG-NODE-DEPENDENCY](../.cursor/plans/gen-dag-node-dependency.md) — текущие согласованные роли/родство/CALL/I/O и OPEN; [DAG-TYPING-1](../.cursor/plans/dag-typing-1.md) и [tz_engine_node_context](./tz_engine_node_context.md) — generic typed contracts/runtime. Наличие legacy схемы здесь не даёт разрешения на реализацию или production switch.
+>
+> **Не смешивать записи:** RepairPatchApplier применяет результаты LLM к execution state (в том числе без repair); target result publication принадлежит typed runtime/coordinator. World changes — prepared domain effects → DAG composition PatchSet → [World Snapshot](./tz_world_snapshot.md) по [Domain Patches](../.cursor/plans/world-domain-patches-snapshots.md). Bootstrap staged Pack publication имеет отдельный lifecycle. RepairPatchApplier не заменяется Snapshot.
+>
+> **Типы нод:** Python/LLM, их Output/error/dependency contracts задаются target registry и node cards. PRE/POST фаза не является разрешением писать SQL напрямую. Parent/child, caller/callee и producer/consumer — разные отношения. Cross-request CALL/parent lifecycle и ранние результаты остаются открытыми там, где это указано в owning-плане.
+
 
 ## Принципиальное разделение фаз
+
+> **LEGACY / НЕ TARGET:** раздел сохраняется для AS-IS/coverage; правила и связи нового DAG берутся из owning-планов, указанных выше.
 
 **pre_llm** — проверка предусловий и gate-логика. Единственное место откуда можно сигнализировать `requires_replan`. Примеры: CheckSceneNode (есть ли сцена?), CheckPlayerNode и т.п.
 
@@ -18,6 +29,8 @@ metadata:
 **post_llm** — фиксация успешного результата. Пишет в DB, считает следующий стейт. **Никогда не верифицирует, никогда не возвращает requires_replan.** Запускается только если pre_llm и llm прошли успешно.
 
 ## Полный flow (сообщение → ответ)
+
+> **LEGACY / НЕ TARGET:** раздел сохраняется для AS-IS/coverage; правила и связи нового DAG берутся из owning-планов, указанных выше.
 
 ### 1. ChatService.handle_message()
 - `pending_repo.upsert(message)` — crash recovery
@@ -113,6 +126,8 @@ while attempt < repair_iterations:
 
 ## Ключевые инварианты
 
+> **LEGACY / НЕ TARGET:** раздел сохраняется для AS-IS/coverage; правила и связи нового DAG берутся из owning-планов, указанных выше.
+
 - `requires_replan` может выставить **только pre_llm** нода через `NodeResult`
 - `post_llm` нода **никогда** не сигнализирует replan — она обрабатывает только успешный результат
 - RepairOrchestrator работает **внутри LLMAggregateExecutor** пока `messages` и `client` живы
@@ -122,6 +137,10 @@ while attempt < repair_iterations:
 - `pass_number > 0` → replan-логика (gate-ноды с `skip_on_replan=False` перезапускаются)
 
 ## SceneContextBuilderNode — агрегатор сцены для LLM
+
+> **Неутверждённое историческое предложение:** эта секция не добавляет concrete-ноду, deps или gameplay-read facade в текущий граф.
+
+> **LEGACY / НЕ TARGET:** раздел сохраняется для AS-IS/coverage; правила и связи нового DAG берутся из owning-планов, указанных выше.
 
 **Фаза:** `pre_llm`  
 **deps:** `["check_scene"]`  
@@ -166,6 +185,8 @@ LLM получает уже локализованный контекст — н
 ---
 
 ## Открытые вопросы / будущие расширения
+
+> **LEGACY / НЕ TARGET:** раздел сохраняется для AS-IS/coverage; правила и связи нового DAG берутся из owning-планов, указанных выше.
 - Domain-валидатор на LLM-ноде: API не определён, нужен когда появится первая нода с ID-верификацией
 - `post_llm` phase в DAGExecutor сейчас агрегирует replan так же как pre_llm — нужно убрать эту агрегацию чтобы инвариант был закреплён кодом
 

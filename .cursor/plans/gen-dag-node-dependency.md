@@ -146,7 +146,7 @@ Error: invalid context/identity/reference, corrupt/read failure, невозмо�
 
 **Effects:** нет UI/SSE, scene writes, spawn/load, started flag или вызова select.execute. Runtime публикует candidates; DAG передаёт их select_start_location как RequiredOutput.
 
-**Input select_start_location:** отдельный candidate Output resolve_start_locations + trusted interaction/session context + optional выбранный UID следующего HTTP запроса. **Terminal Output select:** одна выбранная проверенная StartLocationView. После окончательного выбора и base-stage (§16) select_start_location возвращает выбранную location и accepted found-light либо full-after-missing в initialize_world_entry. Initialize_world_entry вызывает своего child load_player_into_world с этими данными и trusted load context. Запуск load не ждёт L2 check внутри selection: selection не проверяет/не создаёт L2. Detail prerequisites проверяются до фактического размещения в load-flow; exact caller route к world_creation ещё согласуется. Выбор и L2 found не подтверждают загрузку игрока. Resolver evidence валидируется при продолжении; stale candidates требуют явного запуска producer через DAG, не локального повторения его логики в select.
+**Input select_start_location:** отдельный candidate Output resolve_start_locations + trusted interaction/session context + optional выбранный UID следующего HTTP запроса. **Terminal Output select:** обязательная композиция из §5.6: выбранная проверенная StartLocationView + accepted_base + interaction/source correlation. После окончательного выбора и base-stage (§16) select_start_location возвращает выбранную location и accepted found-light либо full-after-missing в initialize_world_entry. Initialize_world_entry вызывает своего child load_player_into_world с этими данными и trusted load context. Запуск load не ждёт L2 check внутри selection: selection не проверяет/не создаёт L2. Detail prerequisites проверяются до фактического размещения в load-flow; exact caller route к world_creation ещё согласуется. Выбор и L2 found не подтверждают загрузку игрока. Resolver evidence валидируется при продолжении; stale candidates требуют явного запуска producer через DAG, не локального повторения его логики в select.
 
 Новый producer меняет граф/контракты select; exact RequiredOutput binding, source consistency, full POJO/files и stale continuation routing возвращаются на совместный freeze. Общие три режима settings и подтверждённые city/underground_city сохраняются.
 
@@ -400,11 +400,23 @@ Public location reads выполняются через согласованны
 
 Промежуточный API response: `type=select_child`, parent (None либо выбранный родитель), children (варианты uid/name с согласованными presentation fields). При необходимости drill-down формат сохраняется, но разрешение descendants должно быть явно определено.
 
-Terminal Output `select_start_location`: `location: StartLocationView` — обязательно, плюс согласованное source evidence (тип OPEN). Location относится к world Input и разрешена актуальной policy. Успешный terminal Output не бывает None и не является списком всех кандидатов. До выбора публикуется UI-flow response, а не ложный terminal success родителя.
+**Единый terminal Output `select_start_location` для NamedLocation-ветви:** обязательная композиция `location + accepted_base + interaction/source correlation`, которая передаётся в `initialize_world_entry` целиком. Это не только выбранная location.
+
+| Поле | Обязательность и смысл |
+|---|---|
+| `location: StartLocationView` | Обязательно non-null; проверенная выбранная NamedLocation из нужного мира и разрешённая актуальной policy |
+| `accepted_base` | Обязательно non-null; результат base-stage world_creation для выбранного scope: found light **либо** опубликованный full после missing light, согласно §16. Содержит data/immutable refs и accepted WorldPublicationRef; для full-after-missing — также успешное publication/completion evidence |
+| Interaction/source correlation | Обязательно: принадлежность результата текущему world/session/selection interaction и evidence проверки policy/location/base. Exact reused domain/runtime POJO ещё OPEN |
+
+`accepted_base` передаётся из результата world_creation, а не восстанавливается по bool, progress counters, последнему manifest.bake_mode или наличию выбранной location. Его full-ветвь не заменяется промежуточным light receipt. `location.world_uid`, base publication world и доверенный session world должны совпадать; base scope должен соответствовать выбранной цели. При stale/несовместимом результате terminal success не публикуется.
+
+`initialize_world_entry` принимает именно эту композицию как результат selection и передаёт location и тот же accepted base своему child `load_player_into_world` вместе с trusted identities и stable load operation ID. Entry не отбрасывает accepted_base и не заменяет его произвольной текущей публикацией. Consistency guard при использовании может отклонить устаревшее evidence, но не объявить другой base эквивалентным без согласованного обновления.
+
+Exact root composition/accepted-base union types и files остаются на POJO freeze с переиспользованием domain результатов; новые параллельные payload-схемы здесь не создаются. До окончания выбора/base-stage выдаётся промежуточный `select_child` response, а не terminal selection success. Координатный вход обходит selection; эта композиция не становится обязательным Input для координатной ветви.
 
 Ошибки подноды: missing/invalid policy; broken/foreign refs; недопустимый клиентский выбор; пустое множество кандидатов (предлагается явная ошибка); read failure/stale interaction. Изменение policy между выдачей и кликом требует повторной валидации/обновления выбора, а не применения устаревшего разрешения.
 
-Terminal Output родителя: подтверждение завершённой загрузки + `start_location: StartLocationView`; фактическая resolved позиция и completion receipt должны прийти из owning load operation. Их типы ещё OPEN; map_x/y/z не заменяют их. Флаг старта и подтверждение должны относиться к тому же world/player/session.
+Terminal Output родителя `initialize_world_entry` соответствует способу входа из §7.1/§16: подтверждение завершённой загрузки, фактическая resolved позиция и completion receipt обязательны в обеих ветвях. Для NamedLocation-входа дополнительно обязательна `start_location: StartLocationView`; для координатного входа возвращается проверенная координатная цель от ГМ, а `StartLocationView` не требуется. Фиктивная NamedLocation ради единообразия Output запрещена. Общий результат — различимые варианты по способу входа, а не обязательная location во всех случаях. Exact union/position POJO и их owner ещё OPEN; map_x/y/z локации не заменяют фактическую позицию. Флаг старта и подтверждение относятся к тому же world/player/session. `select_start_location` обслуживает только NamedLocation-ветвь, поэтому обязательная location в её собственном terminal Output сохраняется.
 
 Механизм resumable parent/child lifecycle и промежуточного response, точные node POJO/error classes/files пока не приняты. Настоящая спецификация делает зависимости явными, но не объявляет runtime поддержку вложенных нод или load contract готовыми.
 
@@ -502,7 +514,7 @@ Proposed binding lifecycle:
 5. Поднода выдаёт текущие варианты через существующее select_child response mapping/API/SSE и сохраняемый interaction state. Нужный runtime/interaction binding всё ещё требует отдельной engine приёмки; новый скрытый executor не вводится.
 6. Следующий запрос напрямую адресует select_start_location и передаёт UID. Select проверяет выбор по актуальному producer Output/evidence. При изменении sources accepted selection binding повторно запускает resolve_start_locations; select не дублирует его policy calculation. Одного наличия UID в frontend button недостаточно.
 7. При изменении policy или relevant locations устаревший выбор не применяется автоматически. Обновить варианты/вернуть declared stale-selection outcome; exact error type и transport binding согласовать в node card.
-8. Terminal result подноды: location: StartLocationView (§5.5), принадлежность миру/актуальной policy проверена; source evidence передаётся по принятому доменному контракту. Список кандидатов не является terminal выбранной location.
+8. Terminal result `select_start_location`: полная композиция из §5.6 — `location: StartLocationView + accepted_base + interaction/source correlation`. Передаётся `initialize_world_entry` целиком; одной location или списка кандидатов недостаточно. `accepted_base` — found light либо accepted full-after-missing по §16, не промежуточные counters/refs без подтверждения принятой базы.
 9. Родитель использует location facts для loading operation. К моменту load заново проверяется актуальность location, особенно is_mobile; nullable map coordinates не превращаются в spawn=(0,0,0). Completion/load receipt и resolved position должны прийти от load owner.
 10. Только после фактической загрузки выполняется предусмотренная фиксация started и публикуется успешный parent Output. Policy update сам по себе не меняет started flag, текущую сцену или положение уже вошедшего игрока.
 
@@ -557,9 +569,10 @@ Direct file counts на 2026-11-02 (включая __init__, до → после
 | world_uid | Проверенный session context | Обязателен |
 | player/character identity | Проверенный session context | Обязателен; разграничение player vs character пока OPEN |
 | session_id | Текущая сессия | Обязателен |
-| Цель входа: NamedLocation либо координаты мира от ГМ | Проверенный selection Output либо доверенный контекст ГМ | Ветви взаимоисключающие; для NamedLocation обязательна StartLocationView, для координатного входа — координаты и bounded scope без фиктивной location. Exact union/owner OPEN |
+| Цель входа: NamedLocation либо координаты мира от ГМ | Полный selection Output (location + accepted_base + correlation) через initialize_world_entry либо доверенный координатный контекст ГМ | Ветви взаимоисключающие; для NamedLocation обязательна StartLocationView, для координатного входа — координаты и bounded scope без фиктивной location. Exact union/owner OPEN |
 | Load operation identity / persisted interaction identity | Parent/runtime binding | Обязательна для retry/resume; не случайный новый HTTP request_id для каждого повтора |
 | Expected publication / согласованный world-read context | World domain read | Обязателен для coherent load; reuse WorldPublicationRef при принятом binding |
+| Accepted base | Для NamedLocation — поле accepted_base полного selection result, переданное initialize_world_entry без потери; для координат — принятый full result по §16 и соответствующему owning binding | Обязательно: data/refs + accepted publication/evidence нужного scope. Один expected publication либо selected location этого поля не заменяет |
 | Bounded load requirements / policy | World/engine settings по domain contract | Обязательны для определения готовности; существующий SceneVolumePolicy — кандидат reuse, не весь контракт игровой сцены |
 
 Input не содержит всемирный список cells, полный SQL World, raw repository handles или fabricated spawn=(0,0,0). Registry/domain dependencies внедряются через bindings. Стартовая policy не должна заново выбирать другую локацию внутри загрузки; выбор должен быть проверен на актуальность, а устаревший возвращён DAG как stale-selection outcome. Нужно согласовать точку фиксации выбора относительно параллельного редактирования policy.
@@ -583,8 +596,8 @@ Input не содержит всемирный список cells, полный 
 ### 7.3. Предлагаемый terminal Output
 
 - Проверенные world/player/session identities.
-- start_location: StartLocationView — выбранное место старта; не путать с текущей optional NamedLocation привязкой после движения.
-- Resolved player position, coordinate space и optional resolved level/location refs по domain position contract.
+- Подтверждённая цель входа — различимые варианты по способу входа, согласованные с Input §7.1: для NamedLocation-входа `start_location: StartLocationView` обязательна; для координатного входа обязательны проверенная координатная цель от ГМ и её scope/provenance, без требования `StartLocationView`. Exact domain target union остаётся OPEN; пустой объект/фиктивный UID локации его не заменяет.
+- Фактическая resolved player position и coordinate space — обязательны в обеих ветвях. Optional resolved level/location refs допускают отсутствие по domain position contract; координатный вход не обязан иметь NamedLocation. Цель от ГМ и фактическая позиция размещения различаются: пригодность/разрешение позиции подтверждается load operation.
 - Scene identity/ref и evidence её binding, не обязательная копия всей карты.
 - World publication/ref, на которой обязательные факты и применённое размещение согласованы.
 - Load completion receipt для данного operation identity. Его точный POJO и критерий server/client completion OPEN.
@@ -1068,7 +1081,7 @@ Output родителя: опубликованные L2/C11 результат�
 | select_start_location → initialize_world_entry (RESULT, не вызов load и не новое родство) | После подтверждения выбора/base-stage: проверенная StartLocationView и accepted found-light либо full-after-missing evidence, interaction/source correlation | Parent entry принимает selection result и вызывает собственного child load_player_into_world; exact durable result binding OPEN |
 | load_player_into_world → world_creation (CALL, НЕ родство) | World, способ входа/target, operation ID, expected publication, required detailed scope и accepted base по §16 | Ready detailed refs/publication либо Error; coordinate scope/readiness contract OPEN |
 | Engine API entry → check_world_entry | World/player/session identities; вход или resume | Started + identities/read evidence; Error не заменяется false |
-| Engine → initialize_world_entry | Started=false; тот же доверенный context и существующий interaction, если есть | Terminal подтверждение фактической загрузки + start_location. Intermediate flow не terminal success |
+| Engine → initialize_world_entry | Started=false; тот же доверенный context и существующий interaction, если есть; NamedLocation- либо координатная цель по §7.1/§16 | Terminal подтверждение фактической загрузки + resolved position + ветвевой результат цели входа. StartLocationView обязательна только в NamedLocation-ветви. Intermediate flow не terminal success |
 | API selection entry → select_start_location | Тот же POST, session/request IDs и выбранный UID в message; authoritative identities из server session | Тот же selection interaction, без повторного первого запуска на каждом клике. UI response через SSE; terminal location передаётся принятому consumer binding (owner OPEN), не world_creation как parent |
 | select_start_location → resolve_start_locations | Запрос актуальных вариантов или проверки текущего UID/родителя; world, world policy source и trusted interaction context | Актуальные candidate location POJO, policy/location evidence; результат допустимости выбора/дальнейших вариантов. Exact union схемы списка/validation ещё OPEN; ошибки refs/read не маскируются |
 | world_creation → check_world_initialization, base-stage | NamedLocation после выбора: light scope; coordinate entry: full requirement по принятому binding | Только requested checks с found/missing/evidence; full-check не является безусловным dependency NamedLocation light-stage |
@@ -1216,7 +1229,7 @@ Error: invalid request/world/stage; check failure; несовместимост�
 
 Проверки и подготовка — разные child families, не последовательное переписывание legacy node IDs. Реальные full L0/C23 operations должны быть явны на boundary; не скрывать их в leaf ради сохранения одного имени.
 
-**D3. Семейство выбора, внутри снизу вверх.** World policy/public location reads → resolve_start_locations → select_start_location с existing POST /chat/stream binding и accepted interaction persistence. Не добавлять world_creation child/caller в select ради integration. Согласованный coordinator поставляет world-ready данные через определённый binding. Этот family может развиваться отдельно от world compute только при принятом локальном contract gate.
+**D3. Семейство выбора, внутри снизу вверх.** World policy/public location reads → resolve_start_locations → select_start_location с existing POST /chat/stream binding и accepted interaction persistence. Родство отдельно: world_creation не child и не parent select_start_location. Утверждённый cross-family CALL **select_start_location → world_creation** для base-stage реализуется по контракту §13.2/§14; отсутствие родства его не запрещает. Возвращённые данные/publication передаются через согласованный typed binding, без дублирования проверок и initialization внутри selection. Противоположный CALL из этого не выводится. Отдельная разработка selection family допустима только после приёмки локальных domain/interaction/CALL contracts; production integration требует готового world_creation binding.
 
 **D4. Семейство detailed_initialization, внутри снизу вверх.** Accepted L2/C11 requests/prepared contracts/readiness/prerequisites → detailed_bake_initialization → parent detailed_initialization с publication/recovery. Parent — world_creation; сначала согласовать C11 trigger; наличие одного L2 read API не снимает эти gates.
 
@@ -1309,3 +1322,9 @@ Exact внешний caller/engine dispatch координатного вход�
 9. Full-after-gameplay continuation — отдельный generic сценарий с frozen-Pack gate; он не отменяет обязательный full-before-detail там, где его требует эта таблица.
 
 Exact POJO/files/owner bindings ещё требуют приёмки. Изменены только документальные контракты; код и production routing не разрешены этим уточнением.
+
+## 17. Внешний domain pipeline: подготовка плана поверхности
+
+Зафиксировано target имя **ISurfacePlanningPipeline.prepare_surface_plan**, owner — surface planning. Требование реализации вынесено в [GEN-SURFACE-PLAN](./generator-public-surface-planning.md), долг [GEN-PLAN-1](../../docs/tz_generator_technical_debt.md#gen-plan-1); карта потребителей — [generator_public_method](./generator_public_method.md#публичные-preparation-pipelines--отдельные-domain-owned-интерфейсы).
+
+Потребляющие операции: L0 light/full и L2 detailed preparation при необходимости surface plan. Exact DAG consumer bindings OPEN; существующие ноды, их Input/Output, callers/callees и родство не изменяются. Reader не готовит планы и не поставляет pipeline настройки. Внутренний pipeline согласованного surface planning остаётся в домене; никаких новых NodeId этим разделом не вводится.

@@ -71,6 +71,9 @@ GEN-DAG-1 владеет **всеми конкретными** Input/Output **н
 
 ## GEN-ALIGN — открытые расхождения связанных ТЗ и правил (аудит 2026-11-02)
 
+**Документальная mitigation 2026-11-02 после замечания пользователя:** tz_world_generation_dag.md получил актуальные owning-ссылки, локальные historical scope annotations и снятие target-смысла с Node/repos/pending_patches формулировки; tz_engine_flow.md явно размечен как legacy AS-IS/прежние предложения, с локальными отметками разделов, target owners и разделением execution result publication / world writes. Оригинальные heading anchors и полезное legacy evidence сохранены. Это устранение опасной неоднозначности GEN-ALIGN-01/04, **не автоматическая приёмка всего GEN-ALIGN-01…05, runtime, graph, contracts или cutover**. Общий статус ниже остаётся OPEN до owning acceptance. Граф отношений не менялся.
+
+
 **Статус: OPEN; это follow-up по согласованному GEN-NODE-JOINT-REVIEW, а не новый TO-BE граф и не разрешение на код.** Перед приёмкой GEN-CONTRACTS/GEN-P0 и соответствующих конкретных нод синхронизировать нормативные документы. Исправления сначала согласовать у owning-планов; старые реализации и их описание не удалять из evidence до проверки caller/usage closure.
 
 | ID / приоритет | Где противоречие | Что требуется решить и проверить перед закрытием |
