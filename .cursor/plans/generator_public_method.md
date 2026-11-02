@@ -62,3 +62,19 @@ Pin/absence/retention/GC, coverage producer receipt, immutable C23 publication j
 C11 evidence и coordinate API — конкретные внешние OPEN §11. Snapshot draft adapters
 не готовые ports. SP-1/GEO EF-1 и частные SP-P0 §15.17 учтены; SP-P0 целиком/SP-M
 не приняты. Ни код, ни bindings, ни публикация/cutover не разрешены этой картой.
+
+## Актуализация: принятое решение о видимой композиции
+
+[GEN-BAKE-READ §13](./generator-public-bake-reads.md#13-решение-пользователя-публичные-read-ноды-и-видимая-композиция-2026-11-02)
+имеет приоритет над первоначальной GBR-1 картой выше.
+
+Публичные domain methods читаются через переиспользуемые публичные read-ноды;
+другие ноды вызывают их через engine CALL/RETURN. Композиция самостоятельных reads
+видна в DAG, а SQL/filesystem остаются внутри domains. Новые NodeIds/связи не приняты.
+
+`PackFullBakeReader` и `build_pack_read_services.full_bake` отозваны. Full-result
+предлагается собирать явной композицией light-read и C23-read нод с общей pinned
+publication/retention. Строка read_full_bake сохраняет требование результата;
+уровень/имя aggregate API и concrete binding OPEN, скрытый Pack composite запрещён.
+PackLightBakeReader/PackTerrainBakeReader и topology-owner domain read остаются
+proposed targets. Это принятие архитектурного принципа, не всего contract freeze.

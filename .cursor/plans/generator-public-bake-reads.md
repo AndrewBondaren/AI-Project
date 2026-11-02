@@ -367,3 +367,81 @@ A/pack/bake/plan **4→4**. Новый D/worldPack/read **0→4** без __init_
 SP-P0/SP-M, GEN bindings, публикацию или cutover. Следующий шаг после приёмки —
 совместное закрытие названных внешних контрактов, а не выбор неизвестных решений
 во время реализации. GEN-READ-1/2/3 остаются OPEN до реализации и evidence.
+
+## 13. Решение пользователя: публичные read-ноды и видимая композиция (2026-11-02)
+
+**Принят только архитектурный принцип этого раздела.** Пользователь подтвердил:
+публичные методы находятся в доменах, публичные read-ноды вызываются другими
+нодами; места и порядок вызовов должны быть видны в большом DAG. Это не приёмка
+всего GBR-1, новых NodeIds, CALL bindings или production реализации.
+
+Этот раздел заменяет предложение §5.2 о скрытой full-композиции внутри Pack.
+`PackFullBakeReader` и factory field `full_bake` **отозваны** из target map §10.
+Упоминания этого класса и full→light+topology nested calls в §§5–12 являются
+историей первоначального варианта, а не действующим implementation target.
+
+### 13.1. Два уровня
+
+- Доменный публичный метод владеет конкретной read operation: разрешение scope,
+  проверка completeness, чтение/декодирование artifacts, typed data/refs/errors.
+  SQL/filesystem/manifest остаются внутри домена.
+- Публичная read-нода — переиспользуемая единица DAG с явными Input/Output;
+  другая нода вызывает её через engine CALL/RETURN. Чужой execute() напрямую
+  не вызывается. Cancellation/resume/результаты проходят штатный lifecycle.
+- Композиция самостоятельных public reads видна как вызовы read-нод. Не прятать
+  её в facade/helper, чтобы затем воспроизводить или обходить в разных consumers.
+  Внутренний decode отдельных blobs не обязан становиться отдельной нодой:
+  storage implementation и самостоятельная domain operation — разные границы.
+
+### 13.2. Full: действующая схема, требующая concrete binding freeze
+
+```text
+full-read composition node (existing consumer role check_full_bake)
+  → CALL public light-read node для required full L0 scope
+  → CALL public C23 topology-read node для required settlement closures
+  → typed aggregation light + C23
+```
+
+Обе read-ноды получают одну explicit pinned publication identity/source/frame и
+совместимый retention context. Identity сама не является живым lease: каждый
+домен обязан acquire/validate её по принятому publication port, а composition
+lifecycle должен удерживать общую closure до завершения обоих reads. Между CALLs
+нельзя выбирать latest. Exact shared retention/lease handoff остаётся external
+OPEN §11; process-local объект lease не становится сериализуемым node Input.
+
+Full-агрегация использует только typed outputs read-нод, без storage introspection.
+Проверяет совпадение identity/publication/scope, объединяет exact missing parts;
+ошибки не понижает до missing. Missing одного child не повод пропустить другой
+required read и скрыть его ошибку. Ноль settlements требует authoritative
+applicability evidence; только тогда topology NOT_APPLICABLE без C23 read.
+
+`read_full_bake` сохраняется в реестре как требование full-result, но больше не
+считается согласованным именем агрегирующего Pack domain method. Его уровень и
+имя (public node operation либо иной accepted domain contract) требуют отдельной
+приёмки. Сохранение прежней строки карты не разрешает скрытый Pack composite.
+
+Необходимые новые read-node roles, их NodeIds/parents/CALLs не назначены этим
+решением. Межплановое предложение GEN: предъявить explicit light/C23 composition
+и reusable water/terrain read roles на отдельную приёмку. Общий граф и GEN-DAG
+не изменяются в этом треке.
+
+### 13.3. Другие consumers и корректировка map
+
+Физический consumer может CALL terrain-read и water-read ноды с согласованными
+publication/source inputs. Water reader вызывает публичный SP-1/EF-1 domain read;
+full не становится prerequisite для каждого самостоятельного чтения. Это пример
+применения принципа, не добавление physics nodes/edges или готового binding.
+
+Сохраняются PackLightBakeReader/read_light_bake, PackTerrainBakeReader/read_location_l2,
+SettlementTopologyRead/read_published_topology как proposed domain targets.
+Удаление одного PackFullBakeReader из первоначальной карты меняет direct target
+count A/pack/read **22→24** и число новых domain files **8→7** (без __init__).
+Existing factory получает только light_bake/terrain_bake; topology binding принадлежит
+его owner. Exact node class/factory/POJO/import map композиции требует отдельного
+GEN contract freeze: в owning GEN документы здесь изменения не вносятся.
+
+Все остальные external OPEN §11, coverage proposals и I/O/error сценарии остаются
+на приёмке. Принятие видимой композиции не закрывает publication ports и не
+разрешает реализацию. Новый acceptance scenario: execution trace обязан показывать
+самостоятельные light/C23 CALLs, их inputs/publication, outputs и cancellation/resume;
+дублирующей скрытой full-композиции в Pack нет.
