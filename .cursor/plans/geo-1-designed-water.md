@@ -13964,6 +13964,11 @@ PHYSICS-1 documentation commit91c630fa preserved; git diff --check clean.
 
 
 ### Task11 — ATOMIC CUTOVER COORDINATE/SNAPSHOT AUDIT — DESIGN OPEN (2026-11-01)
+**Актуальный выбор 2026-11-02: пользователь выбрал A — общий fine P2.**
+Ниже сохранён исходный аудит альтернатив; его рекомендация B и статус выбора
+OPEN заменены решением §9 совместного проекта в конце плана. Exact freeze,
+реализация и G10-A остаются OPEN.
+
 Clean7a52dcd1; analysis requested before choosing a boundary. No application,
 POJO or tests changed; production/G10-A remain OPEN. This audit supersedes the
 assumption that registration alone can now connect existing native leaf stages.
@@ -14321,3 +14326,97 @@ known-dry vs unknown/missing, actual bed/level/identity, A/B footprint proof,
 mixed C/W/P/F refs, cold Pack replay без full solve/working maps/L0 truth;
 union окон равен раздельным reads, измеренные cold/warm/preparation budgets.
 Это требования к будущему evidence, не выполненные tests и не приёмка.
+
+### 7. Решения пользователя по обсуждению пунктов 2–5 (2026-11-02)
+
+Эта запись уточняет открытый список §6 выше. Основание: пользователь сообщил
+«2. Ок», «3. Давай первое — Допускаем дорогую однократную подготовку»,
+«4. Ок», «5. Canonical geometry имеет приоритет» после подробного разбора.
+Это согласование направлений, не приёмка exact contracts или реализации.
+
+- **Представление:** согласовано рекомендованное направление R1 — exact resolved
+  membership в интервалах строк. Body UID, связность узких протоков, observation
+  domain и source mapping сохраняются. R2/R3 не являются выбранной реализацией;
+  выбор геометрии **G1/G2 остаётся OPEN**. Согласие с направлением не замораживает
+  codec/root schema, численные budgets и предложенные имена POJO.
+- **Подготовка:** разрешена дорогая однократная full-fine preparation как исходный
+  этап. Sub-N preparation не prerequisite текущего producer freeze. Полный solve
+  не повторяется на каждое окно; bounded reads остаются обязательными. Стоимость
+  preparation, cold admission и warm read учитывается отдельно; согласие не
+  подтверждает, что существующая реализация уже укладывается в численный бюджет.
+- **Read semantics:** согласовано рекомендованное направление: явно ограниченный
+  open-water scope, explicit unknown и complement dry только внутри доказанного
+  observation/vertical scope. River bed/identity не доказывают river liquid volume.
+  REQUIRED unresolved даёт Failure; missing/corrupt source не становится dry.
+  Точная Z convention `(bed,level]` по-прежнему требует сверки с surface-top/Z-runs
+  до freeze: в обсуждении она была выделена как отдельный неразрешённый вопрос.
+- **L2:** canonical geometry имеет приоритет. Base materialization воспроизводит
+  принятый final bed; z_band clamp и hills не вправе менять его. Приблизительное
+  восстановление фона допустимо только вне конфликта с authoritative geometry.
+  Изменение physical geometry требует обновления зависимых решений по общему
+  lifecycle, а не локального исправления water reader. HSP-04/SP-M должны
+  зафиксировать exact порядок geometry admission и water projection; HSP-03 —
+  исключить влияние coarse policy mask на canonical bed/wet. Exact ecology/L0
+  adapters этим решением не заморожены.
+
+**Task11 A/B остаётся OPEN:** пользователь запросил пояснение конкуренции внутри
+coarse-клетки, но выбора не сообщил. B не активируется по согласию с пунктами 2–5.
+Далее требуется согласовать A/B, G1/G2 и Z convention, затем завершить exact
+domain/shared/storage freezes у соответствующих owners. Producer code и G10-A
+cutover не разрешены этой записью; статусы приёмки не закрываются.
+
+### 8. Смысл water placement footprint — решение пользователя (2026-11-02)
+
+На вопрос «должен ли водный placement резервировать всю область преобразования
+бассейна, включая будущие сухие острова» пользователь ответил «Должен».
+**Water placement резервирует всю область преобразования бассейна, включая будущие
+сухие острова.** Это не wet membership. Сухой результат fine fill не освобождает
+часть принятого footprint для ранее отклонённых конкурентов и не запускает второй
+placement. Допустимость overlap по общим policy остаётся у placement owner;
+резервирование не вводит новую безусловную domain-local conflict policy.
+
+Следствие для Task11: A может точнее выразить внешнюю границу области преобразования
+и её ограничения, но не получает право размещать конкурентов на будущих островах
+внутри зарезервированной области. B сохраняет coarse точность этой границы;
+mapping coarse footprint в fine spec не превращает резервирование в wet mask.
+Выбор A/B по-прежнему OPEN. Это решение о смысле footprint, не acceptance exact
+projection/admission contract и не разрешение producer code/G10-A cutover.
+
+### 9. Task11 — выбран A: общий fine placement (2026-11-02)
+
+Пользователь явно выбрал **A** после разбора A/B и уточнения смысла резервирования.
+Это актуальное решение, заменяющее прежний OPEN выбора A/B и рекомендацию B
+в исторических разделах Task11 и §§4/6–8 совместного проекта.
+**Выбор архитектурного направления принят пользователем; exact contract,
+приёмка реализации и G10-A остаются OPEN.**
+
+- Общая P2-сессия работает в WORLD_FINE_GRID. Все её участники, footprints,
+  constraints, protected/required/excluded geometry и batch topology должны
+  использовать один fine frame. Это не water-only scaling.
+- original_area и остальные величины конкуренции переводятся в согласованные
+  единицы для всех участников. Проверить очередь и tie-break: множитель S²
+  нельзя применять только к воде. Existing coarse inputs допускают лишь явную
+  owning preparation/projection до P2 с exact source binding; внутри P2 скрытой
+  конверсии нет. Простое расширение coarse клеток до блоков не создаёт новых
+  деталей authored geometry.
+- P2 snapshot binding — к exact fine pre-water window W и его natural dependency
+  graph. FineWaterPublicationJob сохраняет принцип exact accepted footprint
+  equality для native BasinSpec; проверить его совместимость со всеми путями
+  spec production. Резервируется вся область преобразования, включая острова;
+  wet membership разрешается позже и не меняет P2 outcome.
+- Специальная цепочка B `W → coarse C → P2(C) → fine spec` не является выбранным
+  target. Не создавать C/admission projection proof только ради отвергнутого B.
+  Coarse projections для L0/ecology остаются отдельными downstream consumers.
+- До кода расширить exact Task11 migration inventory на всех участников общей
+  P2-сессии: producer/capture/transport/registration, geometry/constraints/area
+  preparation, validators, contract versions и consumers. Сохранить единый
+  accepted outcome; не вводить второй water placement или mixed coarse/fine
+  конкуренцию. Оценить S² рост перечисляемых footprints отдельно от fill cost.
+- HSP-01/HSP-06: producer join и publication admission проектировать по A;
+  HSP-02…HSP-10 dispositions сохраняются с учётом canonical geometry priority.
+  Exact source refs финального source по-прежнему должны связывать W/P/P2/F/
+  routes/river/final; fine frame сам по себе не доказывает revision coherence.
+
+Следующие открытые решения: G1/G2 для exact final geometry и Z convention;
+затем exact POJO/API/version/file/caller freeze и evidence по согласованным gates.
+Producer code, G10-A cutover и самостоятельная приёмка этим выбором не разрешены.
