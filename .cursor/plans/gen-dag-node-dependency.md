@@ -40,6 +40,15 @@ Typed engine/public domain contracts, publication path, parent/child и intermed
 
 P2 не является parent P1 и не является child P1. Base readiness проверяется после подтверждения выбора (§16); interaction/response binding требует отдельной engine приёмки. CALL не делает callee дочерней нодой caller; циклический execution graph и hidden executor не разрешаются.
 
+### P3. Семейство light_bake_readers
+
+**Добавлено по решению пользователя:** две самостоятельные PYTHON read-ноды — read_world_light_bake и read_scoped_light_bake. light_bake_readers — название группы, **не NodeId и не новая parent-нода**. Primary parents, callers и engine dispatch новых нод OPEN: существующие родственные связи §0/§1 не меняются. Контракты — §9.5.
+
+- **read_world_light_bake** — полный обязательный light-набор мира по authoritative domain coverage rule.
+- **read_scoped_light_bake** — весь required light scope конкретного запроса; целевой reader NamedLocation entry после подтверждения выбора.
+
+Существующий check_light_bake не удаляется, не переносится и не становится wrapper/parent этих нод автоматически. Его прежняя карточка §9.2 сохраняется как исходное scoped требование; точная замена caller/dependency bindings новой нодой — отдельный OPEN freeze. Запуск обоих readers для одного entry не требуется.
+
 ### P4. Семейство initialize_world_entry
 
 - P4.1 **initialize_world_entry** — parent завершённого входа; engine branch по check_world_entry. Карточки §§2.2/7.
@@ -666,7 +675,7 @@ check_world_initialization сохраняет три check children и выда�
 
 | Нода | Публичный метод генераторного домена | Блокирующий техдолг |
 |---|---|---|
-| check_light_bake | read_light_bake | [GEN-READ-1](../../docs/tz_generator_technical_debt.md#gen-read-1) |
+| read_world_light_bake / read_scoped_light_bake; check_light_bake — исходный binding, migration OPEN | read_light_bake (domain contract freeze OPEN) | [GEN-READ-1](../../docs/tz_generator_technical_debt.md#gen-read-1) |
 | check_full_bake | read_full_bake | [GEN-READ-2](../../docs/tz_generator_technical_debt.md#gen-read-2) |
 | check_detailed_bake | read_location_l2 | [GEN-READ-3](../../docs/tz_generator_technical_debt.md#gen-read-3) |
 
@@ -762,6 +771,35 @@ DAG ветвится по found/missing. При found передаёт сами 
 
 Read ownership gaps: public immutable light multi-tile result, full/topology result, L2 result/refs, missing scopes и source consistency. AS-IS packFineTerrainReadFacade возвращает dict[str, Any], поэтому не принимается как целевой typed port. Новые POJO/порты на месте этих пробелов без совместного согласования не создаются. Код/регистрация/cutover не менялись.
 
+
+### 9.5. light_bake_readers — выходные контракты и Definition of Done
+
+**Статус:** две роли и смысловые I/O/Error добавлены пользователем; exact domain/node POJO/files и activation/parent bindings OPEN. Новые parents/вызовы не назначаются. Обе ноды PYTHON, read-only. Read phase и registration требуют freeze. Domain method read_light_bake — existing proposed requirement GEN-READ-1, не уже реализованный API; обе ноды могут использовать общее доменное чтение. Отдельные новые public method names не назначаются без domain owner.
+
+#### read_world_light_bake
+
+**Input:** world identity, publication expectation (None только при подтверждённом отсутствии), authoritative source/coverage evidence. Required scope — весь обязательный light-набор мира, разрешённый доменом; произвольный клиентский subset или debug cap не может уменьшить критерий complete. Exact coverage rule OPEN: действующее правило location∪declared hydro требует согласовать anchor/territory и покрытие сегментов, а не копировать текущий tile collector в ноду.
+
+**Output found / DoD:** полный обязательный light-комплект этого мира получен/доступен по проверенным immutable refs: L0 tiles с coordinate binding, согласованный locations_index, обязательный coarse climate и необходимые format/grid metadata; world/scope/source/publication evidence согласованы. World light complete не означает полный world_bounds, full/C23 или готовность входа. Нельзя подтвердить complete только manifest.bake_mode, счётчиком или наличием anchors.
+
+**Output missing:** required world light scope, publication/source evidence, reason absent/incomplete и конкретные недостающие компоненты/покрытие. Неполный мир не выдаётся как complete, даже если отдельный запрос можно обслужить.
+
+#### read_scoped_light_bake
+
+**Input:** world identity, publication expectation и явный required scope запроса по принятому domain contract. NamedLocation UID может служить входом разрешения scope, но не заменяет его определение. Source/coverage evidence обязательно; exact POJO OPEN.
+
+**Output found / DoD:** получен весь обязательный light-комплект для required scope: L0 data/immutable refs, необходимые index/climate/metadata и согласованные world/scope/source/publication evidence. Полнота всего light-набора мира не является dependency. Пригодность для L2 означает наличие light prerequisites, но не подтверждает C23/C11, spawn или load completion.
+
+**Output missing:** исходный required scope, reason absent/incomplete и конкретные недостающие компоненты/покрытие. Найденная часть не выдаётся за полный found.
+
+#### Общие ошибки, эффекты и приёмка
+
+- Error: invalid world/scope, incompatible publication/source revisions, corruption/decode/hash/format failure, недоступный либо пропавший declared artifact. Ошибка чтения не превращается в missing.
+- Нормальная доменная пустота допустима только по принятому coverage contract; она не доказывает, что bake был выполнен. Exact empty-scope evidence OPEN.
+- Не выполняют compute, generation, staging/publication, repair, Snapshot commit и автоматический запуск initialization. Missing принимает согласованный consumer; для NamedLocation entry missing scoped light требует full preparation/publication по §16.
+- World reader и scoped reader проверяют один согласованный состав light, различаясь границей required coverage. Они не означают два дублирующих storage reader; completeness и разрешение refs принадлежат домену.
+- Acceptance: partial world + complete request → world missing, scoped found; complete world → world found и scoped found для покрытого запроса; partial request → scoped missing. Wrong world/revision, missing declared artifact и corruption → Error. Результаты pinned к одной publication; reads ничего не записывают.
+- В NamedLocation flow целевой producer — read_scoped_light_bake, а не обязательная пара readers. Старые check_light_bake bindings в §1/§12/§13/§16 — сохранённый structural baseline до отдельной приёмки замены. Это не право выполнить старую и новую ноды последовательно или скрыть новую ноду за helper. World reader не добавляется в entry prerequisites.
 
 ## 10. Родительские ноды инициализации — предложение пользователя 2026-11-02
 
@@ -971,6 +1009,8 @@ Output родителя: опубликованные L2/C11 результат�
 | initialize_world_entry | PYTHON | Engine по результату check_world_entry | load_player_into_world; вызов world_creation пока OPEN, прямого select child нет |
 | select_start_location | PYTHON | API entry/continuation binding; NodeId-parent OPEN | resolve_start_locations; CALL world_creation для base-stage; выбранную location и accepted base возвращает initialize_world_entry, load не вызывает |
 | resolve_start_locations | PYTHON | select_start_location через DAG | Нет |
+| read_world_light_bake | PYTHON | OPEN; группа light_bake_readers не является caller | Нет; public light read с полным world light scope, §9.5 |
+| read_scoped_light_bake | PYTHON | OPEN; target reader NamedLocation flow, замена прежнего binding требует freeze | Нет; public light read с required request scope, §9.5 |
 | check_world_initialization | PYTHON | world_creation | Те же check_light_bake, check_full_bake, check_detailed_bake; условная активация по stage/способу входа (§16), не общая цепочка до выбора |
 | check_light_bake | PYTHON | check_world_initialization | Нет; только public read_light_bake |
 | check_full_bake | PYTHON | check_world_initialization | Нет; только public read_full_bake |

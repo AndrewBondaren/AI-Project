@@ -10,7 +10,8 @@
 
 | Consumer node | Target public method | Техдолг |
 |---|---|---|
-| `check_light_bake` | `read_light_bake` | [GEN-READ-1](../../docs/tz_generator_technical_debt.md#gen-read-1) |
+| `read_world_light_bake` | `read_light_bake` с полным world light coverage; exact signature OPEN | [GEN-READ-1](../../docs/tz_generator_technical_debt.md#gen-read-1) |
+| `read_scoped_light_bake` | `read_light_bake` с required request scope; exact signature OPEN | [GEN-READ-1](../../docs/tz_generator_technical_debt.md#gen-read-1) |
 | `check_full_bake` | `read_full_bake` | [GEN-READ-2](../../docs/tz_generator_technical_debt.md#gen-read-2) |
 | `check_detailed_bake` | `read_location_l2` | [GEN-READ-3](../../docs/tz_generator_technical_debt.md#gen-read-3) |
 
@@ -46,12 +47,14 @@ Bulk остаётся в immutable artifacts с domain-owned refs. Нода не
 
 ## 4. План исполнения вне GEN-DAG
 
-- [ ] Генераторный owner принимает имена и scope трёх публичных операций, ownership full/topology read.
+- [ ] Генераторный owner принимает имена и scope публичных операций, ownership full/topology read.
 - [ ] Провести inventory существующих POJO/refs/errors и согласовать точные Input/Output/Error, required scope, publication/source consistency, absence и partial semantics. Не создавать недостающий порт/тип при обнаруженном пробеле без приёмки.
 - [ ] Предъявить exact class/factory/read binding/file/import map, direct folder counts, retained nested calls и доказательство read-only atomic boundaries. Общий механизм DAG не дублировать.
 - [ ] После отдельного разрешения реализовать публичные операции за стабильным контрактом; storage internals, проверка completeness/refs и decode остаются внутри доменных reads.
 - [ ] Проверить found, absent, incomplete, valid empty, missing published artifact, corruption, stale publication, wrong world, cancel/ref lifecycle. Не использовать debug/progress output как доказательство полученных данных.
 - [ ] Генераторный owner принимает операции и закрывает GEN-READ-1/2/3 отдельно по фактическому evidence.
-- [ ] Передать принятые контракты в GEN-DAG для concrete bindings трёх нод. Это не включает activation/cutover, не принимает SP-R2 и не снимает прочие gates.
+- [ ] Передать принятые контракты в GEN-DAG для concrete bindings согласованных нод. Это не включает activation/cutover, не принимает SP-R2 и не снимает прочие gates.
 
 **Блокировка:** до приёмки соответствующего public метода concrete read binding соответствующей ноды GEN-DAG остаётся OPEN. Документальные Input/Output и обсуждение графа доступны независимо.
+
+**Light readers:** группа light_bake_readers содержит read_world_light_bake и read_scoped_light_bake; смысловые I/O/Error/DoD — [§9.5 реестра нод](./gen-dag-node-dependency.md#95-light_bake_readers--выходные-контракты-и-definition-of-done). Обе читают L0 и обязательные связанные index/climate/metadata для своего coverage. Общий domain reader допустим. check_light_bake сохраняет прежнее родство; replacement bindings новых нод OPEN, нового parent NodeId нет. NamedLocation entry использует scoped reader; world complete не его prerequisite.
