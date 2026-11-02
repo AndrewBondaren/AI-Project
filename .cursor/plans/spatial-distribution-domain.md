@@ -461,7 +461,7 @@ Materials определяет density/viscosity, heat/cool refs и услови
 | **ARCH-6: revision/lifecycle** | Immutable Pack не мутируется в gameplay; PlanRef bootstrap отделён от WorldPublicationRef и accepted Snapshot; local изменения и invalidation не смешивают разные revisions. | Конкретный read/pin/overlay/invalidation contract и ситуации stale/conflict/partial patch. **FAIL:** смешанные geology/geometry/water facts или новый независимый spatial state store. |
 | **ARCH-7: presence/absence/error** | Наличие/отсутствие определяет домен, различены valid dry, vacuum, ambient, local gas, unknown/corrupt/missing source. | Типизированные outcomes и ownership логирования; mandatory gameplay failure даёт ERROR с world/scope/revision/request ID, а optional preview может показывать unresolved. **FAIL:** пустой shard молча становится dry/air либо есть fallback на L0/legacy SQL. |
 | **ARCH-8: materialization boundaries** | Canonical compact water/gas/ambient facts не требуют persisted MapCell; bounded medium projection временная; geology/solids и объекты сохраняют собственные правила материального представления. | По типам output — owner, source revision, lifetime/cache, условия physical materialization и инвалидация; excavation показывает исходный материал без reroll. **FAIL:** materializer заново принимает placement/physics решение или пишет per-cell среду. |
-| **ARCH-9: Pack and production cutover** | Manifest содержит domain-root refs (вариант Б), domain-owned shards/index; старый и новый production producer/read route не остаются одновременно достижимыми после gate. | Trace G10-A → SP-P0/P1/P2R/P2W/P2/P3I/P3W/P3 → SP-3/3S → SP-4/4R и SP-R1/R2/R, схемы storage и планы отключения legacy; fault cases §9/15–16. **FAIL:** двойной source/Pack writer, неполный root или успешный read после corruption через legacy fallback. |
+| **ARCH-9: Pack and production cutover** | Manifest содержит domain-root refs (вариант Б), domain-owned shards/index; старый и новый production producer/read route не остаются одновременно достижимыми после gate. | После joint contract agreement независимы GEO G10-A/SP-H и storage SP-P0/P1/P2R/P2W/P2 по собственным gates; accepted source + SP-P0/P1 сходятся на SP-P3I, далее SP-P3W/P3 → SP-3/3S → SP-4/4R и SP-R1/R2/R. G10-A не prerequisite SP-P0/P1. Схемы storage/legacy closure и fault cases §9/15–16 обязательны. **FAIL:** двойной source/Pack writer, неполный root или успешный read после corruption через legacy fallback. |
 | **ARCH-10: cost model** | Отдельно оценены **разовый** initial fine solve и Pack publication (без per-cell SQL) и **повторное** bounded read (без full-world/fine solve); материализация запускается по требованию. | Явная модель стоимости initial bootstrap и O(окно/необходимые shards) для повторного чтения, перечень I/O/allocations, способ измерения и **согласуемые**, а не выдуманные numerical budgets. **FAIL:** маленькое окно требует full-world prepare/route/fill. |
 | **ARCH-11: external integration gates** | Указаны точные контракты и owners зависимостей GEO-1 G10-A, staged Pack publication, runtime Snapshot, Domain Patches domain.read, DAG-TYPING/GEN-DAG; архивный WS-4 не является gate; архитектура не объявляет их реализованными. | Таблица external gate → owner plan/ТЗ → required contract → blocking SP step. **FAIL:** чужую неподтверждённую реализацию считать DONE или обойти прямым вызовом. |
 | **ARCH-12: порядок и отрицательные сценарии** | Кодовые этапы §8 атомарны, топологически упорядочены и независимые треки не превращены в ложные глобальные зависимости; запретные маршруты проверяемы. | Для каждого шага prerequisites, exact files/contracts, отдельные positive/negative acceptance cases §9; проверка циклов, двух путей, stale revisions и отсутствующих источников. **FAIL:** переход к consumer до producer/publication либо «тест прошёл» без реального caller path. |
@@ -1785,7 +1785,7 @@ Malformed raw request отклоняется existing Pydantic ValidationError �
 
 Подтверждённые противоречия исправлены: внешний strict ConfigDict больше не объявлен гарантией strict nested topology; зафиксированы готовый frame и точные дополнительные проверки без изменения legacy POJO. Добавлена существующая fine_topology formula вместо неявного coarse→fine relabel. Проверка root/pin больше не названа готовой existing Pack/Snapshot операцией: её контракт и Q01 applicability ещё OPEN. Imports window дополнены фактически нужными WorldBounds/WorldTopologyMode; карта остаётся семью новыми shared файлами, без application service или переноса existing POJO. Проверка уникальности source_refs — по equality полного value, без требования hashability refs; PlanKey.scope может содержать region UID, refs не заменяются одним fingerprint.
 
-Request/result/error проверены совместно: validation до read отличается от Failure валидного request; source отсутствует/повреждён/stale — Failure и в PREVIEW; допустимый пустой T определяется доменом. REQUIRED допускает только полный достоверный T и пустые issues. FieldPathError — frozen dataclass с optional code/reference/runtime_context, а не новый BaseModel или обязательный runtime context: shared wrapper сохраняет existing тип. Не вводится generic wet/dry status. При нескольких причинах reader возвращает первичную причину первого неуспешного этапа: frame → pin/dependency admission → format support → availability/integrity → domain scope/budget/completeness; все уже выявленные подробности остаются в issues, порядок обхода shards задаёт domain contract. Этот порядок этапов — предложение предыдущего ревью, не принятый общий precedence ошибок; см. §14.8, SP1-F3. Cancellation и defects не маскируются.
+Request/result/error проверены совместно: validation до read отличается от Failure валидного request; source отсутствует/повреждён/stale — Failure и в PREVIEW; допустимый пустой T определяется доменом. REQUIRED допускает только полный достоверный T и пустые issues. FieldPathError — frozen dataclass с optional code/reference/runtime_context, а не новый BaseModel или обязательный runtime context: shared wrapper сохраняет existing тип. Не вводится generic wet/dry status. Актуализация по принятому F3 (§14.10): Failure.errors сохраняет все фактически обнаруженные SpatialReadError, без primary reason/precedence. Прежнее предложение выбирать первую причину отозвано. Непроведённые зависимые проверки не порождают ошибки; порядок traversal задаёт домен. Cancellation и defects не маскируются.
 
 **Граница приёмки:** владелец принимает shared окно/request/outcome/revision obligations и карту §14.1–14.6. Это не закрывает GEO-SPATIAL-CONTRACT: На момент этого ревью GEO ещё должен был определить domain T, fine physical source/coverage, Z units/bed/level boundaries, Task11 mapping и exact dependency proofs; актуальные принятые A/R1/G1 и Z convention учтены в §14.8. Сохраняется различие PlanRef.output_fingerprint (32 bytes) и publication pack_hash (RevisionHex, 64 hex chars). NativeFinalWaterQuery проверяет exact final/water refs и output proofs при admission и возвращает XY KnownFact/UnknownFact; он не предоставляет XYZ volume, root IO или runtime overlay. Нельзя вывести dry из отсутствующего root, coarse membership либо пустой sparse map. Ocean/lake scope и river SP-H2 не объединяются этим ревью. Новые доменные payload/codec/reader paths не выбраны.
 
@@ -1837,3 +1837,46 @@ Existing `FineTerrainZRun.cells` разворачивает inclusive `[z0,z1]`,
 `SpatialReadError` находится в предложенном `dataModel/spatial/read/failure.py`, imports enum/pydantic/FieldPathError уже предусмотрены; карта остаётся семью shared файлами. Acceptance cases: одна ошибка; несколько различных reasons; несколько paths одного reason; все обнаруженные ошибки сохранены; зависимые непроверенные факты не объявляются дополнительными ошибками. Malformed request до read остаётся Pydantic ValidationError, не SpatialReadFailure без валидного request.
 
 Это приёмка уточнений F2/F3 вместе с ранее принятым F1. **SP-1 целиком остаётся НА ПРИЁМКЕ пользователя**; код, downstream steps, Hydrology payload, Pack codec и runtime overlay этим не разрешены.
+
+### 14.11. Совместное ревью с GEO EF-1 — пакет на приёмку (2026-11-02)
+
+Сверены фактические EF-1 и §14.1–14.10; evidence definitions/callers и **единый
+перечень контрактов/оставшихся blockers** находятся в [GEO EF-1.10–1.11](./geo-1-designed-water.md#ef-110-совместное-ревью-актуальных-geo-ef-1--spatial-sp-1-2026-11-02).
+Это один joint ledger, не вторая копия Hydrology fields. GEN-DAG draft не использован;
+код и приёмки не выполнялись. Принятые F1/F2/F3 сохранены, SP-1 целиком, EF-1 и
+GEO-SPATIAL-CONTRACT остаются НА ПРИЁМКЕ, не DONE.
+
+- **F1:** GEO WaterVolumeRun теперь разделяет исходные bed_z/level_z и clipped
+  z0/z1. Occupancy только внутри request union; исходные физические границы и
+  body/union metadata могут выходить за окно. При разном physical bed соседние
+  columns не сливаются из-за случайного равенства clipped z0/z1. На общем уровне
+  второй API/mode не добавлен. Это domain proposal по принятому F1, не его реализация.
+- **F2:** actual typed request/ref/discriminants и before-check готового topology,
+  strict integer/enum validation сведены с domain admission. NewType не даёт
+  runtime unit proof; legacy normalization/coercion не исправляются outer ConfigDict.
+  Revalidation после model_construct/model_copy обязательна. Raw transport decode
+  остаётся caller boundary; совместимость нельзя вывести из названия fine поля.
+- **F3:** GEO EF-1.5 использует Failure.errors с SpatialReadError(reason,issue),
+  без reason/issues на Failure и без first-failed precedence. Все обнаруженные
+  ошибки сохраняются; missing shard не порождает выдуманный bad checksum. Полный
+  scan/unsafe decode ради новых ошибок не требуется. Slice.issues остаётся только
+  диагностикой успешного preview, не альтернативным контейнером Failure errors.
+- **Refs:** bootstrap revision — exact canonical-open-water envelope.ref,
+  native_final.ref остаётся upstream dependency. Pack reader — WorldPublicationRef
+  с pinned root ArtifactRef; сам ArtifactRef не доказывает world/pin. Domain source
+  graph freeze не закрывает SP-P0 root wire, SP-3 IO или Snapshot overlay/Q01.
+- **Gates:** producer G10-A/SP-H и storage SP-P0/P1 после joint agreement идут
+  независимо по собственным gates. Ветки сходятся на source integration SP-P3I;
+  legacy closure/consumer activation остаются следующими scopes. ARCH-9 trace
+  исправлен вместе с GEO EF-1.8, чтобы не сохранять скрытый G10-A→SP-P0 prerequisite.
+- **Files:** SpatialReadError остаётся failure.py, семь shared файлов; domain window
+  records/imports принадлежат Hydrology. Canonical source serialization не означает
+  регистрацию/persistence каждого WaterWindowFacts/SpatialSlice как Pack source.
+
+Повторно прочитанные existing consumers: NativeFinalWaterQuery, run_column_fill,
+_compress_z_runs/_surface_cell и terrainContributions — XY identity/solid inclusive
+terrain projection, не готовый canonical liquid XYZ read. SP-M/SP-4 должны сохранить
+physical bed, terrain surface и отдельное medium composition. PREVIEW unknown/dry
+и required failures не выводятся из отсутствия MapCell/L0 записи. Численные budgets,
+runtime/cold-Pack evidence и dynamic caller closure не доказаны этим статическим
+review; их gates перечислены в joint ledger.
