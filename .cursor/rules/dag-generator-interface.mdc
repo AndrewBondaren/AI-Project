@@ -30,7 +30,7 @@ alwaysApply: true
 
 **Атомарная доменная операция:** caller/DAG вызывает materialization целиком через стабильный контракт, не дробит internals на ноды/фазы. Домены готовят результаты и инициируют staging объёмных immutable artifacts через доменный staging port; pure compute не пишет опубликованное состояние.
 **Целевой lifecycle:** по [Snapshot ТЗ](../../docs/tz_world_snapshot.md), § «Staged artifacts и точки публикации» и § «Путь записи и сбор патчей», до gameplay DAG оркестрирует staged Pack publication/activation (immutable manifest@hash, без snapshot от bake). После gameplay базовый pack заморожен: домены готовят typed patches и refs результатов, **DAG собирает PatchSet**, только Snapshot применяет его через доменные handlers и выполняет commit. Snapshot сам materialization не запускает. Bulk results передаются artifact refs, не раскладываются в per-cell patches.
-**Legacy до соответствующего cutover:** C19 `.tmp` → SQL tx → `os.replace` и `pending_patches` → `PatchApplier.apply` описывают прежние пути, не целевой commit-контракт и не разрешение нового обходного writer. Миграция — по owning GEN-DAG/Pack/Snapshot gates; эта правка правила не объявляет runtime готовым.
+**Legacy до соответствующего cutover:** C19 `.tmp` → SQL tx → `os.replace` и `pending_patches` → `RepairPatchApplier.apply` описывают прежние пути, не целевой commit-контракт и не разрешение нового обходного writer. Миграция — по owning GEN-DAG/Pack/Snapshot gates; эта правка правила не объявляет runtime готовым.
 
 ## GEN-DAG-1 — обязательный совместный дизайн нового графа (мастер 2026-11-02)
 

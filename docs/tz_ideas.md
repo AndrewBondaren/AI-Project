@@ -10,7 +10,7 @@
 |---|---|
 | [tz_lazy_simulation.md](./tz_lazy_simulation.md) | LOD sim, essential NPC LLM triggers |
 | [tz_perception.md](./tz_perception.md) | Геометрический срез для LLM |
-| [tz_engine_flow.md](./tz_engine_flow.md) | Pass loop, repair, patch_applier |
+| [tz_engine_flow.md](./tz_engine_flow.md) | Pass loop, repair, repair_patch_applier |
 | [tz_json_validation.md](./tz_json_validation.md) | Валидация bundle пресетов |
 | [tz_world_snapshot.md](./tz_world_snapshot.md) | Snapshot / replay инфраструктура |
 | [project_data_storage_tz.md](./project_data_storage_tz.md) | `system_*` / `display_*`, N+1 |
@@ -302,7 +302,7 @@ LlamaBrain: authority hierarchy, canonical facts immutable.
 
 ### Связь
 
-- `patch_applier` post-pass — единая точка enforcement
+- `repair_patch_applier` post-pass — единая точка enforcement
 
 ---
 
@@ -599,7 +599,7 @@ LlamaBrain Component 9: author-controlled fallback.
 | Plan | LLM + intent / event nodes |
 | Diff | Structured contract output |
 | Validate | `llm_validator`, domain validators, repair |
-| Apply | `pending_patches` → `patch_applier` |
+| Apply | `pending_patches` → `repair_patch_applier` |
 
 **Действие:** использовать терминологию в docs при описании event/plot nodes; код не переименовывать ради термина.
 

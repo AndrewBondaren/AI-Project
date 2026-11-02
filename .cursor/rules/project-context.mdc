@@ -30,7 +30,7 @@ N+1 / `system_*` — инструмент **мастера**, не игрока.
 
 ## Движок
 
-`ChatService` → `LLMExecutionEngine` → passes → `patch_applier` → `ResponseResolver`.
+`ChatService` → `LLMExecutionEngine` → passes → `repair_patch_applier` → `ResponseResolver`.
 
 Фазы: **pre_llm** (gate/replan) → **llm** (repair) → **post_llm** (фиксация). Ноды: `@register_python` / `@register_llm` → `NODE_REGISTRY`.
 

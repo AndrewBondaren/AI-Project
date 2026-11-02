@@ -58,7 +58,7 @@ Do **not** score “can a player finish a session.” `scene_narration` is a **c
 
 ## Framework holes (score these)
 
-1. `PatchApplier` = state-merge only — **does not commit** SQLite/pack (PDVA Apply incomplete).
+1. `RepairPatchApplier` = state-merge only — **does not commit** SQLite/pack (PDVA Apply incomplete).
 2. Three writers for scene-shaped facts: DAG `map_cells`, pack L0/L2/Grade, outdoor city-structure — player path still reads the first.
 3. EventBus = per-request SSE, not a world bus.
 4. `shared_context` still untyped `dict`.

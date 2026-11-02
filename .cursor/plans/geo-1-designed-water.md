@@ -87,9 +87,12 @@ retained source, окна и зависимостей; узкие протоки
 и фактического cutover. Прежняя design closure этот открытый вопрос не закрывает.
 
 
-Статус: проектирование, не разрешение на код. Принятые решения мастера
-от 2026-10-22 перечислены в §1. TARGET specification завершена в §6.25–6.29;
-design closure registry — §6.13. Продуктовых вопросов нет; HY-RIV-1 — внешний track.
+Исторический baseline от 2026-10-22: решения мастера перечислены в §1;
+TARGET specification §6.25–6.29 и design closure registry §6.13 относятся
+к прежнему scope. Они не закрывают актуальные вопросы представления Hydrology,
+Task11 и GEO-SPATIAL-CONTRACT. Их статус OPEN задан нормативными разделами
+выше и контрольным списком интеграции в конце плана. HY-RIV-1 — внешний track.
+Статус текущего плана: проектирование, не разрешение на код.
 Первоначальный design-заход менял только этот план. Последующие согласованные
 уточнения и нормативный sync PC-0 могут менять профильные ТЗ; код, тесты и
 fixtures требуют отдельного implementation шага. Уточнение владельцев и фаз
@@ -12568,6 +12571,12 @@ global hierarchical solver и новые summaries НЕ выбраны и не �
 считать исследовательскими гипотезами, не согласованным delivery scope.
 При этом нельзя подменять требуемые fine facts coarse guesses: unknown остаётся
 unknown, соответствие water layout и L2 consumer должно быть доказано.
+Уточнение scope приёмки (2026-11-02): G10-A принимает production source join
+и совместимость его фактов с согласованной L2 projection (семантика, geometry,
+refs и contract-level evidence), но не требует активации Spatial reader в L2.
+Реальный consumer cutover и cold-Pack L2 evidence принимаются в SP-4 после
+SP-3 + SP-M и их prerequisites. SP-4 не prerequisite G10-A; приёмка G10-A
+не объявляет новый L2 water-read активным или проверенным end-to-end.
 Следующий ограниченный шаг — закрепить точные typed inputs/owners для terrain
 planning base с hills без post-fill feedback и применение принятого basin floor;
 использовать existing kernels/POJO, не новый независимый terrain/water generator.
@@ -14083,3 +14092,10 @@ G10-A OPEN. Только документация, без изменения cod
 - Для runtime L2: отдельно SP-3S + SP-4 → SP-4R по owning gates; rivers и Physics не становятся скрытым prerequisite ocean/lake base path.
 
 **Правило handoff:** когда закрывается нужный Spatial gate, обновить соответствующую строку здесь ссылкой на его acceptance evidence (раздел/дата/точный scope), сверить HSP callers и общий граф. До появления evidence строка остаётся OPEN; фраза «Spatial готов» без named gate недостаточна. Автоматический мониторинг этим документом не создаётся. Ни одна внешняя приёмка не закрывает GEO G10-A автоматически.
+
+
+### Уточнение consumer cutover и границ приёмки — 2026-11-02
+
+G10-A и SP-4 принимают разные результаты: production Hydrology source и его контрактную совместимость — G10-A; реальное использование bounded base-Pack reader в L2 — SP-4. До переключения L2 существующий consumer сохраняется только в явно указанном AS-IS scope; он не объявляется вторым canonical producer или Spatial-ready. Exact переходные bindings фиксируются в GEO-SPATIAL-CONTRACT/HSP disposition до зависимого кода.
+
+Требование разделить multi-operation body `TerrainBatchOrchestrator.build_tile_surface_state` сохраняется. SP-M фиксирует exact target responsibilities/methods/files/imports и typed geometry/water inputs; SP-4 реализует согласованное разделение до активации reader. Сохранение класса как orchestration seam не разрешает сохранить в нём доменные алгоритмы или L0-as-water-truth. Геометрия, landcover/hills и water projection остаются у профильных владельцев; алгоритмы не переносятся в generic Spatial. Сверка — [Spatial HSP-04 и SP-M/SP-4](./spatial-distribution-domain.md#hydrology--spatial-проверенные-legacy-пути-и-места-перехода-2026-11-02).

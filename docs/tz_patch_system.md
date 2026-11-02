@@ -53,7 +53,7 @@ Snapshot вызывает domain storage contract, не реализуя его 
 | Сущность | Что это | Связь |
 |---|---|---|
 | `map_cell_patches` (SQL) | Таблица применённых дельт cells-домена | Один **доменный patch-формат**, не система; может стать persist-целью patches |
-| `pending_patches` / `PatchApplier` (engine) | Ephemeral копии node_results LLM-фазы | Не patch-система; кандидат на удаление/замещение |
+| `pending_patches` / `RepairPatchApplier` (engine) | Ephemeral копии node_results LLM-фазы | Не patch-система; кандидат на удаление/замещение |
 | `SessionSnapshot` | Resume пайплайна чата | Не modification snapshot |
 | `WorldSnapshot` | Дельта тика поверх базового pack (patch set + refs), не полный слепок | Commit-артефакт — **приёмник** patch set, не патч |
 

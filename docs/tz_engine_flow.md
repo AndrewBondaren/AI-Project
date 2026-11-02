@@ -34,7 +34,7 @@ for pass_num in range(max_passes):
     _apply_task_transition(state)
     if not state.requires_replan: break
 
-patch_applier.apply(state)           # атомарно, один раз после всех passes
+repair_patch_applier.apply(state)           # атомарно, один раз после всех passes
 state.final_result = state.node_results
 ```
 
@@ -101,7 +101,7 @@ while attempt < repair_iterations:
 - `INTENT_DETECTION`: читает `node_results["intent_detection"]["intents"]` → top intent → новый `task_type` + `requires_replan=True`
 - `next_task_type` (из Python pre_llm ноды): `task_type = state.next_task_type` + `requires_replan=True`
 
-### 8. PatchApplier.apply() — один раз после всех passes
+### 8. RepairPatchApplier.apply() — один раз после всех passes
 - Валидирует все patches структурно
 - Атомарно применяет: `state.node_results[node_id] = output`, `state.node_status = "success"`
 - Удаляет `node_errors` для починенных нод
@@ -117,7 +117,7 @@ while attempt < repair_iterations:
 - `post_llm` нода **никогда** не сигнализирует replan — она обрабатывает только успешный результат
 - RepairOrchestrator работает **внутри LLMAggregateExecutor** пока `messages` и `client` живы
 - Domain-валидация LLM-вывода против DB — объявляется на **LLM-ноде**, выполняется в `_validate_all`, попадает в repair в той же conversation
-- `state.pending_patches` накапливается по ходу выполнения, `PatchApplier` применяет **атомарно один раз** после всех passes
+- `state.pending_patches` накапливается по ходу выполнения, `RepairPatchApplier` применяет **атомарно один раз** после всех passes
 - `pass_number == 0` → resume-логика (пропускаем уже выполненные)
 - `pass_number > 0` → replan-логика (gate-ноды с `skip_on_replan=False` перезапускаются)
 
@@ -168,3 +168,8 @@ LLM получает уже локализованный контекст — н
 ## Открытые вопросы / будущие расширения
 - Domain-валидатор на LLM-ноде: API не определён, нужен когда появится первая нода с ID-верификацией
 - `post_llm` phase в DAGExecutor сейчас агрегирует replan так же как pre_llm — нужно убрать эту агрегацию чтобы инвариант был закреплён кодом
+
+
+### Граница RepairPatchApplier / World Snapshot (2026-11-02)
+
+RepairPatchApplier (прежнее имя PatchApplier) обновляет node_results/status/errors/execution_order и очищает pending_patches состояния DAG. Очередь содержит успешные LLM outputs, включая ответы без repair; исправление ответа выполняет RepairOrchestrator отдельно. Это не запись данных мира. World Snapshot применяет/сохраняет доменные изменения и историю мира. **Заменять RepairPatchApplier на Snapshot запрещено.** Typed replacement публикации результатов относится к coordinator/DAGContext; world effects остаются отдельной границей. Исторические утверждения выше об атомарности не означают транзакционную гарантию: executor уже записывает outputs до applier, rollback отсутствует.

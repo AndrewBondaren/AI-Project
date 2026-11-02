@@ -486,7 +486,7 @@ print('PASS:', len(edges), 'edges; base and separate cutover alternatives')
 
 **Done проверки:** записаны автоматический результат, сверка диаграмм/семантики и отдельно статус рендеринга; отсутствуют необъяснённые противоречия. Непроверенные пункты GRAPH-AC остаются незакрытыми; при OPEN LEGACY-AC приёмка карты запрещена. Evidence — кратко, без повторного описания архитектуры.
 
-**Сверка правила (2026-11-01):** `dag-generator-interface.mdc` синхронизирован с Snapshot ТЗ § «Staged artifacts и точки публикации» / § «Путь записи и сбор патчей»: legacy C19/PatchApplier отделены от target lifecycle, до игры Pack, после игры PatchSet/commit Snapshot; атомарная доменная операция сохранена. Правило и карта не объявляют production migration выполненной.
+**Сверка правила (2026-11-01):** `dag-generator-interface.mdc` синхронизирован с Snapshot ТЗ § «Staged artifacts и точки публикации» / § «Путь записи и сбор патчей»: legacy C19/RepairPatchApplier отделены от target lifecycle, до игры Pack, после игры PatchSet/commit Snapshot; атомарная доменная операция сохранена. Правило и карта не объявляют production migration выполненной.
 
 **Evidence v5 (2026-11-01):** встроенная проверка выполнена: 58 уникальных рёбер, 45 вершин; базовый граф и обе альтернативы cutover ацикличны, локальные ссылки и шесть обратных ссылок PASS. Стрелки двух диаграмм сверены с реестром с учётом транзитивных сокращений и внешних gates; семантическая проверка SP-R0/apply/read и §8 не выявила нового противоречия. Совместная активация в варианте A требует объединения входов GEN-CUTOVER/SP-R2; production evidence не проверялось. `git diff --check` PASS. Mermaid render **не выполнен**: локальные mermaid/mermaid-cli отсутствуют. GRAPH-AC не закрыт; Q01/Q07 и exact contracts OPEN.
 
@@ -573,3 +573,6 @@ Bootstrap confluence/fill/spill/merge остаются Hydrology; runtime физ
 ### Hydrology legacy/read migration — 2026-11-02
 
 Проверенная карта HSP-01…HSP-10 с явными ссылками на definitions/callers и gate каждого перехода: [SPATIAL: Hydrology → Spatial](./spatial-distribution-domain.md#hydrology--spatial-проверенные-legacy-пути-и-места-перехода-2026-11-02). GEO owns producer cutover G10-A; SP-P3/SP-3 — root/read; SP-M/SP-4 — L2 consumer; SP-3S/SP-4R — runtime. HydrologyWorkingFields и L0 hard corridor являются legacy water source/read, но имеют соседних consumers, поэтому blanket deletion запрещён. NativeFinalWaterQuery не объявлен legacy или готовым Spatial API. Карта статически проверена; exact replacements, dynamic closure и production evidence OPEN. До кода затронутого шага закрыть его HSP dispositions; глобальный LEGACY-AC не закрыт.
+
+
+**GRAPH-Q11 / GEN-ALIGN-02, уточнение 2026-11-02:** по решению пользователя в DAG-TYPING-1 и tz_engine_node_context.md §8.2 исправлен порядок: новые node I/O/E → error POJO/files → implementation/handoff. Требование миграции ровно 15 ошибок снято; этот нормативный подпункт исправлен. Остальные GEN-ALIGN и общая приёмка GEN-CONTRACTS OPEN.

@@ -111,7 +111,7 @@ ChatService.handle_message
       → for pass in max_passes:
           GraphCompiler.compile → DAGExecutor.execute
           _apply_task_transition (replan)
-      → patch_applier.apply (атомарно)
+      → repair_patch_applier.apply (атомарно)
       → ResponseResolver.resolve → user-facing output
   → message_repo (turn + narrative) при успехе
 ```
@@ -189,7 +189,7 @@ Intent detection может вернуть `scene_narration_render` → engine �
 - `GraphCompiler` + Kahn levels + LLM temperature groups
 - `DAGExecutor` + parallel levels + SSE node status
 - `RepairOrchestrator` + DSL patches
-- `PatchApplier` — transactional pending patches
+- `RepairPatchApplier` — transactional pending patches
 - Cancel/resume: `CancellationToken`, `SessionSnapshot`, `pending_repo`
 - Repos в context: `scene_repo`, `location_repo`, `map_cell_repo`, `world_repo`, `player_repo`, `npc_repo`, `state_repo`, persist services
 

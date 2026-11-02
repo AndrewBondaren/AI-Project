@@ -228,7 +228,7 @@ ChatService.handle_message
       GraphCompiler.compile(state)     # фильтр NODE_REGISTRY по TaskType
       DAGExecutor.execute(plan, state)
       replan → смена task_type → перекомпиляция
-    PatchApplier.apply                 # после всех pass
+    RepairPatchApplier.apply                 # после всех pass
     ResponseResolver.resolve           # TaskType → output node id
   message_repo (turn + narrative)
   pending_repo.delete

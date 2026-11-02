@@ -653,7 +653,7 @@ runtime `SourceObjectId/SourceRevision` и общий `WorldSnapshotService` п�
 в backend/app не обнаружены. Есть schema world_snapshots и отдельная проверка
 SurfacePlanningView/StateViewRevision в planning/guards/sourceRevision.py;
 это не реализация общего object revision store и snapshot commit lifecycle.
-Engine repair/PatchApplier меняет node_results/status, не заменяет этот механизм.
+Engine repair/RepairPatchApplier меняет node_results/status, не заменяет этот механизм.
 
 До contract freeze необходимо определить и проверить отдельно:
 
@@ -1279,7 +1279,7 @@ runtime atomicity, import audit или per-class test pass.
   результаты (включая fallback), не подходят для SnapshotApplyOutcomeKind.
 - `regions/RegionState`, RegionStateSnapshot и cancellation SessionSnapshot —
   другие предметные данные, не общая snapshot history или operation storage.
-- `PatchStoreService`, engine repair PatchApplier и BaseRepository.upsert
+- `PatchStoreService`, engine repair RepairPatchApplier и BaseRepository.upsert
   не реализуют новый Patch/Snapshot contract; mutable save/replace/delete
   не объявлены append-only совместимыми.
 - SourceObjectId/SourceRevision, общий Snapshot service, ArtifactRef,
@@ -2461,7 +2461,7 @@ Source revision-set binding остаётся отдельным шагом 5 п�
 
 | AS-IS / legacy-кандидат: определение | Caller / DI / registration | Target / граница замены | Gate и оставшаяся проверка |
 |---|---|---|---|
-| [PatchApplier.apply](../../backend/app/application/engine/repair/patchApplier.py) (строка 8) | [LLMExecutionEngine.run](../../backend/app/application/engine/llmExecutionEngine.py) (строка 23) | TARGET/OPEN: Snapshot/domain apply; старый метод меняет node_results/status, не world commit | GEN/Snapshot; не смешивать repair с world patches; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
+| [RepairPatchApplier.apply](../../backend/app/application/engine/repair/repairPatchApplier.py) (строка 8) | [LLMExecutionEngine.run](../../backend/app/application/engine/llmExecutionEngine.py) (строка 23) | TARGET/OPEN: Snapshot/domain apply; старый метод меняет node_results/status, не world commit | GEN/Snapshot; не смешивать repair с world patches; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
 | [SettlementPersistService.persist](../../backend/app/application/worldData/persist/settlementPersistService.py) (строка 69) | [WorldDataWiring.settlement_persist_service](../../backend/app/core/container/worldData.py) (строка 273) | TARGET/OPEN: domain staging/patch → Pack/Snapshot | writer migration; подтверждён DI factory, не весь runtime path; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
 | [ConnectionPersistService.persist_graph](../../backend/app/application/worldData/persist/connectionPersistService.py) (строка 41) | [WorldDataWiring.connection_persist_service](../../backend/app/core/container/worldData.py) (строка 264) | TARGET/OPEN: domain staging/patch → Pack/Snapshot | writer migration; подтверждён DI factory; **УТОЧНИТЬ** полный caller graph, replacement и disposition |
 

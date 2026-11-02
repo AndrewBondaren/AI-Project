@@ -11,10 +11,10 @@ from app.application.cancellation.sessionSnapshot import SessionSnapshot
 
 class LLMExecutionEngine:
 
-    def __init__(self, dag_executor, graph_compiler, patch_applier, executors: dict, snapshot_store, response_resolver, repositories: dict | None = None):
+    def __init__(self, dag_executor, graph_compiler, repair_patch_applier, executors: dict, snapshot_store, response_resolver, repositories: dict | None = None):
         self.dag_executor = dag_executor
         self.graph_compiler = graph_compiler
-        self.patch_applier = patch_applier
+        self.repair_patch_applier = repair_patch_applier
         self.executors = executors
         self.snapshot_store = snapshot_store
         self.response_resolver = response_resolver
@@ -53,7 +53,7 @@ class LLMExecutionEngine:
                     break
 
             # все passes завершены — применяем патчи атомарно
-            self.patch_applier.apply(state)
+            self.repair_patch_applier.apply(state)
 
             # извлекаем user-facing ответ из node_results
             resolved = self.response_resolver.resolve(state)

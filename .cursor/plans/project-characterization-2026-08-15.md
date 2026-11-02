@@ -131,7 +131,7 @@ ChatService.handle_message
       DAGExecutor.execute(plan, state)
       _apply_task_transition             # intent → new TaskType or gate next_task_type
       break unless requires_replan
-    PatchApplier.apply(state)            # after all passes
+    RepairPatchApplier.apply(state)            # after all passes
     ResponseResolver.resolve(state)      # TaskType → output node id
   message_repo.create_turn + narrative   # on success
   pending_repo.delete
@@ -201,7 +201,7 @@ check_scene → check_terrain → eager_terrain
 
 **Stub:** `prepare_context` (`PrepareAnalysisContextNode`) — empty tasks, not `@register_python` in the same style as others.
 
-### 6.7 PatchApplier — honest PDVA
+### 6.7 RepairPatchApplier — honest PDVA
 
 `tz_ideas.md` ID-12 **accepted:** the pass loop is named Plan–Diff–Validate–Apply (Orchestrated Reality, arXiv:2606.16014).
 
@@ -214,7 +214,7 @@ As coded:
 | Validate | Pydantic contract + node validator + repair | No “ID exists in DB” domain validator wired yet |
 | Apply | `pending_patches` → merge into `ExecutionState.node_results` | **Does not write SQLite / pack.** World writes happen inside Python `execute()` via repos (e.g. lazy settlement `insert_bulk_ignore`) |
 
-Closest analog Apply (OR paper) commits content-hashed JSON deltas to canonical world state. That is **not** what `PatchApplier` does today.
+Closest analog Apply (OR paper) commits content-hashed JSON deltas to canonical world state. That is **not** what `RepairPatchApplier` does today.
 
 ### 6.8 EventBus
 
@@ -377,7 +377,7 @@ Internal registry: `docs/tz_ideas.md`. External peers cited there and still accu
 | Beliefs / rumors (ID-1, ID-2) | Spec | AI RPG Engine presentation channels |
 | Plot-lock (ID-5) | Spec; event TaskTypes exist | Lunar |
 | Event graph hash + expand (ID-13) | Spec, **this project’s own** (not RAG, not lore) | OR hashes deltas; not the same protocol |
-| Authority on patches (ID-8) | Spec; natural home `PatchApplier` | LlamaBrain |
+| Authority on patches (ID-8) | Spec; natural home `RepairPatchApplier` | LlamaBrain |
 | Preset cartridge + smoke (ID-6) | Import+JV; no manifest/smoke | MnesOS cartridge |
 | Graceful fallback prose (ID-10) | Spec | LlamaBrain |
 | BYOK (ID-11) | Deferred; router exists | MnesOS |
@@ -453,7 +453,7 @@ A fair summary, not a scorecard you must copy:
 | `docs/tz_project_snapshot.md` | Older living snapshot (Jul 20) |
 | `backend/app/application/engine/llmExecutionEngine.py` | Outer loop |
 | `backend/app/application/engine/graphs/graphCompiler.py` | Compile |
-| `backend/app/application/engine/repair/patchApplier.py` | Apply (state only) |
+| `backend/app/application/engine/repair/repairPatchApplier.py` | Apply (state only) |
 | `backend/app/api/routes/map.py` | Debug bake harness contract |
 | `backend/app/application/worldData/pack/bake/packMaterializationOrchestrator.py` | L0 bake job |
 | `backend/app/dataModel/` | Contract SoT |

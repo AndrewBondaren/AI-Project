@@ -15,7 +15,7 @@ from app.application.engine.validation.contractValidator import ContractValidato
 from app.application.engine.validation.nodeValidator import NodeValidator
 from app.application.engine.repair.repairOrchestrator import RepairOrchestrator
 from app.application.engine.repair.repairBuilder import RepairBuilder
-from app.application.engine.repair.patchApplier import PatchApplier
+from app.application.engine.repair.repairPatchApplier import RepairPatchApplier
 from app.application.engine.repair.dslFailureProjector import DSLFailureProjector
 from app.application.engine.rules.ruleEngine import RuleEngine
 from app.application.engine.rules.ruleCompiler import RuleCompiler
@@ -47,7 +47,7 @@ class EngineWiring:
         self._node_validator = None
         self._llm_validator = None
         self._repair_orchestrator = None
-        self._patch_applier = None
+        self._repair_patch_applier = None
         self._llm_engine = None
         self._response_resolver = None
 
@@ -132,10 +132,10 @@ class EngineWiring:
     # REPAIR
     # =====================================================
 
-    def patch_applier(self):
-        if self._patch_applier is None:
-            self._patch_applier = PatchApplier()
-        return self._patch_applier
+    def repair_patch_applier(self):
+        if self._repair_patch_applier is None:
+            self._repair_patch_applier = RepairPatchApplier()
+        return self._repair_patch_applier
 
     def repair_orchestrator(self):
         if self._repair_orchestrator is None:
@@ -204,7 +204,7 @@ class EngineWiring:
             self._llm_engine = LLMExecutionEngine(
                 dag_executor=self.dag_executor(),
                 graph_compiler=self.graph_compiler(),
-                patch_applier=self.patch_applier(),
+                repair_patch_applier=self.repair_patch_applier(),
                 executors=self.executors(),
                 snapshot_store=snapshot_store,
                 response_resolver=self.response_resolver(),

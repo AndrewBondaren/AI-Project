@@ -195,7 +195,7 @@ Score “thesis + engineering density,” **not** “can a player finish an adve
 | Player narration (`scene_narration` node) | **Conscious blocker** |
 | LLM reads pack L0 / Grade / city-structure as scene facts | No (~2–3/10 consumption) |
 | Bake/outdoor called from DAG / session start | No (DAG gate) |
-| `PatchApplier` commits world | No — **state-merge only** |
+| `RepairPatchApplier` commits world | No — **state-merge only** |
 | EventBus as persistent world bus | No — per-request SSE |
 | Economy / politics sim / rumor / witness / beliefs runtime | Spec / draft |
 | Lazy sim LOD + essential NPC background LLM | Spec |

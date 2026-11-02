@@ -19,7 +19,7 @@ Pydantic в `dataModel` — **не декорация и не «документ
 |------|---------|
 | `application/worldData/generators/` | resolve, assemblers, masterData shims |
 | `application/engine/` (DAG, nodes) | payload defaults, patch values, scene context |
-| `application/chat/` | resolver, patch_applier side defaults |
+| `application/chat/` | resolver, repair_patch_applier side defaults |
 | `db/` | dataclass defaults, seed/migration literals, repo fallbacks |
 | `jsonValidation/` | normalize без POJO, параллельные default-таблицы |
 | `api/routes/` | DTO defaults, response fallbacks |

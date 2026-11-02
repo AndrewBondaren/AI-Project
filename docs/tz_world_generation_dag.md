@@ -39,7 +39,7 @@ metadata:
 | Документ | О чём |
 |---|---|
 | **Этот TZ** | Какие generator-модули существуют, **какие ноды** их вызывают, **когда** (master / lazy / player) |
-| [`tz_engine_flow.md`](./tz_engine_flow.md) | Pass loop, repair, PatchApplier — **механика движка** |
+| [`tz_engine_flow.md`](./tz_engine_flow.md) | Pass loop, repair, RepairPatchApplier — **механика движка** |
 | [`DAG-TYPING-1`](../.cursor/plans/dag-typing-1.md), [`tz_engine_node_context.md`](./tz_engine_node_context.md) | Общесистемные POJO Input/Output и `DAGContext`; не доменные Context-поля |
 | Domain TZ | climate, terrain, building, city, roads, connections |
 | [`tz_logging.md`](./tz_logging.md) | sinks; скрипты = консьюмер `script/{stem}`, bake на сервере |
