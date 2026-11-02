@@ -2,6 +2,9 @@
 
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
+**Смежный LOD трек:** [LOD-SIM-1](./lod-simulation-handoff.md) — generic policy/consumer/handoff и общие проверяемые инварианты; собственные PH-LOD/PH-HANDOFF numerical modes/continuation, PH-ARCH/file map и PH-PUBLISH сохраняются за PHYSICS-1. Новый план DRAFT, не меняет gates PH-ARCH и не разрешает код.
+
+
 Статус на 2026-11-02: **PH-0 принят в статическом scope; D1–D5, SI U1, первый water scope и DAG-owned выбор публичных pipelines приняты; полный PH-ARCH freeze, PH-ORCH integration и runtime OPEN/BLOCKED**. Этот документ фиксирует владельцев ответственности, границу интеграции и **предварительную PH-ARCH file/class map с отдельным PH-ORCH gate**. Новые solver, POJO, DAG-ноды, storage или production cutover не разрешены без PH-0, точного freeze и отдельной архитектурной приёмки.
 
 **Требование PH-LOG:** вся будущая runtime-диагностика Physics проходит общий logging facade проекта; exact events/sink/verification ещё OPEN, см. P3.16. Это не меняет принятые D1–D5/S1–S4 и не разрешает реализацию.

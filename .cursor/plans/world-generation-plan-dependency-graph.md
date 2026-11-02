@@ -1,6 +1,6 @@
-# WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME
+# WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME / LOD-SIM-1
 
-**Статус:** архитектурная карта межплановых gates, v6.9 (2026-11-02), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.10 (2026-11-03), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Назначение:** показать зависимости **конкретных этапов**, а не объявлять один большой план prerequisite другого. Нормативный источник контрактов, статусов и доказательств приёмки — **соответствующий owning-план**; эта карта не вводит новые API, владельцев, типы, численные budgets, путь хранения, обязательный глобальный порядок и не меняет его решение. При конфликте сначала исправить и согласовать owning-план, затем синхронизировать эту карту.
 
@@ -14,6 +14,7 @@
 | [DAG-TYPING-1](./dag-typing-1.md) — `.cursor/plans/dag-typing-1.md` | Общая typed инфраструктура `NodeContract`, OutputRef, runtime, NodeRegistry, parallelism: **A1–A3 implemented/verified**, **B1–B3 не завершены**, B зависит от конкретной интеграции GEN-DAG-1. |
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | **Совместный дизайн нового production DAG**, точные Input/Output/Error POJO, factories, публичные domain operations и единый cutover. Старые 15 ID — AS-IS inventory, **все legacy concrete-ноды под удаление, кроме перерабатываемой `check_scene`**; нет 1:1 миграции. **GEN-NODE-JOINT-REVIEW** обязателен с мастером: Mermaid-карта зависимостей, решения keep/split публичных pipelines и per-node contracts до кода. **DRAFT/DEFERRED**: GEO-1, необходимые Patch/Snapshot gates и concrete contracts/приёмка OPEN. |
 | [PHYSICS-1](./physics-spatial-dynamics.md) — `.cursor/plans/physics-spatial-dynamics.md` | **Owning план PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-HANDOFF/PH-PUBLISH**: DAG-node-only trigger, FAR/MEDIUM/NEAR через DAG+settings, **Grade/SQL только bounded NEAR (FAR/MEDIUM — без Grade)**; фоновая aggregate и локальная подробная стратегии; typed input/output, изменения только через domain-owned operations → Patch/Snapshot. Материалы — отдельный mutable-property owner и внешний контракт, не внутренний поддомен Physics; Physics формирует effects, DAG маршрутизирует Materials/domain change. PH-0 принят статически; направления P1.6, D1–D5 P2.10, SI/scope P2.11 и public pipelines boundary P2.12 приняты; полный PH-ARCH **OPEN**, exact freeze и runtime **OPEN**. В §5 выделены будущие water-first acceptance aliases `PH-AGG-RUNTIME`, `PH-LOCAL-RUNTIME`, `PH-GAMEPLAY-E2E`; это **не implementation steps** и не prerequisite GEO/Pack/GEN initial cutover. |
+| [LOD-SIM-1](./lod-simulation-handoff.md) — `.cursor/plans/lod-simulation-handoff.md` | **Новый DRAFT owning-план** generic LOD policy/consumer, FAR↔NEAR handoff, Time/revision continuity, causal interest, resource budgets и invariant validators. PH-AGG/LOCAL transforms принадлежат PHYSICS-1; Snapshot и Spatial не приобретают нового storage/orchestrator. Только предлагаемая документальная ветка §11; не hard gate и не prerequisite GEO/Pack/GEN initial cutover. |
 
 **Новый owning-трек:** [Time](./time-domain.md) — world clock values, intervals, pure conversions, coherent reads и preparation. Calendar/settings/epochs принадлежат World, стоимость действий — Actions, выбор операций — DAG, commit/restore/branch — Snapshot. **RESEARCHED PROPOSAL; частные решения приняты, общий API/foreign freeze OPEN.** Этапы, статусы и реестр зависимостей Time — §10; это часть общего графа, не отдельный план реализации.
 
@@ -405,6 +406,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | `.cursor/plans/dag-typing-1.md` | Обратная ссылка в начале; A/B-граф подтверждает отсутствие цикла. |
 | `.cursor/plans/world-domain-patches-snapshots.md` | Обратная ссылка в начале; Snapshot runtime gates не выдаются за DONE. |
 | `.cursor/plans/physics-spatial-dynamics.md` | Обратная ссылка в начале; PHYSICS по-прежнему не блокирует base water. |
+| `.cursor/plans/lod-simulation-handoff.md` | Собственный LOD-архитектурный план, обратная ссылка на граф; owning generic policy/handoff, без захвата numerical Physics. |
 
 **Правило обновления:** owner конкретного плана меняет свой статус/контракт первым; затем проверяется и, при необходимости, уточняется эта карта. Запрещено объявлять внешний gate завершённым только по формулировке здесь. Внедрение нового класса/POJO/enum требует file/layout/import map и отдельной приёмки по [code-gates.mdc](../rules/code-gates.mdc) и [folder-composition.mdc](../rules/folder-composition.mdc).
 
@@ -412,7 +414,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 
 - [ ] LEGACY-AC: для каждого показанного перехода проверен реестр owning-плана с явными ссылками на legacy-классы/методы и callers, target заменами, cutover/disposition gates и актуальным evidence по [legacy-folder.mdc](../rules/legacy-folder.mdc). Без такого evidence карта не принимается.
 
-- [ ] Все шесть планов из §1 содержат обратную ссылку; прямые ссылки из графа ведут в существующие файлы.
+- [ ] Все owning-планы из §1, включая новый LOD-SIM-1, содержат обратную ссылку; прямые ссылки из графа ведут в существующие файлы.
 - [ ] Каждое **hard** ребро §5 указано с producer gate, consumer gate и owning plan; проверка топологического порядка не выявляет циклов.
 - [ ] Отсутствуют ложные `SPATIAL DONE → GEO`, `GEN-DAG DONE → GEO`, `DAG-TYPING B → GEN-DAG`, `PHYSICS → base water`, `SP-A/air → water` и `WS-4 → anything`.
 - [ ] Stage A DAG-TYPING и stage B разделены; GEO final и SPATIAL root/read разделены; Pack pregame CAS и runtime Snapshot apply разделены; SP-4 и SP-4R разделены.
@@ -753,3 +755,49 @@ Runtime acceptance позднее требует **конкретных** ready 
 **Команда Time owner:** «Продолжи time-domain.md §§17–18: предъяви A1/A2/A3/A5, не переоткрывая принятые §1/A4; закрой по отдельным slices World calendar projection и Snapshot state/init/acceptance agreements. Различай public prepare, internal bound append и durable accepted result. Уточни exact errors/imports и legacy migration; затем T6 review/T7 приёмка. Pure arithmetic не ждёт calendar grammar или полного Physics/GEN/Snapshot. Stop: документальный freeze proposal, без кода/DDL/ports/nodes/cutover; межплановые изменения отдельными предложениями».
 
 **Проверка v6.9:** общий hard-edge реестр §5 + §10.3: 97 рёбер / 66 вершин; базовый граф и обе отдельные cutover-альтернативы ацикличны. Все 9 новых Time aliases имеют статусные строки; 12 внутренних рёбер отражены в Mermaid. External handoffs остаются пунктирными contract requirements. Mermaid render и runtime не проверялись; GRAPH-AC остаётся OPEN.
+
+## 11. LOD-SIM-1 — общий LOD Handoff и проверка неизменности мира (v6.10, 2026-11-03)
+
+**Owning-план:** [LOD-SIM-1](./lod-simulation-handoff.md). Статус **DRAFT / ARCHITECTURE REVIEW**: пользователь согласовал принцип общего канонического мира и сохранения ключевых инвариантов при разной детализации, но **не** конкретные LOD-контракты, классы, приоритеты, численные допуски или код. Этот трек не превращает PHYSICS-1 в LOD Core, а общий LOD Core — в DAG/Spatial/Snapshot оркестратор.
+
+**Аналогия с bake:** light/full формируют L0 при разном coverage, detailed bake уточняет L2 из одного источника; runtime FAR/MEDIUM/NEAR изменяют также частоту и численную точность. LOD read/projection не пишет Snapshot. Активным процессам отдельно нужна поддерживаемая continuation state, а не только уже опубликованные последствия.
+
+### 11.1. Proposed gate slices (не часть принятого hard-edge реестра §5)
+
+| Gate LOD | Owning-результат | Status / external seam |
+|---|---|---|
+| **LOD-A0** | Reuse/AS-IS inventory: LazySim, bake, Time, Physics, Spatial, Snapshot, GEN | OPEN; read-only можно сейчас |
+| **LOD-C1** | Typed generic consumer, три оси LOD, ownership/invariants, exact errors + POJO/file map | OPEN после A0; joint review |
+| **LOD-P1** | Policy, causal significance, hysteresis, cadence/budget и Time binding | OPEN после C1; exact Time foreign agreement |
+| **LOD-H1** | Generic handoff state machine/commit barrier/continuation; domain transforms остаются у owners | OPEN после C1; PH-HANDOFF, Snapshot/Time agreements |
+| **LOD-V1** | Контрактные валидаторы, negative cases, proof of invariant equivalence | OPEN после P1 + H1 |
+| **LOD-R1** | Будущая first-consumer runtime/E2E приёмка (water-first кандидат) | BLOCKED: V1 + concrete accepted PH/Snapshot/Spatial/Time/DAG contracts |
+
+```mermaid
+flowchart TD
+    A["LOD-A0 inventory"] -.-> C["LOD-C1 common contracts"]
+    C -.-> P["LOD-P1 policy/scheduling"]
+    C -.-> H["LOD-H1 handoff"]
+    P -.-> V["LOD-V1 validators"]
+    H -.-> V
+    V -.-> R["LOD-R1 first runtime E2E"]
+    T["Time: coherent interval"] -.-> P
+    T -.-> H
+    SN["SN-RUNTIME: accepted effects/state"] -.-> R
+    SP["SP-3S / SP-4R: pinned reads"] -.-> R
+    PH["PH-LOD / PH-HANDOFF + ready solver"] -.-> R
+    GEN["GEN: concrete node binding"] -.-> R
+```
+
+Все стрелки в §11.1 — **draft prerequisites/agreements**, а не принятые hard edges §5. После review owner-а только подтверждённые обязательные связи добавляются в единый реестр §5 и пересчитываются cycles/статусы. **Текущий hard graph §5 + §10.3 неизменён: 97 рёбер / 66 вершин**; LOD-ветка пока не входит в count. Не объявлять LOD-R1 prerequisite для initial GEN-CUTOVER, GEO G10-A, SP-PACK/base reader или Snapshot core.
+
+### 11.2. Параллельность и локальные блокировки
+
+- LOD-A0/reuse и архитектурные исследования P1/H1 могут идти параллельно PH-ARCH, Time, GEN-P0 и SPATIAL без production edits. LOD-C1 фиксируется до exact P1/H1 signatures.
+- PH-HANDOFF остаётся **численным процессным** владельцем Physics; generic LOD-H1 задаёт только общую процедуру переключения. Не переносить Physics process state/continuation трансформы в generic LOD и не создавать отдельный storage.
+- Для LOD-R1 требуется доказанный snapshot-aware read, applied world revision, согласованный world Time, конкретные domain effects/continuation writers и DAG contract. `PH-AGG-RUNTIME`/`PH-LOCAL-RUNTIME` — future acceptance aliases PHYSICS-1, не готовые implementation steps.
+- Не синхронизировать LOD только по расстоянию: приоритет и наблюдаемость включают активные causal processes (дорога A→B, волна, пожар). Нет silent materialization/re-solve события, double commit, unbounded Grade/SQL fallback или зацикливания при пороге.
+
+**Следующий допустимый шаг:** LOD-A0 static inventory и совместное решение LOD-C1 boundary/typed contracts. **Stop:** без кода, новых POJO/enum, DAG-ноды, domain writer, принудительного изменения existing PH-ARCH/Time/Snapshot или утверждения runtime готовности. Правки нормативных границ сначала принимаются в owning-планах; WORLD-PLAN-GRAPH-1 синхронизируется после них.
+
+**Проверка v6.10:** добавлен draft LOD трек и обратные ссылки без изменения hard-edge реестра. Markdown/Mermaid/ссылки и static graph должны быть проверены; implementation/runtime evidence отсутствует, GRAPH-AC остаётся OPEN.

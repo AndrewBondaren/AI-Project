@@ -3,6 +3,10 @@
 > **Статус:** концепция ✅ · **детали impl — Todo** (не блокирует D HY / climate / snapshot).
 
 > **Backlog impl:** § «Todo» ниже — решать при отдельной фазе lazy sim + world snapshot (WS-1), не параллельно с surface hydrology.
+> **Owning-план общего runtime LOD:** [LOD-SIM-1](../.cursor/plans/lod-simulation-handoff.md) — generic consumer, policy, безопасные FAR/MEDIUM/NEAR переходы, продолжение событий, Snapshot/Time и проверяемые инварианты. **DRAFT, не реализация**; существующие LS-T1–T9 остаются исходными требованиями и требуют сверки с действующими планами Time/PHYSICS-1.
+>
+> **Исторические допущения ТЗ:** «1 тик = 1 час», freeze cell_states и distance-only границы ниже не являются новым freeze Time/Physics. При конфликте приоритет у отдельно принятых owning Time/Physics/Snapshot контрактов; точная миграция и новая LOD policy — OPEN в LOD-SIM-1.
+
 
 ## Принцип
 
