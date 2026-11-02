@@ -15464,3 +15464,75 @@ Producer, fine P2 migration, G10-A cutover и Pack этим review не нача
 разрешены. Source provenance, production join, cold-Pack и downstream evidence
 не заявлены. GEO-I1 остаётся без пользовательской приёмки независимо от будущего
 исправления I1-R1; G10-A этим review не закрывается.
+
+#### I1.8. Исправление I1-R1 и повторное предъявление (2026-11-02)
+
+**I1-R1 исправлен; GEO-I1 предъявлен на повторную пользовательскую приёмку.**
+Это implementation evidence, не запись о полученной приёмке. Исторический verdict
+I1.7 сохраняется с воспроизведениями дефекта до исправления. G10-A остаётся OPEN.
+
+До правки прослежен текущий flow:
+
+1. Constructor/model_validate запускает `_admit_nested` (mode=before).
+   Для source instance `validate_immutable` проверяет весь payload, затем `vars`
+   возвращает поля; для dict admission начинается с actual space и strict Z.
+2. `_record(bed, FineSurfaceWindow)` проверяет actual outer model, frozen/value
+   graph и полноту полей через existing `validate_immutable`. Этот helper не
+   проверяет соответствие вложенных полей аннотациям: int или другой frozen
+   model — допустимые immutable values. До исправления дальнейший доступ к
+   coverage.spans/span.y и unpack surface row происходил до typed validation.
+3. Existing topology/bounds guards выполняются до legacy normalization.
+   Затем исходные coordinates/levels проходят strict checks; только после них
+   bed/mapping/body/union/shore records явно сериализуются и повторно проверяются
+   `model_validate(..., strict=True)`. Далее Pydantic валидирует поля source и
+   запускает `_consistent_source` с cross-record invariants.
+
+Исследованы `_record`, `_coordinate`, `_integer`, shared immutableValue,
+FineSurfaceWindow.complete_surface, RegionCoverage/CoverageSpan validators и
+WorldTopology.resolve_bounds. Нельзя просто перенести проверки после nested
+validation: WorldTopology способен нормализовать sphere bounds, а legacy shore
+models — исправить enums/liquid flags. Existing guards topology, bodies/unions,
+wet_runs и shore_rows уже проверяют actual records/форму перед обращением к
+полям. Mapping проходит strict nested Pydantic validation до cross-record обхода.
+Поиск новых symbols в backend подтвердил: реальные callers — только tests;
+production application callers/registration нового source отсутствуют.
+
+Выбрано локальное исправление в `_admit_nested`: actual RegionCoverage и каждый
+actual CoverageSpan проверяются existing `_record` до field access; spans и
+surface_z требуют tuple, каждая surface row — tuple длины 2 до unpack;
+protected_cells требует frozenset до обхода. `_coordinate` и `_integer` сохраняют
+strict coordinates/levels. Invalid shapes дают ValueError, который Pydantic
+оформляет как ValidationError. Нет broad catch, coercion/repair и изменений
+общих моделей/helper semantics. Coverage completeness и остальные domain
+invariants остаются в существующих validators.
+
+Изменённые файлы этого исправления:
+
+- `backend/app/dataModel/hydrology/query/source.py` — локальные pre-normalization
+  type/shape guards и reuse CoverageSpan/RegionCoverage.
+- `backend/tests/geo1/canonical_source/test_source_models.py` — три новых tests:
+  три review reproductions × constructor/copy/construct revalidation (9 subcases,
+  ValidationError + целевое сообщение); 27 neighboring malformed shapes для
+  coverage/spans/surface rows/coordinates/heights/protection; позитивный контроль
+  сохранения точных bed/wet facts при constructor и повторном admission.
+- Этот owning-план — исследованный flow, решение и новое evidence.
+
+Новое evidence:
+
+- До правки source новый regression test дал **9 errors** — исходные TypeError/
+  AttributeError во всех трёх entry paths. Fixtures достигают именно дефектного
+  traversal, а не случайного другого invariant.
+- После исправления из backend: `.venv/Scripts/python.exe -m unittest
+  tests.geo1.canonical_source.test_source_models
+  tests.geo1.integration.test_surface_validation
+  tests.test_hydrology_water_body_uid -q` — **50 tests OK** (22 source tests),
+  штатные hydrology WarningError diagnostics. Existing strict/coercion/forged
+  facts, odd sphere, wet/dry/Z/union/shore tests также прошли.
+- `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
+  backend/app/dataModel/hydrology/query/source.py` — **0 errors, 0 warnings**.
+- Diff ограничен тремя файлами выше; production wiring, fixtures и общие модели
+  не изменены. Полная regression suite/producer/cold-Pack evidence не заявлены.
+
+**Результат: GEO-I1 НА ПОВТОРНОЙ ПРИЁМКЕ.** Producer, fine P2 migration,
+G10-A cutover, Pack и downstream activation не начаты. Исправление validation
+boundary не доказывает provenance/connectivity и не закрывает downstream gates.

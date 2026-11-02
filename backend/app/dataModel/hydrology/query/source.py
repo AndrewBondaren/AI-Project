@@ -13,6 +13,7 @@ from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineX, FineXY, FineY, FineZ
+from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan, RegionCoverage
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.topology.worldBounds import WorldBounds
@@ -122,12 +123,25 @@ class CanonicalOpenWaterSource(BaseModel):
             raise ValueError("canonical source requires ordered topology bounds")
         if topology.mode is WorldTopologyMode.SPHERE and bounds.width % 2:
             raise ValueError("canonical sphere frame requires even width without normalization")
-        for span in bed.coverage.spans:
+        # Immutability does not establish nested field types on forged instances.
+        # Check shapes before traversal, while facts are still pre-normalization.
+        coverage = _record(bed.coverage, RegionCoverage)
+        if not isinstance(coverage.spans, tuple):
+            raise ValueError("coverage spans require an immutable tuple")
+        for raw_span in coverage.spans:
+            span = _record(raw_span, CoverageSpan)
             for number in (span.y, span.x0, span.x1):
                 _integer(number)
-        for cell, height in bed.surface_z:
+        if not isinstance(bed.surface_z, tuple):
+            raise ValueError("surface rows require an immutable tuple")
+        for row in bed.surface_z:
+            if not isinstance(row, tuple) or len(row) != 2:
+                raise ValueError("surface row requires a cell/height tuple")
+            cell, height = row
             _coordinate(cell)
             _integer(height)
+        if not isinstance(bed.protected_cells, frozenset):
+            raise ValueError("protected cells require an immutable frozenset")
         for cell in bed.protected_cells:
             _coordinate(cell)
         # Revalidate complete nested values explicitly; legacy models do not opt in.

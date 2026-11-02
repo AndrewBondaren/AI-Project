@@ -4,7 +4,7 @@
 
 Owning-план: [GEN-DAG-1](./gen-dag-1-post-geo-ws.md). Infrastructure SoT: [tz_engine_node_context](../../docs/tz_engine_node_context.md), [DAG-TYPING-1](./dag-typing-1.md).
 
-**Статус:** роли и решения пользователя зафиксированы; пакеты родства §0, граф вызовов §1 и контракты связей §13 — НА СОВМЕСТНОЙ ПРИЁМКЕ. OPEN caller не имеет придуманной стрелки. Полный граф, exact POJO и parent/child mechanism не приняты. Код, удаление legacy и production cutover не разрешены. Старые 15 ID не определяют target; сохраняется назначение check_scene с переработкой.
+**Статус:** роли и решения пользователя зафиксированы; пакеты родства §0, граф вызовов §1 и контракты связей §13 — НА СОВМЕСТНОЙ ПРИЁМКЕ. OPEN caller не имеет придуманной стрелки. Полный граф, exact POJO и parent/child mechanism не приняты. Актуальные два способа входа и условные bake gates — §16; существующее родство неизменно. Код, удаление legacy и production cutover не разрешены. Старые 15 ID не определяют target; сохраняется назначение check_scene с переработкой.
 
 ## 0. Реализация по родству — обязательные отдельные срезы
 
@@ -38,7 +38,7 @@ Typed engine/public domain contracts, publication path, parent/child и intermed
 - P2.2 **resolve_start_locations** — child select_start_location: актуальные candidates/проверка выбора по policy и public location reads. Собственный I/O/Error §2.6.
 - Resolve предложен как parent актуального списка, но его внутренние child NodeIds не определены; не создавать их из service/helper names.
 
-P2 не является parent P1 и не является child P1. Связь согласования world readiness перед выдачей выбора требует отдельного engine/общего coordinator binding; допустим отдельный cross-family caller при явном контракте. Он не делает callee дочерней нодой caller; циклический execution graph и hidden executor не разрешаются.
+P2 не является parent P1 и не является child P1. Base readiness проверяется после подтверждения выбора (§16); interaction/response binding требует отдельной engine приёмки. CALL не делает callee дочерней нодой caller; циклический execution graph и hidden executor не разрешаются.
 
 ### P4. Семейство initialize_world_entry
 
@@ -72,9 +72,9 @@ flowchart TD
     ENTRY -->|"Child"| LOAD["load_player_into_world: ready detailed → запуск игрока"]
     SELECT -->|"Parent актуальных вариантов/выбора"| RESOLVE["resolve_start_locations"]
     CREATION["world_creation"] -->|"Child: проверка"| CHECKS["check_world_initialization"]
-    SELECT -.->|"CALL, не родство: обеспечить опубликованный light"| CREATION
-    SELECT -.->|"CALL после выбора: selected location + accepted light"| LOAD
-    LOAD -.->|"CALL, не родство: ready detailed на light, full не нужен"| CREATION
+    SELECT -.->|"CALL после выбора NamedLocation: проверить light; missing → full"| CREATION
+    SELECT -.->|"CALL после проверки базы: selected location + accepted base"| LOAD
+    LOAD -.->|"CALL: ready detailed для принятого способа входа"| CREATION
     CREATION -->|"Child: только требуемая инициализация"| WORLD["world_initialization"]
     CHECKS -->|"Child"| LIGHT["check_light_bake"]
     CHECKS -->|"Child"| FULL["check_full_bake"]
@@ -85,7 +85,7 @@ flowchart TD
     DETAIL -->|"Child"| DLI["detailed_bake_initialization"]
 ```
 
-Дерево world_creation и дерево select_start_location независимы по родству. Отсутствие родства не запрещает cross-family вызов: caller select_start_location→world_creation теперь задан пользователем: проверить light и подготовить/опубликовать недостающее; это не parent edge. Остальные cross-family callers согласуются отдельно. Cross-family inputs/results описаны отдельно, unresolved coordinator отмечен OPEN. Entry routing — не вызов check_scene из check_world_entry. Init/recheck передача данных не рисуется стрелкой child→initialization parent, которой не было согласовано.
+Деревья world_creation и select_start_location независимы по родству. CALL select_start_location→world_creation выполняется после выбора NamedLocation: проверить light в требуемом scope, при missing подготовить и опубликовать full. Координатный вход требует full перед detailed; его внешний dispatch остаётся OPEN, новый caller/parent этим решением не добавляется. CALL/RETURN не меняет родство; entry routing остаётся engine binding.
 
 ## 2. Актуальные роли и смысловые контракты
 
@@ -105,11 +105,11 @@ Parent/child — согласованная продуктовая роль, н�
 
 ### 2.3. check_light_bake / check_full_bake / check_detailed_bake
 
-Три самостоятельные read-ноды; в стартовом flow light → full выполняются до выбора, location L2 — после него. Каждая возвращает found(data/refs) или missing(required scope). Ошибка чтения/corruption — Error. Input/Output — §9. Domain public methods и внешний техдолг — [GEN-BAKE-READ](./generator-public-bake-reads.md). Нет вызова bake/repair/publication внутри проверки.
+Три самостоятельные read-ноды. Проверки выбираются по способу входа (§16): после выбора NamedLocation выполняется check_light_bake, при missing готовится и публикуется full; координатный вход требует full перед detailed. Нет общей обязательной цепочки light→full до выбора. Каждая проверка возвращает found(data/refs) или missing(required scope); corruption/read failure — Error. Public reads — §9 и GEN-BAKE-READ; проверки не выполняют bake/repair/publication.
 
 ### 2.4. load_player_into_world
 
-Получает выбранную location и found results необходимых bake checks, identities, publication и operation identity. Выполняет согласованное размещение/загрузку, возвращает completion evidence и фактическую позицию (§7). Не дублирует bake readiness checks и не запускает скрытый междоменный pipeline. Atomic operation vs видимая DAG composition этой стадии ещё OPEN.
+Получает target входа (NamedLocation либо координаты ГМ), accepted base по §16, identities/publication и operation identity; ready detailed получает собственным CALL world_creation. Выполняет согласованное размещение/загрузку, возвращает completion evidence и фактическую позицию (§7). Не дублирует bake readiness checks и не запускает скрытый междоменный pipeline. Atomic operation vs видимая DAG composition этой стадии ещё OPEN.
 
 Started фиксируется после фактической загрузки, не после проверки, выбора или создания scene record. Placement/flag consistency и retry после load-success/flag-write-failure требуют согласованного owner/UOW/idempotency.
 
@@ -137,7 +137,7 @@ Error: invalid context/identity/reference, corrupt/read failure, невозмо�
 
 **Effects:** нет UI/SSE, scene writes, spawn/load, started flag или вызова select.execute. Runtime публикует candidates; DAG передаёт их select_start_location как RequiredOutput.
 
-**Input select_start_location:** отдельный candidate Output resolve_start_locations + trusted interaction/session context + optional выбранный UID следующего HTTP запроса. **Terminal Output select:** одна выбранная проверенная StartLocationView. После окончательного выбора select_start_location вызывает load_player_into_world с выбранной location и accepted light. Запуск load не ждёт L2 check внутри selection: selection не проверяет/не создаёт L2. Detail prerequisites проверяются до фактического размещения в load-flow; exact caller route к world_creation ещё согласуется. Выбор и L2 found не подтверждают загрузку игрока. Resolver evidence валидируется при продолжении; stale candidates требуют явного запуска producer через DAG, не локального повторения его логики в select.
+**Input select_start_location:** отдельный candidate Output resolve_start_locations + trusted interaction/session context + optional выбранный UID следующего HTTP запроса. **Terminal Output select:** одна выбранная проверенная StartLocationView. После окончательного выбора и base-stage (§16) select_start_location вызывает load_player_into_world с выбранной location и accepted found-light либо full-after-missing. Запуск load не ждёт L2 check внутри selection: selection не проверяет/не создаёт L2. Detail prerequisites проверяются до фактического размещения в load-flow; exact caller route к world_creation ещё согласуется. Выбор и L2 found не подтверждают загрузку игрока. Resolver evidence валидируется при продолжении; stale candidates требуют явного запуска producer через DAG, не локального повторения его логики в select.
 
 Новый producer меняет граф/контракты select; exact RequiredOutput binding, source consistency, full POJO/files и stale continuation routing возвращаются на совместный freeze. Общие три режима settings и подтверждённые city/underground_city сохраняются.
 
@@ -216,7 +216,7 @@ Error: invalid context/identity/reference, corrupt/read failure, невозмо�
 
 Предлагаемая семантика для согласования:
 
-1. Первая инициализация через выбор NamedLocation требует выбранного location UID и разрешения стартовой геометрической позиции; координаты не заменяются произвольными нулями.
+1. Первая инициализация допускает выбранную NamedLocation либо координаты мира от ГМ (§16). В первой ветви нужен location UID, во второй он не требуется. Обе требуют пригодной геометрической позиции, без нулевого fallback.
 2. После инициализации ready scene может находиться в wilderness без NamedLocation, если есть валидная authoritative позиция и подтверждённое состояние инициализации.
 3. location_uid — optional привязка к именованному месту; если задан, ссылка проверяется. Для отсутствующей привязки не создаётся фиктивный NamedLocation и не требуется сохранять прежний UID после выхода из его области.
 4. Отсутствие location_uid при наличии валидной позиции не вызывает повторный выбор старта. Отсутствие и позиции, и установленного старта — отдельный случай, а не нормальная wilderness scene.
@@ -265,6 +265,8 @@ SP-R2 — отдельное решение, не закрыто readiness check
 ## 5. Явные world settings и location contract стартовой ветки
 
 ### 5.1. Решения и AS-IS evidence
+
+Политика этого раздела ограничивает выбор NamedLocation. Координатный вход ГМ (§16) — отдельная ветвь; его настройка и dispatch OPEN, четвёртый policy mode этим не вводится.
 
 Пользователь потребовал объявить world setting и её реализацию в плане до реализации ноды: настройка является обязательной частью её контракта. Три режима приняты ранее. **Уточнение пользователя: «города» включает city и underground_city.** Village этим режимом не разрешается.
 
@@ -538,7 +540,7 @@ Direct file counts на 2026-11-02 (включая __init__, до → после
 
 Актуальная последовательность получения detailed и начала запуска игрока показана в §16.1; Input load не требует заранее готового full или detailed.
 
-**Уточнение пользователя:** ready detailed bake не является входным prerequisite запуска load-ноды. Load получает его по собственному CALL world_creation и только затем выполняет инициализацию/размещение игрока. Достаточная база подготовки detailed — опубликованный light; **full_bake не обязателен**. Эта норма приоритетна для всех load/detail карточек ниже; граф отношений не меняется.
+**Решение пользователя:** два способа входа (§16). Координаты мира от ГМ не являются NamedLocation: full → detailed → размещение. Для выбранной NamedLocation после выбора выполняется check_light_bake; found открывает detailed, missing требует подготовки и принятой публикации full, затем detailed. Готовый detailed не является Input prerequisite load: load получает его собственным CALL world_creation. Родство не меняется.
 
 
 | Факт | Источник | Обязательность |
@@ -546,7 +548,7 @@ Direct file counts на 2026-11-02 (включая __init__, до → после
 | world_uid | Проверенный session context | Обязателен |
 | player/character identity | Проверенный session context | Обязателен; разграничение player vs character пока OPEN |
 | session_id | Текущая сессия | Обязателен |
-| start_location: StartLocationView | Terminal Output select_start_location | Обязательна non-null, относится к world_uid |
+| Цель входа: NamedLocation либо координаты мира от ГМ | Проверенный selection Output либо доверенный контекст ГМ | Ветви взаимоисключающие; для NamedLocation обязательна StartLocationView, для координатного входа — координаты и bounded scope без фиктивной location. Exact union/owner OPEN |
 | Load operation identity / persisted interaction identity | Parent/runtime binding | Обязательна для retry/resume; не случайный новый HTTP request_id для каждого повтора |
 | Expected publication / согласованный world-read context | World domain read | Обязателен для coherent load; reuse WorldPublicationRef при принятом binding |
 | Bounded load requirements / policy | World/engine settings по domain contract | Обязательны для определения готовности; существующий SceneVolumePolicy — кандидат reuse, не весь контракт игровой сцены |
@@ -555,10 +557,10 @@ Input не содержит всемирный список cells, полный 
 
 ### 7.2. Предлагаемая работа стадии
 
-1. Проверить world/player/session identities, принадлежность start_location миру и актуальность выбранной location. Для mobile location использовать актуальные anchor facts, не старые координаты из кнопки.
-2. Определить целевую location/предварительный scope; окончательное разрешение пригодной позиции выполнить после получения ready detailed на шаге 5 через публичную доменную операцию позиции/входа. Location anchor не равен player position. Для indoor учитывать entry/level; точный spawn contract и owner OPEN. Нет допустимой позиции — declared error, без произвольного нулевого fallback.
-3. Передать согласованный location/scope request в world_creation; точное player-centered окно по resolved position определяется после готовности detailed. Это не весь город, не весь мир и не граница leaf NamedLocation. Размеры/LOD берутся из согласованной policy, без чисел, придуманных в ноде.
-4. Выполнить согласованный CALL world_creation с требованием обеспечить ready detailed bake выбранной location. World_creation сама организует check_detailed_bake и missing preparation/publication через своих children. Load принимает готовые detailed data/refs и принятую publication; три заранее готовых check outputs, особенно full, на вход load не требуются.
+1. Проверить world/player/session identities и способ входа. Для NamedLocation проверить принадлежность миру и актуальность выбора/mobile anchor; для координатного входа — доверенное происхождение координат и применимость world/topology scope.
+2. Определить предварительный scope выбранной NamedLocation либо координатной области. Окончательную пригодную позицию разрешить после ready detailed через public position operation; координатный anchor ещё не доказывает пригодность spawn. Точный spawn contract/owner OPEN; нет позиции — declared error.
+3. Передать в world_creation target/scope и evidence требуемой базы по §16. Координатный вход требует full; NamedLocation использует найденный light либо опубликованный full после missing light. Точное окно по resolved position определяется после detailed; scope не равен автоматически всему миру.
+4. Выполнить согласованный CALL world_creation с требованием ready detailed для принятого target/scope и базы по §16. World_creation сама организует check_detailed_bake и missing preparation/publication через своих children. Load принимает готовые detailed data/refs и принятую publication; Три безусловных check Outputs на вход load не требуются; evidence базы обязательно согласно способу входа (§16).
 5. Дождаться успешного ready detailed результата CALL. После этого инициализировать запуск/размещение игрока, используя актуальные данные и publication. При Error не размещать игрока и не фиксировать started. Detail compute не реализуется внутри load, отсутствует прямой вызов bake_pack/generator pipeline.
 6. Получить согласованное окно через public reads на принятой публикации, проверить возможность размещения персонажа. Набор обязательных facts (например, collision/support/media/body constraints) не frozen: не объявлять все типы персонажей пригодными для любой точки.
 7. Подготовить/применить размещение персонажа и scene binding через owning operations. World effects идут согласованным Snapshot-путём; session bookkeeping классифицируется отдельно. Не выполнять произвольные repository writes из ноды.
@@ -595,19 +597,22 @@ Legacy SceneStartLocationSelect пишет SessionScene с level_uid=None и act
 
 ## 8. Родитель и отдельные ноды проверки инициализации мира
 
+Checks остаются теми же children; изменены только условия запуска. Проверяются запрошенные stages по §16. Полные exact scope/read/preparation контракты координатного входа пока OPEN.
+
+
 **Решение пользователя 2026-11-02:** проверять наличие/готовность light_bake, full_bake и отдельно detailed_bake (L2) у start_location. **Каждая проверка — отдельная нода.** Эти проверки вынесены из внутренней логики стадии load_player_into_world (§7). Имена ниже предложены для закрепления, смысл разделения подтверждён.
 
 ### 8.0. check_world_initialization — родитель, решение пользователя
 
 Пользователь определил отдельного parent проверки статуса инициализации мира, который вызывает check_light_bake, check_full_bake и check_detailed_bake. В исходном перечислении full был повторён; набор light/full/L2 следует предыдущему согласованному разделению. Название родителя предложено как check_world_initialization.
 
-Input facts world-stage: world identity, publication expectation, scopes light/full. Input facts location-stage после выбора: та же согласованная world context, location и required L2 scope. Location не обязана быть стартовой для общей семантики read. Exact двухэтапный parent Input/lifecycle POJO OPEN: не делать location обязательной до выбора и не запускать L2 с None.
+Input различает stage и способ входа: NamedLocation light-check после выбора; coordinate/full requirement; detail-check по NamedLocation либо координатному bounded scope. World/publication expectations обязательны. Exact discriminated Input и scope types OPEN; ни одна ветвь не запускается с неразрешённым target.
 
-Родитель через engine DAG вызывает три child проверки по порядку стартового flow: light, затем full до выбора; L2 — только после выбора location. Каждая сохраняет собственные Input/Output/Error; parent не читает blob/SQL вместо них и не запускает bake/repair. Light/full в этом flow не параллельны.
+Родитель вызывает только проверки запрошенного stage. NamedLocation-stage: check_light_bake после подтверждения выбора; found не запускает check_full_bake, missing передаётся world_creation для full preparation/publication. Координатный вход требует подтверждённый full перед detailed; exact full-read binding OPEN. Detail-stage использует check_detailed_bake. Общей безусловной последовательности трёх checks нет.
 
-Output facts: world/location identities и согласованная publication; три типизированных вложенных результата light/full/location_l2 (каждый found с data/refs либо missing). Частичные результаты не превращаются в общий ready=true. Error/cancellation дочернего read не маскируется missing; exact propagation/partial failure policy OPEN.
+Output facts: world, способ входа/target, scope и publication; typed found(data/refs) либо missing только запрошенных checks. Невыполненный check не представляется missing или found. Error/cancellation не маскируется missing; exact stage-specific union/partial failure policy OPEN.
 
-initialize_world_entry не является прямым launcher bake checks. Состав проверок принадлежит check_world_initialization, теперь child world_creation. Порядок world checks до выбора и location check после выбора сохраняется; передача запросов от select в world_creation требует external caller acceptance (§14). Exact staged parent/child binding ещё требует приёмки. Parent/child механизм также проходит GEN-ENTRY-LIFECYCLE (§4); скрытый executor в генераторе запрещён.
+initialize_world_entry не является прямым launcher bake checks. check_world_initialization остаётся child world_creation и владеет своими check children. Условный routing — §16; exact binding/lifecycle — §4. Нельзя исполнять проверки скрытым executor или менять их родство.
 
 ### 8.1. check_light_bake
 
@@ -627,8 +632,8 @@ initialize_world_entry не является прямым launcher bake checks. 
 
 ### 8.3. check_detailed_bake
 
-- Назначение: отдельно проверить terrain L2 переданной локации. Семантика не зависит от того, стартовая ли это локация.
-- Input: world_uid; location: проверенная локация из согласованного public read или producer Output; та же pinned publication/ref; требуемый location volume/LOD по domain contract.
+- Назначение: проверить terrain L2 для NamedLocation либо координатного bounded scope. Расширение public read на coordinate/wilderness scope требует доменной приёмки (§16).
+- Input: world_uid; discriminated target (проверенная NamedLocation либо координаты/область без NamedLocation); pinned publication; required volume/LOD. Exact union и domain operation OPEN.
 - Domain read: public location terrain readiness. Для district/building/room разрешение owning terrain scope выполняет домен; нельзя выдумать обязательный l.{leaf_uid}.terrain blob для любого leaf.
 - Output facts: проверенная location identity; resolved terrain scope; наличие/полнота/актуальность L2, missing detail и provenance. Exact POJO OPEN.
 - Effects: нет; не вызывает detailed bake/refine, C11 и Snapshot.
@@ -641,12 +646,12 @@ initialize_world_entry не является прямым launcher bake checks. 
 - Только manifest.bake_mode недостаточно: в текущем коде это режим последнего L0 bake (light/full), не история выполнения всех jobs и не доказательство L2. Default light в wire-модели не доказывает наличие L0.
 - AS-IS evidence: WorldPackManifest.tiles содержит world_map_path/hash; location_terrain_entries — location_uid, territory_volume, terrain_path/hash; settlement_structure_entries отдельно содержит status/packed districts. WorldPackMetadata path/hash сами по себе не доказывают completeness/актуальность.
 - Все проверки должны относиться к согласованному состоянию/публикации. После подготовки/commit недостающего повторная проверка использует новое принятое состояние.
-- В стартовом flow по решению пользователя порядок строго light → full → выбор → location L2. Зависимость light→full — order-only. L2 check требует переданную проверенную location; в других сценариях producer location может быть другим, без изменения read semantics. Exact RequiredOutput/order dependencies согласуются с public readiness APIs.
-- DAG получает три самостоятельных результата и выбирает дальнейшие операции. Какие неполноты блокируют старт и допускается ли локальная готовность вместо глобального full-world completeness — ещё требуется явно согласовать; автоматически запускать full-world bake при входе игрока запрещено.
+- Порядок entry-checks определяется §16: NamedLocation выбирается до light-check; при missing light публикуется full, затем выполняется detail-stage. Координатная ветвь требует full → detail. Нет обязательного full-check после найденного light и нет общей пары checks до выбора. Exact RequiredOutput/order dependencies требуют freeze.
+- Required full scope задаётся принятым запросом/доменом; требование full не означает автоматически full-world bake. При missing light NamedLocation-ветвь требует full preparation/publication; размеры и необходимые C23 части OPEN, не выбираются нодой самостоятельно.
 
 ### 8.5. Влияние на стадию загрузки
 
-Родитель check_world_initialization организует три отдельные readiness checks. initialize_world_entry не вызывает их напрямую. load_player_into_world получает результаты проверок через согласованный Output check_world_initialization как prerequisites (exact scope/requiredness ещё уточняется). Он не содержит второй реализации этих проверок и не организует скрытый bake pipeline. Перед effect применения позиции допустима проверка актуальности pinned prerequisites через domain guard; это consistency guard, не повторный readiness orchestrator.
+check_world_initialization сохраняет три check children и выдаёт stage-specific результаты через world_creation. Load получает/проверяет accepted base по способу входа, а ready detailed — собственным CALL world_creation. Он не дублирует read implementation. Consistency guard перед placement допустим; родство и существующие callers не меняются.
 
 Три отдельные проверки показаны на единой карте §1:
 
@@ -733,12 +738,12 @@ Input:
 
 - world_uid: EntityUid — обязательно;
 - publication: WorldPublicationRef | None — поле обязательно; None только при подтверждённом отсутствии active publication;
-- location — обязательная проверенная location identity/public domain projection, world совпадает; точный reuse POJO согласовать независимо от стартового flow;
+- target — проверенная NamedLocation либо координаты мира и bounded scope без NamedLocation; world совпадает. Exact discriminated POJO и public coordinate/wilderness read contract OPEN; одного nullable location недостаточно;
 - required_scope/LOD — обязательное требование к L2 территории/окну; точный scope type согласовать. Leaf UID не подменяет owning terrain scope.
 
 Output found:
 
-- world_uid, publication, location identity и resolved terrain scope;
+- world_uid, publication, target identity/evidence и resolved terrain scope;
 - data — полученные L2 terrain columns/chunks или проверенные immutable domain refs для всего required scope. Существующие FineTerrainChunkWire/FineTerrainColumnWire — wire candidates; они содержат mutable lists и не объявляются готовым immutable node Output. Нужен принятый read/ref contract, а не копирование wire схем ради DAG.
 
 Output missing:
@@ -784,7 +789,7 @@ Output родителя: произведённые domain results/immutable ref
 
 Назначение: родитель подготовки detail для переданного scope. Пока включает только detailed_bake_initialization; terrain/wilderness/structure дополнительные children автоматически не добавляются.
 
-Input proposal: world identity, **location**, requested L2 scope/LOD, согласованные source/publication expectations и missing result check_detailed_bake. Привязки к стартовой роли нет: та же операция может обслуживать иную переданную location.
+Input proposal: world identity, target (NamedLocation либо координатная область), requested L2 scope/LOD, publication expectations и missing detailed requirements. Exact domain target union OPEN. Для координатного входа обязательна accepted full base; для NamedLocation база определяется §16.
 
 Child detailed_bake_initialization подготавливает location L2 через публичную доменную операцию. Заданные coordinate/terrain scope разрешает domain contract. Нельзя использовать location_uid как UID chunk или создавать фиктивный terrain blob для каждого leaf.
 
@@ -792,10 +797,10 @@ Output родителя: опубликованные L2/C11 результат�
 
 ### 10.3. Предлагаемое включение missing-веток
 
-- До выбора требуется последовательная light/full проверка через world_creation → check_world_initialization. External routing из selection flow в world_creation пока OPEN; прямой select→check parent не фиксируется.
-- При missing light DAG направляет запрос world_initialization/light child, после принятой подготовки/publish повторяет light check в новом pass.
-- Full проверка идёт после light; missing full аналогично направляется world_initialization/full child и повторно проверяется.
-- Light/full проверки остаются до выбора в принятом порядке, но missing full и длительная full initialization не должны блокировать выдачу выбора/вход глобальной готовностью full. Для раннего входа world-level gate — опубликованный light; локальные L2/C11/placement prerequisites проверяются отдельно.
+- NamedLocation сначала выбирается и подтверждается; затем select_start_location вызывает world_creation для check_light_bake через check_world_initialization.
+- При found light используется существующая accepted база; check_full_bake/full preparation для этой ветви не требуются.
+- При missing light world_creation вызывает world_initialization для подготовки и публикации full; standalone light preparation и ранний light milestone не заменяют требуемый full completion.
+- Координаты от ГМ — отдельный способ входа без NamedLocation: full → detailed. Exact внешний dispatch координатной ветви OPEN; новые NodeIds/callers/родство не добавляются. В обоих случаях placement ждёт required base и detailed.
 - После выбора select_start_location вызывает load_player_into_world. Detail readiness/preparation остаётся prerequisite фактического placement, не prerequisite запуска load-flow; CALL load_player_into_world→world_creation для detailed результата принят. World_creation использует собственные check/detail subtrees. Selection не запускает detail check перед передачей выбора.
 - Read node не запускает initialization сама. Found не требует лишнего повторного compute. Corruption/read failure не подменяются missing и не запускают автоматический repair/rebake.
 
@@ -816,6 +821,9 @@ Output родителя: опубликованные L2/C11 результат�
 
 ### 11.1. Подтверждённые решения пользователя
 
+**Область применения:** generic light/full preparation и ранние milestones ниже не заменяют entry gates §16. Для координатного входа и missing-light NamedLocation обязательна full publication до detailed. Три world.start_location_policy режима относятся только к выбору NamedLocation; настройка/доверенный dispatch координат от ГМ — отдельный OPEN контракт без нового режима policy по предположению.
+
+
 - Только недостающие части штатных light/full областей: при 7 актуальных готовых тайлах из 10 подготавливаются оставшиеся 3.
 - full_bake_initialization включает **L0 + C23 topology**.
 - detailed_bake_initialization включает **L2 + C11** для settlement-like location; вне подходящей location C11 не применяется.
@@ -828,7 +836,7 @@ Output родителя: опубликованные L2/C11 результат�
 |---|---|---|
 | PackTileRef | dataModel/worldPack/bake/packTilePlan.py | Reuse для адресов недостающих L0 тайлов: gx, gy |
 | PackTilePlan | тот же модуль | Reuse domain planning result после решения deep immutability: tiles сейчас list. Не строить план в ноде по собственному алгоритму |
-| DetailedBakeRequest | dataModel/worldPack/bake/detailedBakeScope.py | Reuse request scope=location для detailed child; location_uid обязателен при этом scope; grade/stage defaults из доменного POJO |
+| DetailedBakeRequest | dataModel/worldPack/bake/detailedBakeScope.py | Reuse candidate: location для NamedLocation, wilderness для координатного входа. Exact bounded entry adapter OPEN; location_uid обязателен только для scope=location |
 | MaterializationContext | application/worldData/materialize/surface/materializationContext.py | Existing frozen dataclass; кандидат вложенного execution request. Contains resource и legacy persistence knobs — не объявлять готовым target persistence контрактом. Проба CPU/worker policy не задаётся генератором |
 | MaterializationJobReport | тот же модуль | Reuse optional diagnostic report, не payload результата/доказательство публикации |
 | PersistResult | application/worldData/materialize/shared/persistResult.py | Reuse diagnostic counters; total/succeeded/failed не заменяют data/refs |
@@ -881,7 +889,7 @@ Output родителя: опубликованные L2/C11 результат�
 
 **Gate REVIEW-P1-04:** ранний вход по light не даёт права завершать full путём rebake/смены frozen base после gameplay_started. Соответствующий publication path должен быть отдельно принят.
 
-**Уточнение пользователя: ранняя отдача light.** Чтобы пустить игрока в мир без ожидания full, после фактической публикации light родитель немедленно делает этот результат доступным вызывающему flow. Один final Output только после full этому требованию не соответствует.
+**Ранний light milestone — generic lifecycle контракт подготовки.** Он сохраняется для отдельных preparation flows, но не разрешает ранний вход в ветвях с обязательным full (§16): координаты и missing-light NamedLocation ждут full completion. NamedLocation с уже найденным light использует этот found результат без запуска full.
 
 Контракт делится по моменту выдачи:
 
@@ -895,24 +903,24 @@ Output родителя: опубликованные L2/C11 результат�
 
 **Публикация по этапам — принято:** light child готовит → parent публикует light → full child готовит на принятой light base → parent публикует full. Light publication receipt — prerequisite full child. Если light был готов ранее, его актуальная принятая publication переиспользуется; новая публикация ради пустой light работы не требуется.
 
-После принятой light publication родитель сразу предоставляет light readiness/data refs для входа; ожидание full не является обязательным global world-entry gate. Это отдельный завершённый light milestone, но не terminal success всей full подготовки. Full failure не отзывает уже принятую light готовность. Durable parent phase и отдельные operation/idempotency identities light/full publication должны позволять resume без двойной публикации; exact model остаётся частью GEN-ENTRY-LIFECYCLE.
+После принятой light publication родитель может предоставить typed light milestone; его допустимость для entry определяется исключительно §16. При обязательном full этот milestone не открывает detailed или placement. Это отдельный завершённый light milestone, но не terminal success всей full подготовки. Full failure не отзывает уже принятую light готовность. Durable parent phase и отдельные operation/idempotency identities light/full publication должны позволять resume без двойной публикации; exact model остаётся частью GEN-ENTRY-LIFECYCLE.
 
 
-**Input:** общие world/operation/publication identities; результаты check_light_bake/check_full_bake с missing scopes и уже полученными актуальными refs; существующие generator requests/plans/resource policy по contract freeze. Не требует location для L2.
+**Input:** world/operation/publication identities, requested preparation stage и его основание: missing light выбранной NamedLocation требует full preparation; coordinate entry требует full; иные standalone light/full requests остаются отдельными. Missing scopes/готовые prerequisites и generator requests — по domain freeze. Не требовать оба check Outputs безусловно; отсутствующий full-check не подменяется found/missing. Derivation full requirements из missing light — domain gate.
 
-**Работа:** вызвать light child при missing light, затем full child при missing full/C23; готовые части переиспользовать. Получить prepared child Outputs, проверить соответствие общего source/dependency/publication context, опубликовать через owning publication entrypoint. Между детьми есть две последовательные publication boundaries: родитель сначала публикует light, затем запускает full на полученной публикации и публикует full. Без успешной light publication full не запускается.
+**Работа:** выполнить только запрошенную подготовку через существующих children. В entry missing-light ветви результатом должна стать принятая full publication, не только light milestone. При необходимости внутреннего light этапа сохраняется light preparation → parent light publication → full preparation → parent full publication. Готовые актуальные части не пересоздаются. Full может быть terminal без нового light compute при готовой базе; exact prerequisites/first full preparation OPEN.
 
-**Output:** world/operation identities; результаты по light/full с переиспользованными и созданными refs; обязательный успешный parent publication result. Для bootstrap — PackActivationResult с ACTIVE; для допустимого runtime extension — committed SnapshotApplyResult/refs по owning domain contract. Это фазовые варианты композиции, не «любой receipt подходит всегда».
+**Output:** world/operation identities; результаты запрошенных этапов с reused/created refs и accepted publication. Entry request с обязательным full завершается только full completion; отдельный light milestone не заменяет terminal result. Для bootstrap — PackActivationResult с ACTIVE; для допустимого runtime extension — committed SnapshotApplyResult/refs по owning domain contract. Это фазовые варианты композиции, не «любой receipt подходит всегда».
 
 **Error:** child failure; несовместимые results; stale expected publication; refused/failed commit/activation; invalid artifact refs. Parent success только после публикации, не после счётчиков compute. Exact union/error classes/files OPEN.
 
 ### 11.7. detailed_bake_initialization
 
-**Input:** общие identity/publication поля; request: DetailedBakeRequest, ограниченный scope=location; недостающий L2 scope и недостающие C11 части по public domain request; готовый light/L0 и согласованные domain inputs подготовки location; full/C23 как внешний обязательный результат не требуются; execution resources.
+**Input:** world/operation/publication identities; detailed request для NamedLocation либо coordinate/wilderness target; missing L2 и применимые C11 requirements, accepted base согласно §16 и domain inputs/resources. DetailedBakeRequest — reuse candidate, exact bounded coordinate adapter/request OPEN.
 
-location_uid обязателен; wilderness branch этого request в данной ноде не запускается. Optional raw map_z не заменяет готовый terrain input. Missing L2/C11 scopes требуют typed domain contracts; их нельзя заменить произвольным dict/list без семантики.
+Для location-ветви location_uid обязателен; для coordinate/wilderness ветви фиктивный UID запрещён. Required world coordinates/scope и topology semantics требуют domain freeze. Offline wilderness request не объявляется автоматически готовым bounded entry contract.
 
-**Работа:** подготовить missing L2; для settlement-like location подготовить missing C11 поверх terrain по самостоятельному detailed contract, без обязательного full bake. Необходимые локальные topology inputs определяет generator owner, не требование готовности full. При готовом L2 и missing C11 не пересоздавать L2. Для иной location C11 — неприменимо. Нода не запускает interiors и не выбирает player spawn.
+**Работа:** подготовить missing L2 в scope цели входа; применимый C11 определяется domain requirements, не выдумывается из отсутствующей NamedLocation. При готовом L2 и missing C11 L2 не пересоздаётся. Координатный вход требует full base, NamedLocation использует found light либо full после missing light. Нода не выбирает spawn и не запускает interiors; exact coordinate/C11 applicability OPEN.
 
 **Output:** подготовленные L2 и применимые C11 domain results/refs, source/dependency evidence; optional PackDetailedBakeResult и MaterializeResult только после принятого immutable/domain contract. Exact prepared terrain/structure result types OPEN. Никакой активной публикации.
 
@@ -920,7 +928,7 @@ location_uid обязателен; wilderness branch этого request в да�
 
 ### 11.8. detailed_initialization
 
-**Input:** world/operation/publication identities; location request и missing detail requirements; готовые согласованные prerequisites. Пока один child detailed_bake_initialization.
+**Input:** world/operation/publication identities; NamedLocation либо coordinate target/scope, missing detail requirements и accepted base по §16. Exact coordinate contract OPEN. Child остаётся detailed_bake_initialization.
 
 **Работа:** вызвать child для недостающих L2/C11, проверить staged results и опубликовать их через owning publication contract.
 
@@ -963,11 +971,11 @@ location_uid обязателен; wilderness branch этого request в да�
 | initialize_world_entry | PYTHON | Engine по результату check_world_entry | load_player_into_world; вызов world_creation пока OPEN, прямого select child нет |
 | select_start_location | PYTHON | API entry/continuation binding; NodeId-parent OPEN | resolve_start_locations; CALL world_creation для готового light; CALL load_player_into_world после выбора (не родство) |
 | resolve_start_locations | PYTHON | select_start_location через DAG | Нет |
-| check_world_initialization | PYTHON | world_creation | check_light_bake → check_full_bake до выбора; check_detailed_bake после выбранного location UID |
+| check_world_initialization | PYTHON | world_creation | Те же check_light_bake, check_full_bake, check_detailed_bake; условная активация по stage/способу входа (§16), не общая цепочка до выбора |
 | check_light_bake | PYTHON | check_world_initialization | Нет; только public read_light_bake |
 | check_full_bake | PYTHON | check_world_initialization | Нет; только public read_full_bake |
-| check_detailed_bake | PYTHON | check_world_initialization в этом flow | Нет; только public read_location_l2. Иные location consumers добавляются явно, общая семантика не зависит от стартовой роли |
-| world_creation | PYTHON | CALL от select_start_location: обеспечить light; CALL от load_player_into_world: обеспечить detailed location | check_world_initialization, world_initialization, detailed_initialization; select_start_location НЕ child |
+| check_detailed_bake | PYTHON | check_world_initialization в этом flow | Нет; public read_location_l2 для location, coordinate read contract OPEN. Иные consumers добавляются явно, общая семантика не зависит от стартовой роли |
+| world_creation | PYTHON | CALL от select_start_location после выбора: light-check, missing → full; CALL от load_player_into_world: detailed target | check_world_initialization, world_initialization, detailed_initialization; select_start_location НЕ child |
 | world_initialization | PYTHON | world_creation по missing light/full | light_bake_initialization, затем full_bake_initialization |
 | light_bake_initialization | PYTHON | world_initialization | Нет самостоятельного child graph до отдельного решения; public preparation contract OPEN |
 | full_bake_initialization | PYTHON | world_initialization | Самостоятельные L0/C23 operations должны быть явно представлены в принятой composition; дополнительные NodeId не утверждены |
@@ -1001,45 +1009,42 @@ location_uid обязателен; wilderness branch этого request в да�
 
 ### 13.2. Зафиксированные направления и контракты передачи (exact POJO/lifecycle OPEN)
 
-**Уточнённый пользователем CALL:** select_start_location вызывает world_creation с контрактом обеспечить готовый опубликованный light: проверить check_light_bake и доматериализовать, если отсутствует. World_creation вызывает свой check_world_initialization (light-stage), а при missing — свой world_initialization (light request). Select не вызывает check leaf напрямую. Обратный CALL world_creation→selection не принят. Родство от этого не меняется.
+**CALL по решению пользователя:** после выбора NamedLocation select_start_location вызывает world_creation для проверки light. Через собственный check_world_initialization выполняется check_light_bake; found переиспользуется, missing требует world_initialization с full preparation/publication. До принятого full completion missing-light ветвь не допускается к detailed/load. Координатный вход требует full → detailed; его внешний binding OPEN. Родство неизменно.
 
 
 | Caller → callee | Trigger и Input | Возвращаемая информация / обработка |
 |---|---|---|
-| select_start_location → world_creation (CALL, не родство) | World identity, stable operation/interaction context, expected publication и required light scope; требование обеспечить опубликованный light | Готовые light data/refs и accepted publication/receipt: существующие либо полученные после missing preparation. Error при read/preparation/publication failure; не просто исходный missing |
-| select_start_location → load_player_into_world (CALL после выбора) | Проверенная выбранная StartLocationView; trusted world/player/session context; stable load operation identity; accepted light data/refs/publication | Load completion result либо declared Error. Наличие выбранной location не равно started; необходимая detail readiness обеспечивается до actual placement по согласованному load contract |
-| load_player_into_world → world_creation (CALL, НЕ родство) | World/location, stable operation ID, expected publication и required detailed scope; обеспечить detailed bake для размещения | Принятые detailed данные/refs/publication: существующие либо после missing preparation/publish. Error при read/preparation/publication failure; не исходный missing |
+| select_start_location → world_creation (CALL, не родство) | После подтверждения NamedLocation: world/location, stable operation identity, expected publication и required light scope | Found light data/refs либо после missing light — accepted full data/refs/publication. Error при read/preparation/publication failure; ранний light milestone не заменяет full completion |
+| select_start_location → load_player_into_world (CALL после выбора и base readiness) | Проверенная StartLocationView, trusted identities, stable load operation и accepted found-light либо full-after-missing evidence | Load completion либо Error; detailed получается до placement через CALL load→world_creation |
+| load_player_into_world → world_creation (CALL, НЕ родство) | World, способ входа/target, operation ID, expected publication, required detailed scope и accepted base по §16 | Ready detailed refs/publication либо Error; coordinate scope/readiness contract OPEN |
 | Engine API entry → check_world_entry | World/player/session identities; вход или resume | Started + identities/read evidence; Error не заменяется false |
 | Engine → initialize_world_entry | Started=false; тот же доверенный context и существующий interaction, если есть | Terminal подтверждение фактической загрузки + start_location. Intermediate flow не terminal success |
 | API selection entry → select_start_location | Тот же POST, session/request IDs и выбранный UID в message; authoritative identities из server session | Тот же selection interaction, без повторного первого запуска на каждом клике. UI response через SSE; terminal location передаётся принятому consumer binding (owner OPEN), не world_creation как parent |
 | select_start_location → resolve_start_locations | Запрос актуальных вариантов или проверки текущего UID/родителя; world, world policy source и trusted interaction context | Актуальные candidate location POJO, policy/location evidence; результат допустимости выбора/дальнейших вариантов. Exact union схемы списка/validation ещё OPEN; ошибки refs/read не маскируются |
-| world_creation → check_world_initialization, world-stage | После получения списка до выбора: world/publication и light/full scopes; location не требуется | Два отдельных typed found/missing результата light/full и согласованный evidence; Error не hidden missing. Никакой генерации из parent проверки |
-| world_creation → check_world_initialization, location-stage | После подтверждённого выбора: world/publication, location UID/проверенные facts, L2 scope | Typed found/missing L2 result по переданной location. Признак стартовой роли не передаётся |
+| world_creation → check_world_initialization, base-stage | NamedLocation после выбора: light scope; coordinate entry: full requirement по принятому binding | Только requested checks с found/missing/evidence; full-check не является безусловным dependency NamedLocation light-stage |
+| world_creation → check_world_initialization, detail-stage | World/publication, target NamedLocation либо координатная область, required L2 scope | Typed found/missing L2; coordinate public-read contract OPEN |
 | world_initialization → light_bake_initialization | Объявленный missing light scope, expected publication, operation identity и domain request/prerequisites | Prepared light artifacts/refs + source evidence; без active writes. Parent публикует, выдаёт light milestone |
 | world_initialization → full_bake_initialization | Только после принятой light base: missing full L0/C23, новая publication expectation, operation identity и prerequisites | Prepared L0/C23 результаты/refs; parent публикует full. Ошибка full не откатывает light |
-| detailed_initialization → detailed_bake_initialization | Location, missing L2/C11, expected publication, operation identity и light/L0 prerequisites (без обязательного full) | Prepared L2 и применимый C11; parent публикует. Уже готовый L2 не пересоздаётся ради missing C11 |
-| initialize_world_entry → load_player_into_world | Выбранная location, accepted light, identities и stable operation ID; готовый detailed нода получает собственным CALL, full не требуется | Resolved position/scene binding/load completion receipt. Нет fabricated spawn, нет started по одному scene_ready |
+| detailed_initialization → detailed_bake_initialization | Target/scope, missing L2/C11, expected publication и accepted base согласно §16 | Prepared L2 и применимый C11; parent публикует; coordinate contract OPEN |
+| initialize_world_entry → load_player_into_world | Цель входа и required base по §16, identities/operation ID; прежний entry binding для NamedLocation не допускает второго запуска после CALL selection | Load completion/position; exact coordinate dispatch и completion delivery OPEN, новые callers не добавляются |
 | Engine → check_scene | Started=true либо завершённый entry; identities и требования scene scenario | Отчёт scene facts, без start-policy и без первого входа |
 
 Вызовы check parent→трём check children принадлежат семейству P1.2 и §9; они не становятся прямыми вызовами из resolve_start_locations. Pub-method calls не входят в список child NodeIds.
 
 ### 13.3. Передача между этапами без изменения родства
 
-1. Select получает список от resolve parent. Список existing NamedLocations не требует light.
-2. Select_start_location вызывает world_creation с ensure-light контрактом. World_creation через check parent проверяет light, при missing через initialization parent готовит/публикует недостающее и возвращает готовый light. Full-stage допускается отдельным запросом; он не требуется для данного light→detailed→player-entry flow. Родство select/world_creation отсутствует.
-3. Missing report должен поступить инициатору подготовки через согласованный routing. **world_creation вызывает world_initialization; parent detailed_initialization — world_creation; условия C11 readiness ещё OPEN (§13.4)**. Прямой select→initialization или check→initialization вызов не разрешён. Callers world_creation: select_start_location для light и load_player_into_world для detailed; прочие routes отдельно.
-4. World parent при разрешённом запуске готовит missing light, публикует и сразу отдаёт accepted light data/refs/receipt. Этот ранний результат не ждёт full и не равен простому progress counter.
-5. Full child получает publication принятого light; full completion приходит отдельно. Дальнейшая full публикация после gameplay обязана соблюдать frozen-Pack policy; global full не блокирует вход, обязательный локальный C11 обеспечивается detailed contract без требования полного full bake.
-6. Select отдаёт UI варианты; следующий POST напрямую возвращается в select interaction. Актуальность выбора подтверждает resolve parent.
-7. После окончательного выбора select_start_location вызывает load_player_into_world. Передаёт выбранную location и accepted light вместе с trusted load context. Необходимые location-detail checks/preparation выполняются до placement; их CALL load_player_into_world→world_creation задан пользователем; world_creation использует собственные check/detail subtrees, selection их не делает.
-8. Load получает выбранную location напрямую по согласованному CALL selection; completion доставляется accepted entry binding без второго запуска load из entry parent. Exact entry ownership/notification остаётся OPEN; чужой catalog произвольно не читается. Exact producer для раннего light milestone и прохода child reports вверх — §4 OPEN.
-9. Load завершает реальное размещение/готовность. Только после этого фиксируется started и выдаётся terminal entry result. Check/readiness/selection сами started не меняют.
+1. NamedLocation: resolve_start_locations поставляет кандидатов; select_start_location выдаёт UI и подтверждает окончательный выбор по актуальному producer evidence. До выбора bake checks не являются общим prerequisite списка.
+2. После выбора select_start_location вызывает world_creation: check_world_initialization → check_light_bake в required scope. Found light переиспользуется; full-check не запускается как безусловная зависимость.
+3. При missing light world_creation вызывает world_initialization для подготовки и публикации full через её существующих children. Domain contract должен определить scoped full requirements и необходимые upstream части. До accepted full completion эта ветвь не переходит к detailed/load; один light milestone недостаточен.
+4. Select передаёт load выбранную NamedLocation и accepted base: found light либо full после missing. Load через прежний CALL world_creation получает ready detailed, затем выполняет placement. Required C11 readiness сохраняет отдельный gate.
+5. Координатный вход от ГМ не требует NamedLocation: required full → detailed координатной области → пригодная позиция → load completion → started. Exact координатный dispatch, target/read/preparation POJO и scope OPEN; новых callers/NodeIds/родственных связей этим не вводится.
+6. Completion поступает accepted entry binding без второго запуска load. Точный lifecycle/notification, placement/started UOW и retry сохраняются OPEN. Отказ required read/preparation/publication не открывает placement.
 
 ### 13.4. Критические OPEN связи — не допускать в реализацию
 
-- World_creation получает check results и активирует world_initialization по missing light/full (решение пользователя). Caller world_creation для light-просьбы — select_start_location; остальные external requests OPEN; detailed_initialization теперь её поднода по решению пользователя. Ни initialize_world_entry, ни select не назначаются агентом автоматически.
+- World_creation получает check results и активирует world_initialization по missing light/full (решение пользователя). Caller world_creation для NamedLocation light-check/full-after-missing — select_start_location; detail caller — load; координатный внешний dispatch OPEN; detailed_initialization теперь её поднода по решению пользователя. Ни initialize_world_entry, ни select не назначаются агентом автоматически.
 - Как selection interaction отдаёт intermediate response и final location ожидающему parent; где durable state и correlation.
-- Как accepted light milestone становится typed prerequisite load, пока full/parent ещё работает. Не объявлять RequiredOutput незавершённого parent без принятой runtime semantics.
+- Как stage-specific accepted base поступает load: found light либо full completion по §16. Ранний light milestone при required full не открывает вход. Generic intermediate publication требует отдельной runtime semantics.
 - Точное место приема initialization receipts и повторного check-stage; read children не запускают recheck/prepare сами.
 - Child состав resolve_start_locations; самостоятельные L0/C23 и L2/C11 operations: не маскировать неутверждённые children публичным методом с hidden pipeline.
 
@@ -1066,25 +1071,25 @@ World_creation не вызывает перечисленных grandchildren н
 
 ### 14.2. Input — предлагаемый смысловой контракт
 
-**Конкретный принятый light-вызов:** select_start_location передаёт world_uid, stable operation identity, expected publication и required light scope с требованием «получить готовый light, подготовить отсутствующее». Exact root POJO/дискриминатор request ещё на freeze; это не произвольный список NodeId от frontend.
+**Принятый NamedLocation-вызов:** после выбора select_start_location передаёт world/location, stable operation identity, expected publication и required light scope. Запрос: проверить light; при missing подготовить/опубликовать full, затем разрешить detailed. Exact request POJO OPEN; frontend не передаёт произвольные NodeIds.
 
-Результат этого вызова: accepted light data/immutable refs, world/operation identities и publication evidence. Если light уже актуален — вернуть existing data без повторной materialization/publish. Если light missing — проверить через собственный check parent, подготовить missing light через собственный initialization parent, опубликовать и подтвердить полученный результат. Read corruption — Error, а не trigger доматериализации.
+Результат NamedLocation base-вызова: существующий found light либо принятый full после missing light, с data/refs и publication evidence. Read corruption — Error. При missing light standalone light publication недостаточна для завершения этого запроса.
 
-Light-запрос не включает автоматическое требование ждать или создавать full. Full-stage возможен отдельным запросом, но не является обязательным этапом entry/detail flow; данный CALL его не определяет. Missing, который удалось устранить, не является финальным результатом ensure-light вызова. Неустранённое отсутствие/невозможность публикации не выдаётся как success.
+Full условно обязателен для NamedLocation при missing light и безусловно обязателен перед detailed для координатного входа от ГМ. Found light NamedLocation не запускает full. Требуемый full scope не равен автоматически всему миру. Координатный внешний binding OPEN; родство неизменно.
 
 
 - world_uid: EntityUid — обязательно, существующий мир;
 - operation identity — обязательно, устойчиво при retries/resume;
 - expected_publication: WorldPublicationRef | None — поле обязательно, None лишь при подтверждённом отсутствии;
-- request stage/scopes проверок: world light/full до выбора либо location L2 после выбора; exact discriminated request POJO OPEN;
-- location identity/facts и requested L2 scope — обязательны только для location-stage, не для world-stage;
+- request stage/scopes: NamedLocation light после выбора; coordinate full; detail по выбранному target; exact discriminated request POJO OPEN;
+- target: NamedLocation identity/facts либо координаты мира/область; фиктивная NamedLocation для координатной ветви запрещена;
 - принятые generator preparation inputs/resource policy — передаются world_initialization лишь при необходимости preparation, без raw repositories/writers/assembler internals.
 
-Приняты два external caller: select_start_location требует опубликованный light; load_player_into_world требует опубликованный detailed bake переданной location. Прочие callers/requests обсуждаются отдельно; обратный CALL к selection не принят. Не вводить универсальный dict[str, Any] и не заставлять до выбора передавать фиктивную location. Reuse domain POJO из §11 сохраняется.
+Существующие CALL сохраняются: select_start_location запрашивает base после выбора NamedLocation; load_player_into_world — ready detailed по target. Внешний координатный dispatch OPEN и не добавляет caller/родство автоматически. Reuse POJO — §11.
 
 ### 14.3. Child calls и отдельный cross-family selection call
 
-**CALL принят пользователем:** select_start_location → world_creation: проверить light и при отсутствии доматериализовать/опубликовать. World_creation использует собственные check/initialization child contracts. Select не становится parent world_creation. Child set world_creation остаётся {check_world_initialization, world_initialization, detailed_initialization}. Обратного CALL world_creation→select_start_location нет.
+**CALL принят пользователем:** select_start_location → world_creation после выбора: check light, при missing full preparation/publication. World_creation использует прежних check/initialization children. Обратного CALL к selection нет; родство неизменно.
 
 
 **Уточнение пользователя имеет приоритет:** select_start_location сохраняет старое имя. World_creation НЕ её parent; select_start_location НЕ parent world_creation. Её API entry/resolve contract сохраняются, но передачу selection/world readiness через общий binding ещё нужно согласовать.
@@ -1092,9 +1097,9 @@ Light-запрос не включает автоматическое требо
 
 | Caller → child | Что передаёт | Что принимает |
 |---|---|---|
-| world_creation → check_world_initialization | World/publication context; requested world-stage scopes либо location-stage request | Идентифицированные light/full/L2 found(data/refs) или missing scopes, source evidence; Error отдельно |
-| world_creation → world_initialization | Stable operation ID; актуальный expected publication; только missing light/full/C23 scopes из report + готовые prerequisite refs и generator requests | Ранний accepted light milestone и последующий full result с publication receipts; child failure отдельно, не success |
-| world_creation → detailed_initialization | World/location, stable operation ID, expected publication, missing L2 и согласованная C11 потребность, необходимый light/L0 и detailed domain inputs (full не обязателен) | Опубликованные L2/применимые C11 refs и publication receipt; Error отдельно |
+| world_creation → check_world_initialization | World/publication context; requested base/detail-stage и target согласно §16 | Идентифицированные light/full/L2 found(data/refs) или missing scopes, source evidence; Error отдельно |
+| world_creation → world_initialization | Stable operation ID/publication, requested full для missing-light NamedLocation либо coordinate entry; scoped domain requirements и готовые prerequisites | Accepted full completion для этих entry requests; ранний light milestone не открывает переход к detailed |
+| world_creation → detailed_initialization | World/target, operation ID/publication, missing L2/C11, accepted base по способу входа (§16) | Published L2/применимый C11 и receipt; coordinate contract OPEN |
 
 Второй вызов отсутствует, если запрошенные light/full уже found. Check parent read-only и сам world_initialization не вызывает.
 
@@ -1102,11 +1107,11 @@ Light-запрос не включает автоматическое требо
 
 1. Вызвать check parent с требуемым stage/scopes, проверить identities/publication результата.
 2. Для world-stage проанализировать отдельные found/missing результаты. Если всё требуемое found — вернуть эти данные без compute/publication.
-3. При missing light/full передать соответствующие области world_initialization. Не добавлять готовые актуальные части в список на пересоздание.
-4. Получить/передать ранний light milestone сразу после принятой light publication; полный full не задерживает этот результат. Обычный progress/prepared child output не заменяет accepted publication.
+3. Для NamedLocation missing light передать world_initialization запрос подготовки full; для coordinate entry обеспечить required full. Scoped requirements/готовые части разрешает домен, не повторный алгоритм в ноде.
+4. В entry-ветви с обязательным full дождаться accepted full completion. Ранний light milestone может оставаться отдельным результатом generic preparation, но не удовлетворяет этому entry gate.
 5. После принятой публикации при необходимости вызвать собственный check child повторно на обновлённой publication, подтвердить required scope. Recheck не делает initialization leaf.
 6. Full preparation/publication остаётся последовательной после light. Ошибка full не отзывает опубликованный light; не выдавать full found по одной light готовности.
-7. Для location-stage получить L2 result; при missing world_creation вызывает собственную подноду detailed_initialization с location/publication/missing scope. Required C11 readiness при готовом terrain L2 требует отдельного согласованного evidence/trigger; не пытаться исправить L2 через world_initialization.
+7. Для detail-stage получить L2 result по target; при missing вызвать собственную detailed_initialization. Coordinate read и применимый C11 readiness/trigger остаются domain gates; без них ready не фабрикуется.
 
 Если missing исходит из corruption/read failure, preparation не выбирается автоматически: это Error, не нормальная ветка отсутствующих данных.
 
@@ -1183,11 +1188,20 @@ D2–D5 обозначают dependency gates, не безусловное ра�
 Review только документов; production code/tests/schema не менялись. Другие рабочие изменения репозитория не являются частью этого ревью.
 
 
-## 16. CALL загрузки — load_player_into_world → world_creation
+## 16. Способы входа и CALL загрузки — актуальное решение пользователя
 
-### 16.1. Порядок вызова и передачи результата — текущая норма
+**Родственные связи менять запрещено.** Дерево §0 и Child edges §1 сохранены. Условия checks/preparation и данные CALL меняются без переноса нод, новых NodeIds или назначения неизвестного caller.
 
-Эта диаграмма показывает **CALL/RETURN и порядок**, не родство и не новые NodeIds. Она детализирует существующий CALL из графа §1. Все child calls выполняются через принятый engine binding; runtime реализация остаётся отдельным gate.
+### 16.1. Два способа входа
+
+| Способ входа | Проверка/подготовка базы | Далее |
+|---|---|---|
+| Координаты мира, заданные ГМ | Обязателен full в required scope: подтвердить существующий либо подготовить и опубликовать недостающий | Detailed координатной области → проверка пригодной позиции → загрузка игрока |
+| Выбранная NamedLocation | После подтверждения выбора check_light_bake для required scope. Found: использовать light. Missing: подготовить и опубликовать full | Detailed выбранного scope → проверка пригодной позиции → загрузка игрока |
+
+Координаты мира не являются NamedLocation и не требуют её создания. В NamedLocation-ветви проверяется именно **light**, а при missing готовится именно **full**. Found light не влечёт обязательного full-check/compute. Подготовка full не означает автоматически bake всего мира: full requirements/scope определяет принятый domain contract.
+
+### 16.2. CALL/RETURN NamedLocation-ветви, не родство
 
 ```mermaid
 sequenceDiagram
@@ -1195,47 +1209,49 @@ sequenceDiagram
     participant L as load_player_into_world
     participant W as world_creation
     participant C as check_world_initialization
+    participant I as world_initialization
     participant D as detailed_initialization
     participant B as detailed_bake_initialization
-    S->>L: Выбранная location + accepted light + trusted load context
-    L->>W: Обеспечить ready detailed(location, scope) на light
-    W->>C: Location-stage: check_detailed_bake
-    C-->>W: Полученные detailed данные/refs либо missing
-    alt Подтверждено отсутствие required detailed
-        W->>D: Подготовить и опубликовать missing detailed на light
-        D->>B: Подготовить missing L2 и применимый C11
-        B-->>D: Prepared результаты/refs
-        D->>D: Принятая публикация результата
-        D-->>W: Опубликованный detailed + publication receipt
-    else Требуемый detailed найден и актуален
-        Note over W: Переиспользовать данные без повторной подготовки
+    Note over S: NamedLocation выбрана и проверена
+    S->>W: Проверить light выбранного scope
+    W->>C: Light-stage: check_light_bake
+    C-->>W: Found light либо missing
+    alt Missing light
+        W->>I: Подготовить и опубликовать full
+        I-->>W: Accepted full data/refs/publication
+    else Found light
+        Note over W: Переиспользовать light без обязательного full
     end
-    W-->>L: Ready detailed данные/refs + accepted publication
-    L->>L: Инициализировать запуск/размещение игрока
+    W-->>S: Accepted base: found light либо full после missing
+    S->>L: Выбранная location + accepted base + trusted context
+    L->>W: Обеспечить ready detailed(target, scope)
+    W->>C: Detail-stage: check_detailed_bake
+    C-->>W: Found L2 либо missing
+    opt Missing required detail, включая применимый C11 по принятому контракту
+        W->>D: Подготовить и опубликовать missing detail
+        D->>B: Подготовить L2 и применимый C11
+        B-->>D: Prepared results/refs
+        D-->>W: Published detail + receipt
+    end
+    W-->>L: Ready detailed data/refs/publication
+    L->>L: Проверить позицию и выполнить размещение
 ```
 
-**Инварианты:**
+### 16.3. Координатная ветвь и незакрытые границы
 
-1. load не размещает игрока до успешного ready detailed результата.
-2. На входе в load готовый detailed не требуется: он получается указанным CALL. Accepted light требуется как база preparation.
-3. Full_bake/full_bake_initialization/check_full_bake не являются обязательными шагами этого light→detailed→player-entry сценария.
-4. Prepared results либо job/progress counters не заменяют опубликованный detailed.
-5. При Error на проверке/preparation/publication нет ready результата, player placement и started не выполняются.
-6. Наличие terrain L2 само по себе не доказывает применимый C11; точный detailed readiness contract сохраняет отмеченный domain gate.
-7. Вызов load→world_creation — не parent/child; дерево §0 неизменно.
+Порядок обязателен: full → detailed → размещение. Full может быть переиспользован только при подтверждённой актуальности и полноте required scope. Переданное ГМ положение — доверенный target/anchor; пригодность spawn подтверждается после detailed. Ошибка не заменяется нулевыми координатами или случайной NamedLocation.
 
-### 16.2. Контрактная граница
+Exact внешний caller/engine dispatch координатного входа OPEN; автоматически назначать его select_start_location или добавлять CALL запрещено. Существующий CALL load_player_into_world→world_creation остаётся путём получения ready detailed. Для координатной ветви требуется совместно принять target union, bounded full/L2 scopes, public wilderness read/preparation и provenance координат. Existing DetailedBakeRequest(scope=wilderness) и EntryRefineOrchestrator — reuse candidates, не доказательство готового entry API. Coordinate selection/random sampling этим решением не добавляются.
 
+### 16.4. Инварианты и ownership
 
-**Подтверждение пользователя:** load сначала получает готовый detailed_bake от world_creation, затем инициализирует запуск игрока в мир. Detailed_bake не требует full_bake; подготовка возможна на light. Старые упоминания обязательного full/C23 на входе detailed не являются target prerequisite. Если AS-IS C11 метод требует результат full job, это задача адаптации публичного domain contract, не причина вводить full в load DAG.
+1. До placement обязательны accepted base по выбранной ветви, ready detailed и пригодная позиция.
+2. Missing light выбранной NamedLocation требует accepted full completion. Ранний light milestone не заменяет этот gate. Координатный вход также не допускается к detailed по одному light.
+3. Проверки read-only; missing передаётся world_creation, который активирует собственную world_initialization. Checks не запускают preparation сами.
+4. World_creation → {check_world_initialization, world_initialization, detailed_initialization}; detailed_initialization → detailed_bake_initialization. Все прочие primary parent/children остаются как в §0. Load не вызывает чужих grandchildren.
+5. Children готовят; initialization parents публикуют. Prepared/job counters не заменяют accepted publication. Готовые актуальные части не пересоздаются.
+6. C11 applicability/readiness, source/publication consistency, placement/started UOW и generic CALL/parent lifecycle остаются OPEN gates. L2 found само по себе не доказывает применимый C11.
+7. Error/read corruption/publication refusal запрещают placement и started. Retry использует стабильные operation identities и не создаёт вторую загрузку.
+8. Full-after-gameplay continuation — отдельный generic сценарий с frozen-Pack gate; он не отменяет обязательный full-before-detail там, где его требует эта таблица.
 
-
-**Имя подтверждено пользователем:** используется существующая world_creation. Новая нода/переименование не вводится. Это **CALL, не родство**: world_creation не становится child load_player_into_world.
-
-Input requirement: world/location, stable operation identity, expected publication и required detailed scope. World_creation вызывает своё check_world_initialization с location-stage → check_detailed_bake. Если результат найден и актуален — возвращает данные/refs без повторной подготовки. При подтверждённом отсутствии вызывает собственную detailed_initialization → detailed_bake_initialization; child готовит, detailed parent публикует; после принятой публикации подтверждает результат и возвращает load готовые detailed данные/refs/publication.
-
-Read corruption, несовместимая revision, generation/staging failure и publication refusal возвращаются как Error; не подменяются missing или успешным запуском job. Actual player placement и started не выполняются внутри world_creation.
-
-Общее родство не меняется: world_creation → {check_world_initialization, world_initialization, detailed_initialization}; detailed_initialization → detailed_bake_initialization. Loader не вызывает чужих grandchildren напрямую.
-
-Exact prepared-result POJO, C11 readiness при уже существующем terrain L2 и generic CALL/parent lifecycle остаются соответствующими OPEN gates; уточнение имени их не закрывает.
+Exact POJO/files/owner bindings ещё требуют приёмки. Изменены только документальные контракты; код и production routing не разрешены этим уточнением.

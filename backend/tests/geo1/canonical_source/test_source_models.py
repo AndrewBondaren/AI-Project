@@ -164,6 +164,54 @@ class SourceModelTests(TestCase):
             with self.subTest(change=change), self.assertRaisesRegex(ValidationError, message):
                 source(**change)
 
+    def test_i1_r1_malformed_nested_records_raise_validation_error(self):
+        window = bed()
+        cases = (
+            (window.model_copy(update={"surface_z": (1,)}), "surface row"),
+            (window.model_copy(update={"coverage": run()}), "actual RegionCoverage"),
+            (window.model_copy(update={"coverage": window.coverage.model_copy(
+                update={"spans": (1,)})}), "actual CoverageSpan"),
+        )
+        for malformed, message in cases:
+            # Cover constructor admission and revalidation of both forged outer forms.
+            for entry in ("constructor", "copy", "construct"):
+                with self.subTest(message=message, entry=entry):
+                    with self.assertRaisesRegex(ValidationError, message):
+                        if entry == "constructor":
+                            source(bed=malformed)
+                        elif entry == "copy":
+                            CanonicalOpenWaterSource.model_validate(source().model_copy(update={"bed": malformed}))
+                        else:
+                            CanonicalOpenWaterSource.model_validate(CanonicalOpenWaterSource.model_construct(
+                                **(values() | {"bed": malformed})))
+
+    def test_neighboring_malformed_bed_shapes_are_rejected(self):
+        window = bed()
+        cases = []
+        for coverage in (None, 1, (), window.coverage.model_dump()):
+            cases.append({"coverage": coverage})
+        for spans in (None, 1, frozenset(), (None,), (run(),), ((-1, 0, 4),)):
+            cases.append({"coverage": window.coverage.model_copy(update={"spans": spans})})
+        for rows in (None, 1, frozenset(), (None,), ((),), (((0, -1),),),
+                     (((0, -1), -3, 0),), ((1, -3),), (((0,), -3),),
+                     (((0, -1, 0), -3),), (((0, -1), True),)):
+            cases.append({"surface_z": rows})
+        for cells in (None, 1, (), frozenset({1}), frozenset({(0,)})):
+            cases.append({"protected_cells": cells})
+        for change in cases:
+            with self.subTest(change=change), self.assertRaises(ValidationError):
+                source(bed=window.model_copy(update=change))
+
+    def test_valid_nested_records_preserve_exact_facts_on_readmission(self):
+        window = bed()
+        data = source(bed=window)
+        for admitted in (data, CanonicalOpenWaterSource.model_validate(data),
+                         CanonicalOpenWaterSource.model_validate(data.model_dump() | {"bed": window,
+                             "wet_runs": data.wet_runs, "bodies": data.bodies, "unions": data.unions,
+                             "source_mapping": data.source_mapping})):
+            self.assertEqual(admitted.bed, window)
+            self.assertEqual(admitted.wet_runs, (run(),))
+
     def test_run_coverage_order_overlap_and_merge(self):
         for runs, message in [((run(-1, 1),), "outside observed"), ((run(3, 5),), "outside observed"),
                               ((run(y=0),), "outside observed"), ((run(uid="missing"),), "body is missing"),

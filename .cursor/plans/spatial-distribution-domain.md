@@ -2212,6 +2212,594 @@ Constructor guard до ensure_dirs и повторный guard save_manifest д�
 
 Оставшиеся **P0 design blockers**: (1) полный source/storage shape+IDs closure вместо обещания будущего lock; (2) fixture/count compatibility и приёмка предложенных byte/structural чисел; (3) закрытый mutation map с ZIP import, lifetime guards и namespace ownership. **Downstream blockers полного storage/publication freeze:** accepted bounded IO и closure handoff ports, реализация codec/reconstruction и golden/negative/cold-audit evidence, retention/CAS/GC/fencing evidence. Heap/time SLA остаются отдельным downstream production acceptance согласно §15.11 и не переоткрывают принятое разделение scope. Ни SP-P1, ни публикация, ни runtime данным verdict не разрешены.
 
+### 15.12.5. Исследование blockers: итог нового design pass
+
+Разделы 15.12.1–4 выше сохранены как входной review. Их design findings имеют
+новые dispositions §§15.13–15.16 ниже: выполнены actual closure traversal,
+existing-codec probes и mutation-path audit. Это **новый storage freeze candidate
+на согласование**, не пользовательский freeze и не implementation evidence.
+§15.11 целиком сохраняется. Открытый GEO-I1-R1 не закрыт наличием source records:
+их shapes ниже — проверенная baseline для документа, не принятая реализация GEO-I1.
+Изменение GEO source по результату R1 требует повторной сверки этого lock до кода.
+
+### 15.13. Проверяемый actual schema lock (2026-11-02)
+
+Baseline: traversal actual model_fields/dataclass fields, get_type_hints(include_extras=True), TypeAliasType.__value__, всех union/generic arguments. Порядок fields — wire order; PydanticUndefined/MISSING = required. Factory baseline указан как значение; canonical wire содержит все fields, decoder не применяет defaults. 600xx — предлагаемые IDs, остальные existing. RegistryKey[R] — строка, R phantom marker и не payload registry. Abstract StrEnum не concrete wire enum (см. diagnostic admission ниже).
+
+| ID | Qualified record / enum | Ordered fields / defaults / metadata / enum wire values |
+|---|---|---|
+| 3 | `app.dataModel.climate.enums.climatePoleMode.ClimatePoleMode` | MANUAL='manual'; AUTORESOLVE='autoresolve' |
+| 4 | `app.dataModel.climate.enums.climatePolePreset.ClimatePolePreset` | ICE='ice'; DESERT='desert'; BINARY='binary' |
+| 8 | `app.dataModel.climate.enums.poleKind.PoleKind` | COLD='cold'; HOT='hot'; NEUTRAL='neutral' |
+| 14 | `app.dataModel.climate.planning.climatePoints.AnchorSource` | MANUAL='manual'; AUTO='auto'; ADMIN='admin' |
+| 19 | `app.dataModel.terrain.enums.eligibilityOp.EligibilityOp` | GTE='gte'; LTE='lte'; IN_RANGE='in_range'; FLAG='flag' |
+| 21 | `app.dataModel.terrain.hillShape.HillShape` | CIRCLE='circle'; OVAL='oval'; DOUBLE_CIRCLE='double_circle'; DOUBLE_OVAL='double_oval' |
+| 22 | `app.dataModel.terrain.enums.terrainFillRole.TerrainFillRole` | SUBSURFACE='subsurface'; MAGMA='magma' |
+| 23 | `app.dataModel.hydrology.enums.hydrologyCellRole.HydrologyCellRole` | COASTAL_SEA='coastal_sea'; OPEN_OCEAN='open_ocean'; INLAND_SEA='inland_sea'; LAKE='lake'; RIVER_BED='river_bed'; SHORE='shore' |
+| 24 | `app.dataModel.climate.planning.inputs.climateLocalInput.ProminenceScale` | METRIC='metric'; GRID='grid' |
+| 28 | `app.dataModel.validation.enums.resolutionMode.ResolutionMode` | RUNTIME='runtime'; VALIDATE_ONLY='validate_only' |
+| 36 | `app.dataModel.spatial.regionShape.RegionShapeKind` | BBOX='bbox'; ELLIPSE='ellipse'; POLYGON='polygon'; ANCHOR_RADIUS='anchor_radius'; CORRIDOR='corridor' |
+| 41 | `app.dataModel.hydrology.enums.basinKind.BasinKind` | SEA='sea'; OCEAN='ocean'; INLAND_SEA='inland_sea'; LAKE='lake' |
+| 44 | `app.dataModel.materials.enums.materialCategory.MaterialCategory` | SOLID='solid'; LIQUID='liquid'; GAS='gas' |
+| 48 | `app.dataModel.hydrology.enums.waterSide.WaterSide` | INTERIOR='interior'; EXTERIOR='exterior' |
+| 52 | `app.dataModel.locations.enums.geographicSubtype.GeographicSubtype` | MOUNTAIN='mountain'; PEAK='peak'; PLAIN='plain'; LAKE='lake'; SEA='sea'; OCEAN='ocean'; INLAND_SEA='inland_sea'; ISLAND='island'; COAST='coast'; RIVER='river' |
+| 53 | `app.dataModel.topology.worldTopology.WorldTopology` | mode: <enum 'WorldTopologyMode'>; default=factory→<WorldTopologyMode.WRAPPED: 'wrapped'>; metadata=[]<br>bounds: <class 'app.dataModel.topology.worldBounds.WorldBounds'>; default=PydanticUndefined; metadata=[] |
+| 54 | `app.dataModel.topology.enums.worldTopologyMode.WorldTopologyMode` | PLANAR='planar'; WRAPPED='wrapped'; SPHERE='sphere' |
+| 55 | `app.dataModel.topology.worldBounds.WorldBounds` | x_min: <class 'int'>; default=PydanticUndefined; metadata=[]<br>x_max: <class 'int'>; default=PydanticUndefined; metadata=[]<br>y_min: <class 'int'>; default=PydanticUndefined; metadata=[]<br>y_max: <class 'int'>; default=PydanticUndefined; metadata=[] |
+| 58 | `app.dataModel.terrainMasks.mountain.enums.MountainKind` | ROCKY='rocky'; ICE_PEAK='ice_peak'; VOLCANO='volcano'; PLATEAU='plateau'; FORESTED='forested' |
+| 64 | `app.dataModel.terrain.relief.enums.ReliefSideKind` | SHEER='sheer'; SLOPE='slope'; COUPLE='couple' |
+| 65 | `app.dataModel.terrainMasks.mountain.enums.MountainRangeStyle` | BROKEN='broken'; SMOOTH='smooth'; HYBRID='hybrid' |
+| 70 | `app.dataModel.terrain.relief.enums.ReliefPickMode` | FIXED='fixed'; RANDOM='random'; ROUND_ROBIN='round_robin' |
+| 76 | `app.dataModel.terrain.relief.enums.ReliefContext` | MOUNTAIN='mountain'; OPEN_LAND='open_land'; SHORE='shore'; ROAD_SHOULDER='road_shoulder'; RAVINE='ravine' |
+| 80 | `app.dataModel.hydrology.enums.hydrologyConnectionType.HydrologyConnectionType` | LAKE_SHORELINE='lake_shoreline'; COASTLINE='coastline'; RIVER='river'; MOUNTAIN_RIVER='mountain_river' |
+| 82 | `app.dataModel.hydrology.enums.planning.hydrologyScope.HydrologyScope` | COASTAL_SEA='coastal_sea'; OPEN_OCEAN='open_ocean'; LAKES='lakes'; RIVERS='rivers'; LANDFORMS='landforms' |
+| 86 | `app.dataModel.hydrology.enums.riverSystemRole.RiverSystemRole` | STEM='stem'; TRIBUTARY='tributary'; SYSTEM='system' |
+| 87 | `app.dataModel.hydrology.enums.riverSystemTopology.RiverSystemTopology` | CONFLUENCE='confluence'; BASIN='basin' |
+| 88 | `app.dataModel.hydrology.enums.riverDeclareMode.RiverDeclareMode` | ENDPOINTS='endpoints'; VIA_LOCATIONS='via_locations'; SEGMENTS='segments' |
+| 94 | `app.dataModel.planning.identity.planRef.PlanRef` | key: <class 'app.dataModel.planning.identity.planKey.PlanKey'>; default=PydanticUndefined; metadata=[]<br>output_fingerprint: app.dataModel.planning.identity.planKey.OutputFingerprint; default=PydanticUndefined; metadata=[Strict(strict=True), MinLen(min_length=32), MaxLen(max_length=32)] |
+| 95 | `app.dataModel.planning.identity.planKey.PlanKey` | world_uid: EntityUid; default=PydanticUndefined; metadata=[]<br>scope: PlanScope; default=PydanticUndefined; metadata=[]<br>contract_id: PlanContractId; default=PydanticUndefined; metadata=[]<br>schema_version: app.dataModel.planning.identity.planKey.SchemaVersion; default=PydanticUndefined; metadata=[Strict(strict=True), Gt(gt=0)]<br>algorithm_version: app.dataModel.planning.identity.planKey.AlgorithmVersion; default=PydanticUndefined; metadata=[Strict(strict=True), Gt(gt=0)]<br>input_fingerprint: app.dataModel.planning.identity.planKey.InputFingerprint; default=PydanticUndefined; metadata=[Strict(strict=True), MinLen(min_length=32), MaxLen(max_length=32)] |
+| 96 | `app.dataModel.planning.identity.planKey.WorldPlanScope` | kind: typing.Literal[<PlanScopeKind.WORLD: 'world'>]; default=<PlanScopeKind.WORLD: 'world'>; metadata=[] |
+| 97 | `app.dataModel.planning.identity.planKey.PlanScopeKind` | WORLD='world'; REGION='region' |
+| 98 | `app.dataModel.planning.identity.planKey.RegionPlanScope` | kind: typing.Literal[<PlanScopeKind.REGION: 'region'>]; default=<PlanScopeKind.REGION: 'region'>; metadata=[]<br>region_uid: EntityUid; default=PydanticUndefined; metadata=[] |
+| 101 | `app.dataModel.planning.contracts.planDependency.PlanDependency` | slot: app.dataModel.planning.identity.planKey.PlanSlot; default=PydanticUndefined; metadata=[Strict(strict=True), MinLen(min_length=1)]<br>ref: <class 'app.dataModel.planning.identity.planRef.PlanRef'>; default=PydanticUndefined; metadata=[] |
+| 104 | `app.dataModel.climate.enums.poleSource.PoleSource` | MANUAL='manual'; AUTORESOLVE='autoresolve' |
+| 105 | `app.dataModel.planning.diagnostics.planDiagnostic.PlanDiagnostic` | issue: <class 'app.dataModel.validation.diagnostics.fieldPathError.FieldPathError'>; default=PydanticUndefined; metadata=[]<br>disposition: <enum 'PlanDiagnosticDisposition'>; default=PydanticUndefined; metadata=[] |
+| 106 | `app.dataModel.validation.diagnostics.fieldPathError.FieldPathError` | path: tuple[str \| int, ...]; default=MISSING; metadata=mappingproxy({})<br>message: <class 'str'>; default=MISSING; metadata=mappingproxy({})<br>schema_id: str \| None; default=None; metadata=mappingproxy({})<br>code: str \| None; default=None; metadata=mappingproxy({})<br>reference: app.dataModel.validation.diagnostics.fieldPathError.ReferenceIssueContext \| None; default=None; metadata=mappingproxy({})<br>runtime_context: app.dataModel.validation.diagnostics.runtimeIssueContext.RuntimeIssueContext[enum.StrEnum, enum.StrEnum] \| None; default=None; metadata=mappingproxy({}) |
+| 107 | `app.dataModel.validation.diagnostics.fieldPathError.ReferenceIssueContext` | reason: <enum 'ReferenceIssueReason'>; default=MISSING; metadata=mappingproxy({})<br>domain: <class 'str'>; default=MISSING; metadata=mappingproxy({})<br>world_uid: str \| None; default=None; metadata=mappingproxy({})<br>requested_template_uid: str \| None; default=None; metadata=mappingproxy({})<br>owner_pack_uid: str \| None; default=None; metadata=mappingproxy({})<br>dependency_pack_uid: str \| None; default=None; metadata=mappingproxy({})<br>consumer: str \| None; default=None; metadata=mappingproxy({})<br>selected_default: str \| None; default=None; metadata=mappingproxy({}) |
+| 108 | `app.dataModel.validation.diagnostics.fieldPathError.ReferenceIssueReason` | UNKNOWN_TEMPLATE='unknown_template'; OWNER_UNAVAILABLE='owner_pack_unavailable'; KIND_MISMATCH='library_kind_mismatch'; MISSING_DEPENDENCY='missing_dependency'; BODY_MISSING='body_missing'; DEFAULT_APPLIED='default_applied' |
+| 109 | `app.dataModel.validation.diagnostics.runtimeIssueContext.RuntimeIssueContext` | world_uid: EntityUid; default=MISSING; metadata=mappingproxy({})<br>snapshot_uid: EntityUid \| None; default=MISSING; metadata=mappingproxy({})<br>content_revision: RevisionHex \| None; default=MISSING; metadata=mappingproxy({})<br>source_uid: EntityUid \| None; default=MISSING; metadata=mappingproxy({})<br>body_uids: tuple[EntityUid, ...]; default=MISSING; metadata=mappingproxy({})<br>cell: tuple[typing.Annotated[int, Strict(strict=True)], typing.Annotated[int, Strict(strict=True)]] \| None; default=MISSING; metadata=mappingproxy({})<br>face: app.dataModel.spatial.facing.Facing \| None; default=MISSING; metadata=mappingproxy({})<br>fallback_action: +A_co; default=MISSING; metadata=mappingproxy({})<br>fallback_reason: +R_co; default=MISSING; metadata=mappingproxy({}) |
+| 110 | `app.dataModel.spatial.facing.Facing` | NORTH='north'; SOUTH='south'; EAST='east'; WEST='west'; NORTHEAST='north_east'; NORTHWEST='north_west'; SOUTHEAST='south_east'; SOUTHWEST='south_west' |
+| 111 | `app.dataModel.planning.diagnostics.planDiagnostic.PlanDiagnosticDisposition` | ERROR='error'; FALLBACK='fallback'; NOTICE='notice' |
+| 119 | `app.dataModel.spatial.grid.coordinateSpace.CoordinateSpace` | WORLD_SURFACE_GRID='world_surface_grid'; WORLD_FINE_GRID='world_fine_grid'; LOCATION_FINE_GRID='location_fine_grid' |
+| 125 | `app.dataModel.placement.common.PlacementMode` | ABSOLUTE='absolute'; SEMANTIC='semantic' |
+| 126 | `app.dataModel.placement.common.AbsoluteMovement` | FORBID='forbid'; EXPLICIT_CANDIDATES='explicit_candidates' |
+| 128 | `app.dataModel.placement.common.DependencyRelation` | RESOLVED='resolved'; SUPPORTED_BY='supported_by'; CONTAINED_BY='contained_by'; CONNECTED_TO='connected_to' |
+| 130 | `app.dataModel.placement.common.OverlapRelation` | COVERAGE='coverage'; CONTAINMENT='containment'; CONNECTION='connection'; EMBEDDING='embedding'; SHARED_BOUNDARY='shared_boundary' |
+| 135 | `app.dataModel.placement.common.WaterPresence` | PRESENT='present'; ABSENT='absent'; UNKNOWN='unknown' |
+| 150 | `app.dataModel.hydrology.mapCellHydrology.MapCellHydrology` | liquid_candidate: DefaultWhenMissing[bool]; default=False; metadata=[]<br>role: DefaultWhenMissing[app.dataModel.hydrology.enums.hydrologyCellRole.HydrologyCellRole \| None]; default=None; metadata=[]<br>deepening_index: DefaultWhenMissing[typing.Annotated[int, FieldInfo(annotation=NoneType, required=True, metadata=[Ge(ge=0)])] \| None]; default=None; metadata=[]<br>connection_edge_uid: DefaultWhenMissing[str \| None]; default=None; metadata=[]<br>shore_kind: DefaultWhenMissing[app.dataModel.hydrology.enums.hydrologyShoreKind.HydrologyShoreKind \| None]; default=None; metadata=[]<br>water_body_uid: DefaultWhenMissing[str \| None]; default=None; metadata=[]<br>z_water_level: DefaultWhenMissing[int \| None]; default=None; metadata=[]<br>river_drainage: DefaultWhenMissing[app.dataModel.hydrology.riverDrainageLink.RiverDrainageLink \| None]; default=None; metadata=[] |
+| 151 | `app.dataModel.hydrology.enums.hydrologyShoreKind.HydrologyShoreKind` | RIVER='river'; MOUNTAIN_RIVER='mountain_river'; LAKE='lake'; SEA='sea' |
+| 152 | `app.dataModel.hydrology.riverDrainageLink.RiverDrainageLink` | river_uid: <class 'str'>; default=PydanticUndefined; metadata=[]<br>river_type: <enum 'HydrologyConnectionType'>; default=PydanticUndefined; metadata=[]<br>receiver_uid: <class 'str'>; default=PydanticUndefined; metadata=[]<br>receiver_kind: app.dataModel.hydrology.enums.basinKind.BasinKind \| app.dataModel.hydrology.enums.hydrologyConnectionType.HydrologyConnectionType; default=PydanticUndefined; metadata=[]<br>receiver_cell: tuple[int, int]; default=PydanticUndefined; metadata=[] |
+| 153 | `app.dataModel.hydrology.waterBody.WaterBody` | water_body_uid: StrictOnWire[str]; default=PydanticUndefined; metadata=[]<br>location_uid: DefaultWhenMissing[str \| None]; default=None; metadata=[]<br>kind: StrictOnWire[app.dataModel.hydrology.enums.basinKind.BasinKind]; default=PydanticUndefined; metadata=[]<br>liquid: DefaultWhenMissing[StrictOnWire[MaterialKey]]; default='water'; metadata=[]<br>declared_level: StrictOnWire[int]; default=PydanticUndefined; metadata=[]<br>z_water_level: StrictOnWire[int]; default=PydanticUndefined; metadata=[]<br>declared_basin_uid: DefaultWhenMissing[str \| None]; default=None; metadata=[]<br>parent_system_uid: DefaultWhenMissing[str \| None]; default=None; metadata=[] |
+| 154 | `app.dataModel.hydrology.physicalWaterUnion.PhysicalWaterUnion` | water_system_uid: StrictOnWire[str]; default=PydanticUndefined; metadata=[]<br>member_uids: StrictOnWire[tuple[str, ...]]; default=PydanticUndefined; metadata=[]<br>child_system_uids: StrictOnWire[tuple[str, ...]]; default=PydanticUndefined; metadata=[]<br>z_water_level: StrictOnWire[int]; default=PydanticUndefined; metadata=[]<br>parent_system_uid: DefaultWhenMissing[str \| None]; default=None; metadata=[] |
+| 166 | `app.dataModel.hydrology.declaredCoastline.CoastlinePurpose` | WATER_SOURCE='water_source'; BODY_BOUNDARY='body_boundary' |
+| 169 | `app.dataModel.terrain.relief.bathymetry.floorProfile.FloorProfileKind` | SAMPLED='sampled'; FIELD='field' |
+| 173 | `app.dataModel.terrain.designedWater.strategyKind.DesignedWaterStrategyKind` | AUTHORED_REGION='authored_region'; CONTINENTAL_NOISE='continental_noise'; PLATE='plate'; PLATE_NOISE='plate_noise' |
+| 177 | `app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy.FieldCompositionOperator` | ADD_CLAMP='add_clamp' |
+| 178 | `app.dataModel.materials.enums.materialSubstrateKind.MaterialSubstrateKind` | ROCK='rock'; LOOSE_SEDIMENT='loose_sediment'; OTHER='other' |
+| 182 | `app.dataModel.regions.regionState.RegionTransitionCause` | DRIFT='drift'; DECLARED_EDIT='declared_edit'; EVENT='event' |
+| 183 | `app.dataModel.terrain.relief.enums.ReliefConditionTerrain` | MOUNTAIN='mountain'; PLAINS='plains'; FOREST='forest'; RAVINE='ravine'; SHORE_RIVER='shore_river'; SHORE_MOUNTAIN_RIVER='shore_mountain_river'; SHORE_LAKE='shore_lake'; SHORE_SEA='shore_sea' |
+| 184 | `app.dataModel.terrain.relief.enums.ReliefSlopePolicy` | SLOPE_DOWN='slope_down'; SLOPE_UP='slope_up'; SLOPE_NONE='slope_none' |
+| 199 | `app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts.SurfaceAspect` | HORIZONTAL='horizontal'; RELIEF_FACE='relief_face' |
+| 200 | `app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts.SurfaceCoatingAction` | APPLY_SHORE_SURFACE='apply_shore_surface'; KEEP_EXISTING_SURFACE='keep_existing_surface' |
+| 201 | `app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts.SurfaceCoatingReason` | ROCK_CLIFF='rock_cliff'; SUPPORTED='supported' |
+| 215 | `app.dataModel.policy.policyEnums.FactState` | KNOWN='known'; WAITING='waiting'; UNKNOWN='unknown' |
+| 219 | `app.dataModel.policy.policyEnums.PolicyOperation` | OBJECT_ADMISSION='object_admission'; VALUE_SELECTION='value_selection' |
+| 220 | `app.dataModel.policy.policyEnums.PolicyState` | READY='ready'; DISABLED='disabled'; WAITING_SUPPORT='waiting_support'; UNRESOLVED='unresolved' |
+| 221 | `app.dataModel.policy.policyEnums.PolicyDisableReason` | ENABLED_FALSE='enabled_false'; ZERO_PRIORITY='zero_priority'; POLICY_FORBID='policy_forbid'; SUPPORT_DISABLED='support_disabled'; ERROR_FALLBACK='error_fallback'; DOMAIN_RULE='domain_rule' |
+| 222 | `app.dataModel.policy.policyEnums.PolicyOrigin` | AUTHORED='authored'; DOMAIN_DEFAULT='domain_default'; TERMINAL_DEFAULT='terminal_default'; RULE='rule'; FALLBACK='fallback' |
+| 226 | `app.dataModel.hydrology.planning.sourceBodyMapping.SourceBodyMapping` | entries: tuple[app.dataModel.hydrology.planning.sourceBodyMapping.SourceBodyMappingEntry, ...]; default=PydanticUndefined; metadata=[] |
+| 227 | `app.dataModel.hydrology.planning.sourceBodyMapping.SourceBodyMappingEntry` | source_uid: EntityUid; default=PydanticUndefined; metadata=[]<br>body_uids: tuple[EntityUid, ...]; default=PydanticUndefined; metadata=[] |
+| 228 | `app.dataModel.hydrology.enums.planning.waterGenerationScope.WaterGenerationCategory` | SEA='sea'; OCEAN='ocean'; LAKE='lake' |
+| 229 | `app.dataModel.hydrology.enums.planning.hydrologyExecutionMode.HydrologyExecutionMode` | DISABLED='disabled'; DECLARED_ONLY='declared_only'; AUTORESOLVE='autoresolve' |
+| 230 | `app.dataModel.hydrology.policy.hydrologyGenerationDecision.WaterPolicyReason` | DECLARED_ONLY='declared_only'; AUTORESOLVE='autoresolve'; DRY_TARGET='dry_target'; EMPTY_GENERATION_TARGET='empty_generation_target' |
+| 235 | `app.application.worldData.planning.contracts.surfacePlanningView.SurfacePlanningViewKind` | READY='ready'; NO_EXTENT='no_extent' |
+| 238 | `app.dataModel.terrain.regions.coverageGeometry.RegionCoverage` | region_uid: EntityUid; default=PydanticUndefined; metadata=[]<br>spans: tuple[app.dataModel.terrain.regions.coverageGeometry.CoverageSpan, ...]; default=PydanticUndefined; metadata=[] |
+| 239 | `app.dataModel.terrain.regions.coverageGeometry.CoverageSpan` | y: app.dataModel.spatial.grid.coordinateTypes.FineY; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>x0: app.dataModel.spatial.grid.coordinateTypes.FineX; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>x1: app.dataModel.spatial.grid.coordinateTypes.FineX; default=PydanticUndefined; metadata=[Strict(strict=True)] |
+| 244 | `app.dataModel.hydrology.sources.waterDesignSource.WaterDesignSourceKind` | BASIN='basin'; LAKE='lake'; COASTLINE='coastline'; PROCEDURAL='procedural' |
+| 268 | `app.dataModel.placement.lifecycle.causal.PlacementOutcomeStatus` | RESOLVED='resolved'; DISABLED='disabled'; UNRESOLVED='unresolved' |
+| 270 | `app.dataModel.placement.result.PlacementIssueCode` | MISSING_SPECIFICITY='PLACEMENT_MISSING_SPECIFICITY'; MISSING_DEPENDENCY='PLACEMENT_MISSING_DEPENDENCY'; FAILED_DEPENDENCY='PLACEMENT_FAILED_DEPENDENCY'; DEPENDENCY_CYCLE='PLACEMENT_DEPENDENCY_CYCLE'; NO_CANDIDATES='PLACEMENT_NO_CANDIDATES'; SPATIAL_CONFLICT='PLACEMENT_SPATIAL_CONFLICT'; CONSTRAINT_VIOLATION='PLACEMENT_CONSTRAINT_VIOLATION'; UNKNOWN_COASTLINE_WATER='PLACEMENT_UNKNOWN_COASTLINE_WATER'; COASTLINE_PRIORITY_LOWERED='PLACEMENT_COASTLINE_PRIORITY_LOWERED' |
+| 283 | `app.dataModel.terrain.sampling.fineSurfaceWindow.FineSurfaceWindow` | coverage: <class 'app.dataModel.terrain.regions.coverageGeometry.RegionCoverage'>; default=PydanticUndefined; metadata=[]<br>surface_z: tuple[tuple[FineXY, typing.Annotated[app.dataModel.spatial.grid.coordinateTypes.FineZ, FieldInfo(annotation=NoneType, required=True, metadata=[Strict(strict=True)])]], ...]; default=PydanticUndefined; metadata=[]<br>topology: <class 'app.dataModel.topology.worldTopology.WorldTopology'>; default=PydanticUndefined; metadata=[]<br>protected_cells: frozenset[tuple[int, int]]; default=PydanticUndefined; metadata=[] |
+| 60004 | `app.dataModel.hydrology.query.source.WaterMembershipRun` | y: app.dataModel.spatial.grid.coordinateTypes.FineY; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>x0: app.dataModel.spatial.grid.coordinateTypes.FineX; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>x1: app.dataModel.spatial.grid.coordinateTypes.FineX; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>body_uid: EntityUid; default=PydanticUndefined; metadata=[] |
+| 60005 | `app.dataModel.artifacts.references.ArtifactRef` | kind: <enum 'ArtifactKind'>; default=PydanticUndefined; metadata=[]<br>format_key: ArtifactFormatKey; default=PydanticUndefined; metadata=[]<br>format_version: FormatVersion; default=PydanticUndefined; metadata=[]<br>content_hash: RevisionHex; default=PydanticUndefined; metadata=[]<br>nbytes: <class 'int'>; default=PydanticUndefined; metadata=[Strict(strict=True), Ge(ge=0)]<br>row_count: typing.Annotated[int, Strict(strict=True), FieldInfo(annotation=NoneType, required=True, metadata=[Ge(ge=0)])] \| None; default=None; metadata=[] |
+| 60006 | `app.dataModel.artifacts.references.ArtifactKind` | BLOB='blob'; SQL_ROWS='sql_rows' |
+| 60007 | `app.dataModel.hydrology.query.source.CanonicalOpenWaterSource` | space: typing.Literal[<CoordinateSpace.WORLD_FINE_GRID: 'world_fine_grid'>]; default=PydanticUndefined; metadata=[]<br>bed: <class 'app.dataModel.terrain.sampling.fineSurfaceWindow.FineSurfaceWindow'>; default=PydanticUndefined; metadata=[]<br>z_min: app.dataModel.spatial.grid.coordinateTypes.FineZ; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>z_max: app.dataModel.spatial.grid.coordinateTypes.FineZ; default=PydanticUndefined; metadata=[Strict(strict=True)]<br>wet_runs: tuple[app.dataModel.hydrology.query.source.WaterMembershipRun, ...]; default=PydanticUndefined; metadata=[]<br>bodies: tuple[app.dataModel.hydrology.waterBody.WaterBody, ...]; default=PydanticUndefined; metadata=[]<br>unions: tuple[app.dataModel.hydrology.physicalWaterUnion.PhysicalWaterUnion, ...]; default=PydanticUndefined; metadata=[]<br>source_mapping: <class 'app.dataModel.hydrology.planning.sourceBodyMapping.SourceBodyMapping'>; default=PydanticUndefined; metadata=[]<br>shore_rows: tuple[tuple[FineXY, app.dataModel.hydrology.mapCellHydrology.MapCellHydrology], ...]; default=PydanticUndefined; metadata=[] |
+| 60008 | `app.dataModel.planning.contracts.planEnvelope.PlanEnvelope[CanonicalOpenWaterSource]` | ref: <class 'app.dataModel.planning.identity.planRef.PlanRef'>; default=PydanticUndefined; metadata=[]<br>dependencies: tuple[app.dataModel.planning.contracts.planDependency.PlanDependency, ...]; default=PydanticUndefined; metadata=[]<br>payload: <class 'app.dataModel.hydrology.query.source.CanonicalOpenWaterSource'>; default=PydanticUndefined; metadata=[]<br>diagnostics: tuple[app.dataModel.planning.diagnostics.planDiagnostic.PlanDiagnostic, ...]; default=PydanticUndefined; metadata=[] |
+
+
+Alias closure:
+
+- `AlgorithmVersion = <class 'int'>`
+- `ArtifactFormatKey = app.dataModel.registryKey.RegistryKey[app.dataModel.artifacts.references.ArtifactFormatRegistry]`
+- `EntityUid = typing.Annotated[str, Strict(strict=True), StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=1, max_length=None, pattern='^\\S(?:.*\\S)?$', ascii_only=None)]`
+- `FineX = <class 'int'>`
+- `FineXY = tuple[app.dataModel.spatial.grid.coordinateTypes.FineX, app.dataModel.spatial.grid.coordinateTypes.FineY]`
+- `FineY = <class 'int'>`
+- `FineZ = <class 'int'>`
+- `FormatVersion = typing.Annotated[int, Strict(strict=True), FieldInfo(annotation=NoneType, required=True, metadata=[Gt(gt=0)])]`
+- `InputFingerprint = <class 'bytes'>`
+- `MaterialKey = app.dataModel.registryKey.RegistryKey[app.dataModel.materials.worldMaterialRegistry.WorldMaterialRegistry]`
+- `OutputFingerprint = <class 'bytes'>`
+- `PlanContractId = app.dataModel.registryKey.RegistryKey[app.dataModel.planning.contracts.planContract.PlanContractRegistry]`
+- `PlanScope = typing.Annotated[app.dataModel.planning.identity.planKey.WorldPlanScope | app.dataModel.planning.identity.planKey.RegionPlanScope, FieldInfo(annotation=NoneType, required=True, discriminator='kind')]`
+- `PlanSlot = <class 'str'>`
+- `RevisionHex = typing.Annotated[str, Strict(strict=True), StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=64, max_length=64, pattern='^[0-9a-f]{64}$', ascii_only=None)]`
+- `SchemaVersion = <class 'int'>`
+
+#### 15.13.1. Generic/diagnostic closure и конкретный manifest
+
+Таблица выше включает 61 concrete enum из fixed SURFACE_MANIFEST snapshot и
+record closure source/envelope/ArtifactRef. Общий traversal дал 87 entries с
+abstract StrEnum, то есть **86 concrete entries**; дополнительно три proposed
+storage records дают **89**. Это finite source/storage admission roster, не
+импорт `latest SURFACE_MANIFEST`. Все enum members/wire values приведены выше.
+Для компактной реализации допустим source manifest с тем же finite roster:
+наличие storage-only entries в roster не означает допустимость их в source fields.
+Expected top-level type и exact fields проверяются отдельно.
+
+Почему перечислены все enum snapshot: FieldPathError.runtime_context принимает
+RuntimeIssueContext[StrEnum,StrEnum]; это **не конечный union конкретных fallback
+enums**. Предлагается explicit finite admission: оба поля context должны содержать
+actual concrete StrEnum instance из **57** StrEnum этого snapshot, с registered
+ID и точным wire value. Остальные четыре registered enum (IDs3 ClimatePoleMode,4 ClimatePolePreset,
+8 PoleKind,104 PoleSource) не наследуют StrEnum и недопустимы именно в этих двух
+context fields, хотя сохраняются в полном fixed manifest roster. Другие enum
+классы отклоняются до fingerprint/publication,
+не преобразуются в строки и не теряются из diagnostics. Это ограничение storage
+V1, не изменение общего FieldPathError. Будущие enums требуют нового schema review.
+Semantic validity action/reason остаётся producer responsibility, storage не
+подбирает «подходящий» fallback по значению. ERROR diagnostic source не публикуется.
+
+RuntimeIssueContext — **один runtime dataclass class ID109**, а не новый ID на
+каждую Python typing specialization; A_co/R_co bound=StrEnum,covariant=True.
+FieldPathError uses RuntimeIssueContext[StrEnum,StrEnum]|None. Concrete enum type
+передаётся собственным TLV enum ID. Иное правило у Pydantic PlanEnvelope[T]:
+PlanEnvelope[CanonicalOpenWaterSource] — реальный specialized model class ID60008;
+несpecialized PlanEnvelope и другие specializations на этом top-level запрещены.
+PlanScope union закрыт WorldPlanScope ID96 / RegionPlanScope ID98 с discriminator
+kind (enum97); никакого неучтённого scope record нет. RiverReceiverKind — union
+BasinKind41 | HydrologyConnectionType80; RiverDrainageLink152 входит даже если
+в большинстве SHORE records river_drainage=None. ReferenceIssueContext107 и
+RuntimeIssueContext109 независимы и могут присутствовать одновременно.
+
+Wire policy aliases StrictOnWire[T] / DefaultWhenMissing[T] разворачиваются в
+Annotated[T,WireFieldPolicy.STRICT_ON_WIRE / DEFAULT_WHEN_MISSING]. Их metadata
+не отдельные runtime values и ID им не нужен. RegistryKey[R] serializes как str,
+R не вложенная registry table. NewType FineX/Y/Z=int, Input/OutputFingerprint=bytes,
+Schema/AlgorithmVersion=int, PlanSlot=str; ограничения fields приведены в lock.
+Default factories не вызываются при decode: exact wire roster содержит каждый
+field, включая None/default. Default WorldTopology.mode baseline=wrapped и
+WaterBody.liquid='water' не разрешают пропустить поля или подменить captured values.
+
+Дополнение трёх storage shapes (все required, без defaults, immutable/strict,
+extra=forbid,revalidate_instances=always; StrictInt исключает bool):
+
+| ID | Type | Exact ordered fields |
+|---|---|---|
+| 60001 | HydrologyPackRoot | source_ref:PlanRef; dependencies:tuple[PlanDependency,...]; diagnostics:tuple[PlanDiagnostic,...]; topology:WorldTopology; coverage_region_uid:EntityUid; z_min:FineZ; z_max:FineZ; bodies:tuple[WaterBody,...]; unions:tuple[PhysicalWaterUnion,...]; source_mapping:SourceBodyMapping; shards:tuple[HydrologyShardRef,...] |
+| 60002 | HydrologyShardRef | tx:StrictInt; ty:StrictInt; artifact:ArtifactRef |
+| 60003 | HydrologyPackShard | source_ref:PlanRef; tx:StrictInt; ty:StrictInt; bed:FineSurfaceWindow; wet_runs:tuple[WaterMembershipRun,...]; shore_rows:tuple[tuple[FineXY,MapCellHydrology],...] |
+
+60004 shared source/storage WaterMembershipRun; 60005/60006 ArtifactRef/ArtifactKind;
+60007/60008 source/envelope. Existing IDs не меняются. Все достижимые record/enum
+runtime classes имеют ID; abstract StrEnum, phantom registry и TypeVar не имеют
+собственных TLV records. Root/shard не содержат envelope целиком, но root хранит
+source ref/dependencies/diagnostics/tables, shard — bed/wet/shore; reconstruction
+§15.10.2 восстанавливает source payload с fixed WORLD_FINE_GRID и original envelope.
+Replay uses output_fingerprint(payload,dependencies,diagnostics,source schema),
+не digest envelope и не ArtifactRef hash. Изменение fields/defaults/enum wire
+assignment или canonical alias constraints требует schema/version review.
+
+Codec compatibility: existing canonicalCodec enum/record exact type lookup,
+ordered fields, nested tuple/frozenset, dataclass validation и final re-encode
+поддерживают этот roster. Actual constructors с coercion/extra=ignore не объявлены
+strict storage admission: pre-model scanner обязан проверять field roster/types,
+actual enum classes, integer types и nested shapes, затем EF-1 domain validators.
+Source R1 admission bug/изменение validators не исправляется storage DTO-копией.
+Root-only read не доказывает global source equality; build/full audit делает
+reconstruction, обычное чтение доверяет admitted immutable publication.
+
+
+#### 15.13.2. Declaration-file SHA-256 baseline
+
+- `backend/app/application/worldData/planning/contracts/surfacePlanningView.py`: `db6ffd087a0a15bf45008777b70bba2045dabb45d9e868cb72b72d305de67684`
+- `backend/app/dataModel/artifacts/references.py`: `bebaeaae4f1bf68ab8622a199158aa9e682163022dfc264e704578bee8e5a242`
+- `backend/app/dataModel/climate/enums/climatePoleMode.py`: `4b8dd0cd9005910acfad45f13d906dc94427c1ce05506f2273a33315408367b6`
+- `backend/app/dataModel/climate/enums/climatePolePreset.py`: `eaea1ca197e07a921fd782de9e721bc5057e0b32bda8d2e7b723a9fdc4c93645`
+- `backend/app/dataModel/climate/enums/poleKind.py`: `a767f526c049bae7e03eb963bddcc045216fc97e62fc6b3ab097fcbc892a3f6d`
+- `backend/app/dataModel/climate/enums/poleSource.py`: `21a3683f318ca6e7f840b83ca80d74d78b9c20026f7c268a3fe837fc002dcbc5`
+- `backend/app/dataModel/climate/planning/climatePoints.py`: `5b05e8603dd575ea82bf16041dffa20e05bfa1e07103772b1b906b0b0bdbc288`
+- `backend/app/dataModel/climate/planning/inputs/climateLocalInput.py`: `d8a49adc35c46134071aaebbcb345ad17d2e7e9b8789f69b767ff3392fbd6f38`
+- `backend/app/dataModel/hydrology/declaredCoastline.py`: `c9c71d0f8c96f4e8e52f57fee7c86ad8122323063803f7bffc2f989abd50c245`
+- `backend/app/dataModel/hydrology/enums/basinKind.py`: `5795a0f41212ca42d6de03bdb531d72eb4732c1126d465fa24190d4ca433d0fd`
+- `backend/app/dataModel/hydrology/enums/hydrologyCellRole.py`: `73b55a4c0a201dc1320adf244564c379e9b6031447246977e966599dbd9cbb9f`
+- `backend/app/dataModel/hydrology/enums/hydrologyConnectionType.py`: `ba490b8e6a9d0318bec3aa6a954607bd8178f0a8078b7e9e02c4ac354767c8a4`
+- `backend/app/dataModel/hydrology/enums/hydrologyShoreKind.py`: `37b2e465a2d231c6147fab4d26548fcda137866c66888d096bbab55c5907631d`
+- `backend/app/dataModel/hydrology/enums/planning/hydrologyExecutionMode.py`: `11a864402aba4967acff0b56e2ca047ebc831d5c2853af0647e13efab38b1ec8`
+- `backend/app/dataModel/hydrology/enums/planning/hydrologyScope.py`: `23543aae25b4e173635881f773bafaaebee4484aa5af538adf0030a71e5a61f3`
+- `backend/app/dataModel/hydrology/enums/planning/waterGenerationScope.py`: `6cc12b50c8349511370970d7ae225396ae4fbdb59c1c337e739ee0efb5168e32`
+- `backend/app/dataModel/hydrology/enums/riverDeclareMode.py`: `33dcb32fb48f17c7df6cf0c9c5606a55bb22a324c31223b3916b95922fb1038f`
+- `backend/app/dataModel/hydrology/enums/riverSystemRole.py`: `820bba2daa828c0920e5ef3c04b179301232161263398159fd73a0d9c12c9c7c`
+- `backend/app/dataModel/hydrology/enums/riverSystemTopology.py`: `81b3317c96c6ba1ad38a66b23b1fb5338b0f2ef506d861538ab9ca07d9e0995c`
+- `backend/app/dataModel/hydrology/enums/waterSide.py`: `00a4c7e188d109300e8df6f7502d778e79e037a2630b58fbf36cf9968f67dd20`
+- `backend/app/dataModel/hydrology/mapCellHydrology.py`: `e0f81882ef17adc813a483e83410ce6f32304e0f282e18bdcb84dcafd69d82e4`
+- `backend/app/dataModel/hydrology/physicalWaterUnion.py`: `dddaa24903fe2f8fe914a00e0474af5bd4a2e147878dd774c9896a955a8b50a1`
+- `backend/app/dataModel/hydrology/planning/sourceBodyMapping.py`: `7e93c22d9cf80577caff5634c703052a14f3d559f39dae1634fa24544b9cfa50`
+- `backend/app/dataModel/hydrology/policy/hydrologyGenerationDecision.py`: `9cb166c332e67c57ec3fb60e152087b79e07b2324332ad41a460324aa813ad78`
+- `backend/app/dataModel/hydrology/query/source.py`: `9bea0dfb523065dd4dc82dcedf1b09b1f14747f098e2872e4be7f74abfd192d6`
+- `backend/app/dataModel/hydrology/riverDrainageLink.py`: `3a6665f0fb1483242241b101be5cb4afd7daf025552acd4b7bf5ea7cac48466a`
+- `backend/app/dataModel/hydrology/sources/waterDesignSource.py`: `0ab4155d99ccafcd3c42071155e472c2e71107053516b82bcc7a52338d62f574`
+- `backend/app/dataModel/hydrology/waterBody.py`: `398a54bf251e117ac1459f8fdca6a813733363e66de10514a4875b6677bafbca`
+- `backend/app/dataModel/locations/enums/geographicSubtype.py`: `792f752cced85d89b16e0e42a7d59db3bc690bb6126f820a488764d1f0c2532d`
+- `backend/app/dataModel/materials/enums/materialCategory.py`: `9db88b39e108ca64a91f7ede7e87380403229f7fb5b4ae15a97b815852275e7f`
+- `backend/app/dataModel/materials/enums/materialSubstrateKind.py`: `78f0b862985c327d4f1b133ebad17cb10b9dd6623757be8a0415d0cb02393625`
+- `backend/app/dataModel/placement/common.py`: `9641ab0814944672775181ebbc99517fd102b754c26bf3a7975bef4d9be8411e`
+- `backend/app/dataModel/placement/lifecycle/causal.py`: `9958eb16697751ef81b91863cb901d81782e48f5edd9c60ac302b934cdc0e494`
+- `backend/app/dataModel/placement/result.py`: `50fc2a79c49233bd1dcec654c75c8890c8e64180e4ac5b8dfdff1c1c9ee06519`
+- `backend/app/dataModel/planning/contracts/planDependency.py`: `ed3d7ab1aff4490bc52dde600ce01f9b7a32485e4db8b7eace3b451605092e14`
+- `backend/app/dataModel/planning/contracts/planEnvelope.py`: `33e002f6bba2cdee7ce27b1810f72d2ad5f1e283539ae36d9c0143d1f4237039`
+- `backend/app/dataModel/planning/diagnostics/planDiagnostic.py`: `45df6d3ba75832ee6e49b99df6e43a017ae960cab81841961afbb5e6327e334e`
+- `backend/app/dataModel/planning/identity/planKey.py`: `1b718e5cace1479414f4a30b520cf2abe893e0b08aee4faedf4d192930c618a8`
+- `backend/app/dataModel/planning/identity/planRef.py`: `07444b69abaca9213fa47b0ae79b564fcf5fb4dfb51857a6fa048670265906d5`
+- `backend/app/dataModel/policy/policyEnums.py`: `08714c1e403fcc1647aab943ffb12708e8181739f573eb3ae7b5e23c6708d421`
+- `backend/app/dataModel/regions/regionState.py`: `d5520417ea86b8b0c4a1b8b9fc263328ab03b80c6f9922dc0bc10e32567be085`
+- `backend/app/dataModel/spatial/facing.py`: `33a63576aab1887e08887dfca04f2833897051f5ddfdf81797d64f4c205464a7`
+- `backend/app/dataModel/spatial/grid/coordinateSpace.py`: `9e9dcf9ad442bb6da4628cee1f9dc52881c4aec58f66d3bd0323fd066a36757c`
+- `backend/app/dataModel/spatial/regionShape.py`: `cc7ea9a95314efc30e851ae5e5d2ba58dc4650721008e7e981d1f6fe9bc995cd`
+- `backend/app/dataModel/terrain/designedWater/settings/fieldCompositionPolicy.py`: `1e8eff61e397670dc1372eca5aa5c515fe9e472febca0f6b7422106a546056b9`
+- `backend/app/dataModel/terrain/designedWater/strategyKind.py`: `e08236cb50c96d0b7422f2ce28f2bdb63f3586f028b121f770264256807a726a`
+- `backend/app/dataModel/terrain/enums/eligibilityOp.py`: `ad6655da3a77aa161271408f2f80b46d3c596c3f26319ebb14f059dcf2753523`
+- `backend/app/dataModel/terrain/enums/terrainFillRole.py`: `f4a2c4c9d97a861e6c5ae2fa45aa97b1e80119f12093a3f3223cf81038ac1b65`
+- `backend/app/dataModel/terrain/hillShape.py`: `874f4b504d5ca2d883a7b9bc67ad273c818e9e25a2da2642702260ae06f08fd7`
+- `backend/app/dataModel/terrain/regions/coverageGeometry.py`: `fc48cf71283d5d858c7fea8b95961570726a1261c49b6d2deaf9568123ec77c4`
+- `backend/app/dataModel/terrain/relief/bathymetry/floorProfile.py`: `cbaf62da241226efcf00565fec8d721bef08529f0248b590c65f9ebc910be2fa`
+- `backend/app/dataModel/terrain/relief/enums.py`: `9b399827531d04415a8d74cb714bdb6851d80dc1448f048ff5c8dbdc0ffa3a04`
+- `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceCoatingFacts.py`: `6bd0fc6651d14277ee209bdb6021adeb8ff3f6e5bfac2162d32146eb88d24d74`
+- `backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py`: `10a91e3464c1cbd48ac27035ea37f80f027773e4e71202593c729e1207ed8d4b`
+- `backend/app/dataModel/terrainMasks/mountain/enums.py`: `8ca09a556934e16d204fe59561eb9b90cb36b0112c7aa7e63f0c2152b7f81b68`
+- `backend/app/dataModel/topology/enums/worldTopologyMode.py`: `9e579a747520f0fb9e0e06e4c191ee8c59a9dae9cdc3ba2d56d6cbaa6451bd65`
+- `backend/app/dataModel/topology/worldBounds.py`: `b0805872cb7fb6ab05900c7cd7b867388be5052746baf0429445d074a0493497`
+- `backend/app/dataModel/topology/worldTopology.py`: `59f5f6acbfe6b46946d2cac0585dd61eaecd01bfb1aa48317fef5cea1d706960`
+- `backend/app/dataModel/validation/diagnostics/fieldPathError.py`: `33cedd25d406a7682f4e325affb12cff3e6741fafc29b6b3c7d4b2921f9f417a`
+- `backend/app/dataModel/validation/diagnostics/runtimeIssueContext.py`: `0c8d4f6294562c874df328f6ca19cc0f2b750e78130eb1fec5106aa2da7f4f55`
+- `backend/app/dataModel/validation/enums/resolutionMode.py`: `04eff0dfd7287e37863d3841792a9bfceab1bc0b96c17bdcc70fd63e0b5fbb77`
+
+### 15.14. Caps: воспроизводимые existing TLV пробы
+
+Это disposable исследовательские модели через pydantic.create_model для трёх
+предложенных storage shapes, **не SP-P1/новые production declarations/codecs**.
+Использован existing canonicalCodec.encode; TLV counter только читает bytes по
+9-byte header, рекурсирует в tags 6/7/8/9 и считает все wrappers/name strings.
+Depth top=1, width=max immediate children. Никакой bounded decoder не реализован.
+Small fixtures также прошли existing decode→encode byte equality; большие
+fixtures измерены encode+scan без дорогого copying legacy decode.
+
+Общая fixture: planar bounds [0,63]², world='w', region='r', input/output hashes
+32 repeated bytes, canonical source contract, schema/algorithm=1. Dependency slots
+ровно семь sorted EF-1; для sizing contract names равны slots, **это synthetic
+ref graph, не accepted producer proof**. Dry bed z=0, z bounds [-1,10], rows full
+square, no wet runs/body/union/mapping. Shore=MapCellHydrology.shore(SEA), остальные
+fields actual defaults; protection при включении содержит все XY. Root catalog
+synthetic ty=0,tx=0..N-1, SHA='0'*64,nbytes=1024; это wire-size catalog probe,
+не утверждение coverage этих refs. UID/diagnostic/string длины не универсальные:
+длинные значения могут законно вызвать byte/resource refusal.
+
+| Fixture | Bytes | TLV nodes | Depth | Max width | Existing decode parity / expected caps |
+|---|---:|---:|---:|---:|---|
+| shard side=1 shore=False protect=False | 1552 | 130 | 19 | 6 | True; ACCEPT structural/bytes |
+| source | 1206 | 109 | 18 | 9 | True; ACCEPT structural/bytes |
+| envelope | 6544 | 506 | 24 | 9 | True; ACCEPT structural/bytes |
+| shard side=16 shore=True protect=False | 136315 | 11328 | 19 | 256 | True; ACCEPT structural/bytes |
+| shard side=64 shore=False protect=True | 345563 | 33712 | 19 | 4096 | True; ACCEPT structural/bytes |
+| shard side=64 shore=True protect=False | 2135515 | 177072 | 19 | 4096 | not run (large legacy decode); REFUSE old caps |
+| shard side=64 shore=True protect=True | 2262491 | 189360 | 19 | 4096 | not run (large legacy decode); REFUSE old caps |
+| root entries=0 | 5966 | 452 | 24 | 11 | True; ACCEPT structural/bytes |
+| root entries=1 | 6482 | 489 | 24 | 11 | True; ACCEPT structural/bytes |
+| root entries=1024 | 535118 | 38340 | 24 | 1024 | True; ACCEPT structural/bytes |
+| root entries=14157 | 7324879 | 524261 | 24 | 14157 | not run (large legacy decode); ACCEPT structural/bytes |
+| root entries=14158 | 7325396 | 524298 | 24 | 14158 | not run (large legacy decode); REFUSE old caps |
+| root entries=65536 | 33887822 | 2425284 | 24 | 65536 | not run (large legacy decode); REFUSE old caps |
+
+Nested diagnostic union probe (ReferenceIssueContext + RuntimeIssueContext,
+path=('hydrology',0), face=NORTH, fallback enum values NOTICE/DEFAULT_APPLIED):
+**1316 bytes /107 nodes /depth15 /width9**, existing decode re-encode identical.
+Это codec union compatibility, не producer semantic fixture.
+
+**Конкретное предложение на пользовательское решение:** shard node cap
+**131072→262144**. 4096 SHORE без protection =177072 nodes, с полной protection
+=189360; оба в 4 MiB и depth64/width65536. При новом cap оба ACCEPT. Сохраняются
+bytes root16 MiB/shard4 MiB, root nodes524288, depth64, container65536 и field caps
+4096. Новый cap не обещает принять любые длинные UID/полные drainage/diagnostics:
+все ограничения одновременны, oversized value/source явно REFUSE без truncation.
+Новые числа **не приняты**. Если пользователь сохраняет старый cap, эти два
+полных SHORE fixtures — сознательный REFUSE, не parser defect.
+
+Root caps предлагается сохранить: 65536 — ceiling коллекции, не гарантированная
+capacity. В измеренном catalog profile N≤14157 проходит node cap, N=14158
+REFUSE (524298>524288), хотя bytes проходят. N=65536 нарушает и bytes, и nodes.
+Дополнительные tables/diagnostics уменьшают доступную capacity. Это согласуется
+с §15.11: source вне caps явно отклоняется; paged-root не внедряется молча.
+Root empty catalog допускается только для empty observed coverage source;
+не является доказательством all-world dry. Single observed cell requires shard.
+
+Граничные field/parser expectations: 4097 surface/protected/wet/shore entries —
+REFUSE field cap; duplicate/foreign coordinates — REFUSE domain admission до
+публикации независимо от bytes; depth65/node cap+1/container65537 — REFUSE parser;
+bytes cap+1 — REFUSE до decode. Эти cases — **расчёт ожидаемого admission**, не
+исполнение ещё отсутствующего bounded parser. Arbitrarily long scalar не обход
+byte cap. Structural cap не численный time/heap SLA, как принято §15.11.
+
+#### 15.14.1. Воспроизведение исследования
+
+Ниже два самостоятельных фрагмента запускаются последовательно из repository
+root через backend/.venv/Scripts/python.exe; сохранять их следует во временные
+файлы с указанными именами, удалить после исследования. Первый создаёт lock и
+ID dictionary из actual declarations, второй использует его для existing codec
+проб. Это audit recipe, не новый тестовый/production module или SP-P1.
+
+`.sp-p0-probe.tmp.py`:
+
+```python
+import sys,typing,dataclasses,hashlib
+from pathlib import Path
+sys.path.insert(0,str(Path('backend').resolve()))
+from pydantic import BaseModel
+from enum import Enum,StrEnum
+from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+from app.dataModel.hydrology.query.source import CanonicalOpenWaterSource,WaterMembershipRun
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.artifacts.references import ArtifactRef,ArtifactKind
+from app.dataModel.registryKey import RegistryKey
+entries={e.python_type:e.type_id for e in SURFACE_MANIFEST.entries}
+entries.update({WaterMembershipRun:60004,CanonicalOpenWaterSource:60007,PlanEnvelope[CanonicalOpenWaterSource]:60008,ArtifactRef:60005,ArtifactKind:60006})
+seen=set();aliases={};rows=[]
+def walk(t):
+ if isinstance(t,typing.TypeAliasType):
+  if t.__name__ not in aliases:aliases[t.__name__]=repr(t.__value__);walk(t.__value__)
+  return
+ if hasattr(t,'__supertype__'):aliases[t.__name__]=repr(t.__supertype__);walk(t.__supertype__);return
+ if isinstance(t,Enum):walk(type(t));return
+ if typing.get_origin(t) is not None and dataclasses.is_dataclass(typing.get_origin(t)):walk(typing.get_origin(t))
+ if typing.get_origin(t) is RegistryKey:return
+ for a in typing.get_args(t):walk(a)
+ if not isinstance(t,type) or t in seen:return
+ if not (issubclass(t,(BaseModel,Enum)) or dataclasses.is_dataclass(t)):return
+ seen.add(t)
+ name=t.__module__+'.'+t.__name__
+ if issubclass(t,Enum):shape='; '.join(n+'='+repr(getattr(v,'wire_value',v.value)) for n,v in t.__members__.items())
+ else:
+  fs=t.model_fields if issubclass(t,BaseModel) else {f.name:f for f in dataclasses.fields(t)}; hints=typing.get_type_hints(t,include_extras=True);parts=[]
+  for n,f in fs.items():
+   a=f.annotation if issubclass(t,BaseModel) else hints[n];walk(a);d='MISSING' if f.default is dataclasses.MISSING else repr(f.default);factory=getattr(f,'default_factory',None)
+   if factory is not None and factory is not dataclasses.MISSING:
+    try:d='factory→'+repr(factory())
+    except:d='factory:'+getattr(factory,'__qualname__','unknown')
+   parts.append(n+': '+repr(a)+'; default='+d+ ('; metadata='+repr(f.metadata) if hasattr(f,'metadata') else ''))
+  shape='<br>'.join(parts)
+ rows.append((entries.get(t,'abstract'),name,shape))
+for t in [PlanEnvelope[CanonicalOpenWaterSource],ArtifactRef]:walk(t)
+# Runtime diagnostic enum envelope: finite existing manifest enum set, no latest extension.
+for e in SURFACE_MANIFEST.entries:
+ if e.kind.value=='enum':walk(e.python_type)
+out=['### 15.13. Проверяемый actual schema lock (2026-11-02)','','Baseline: traversal actual model_fields/dataclass fields, get_type_hints(include_extras=True), TypeAliasType.__value__, всех union/generic arguments. Порядок fields — wire order; PydanticUndefined/MISSING = required. Factory baseline указан как значение; canonical wire содержит все fields, decoder не применяет defaults. 600xx — предлагаемые IDs, остальные existing. RegistryKey[R] — строка, R phantom marker и не payload registry. Abstract StrEnum не concrete wire enum (см. diagnostic admission ниже).','','| ID | Qualified record / enum | Ordered fields / defaults / metadata / enum wire values |','|---|---|---|']
+for i,n,s in sorted(rows,key=lambda r:int(r[0]) if isinstance(r[0],int) else 999999):out.append(f'| {i} | `{n}` | '+s.replace('|','\\|')+' |')
+out+=['','Alias closure:','']
+for n,s in sorted(aliases.items()):out.append('- `'+n+' = '+s+'`')
+Path('.sp-p0-lock.tmp').write_text('\n'.join(out),encoding='utf8')
+print('records',len(rows),'aliases',len(aliases))
+
+```
+
+`.sp-p0-count.tmp.py`:
+
+```python
+exec(open('.sp-p0-probe.tmp.py',encoding='utf8').read())
+from pydantic import create_model,ConfigDict,StrictInt
+from app.dataModel.planning.identity.planKey import PlanKey,WorldPlanScope
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.planning.contracts.planDependency import PlanDependency
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.topology.worldBounds import WorldBounds
+from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
+from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage,CoverageSpan
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
+from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest,RegisteredTypeEntry,CanonicalTypeKind
+from app.application.encoding.canonicalCodec import encode,decode
+C=ConfigDict(frozen=True,strict=True,extra='forbid',revalidate_instances='always')
+SR=create_model('HydrologyShardRef',__config__=C,tx=(StrictInt,...),ty=(StrictInt,...),artifact=(ArtifactRef,...))
+S=create_model('HydrologyPackShard',__config__=C,source_ref=(PlanRef,...),tx=(StrictInt,...),ty=(StrictInt,...),bed=(FineSurfaceWindow,...),wet_runs=(tuple[WaterMembershipRun,...],...),shore_rows=(tuple[tuple[tuple[int,int],MapCellHydrology],...],...))
+R=create_model('HydrologyPackRoot',__config__=C,source_ref=(PlanRef,...),dependencies=(tuple[PlanDependency,...],...),diagnostics=(tuple[PlanDiagnostic,...],...),topology=(WorldTopology,...),coverage_region_uid=(str,...),z_min=(int,...),z_max=(int,...),bodies=(tuple[WaterBody,...],...),unions=(tuple[PhysicalWaterUnion,...],...),source_mapping=(SourceBodyMapping,...),shards=(tuple[SR,...],...))
+for t,i in [(R,60001),(SR,60002),(S,60003)]:entries[t]=i
+manifest=CanonicalSchemaManifest(entries=tuple(RegisteredTypeEntry(type_id=i,python_type=t,kind=CanonicalTypeKind.ENUM if issubclass(t,Enum) else CanonicalTypeKind.RECORD) for t,i in entries.items()))
+ref=PlanRef(key=PlanKey(world_uid='w',scope=WorldPlanScope(),contract_id='hydrology.canonical_open_water',schema_version=1,algorithm_version=1,input_fingerprint=b'i'*32),output_fingerprint=b'o'*32)
+slots=('fine_water','hydrology_routes','native_final','pre_water_surface','prepared_natural','river_relief','water_placement')
+deps=tuple(PlanDependency(slot=s,ref=ref.model_copy(update={'key':ref.key.model_copy(update={'contract_id':s})})) for s in slots)
+top=WorldTopology(mode=WorldTopologyMode.PLANAR,bounds=WorldBounds(x_min=0,x_max=63,y_min=0,y_max=63))
+def counts(b):
+ nodes=depth=width=0
+ def scan(pos,end,d):
+  nonlocal nodes,depth,width
+  nodes+=1;depth=max(depth,d);tag=b[pos];stop=pos+9+int.from_bytes(b[pos+1:pos+9],'big');assert stop<=end
+  if tag in (6,7,8,9):
+   cur=pos+9;n=0
+   while cur<stop:cur=scan(cur,stop,d+1);n+=1
+   width=max(width,n)
+  return stop
+ assert scan(0,len(b),1)==len(b)
+ return len(b),nodes,depth,width
+results=[]
+def measure(label,v,expected):
+ b=encode(v,manifest); c=counts(b)
+ # Existing decoder roundtrip only small fixtures: large tuple decoder is known copying path.
+ parity='not run (large legacy decode)' if c[1]>50000 else str(encode(decode(b,type(v),manifest),manifest)==b)
+ results.append((label,*c,expected,parity))
+for side,shore,protected in [(1,False,False),(16,True,False),(64,False,True),(64,True,False),(64,True,True)]:
+ cells=tuple((x,y) for y in range(side) for x in range(side))
+ bed=FineSurfaceWindow(coverage=RegionCoverage(region_uid='r',spans=tuple(CoverageSpan(y=y,x0=0,x1=side) for y in range(side))),surface_z=tuple((xy,0) for xy in cells),topology=top,protected_cells=frozenset(cells) if protected else frozenset())
+ rows=tuple((xy,MapCellHydrology.shore(HydrologyShoreKind.SEA)) for xy in cells) if shore else ()
+ src=CanonicalOpenWaterSource(space=__import__('app.dataModel.spatial.grid.coordinateSpace',fromlist=['CoordinateSpace']).CoordinateSpace.WORLD_FINE_GRID,bed=bed,z_min=-1,z_max=10,wet_runs=(),bodies=(),unions=(),source_mapping=SourceBodyMapping(entries=()),shore_rows=rows)
+ shard=S(source_ref=ref,tx=0,ty=0,bed=bed,wet_runs=(),shore_rows=rows)
+ measure(f'shard side={side} shore={shore} protect={protected}',shard,'old 131072 reject if nodes exceed; proposed 262144 accept')
+ if side==1:
+  measure('source',src,'accept');measure('envelope',PlanEnvelope[CanonicalOpenWaterSource](ref=ref,dependencies=deps,payload=src,diagnostics=()),'accept')
+for n in [0,1,1024,14157,14158,65536]:
+ ars=tuple(SR(tx=i,ty=0,artifact=ArtifactRef(kind=ArtifactKind.BLOB,format_key='hydrology.open_water.shard.tlv',format_version=1,content_hash='0'*64,nbytes=1024)) for i in range(n))
+ root=R(source_ref=ref,dependencies=deps,diagnostics=(),topology=top,coverage_region_uid='r',z_min=-1,z_max=10,bodies=(),unions=(),source_mapping=SourceBodyMapping(entries=()),shards=ars)
+ measure(f'root entries={n}',root,'all caps simultaneous')
+Path('.sp-p0-counts.tmp').write_text(repr(results),encoding='utf8');print(results)
+
+```
+
+
+### 15.15. Полный mutation disposition и namespace exclusion
+
+Статический поиск backend/app по filesystem write/replace/extract/mkdir + прямым
+WorldPackWriter/PackManifestStore/sidecar callers нашёл следующие **Pack sinks**.
+ZIP upload temp и logs вне Pack namespace не являются Pack publication.
+Export/reader paths read-only. Полнота здесь — source inventory, не runtime proof
+отсутствия стороннего процесса с доступом к directory.
+
+| Sink / callers (от backend/app) | Exact pre-mutation admission / disposition |
+|---|---|
+| core/container/packs.py:world_pack_writer_for/world_pack_writer; WorldPackWriter.__init__ | Acquire namespace lifetime ownership **до load/injected manifest inspection и ensure_dirs**. Admit on-disk head и supplied manifest, equality world/namespace/version; loaded/injected V2 refusal до dirs. Missing head разрешён только explicit NEW_V1 namespace under ownership. Не доверять injected V1 поверх on-disk V2 |
+| io/worldPackWriter.py:_atomic_write → write_world_map_tile/write_wilderness_chunk/write_location_terrain/write_climate_coarse/write_climate_tile | Require active same lifetime ownership + immutable admitted V1 mode до mkdir/temp.write_bytes/replace. Не ждать save_manifest. Serialize same namespace writes, включая одинаковые .tmp имена |
+| тот же encode_settlement_structure_tmp/publish_settlement_structure | До tmp mkdir/write и os.replace; receipt retry также под lifetime ownership. Ownership удерживается до manifest commit/abort cleanup, не освобождается между encode и publish. Повторный вызов старого writer после закрытия operation запрещён |
+| тот же write_locations_index | Guard до parent.mkdir/write_text; direct index write — mutation даже без manifest save |
+| тот же merge_grade_cell_slots_tile/location → io/gradeSlotSidecar.py:merge_grade_slot_sidecar | Guard до read-modify-write sidecar (mkdir/write_text); direct helper получает проверяемое namespace ownership, не raw path как разрешение. Других production direct callers helper не найдено |
+| sync_world_metadata/_upsert_tile/_replace_tile/commit_chunk/recalc_wilderness_status/recalc_manifest_counters/save_manifest | Ownership guard до in-memory mutable manifest mutation; save повторяет V1/world/roots check до recalc/hash и store. Exposed writer.manifest не capability; caller mutations не обходят final strict admission |
+| io/packManifestStore.py:save → mkdir/mkstemp/replace/unlink cleanup | Require active matching namespace ownership до первой mutation и V1-only admitted manifest. Standalone store.save не обход writer. Cleanup остаётся в том же ownership scope |
+| io/worldPackPaths.py:ensure_dirs | Только под admitted owner; bare paths/world UID не право на запись. Путь canonical resolved root входит в identity, path aliases не отдельные locks |
+| import_/packImportService.py:import_zip → api/routes/worlds.py:import_world_pack | ZIP inspect/stage вне destination; acquire destination ownership; verify target V1/NEW_V1 и incoming manifest V1 до destination mkdir/extract. Incoming V2 или target V2 → refusal. Нельзя inspect после extractall |
+| pack/refine/fine/fineRectDrain.py; fine/chunk/fineChunkPersist.py; fine/fineRefineGradePersist.py; pack/climate/climatePackBakeOrchestrator.py | Удерживать writer operation ownership через весь job/worker pool, persist/finalize/abort. Перед scheduled worker mutation scope ещё жив; cancellation ждёт завершения writers, не просто compute tasks. V2 отказ до terrain/climate/grade blob |
+| materialize/surface/worldSurfaceMaterializationOrchestrator.py; pack/bake/l0/packMaterializationOrchestrator.py; pack/bake/finalize/packBakePublisher.py и packBakeFinalize.py | Общий owner через весь batch/finalization и world-row pack pointer update; V2 legacy job не начинает. DB update не публикует неadmitted namespace и не заменяет CAS |
+
+ZIP exact staging rule: один root manifest.json, duplicate ZIP paths/JSON keys,
+absolute/traversal/escaping normalized paths, symlink entries и archive entries
+outside namespace отвергаются; incoming manifest version/world binding проверяются
+до target mutations. Обработчик uploaded tmp только transport, admission в service,
+тот же для server path= input. Проверенный archive переносится в private staging
+outside active namespace; source zip cannot change between inspection/extraction
+(use same opened content or immutable staged copy). Target проверяется после
+acquire owner, не только до staging. Legacy V1 import может сохранять historical
+non-atomic merge semantics, но на failure не V2 publication; V2 import через этот
+путь всегда отказ. Partial V1 import требует explicit repair под тем же owner.
+
+**Выбранное design решение для race, без нового выдуманного Snapshot port:**
+единственный mutation owner canonical Pack namespace на полный operation lifetime.
+Это infrastructure responsibility Pack IO/caller lifecycle, не WorldPublicationRef
+и не os.replace. В минимальном rollout используется **остановка и запрет admission
+jobs + исключительное владение storage namespace одним supervisor/process**;
+все cooperating writer/import jobs сериализуются в нём, cross-process legacy
+writers не допускаются access/deployment policy. Существующий process-local
+asyncio lock сам по себе такую гарантию не даёт. Для multi-process deployment
+нужен отдельно доказанный OS-wide/external exclusion механизм до activation;
+он не считается existing capability. Force-expiring lease без fencing всех
+filesystem sinks запрещён: paused writer может ожить после lease expiry.
+
+Race trace: W1 acquired V1 owner → V2 activation requests exclusive maintenance →
+new V1 admissions stopped → wait W1 including pending workers/tmp publication/
+sidecars/store/finalize to finish or terminate with confirmed no further writes →
+exclusive activation acquired → re-read head/generation under exclusion → activate
+V2 → release maintenance **without restoring legacy write access to V2 namespace**.
+Если W1 ещё жив/ownership не подтверждено, activation REFUSE/WAIT, не replace.
+Повторное использование W1 после release запрещено active-owner check; cached
+in-memory V1 manifest не admission. При ошибке/неподконтрольном writer deploy
+не считается fenced, active namespace не переключается.
+
+Rollout ordering: (1) deploy version-aware reads/guards и ownership for **all sinks**;
+(2) fence/drain old binaries, import routes, background/refine jobs и retained
+writer instances; (3) prepare immutable candidate/retention closure separately;
+(4) exclusive maintenance + head recheck, accepted publisher activation; (5) enable
+только accepted V2 callers, legacy mutation stays disabled. Rollback old binary
+использует retained отдельный V1 namespace; writing V2 запрещено. Нельзя поменять
+Pack path на V2, пока live job держит resolved old target без ownership control.
+Эта operational exclusion решает именно design race; actual stop/drain/access
+proof — downstream evidence, а не предположение о Snapshot adapters.
+
+#### 15.15.1. File/import/caller map дополнение
+
+- `application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py` —
+  дополнительный прямой caller encode/publish settlement tmp. Ownership scope
+  охватывает SQL receipt/commit/retry и финальный Pack publish; release после tmp
+  encoding при ещё возможном publish запрещён. Если job восстанавливается после
+  рестарта, он заново acquire/admit target V1 до любых mutations; V2 target refusal.
+- Полный статический direct method-call file roster: settlementOutdoorPackingJob.py;
+  fineRectDrain.py; fineChunkPersist.py; climatePackBakeOrchestrator.py;
+  worldSurfaceMaterializationOrchestrator.py; packBakeFinalize.py;
+  packMaterializationOrchestrator.py; worldMapBakeOrchestrator.py; сам worldPackWriter.py.
+  Это поиск `.write_*/encode_settlement_structure_tmp/publish_settlement_structure/
+  merge_grade_cell_slots_*/save_manifest/commit_chunk/sync_world_metadata`,
+  не заявление dynamic caller closure. Все caller groups под тем же lifetime owner.
+- Existing core/container/packs.py и application/worldData/pack/io/worldPackWriter.py:
+  lifetime admission callers; io/packManifestStore.py, gradeSlotSidecar.py,
+  worldPackPaths.py и import_/packImportService.py требуют ownership перед mutation.
+  api/routes/worlds.py остаётся transport и вызывает service, не реализует lock.
+- Предлагаемый new application/worldData/pack/ownership/__init__.py (пустой) и
+  namespaceOwner.py: Pack-owned operation lifetime/exclusion boundary. Imports
+  pathlib/contextlib/threading или async coordination и typed namespace identity;
+  no hydrology/GEN/Snapshot. Concrete cross-process mechanism не притворяется
+  принятым port; минимальный supported deployment — single exclusive supervisor.
+  Exact implementation API/handle constructors и asynchronous cleanup принимаются
+  отдельно до code-step, semantic preconditions/state machine заданы §15.15.
+- sourceSchema.py содержит fixed 86 concrete entries/shape lock и finite enum
+  admission; packSchema.py добавляет 60001–3 (итого89); no live manifest composition.
+  packCodec.py imports packSchema + boundedCanonicalDecode + data models;
+  packFormats.py registers bytes contracts только через owning composition.
+  Decoder schema scanner проверяет ID/field roster до constructor.
+- source root/shard records импортируют existing data declarations closure, не
+  application codecs/ownership. Pack manifest codec imports только manifest/root
+  declarations; domain payloads не импортирует. Future producer/replay используют
+  одинаковый sourceSchema fingerprint, не отдельную несовместимую таблицу.
+- Folder deltas: new ownership 0→2; import_ и core/container/packs existing files
+  count unchanged; io no new files (existing ceiling debt не расширяется).
+  hydrology/encoding 0→5, pack/encoding 0→2, application/encoding 2→3 по §15.10.5.
+  Точные актуальные counts и все import callers проверяются заново перед code-step;
+  это не разрешение implementation через неподтверждённые lifetime API.
+
+### 15.16. Dispositions, пользовательские решения и downstream evidence
+
+| Finding | Новый disposition |
+|---|---|
+| P0-R1 transitive lock | **Design проработан**: actual fields/defaults/aliases/enum values/IDs + generic/diagnostic finite admission §§15.13/1; storage graph89 entries. Proposed enum restriction требует согласования; GEO-I1-R1 остаётся external review, shapes при его изменении пересверяются |
+| P0-R2 fixtures/caps | **Design проработан измерениями** §15.14: minimal/typical/full4096SHORE/root boundaries. Предложено shard262144 nodes, остальные caps сохранены. Numerical acceptance остаётся решением пользователя, не выведена из §15.11 |
+| P0-R3 ZIP/live-writer race | **Design проработан** §15.15: every sink pre-mutation admission, namespace lifetime owner, drain/exclusive activation, V2 legacy refusal; exact infrastructure API и operational proof остаются implementation gates |
+| Reconstruction/retention | §§15.10.2/5 сохранены; full source replay отдельный audit, closure=root+all shards, no lazy touched-only retention |
+
+**Предъявляется на согласование единый storage design candidate**, совместимый с
+принятыми решениями §15.11. Нужны конкретные пользовательские решения:
+(а) finite diagnostic enum roster snapshot и exact shapes/IDs этого lock;
+(б) shard node cap262144 вместо131072 с одновременными прочими caps, включая
+ограниченную эффективную root capacity; (в) namespace lifetime exclusion и
+single-exclusive-supervisor rollout как минимально поддержанный режим.
+Это не запись «freeze принят»: до решения пользователя значения остаются proposal.
+GEO-I1-R1 не объявлен закрытым и не замаскирован storage tests.
+
+**Отдельно downstream, не оставшиеся P0 исследования:** реализация strict
+shape/schema guard + bounded parser, golden/source fingerprint parity и
+adversarial execution; actual source→partition→reconstruction equality/full cold
+audit; verified bounded byte-read; accepted closure transfer/pin/CAS/GC lifecycle
+ports и storage publication; writer/import owner API и integration/kill/retry/
+concurrent activation evidence; deployment drain/access exclusion proof;
+heap/time/concurrency SLA measurements и отдельная production acceptance.
+Без этих owning gates нет полного storage/publication/runtime readiness.
+SP-P1, production-код, consumer cutover и публикация не начаты этим исследованием.
+
+
 ## 16. SP-M — materialization/projection contract (2026-11-02)
 
 **Статус: документальный проект НА СОГЛАСОВАНИЕ. Не freeze, не CODE-READY.**
