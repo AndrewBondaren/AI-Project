@@ -33,7 +33,7 @@ flowchart TD
     D -->|"L2 found data/refs"| LOAD["load_player_into_world · boundary OPEN"]
     S -->|"Terminal selected location"| LOAD
     L -->|"Полученные L0 данные/refs"| LOAD
-    F -->|"Полученные full данные/refs"| LOAD
+    F -.->|"Full status не является глобальным gate входа"| FULLSTATUS["Full readiness / дальнейшая подготовка"]
     subgraph WI["world_initialization · parent; contract OPEN"]
         LI["light_bake_initialization"]
         FI["full_bake_initialization"]
@@ -41,6 +41,7 @@ flowchart TD
         FP["world_initialization: публикация full"]
         LI -->|"Prepared light result"| LP
         LP -->|"Accepted light publication"| FI
+    LP -->|"Ранний world-ready result: light data/refs"| LOAD
         FI -->|"Prepared full result"| FP
     end
     subgraph DI["detailed_initialization · parent; contract OPEN"]
@@ -769,7 +770,7 @@ Output родителя: опубликованные L2/C11 результат�
 - В начале select_start_location запускается последовательная light/full проверка через check_world_initialization.
 - При missing light DAG направляет запрос world_initialization/light child, после принятой подготовки/publish повторяет light check в новом pass.
 - Full проверка идёт после light; missing full аналогично направляется world_initialization/full child и повторно проверяется.
-- Только после pre-selection этапа выдаются кандидаты и принимается выбор.
+- Light/full проверки остаются до выбора в принятом порядке, но missing full и длительная full initialization не должны блокировать выдачу выбора/вход глобальной готовностью full. Для раннего входа world-level gate — опубликованный light; локальные L2/C11/placement prerequisites проверяются отдельно.
 - После выбора location выполняется check_location_l2; missing передаётся detailed_initialization с child detailed_location_initialization, затем повторный L2 read на принятом состоянии.
 - Read node не запускает initialization сама. Found не требует лишнего повторного compute. Corruption/read failure не подменяются missing и не запускают автоматический repair/rebake.
 
@@ -853,9 +854,21 @@ Output родителя: опубликованные L2/C11 результат�
 
 ### 11.6. world_initialization
 
+**Уточнение пользователя: ранняя отдача light.** Чтобы пустить игрока в мир без ожидания full, после фактической публикации light родитель немедленно делает этот результат доступным вызывающему flow. Один final Output только после full этому требованию не соответствует.
+
+Контракт делится по моменту выдачи:
+
+- **Light milestone:** world_uid, operation identity, полученные light data/refs, принятая publication/receipt. Выдаётся после light publication либо после подтверждения уже готовой актуальной light base.
+- **Full completion:** world_uid, operation identity, full L0/C23 data/refs и принятая full publication/receipt. Выдаётся после full publication; не задерживает light milestone.
+
+Это смысловые результаты, не автоматически новый enum или два SUCCESS у одной runtime-ноды. Точная доставка раннего typed milestone downstream при продолжающемся parent/full, его durable storage и отличие от progress/SSE — OPEN GEN-ENTRY-LIFECYCLE. Нельзя обозначать его RequiredOutput финального родителя, который ещё не завершён, без нового принятого runtime binding.
+
+Приготовленный light без publication не открывает вход. Light readiness не означает готовность выбранного L2/C11 или безопасной player position. Продолжение full после начала gameplay должно соблюдать запрет rebake frozen base Pack: допустимый extension/publication path требует отдельного domain решения; ранний вход этот gate не отменяет.
+
+
 **Публикация по этапам — принято:** light child готовит → parent публикует light → full child готовит на принятой light base → parent публикует full. Light publication receipt — prerequisite full child. Если light был готов ранее, его актуальная принятая publication переиспользуется; новая публикация ради пустой light работы не требуется.
 
-Промежуточный light receipt не является terminal success всего запрошенного full flow. Full failure не откатывает уже принятую light публикацию. Durable parent phase и отдельные operation/idempotency identities light/full publication должны позволять resume без двойной публикации; exact model остаётся частью GEN-ENTRY-LIFECYCLE.
+После принятой light publication родитель сразу предоставляет light readiness/data refs для входа; ожидание full не является обязательным global world-entry gate. Это отдельный завершённый light milestone, но не terminal success всей full подготовки. Full failure не отзывает уже принятую light готовность. Durable parent phase и отдельные operation/idempotency identities light/full publication должны позволять resume без двойной публикации; exact model остаётся частью GEN-ENTRY-LIFECYCLE.
 
 
 **Input:** общие world/operation/publication identities; результаты check_light_bake/check_full_bake с missing scopes и уже полученными актуальными refs; существующие generator requests/plans/resource policy по contract freeze. Не требует location для L2.
