@@ -259,6 +259,9 @@ class SqliteArtifactHolders:
                         and h.event_kind == "release" for h in rows)
                     if not released or not (retention or any(h in held for h in planned.get(ref, []))):
                         raise ValueError("missing operation hold or previous handoff")
+            # TODO(4C3-B-REV-1): validate holder chains for every metadata destination
+            # before the first append, including refs outside retained_refs.
+            # See .cursor/plans/world-domain-4c3-b-review-debt.md (repository root).
             for ref, snapshot_holders in planned.items():
                 for holder in snapshot_holders:
                     await self.acquire(ref, holder)

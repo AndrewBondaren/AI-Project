@@ -15098,3 +15098,84 @@ preparation. Storage не получает права угадывать domain 
 revision value types означают reuse формы, не доказательство accepted Snapshot
 ports/pin/overlay. Статусы SP-1, EF-1, GEO-SPATIAL-CONTRACT остаются **НА ПРИЁМКЕ**;
 пользователь принимает каждый результат отдельно. Код и G10-A cutover не начаты.
+
+### EF-1.13. Окончательный пакет трёх отдельных приёмок (2026-11-02)
+
+**Все три результата готовы к приёмке; приёмка пользователем ещё не объявлена.**
+Это acceptance scope, не новый архитектурный вариант и не разрешение реализации.
+Обязательное действие пользователя — явно принять каждый из трёх результатов ниже;
+повторно выбирать уже принятые A/R1/G1/Z и F1/F2/F3 не требуется.
+
+**Проверка изменений после последнего review:** редакции финальных вердиктов
+EF-1.12 и Spatial §14.12 сохранены в `0c0ce092`; сравнение обоих owning-планов
+`0c0ce092..11891e1c` и их working tree до подготовки этого пакета не показало
+изменений. Поэтому весь caller audit не повторялся. Повторно сверены exact
+положения F1/F2/F3, source admission derivation и gates. Код, GEN-DAG draft и
+непринятый Snapshot B не использованы как accepted dependencies.
+
+**Закрытые findings:** Failure.errors — required nonempty
+tuple[SpatialReadError,...], каждая запись со своим reason/issue; primary reason
+и failure.issues отсутствуют. Все фактически найденные ошибки сохраняются;
+непроведённые dependent checks не создают ошибок. Slice.issues остаётся отдельной
+preview диагностикой. Physical bed_z/level_z не подменяются clipped z0/z1;
+F2 before-validation/nested checks явно заданы. Captured RiverReliefInput derivation
+и input proofs уточнены в EF-1.5. Ошибочное G10-A→SP-P0/P1 ребро устранено в
+EF-1.8 и Spatial ARCH-9. Повторных блокирующих findings в этом scope нет.
+
+#### Приёмка 1 — SP-1
+
+- **Предмет:** Spatial §§14.1–14.6 с действующими уточнениями §§14.9–14.10 (F1/F2/F3),
+  совместной сверкой §14.11 и verdict §14.12. Exact shared window/request/result/
+  errors/revisions, async read protocol, seven-file/import map и typed validation.
+- **Решение пользователя, ожидается:** принять общий SP-1 в этом scope. Частные
+  F1/F2/F3 уже приняты; это не заменяет общего решения.
+- **Вердикт:** ГОТОВ К ПРИЁМКЕ. Блокирующих архитектурных findings нет.
+- **Разблокирует:** shared contract prerequisite профильных freezes, включая SP-M;
+  вместе с принятой совместной границей — SP-P0 по его собственным gates. Убирает
+  неопределённость общей read оболочки для domain/reader проектирования.
+- **Не входит:** реализация shared моделей/validators/readers, domain/source acceptance,
+  root schema/codec/budgets, Pack IO/publication/pin, runtime Snapshot/overlay,
+  production activation. SP-P1 не начинается без собственного prerequisite SP-P0.
+
+#### Приёмка 2 — GEO EF-1
+
+- **Предмет:** EF-1.1–1.9 с нормативными уточнениями EF-1.10, ledger EF-1.11 и
+  verdict EF-1.12; exact admission derivation включена в EF-1.5. A fine P2,
+  R1 membership/G1 final bed, payload/physical/clipped intervals, dry/unknown,
+  source graph/refs/errors, POJO/API/files/imports/versions и HSP dispositions.
+- **Решение пользователя, ожидается:** принять документальный exact domain freeze.
+  A/R1/G1, дорогая preparation, canonical geometry priority и `(bed,level]` уже
+  выбраны; дополнительных архитектурных выборов в этом пакете нет.
+- **Вердикт:** ГОТОВ К ПРИЁМКЕ. Блокирующих findings нет.
+- **Разблокирует:** domain-freeze prerequisite отдельного GEO implementation scope;
+  вместе с SP-1 и совместным agreement снимает контрактную блокировку producer
+  work по собственным GEO gates. Позволяет storage owner опираться на exact source
+  specification вместо догадок о water payload.
+- **Не входит:** фактический producer code/cutover, concrete production participant
+  roster/capture/registration closure и real native join G10-A/SP-H; codec IDs,
+  Pack root/index/budgets SP-P0; Pack reader SP-3; exact L2 method split и activation
+  SP-M/SP-4; river-volume SP-H2. Приёмка документа не объявляет эти проверки пройденными.
+
+#### Приёмка 3 — GEO-SPATIAL-CONTRACT
+
+- **Предмет:** совместный producer/read boundary, определённый разделами
+  GEO-SPATIAL-CONTRACT обоих планов, с актуальным exact содержанием GEO EF-1.4/1.5/
+  1.8/1.10 и Spatial §§14.2–14.5/14.9–14.11; итоговый verdict — EF-1.12.
+  Исторические OPEN/предложения не подменяют эти последующие точные уточнения.
+- **Решение пользователя, ожидается:** отдельно принять совместимость domain T и
+  shared read contract, source/revision binding и границы двух независимых веток.
+  Приёмка одного SP-1 или EF-1 не считается неявной совместной приёмкой.
+- **Вердикт:** ГОТОВ К СОВМЕСТНОЙ ПРИЁМКЕ. Блокирующих расхождений нет.
+- **Разблокирует:** после приёмки соответствующих SP-1/EF-1 — согласованную domain
+  boundary для GEO producer по его gates и storage SP-P0 по его gates. Storage
+  SP-P1 следует после собственной приёмки SP-P0. **G10-A не prerequisite SP-P0/P1.**
+- **Не входит:** accepted producer source/publication evidence, SP-P0/1/2/3 outputs,
+  Pack reader/pin, L2/gameplay activation, runtime overlay/Q01 и river-volume.
+  Ветки сходятся на SP-P3I: там потребуются accepted source и storage prerequisites,
+  затем staged publication/read по соответствующим gates.
+
+Общий scope этих приёмок — архитектурные документы и compatibility. Численные
+budgets, dynamic caller closure и runtime/cold-Pack tests остаются downstream
+evidence, а не скрытыми блокерами приёмки данного документа. Непринятый Snapshot B
+не получает статус принятого из reuse WorldPublicationRef/ArtifactRef. Все три
+статуса сохраняются **НА ПРИЁМКЕ** до явного решения пользователя.

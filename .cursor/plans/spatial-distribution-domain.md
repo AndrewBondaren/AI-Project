@@ -1900,3 +1900,25 @@ closure, root format/budgets, Pack IO/pin, L2 activation и runtime overlay ос
 downstream scopes. GEN-DAG draft и текущая Snapshot 4C3-B реализация не использованы
 как accepted dependencies; reuse revision value types не принимает Snapshot ports.
 Код не менялся, runtime/tests не запускались; все три результата **НА ПРИЁМКЕ**.
+
+### 14.13. Окончательный пакет приёмки SP-1 / EF-1 / совместной границы (2026-11-02)
+
+Три точных предмета приёмки, обязательные решения пользователя, blockers и
+разблокируемые/downstream scopes собраны в [GEO EF-1.13](./geo-1-designed-water.md#ef-113-окончательный-пакет-трёх-отдельных-приёмок-2026-11-02).
+После последнего verdict §14.12/EF-1.12 изменений этих owning-планов до подготовки
+пакета не обнаружено (сравнение `0c0ce092..11891e1c` и working tree); полный аудит
+не повторялся. F3 errors tuple без primary/выдуманных dependent errors и отсутствие
+G10-A prerequisite для SP-P0/P1 повторно подтверждены.
+
+**SP-1 готов к отдельной приёмке:** предмет §§14.1–14.6 с принятыми уточнениями
+F1/F2/F3 §§14.9–14.10 и совместной сверкой §§14.11–14.12; блокирующих findings нет.
+Решение пользователя — принять общий exact shared freeze, не повторно выбирать F1–F3.
+Приёмка снимает shared prerequisite профильных freezes (SP-M; SP-P0 вместе с
+совместным agreement), но не принимает domain/source, root/codec/budgets, reader
+implementation, producer/runtime/consumer activation. EF-1 и GEO-SPATIAL-CONTRACT
+предъявлены отдельно, их приёмки не следуют автоматически из SP-1.
+
+После совместного agreement producer и storage идут по собственным gates;
+ветки сходятся на SP-P3I, не до SP-P0/P1. GEN-DAG draft и непринятый Snapshot B
+не использованы как accepted dependencies. Код не менялся. **Все три результата
+готовы к приёмке, но остаются НА ПРИЁМКЕ до явного решения пользователя.**

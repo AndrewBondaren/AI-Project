@@ -14,44 +14,59 @@ Owning-план: [GEN-DAG-1](./gen-dag-1-post-geo-ws.md). Infrastructure SoT: [t
 flowchart TD
     API["POST /chat/stream"] --> E["Engine entry / interaction routing"]
     E -->|"Вход без active selection interaction"| W["check_world_entry"]
-    E -->|"Запрос выбора: прямой target binding"| S
-    W -->|"started=true: scene branch"| C["check_scene"]
-    W -->|"started=false: activate or continue parent"| P["initialize_world_entry"]
-    subgraph I["Логическая композиция parent; runtime lifecycle OPEN (§4)"]
-        R["resolve_start_locations"]
-        S["select_start_location"]
-        R -->|"RequiredOutput: кандидаты + policy evidence"| S
-        subgraph CHECKS["check_world_initialization · parent; runtime lifecycle OPEN"]
-            L["check_light_bake"]
-            F["check_full_bake"]
-            D["check_location_l2"]
-            REPORT["Output родителя: light/full/L2 results"]
-            L -->|"found / missing"| REPORT
-            F -->|"found / missing"| REPORT
-            D -->|"found / missing"| REPORT
-        end
-        LOAD["load_player_into_world · состав операции OPEN"]
-        DONE["Подтверждение загрузки и фиксация started · binding OPEN"]
-        S -->|"RequiredOutput: location"| D
-        S -->|"RequiredOutput: start_location"| LOAD
-        REPORT -->|"RequiredOutput: данные проверок; missing блокирует загрузку"| LOAD
-        LOAD -->|"Load completion receipt"| DONE
+    E -->|"Выбор: прямой target binding"| S
+    W -->|"started=true"| C["check_scene"]
+    W -->|"started=false"| P["initialize_world_entry"]
+    P -.->|"Запускает стартовый flow"| S["select_start_location · composite lifecycle OPEN"]
+    subgraph CHECKS["check_world_initialization · родитель проверок; lifecycle OPEN"]
+        L["check_light_bake"]
+        F["check_full_bake"]
+        D["check_location_l2"]
+        L -.->|"Order-only: строго после light"| F
     end
-    P -.->|"Начало/обновление стартового flow"| R
-    S -.->|"select_child response через тот же POST/SSE"| UI["Frontend"]
-    UI -.->|"Следующий POST: выбранный UID"| API
+    S -.->|"Начало flow: проверка через parent"| L
+    F -.->|"found: переход к выбору"| R["resolve_start_locations"]
+    R -->|"RequiredOutput: кандидаты"| OFFER["Выдача вариантов внутри select_start_location"]
+    OFFER -.->|"select_child через SSE"| UI["Frontend"]
+    UI -.->|"Выбранный UID следующим POST"| API
+    S -->|"После выбора: location_uid и проверенные location facts"| D
+    D -->|"L2 found data/refs"| LOAD["load_player_into_world · boundary OPEN"]
+    S -->|"Terminal selected location"| LOAD
+    L -->|"Полученные L0 данные/refs"| LOAD
+    F -->|"Полученные full данные/refs"| LOAD
+    subgraph WI["world_initialization · parent; contract OPEN"]
+        LI["light_bake_initialization"]
+        FI["full_bake_initialization"]
+        LP["world_initialization: публикация light"]
+        FP["world_initialization: публикация full"]
+        LI -->|"Prepared light result"| LP
+        LP -->|"Accepted light publication"| FI
+        FI -->|"Prepared full result"| FP
+    end
+    subgraph DI["detailed_initialization · parent; contract OPEN"]
+        DLI["detailed_location_initialization"]
+    end
+    L -.->|"missing light: dispatch parent world_initialization"| LI
+    F -.->|"missing full: dispatch parent world_initialization"| FI
+    D -.->|"missing L2: dispatch parent detailed_initialization"| DLI
+    LP -.->|"Recheck в новом pass"| L
+    FP -.->|"Recheck в новом pass"| F
+    DLI -.->|"После принятой публикации: recheck в новом pass"| D
+    LOAD -->|"Load completion receipt"| DONE["Подтверждение загрузки и фиксация started"]
     DONE -->|"Parent terminal Output: confirmed + start_location"| C
 ```
 
 ### Как читать карту
 
-- Сплошные стрелки внутри load composition — data dependencies. Стрелки world-entry branch — routing по Output check_world_entry; точные admission/conditional binding ещё не frozen.
-- Пунктир — control/API interaction, **не** RequiredOutput. Повторный HTTP-запрос — новый request, не цикл вычисления одного execution DAG и не удерживаемый coroutine.
-- P — предложенная родительская нода; I — только граница её видимой логической композиции, не второй родительский NodeId. API/E/UI/DONE/REPORT — boundary, операция или Output, а не автоматически новые ноды. CHECKS — родитель check_world_initialization; его child dispatch не принадлежит initialize_world_entry.
-- Light/full проверки могут выполняться независимо от выбора и друг друга на согласованном read context. L2 требует выбранную location. Точный required scope каждой проверки задаётся §9; карта не утверждает необходимость глобального full-world bake на каждом входе.
-- Missing-результат любой bake проверки **не проходит** в LOAD как found. DAG выбирает отдельную preparation/recheck ветку; её ноды/publication пока OPEN и на карте не маскируются фиктивным readiness success.
-- Ветвь existing entry использует собственный scene/action graph; она не запускает первоначальный выбор старта. Повреждённая existing scene не сбрасывает started автоматически.
-- Общая карта охватывает обсуждённый world-entry срез, не весь будущий GEN-DAG (bootstrap/Physics/player-action contracts остаются за пределами принятой карты).
+- **Порядок принят пользователем:** в начале select_start_location — check_light_bake, затем check_full_bake; после них выдача/выбор; только после выбора location_uid — check_location_l2.
+- Пунктир — lifecycle/control/API interaction или явно обозначенный order-only. Сплошные стрелки — данные. Full check не получает light payload как обязательный бизнес-Input только ради последовательности; это order-only dependency.
+- CHECKS — родитель check_world_initialization, которому принадлежат три child checks. Select инициирует проверки через этот parent; initialize_world_entry напрямую их не вызывает. Механизм двух этапов parent (до выбора и после появления location UID) ещё OPEN (§4/§8.0), порядок уже определён.
+- E/UI/OFFER/DONE/LP/FP — boundaries, операции или response, не автоматически новые ноды. LP/FP — публикации родителя world_initialization. Resolve остаётся самостоятельной нодой. Видимая композиция не разрешает скрытый executor в select или генераторе.
+- До выбора нет location UID: check_location_l2 не запускается с None/фиктивной location. Выбранный UID — идентификатор location, не L2 artifact UID; refs получаются из результата L2 read.
+- Missing не выдаётся как found и не допускается в load как готовые данные. Предложенные missing-ветки проходят через parents world_initialization/detailed_initialization (§10); exact dispatch, scope, progress/error и publication/recheck bindings остаются OPEN. Стрелка перехода к выбору обозначает порядок, а не игнорирование missing/error.
+- WI/DI — согласуемые родительские ноды инициализации; стрелки missing/recheck показывают предложенную маршрутизацию между passes, не циклические deps одного execution DAG. Read-ноды сами initialization не вызывают.
+- Новый HTTP-запрос продолжает selection interaction, а не безусловно повторяет light/full на каждый клик. Reuse/revalidation после изменения publication требует принятого lifecycle contract.
+- Граф на совместной приёмке; покрывает world-entry срез, не весь будущий GEN-DAG. First entry принадлежит check_world_entry; отсутствие текущей location_uid в wilderness не сбрасывает started.
 
 ## 2. Актуальные роли и смысловые контракты
 
@@ -71,7 +86,7 @@ Parent/child — согласованная продуктовая роль, н�
 
 ### 2.3. check_light_bake / check_full_bake / check_location_l2
 
-Три самостоятельные read-ноды; каждая возвращает found(data/refs) или missing(required scope). Ошибка чтения/corruption — Error. Input/Output — §9. Domain public methods и внешний техдолг — [GEN-BAKE-READ](./generator-public-bake-reads.md). Нет вызова bake/repair/publication внутри проверки.
+Три самостоятельные read-ноды; в стартовом flow light → full выполняются до выбора, location L2 — после него. Каждая возвращает found(data/refs) или missing(required scope). Ошибка чтения/corruption — Error. Input/Output — §9. Domain public methods и внешний техдолг — [GEN-BAKE-READ](./generator-public-bake-reads.md). Нет вызова bake/repair/publication внутри проверки.
 
 ### 2.4. load_player_into_world
 
@@ -103,7 +118,7 @@ Error: invalid context/identity/reference, corrupt/read failure, невозмо�
 
 **Effects:** нет UI/SSE, scene writes, spawn/load, started flag или вызова select.execute. Runtime публикует candidates; DAG передаёт их select_start_location как RequiredOutput.
 
-**Input select_start_location:** отдельный candidate Output resolve_start_locations + trusted interaction/session context + optional выбранный UID следующего HTTP запроса. **Terminal Output select:** одна выбранная проверенная StartLocationView, не candidates и не загрузка. Resolver evidence валидируется при продолжении; stale candidates требуют явного запуска producer через DAG, не локального повторения его логики в select.
+**Input select_start_location:** отдельный candidate Output resolve_start_locations + trusted interaction/session context + optional выбранный UID следующего HTTP запроса. **Terminal Output select:** одна выбранная проверенная StartLocationView. После выбора этот location UID передаётся в L2 check. Публикация terminal Output select до/после L2 и способ передачи L2 result через parent — часть ещё открытого lifecycle binding; порядок вызовов light → full → выбор → L2 принят. Выбор и L2 found не подтверждают загрузку игрока. Resolver evidence валидируется при продолжении; stale candidates требуют явного запуска producer через DAG, не локального повторения его логики в select.
 
 Новый producer меняет граф/контракты select; exact RequiredOutput binding, source consistency, full POJO/files и stale continuation routing возвращаются на совместный freeze. Общие три режима settings и подтверждённые city/underground_city сохраняются.
 
@@ -560,13 +575,13 @@ Legacy SceneStartLocationSelect пишет SessionScene с level_uid=None и act
 
 Пользователь определил отдельного parent проверки статуса инициализации мира, который вызывает check_light_bake, check_full_bake и check_location_l2. В исходном перечислении full был повторён; набор light/full/L2 следует предыдущему согласованному разделению. Название родителя предложено как check_world_initialization.
 
-Input facts: world identity, publication expectation, location для L2 и явно объявленные scopes трёх проверок. Location не обязана быть стартовой. Exact composition POJO и применимость полного набора вне текущего entry scenario ещё согласуются.
+Input facts world-stage: world identity, publication expectation, scopes light/full. Input facts location-stage после выбора: та же согласованная world context, location и required L2 scope. Location не обязана быть стартовой для общей семантики read. Exact двухэтапный parent Input/lifecycle POJO OPEN: не делать location обязательной до выбора и не запускать L2 с None.
 
-Родитель через engine DAG вызывает три child проверки. Каждая сохраняет собственные Input/Output/Error; check_world_initialization не читает blob/SQL вместо них и не дублирует их логику. Light/full могут выполняться независимо, L2 получает переданную location. Сам parent не запускает bake/repair.
+Родитель через engine DAG вызывает три child проверки по порядку стартового flow: light, затем full до выбора; L2 — только после выбора location. Каждая сохраняет собственные Input/Output/Error; parent не читает blob/SQL вместо них и не запускает bake/repair. Light/full в этом flow не параллельны.
 
 Output facts: world/location identities и согласованная publication; три типизированных вложенных результата light/full/location_l2 (каждый found с data/refs либо missing). Частичные результаты не превращаются в общий ready=true. Error/cancellation дочернего read не маскируется missing; exact propagation/partial failure policy OPEN.
 
-initialize_world_entry больше не является прямым launcher light/full проверок. Кто активирует check_world_initialization и его положение относительно selection/load должны быть явно приняты; текущая карта показывает data prerequisite выбранной location для entry case, а не окончательный engine admission binding. Parent/child механизм также проходит GEN-ENTRY-LIFECYCLE (§4); скрытый executor в генераторе запрещён.
+initialize_world_entry не является прямым launcher bake checks. В стартовом flow select_start_location инициирует world checks в самом начале, а location check — после выбора, через parent check_world_initialization. Exact staged parent/child binding ещё требует приёмки. Parent/child механизм также проходит GEN-ENTRY-LIFECYCLE (§4); скрытый executor в генераторе запрещён.
 
 ### 8.1. check_light_bake
 
@@ -600,7 +615,7 @@ initialize_world_entry больше не является прямым launcher 
 - Только manifest.bake_mode недостаточно: в текущем коде это режим последнего L0 bake (light/full), не история выполнения всех jobs и не доказательство L2. Default light в wire-модели не доказывает наличие L0.
 - AS-IS evidence: WorldPackManifest.tiles содержит world_map_path/hash; location_terrain_entries — location_uid, territory_volume, terrain_path/hash; settlement_structure_entries отдельно содержит status/packed districts. WorldPackMetadata path/hash сами по себе не доказывают completeness/актуальность.
 - Все проверки должны относиться к согласованному состоянию/публикации. После подготовки/commit недостающего повторная проверка использует новое принятое состояние.
-- Между тремя проверками не вводится последовательность только из-за названий bake режимов. Независимые read checks на одной публикации могут выполняться параллельно; L2 check требует переданную проверенную location; в стартовом flow её producer — select_start_location, в других сценариях producer может быть другим. Exact RequiredOutput/order dependencies согласуются с public readiness APIs.
+- В стартовом flow по решению пользователя порядок строго light → full → выбор → location L2. Зависимость light→full — order-only. L2 check требует переданную проверенную location; в других сценариях producer location может быть другим, без изменения read semantics. Exact RequiredOutput/order dependencies согласуются с public readiness APIs.
 - DAG получает три самостоятельных результата и выбирает дальнейшие операции. Какие неполноты блокируют старт и допускается ли локальная готовность вместо глобального full-world completeness — ещё требуется явно согласовать; автоматически запускать full-world bake при входе игрока запрещено.
 
 ### 8.5. Влияние на стадию загрузки
@@ -715,3 +730,169 @@ DAG ветвится по found/missing. При found передаёт сами 
 Если active publication отсутствует целиком, Input содержит publication=None после подтверждённого domain read; результат missing/absent относится ко всему required scope. При found publication обязательно non-null. Read failure не допускает подстановку None и missing. Это явная nullability политика, не фиктивный WorldPublicationRef; read evidence отсутствия требует принятого domain contract.
 
 Read ownership gaps: public immutable light multi-tile result, full/topology result, L2 result/refs, missing scopes и source consistency. AS-IS packFineTerrainReadFacade возвращает dict[str, Any], поэтому не принимается как целевой typed port. Новые POJO/порты на месте этих пробелов без совместного согласования не создаются. Код/регистрация/cutover не менялись.
+
+
+## 10. Родительские ноды инициализации — предложение пользователя 2026-11-02
+
+Пользователь предложил две композиции. В текущей карте фиксируем их как target роли для совместной детализации:
+
+- **world_initialization** → **light_bake_initialization**, **full_bake_initialization**.
+- **detailed_initialization** → пока одна child **detailed_location_initialization**.
+
+Это отдельные initialization ноды, не переименование check_world_initialization/check_light_bake/check_full_bake/check_location_l2. Проверки возвращают found/missing; инициализация подготавливает недостающие результаты. Read-ноды не получают скрытых effects.
+
+### 10.1. world_initialization
+
+Назначение: родитель world-level подготовки light/full. Предлагаемый Input: world identity, согласованные source/publication expectations, requested scope и missing light/full результаты проверок. Точный typed request и phase bindings OPEN.
+
+Дочерние ноды:
+
+- light_bake_initialization: подготовить light/L0 required scope через публичную доменную операцию генератора.
+- full_bake_initialization: подготовить полный L0 и topology C23 — состав явно подтверждён пользователем; готовить только отсутствующие части через согласованные публичные доменные операции. Не считать legacy bake_pack стабильным атомарным контрактом: его nested planning/climate/L0/topology/publication scope требует доменной приёмки.
+
+Когда нужны обе операции, порядок light → full. По решению пользователя готовятся только недостающие части штатного scope: из 10 требуемых тайлов при 7 актуальных готовятся 3. Готовые актуальные результаты не пересоздаются. Stale/corrupt не считаются просто missing и требуют отдельного исхода. Родитель управляет child lifecycle через engine DAG, не вызывает generator internals. По решению пользователя дочерние ноды только готовят результат; world_initialization отвечает за публикацию.
+
+Output родителя: произведённые domain results/immutable refs по выполненным child operations и evidence принятой публикации. Output дочерних нод — prepared results, не publication success. Не возвращать successful readiness до завершения необходимой публикации. Проверяющие ноды должны получить found после recheck соответствующего принятого состояния.
+
+### 10.2. detailed_initialization
+
+Назначение: родитель подготовки detail для переданного scope. Пока включает только detailed_location_initialization; terrain/wilderness/structure дополнительные children автоматически не добавляются.
+
+Input proposal: world identity, **location**, requested L2 scope/LOD, согласованные source/publication expectations и missing result check_location_l2. Привязки к стартовой роли нет: та же операция может обслуживать иную переданную location.
+
+Child detailed_location_initialization подготавливает location L2 через публичную доменную операцию. Заданные coordinate/terrain scope разрешает domain contract. Нельзя использовать location_uid как UID chunk или создавать фиктивный terrain blob для каждого leaf.
+
+Output родителя: опубликованные L2/C11 результаты и publication evidence; Output дочерней ноды: только подготовленные L2/C11 результаты/refs, без изменения active publication. Готовность L2 terrain не означает готовность C11/interiors/фактический spawn. По решению пользователя detailed_location_initialization включает L2 и C11 для settlement-like location. Для остальных location C11 неприменим, а не missing. Дочерняя нода только готовит результат; detailed_initialization публикует его. Nested public operations и граница composition должны быть явно приняты; копирование старого скрытого pipeline не разрешено.
+
+### 10.3. Предлагаемое включение missing-веток
+
+- В начале select_start_location запускается последовательная light/full проверка через check_world_initialization.
+- При missing light DAG направляет запрос world_initialization/light child, после принятой подготовки/publish повторяет light check в новом pass.
+- Full проверка идёт после light; missing full аналогично направляется world_initialization/full child и повторно проверяется.
+- Только после pre-selection этапа выдаются кандидаты и принимается выбор.
+- После выбора location выполняется check_location_l2; missing передаётся detailed_initialization с child detailed_location_initialization, затем повторный L2 read на принятом состоянии.
+- Read node не запускает initialization сама. Found не требует лишнего повторного compute. Corruption/read failure не подменяются missing и не запускают автоматический repair/rebake.
+
+Имена и роли initialization parents/children предложены пользователем; exact missing routing/поведение API пока предлагается и требует приёмки. При started gameplay базовый Pack не перепекается; runtime extension идёт только по принятым domain Patch/Snapshot контрактам. Bootstrap staged Pack activation и runtime Snapshot commit — разные publication paths, не выбор внутри генератора по усмотрению ноды.
+
+### 10.4. Что нужно закрыть до реализации
+
+1. По каждой initialization child совместно определить атомарную публичную domain operation, её nested calls, Input/Output/Error и scope. Имена public compute methods пока не назначаются по аналогии с read methods.
+2. Конкретные effects/staging/publication owner, отмена, retry/operation identity, partial completion и recovery.
+3. Родительские typed Input/Output, порядок/условия child activation и engine binding. Это проходит тот же parent/child lifecycle gate §4; отдельный внутренний executor не создаётся.
+4. Внести новые public generation requirements во внешний owning-план только после согласования exact методов. GEN-BAKE-READ/GEN-READ-1..3 остаются требованиями к чтению и не объявляются закрытыми наличием initialization роли.
+5. Обновить единый graph/contract/file freeze и получить поузловую авторизацию до кода.
+
+Код, concrete bindings, SQL и production cutover не менялись. Player started flag не устанавливается world/detail initialization: он относится к завершённой загрузке игрока.
+
+
+## 11. Контракты initialization нод и reuse POJO — согласование 2026-11-02
+
+### 11.1. Подтверждённые решения пользователя
+
+- Только недостающие части штатных light/full областей: при 7 актуальных готовых тайлах из 10 подготавливаются оставшиеся 3.
+- full_bake_initialization включает **L0 + C23 topology**.
+- detailed_location_initialization включает **L2 + C11** для settlement-like location; вне подходящей location C11 не применяется.
+- Дочерние ноды **готовят**, родительские **публикуют**. Успех child не означает активированную публикацию. **Порядок world_initialization принят пользователем:** light preparation → parent light publication → full preparation на принятой light publication → parent full publication.
+- Предпочтение — reuse POJO генератора, без копирования полей/defaults/validators в DAG.
+
+### 11.2. Инвентарь существующих POJO и решение о reuse
+
+| Существующий тип | Где | Решение |
+|---|---|---|
+| PackTileRef | dataModel/worldPack/bake/packTilePlan.py | Reuse для адресов недостающих L0 тайлов: gx, gy |
+| PackTilePlan | тот же модуль | Reuse domain planning result после решения deep immutability: tiles сейчас list. Не строить план в ноде по собственному алгоритму |
+| DetailedBakeRequest | dataModel/worldPack/bake/detailedBakeScope.py | Reuse request scope=location для detailed child; location_uid обязателен при этом scope; grade/stage defaults из доменного POJO |
+| MaterializationContext | application/worldData/materialize/surface/materializationContext.py | Existing frozen dataclass; кандидат вложенного execution request. Contains resource и legacy persistence knobs — не объявлять готовым target persistence контрактом. Проба CPU/worker policy не задаётся генератором |
+| MaterializationJobReport | тот же модуль | Reuse optional diagnostic report, не payload результата/доказательство публикации |
+| PersistResult | application/worldData/materialize/shared/persistResult.py | Reuse diagnostic counters; total/succeeded/failed не заменяют data/refs |
+| PackDetailedBakeResult | application/worldData/pack/bake/detailed/packDetailedBakeOrchestrator.py | Reuse diagnostic detailed result; frozen dataclass, но находится в concrete orchestrator module. Его перенос в domain-owned contract file — задача owner, не создание дубля |
+| MaterializeResult / TopologyBatchResult | application/worldData/settlementOutdoor/settlementOutdoorContract.py | Mutable dataclasses, string status/optional error; не готовые immutable terminal data для typed ноды. Domain contract gap, не copied fields в engine |
+| PackBakeResult | application/worldData/pack/bake/packBakeResult.py | Не использовать целиком: mutable HTTP DTO, loading_progress dict[str, Any], смешаны report/detailed/settlement. Сохранить как AS-IS response evidence |
+| ArtifactRef | dataModel/artifacts/references.py | Reuse immutable content refs; format keys и domain meaning должны быть приняты; голого tuple refs без binding к scope/owner недостаточно |
+| PlanRef | dataModel/planning/identity/planRef.py | Reuse ссылок на существующие domain plans; не заставлять ноду читать assembler/working maps |
+| WorldPublicationRef | dataModel/worldSnapshot/identity/publication.py | Reuse expected/current publication, optional только при достоверно отсутствующем base |
+| PackActivationResult | dataModel/worldSnapshot/results/publication.py | Reuse bootstrap publication result родителя; ACTIVE означает активацию, READY_INACTIVE не выдавать за опубликованную готовность |
+| SnapshotApplyResult / SnapshotCommitRefs | dataModel/worldSnapshot/results/apply.py | Reuse runtime publication result при committed; неприменимо как замена bootstrap activation. Refusal не означает successful initialization |
+
+Поля собственной композиции ноды — только необходимые identity/request/producer result поля, вкладывающие эти POJO. Generic I/O требуют Pydantic BaseModel root; frozen dataclass может рассматриваться как вложенный тип после проверки boundary/deep immutability. Самостоятельную зеркальную схему отчётов не создавать.
+
+### 11.3. Общая граница preparation contract
+
+Для всех initialization children:
+
+- operation_id: EntityUid — обязательно, устойчивый при retry;
+- world_uid: EntityUid — обязательно;
+- expected_publication: WorldPublicationRef | None — поле обязательно; None только при подтверждённом отсутствии base, не после read failure;
+- requested missing scope — обязательно и nonempty для actual compute; готовые части с согласованными refs передаются как prerequisites, не пересоздаются;
+- domain request/planning refs и execution resource policy — по существующему принятому generator request, без SQL World/NamedLocation и storage writer в node Input.
+
+Точные request/prepared-result POJO генератора для scoped staging пока не найдены. Требуемый child Output должен содержать произведённые artifacts/row-set refs с domain/scope binding и source evidence. Reuse ArtifactRef/PlanRef — компоненты, но не готовая целая модель результата. **Exact type OPEN:** не объявлять новую модель/порт на месте пробела без приёмки domain owner. Это блокирует полный POJO freeze, но смысл I/O ниже определён.
+
+Каждая child выполняет подготовку/staging, не active writes: SQL C23/scene entities и artifact blobs должны возвращаться prepared через принятый domain lifecycle. Прямой вызов legacy метода, который уже пишет SQL/manifest, нарушит согласованное «child готовит — parent публикует».
+
+### 11.4. light_bake_initialization
+
+**Input:** общие identity/publication поля; missing_tiles: tuple[PackTileRef, ...] (обязательно nonempty); необходимые согласованные domain plan refs; execution resource context по принятому generator contract.
+
+**Работа:** подготовить light/L0 для missing_tiles; использовать актуальные parent/source данные; не пересчитывать готовые tiles, не создавать topology/L2 по собственному решению.
+
+**Output:** подготовленный domain light result для тех же tile refs (включает artifacts/refs + source evidence, exact generator POJO OPEN); optional MaterializationJobReport для diagnostics. Нет activated publication и started flag.
+
+**Error semantics:** invalid/mismatched missing scope; stale source; missing required upstream; generation/staging failure; cancelled preparation; incompatible artifact format. Частичный compute не выдаётся за полный успешный result. Existing concrete Error POJO не найдены — состав и reuse/new types на domain freeze.
+
+### 11.5. full_bake_initialization
+
+**Input:** общие identity/publication поля; недостающее полное L0 покрытие через PackTileRef; недостающие C23 settlement scopes (location identities); готовые согласованные L0 prerequisites и domain request/plans. Должна отсутствовать хотя бы одна требуемая часть, не обязательно обе.
+
+**Работа:** подготовить только missing full L0 и missing C23. При готовом L0 и отсутствующем C23 не пересчитывать L0. C23 сохраняется частью ответственности этой child; публичные самостоятельные L0/C23 операции должны быть видимы в engine composition, не скрыты в generator pipeline.
+
+**Output:** подготовленные L0 и C23 domain results/refs по запрошенным missing частям + source/dependency evidence; optional reuse diagnostics reports. Existing TopologyBatchResult не считается пригодным staged SQL data payload. Exact prepared topology type OPEN.
+
+**Error:** ошибки light child плюс topology preparation/placement conflict и несовместимость L0↔C23 dependencies. Нет публикации из child.
+
+### 11.6. world_initialization
+
+**Публикация по этапам — принято:** light child готовит → parent публикует light → full child готовит на принятой light base → parent публикует full. Light publication receipt — prerequisite full child. Если light был готов ранее, его актуальная принятая publication переиспользуется; новая публикация ради пустой light работы не требуется.
+
+Промежуточный light receipt не является terminal success всего запрошенного full flow. Full failure не откатывает уже принятую light публикацию. Durable parent phase и отдельные operation/idempotency identities light/full publication должны позволять resume без двойной публикации; exact model остаётся частью GEN-ENTRY-LIFECYCLE.
+
+
+**Input:** общие world/operation/publication identities; результаты check_light_bake/check_full_bake с missing scopes и уже полученными актуальными refs; существующие generator requests/plans/resource policy по contract freeze. Не требует location для L2.
+
+**Работа:** вызвать light child при missing light, затем full child при missing full/C23; готовые части переиспользовать. Получить prepared child Outputs, проверить соответствие общего source/dependency/publication context, опубликовать через owning publication entrypoint. Между детьми есть две последовательные publication boundaries: родитель сначала публикует light, затем запускает full на полученной публикации и публикует full. Без успешной light publication full не запускается.
+
+**Output:** world/operation identities; результаты по light/full с переиспользованными и созданными refs; обязательный успешный parent publication result. Для bootstrap — PackActivationResult с ACTIVE; для допустимого runtime extension — committed SnapshotApplyResult/refs по owning domain contract. Это фазовые варианты композиции, не «любой receipt подходит всегда».
+
+**Error:** child failure; несовместимые results; stale expected publication; refused/failed commit/activation; invalid artifact refs. Parent success только после публикации, не после счётчиков compute. Exact union/error classes/files OPEN.
+
+### 11.7. detailed_location_initialization
+
+**Input:** общие identity/publication поля; request: DetailedBakeRequest, ограниченный scope=location; недостающий L2 scope и недостающие C11 части по public domain request; готовый L0/C23/terrain prerequisites по необходимым операциям; execution resources.
+
+location_uid обязателен; wilderness branch этого request в данной ноде не запускается. Optional raw map_z не заменяет готовый terrain input. Missing L2/C11 scopes требуют typed domain contracts; их нельзя заменить произвольным dict/list без семантики.
+
+**Работа:** подготовить missing L2; для settlement-like location подготовить missing C11 поверх terrain с учётом C23. При готовом L2 и missing C11 не пересоздавать L2. Для иной location C11 — неприменимо. Нода не запускает interiors и не выбирает player spawn.
+
+**Output:** подготовленные L2 и применимые C11 domain results/refs, source/dependency evidence; optional PackDetailedBakeResult и MaterializeResult только после принятого immutable/domain contract. Exact prepared terrain/structure result types OPEN. Никакой активной публикации.
+
+**Error:** invalid location/request; missing parent light/C23, incompatible terrain/topology; generation/staging/packing error; stale inputs. C11 failure не превращается в успешную «только terrain» загрузку, если C11 входит в requested обязательный состав.
+
+### 11.8. detailed_initialization
+
+**Input:** world/operation/publication identities; location request и missing detail requirements; готовые согласованные prerequisites. Пока один child detailed_location_initialization.
+
+**Работа:** вызвать child для недостающих L2/C11, проверить staged results и опубликовать их через owning publication contract.
+
+**Output:** world/location/operation identities; опубликованные terrain/structure refs по requested scope; успешный publication result как в §11.6 с phase-specific invariants. Generic L2 read afterwards не доказывает C11 readiness; проверка/receipt C11 не теряется при передаче родителю.
+
+**Error:** child failures, domain consistency conflict, invalid refs, refused/failed publication. Started игрока не меняется этой нодой.
+
+### 11.9. Остаток contract freeze — конкретные вопросы
+
+1. **Закрыто ответом пользователя:** world_initialization сначала публикует light, затем запускает full и публикует full. Full child получает новую принятую publication light как expected_publication, а не первоначальную. После full failure опубликованный light остаётся принятой базой; retry проверяет её актуальность и продолжает missing full, не переподготавливает light без причины. Exact durable phase/receipt/recovery binding ещё требует lifecycle freeze.
+2. Генератор должен предоставить immutable prepared result для L0/C23/L2/C11: reuse ArtifactRef/PlanRef и domain POJO без копирования. Текущие public bake методы пишут state и возвращают главным образом diagnostics. Точный prepared contract/owner/files — внешний domain gate; node schema нельзя ложно считать законченной.
+3. Public generator preparation methods и declared errors для children ещё не назначены. Они не равны трём public read methods GEN-READ-1..3; новый контракт согласуется отдельно.
+4. Input/Output root composition names/точные files, parent/child runtime и conditional producer deps остаются до общего freeze. Предлагаемые составы §11.4–11.8 ещё требуют явной поузловой приёмки.
+
+Это контрактный план, не implementation. Новые классы/порты, production nodes и tests не создавались.
