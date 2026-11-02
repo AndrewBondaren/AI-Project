@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | `check_light_bake` | `read_light_bake` | L0 заданного scope: data/immutable refs либо missing | [GEN-READ-1](../../docs/tz_generator_technical_debt.md#gen-read-1) | [GEN-BAKE-READ](./generator-public-bake-reads.md) |
 | `check_full_bake` | `read_full_bake` | Full L0 + требуемая topology: data/refs либо missing | [GEN-READ-2](../../docs/tz_generator_technical_debt.md#gen-read-2) | [GEN-BAKE-READ](./generator-public-bake-reads.md) |
-| `check_location_l2` | `read_location_l2` | L2 owning scope выбранной location: data/refs либо missing | [GEN-READ-3](../../docs/tz_generator_technical_debt.md#gen-read-3) | [GEN-BAKE-READ](./generator-public-bake-reads.md) |
+| `check_detailed_bake` | `read_location_l2` | L2 owning scope выбранной location: data/refs либо missing | [GEN-READ-3](../../docs/tz_generator_technical_debt.md#gen-read-3) | [GEN-BAKE-READ](./generator-public-bake-reads.md) |
 
 Для всех методов: явные world/scope/publication inputs, отдельный Error для corruption/read failure/stale refs; нет генерации, writes, fallback, SQL/filesystem знания в ноде. Это domain reads, не HTTP endpoints и не новый central gameplay facade.
 
