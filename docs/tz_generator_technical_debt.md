@@ -48,6 +48,21 @@
 
 ## Отложенные контракты генераторов
 
+### Публичные reads результатов bake для GEN-DAG (2026-11-02)
+
+**Owner:** генераторный/Pack read домен и topology owner; реализация вне scope GEN-DAG. Имена public methods — target proposal, не уже существующие методы. Plan/acceptance: [GEN-BAKE-READ](../.cursor/plans/generator-public-bake-reads.md). Дублирующая карта: [generator_public_method](../.cursor/plans/generator_public_method.md).
+
+<a id="gen-read-1"></a>
+**GEN-READ-1 — public light bake read.** Severity high, P1, Status open. Consumer `check_light_bake` → target `read_light_bake`. Получение L0 required scope или подтверждённого отсутствия с отдельным Error. Evidence: [WorldPackReader](../backend/app/application/worldData/pack/io/worldPackReader.py), [parentLightLoad](../backend/app/application/worldData/pack/read/parentLightLoad.py); последний сводит missing и OSError/ValueError к None. Нужен публичный scoped typed read, не импорт storage reader в ноду. [Требование и план](../.cursor/plans/generator-public-bake-reads.md#2-требования-к-контрактам).
+
+<a id="gen-read-2"></a>
+**GEN-READ-2 — public full bake read.** Severity high, P1, Status open. Consumer `check_full_bake` → target `read_full_bake`. Полный L0 и требуемая topology как данные/refs либо missing, согласованный read scope/revisions. Evidence: [PackCompletenessClassifier](../backend/app/application/worldData/pack/bake/finalize/packCompletenessClassifier.py), [PackLoadingProgressFacade](../backend/app/application/worldData/pack/read/packLoadingProgressFacade.py): классификация/проценты по manifest не являются data read и не доказывают topology. Exact Pack/topology composition owner OPEN. [Требование и план](../.cursor/plans/generator-public-bake-reads.md#2-требования-к-контрактам).
+
+<a id="gen-read-3"></a>
+**GEN-READ-3 — public location L2 read.** Severity high, P1, Status open. Consumer `check_location_l2` → target `read_location_l2`. Полные terrain L2 данные/refs для owning required scope переданной location либо missing; стартовая роль не является частью read-контракта. Evidence: [WorldPackReader](../backend/app/application/worldData/pack/io/worldPackReader.py), [PackFineTerrainReadFacade](../backend/app/application/worldData/pack/read/packFineTerrainReadFacade.py): debug sample/dict не является typed terminal read. Нужны owner scope resolution и immutable result/ref lifecycle. [Требование и план](../.cursor/plans/generator-public-bake-reads.md#2-требования-к-контрактам).
+
+Закрытие каждого долга требует принятого public Input/Output/Error, implementation evidence и доменной приёмки. До этого соответствующий concrete binding GEN-DAG OPEN; записанные target names не разрешают код или cutover.
+
 ### PORTAL-T-1 — задание назначения портала в генераторе и прибытие в локацию
 
 **Severity:** info. **Status:** open. **P:** P3 (не приоритет).

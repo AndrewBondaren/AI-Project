@@ -9,14 +9,14 @@ from app.application.worldSnapshot.validation.receiptProvenance import validate_
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.worldSnapshot.identity.refs import SnapshotRef, WorldSnapshotRef, PlayerSnapshotRef
+from app.dataModel.worldSnapshot.identity.refs import SnapshotRef, WorldSnapshotRef, PlayerSnapshotRef, SnapshotChainKind
 from app.dataModel.worldSnapshot.metadata.envelope import (
     SnapshotEnvelope, WorldSnapshotMetadata, PlayerSnapshotMetadata,
 )
 from app.db.models.snapshotCore.historyRows import WorldSnapshotRow, PlayerSnapshotRow
 from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
 from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
-from app.db.repositories.sqlite.shared.validation.rowValues import _fields, _wire
+from app.db.repositories.sqlite.shared.validation.rowValues import _fields, _wire, _UID, _values
 from app.db.repositories.sqlite.snapshotCore.history.rowProjection import encode_history_row, decode_history_row
 
 
@@ -47,6 +47,29 @@ class SqliteSnapshotHistoryStore:
             actual = PlayerSnapshotRef(player_uid=parent["player_uid"], snapshot_id=parent["player_snapshot_id"])
         if actual != ref:
             raise PublicationInfrastructureError("snapshot parent ref disagrees with storage")
+
+    async def resolve_ref(self, snapshot_id: EntityUid, kind: SnapshotChainKind,
+                          *, scope: CommitReadScope) -> SnapshotRef | None:
+        """Resolve immutable owner identity in the caller scope; no envelope decoding."""
+        snapshot_id = _UID.validate_python(snapshot_id, strict=True)
+        kind = TypeAdapter(SnapshotChainKind).validate_python(kind, strict=True)
+        if kind is SnapshotChainKind.WORLD:
+            row = await self._access.one_row(scope, WorldSnapshotRow,
+                "SELECT * FROM world_snapshots WHERE snapshot_id=?", (snapshot_id,))
+            if row is None:
+                return None
+            _values(uids=(row.snapshot_id, row.world_uid, row.timeline_id))
+            if row.snapshot_id != snapshot_id:
+                raise PublicationInfrastructureError("snapshot identity mismatch")
+            return WorldSnapshotRef(snapshot_id=row.snapshot_id, world_uid=row.world_uid, timeline_id=row.timeline_id)
+        row = await self._access.one_row(scope, PlayerSnapshotRow,
+            "SELECT * FROM player_snapshots WHERE player_snapshot_id=?", (snapshot_id,))
+        if row is None:
+            return None
+        _values(uids=(row.player_snapshot_id, row.player_uid))
+        if row.player_snapshot_id != snapshot_id:
+            raise PublicationInfrastructureError("snapshot identity mismatch")
+        return PlayerSnapshotRef(snapshot_id=row.player_snapshot_id, player_uid=row.player_uid)
 
     async def _world_for_player(self, operation_id: EntityUid, scope: CommitReadScope) -> WorldSnapshotMetadata:
         row = await self._access.one(scope, "SELECT * FROM world_snapshots WHERE operation_id=?", (operation_id,))

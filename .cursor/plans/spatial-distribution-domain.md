@@ -1880,3 +1880,23 @@ physical bed, terrain surface и отдельное medium composition. PREVIEW 
 и required failures не выводятся из отсутствия MapCell/L0 записи. Численные budgets,
 runtime/cold-Pack evidence и dynamic caller closure не доказаны этим статическим
 review; их gates перечислены в joint ledger.
+
+### 14.12. Итоговый review verdict пакета (2026-11-02)
+
+Актуальные exact definitions и закрытие findings перепроверены точечно, без нового
+полного SP-0 аудита. **SP-1 готов к пользовательской приёмке shared архитектурного
+scope; блокирующих findings не осталось.** F1 physical bed/level отделены от
+clipped occupancy в GEO; F2 typed/before validation не подменена outer strict;
+F3 Failure.errors сохраняет все обнаруженные ошибки без primary reason и без
+ошибок пропущенных dependent checks. Files/import directions и stable source refs
+согласованы с доменным T. Это verdict review, не приёмка SP-1.
+
+Три отдельных вердикта, downstream ограничения и уточнение source admission —
+[GEO EF-1.12](./geo-1-designed-water.md#ef-112-итоговое-архитектурное-ревью--три-отдельных-вердикта-2026-11-02).
+GEO EF-1 и GEO-SPATIAL-CONTRACT предъявлены отдельно; не считаются принятыми
+по готовности shared SP-1. После joint agreement producer G10-A/SP-H и storage
+SP-P0/P1 идут независимо по своим gates, сходятся на SP-P3I. Production caller
+closure, root format/budgets, Pack IO/pin, L2 activation и runtime overlay остаются
+downstream scopes. GEN-DAG draft и текущая Snapshot 4C3-B реализация не использованы
+как accepted dependencies; reuse revision value types не принимает Snapshot ports.
+Код не менялся, runtime/tests не запускались; все три результата **НА ПРИЁМКЕ**.

@@ -3,6 +3,13 @@
 import sqlite3
 import unittest
 from tests.snapshotCore.support.fixtures import new_database, stage, close_writers, insert, operation
+from app.application.publication.errors import PublicationInfrastructureError
+from app.dataModel.artifacts.lifecycle.holders import OperationHolder
+from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
+from app.db.models.artifacts.leaseRows import ArtifactLeaseEventRow
+from app.db.models.snapshotCore.operationRows import PublicationOperationEventRow
+from tests.snapshotCore.support.fixtures import live_database, run_async, unsafe_update
+from tests.snapshotCore.support.artifactFixtures import adapters, descriptor, preparing, sealed, close_preparation, writer_fact
 
 
 class ArtifactLeaseTests(unittest.TestCase):
@@ -59,3 +66,60 @@ class ArtifactLeaseTests(unittest.TestCase):
         insert(self.conn, "artifact_writer_claims", event_id="stage-writer-release", artifact_id="artifact",
                operation_id="stage", fence=1, predecessor_id="stage-writer", event_seq=2, event_kind="release")
         insert(self.conn, "publication_outcomes", **cancelled)
+
+
+class ArtifactAdmissionReadTests(unittest.TestCase):
+    def test_catalog_checks_lease_and_writer_row_boundaries_without_a_lease_adapter(self):
+        async def check():
+            async with live_database() as bundle:
+                catalog, holders = adapters(bundle)
+                lease = await preparing(bundle)
+                reservation = await catalog.reserve(lease, descriptor())
+                await writer_fact(bundle, reservation)
+                async with bundle[1].read_scope() as scope:
+                    writer = (await catalog._writers(scope, artifact_id=reservation.artifact_id))[0]
+                for column, bad in {"event_id": " bad ", "artifact_id": " bad ", "operation_id": " bad ",
+                        "fence": 0, "predecessor_id": "missing", "event_seq": 0, "event_kind": "unknown"}.items():
+                    with self.subTest(table="writer", column=column):
+                        old = await unsafe_update(bundle[0], "artifact_writer_claims", "event_id", writer.event_id, column, bad)
+                        try:
+                            async with bundle[1].read_scope() as scope:
+                                with self.assertRaises(PublicationInfrastructureError):
+                                    await catalog._writers(scope)
+                        finally:
+                            await unsafe_update(bundle[0], "artifact_writer_claims", "event_id",
+                                bad if column == "event_id" else writer.event_id, column, old)
+                for column, bad in {"event_id": " bad ", "operation_id": "missing", "predecessor_id": "missing",
+                        "event_seq": 0, "fence": 0, "admission_open": 2}.items():
+                    with self.subTest(table="lease", column=column):
+                        old = await unsafe_update(bundle[0], "artifact_lease_events", "event_id", lease.operation_id + "-lease", column, bad)
+                        try:
+                            with self.assertRaises((PublicationInfrastructureError, ValueError)):
+                                await catalog.reserve(lease, descriptor("must not reserve"))
+                            if column == "operation_id":
+                                with self.assertRaises(ValueError):
+                                    await holders.release(reservation.ref, OperationHolder(lease=lease))
+                        finally:
+                            await unsafe_update(bundle[0], "artifact_lease_events", "event_id",
+                                bad if column == "event_id" else lease.operation_id + "-lease", column, old)
+        run_async(check())
+
+    def test_historical_holder_fence_is_not_replaced_by_current_operation_fence(self):
+        async def check():
+            async with live_database() as bundle:
+                catalog, holders = adapters(bundle)
+                lease = await preparing(bundle)
+                ref = descriptor()
+                await sealed(bundle, catalog, lease, ref)
+                await close_preparation(bundle, lease, ready=True)
+                await bundle[-1].claim_publication(OperationKind.SNAPSHOT_APPLY, lease.operation_id, "w1", "a" * 64, "b" * 64)
+                async with bundle[1].transaction(lease.operation_id) as scope:
+                    event = await bundle[-1]._event(lease.operation_id, scope)
+                    await bundle[2]._access.insert(scope, PublicationOperationEventRow("recover", lease.operation_id,
+                        event.event_id, event.event_seq + 1, "recovery_required", 1))
+                    await bundle[2]._access.insert(scope, PublicationOperationEventRow("resumed", lease.operation_id,
+                        "recover", event.event_seq + 2, "ready", 2))
+                self.assertEqual(await holders.holders(ref), (OperationHolder(lease=lease),))
+                with self.assertRaises(ValueError):
+                    await holders.acquire(ref, OperationHolder(lease=lease))
+        run_async(check())

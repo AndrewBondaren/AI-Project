@@ -14731,6 +14731,31 @@ native final→F+W+routes+river. Regions ref retained внутри P2 dependency
 не подменяется snapshot_uid. Existing captured-input fingerprint checks сохраняются.
 Полностью dry source тоже публикуется явно, не как отсутствующий artifact.
 
+**Уточнение по финальному review:** RiverReliefInput не является отсутствующим
+внешним аргументом этой signature. Его exact captured value выводится из inputs
+по existing `SurfacePlanningCapture._river_relief`:
+`RiverReliefInput(z_min=inputs.z_min, z_max=inputs.z_max, grid=inputs.grid,
+topology=inputs.topology, channel_depths=tuple((kind,inputs.rivers.channel_depth_for(kind))
+for kind in sorted((HydrologyConnectionType.RIVER,HydrologyConnectionType.MOUNTAIN_RIVER),
+key=lambda kind:kind.value)))`.
+Это pure derivation из frozen input, без live World/default lookup/нового solve;
+inputs.topology остаётся исходным captured frame, повторного fine lift нет.
+SourcePreparation импортирует existing RiverReliefInput и HydrologyConnectionType;
+не вызывает private capture method и не импортирует World/capture orchestration.
+
+Проверяемые captured fingerprints точно разделены: F — existing physical tuple
+`(inputs, tuple(sorted(placement.payload.basin_specs,key=lambda spec:spec.source_uid)),
+geo_execution_decisions(routes.payload.classification_decisions))`;
+normalization reuse из existing water/planning/geoExecution.py, не новый policy.
+Routes — inputs; river — derived RiverReliefInput; native final —
+(inputs, derived RiverReliefInput). Используются target metadata versions EF-1.3,
+точные dependency tuples и existing input_fingerprint. Mismatch — PlanBuildFailure,
+не перепубликация native final и не доверие одному output hash. P2/natural
+подтверждаются expected refs, output proofs и accepted dependency binding;
+повторный solve/восстановление всех их author inputs не обещается signature.
+Это сохраняет actual native publication proof semantics, делая canonical admission
+исполняемым по перечисленным аргументам, а не по скрытому RiverReliefInput.
+
 Новый `query/preparedOpenWaterReader.py:PreparedOpenWaterReader`:
 `__init__(source: PlanEnvelope[CanonicalOpenWaterSource], *, expected_source: PlanRef,
 control: PlanBuildControl) -> None` — однократная strict admission и immutable
@@ -15034,3 +15059,42 @@ codec owner. Existing refs/wires сохраняют свои fields и верс�
 Проверка этого review: статическое чтение definitions/callers и documentary diff;
 новые runtime/tests не запускались. Численные budgets и dynamic caller closure
 не доказаны. Код и GEN-DAG draft не изменены/не использованы.
+
+### EF-1.12. Итоговое архитектурное ревью — три отдельных вердикта (2026-11-02)
+
+**Review verdict, не пользовательская приёмка.** Повторно прочитаны актуальные
+EF-1.4/1.5/1.8/1.10/1.11 и SP-1 §14.2–14.5/14.9–14.11; полный SP-0 inventory
+не повторялся. Точечная трассировка спорного admission: NativeFinalPublicationJob.publish
+в `application/worldData/generators/hydrology/planning/assembly/final/publication.py`
+проверяет river input fingerprint по RiverReliefInput и final fingerprint по
+(inputs,relief_inputs). `planning/composition/surfacePlanningCapture.py:_river_relief`
+и `dataModel/hydrology/rivers.py:channel_depth_for` задают pure mapping из captured
+Hydrology input. Эта derivation и imports теперь явно внесены в EF-1.5; omission
+не оставлен как скрытый input или ослабленная проверка. Код не менялся.
+
+| Результат | Блокирующие findings / вердикт | Downstream ограничения |
+|---|---|---|
+| **SP-1** | **Готов к приёмке своего shared архитектурного scope.** Блокирующих findings в проверенных exact definitions не осталось. F1 сохраняет physical boundaries, F2 требует typed before-validation, F3 содержит все реально обнаруженные errors без primary/выдуманных проверок; map семи shared файлов согласован | Не означает реализацию validators/readers, принятие domain source, storage format/IO/budgets, Pack root/pin admission, Snapshot runtime или consumer activation |
+| **GEO EF-1** | **Готов к приёмке документального domain freeze.** Блокирующих findings после явного captured-relief derivation EF-1.5 нет. A/R1/G1, physical vs clipped fields, known-domain dry/unknown, exact refs/errors, files/imports и legacy dispositions согласованы | Production participant roster/capture/registration closure и real native join — G10-A/SP-H; source codec IDs/budgets — owning codec/SP-P0; L2 method split/terrain-water composition — SP-M/SP-4. Это не готовый production producer/Pack reader |
+| **GEO-SPATIAL-CONTRACT** | **Готов к отдельной совместной приёмке producer/read boundary.** Блокирующих противоречий между EF-1 и SP-1 нет: доменный T/physical intervals соответствуют F1; admission/errors — F2/F3; bootstrap canonical PlanRef не подменяет native-final upstream ref, Pack refs не выдаются за доказанный pin | Совместная приёмка не закрывает SP-P0/SP-P1/SP-P3, SP-3/SP-M/SP-4, Q01/runtime или SP-H2 rivers; их evidence собирается по собственным gates |
+
+**Закрытие findings:** F3 primary reason устранён в EF-1.5 и shared historical
+§14.7; dependency G10-A→SP-P0/P1 устранена в EF-1.8 и ARCH-9. F1 дополнен
+physical bed_z/level_z отдельно от z0/z1: clipping не создаёт новое дно/уровень.
+Разное physical bed запрещает слияние даже при одинаковом clipped span.
+F2 не полагается на NewType/Literal/outer strict для nested legacy objects.
+Failure.errors не смешивается со Slice.issues. Unknown не создаётся из missing/
+corrupt source, dry не отрицает river-volume за scope. Source graph seven refs
+проверяется в согласованных версиях; никакого implicit latest/повторного lift.
+
+**Независимость подтверждена:** после joint agreement GEO producer G10-A/SP-H и
+storage SP-P0/P1 продолжаются по собственным gates. Accepted producer source
+потребуется при source integration SP-P3I, не для старта storage design/format
+preparation. Storage не получает права угадывать domain fields до agreement.
+
+**Evidence limits:** это статический архитектурный review документа/definitions,
+не implementation test или измерение budgets. GEN-DAG draft и текущая Snapshot
+4C3-B реализация не использованы как принятые dependencies. Ссылки на existing
+revision value types означают reuse формы, не доказательство accepted Snapshot
+ports/pin/overlay. Статусы SP-1, EF-1, GEO-SPATIAL-CONTRACT остаются **НА ПРИЁМКЕ**;
+пользователь принимает каждый результат отдельно. Код и G10-A cutover не начаты.
