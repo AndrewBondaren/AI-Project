@@ -237,15 +237,17 @@ class SqliteArtifactHolders:
                     raise ValueError("handoff snapshot world mismatch")
                 for ref in metadata.retained_artifacts:
                     planned.setdefault(ref, []).append(SnapshotHolder(snapshot=snapshot))
-            # Validate every transferred ref before adding holds or releasing any.
+            # The caller may catch a refusal and commit the borrowed scope.
+            # Validate every destination, including metadata-only refs, before
+            # the first append; acquire must not discover a late corrupt chain.
             operation_holder = OperationHolder(lease=lease)
-            for ref in planned:
-                if not await self._catalog.is_sealed(ref):
-                    raise ValueError("snapshot metadata retains an unsealed artifact")
-            for ref in retained_refs:
+            checked_holders: dict[ArtifactRef, tuple[ArtifactHolderRef, ...]] = {}
+            for ref in dict.fromkeys((*planned, *retained_refs)):
                 if not await self._catalog.is_sealed(ref):
                     raise ValueError("handoff requires sealed refs")
-                held = await self._holders(scope, ref)
+                checked_holders[ref] = await self._holders(scope, ref)
+            for ref in retained_refs:
+                held = checked_holders[ref]
                 retention = [h for h in held if isinstance(h, ArtifactRetentionHolder)]
                 for h in retention:
                     if not await self._catalog.is_sealed(h.artifact):
@@ -259,9 +261,6 @@ class SqliteArtifactHolders:
                         and h.event_kind == "release" for h in rows)
                     if not released or not (retention or any(h in held for h in planned.get(ref, []))):
                         raise ValueError("missing operation hold or previous handoff")
-            # TODO(4C3-B-REV-1): validate holder chains for every metadata destination
-            # before the first append, including refs outside retained_refs.
-            # See .cursor/plans/world-domain-4c3-b-review-debt.md (repository root).
             for ref, snapshot_holders in planned.items():
                 for holder in snapshot_holders:
                     await self.acquire(ref, holder)

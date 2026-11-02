@@ -14,7 +14,7 @@
 | `check_full_bake` | `read_full_bake` | [GEN-READ-2](../../docs/tz_generator_technical_debt.md#gen-read-2) |
 | `check_location_l2` | `read_location_l2` | [GEN-READ-3](../../docs/tz_generator_technical_debt.md#gen-read-3) |
 
-Дубликат карты: [generator_public_method](./generator_public_method.md). Consumer requirements: [GEN-DAG-NODE-DEPENDENCY §§8–9](./gen-dag-node-dependency.md#8-отдельные-ноды-проверки-состояния-мира-перед-загрузкой). Owning orchestration: [GEN-DAG-1](./gen-dag-1-post-geo-ws.md).
+Дубликат карты: [generator_public_method](./generator_public_method.md). Consumer requirements: [GEN-DAG-NODE-DEPENDENCY §§8–9](./gen-dag-node-dependency.md#8-родитель-и-отдельные-ноды-проверки-инициализации-мира). Owning orchestration: [GEN-DAG-1](./gen-dag-1-post-geo-ws.md).
 
 ## 2. Требования к контрактам
 

@@ -1,5 +1,10 @@
 # SPATIAL-1 — Пространственное распределение сред и материалов
 
+**Актуальная приёмка 2026-11-02:** пользователь явно принял документальные SP-1
+(scope §14.12), GEO EF-1 (scope EF-1.12) и GEO-SPATIAL-CONTRACT. Запись и исключения
+— §14.14. Исторические НА ПРИЁМКЕ/OPEN этих трёх результатов ниже заменены этой
+приёмкой; storage/implementation/runtime и остальные треки не приняты.
+
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
 ## Порядок принятия контракта
@@ -14,14 +19,14 @@ output описывается только в [GEO-1, начале плана](.
 конкретные ноды/оркестрация — только в [GEN-DAG-1](./gen-dag-1-post-geo-ws.md).
 [Соответствие, порядок freeze и пути — §13](#13-соответствие-контрактов-и-порядок-freeze).
 Не копировать одну спецификацию POJO между планами. SPATIAL — общий контракт,
-Hydrology реализует собственный reader/index. Статус architecture/POJO freeze
-OPEN; эта запись не является разрешением на реализацию SPATIAL или DAG.
+Hydrology реализует собственный reader/index. Shared exact freeze SP-1 принят
+документально в scope §14.12; остальные owning freezes сохраняют собственные gates.
+Эта запись не является разрешением на реализацию SPATIAL или DAG.
 
-**Приоритетный совместный вопрос с GEO-1 — OPEN:** определить компактный water
-source и ограниченную materialization без обязательного full-basin/full-world
-fine-разворачивания. [Формулировка и варианты — в начале GEO-1](./geo-1-designed-water.md).
-Связано с SP-0/SP-H/SP-M/SP-3/SP-4 и §12; выбор coarse/fine P2 не подменяет этот
-вопрос. Конкретное представление и алгоритмы пока не утверждены.
+**Совместный domain/read контракт с GEO-1 принят документально** (§14.14):
+A/R1/G1, дорогая однократная preparation допустима, bounded read без повторного
+solve. Exact source — GEO EF-1; storage/materialization/reader implementation
+остаются SP-P0/SP-M/SP-3/SP-4 по своим gates. Это не приёмка production evidence.
 
 
 Статус: **архитектурный план / OPEN**. Направление и границы ответственности согласованы 2026-10-31; конкретные классы, POJO, контракты публикации, world ambient policy и production wiring требуют отдельной приёмки. **Обязательный трек SP-A0/A1/A2 — переработать существующие air policy и настройки World, а не только добавить новый reader.** Сам факт наличия плана **не разрешает реализацию или cutover**.
@@ -1624,7 +1629,7 @@ Evidence: HEAD `72d61d44`; прочитаны тела методов цепоч
 
 ## 14. SP-1 — exact shared read contract: проект на согласование
 
-**Статус: НА ПРИЁМКЕ архитектурного проекта, freeze НЕ ПРИНЯТ.** Начат после явной приёмки SP-0; ниже один конкретный предлагаемый контракт, не молчаливое архитектурное решение. Никаких Python-файлов/POJO/enum/schema/tests/wiring не создано. Основание: §3, §7, §8 SP-1, §11 ARCH-3/4/6/7; профильные требования — [Terrain Generation](../../docs/tz_terrain_generation.md), [World Pack](../../docs/tz_world_pack_storage.md), [World Snapshot](../../docs/tz_world_snapshot.md), [Hydrology](../../docs/tz_terrain_hydrology.md). Exact water payload/source остаётся GEO; exact root format — SP-P0; materialization — SP-M; gameplay consumer/composition — SP-R0.
+**Статус: документальный архитектурный результат ПРИНЯТ пользователем в scope §14.12; запись приёмки — §14.14. Implementation не принят.** Начат после явной приёмки SP-0; ниже один конкретный предлагаемый контракт, не молчаливое архитектурное решение. Никаких Python-файлов/POJO/enum/schema/tests/wiring не создано. Основание: §3, §7, §8 SP-1, §11 ARCH-3/4/6/7; профильные требования — [Terrain Generation](../../docs/tz_terrain_generation.md), [World Pack](../../docs/tz_world_pack_storage.md), [World Snapshot](../../docs/tz_world_snapshot.md), [Hydrology](../../docs/tz_terrain_hydrology.md). Exact water payload/source остаётся GEO; exact root format — SP-P0; materialization — SP-M; gameplay consumer/composition — SP-R0.
 
 ### 14.1. Reuse против новых деклараций
 
@@ -1922,3 +1927,166 @@ implementation, producer/runtime/consumer activation. EF-1 и GEO-SPATIAL-CONTRA
 ветки сходятся на SP-P3I, не до SP-P0/P1. GEN-DAG draft и непринятый Snapshot B
 не использованы как accepted dependencies. Код не менялся. **Все три результата
 готовы к приёмке, но остаются НА ПРИЁМКЕ до явного решения пользователя.**
+
+### 14.14. Явная приёмка пользователя — три документальных результата (2026-11-02)
+
+Пользователь прямо сообщил: «Принимаю документальные архитектурные результаты:
+1. Spatial SP-1 в scope итогового verdict §14.12. 2. GEO EF-1 в scope EF-1.12.
+3. GEO-SPATIAL-CONTRACT — совместимость domain/shared contracts и независимость
+producer/storage веток».
+
+- **SP-1 — ПРИНЯТ документальный архитектурный результат**, exact scope §14.12.
+- **GEO EF-1 — ПРИНЯТ документальный архитектурный результат**, exact scope GEO EF-1.12.
+- **GEO-SPATIAL-CONTRACT — ПРИНЯТ**, совместимость domain/shared contracts и
+  независимость producer/storage веток. Это отдельная явная совместная приёмка.
+
+Запись заменяет исторические НА ПРИЁМКЕ/OPEN по этим трём документальным результатам,
+включая §§14.12–14.13. Приёмка **не включает реализацию, G10-A cutover, Pack
+storage/publication, runtime overlay, L2/gameplay activation или downstream evidence**.
+Остальные шаги плана не объявляются DONE. SP-P0/P1 идут по собственным gates,
+без G10-A prerequisite; accepted source нужен на SP-P3I. Ссылки на revision value
+types не принимают непринятый Snapshot B; GEN-DAG draft не использован.
+
+Зеркальная приёмка — [GEO EF-1.14](./geo-1-designed-water.md#ef-114-явная-приёмка-трёх-документальных-результатов-2026-11-02).
+Следующий GEO step [GEO-I1](./geo-1-designed-water.md#geo-i1--следующий-ограниченный-implementation-step-canonical-source-records)
+подготовлен **только на согласование до кода**: domain source records R1/G1/Z и
+их validators/tests, без producer/shared read/Pack/activation. Он не является
+реализацией SP-1, новым gate Spatial или автоматическим разрешением реализации.
+
+
+## 15. SP-P0 — storage freeze proposal V1 (2026-11-02)
+
+**Статус: документальный SP-P0 подготовлен / НА СОГЛАСОВАНИЕ, не CODE-READY.** Проверена явная приёмка SP-1/GEO EF-1/GEO-SPATIAL-CONTRACT в §14.14 и GEO EF-1.14. G10-A не prerequisite этого проектирования. Ниже конкретное предложение для начального open-water scope, включая предлагаемые численные ограничения; они не измеренные характеристики и не уже принятое решение пользователя. Изменена только документация. GEN-DAG draft и непринятые Snapshot adapters не использованы как принятые ports.
+
+### 15.1. Проверенные existing contracts / callers
+
+- [WorldPackManifest](../../backend/app/dataModel/worldPack/meta/worldPackManifest.py): pack_version=1.0.0, extra=ignore, mutable lists; domain roots отсутствуют. Frozen outer field не делает этот manifest immutable.
+- [PackManifestStore.load/save](../../backend/app/application/worldData/pack/io/packManifestStore.py): JSON + model_validate, save через temp/os.replace. Это file replacement, не accepted staged manifest CAS.
+- [WorldPackReader.load_manifest/manifest](../../backend/app/application/worldData/pack/io/worldPackReader.py): path/stamp cache; не pinned read по WorldPublicationRef. [WorldPackWriter](../../backend/app/application/worldData/pack/io/worldPackWriter.py) меняет текущий manifest; не становится новым publisher через добавление поля.
+- [ArtifactRef/ArtifactKind/ArtifactFormatMetadata](../../backend/app/dataModel/artifacts/references.py): reuse BLOB ref с format_key/version/hash/nbytes и row_count=None, без storage path.
+- [ArtifactFormatContract](../../backend/app/application/artifacts/contracts/formatBackend.py): **BLOB content_model обязан быть bytes**. Нельзя зарегистрировать HydrologyRoot как BLOB BaseModel. [ArtifactFormatRegistryBinding.register/encode/decode](../../backend/app/application/artifacts/registry/artifactRegistry.py) проверяет exact model и backend contract identity.
+- [ContentAddressedBlobBackend.write/verify/delete](../../backend/app/storage/artifacts/blobBackend.py): bytes/hash/path/claim lifecycle; публичного read нет. SP-P2R должен отдельно предъявить verified bounded byte-read; не использовать private _path и не объявлять verify методом чтения.
+- [CanonicalCodec](../../backend/app/application/encoding/canonicalCodec.py) и [SurfaceEnvelopeCodec](../../backend/app/application/worldData/planning/encoding/surfaceEnvelopeCodec.py): reuse deterministic TLV и strict decode/re-encode admission. [SURFACE_MANIFEST](../../backend/app/application/worldData/planning/encoding/surfaceManifest.py) содержит IDs до 297 в проверенной редакции; его future GEO изменения не включаются автоматически в storage schema.
+- [FineSurfaceWindow](../../backend/app/dataModel/terrain/sampling/fineSurfaceWindow.py) проверяет exact row-major coverage/surface и protected subset. [RegionCoverage/CoverageSpan](../../backend/app/dataModel/terrain/regions/coverageGeometry.py), WaterBody/PhysicalWaterUnion/SourceBodyMapping и MapCellHydrology reuse по EF-1, без новых копий их полей.
+
+### 15.2. Manifest boundary и version migration
+
+Предлагаемый World Pack wire version **2.0.0**. Существующий SCHEMA_ID SCH-WORLD-PACK-MANIFEST сохраняется; это version change wire, не второй manifest. Добавить required `spatial_roots: tuple[SpatialDomainRootRef, ...]` для V2. Новый record: `domain: SpatialDatasetKind`, `root: ArtifactRef`, оба required. Новый StrEnum SpatialDatasetKind: только `HYDROLOGY_OPEN_WATER = hydrology_open_water` в V1; другие domain datasets добавляются отдельным согласованным version change. Rows sorted по domain.value, unique domain; root.kind=BLOB, root format/key/version проверяются owning domain boundary. Manifest не получает bounds, shards, coverage, source PlanRefs или generic index.
+
+V1 decode разрешает отсутствие spatial_roots и преобразует его в пустой tuple только как explicit legacy decoding policy; это **не доказательство dry**. V2 missing/null spatial_roots — invalid manifest. До cutover existing V1 writer не переключается одним изменением PACK_WIRE_VERSION default: сохраняет V1 либо явно отказывает попытке записать V2 через legacy save. V2 encode/publish — лишь принятый SP-P2W/P3W путь. Старый читатель extra=ignore может потерять roots, поэтому reader/writer version admission обязателен до активации; неизвестная major version — refusal. Все existing save/load callers проверяются в SP-P1/P2 до кода; массовая смена формата старых Pack без source не выполняется.
+
+Отсутствующий hydrology entry — SOURCE_MISSING для required water read, включая PREVIEW failure; legacy L0/MapCell fallback запрещён. Empty domain публикуется **явным root** с достоверным observation и G1 dry geometry. Empty coverage означает unknown вне неё, не весь мир dry. Отсутствующий shard, указанный root, — corruption/missing, не dry. Manifest entry единственный на dataset и publication; root immutable.
+
+### 15.3. Exact Hydrology root и shard records (предлагается)
+
+Все новые records BaseModel frozen/strict/extra=forbid/revalidate_instances=always; required поля без defaults, tuple collections. Strict int excludes bool; nested existing refs/geometry/body records проходят explicit EF-1/SP-1 checks, outer config не исправляет их coercion. Root и shards — storage representation, не SpatialSlice/WaterWindowFacts persistence.
+
+| Record | Exact required fields |
+|---|---|
+| HydrologyPackRoot | source_ref: PlanRef; dependencies: tuple[PlanDependency,...]; diagnostics: tuple[PlanDiagnostic,...]; topology: WorldTopology; coverage_region_uid: EntityUid; z_min: FineZ; z_max: FineZ; bodies: tuple[WaterBody,...]; unions: tuple[PhysicalWaterUnion,...]; source_mapping: SourceBodyMapping; shards: tuple[HydrologyShardRef,...] |
+| HydrologyShardRef | tx: StrictInt; ty: StrictInt; artifact: ArtifactRef |
+| HydrologyPackShard | source_ref: PlanRef; tx: StrictInt; ty: StrictInt; bed: FineSurfaceWindow; wet_runs: tuple[WaterMembershipRun,...]; shore_rows: tuple[tuple[FineXY,MapCellHydrology],...] |
+
+`source_ref` — exact canonical-open-water envelope.ref, dependencies — его семь exact slots EF-1, diagnostics — его diagnostics, не refs выбранных shards. Root world извлекается из source_ref.key.world_uid, без второго world_uid. Root topology WORLD_FINE frame; root z bounds — exact source. Bodies/unions/mapping — полные source tables, canonical ordering и graph consistency EF-1; не только visible-window metadata. Этот bounded V1 ограничивает размер metadata root, превышение не обрезается.
+
+**Partition V1:** фиксированные XY tiles 64×64 fine cells, origin=(0,0); tx=floor(x/64), ty=floor(y/64), включая отрицательные координаты. Tile box [64tx,64(tx+1))×[64ty,64(ty+1)); topology bounds могут обрезать tile. Seam caller split остаётся SP-1; shards не wrap-ятся. Root shards sorted (ty,tx), unique; запись только для непустого observed coverage tile, максимум одна на tile. Полный список объявляет все observed tiles: отсутствие tile entry даёт unknown, не dry.
+
+Shard bed.coverage.region_uid равен root.coverage_region_uid, topology равен root.topology; coverage — точное пересечение source coverage с tile, непустое. Surface/protected — только exact G1 source samples/subset, no clamp. wet runs разделяются на границе tiles, canonical внутри tile; повторное объединение соседних runs одного body при reconstruct восстанавливает source. shore_rows exact source subset. Поля body/union tables не дублируются в shards; validation использует root tables. `source_ref` и ArtifactRef binding не заменяют checksum/admission.
+
+Root builder проверяет disjoint union shard coverage = source bed.coverage, все samples/protection/wet/shore равны source, tables равны source, reconstructed canonical envelope имеет original fingerprint. Это source→encoding proof SP-P3I, без повторного solve. При cold admission hash-verified root/index даёт карту known candidates, каждый прочитанный shard проходит hash/version/frame/source_ref/record checks. Если требуется повторно доказать весь source fingerprint без доверия accepted root, это отдельный полный cold audit, не скрытая часть warm read. Не считать криптографический hash доказательством истинности publisher facts.
+
+Дополнительный admission root/index: каждый shard ref имеет kind=BLOB, format_key=`hydrology.open_water.shard.tlv`, format_version=1, row_count=None и 0<nbytes≤4 MiB; manifest root ref — root key/version из §15.4, 0<nbytes≤16 MiB. tx/ty и source_ref decoded shard обязаны совпасть с выбранной записью/root. Все wet/shore/protected координаты входят в observed coverage; bed/water Z и body references проверяются по EF-1, включая dry samples и physical boundaries. root source_ref — `hydrology.canonical_open_water`, schema_version=1, algorithm_version=1; семь dependencies и их world/scope/revisions проверяются по принятому EF-1, а не только по числу элементов. Неверный ref не допускается к IO; неверное содержимое не становится empty.
+
+### 15.4. Codec, IDs и registration
+
+Предлагаемые ArtifactFormatKey строки:
+`hydrology.open_water.root.tlv`, `hydrology.open_water.shard.tlv`; version **1**, kind BLOB, row_count=None. Format registry получает две bytes contracts (`ArtifactFormatContract[bytes]`); bytes encode/decode сохраняют bytes, domain codec отдельно декодирует и валидирует содержание. Backend verify проверяет bytes/hash, domain admission — схему/смысл. Pure encode/decode не выполняют IO.
+
+Domain codec — existing canonical TLV v1, **без compression в format v1**: предсказуемый byte cap, без decompress bomb и скрытого выбора zstd параметров. G1 сохраняется losslessly как samples; R1 остаётся row runs. Новый compression требует нового format version, не silent codec replacement. SHA-256 ArtifactRef вычисляется по фактическим TLV bytes; source fingerprint остаётся отдельной identity существующего planning codec.
+
+Storage schema manifest фиксируется отдельно: reuse existing SURFACE_MANIFEST V1 entries с их текущими IDs; никакого `latest entries + ...` на read. Исторический V1 manifest snapshot должен оставаться immutable при будущих GEO schema changes. Предлагаемые новые IDs в этом format-local manifest: 60001 HydrologyPackRoot; 60002 HydrologyShardRef; 60003 HydrologyPackShard; 60004 WaterMembershipRun; 60005 ArtifactRef; 60006 ArtifactKind. Existing вложенные types берутся из проверенного surface snapshot, не перенумеровываются. Эти ID **не резервируют** future planning surfaceManifest IDs. SpatialDomainRootRef/SpatialDatasetKind — JSON manifest wire, TLV ID не требуется. Ни SpatialSlice, ни query errors не регистрируются как persisted water source.
+
+Проверенная исходная редакция surfaceManifest.py: SHA-256 `de00a17c8c3a2c149b22e2392f45d1c69979fd921b9e3c496f277331c73d7b2d`. Проверены existing IDs WorldTopology=53, PlanRef=94, PlanDependency=101, PlanDiagnostic=105, MapCellHydrology=150, WaterBody=153, PhysicalWaterUnion=154, SourceBodyMapping=226, SourceBodyMappingEntry=227, FineSurfaceWindow=283. Новые 60001–60006 с ними не пересекаются. Этот hash фиксирует таблицу назначения, не все транзитивные Python declarations: implementation admission обязан проверить closure nested types и golden bytes; изменение imported record shape без version bump запрещено.
+
+Exact API кандидаты: `encode_root(root: HydrologyPackRoot) -> bytes`, `decode_root(payload: bytes, version: FormatVersion) -> HydrologyPackRoot`; аналогично encode_shard/decode_shard. Decode: byte cap до TLV decode, exact version, immutable strict validation, re-encode equality для rejection noncanonical/trailing bytes, then cross-record admission. Код с domain types появится по собственным gates после реализации нужных EF-1 records; отсутствие их реализации не отменяет документальный P0.
+
+### 15.5. Бюджеты V1 — конкретное предложение на согласование
+
+Это выбранные проектные лимиты-кандидаты, **не benchmark evidence**. Изменение формата/размера partition требует review; runtime policy может только ужесточать лимиты без изменения wire. Предлагаемый profile `open_water_v1`:
+
+| Ограничение | Значение / поведение |
+|---|---|
+| Root bytes | ≤16 MiB, включая tables и каталог |
+| Shard bytes | ≤4 MiB; до 4096 observed cells, не более 4096 wet runs и 4096 shore rows |
+| Root entries | ≤65536 shards; при превышении новый согласованный paged-root format, не truncate |
+| Один read request | ≤64 boxes; ≤1,048,576 запрошенных XYZ cells в disjoint union; ≤64 distinct touched tiles |
+| Cold read bytes | ≤272 MiB = root 16 + 64 shards×4; sequential decode не более одного shard payload одновременно |
+| Retained byte cache | ≤64 MiB raw artifacts; content-keyed eviction, no stale pin reuse; отсутствие cache не запускает producer |
+| Output | ≤65536 volume runs; full immutable result, превышение → RESOURCE_LIMIT без partial payload |
+
+Значения conservative operational caps, не заявление о пригодности для любого размера мира. Для миров вне V1 envelope публикация явно отклоняется до activation; требуется новый профиль/format, а не потеря observed facts. Decoded Python heap не равен encoded bytes: exact численные object-heap/time SLA этим не доказаны. Acceptance SP-P1/P3I включает измерение worst-case decode/source build на fixture под этими structural caps; если недостаточно, P0 budgets пересогласуются до production activation. Deadline/cancel передаются caller lifecycle, не новый scheduler/таймер в codec. Подготовка остаётся full-fine допустимой по EF-1, бюджеты read не обещают дешёвый solve.
+
+Reader не перебирает все shards для окна: admission root один раз, immutable lookup (ty,tx)→ref; enumerates bounded tiles для каждого box, dedupe до IO. Root catalog full load ограничен root cap; только domain index, не manifest generic index. Ошибки всех проведённых безопасных проверок возвращаются по F3 errors tuple; при отсутствии необходимого source зависимые проверки не продолжаются. SP-3 владеет exact reader/cache implementation, SP-P2R — verified bytes port и resource-safe IO.
+
+### 15.6. Exact target file/import map (предложение, файлы не созданы)
+
+| Путь от backend/app | Символы / owner / шаг |
+|---|---|
+| dataModel/worldPack/meta/spatial/__init__.py | пустой marker, SP-P1 |
+| dataModel/worldPack/meta/spatial/domainRoot.py | SpatialDatasetKind, SpatialDomainRootRef; Pack owner, imports ArtifactRef/enum/pydantic |
+| dataModel/worldPack/meta/worldPackManifest.py | изменение WorldPackManifest.spatial_roots/version admission; imports new record; без domain payload imports |
+| dataModel/hydrology/pack/__init__.py | пустой marker |
+| dataModel/hydrology/pack/root.py | HydrologyPackRoot, HydrologyShardRef; domain records + planning refs/dependencies/diagnostics + ArtifactRef; no application |
+| dataModel/hydrology/pack/shard.py | HydrologyPackShard; EF-1 WaterMembershipRun + FineSurfaceWindow + MapCellHydrology; no IO |
+| application/worldData/generators/hydrology/encoding/__init__.py | пустой marker |
+| application/worldData/generators/hydrology/encoding/packSchema.py | frozen format-local TLV manifest and IDs; reuse schema declarations, no storage IO |
+| application/worldData/generators/hydrology/encoding/packCodec.py | четыре pure encode/decode функции; CanonicalCodec + strict domain admission |
+| application/worldData/generators/hydrology/encoding/packFormats.py | две ArtifactFormatContract[bytes] constants, format keys/version; no registration side effects |
+
+Прямые file counts: worldPack/meta существующие 7→7 (новая подпапка; existing >5 WARN), meta/spatial 0→2; hydrology/pack 0→3; hydrology/encoding 0→4. Проверить counts повторно перед реализацией. Domain source query records EF-1 не дублируются в pack folder. Manifest codec snapshots импортируют только existing data declarations; направление application codec → dataModel, never dataModel → application. Связывание backend/registry — внешняя composition SP-P2/P3, не import-side effect в этих файлах. Concrete build/index/publisher/reader paths принадлежат следующим freezes; generic P0 не выдаёт за них случайные новые сервисы.
+
+### 15.7. Migration/caller map и publication/retention seam
+
+| AS-IS символ / ссылка | Disposition / точка смены |
+|---|---|
+| WorldPackManifest / PackManifestStore.load/save (ссылки §15.1) | SP-P1 version-aware model/decode; legacy save не публикует V2; accepted staged replacement только SP-P2W/P3W |
+| WorldPackReader.load_manifest/manifest | RETAIN legacy clients до явного migration; mtime cache не accepted pin. SP-P2R/SP-3 дают pinned root bytes, не модификация private paths из Hydrology |
+| WorldPackWriter manifest mutation/save path | RETAIN AS-IS до owning publisher switch; atomic os.replace не manifest CAS. Не объявлять его default writer нового root |
+| CanonicalWaterSourceJob.prepare (EF-1 proposal) | SP-P3I consumes admitted canonical envelope, partitions/encodes once; G10-A/SP-H required здесь, не перед SP-P0/P1 |
+| HydrologyWorkingFields / parentLightHydroCorridor | HSP-02/03 retain соседних callers; не Pack source, SP-M/SP-4 отдельный cutover |
+| NativeFinalWaterQuery.water_at | RETAIN XY evidence, не root reader; no automatic rename |
+| ArtifactFormatRegistryBinding / BLOB backend | REUSE bytes registration/write/verify/delete contracts; отсутствие read не обходить через private _path; SP-P2R добавляет/принимает owning port |
+
+**Publication ordering:** stage+seal shards → root referencing exact shards → candidate V2 manifest → accepted pregame CAS/pin. До activation должны быть durable и protected **все** refs. root→shard references сами не создают GC holds. SP-P3W обязан предъявить явный closure refs и удержание root+shards через accepted staging/publication owners; retained refs/metadata mapping использовать только после принятия соответствующего Snapshot contract/implementation. Нельзя считать непринятый 4C3-B доказательством готового handoff. Не вводить собственный hydrology GC или прямой SQL writer. Publication refusal не изменяет active root; abandoned staged data освобождается общим lifecycle.
+
+Для domain root admission: format/version/hash/size → exact source/world/frame/dependencies → root/index consistency → queried shard facts. Pack root привязывается к manifest выбранного WorldPublicationRef; его принадлежность pin не доказывается source_ref или format key. Q01/overlay/SP-3S остаются внешними gates. Snapshot domain changes не переписывают immutable base shards.
+
+### 15.8. Предмет согласования и acceptance evidence
+
+На согласование вынесен **весь SP-P0 V1**: V2 manifest root-only entries; root/shard records и tile=64; TLV без compression, ключи/версии/format-local IDs; явная empty/unknown семантика; structural/byte caps и их ограничения; карта файлов и migration. Ничего из этого не объявляется принятым фактом по наличию текста.
+
+До приёмки P0 проверить domain refs/types/IDs closure, storage codec/schema consistency, dry/unknown при отсутствующем tile и сохранение G1/protected/shore/body mapping; согласовать пригодность предложенных лимитов мира. До SP-P1 кода отдельно зафиксировать реализационный scope и существование нужных EF-1 declarations. До downstream activation: canonical decode negative cases, unknown major/minor/format/ref kind, bad hash/size/noncanonical TLV, absent vs explicit dry, negative/seam tiles, cross-shard runs reconstruction, source fingerprint replay, max-limit/refusal cases, concurrent publication/retention/CAS evidence, cold read без solve/L0/working maps, pin mismatch, GC safety всех shards. Это будущие проверки, не проведённые тесты.
+
+SP-P0 может приниматься без реализации G10-A, Snapshot ports и GEN. Его приёмка не закрывает SP-P2R/W, PACK-ENTRY-CONTRACT, SP-P3I/W, SP-3, SP-M или runtime. Общий graph hard edges не изменяются. Остаточная работа по time/heap measurements, verified byte-read и retention/pin интеграции явно принадлежит указанным downstream gates; если пересмотр структурного budget/формата потребуется по measurement, он возвращается на P0 review, не решается молча в коде.
+
+### 15.9. Архитектурное ревью SP-P0 (2026-11-02)
+
+**Verdict: требуется документальная доработка до предъявления exact storage freeze.** Выбранное root-only направление согласуется с принятыми SP-1 §14.12 и GEO EF-1.12/1.14; перечисленные ниже findings не переоткрывают A/R1/G1. Это verdict ревью, **не пользовательская приёмка/freeze**. SP-P1, публикация и runtime activation не начаты. G10-A не prerequisite проектирования или исправления этих findings.
+
+Проверка статическая по текущим файлам; runtime/tests/benchmarks не запускались. Existing изменения рабочего дерева сохранены. Evidence: CanonicalCodec._encode/_decode_one/decode, SurfaceEnvelopeCodec, surfaceManifest.py, planFingerprints.output_fingerprint, PlanEnvelope, FineSurfaceWindow/RegionCoverage, WorldPackManifest, PackManifestStore, WorldPackReader/Writer, ArtifactFormatContract/ArtifactFormatRegistryBinding, ContentAddressedBlobBackend. Hash surfaceManifest из §15.4 подтверждён; IDs 60001–60006 допустимы по RegisteredTypeEntry (положительный StrictInt, без 16-bit ограничения) и не пересекаются с текущими bindings. hydrology/query/source.py ещё отсутствует: принятые EF-1 declarations остаются проектом, не существующим codec port.
+
+**P0-R1 — P1 / schema и fingerprint replay не замкнуты (§15.3–15.4).** Storage IDs регистрируют WaterMembershipRun, но не CanonicalOpenWaterSource; текущий SURFACE_MANIFEST не содержит обоих новых типов. Existing output_fingerprint хеширует `(payload, dependencies, diagnostics)`, а не envelope целиком. Следовательно, storage hash root/shards сам по себе не позволяет выполнить обещанный replay original output fingerprint: нужен отдельно фиксированный planning source manifest с ID CanonicalOpenWaterSource/WaterMembershipRun и версией, используемый самим canonical producer. Два format-local пространства IDs допустимы и не обязаны совпадать. До freeze указать точный owning source codec/version/ID handoff, формулу replay и её imports; реализация producer остаётся downstream. Не решать это чтением latest SURFACE_MANIFEST. Отдельно перечислить транзитивную closure storage snapshot и политику изменения imported record shapes: hash одного surfaceManifest.py подтверждает назначения, но не замораживает определения Python-типов, от которых decoder получает names/types динамически. Golden bytes и negative cases проверяются при реализации, однако точная схема должна быть определена до неё.
+
+**P0-R2 — P1 / byte cap недостаточен для bounded decode (§15.4–15.5).** Existing _decode_one рекурсивно разбирает произвольные tuple/set/record значения до domain validation, копирует body[offset:] и сохраняет parts; лимитов глубины/числа TLV nodes нет, RecursionError не переводится canonical decoder в CanonicalEncodingError. Payload ≤4/16 MiB может превысить recursion depth до проверки shard/root caps; re-encode equality выполняется позже. «Sequential один payload» не ограничивает transient copies, decoded root/index, result и metadata closure. До freeze задать численные parser depth/node/collection caps и отказ до allocation/recursion, owner безопасного decoder и точный target file/import disposition. Существующий codec нельзя объявлять готовым resource-safe storage decoder только по byte cap. Heap/time measurements допустимо оставить SP-P1/P3I, но отсутствие проектного bound нельзя заменить будущим benchmark. Полный root scan ограничен 16 MiB/65536 entries и приемлем как bounded index admission; 272 MiB — верхняя граница raw artifact bytes одного read, не memory/time SLA.
+
+**P0-R3 — P2 / V1/V2 migration map недостаточно точна (§15.2, §15.6–15.7).** PackManifestStore.load сейчас json.loads→model_validate без version admission, WorldPackManifest.pack_version — произвольная str с default, extra=ignore; старый reader примет V2 и последующий save может стереть roots. Новый required tuple нельзя просто добавить общей модели без version-dispatched V1 policy. Фактические mutation/save callers помимо WorldPackWriter: `application/worldData/pack/bake/finalize/packBakeFinalize.py:finalize_pack_on_world`, `application/worldData/pack/refine/fine/fineRectDrain.py:FineRectDrain.refine_rect`, `application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py`; re-export PACK_WIRE_VERSION есть в `dataModel/worldPack/__init__.py`. До freeze внести их отдельные dispositions и target files version dispatcher/legacy-save guard; определить admission для unsupported minor/patch и V1 с неожиданным spatial_roots, не только unknown major. Unmodified old binaries не получают guard задним числом: явно определить rollout/exclusive writer policy для V2 storage. Не требовать сейчас реализации CAS и не выдавать os.replace за CAS.
+
+**Exact source split/reconstruction — представление достаточно, алгоритм нормализации нужно уточнить.** Root сохраняет полные tables/mapping (включая explicit empty entries), dependencies/diagnostics/ref; shards — все dry/wet bed samples, protected subset и SHORE. Fixed WORLD_FINE space восстанавливается из контракта; topology/region_uid/Z — из root. Разбиение R1 на tile boundaries обратимо. При сборке необходимо канонически объединять **и coverage spans**, не только wet runs: RegionCoverage отвергает adjacent spans одной строки, поэтому простая конкатенация shard.coverage не восстанавливает валидный source. Затем восстановить global row-major surface/shore, union protected_cells, merged same-body wet runs, исходные tables и envelope fields; проверять equality payload/dependencies/diagnostics и output_fingerprint по P0-R1. Это требуемое уточнение source→encoding proof, не новый solve. Empty coverage допустима и означает unknown; полностью dry observed coverage требует shards с G1 samples. Пропуск такого dry shard ради compactness нарушит EF-1.
+
+**Absent/empty/unknown и provenance — согласованы.** Missing manifest root/указанный shard не dry; отсутствующая tile entry вне observed coverage unknown. После admitted publication root полнота каталога опирается на publisher proof; selective cold read не доказывает заново весь source hash. Это явно объявленная trust boundary, не дефект. Source PlanRef, artifact SHA и WorldPublicationRef pin — разные identities; source_ref не подтверждает принадлежность выбранному manifest. RESOURCE_LIMIT уже входит в принятый закрытый enum §14.3; новые причины ошибок для budgets не нужны. PREVIEW не превращает corruption/missing в empty.
+
+**Retention всех shards — верное требование, готового механизма не доказано.** §15.7 правильно требует closure `root + все shard ArtifactRef`, включая shards вне текущего окна/cache, до manifest activation. ArtifactFormatRegistryBinding/BlobBackend не обходят вложенные refs и не создают holds из содержимого root. Необходим downstream evidence SP-P3W: explicit closure перед CAS, непрерывное удержание при staging→publication и rollback, retained old pin после смены active root, concurrent GC, release abandoned staging и окончательное освобождение после последнего pin. Root-only hold и lazy hold только прочитанных shards неприемлемы. Сохранение семи PlanDependency refs — provenance, не обещание retention upstream artifacts; обязательный cold gameplay read должен обходиться root/shards без upstream solve. Snapshot adapters/4C3-B и GEN-DAG draft не приняты как ports; их отсутствие не блокирует P0 design, но запрещает объявлять publication/read integration готовой. Public verified bounded byte-read отсутствует в ArtifactBackend/ContentAddressedBlobBackend, остаётся SP-P2R; verify читает весь файл и не возвращает bytes.
+
+**Численные budgets — только предложенный envelope.** 64×64, 65536 shards, 4096 samples/runs/shore rows и raw-byte ceilings дают конечный storage/read профиль; это не доказательство пригодности для текущих миров или дешёвой подготовки. 65536 полных tiles дают максимум 268435456 observed XY cells, при sparse coverage меньше; допускается явный отказ большому source, не потеря фактов. Ограничение request XYZ volume не ограничивает общий объём retained source. Cache 64 MiB не включает decoded root/index/output, поэтому оно не закрывает P0-R2. Численные heap/time SLA по-прежнему отсутствуют; до приёмки следует либо определить их проектные значения/методику, либо явно согласовать более узкий scope bounded bytes/structure, не объявлять весь прежний memory/time budget gate закрытым.
+
+Для повторного review: закрыть P0-R1/R2/R3 документально, уточнить canonical reconstruction и scope budgets. Runtime verification, golden bytes, max-limit fixtures, GC/CAS и cold replay остаются своими downstream gates. Существующие folder counts §15.6 (meta=7) подтверждены; чистые domain→dataModel и codec→dataModel imports разумны, но добавленные dispositions/decoder/source codec paths должны дополнить exact map. Никакая запись этого review не принимает freeze за пользователя.

@@ -92,3 +92,11 @@ Reuse retained: Materials schema/category/lookup, captured WorldPublicationRef, 
 4. Реализация требует отдельной команды пользователя. Этот документ её не разрешает.
 
 Source links `#L` фиксируют проверенные места на дату ревью; после изменений строки нужно перепроверять. Сервер и тесты не запускались: задача документальная, runtime guarantees не заявляются.
+
+## 6. Уточнение после ответа пользователя — 2026-11-02
+
+[Owning P1.6](./physics-spatial-dynamics.md#p16-решения-пользователя-по-замечаниям--2026-11-02) фиксирует согласие с направлениями 01–03: explicit init/resume, completeness computed, binding на пару process/mode с typed input/kernel/output/state. Для 04 принят отдельный owner Time: его публичные типы/семантика передаются в input, Physics не создаёт PhysicsTimePoint/clock. Balance/version types остаются предметом PH-ARCH. **Все четыре exact-freeze gaps остаются OPEN до точных schemas/signatures/validators и повторной приёмки; направления решений уже не требуется предлагать заново.** A–E целиком и SI этим ответом не приняты; PH-ORCH/runtime не разблокированы.
+
+## 7. Документальная доработка P2 — на повторное review
+
+[PH-ARCH P2](./physics-spatial-dynamics.md#ph-arch-p2--уточнённый-freeze-proposal-после-p16) содержит proposed dispositions: 01 → P2.2 (init/resume/Time/zero step), 02 → P2.3 (closed outcomes/completeness), 03 → P2.4 (typed pair binding/group coupling/versions), 04 → P2.1/P2.6 (balance/version ownership и полный common layout, Time external). Статус всех четырёх: **DOCUMENTED PROPOSAL / AWAITING REVIEW**, не CLOSED. Внешние Time/material/read/publication types и concrete kernel specializations остаются OPEN; A–E, units и PH-ARCH целиком не приняты автоматически. Никаких готовых ports или runtime guarantees P2 не заявляет.

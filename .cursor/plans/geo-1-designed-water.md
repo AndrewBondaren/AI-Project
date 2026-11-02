@@ -1,12 +1,18 @@
 # GEO-1 — designed water: общие стратегии и каскад параметров
 
+**Актуальная приёмка 2026-11-02:** пользователь принял документальные Spatial SP-1
+(scope §14.12), GEO EF-1 (scope EF-1.12) и GEO-SPATIAL-CONTRACT.
+Запись приёмки и исключения — EF-1.14 в конце плана. Прежние OPEN/НА ПРИЁМКЕ
+этих документов ниже сохраняют историю; implementation/G10-A и downstream не приняты.
+
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
 **Контроль интеграции:** [оставшиеся пробелы и условия handoff со Spatial](#оставшиеся-пробелы-интеграции-geo-1--hydrology--spatial-2026-11-02); статусы обновляются по evidence owning-плана.
 
 ## Контракт исходных фактов Hydrology — нормативное место
 
-Статус: **архитектура/представление OPEN; точные POJO/enum ещё не заморожены**.
+Статус: **документальный exact freeze принят пользователем в scope EF-1.12**;
+source implementation и production evidence остаются OPEN (актуальная запись EF-1.14).
 Этот раздел владеет доменным output Hydrology. Generic read, представление и
 материализация — [SPATIAL §§3/7/12](./spatial-distribution-domain.md);
 [таблица соответствия и пути исполнения — SPATIAL §13](./spatial-distribution-domain.md#13-соответствие-контрактов-и-порядок-freeze).
@@ -14458,7 +14464,7 @@ code и не запуск G10-A cutover. Acceptance остаётся за пол
 
 ## EF-1 — exact freeze Task11 A / canonical open water (2026-11-02)
 
-**ПРЕДЪЯВЛЕН НА ПРИЁМКУ, НЕ ПРИНЯТ.** Актуальный документальный проект по
+**ДОКУМЕНТАЛЬНО ПРИНЯТ пользователем в scope EF-1.12 (запись EF-1.14).** Exact freeze по
 A/R1/G1/Z заменяет предварительные source/payload proposals выше. Producer/POJO/
 fixtures/registration не изменены, G10-A не начат. SP-1 §14/14.7 сверены как
 непринятый shared проект. GEN-DAG draft-контракты/планы/node ports не использованы:
@@ -15179,3 +15185,191 @@ budgets, dynamic caller closure и runtime/cold-Pack tests остаются down
 evidence, а не скрытыми блокерами приёмки данного документа. Непринятый Snapshot B
 не получает статус принятого из reuse WorldPublicationRef/ArtifactRef. Все три
 статуса сохраняются **НА ПРИЁМКЕ** до явного решения пользователя.
+
+### EF-1.14. Явная приёмка трёх документальных результатов (2026-11-02)
+
+Основание — прямое решение пользователя: «Принимаю документальные архитектурные
+результаты: 1. Spatial SP-1 в scope итогового verdict §14.12. 2. GEO EF-1 в scope
+EF-1.12. 3. GEO-SPATIAL-CONTRACT — совместимость domain/shared contracts и
+независимость producer/storage веток».
+
+| Результат | Принятый scope / текущий статус |
+|---|---|
+| Spatial SP-1 | **ПРИНЯТ документальный архитектурный результат** в scope Spatial §14.12: shared exact contract с F1/F2/F3 и указанными ограничениями |
+| GEO EF-1 | **ПРИНЯТ документальный архитектурный результат** в scope EF-1.12: A/R1/G1/Z, exact domain/source/read proposal, migration/dispositions и совместная сверка |
+| GEO-SPATIAL-CONTRACT | **ПРИНЯТА совместимость domain/shared contracts и независимость producer/storage веток**; это отдельная явная приёмка, не вывод из первых двух |
+
+Эта запись заменяет прежние НА ПРИЁМКЕ/ожидается решение по этим трём документальным
+результатам, включая EF-1.11–1.13; исторические review остаются evidence.
+Приёмка **не включает реализацию, G10-A cutover, Pack storage/publication, runtime
+overlay, L2/gameplay activation или downstream evidence**. Ни один implementation
+milestone не объявляется DONE. SP-P0/P1 продолжаются по собственным gates, без
+G10-A prerequisite; accepted source понадобится при SP-P3I. GEN-DAG draft не
+использован; reuse revision types не принимает непринятый Snapshot B.
+
+### GEO-I1 — следующий ограниченный implementation step: canonical source records
+
+**РЕАЛИЗОВАН, ПРЕДЪЯВЛЕН НА ПРИЁМКУ; пользовательская приёмка I1 ещё не получена.**
+Реализация разрешена последующей явной командой пользователя «Реализуй только GEO-I1»;
+первоначальная команда подготовки шага код не разрешала. Это первый bounded
+срез реализации принятого EF-1, а не повторное согласование A/R1/G1/Z и не весь
+producer. Выбраны domain-only records/validation: они нужны source preparation,
+но не требуют готовых fine P2 transport, shared Spatial implementation или Pack.
+
+#### I1.1. Входы и точный результат
+
+Prerequisites: три приёмки EF-1.14; существующие FineSurfaceWindow/RegionCoverage,
+WaterBody/PhysicalWaterUnion/SourceBodyMapping и CoordinateSpace/FineXY/Z; отдельное
+подтверждение пользователем scope GEO-I1 перед реализацией. SP-P0/P1, G10-A,
+shared Spatial code, GEN-DAG и Snapshot B не prerequisites этого domain-only среза.
+Перед кодом повторить git status и наличие target files: параллельные изменения
+не перезаписывать. При несовместимой новой редакции — явный review, не scope drift.
+
+Результат: импортируемые immutable **WaterMembershipRun**, **CanonicalOpenWaterSource**
+и **WaterSourceIssueCode** по принятому EF-1.4/1.5; meaningful tests их boundary и
+cross-record invariants. Структура source payload остаётся без provenance fields:
+PlanEnvelope/source graph не реализуется в I1. Никаких WaterBodyV2, callback,
+storage/index/IO или общего Spatial service.
+
+#### I1.2. Allowlist классов/методов/файлов
+
+| Exact path от repo root | Создание/изменение и обязанности |
+|---|---|
+| backend/app/dataModel/hydrology/query/__init__.py | Новый пустой marker, без eager exports |
+| backend/app/dataModel/hydrology/query/source.py | Новые WaterMembershipRun/CanonicalOpenWaterSource/WaterSourceIssueCode, exact fields и enum values EF-1.4/1.5. Public API — existing BaseModel constructor/model_validate; frozen, strict, extra=forbid, revalidate_instances=always |
+| тот же source.py:WaterMembershipRun._strict_coordinates / _ordered_run | Before strict-int check y/x0/x1, затем x0<x1; no sorting/coercion/clamp входа |
+| тот же source.py:CanonicalOpenWaterSource._admit_nested / _consistent_source | Before typed space/fine frame/actual nested records и scalar checks; after immutable coverage/run/body/mapping/shore consistency, как I1.3. Helpers остаются private в том же файле; не добавляют application dependencies |
+| backend/tests/geo1/canonical_source/__init__.py | Новый пустой test marker |
+| backend/tests/geo1/canonical_source/test_source_models.py | Позитивные/negative data-contract cases I1.5; небольшие local factories в этом же файле, не synthetic production admission |
+
+Только эти четыре файла входят в предложенный срез. Existing data models не
+переименовываются/не правятся ради удобства. Counts: новый domain query 0→2 файла
+(window.py отложен), новый test package 0→2; оба с __init__.py. Перед реализацией
+проверить фактические counts/наличие — это target count, не разрешение перезаписи.
+
+Разрешённые source.py imports: pydantic/typing/enum; existing identity.uid,
+spatial.grid.coordinateSpace/coordinateTypes, terrain.sampling.fineSurfaceWindow,
+terrain.regions.coverageGeometry, topology.worldTopology/worldBounds/enums,
+hydrology.waterBody/physicalWaterUnion/planning.sourceBodyMapping/mapCellHydrology/
+enums.hydrologyCellRole, validation.immutableValue. Не импортировать application,
+SQL/World, Spatial read/window, engine, Snapshot/Pack services или surfaceManifest.
+EntityUid/Fine* и MaterialKey runtime semantics брать из existing definitions,
+не придумывать отдельные runtime wrapper classes.
+
+#### I1.3. Validator scope по принятому контракту
+
+- Exact strict integers, actual CoordinateSpace.WORLD_FINE_GRID, ready topology
+  с existing bounds/mode; no bool/string/float, inverted bounds или odd SPHERE
+  normalization. Model_construct/model_copy не обходят revalidation. Ранее
+  нормализованный raw topology восстановить невозможно — не обещать обратного.
+- FineSurfaceWindow existing complete row-major coverage/protected cells reuse;
+  observed bed cells canonical; bed/protection/types immutable. z_min≤z_max и
+  каждый bed_z/effective level внутри [z_min,z_max]. Source covers known XY×Z,
+  sparse wet absence не заменяет observation coverage.
+- Wet runs canonical sorted/disjoint, adjacent same-body слиты, inside coverage,
+  existing body UID, каждой wet cell bed_z<effective body level. Seam остаётся
+  canonical, нельзя интервалом склеить разные края. Reject неполную/неcanonical
+  запись вместо молчаливого исправления.
+- Bodies/unions unique sorted, ссылки member/child/parent существуют и нет циклов;
+  effective levels/relationships согласованы с accepted physical facts. Mapping
+  сохраняет dry empty entries, body refs существуют; shore rows exact SHORE,
+  row-major/unique/inside observed domain, не жидкая membership.
+- WaterSourceIssueCode — только agreed enum для следующих application операций.
+  Model validation возвращает existing Pydantic ValidationError; domain dataModel
+  не создаёт PlanBuildFailure, SpatialReadFailure, логи или fallback.
+
+Membership/connectivity **не доказываются заново** валидатором. Он проверяет
+целостность предъявленных exact facts, не заполняет все bed<level клетки и не
+вызывает flood. Authoritative происхождение/connectivity и captured-input proof
+останутся обязанностью CanonicalWaterSourceJob в следующем отдельном срезе.
+Likewise captured liquid registry membership нельзя проверить без inputs.liquid_keys:
+I1 проверяет existing typed material field, application membership check остаётся
+на принятом EF-1.5 boundary. Не добавлять для него runtime registry в source POJO.
+
+#### I1.4. Participant/caller inventory и legacy dispositions
+
+| Путь / участник | I1 disposition |
+|---|---|
+| Общая P2: PlacementSession + DesignedWaterPlacementPreparer + prepare_competitor | Сохраняются AS-IS, код/markers/area сейчас не переключаются. A остаётся принятым target для будущего цельного P2 migration; не объявлять coarse путь fine-ready |
+| WaterDesignUniverse / prepare_designed_water / procedural wrapper и source adapters | AS-IS; FineSurfaceWindow input migration отложена вместе с A. Production non-water callback по прошлому inventory не найден; не выдумывать adapters |
+| DEPENDENT BoundaryPreparationJob / AttachedCoastlinePreparer | AS-IS отдельная fine session, не PRE_RELIEF competitor. Shared V2 constructors не меняются I1 |
+| PC WaterPlacementPlanProvider / run_prepared_water_placement / legacy PlacementBatch | AS-IS production registration. No G10-A switch, no new binding/slot/cache versions |
+| FineWaterPublicationJob / NativeFinalPublicationJob / HydrologyFactsAssembler.publish_fine | AS-IS producer/admission; новые source records пока не подключаются сюда |
+| Future CanonicalWaterSourceJob.prepare | Будущий первый application producer CanonicalOpenWaterSource, не реализуется/не регистрируется I1 |
+| Future PreparedOpenWaterReader / Pack reader | Будущие consumers; WaterWindowFacts/WaterVolumeRun/shared SP-1 implementation отложены. F1/F3 не реализуются под видом model tests |
+| HydrologyWorkingFields, hard corridor, L0, TerrainBatchOrchestrator, Climate/Landcover/coating | Все HSP dispositions EF-1.8 сохраняются; I1 не удаляет/не переключает readers/geometry helpers |
+
+В текущих production callers нового source типа нет. I1 добавляет только test
+consumers; наличие типов не доказывает producer join, cold-Pack replay или
+отсутствие legacy источников. Blanket deletion/cleanup в этом срезе запрещён.
+
+#### I1.5. Проверки, критерии сдачи и stop boundary
+
+Обязательные cases: valid dry source с explicit coverage; wet run с точным
+negative bed и effective level; isolated dry low cell не становится wet только
+по bed<level; immutable records; strict coercion/forged copies; topology frame/
+odd sphere/inverted bounds; missing/unsorted/overlapping/unmerged runs; unknown
+body/mapping/member refs и union cycles; wet bed==level; out-of-range bed/level;
+shore outside coverage/wrong role; explicit empty source mapping остаётся dry
+source evidence, не unknown world. Отрицательные проверки должны бить именно
+нарушаемый invariant, не случайную ошибку сборки fixture.
+
+Проверки реализации: focused backend/tests/geo1/canonical_source/test_source_models.py;
+existing backend/tests/geo1/integration/test_surface_validation.py и
+backend/tests/test_hydrology_water_body_uid.py как совместимость existing water/
+mapping contracts; проектные type/lint checks только затронутого scope.
+Проверить imports без app/storage dependencies,
+реальные file counts и diff на отсутствие изменений production wiring/fixtures.
+Полную regression suite не заявлять заранее; расширять при обнаруженной зависимости
+или failure. Сейчас тесты не запускались — кода GEO-I1 ещё нет.
+
+**Сдача I1:** records соответствуют EF-1, проверки пройдены, перечислены реальные
+изменённые файлы и ограничения; отдельно предъявить пользователю. Нельзя закрыть
+G10-A/SP-H или source/read/storage milestones результатом этого шага.
+
+**Явно вне I1:** fine P2 marker/geometry/constraints/area migration, NativeWaterPlacementJob/
+NativeBasinSpecJob, CanonicalWaterSourceJob и его fingerprint envelope, shared SP-1
+код/WaterWindowFacts/PreparedOpenWaterReader, codecs/type IDs/surfaceManifest,
+production registry/version bumps, Pack IO/publication, runtime и L2/gameplay.
+При необходимости любого из них остановить расширение I1 и предъявить отдельный
+scope; эта команда разрешила только подготовку плана, не реализацию.
+
+#### I1.6. Implementation evidence — результат на приёмку (2026-11-02)
+
+Проверены приёмки EF-1.14 и exact allowlist I1 до кода. Новая команда пользователя
+явно разрешила реализацию только I1. Противоречий принятому EF-1 при выполнении
+не обнаружено; контракт не изменялся. GEN-DAG/непринятый Snapshot не использованы.
+
+Реализованы четыре файла I1.2: domain query/__init__.py (пустой), source.py с
+WaterMembershipRun/CanonicalOpenWaterSource/WaterSourceIssueCode и validators;
+test package/__init__.py (пустой) и test_source_models.py. Exact fields/defaults/
+enum values сохранены. Before-admission не допускает coercion и исправления
+forged nested instances посредством legacy normalization. After-validation
+проверяет coverage/vertical scope, R1 order/ownership/bed inequality, physical
+union refs/ancestry/effective levels/cycles, mapping и dry shore metadata.
+Union semantics сверена с existing waterBodyResolver/materializer: ancestor
+member sets включают descendant bodies, own declared level не обязан равняться
+effective level. Flood/connectivity и liquid registry membership не вычисляются.
+
+Выполнены проверки:
+
+- `.venv/Scripts/python.exe -m unittest tests.geo1.canonical_source.test_source_models
+  tests.geo1.integration.test_surface_validation tests.test_hydrology_water_body_uid -q`
+  из backend: **47 tests, OK**, включая **19** новых tests (negative cases внутри subTests).
+- `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
+  backend/app/dataModel/hydrology/query/source.py`: **0 errors, 0 warnings**.
+- AST imports audit: forbidden application/SQL/WorldPack/WorldSnapshot/Spatial
+  read/query imports отсутствуют. Оба новых package содержат ровно по 2 .py файла;
+  markers пустые, trailing whitespace отсутствует.
+- Поиск новых symbols в backend/app: только definitions/internal references в
+  source.py. Production consumers/registration/fixtures не переключались.
+
+Полная regression suite/producer runtime/cold-Pack replay не заявлены. Existing
+compatibility tests эмитят штатные hydrology diagnostics и завершаются OK.
+Code allowlist — только четыре файла; этот раздел плана является отчётом о работе,
+не расширением implementation scope. Другие изменения working tree не включены.
+
+**I1 — НА ПРИЁМКЕ реализации.** G10-A/SP-H не закрыты. Fine P2 migration,
+CanonicalWaterSourceJob, Spatial reader, codecs/Pack/production wiring и
+downstream evidence не начаты результатом I1. Наличие validated source records
+не доказывает authoritative происхождение/connectivity предъявленных facts.

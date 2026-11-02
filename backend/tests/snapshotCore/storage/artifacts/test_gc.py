@@ -10,6 +10,7 @@ from app.dataModel.worldSnapshot.identity.refs import SnapshotChainKind
 from app.db.repositories.sqlite.artifacts.catalogStore import SqliteArtifactCatalog
 from app.db.repositories.sqlite.artifacts.holderStore import SqliteArtifactHolders
 from app.db.repositories.sqlite.artifacts.access.artifactScope import SqliteArtifactScope
+from app.db.models.artifacts.holderRows import ArtifactHolderEventRow
 from tests.snapshotCore.support.fixtures import live_database, run_async, live_started, unsafe_update
 from tests.snapshotCore.support.artifactFixtures import (
     adapters, descriptor, preparing, writer_fact, sealed, close_preparation, snapshot_metadata,
@@ -305,6 +306,44 @@ class SqliteArtifactBehaviorTests(unittest.TestCase):
                         self.assertEqual(await holders.holders(a), (OperationHolder(lease=lease),))
                 with self.assertRaises(PublicationInfrastructureError):
                     await holders.handoff(scope, lease, (), (a,))
+        run_async(check())
+
+    def test_corrupt_metadata_only_destination_refuses_without_appends_even_when_caller_commits(self):
+        async def check():
+            async with live_database() as bundle:
+                await live_started(bundle)
+                catalog, holders = adapters(bundle)
+                lease = await preparing(bundle)
+                a, b = descriptor("first-valid"), descriptor("later-corrupt")
+                reservations = [await sealed(bundle, catalog, lease, ref) for ref in (a, b)]
+                await close_preparation(bundle, lease, ready=True)
+                await bundle[-1].claim_publication(OperationKind.SNAPSHOT_APPLY, lease.operation_id, "w1", "a" * 64, "b" * 64)
+                access = bundle[2]._access
+                async with bundle[1].read_scope() as scope:
+                    corrupt = (await holders._chain(access, scope, reservations[1].artifact_id))[0]
+                await unsafe_update(bundle[0], "artifact_holder_events", "event_id", corrupt.event_id, "event_seq", 2)
+                # Read facts directly: the intentional corruption makes B's normal
+                # holder projection fail, but its operation acquire must survive.
+                sql = "SELECT * FROM artifact_holder_events ORDER BY event_id"
+                async with bundle[1].read_scope() as scope:
+                    before = await access.all_rows(scope, ArtifactHolderEventRow, sql)
+                async with bundle[1].transaction(lease.operation_id) as scope:
+                    snapshots = await snapshot_metadata(bundle, scope, lease, (a, b))
+                    with self.assertRaisesRegex(PublicationInfrastructureError, "invalid artifact holder chain"):
+                        await holders.handoff(scope, lease, snapshots, (a,))
+                    scope.assert_active()
+                    inside = await access.all_rows(scope.read_scope, ArtifactHolderEventRow, sql)
+                    # Deliberately leave normally: the caller caught the refusal
+                    # and commits its snapshot metadata, without any rollback.
+                async with bundle[1].read_scope() as scope:
+                    committed = await access.all_rows(scope, ArtifactHolderEventRow, sql)
+                self.assertIsNotNone(await bundle[4].read(snapshots[0]))
+                self.assertEqual(len(before), 2)
+                for observed in (inside, committed):
+                    self.assertEqual(observed, before)
+                    self.assertFalse(any(row.holder_kind == "snapshot" for row in observed))
+                    self.assertTrue(all(row.holder_kind == "operation" and row.event_kind == "acquire"
+                        and row.operation_id == lease.operation_id and row.fence == lease.fence for row in observed))
         run_async(check())
 
     def test_ready_inactive_handoff_requires_explicit_existing_retention(self):
