@@ -3621,3 +3621,201 @@ bounded batch memory/concurrency budget, typed error propagation по реаль
 callers, cold-Pack/source consistency, seam/river/Climate/Landcover negative cases
 и GEN consumer evidence. Расширение согласованного scope возвращается на review,
 не выбирается молча в implementation. Код, cutover и публикация не начаты.
+
+### 15.20. SP-P1 implementation preflight (2026-11-02)
+
+**Verdict: первый изолированный code-step подготовлен к отдельному разрешению;
+код НЕ разрешён этим preflight.** SP-P0 принят в scope §15.19. Новым прямым
+решением пользователя приняты GEO-I1 и исправленный Snapshot 4C3-B. Это снимает
+именно ожидание их пользовательской приёмки; не принимает G10-A, весь Snapshot,
+production binding, publication/read port или SP-P1 implementation. Исторические
+оговорки «I1/B не принят» выше читать с этой поправкой. Другие планы не изменены.
+
+#### 15.20.1. Actual evidence и lock drift
+
+Проверены текущие source.py, canonicalCodec.py, surfaceManifest.py,
+worldPackManifest.py, packManifestStore.py, artifacts/references.py,
+artifacts/encoding/coreManifest.py, contracts/formatBackend.py, registry/artifactRegistry.py,
+actual fingerprint implementation `application/planning/service/planFingerprints.py`.
+Paths здесь от backend/app. Последний путь важен: fingerprint находится в общем
+planning/service, не в worldData/planning/encoding.
+
+Повторно вычислены SHA-256 всех **61** файловых baseline entries §15.13.2:
+**61 совпадение, 0 drift**. Отдельно совпали source.py=9bea0d…192d6 и
+surfaceManifest.py=de00a1…d7b2d. Это проверка неизменности declarations относительно
+принятого traversal, не новый запуск codec probes, тестов или benchmark.
+Следовательно принятые ordered fields/defaults/metadata/aliases §15.13 для узкого
+roster §15.18.2 сохраняются. Lock не обновлён. Полный широкий inventory не возвращён
+в admission. При реализации обязательно machine-readable сравнение именно closure:
+source 33 (23 records/10 enums), storage 38 (27/11), 16 source aliases; не проверять
+только число bindings или SHA одного manifest. RuntimeIssueContext generic parameters,
+phantom RegistryKey marker и Annotated metadata не получают самостоятельных IDs.
+
+Existing reuse: WaterMembershipRun и CanonicalOpenWaterSource с исправленными
+I1 validators; PlanEnvelope[CanonicalOpenWaterSource], FineSurfaceWindow,
+RegionCoverage/CoverageSpan, topology/body/union/mapping и diagnostics declarations;
+CanonicalCodec TLV v1, output_fingerprint, ArtifactRef и bytes format contract.
+**Отсутствует application caller CanonicalOpenWaterSource/WaterMembershipRun** по
+поиску backend/app/application. SourceSchema, packSchema, packCodec, packFormats,
+HydrologyPackRoot/Shard и spatial manifest entries остаются additions.
+Наличие source POJO не означает producer registration.
+
+Source IDs — ровно §15.18.2, включая 60004/60007/60008; storage добавляет
+60001/60002/60003/60005/60006. JSON SpatialDatasetKind/SpatialDomainRootRef не получают
+TLV ID. Source manifest — literal immutable bindings, не фильтр latest SURFACE_MANIFEST.
+Storage импортирует frozen source baseline, не live global registry. Snapshot
+ARTIFACT_CORE_SCHEMA использует ArtifactKind=20003/ArtifactRef=20107: это другое
+format-local пространство. Контрпример ошибочного reuse: замена 60005 на 20107
+меняет bytes/hash прежнего storage v1. Выбрано сохранить 60005/60006; owner Spatial
+codec, Snapshot не менять. Общий класс ArtifactRef остаётся один.
+
+#### 15.20.2. Diagnostic admission и interfaces
+
+Повторный поиск `RuntimeIssueContext(` по backend/app обнаруживает только declaration.
+Producer/transfer trace §15.18.1 остаётся нормативным; его code strings не enum IDs.
+В source admission до fingerprint и в storage admission до возврата результата
+обязательны runtime_context=None и reference=None. Нельзя удалять неизвестный
+context, менять disposition или нормализовать его в строку. Например injected
+RuntimeIssueContext с известным globally registered enum всё равно запрещён:
+успешный generic decode не доказывает producer admission. Declaration IDs107/109
+сохраняются ради exact shape; concrete fallback roster пуст. Новый producer emission
+останавливает только затронутый admission и требует review расширения.
+
+**Предложение интерфейса первого шага, на согласование:** в sourceSchema.py публичные
+`OPEN_WATER_SOURCE_SCHEMA_V1`, `require_source_schema_v1() -> None`,
+`require_source_diagnostics_v1(diagnostics: tuple[PlanDiagnostic,...]) -> None`.
+Последняя проверяет весь immutable diagnostic graph и сохраняет его без изменений;
+refusal — existing CanonicalEncodingError, без нового query error enum. Первый helper
+проверяет shape/ID lock до encode/fingerprint. Helpers не строят source, envelope,
+PlanRef или fingerprint; будущий GEO producer и replay вызывают их перед existing
+output_fingerprint(payload, dependencies, diagnostics, OPEN_WATER_SOURCE_SCHEMA_V1).
+Private lock constants/inspection helpers не public registry. Отдельная factory,
+source DTO или новый source codec revision не нужны. Это добавление API, а не уже
+принятый или реализованный символ; требует явного согласования в code-step command.
+
+Storage public API сохраняется §15.4: encode_root/encode_shard и
+ decode_root/decode_shard(payload: bytes, version: FormatVersion); exact top-level
+root/shard, не произвольный envelope. Generic bounded decoder — internal application
+utility §15.10.3. Artifact format constants используют bytes→bytes с version refusal,
+а не HydrologyPackRoot как content_model. `register(contract, backend)` вызывается
+только внешней composition после принятия backend; import-side registration в P1 нет.
+
+#### 15.20.3. Exact files/imports и атомарные шаги
+
+Все additions ниже — предложение реализации. Fields/enum values остаются exact
+§§15.2–15.3/15.13/15.18, не переименовываются. Пути от backend/app, tests от backend.
+
+| Шаг / prerequisite | Allowlist и результат | Acceptance / stop boundary |
+|---|---|---|
+| P1-A: принятые P0/I1 + отдельное разрешение helper API выше | generators Hydrology path `application/worldData/generators/hydrology/encoding/{__init__.py,sourceSchema.py}`; `tests/spatial_pack/{__init__.py,test_source_schema.py}` | Literal 33 bindings, exact lock/aliases, diagnostic admission, existing TLV round-trip и fingerprint golden; stop до storage POJO, producer, manifest и IO |
+| P1-B: принят P1-A | `dataModel/hydrology/pack/{__init__.py,root.py,shard.py}`; hydrology/encoding/packSchema.py; tests/spatial_pack/test_storage_schema.py | 38 bindings; root/shard fields, strict nested admission, local refs/caps/order; stop до parser, builder/partition и IO |
+| P1-C: принят P1-B, bounded parser contract §15.17 | application/encoding/boundedCanonicalDecode.py; при необходимости private shared helpers в canonicalCodec.py; hydrology/encoding/{packCodec.py,packFormats.py}; tests/spatial_pack/{test_pack_codec.py,test_bounded_decode.py} | Wire parity, pre-construction limits, malformed/version/diagnostic refusal; bytes contracts без backend registration; stop до verified stream read и publication |
+| P1-D: P1-C и отдельный review полного guard diff | dataModel/worldPack/meta/spatial/{__init__.py,domainRoot.py}; existing worldPackManifest.py; application/worldData/pack/encoding/{__init__.py,packManifestCodec.py}; existing pack/io/{packManifestStore.py,worldPackWriter.py}; tests/spatial_pack/test_manifest_versions.py | Pure V1/V2 dispatch + legacy save/construction refusal единым изменением; default остаётся V1; stop до V2 activation и namespace lifetime integration |
+
+Import map: sourceSchema → data declarations/schemaManifest/canonical error;
+packSchema → sourceSchema + root/shard; root/shard → dataModel only;
+packCodec → packSchema + bounded decoder + existing encoder, не storage backend;
+packFormats → ArtifactFormatContract[bytes]; manifest codec → WorldPackManifest +
+spatial directory records, без hydrology payload/application registry. Empty __init__
+без eager exports. Existing planning/source producer imports не менять в P1-A.
+
+Пересчитанные direct counts (включая markers): meta 7→7; meta/spatial 0→2;
+hydrology/pack 0→3; hydrology/encoding 0→2 в A, →3 в B, →5 в C;
+application/encoding 2→3; pack/io **11→11**, additions запрещены;
+pack/encoding 0→2. Новый tests/spatial_pack 0→2→3→5→6; последний шаг WARN,
+без превышения ceiling10. Для meta7 и io11 WARN озвучен; композиция новых
+ответственностей уже вынесена в spatial/encoding, перенос unrelated io не входит.
+Перед каждым шагом повторить counts и line/class limits; превышение лимитов — stop
+на согласование композиции, не silent helper spill в соседние owners.
+
+#### 15.20.4. Проверяемые acceptance cases
+
+- P1-A: assert exact ID→class и field-order/type/default/enum/alias lock; отдельные
+  negative mutations field order/default/enum value/ID/alias constraint должны отказать
+  до encode. Нельзя «обновить golden» для починки drift. Minimal dry/wet source и
+  full specialized envelope: encode→decode→encode bytes equality и payload equality.
+  Fingerprint golden считается existing output_fingerprint, отдельно от artifact SHA;
+  изменение diagnostics/dependency/payload меняет output. Input fingerprint не replay.
+- Diagnostic negatives: неизвестный concrete enum, injected reference, ERROR→FALLBACK
+  substitution, context из globally registered enum. Refusal без strip/coercion;
+  исходный graph после отказа неизменён. Позитивы — реальные формы water/river diagnostics
+  §15.18.1 с None contexts, включая JSON message как непрозрачную строку.
+- P1-B/C: wrong top-level, bool вместо int, list вместо tuple, extra/missing field,
+  missing explicit default/None, чужой source_ref/frame/body, duplicate tiles/rows,
+  SQL_ROWS ref, row_count, wrong format/version/size; distinct empty coverage и dry bed.
+  Unsupported source/pack format versions отвергаются, не пробуются latest схемой.
+- P1-C: truncated header/body, unknown tag/ID, trailing bytes, duplicate record fields,
+  noncanonical set/order/integer, oversized length, depth65, container65537, root
+  nodes524289/shard262145 и byte cap+1. Counters включают wrappers/field names;
+  instrument constructor: structural refusal до вызова domain constructors. Exact-bound
+  fixtures проходят только если соблюдены все остальные ограничения. Old decode с
+  последующей проверкой counters неприемлем. Golden parity с existing codec на допустимых
+  fixtures; encode-only sizing §15.18 не выдавать за safe decode evidence.
+- Canonical reconstruction: в P1 тестовый oracle, без production builder: dry/wet
+  через x=-1/0/63/64, adjacent coverage spans и same-body runs объединяются; gaps,
+  protected, shore, empty mapping entries сохраняются. Compare whole payload/dependencies/
+  diagnostics и replay fingerprint. Cross-shard overlap/body conflict/missing declared
+  shard отказывают. Production partition/build equality и полный cold audit — P3I/P3,
+  не результат тестового oracle.
+- P1-D: missing version→V1; V1 spatial_roots даже []→refusal; exact V2 required tuple;
+  unknown minor/patch, duplicate JSON keys, null/missing/duplicate/unsorted domains→refusal.
+  Legacy V1 encoding исключает roots. V2 save/injected writer отказывает до mkdir/temp/
+  hash mutation. Эти unit proofs не доказывают lifetime fencing живого worker.
+
+Target commands после реализации из backend: `../.venv/Scripts/python.exe -m unittest
+ discover -s tests/spatial_pack -p 'test_*.py'`; плюс existing canonical codec и GEO-I1
+regressions для затронутого шага. Сейчас эти новые tests не существуют и не запускались.
+Отдельно downstream: verified oversized stream/cancel/close — P2R; actual disk cold
+read без producers/L0 — P3/SP-3; SQL+BLOB staging, complete closure root+all shards,
+CAS failure/retry, old pin/GC и namespace drain/cleanup — P2W/P3W. Heap/time/concurrency
+measurements не обещаны данным статическим preflight.
+
+#### 15.20.5. Конфликты, callers и границы ответственности
+
+**Manifest integration conflict (owner Pack/Spatial P1-D).** Actual manifest mutable,
+extra=ignore, pack_version arbitrary string; store load→model_validate и save→JSON→replace.
+Контрпример: V2 roots загрузились старой моделью, были проигнорированы и исчезли при save.
+Варианты: global default2 (неприемлем), pure representation без подключения (допустим до D),
+dispatcher+legacy guard вместе (выбран для D). Constructor/save guards не заменяют
+namespace exclusion §15.17. Если D выявляет mutation до guard в caller, D останавливается
+до адресного исправления/согласования; нельзя объявлять весь P1 blocked или V2 safe.
+
+Actual store callers WorldPackReader/WorldPackWriter сохраняются legacy. Сохраняются
+отдельные dispositions finalize_pack_on_world, FineRectDrain и surface materialization
+из §15.10.4, а полный mutation inventory/ZIP/workers — §15.15. V2 mutation запрещена;
+не добавлять preserve-roots rewrite как обход. HydrologyWorkingFields, L0 masks,
+NativeFinalWaterQuery, terrain/Climate/Landcover не переключаются и не удаляются.
+Error нового пути не вызывает legacy fallback. Второго canonical source не создаётся.
+
+**Snapshot seam (owner Snapshot + Spatial P2W/P3W).** B принят в exact corrected
+catalog/holder/history scope, включая prevalidation metadata destinations до append.
+Контрпример: успешный SQL handoff не удерживает автоматически shard, не переданный в
+retained_refs, и не доказывает drain filesystem writer. Выбрано reuse accepted B с
+явной complete closure, но integration ждать конкретного lifecycle/publication port
+и evidence, а не «завершения Snapshot». Existing ArtifactBackend имеет write/verify/delete,
+не public byte read; verify не transport. P2R принимает bounded read отдельно.
+
+SP-P1 = representation/schema/codec и version admission; P2R = verified byte IO;
+P2W = staged Pack publication/lifetime integration; P3I = producer-backed deterministic
+partition/root builder; P3W = closure publication binding; SP-3 = cold Pack domain reader.
+G10-A не prerequisite P1 design или A–D; конкретный accepted producer требуется
+зависящему P3I slice. Никаких dependencies на завершение целых GEO/Spatial/Snapshot/GEN.
+
+**Предложения другим планам (не внесены):** GEO отметить приёмку I1 и при подготовке
+producer импорт одного OPEN_WATER_SOURCE_SCHEMA_V1/admission перед fingerprint;
+Snapshot отметить приёмку исправленного B, сохранив C/D/4D2 integration gates;
+Pack owner предъявить exact lifetime/retention/publication port перед P2W binding.
+Time/API-1 не затрагивались.
+
+**На согласование:** helper API P1-A и атомарное разбиение A–D выше. Принятый P0
+не переоткрыт. Remaining blockers: отдельное разрешение code-step; для дальнейших
+slice — их перечисленные parser/guard/producer/IO/lifetime proofs. Review PASS не
+заменяет пользовательской приёмки.
+
+Готовая команда первого допустимого шага:
+> Реализуй только SP-P1-A по §15.20 spatial-distribution-domain.md. Согласую helper
+> API §15.20.2. Добавь sourceSchema.py и тесты в exact allowlist A; сохрани принятый
+> lock/IDs и producer-backed diagnostic admission. При drift остановись с concrete
+> diff, не обновляй lock. Не создавай storage POJO/ports, producer, manifest wiring,
+> publication, node bindings или cutover. Выполни адресные проверки A и предъяви
+> результат на пользовательскую приёмку; P1-B не начинать.

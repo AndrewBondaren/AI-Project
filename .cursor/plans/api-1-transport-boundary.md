@@ -369,3 +369,262 @@ Multi-domain edit первой версии: preview разрешён тольк
 Приёмочные сценарии: missing vs explicit null/reset; invalid не default; preview no DB/Pack/tasks/version writes; stale between preview/apply; repeated operation и unknown commit; linked registry deletion; grid change после gameplay; failure до/после commit без partial acceptance; app secret write не возвращает secret read; frontend protocol parity; независимые pure reads без bake. SSE проверяется отдельно по existing chat protocol, не переделывается settings migration.
 
 **Verdict:** static endpoint/import и slice inventories выполнены; полная nested-call/client/authorization ревизия каждой строки ещё не завершена. Proposal готов к предметному согласованию ownership/routing/lifecycle, **не exact freeze всех доменов и не CODE-READY**. Следующий разрешённый шаг — принять routing exception и пилотный owner contract; затем B exact schema/files и independent review, без кода. Межплановые requests: GEN rule exception для read/prepare, Snapshot applicable settings handler/atomic batch, Pack grid consequences, World calendar/creation ownership; в чужие документы изменения не внесены.
+
+## API-1-R3 — проверка отчёта R2 по actual contracts (2026-11-02)
+
+Источником предыдущего отчёта служит раздел R2 этого файла; отдельный report в доступном дереве не найден. Перед работой `git status --short` пуст; последний commit документа — `60ccaae5`. R2 сохранён как история исследования. Нижеследующие исправления имеют приоритет над его рекомендациями. Это документальный proposal, не приёмка исключений.
+
+### Исправления evidence и контрактов
+
+1. **R2 client mismatch опровергнут.** `frontend/src/api/settingsApi.js` вызывает существующие GET/PUT `/chat/settings` из `api/routes/chat.py:79,90`; оба router подключены в `core/app.py` с `/api`. `/settings` — другой контракт: optional поля и ответ `{ok,updated}`, тогда как `/chat/settings` принимает полный ChatSettings и возвращает ChatSettings. Поэтому предложение исправить helper на `/settings` снято. Поиск имён helper в frontend/src не выявил callers за пределами его файла; это не доказательство отсутствия внешних клиентов. Сохранить оба wire contracts до отдельной приёмки. В chat update есть прямой `app_settings.update`, в settings update — `container.settings_service().update`: ревизия должна включать оба пути.
+2. **API-F1 подтверждён с уточнением:** `WorldService.update → _write_scope → _update → _save → repo.update + DeclaredRegionEditor.reconcile`, затем route вызывает `map_cell_service.clear`. `DeclaredRegionEditor.transaction` использует `transaction_if_needed`; внутри reconcile создаётся StateChangeConsumer и вызываются remove_declared/add_declared/evaluate. SQL сохранение и region effects имеют общую transaction scope при установленном editor; route clear вне неё. Нельзя утверждать, что все effects вне транзакции, либо что SQL transaction обеспечивает Pack publication.
+3. **Preview не равен новому состоянию:** `edit_region(validate_only=True)` выполняет apply_region_operation, merge, normalize и prepare_import, но возвращает **исходный World**; это не PreparedOwnerChange и не preview нового POJO. `validate_only` обходит write scope и `_update`. Перенос этой сигнатуры как общего preview дал бы ложный результат. Pure prepare должен вернуть отдельно вычисленный candidate и diagnostics, не называть исходный World candidate.
+4. **Нет optimistic concurrency в actual storage:** `IWorldRepository.update(World)` не принимает expected revision; `SqliteWorldRepository.update → BaseRepository.save` обновляет по primary key без CAS. `next_version_number` считает суффиксы имени, current_tick — runtime clock; schema_version и Pack hash также не универсальная revision всей строки. WorldPublicationRef из R2 — proposed foreign contract, не найденный existing type. Нельзя приписывать существующему read coherent publication или обещать conflict detection.
+5. **Общая validation-инфраструктура уже содержит domain policy:** `facade.merge_world_patch` специально нормализует terrain_masks; `normalize_world` вызывает terrainHillRegistry.apply_landcover_policies с terrain_registry/default_landcover. WorldService._validate содержит grid/terrain checks. Поэтому одного переноса COLUMN_INVALIDATES недостаточно. Retain resolver/report/WorldSlice; replace domain branches owner-owned normalization/validation на том же POJO контракте. Никакого второго field registry. Cutover требует parity authored presence, canonical overlays и cross-reference validation, а не только сравнения model_dump.
+6. **Pack grid не безопасный write pilot по умолчанию.** fine_cells_per_map_cell вызывает clear, grid влияет на materialization; WorldPackMetadata включает служебные publication сведения и не является автоматически редактируемой settings секцией. Предлагается сначала read/preview WorldGridSettings, только после решения routing и доказательства no writes; accepted apply — отдельный срез. Owner Pack предложен, не утверждён.
+7. **Roster WorldSlice не покрывает все настройки World.** `db/models/world.py` также содержит stat/skill/resist schemas, formulas/action_registry, slots/weight/volume, HP/wounds, calendar/sleep, дополнительные registry, caves, custom fields и migration policy. Отсутствие в WORLD_SLICES не даёт права raw passthrough. Их public exposure закрыт до owning typed contract. Calendar остаётся World-owned; current_tick, created_at, идентичность, pack path/hash/version и schema/publication metadata исключаются из пользовательского settings patch.
+8. **Transport размещение не доказывает thinness:** map.bake_world_pack читает World/locations/connections, собирает materialization context/writer и вызывает bake_pack, затем loading progress. Это explicit multi-input scenario; не переносить его в settings helper. chat history/pending обращаются к repositories. Для этих families A/B gate остаётся OPEN; R2 inventory не означает проверку всех вложенных callers.
+
+### Решение ownership для непокрытых секций (proposal)
+
+Existing для всех строк — World row + WorldService.get_by_id/update/prepare_import, а не отдельные typed public settings методы. Target — отдельный owner contract только после проверки его consumers; до этого read существующего world export сохраняется, новый settings write запрещён.
+
+| Секция | Предлагаемый owner / граница |
+|---|---|
+| name, narrative_language, measurement_system | World; идентификаторы и creation metadata не менять через settings |
+| calendar | World: CalendarSettings read/prepare; Time только consumer resolved calendar и clock-dependent consequences |
+| stat_schema, skill_schema, resist_schema, derived_formulas, action_formulas, action_registry | Character stats / Actions; раздельное подтверждение owners, не один World bag |
+| slots, weight_enabled, volume_enabled, overload_penalty_formula | Inventory |
+| combat_settings | Combat/Actions |
+| hp_enabled, faint_threshold, faint_check_formula, wounds_enabled, wound_death_formula, wound_type_registry | Health/Wounds |
+| sleep_penalty_formula | Needs/Time consumer; ownership OPEN, не приписывать календарю |
+| colour/texture/tag/intensity/narrative registries | Content owners OPEN; не выводить ownership из SQL таблицы |
+| body_schema, muscle/constitution, npc target/needs/goals, character traits, respawn registries | Character/NPC owners; references и live effects проверять отдельно |
+| material_category/use_type | Materials; согласовать с typed material_registry |
+| cell_state/danger/road_type/location_state, caves | Соответственно cell/locations/roads/terrain owners, OPEN точные contracts |
+| faction_relation_type_registry | Factions |
+| player_fields, npc_fields | Character schema owner |
+| stat_conflict_mode/stat_migrations/registry_migrations/trait_change_log_threshold | Migration/character evolution operations, не обычный replace settings |
+| library_pins | Library attachment operation, не свободное редактирование массива |
+
+Эта таблица дополняет все 36 строк R2, но не утверждает новые домены. File/import source для typed строк — конкретные POJO imports в worldSlices.py и accessors worldRow.py; для непокрытых строк единственный установленный storage type — World. Запрещено объявлять dict-поля production typed контрактами.
+
+### Карточки атомарных срезов: методы, типы, файлы, переход
+
+Все новые имена ниже — **proposed**, не existing symbols. `Revision`, `ActorContext`, `PublicationReceipt` требуют точного foreign freeze; строковый hash или request bool не заменяют их. Ошибки: существующие WorldDataNotFoundError/WorldDataValidationError/ImportValidationError сохраняются на legacy path; новые операции различают not-found, invalid с FieldPathError, forbidden, conflict, unsupported lifecycle и infrastructure failure. HTTP mapping принадлежит api/errorMapping.py, не домену.
+
+| Срез | Existing → target public method; Input / Output / Error | Class/factory/file/import map; retain/replace/remove; gate |
+|---|---|---|
+| App settings | app_settings reads/update и SettingsService.update → SettingsService.read/update; typed app patch с присутствием полей / redacted view либо updated keys / invalid, forbidden, IO | Existing core/settingsService.py и container.settings_service; proposed types рядом с owner. api routes settings/chat → service; retain оба wire shape, replace прямой singleton access, remove bypass после parity. A-app: сравнить side effects обоих writers, включая reload и persistence |
+| Каждый typed WorldSlice из R2 | WorldService.get_by_id + worldRow accessor → owner.read_settings(Read(world_uid,base,actor)); конкретный POJO + base / not-found, conflict, forbidden | Existing POJO import worldSlices.py retain; proposed public service в owning application package, factory в container; route imports только public method/types. B-read: coherent source и security contract, C routing |
+| Каждый typed WorldSlice prepare | WorldService._update/prepare_import → owner.prepare_settings(Change(world_uid,base,actor,concrete intent)); candidate конкретного POJO + typed consequences + diagnostics / invalid, refs, conflict, forbidden | Proposed owner settings contracts рядом с конкретным POJO, service рядом с owner operation; reuse resolve + WorldSlice + merge. Replace policy branches в facade/worldColumnWrite только при parity. B-prepare: full final-state validation и нулевые effects |
+| Grid pilot | WorldService.update(dict) → proposed PackSettingsService.read_grid/prepare_grid; WorldGridSettings candidate / grid lifecycle refusal | Proposed dataModel/worldPack/settings/change.py, application/worldData/pack/settings/settingsService.py; factory pack_settings_service. Retain WorldGridSettings; replace clear requirement ownership; remove legacy bypass только при accepted replacement. Gate отдельно от write |
+| Regions | WorldService.edit_region(str,DeclaredRegionEdit,validate_only) → owner prepare declaration; DeclaredRegionEdit + base / candidate WorldTerrainMasks + consequences / structured invalid | Retain terrainMasks/regions/edit.py; DeclaredRegionEditor и StateChangeConsumer effects остаются owning domain. Replace old-world preview result. Acceptance связывает declaration + region state, не вызывает reconcile после publication отдельно |
+| Calendar | World.calendar:dict → proposed WorldCalendarSettingsService.read/prepare; World-owned calendar contract + base / resolved candidate + Time consequences / invalid, lifecycle, conflict | Proposed worldData/calendar public service; owning World POJO path требует согласования World/Time. Не импортировать Time algorithms в common layer. Gate только calendar schema + anchor consequences, не весь Time DONE |
+| Apply одной/нескольких секций | WorldService.update + route clear → согласованный DAG invocation → owner operations → Snapshot acceptance; prepared typed changes + base + operation identity / PublicationReceipt / conflict, invalid, forbidden, unknown outcome | Retain public owner operations; DAG и Snapshot bindings только отдельной приёмкой. Remove route clear и старые writers в том же cutover. Gate: applicable handlers, atomic acceptance и idempotency доказаны |
+| Остальные transport families | R2 handlers → их owner public methods; existing wire Input/Output сохранить, domain errors отдельно от HTTP | Retain app/api routes/core registration; replace repositories/algorithms в handlers. Map bake зависит от согласования конкретного DAG сценария, chat SSE от protocol parity. Exact nested I/O для непроверенных families OPEN; code gate закрыт |
+
+Общая строка «каждый WorldSlice» применяется отдельно к каждой строке R2, не предлагает generic runtime dispatch или общий service. Concrete change shape нельзя принять одним generic template: перед B PASS каждая строка должна иметь frozen I/O и factory, либо явно быть unsupported. Это оставшийся документальный gate, не разрешение реализовать недостающие contracts по усмотрению агента.
+
+### Сквозные semantics и проверка атомарности
+
+- Missing patch field сохраняет значение. Explicit null передаётся resolver и принимается/отвергается owning policy; null не универсальный reset. Reset — отдельный owner intent только для разрешённых полей, через existing canonical policy. Для whole-section replace missing проходит правила полного POJO; нельзя применять patch semantics незаметно.
+- Facade рекурсивно сливает json_blob; supplied registries заменяются. На примере terrain_masks + terrain_registry validation и consequences вычисляются на **общем candidate**, иначе валидная совместная правка может быть отвергнута или отдельные previews окажутся несовместимыми. Проверка refs по прежнему состоянию недостаточна.
+- `validate_only` не выделяет version, operation receipt, artifacts, jobs, clock events, state changes или repair defaults; разрешены чтения и локальное вычисление. Read не вызывает repair_defaults. Prepared result не authority token: apply повторно проверяет base, права и applicable invariants внутри acceptance boundary.
+- Trusted actor/capability проверяется application boundary для read, preview и apply; get_container/CORS не authorization. Нельзя доверять world_uid как доказательству доступа. До freeze permission mechanism безопасность нового API не заявлена.
+- Revision должна покрывать все прочитанные settings и зависимости; при независимых domain revisions нужен согласованный consistent vector, не произвольная смесь последних reads. CAS и запись результата операции выполняются в acceptance transaction. Preview A; competing apply B; apply A должен конфликтовать даже при разных HTTP соединениях.
+- Multi-section operation возвращает один accepted receipt только после общего commit; failure любого handler до commit оставляет прежнюю публикацию. Staged artifact не visible state; crash после commit разрешается по operation identity без второго apply. SQL transaction region reconciliation сама по себе этого не обеспечивает. До готовности такого контракта batch apply unsupported, не partial success/207.
+
+### DAG decision: варианты и последствия для согласования
+
+Действующее правило `.cursor/rules/dag-generator-interface.mdc:64–81` требует API → engine DAG → принятая node → domain CRUD и удаления bypass после cutover. Оно включает CRUD read; отсутствие writes само по себе не создаёт действующее исключение.
+
+Предпочтительный **proposal**: direct только pinned read и pure prepare/validate одной owner operation; любая persistent mutation, repair, registry membership change, draft creation/save, live calendar reanchor, grid rebuild и batch acceptance — DAG. Pure multi-section preview допустим лишь как согласованная композиция owners на общем candidate, не универсальный settings service. Пока композиция не принята, поддерживать только single-owner preview.
+
+Сценарии: просмотр grid — direct read после exception; проверка календаря — direct World prepare без изменения tick/anchor; смена масштаба сетки — DAG с Pack consequences; удаление material с refs — domain rejection либо согласованный DAG миграции ссылок; изменение climate и material одновременно — DAG общий candidate/acceptance; изменение live календаря — DAG World + Time consequence + Snapshot; app LLM preference — отдельный app settings контракт, не World DAG exemption. Альтернатива: сохранить DAG даже для read/prepare; цена — invocation/nodes должны быть приняты для этих операций, но owning POJO/API дизайн не меняется. Direct persistent single-owner save не рекомендуется: SQL locality не гарантирует отсутствие nested effects или coherent publication.
+
+### Очерёдность и stop verdict
+
+1. **A-corrections (этот документ):** исправить ложный mismatch, раскрыть nested reconcile/facade policy/CAS gap. Проверка — указанные source chains; код не меняется.
+2. **B-app и B-grid-read/prepare:** независимые документальные контракты, каждый со своим factory/I/O/error/security/source revision. Prerequisites — согласование owners и routing; не Time/GEN/Snapshot целиком. Grid не считается принятым пилотом.
+3. **B-owner cards:** независимая детализация Climate, Materials, Terrain, Locations, World Calendar и остальных строк; shared resolver изменения одним writer. Acceptance: нет непокрытых полей или скрытых writes, all callers замкнуты по конкретной операции.
+4. **C-acceptance seam:** общий candidate, CAS, operation receipt, applicable Snapshot handlers и Pack lifecycle только для выбранного среза. Требуется согласованный ограниченный contract, не завершение всего Snapshot. До этого read/prepare может быть спроектирован, apply не разрешён.
+5. **D-contract migration proposal:** replacement + client parity + удаление всех legacy bypass в одной атомарной операции перехода; отдельно запрашивается разрешение кода. Не параллелить writers worldSlices/facade/container/errorMapping. Независимые owner исследования и app settings можно вести параллельно после согласования scope.
+
+**Verdict: CHANGES REQUIRED / DOCUMENT PROPOSAL, не PASS и не CODE-READY.** R2 ошибочно предлагал client URL correction; его inventory не закрывает exact contracts и nested closure всех families. Проверенные corrections внесены; оставшиеся exact owner types, security/revision source и transport family call closure явно блокируют соответствующие B gates. Межплановые предложения отдельно: GEN — ограниченное read/prepare исключение; Snapshot — CAS/receipt/atomic batch seam; World/Time — calendar ownership и anchor consequences; Pack — grid consequences. Эти документы, rules и bindings не изменены.
+
+**На согласование:** (а) direct read/prepare exception либо DAG для всего CRUD; (б) owner roster с OPEN секциями, не автоматическая приёмка по пути POJO; (в) grid read/prepare как пилот, без apply; (г) unsupported batch apply до atomic publication contract. **Следующий допустимый шаг:** документальная детализация одной выбранной B карточки и закрытие её callers/security/revision evidence; принятие routing не подменяется review PASS. Код, production POJO/ports, URL, DDL, nodes/bindings, публикация и cutover остаются за stop boundary.
+
+## Принятое уточнение пользователя: domain contracts → авторские DAG-ноды → transport (2026-11-02)
+
+Пользователь определил целевую цепочку настроек: **app/api → engine DAG → ноды, написанные пользователем → публичные typed-контракты owning domains**. Формулировка «API вызывает эти ноды» означает вызов через engine DAG, согласно действующему правилу, а не обход engine через concrete node.execute.
+
+Домены сначала предоставляют собственные публичные settings methods с Input/Output/Error, validation и effects/lifecycle boundaries. DAG использует эти контракты; доменные методы не проектируются под выдуманные агентом ноды. **Ноды пишет пользователь.** Агент не создаёт и не изменяет ноды/bindings и не выводит их поведение из существующего implementation. Time-domain пользователь готовит к контракту отдельно; API-1 не меняет этот план.
+
+Это решение заменяет предложенное в R2/R3 direct read/prepare exception: новый settings transport не вызывает домены напрямую. Read и prepare остаются самостоятельными публичными доменными операциями, но их транспортный вызов также проходит согласованный DAG-путь. Pure/no-write semantics prepare сохраняются независимо от routing. Дополнительное исключение из DAG-правила этим планом больше не запрашивается.
+
+Уточнение gates: проектирование и согласование B owner contracts не зависят от готовности DAG-ноды или всего Time/GEN/Snapshot. Для transport cutover необходимы написанная пользователем и принятая нода, её engine invocation contract и проверка actual effects/publication. API остаётся тонким клиентом invocation; домены владеют своей семантикой; общего WorldSettingsService и второго registry/policy engine нет. Публикация и multi-section atomicity по-прежнему требуют собственного принятого acceptance contract.
+
+Снятый вопрос на согласование: direct read/prepare versus DAG. Оставшиеся вопросы: точные owner contracts, спорные owner assignments, пилотный срез, revision/security и atomic acceptance. Следующий допустимый шаг — документально уточнять public settings contracts доменов для последующего использования пользовательскими нодами. Это не разрешение кода, URL changes, DDL, publication или cutover; stop boundary сохраняется.
+
+## API-1-R4 — перечень «домен / настройка / контракт» (2026-11-02)
+
+Scope: настройки конкретного мира, включая authored registries и generation policies. Instance CRUD персонажей/локаций и параметры одного запуска генерации не превращаются в world settings. В колонке «контракт» разделены **existing data contract** и **public settings operation**. POJO не равен публичному сервисному API. Имена будущих методов не замораживаются этой таблицей; ноды пишет пользователь, внешний API вызывает их через engine DAG.
+
+Обозначения: **P** — existing POJO и WorldSlice; dedicated public read/prepare settings method ещё требуется. **L** — legacy World field, typed settings boundary не установлена; новый generic dict endpoint запрещён. **D** — документальный target, не production type. **S** — служебное состояние, не редактируемая настройка. Owner, помеченный «proposal», требует подтверждения и не выводится автоматически из места хранения.
+
+Для P existing access — WorldService.get_by_id → worldRow/resolve_world_slice, write — WorldService.update/prepare_import через facade. Это общий legacy путь, а не доменный публичный контракт. Target каждой P строки: owner read возвращает указанный concrete POJO на согласованной base; owner prepare принимает concrete typed intent и возвращает candidate того же POJO, diagnostics и typed consequences. Для registry отдельно требуются entry identity, upsert/remove, references и retained history policy. Ошибки и revision/security/acceptance gates — R3. Нет общего dispatch по строковому имени домена.
+
+### Мир, время, физическая среда и карта
+
+| Домен / owner | Настройка / actual field | Контракт и статус |
+|---|---|---|
+| World | name, narrative_language, measurement_system | **L:** World scalar fields; нужны World-owned typed read/prepare identity-independent preferences |
+| World (Time — consumer) | Настройки времени: initial start, hours_per_day, версии/bindings | **D:** WorldTimeSettings и public settings inventory [Time §28](./time-domain.md); exact I/O/method/files freeze в owning плане, не выдумывать здесь |
+| World (Time — consumer) | calendar: registry, definition, epoch, selected calendar | **L:** World.calendar:dict; **D:** WorldCalendarRegistry и World public read current/historical, prepare create/update/select/remove по Time §28. Не объявлять calendar единственной periodic definition |
+| World Environment | world_environment.atmosphere: mode, composition(system_material, fraction) | **P:** WorldEnvironmentSettings / WorldAtmosphereSettings / AtmosphereGasComponent; dataModel/worldEnvironment/worldEnvironmentSettings.py |
+| Pack / spatial grid (owner proposal) | fine_cells_per_map_cell | **P:** WorldGridSettings; dataModel/worldPack/meta/worldGridSettings.py; apply имеет invalidation consequences |
+| Pack / L0 resolution | world_map_cells_per_tile | **P:** WorldMapResolutionSettings; dataModel/worldPack/meta/worldMapResolutionSettings.py; это authored override, не готовая resolved сторона тайла |
+| Terrain, spatial topology (ownership split OPEN) | world_topology_mode, closed_planet_grid, z_min, z_max, map_subsurface_depth | **P:** WorldTerrainScalars; dataModel/terrain/worldTerrainScalars.py. Public contract должен определить допустимость live изменения |
+| Terrain execution | terrain_chunk_columns, terrain_parallel_workers | **P:** тот же WorldTerrainScalars; existing world persistence не делает эти поля physical law; не смешивать с per-request override |
+| Terrain / Physics / Climate (ownership OPEN) | g, elevation_lapse_rate, magma_band_thickness | **P:** фактически WorldTerrainScalars. Не объявлять уже существующий PhysicsSettings по смыслу g; требуется owner decision без дублирования policy |
+| World / spatial layout (proposal) | grid_bbox_padding, world_bounds, default_passage_height | **L:** поля World, отдельный public settings contract в проверенном roster отсутствует |
+| Pack publication | terrain_pack_path, terrain_pack_hash | **S:** WorldPackMetadata в dataModel/worldPack/meta/worldPackMetadata.py; read metadata, не пользовательский replace |
+| World publication / clock | world_uid, created_at, current_tick, schema_version, world_map_version, terrain_pack_version | **S:** identity/runtime/version fields; не settings patch и не универсальный revision token |
+
+### Климат, поверхность, вода и регионы
+
+| Домен / owner | Настройка / actual field | Контракт и статус |
+|---|---|---|
+| Climate | default_climate_zone; climate_temperature_peak_min/max; climate_pole_mode/preset; climate_local_influence_fraction; precipitation_liquid; climate_parallel_workers; season_temp_offsets | **P:** WorldClimateScalars + SeasonTempOffsets; dataModel/climate/worldClimateScalars.py |
+| Climate | climate_zone_registry | **P:** WorldClimateZoneRegistry; dataModel/climate/climateZone/worldClimateZoneRegistry.py |
+| Climate / Weather | weather_type_registry | **P:** WorldWeatherTypeRegistry; dataModel/climate/weatherType/worldWeatherTypeRegistry.py |
+| Terrain | terrain_registry | **P:** WorldTerrainRegistry; dataModel/terrain/worldTerrainRegistry.py; учитывать связь с default_landcover |
+| Terrain | terrain_category_registry | **P:** WorldTerrainCategoryRegistry; dataModel/terrain/worldTerrainCategoryRegistry.py |
+| Relief | relief_grade_obstacle_policy | **P:** WorldReliefGradeObstacleScalars; dataModel/terrain/relief/worldReliefGradeObstacle.py |
+| Relief | relief_pick_policy: mountain, open_land, shore, road_shoulder, ravine; canal_obstacle_policy | **P:** WorldReliefPickPolicy, ReliefContextPickPolicy; dataModel/terrain/relief/worldReliefPickPolicy.py |
+| Relief | canal_template_registry | **P:** WorldCanalTemplateRegistry; dataModel/terrain/relief/worldCanalTemplateRegistry.py |
+| Hydrology | hydrology.enabled/default_water_level/default_shore/default_rivers/default_lakes/default_seas/default_landforms/materialize_named_locations | **P:** WorldHydrology; dataModel/hydrology/worldHydrology.py; nested owning policies, не второй flat registry |
+| Hydrology | hydrology.declared_lakes/basins/coastlines/rivers | **P:** тот же WorldHydrology с concrete declaration POJO; это authored objects, нужны owner operations, не произвольный patch списка |
+| Hydrology / designed water | water_fraction, autoresolve, strategy; body generation_region_uid | Existing WorldWaterGenerationSettings / CategoryWaterGenerationSettings / BodyWaterGenerationSettings в hydrology/generation/waterGenerationSettings.py; **не объявлять текущим WorldSlice root**: WorldHydrologyGenerationFields отмечен future root до G10-A. Runtime binding — generators/hydrology/policy/hydrologyGenerationBinding.py |
+| Terrain / Regions | terrain_masks.enabled; default_mountains; declared_mountains; default_landcover; declared_regions; default_ravines; default_roads | **P:** WorldTerrainMasks + category policies; dataModel/terrainMasks/worldTerrainMasks.py. Это несколько semantic owners под одним storage root, не доказательство одного RegionsSettingsService |
+| World declarations / Regions effects | add/remove/update declared region | Existing typed DeclaredRegionEdit → WorldService.edit_region; dataModel/terrainMasks/regions/edit.py. Это публичная operation, но без нового revision/preview contract; validate_only возвращает старый World |
+| Terrain / Caves (proposal) | caves | **L:** World.caves:dict; typed settings contract не установлен |
+
+### Материалы, ресурсы, экономика и контент
+
+| Домен / owner | Настройка / actual field | Контракт и статус |
+|---|---|---|
+| Materials | material_registry | **P:** WorldMaterialRegistry; dataModel/materials/worldMaterialRegistry.py |
+| Materials | material_category_registry, material_use_type_registry | **L:** World dict fields; не подменять контрактом material_registry |
+| Economy | economic_tier_registry | **P:** WorldEconomyTierRegistry; dataModel/economy/economyTier/worldEconomyTierRegistry.py |
+| Resources | resource_type_registry | **P:** WorldResourceTypeRegistry; dataModel/resources/worldResourceTypeRegistry.py |
+| Flora / Crops | crops_registry | **P:** WorldCropsRegistry; dataModel/flora/worldCropsRegistry.py; прежняя группировка всего под Economy — только UI proposal |
+| Livestock | livestock_registry | **P:** WorldLivestockRegistry; dataModel/livestock/worldLivestockRegistry.py |
+| Lore | lore_registry | **P:** WorldLoreRegistry; dataModel/lore/loreRegistry/worldLoreRegistry.py; registry_dict, не list |
+| Races | race_template_registry | **P:** WorldRaceTemplateRegistry; dataModel/races/worldRaceTemplateRegistry.py; не путать world template settings с race instance CRUD |
+| Perks | perk_template_registry | **P:** WorldPerkTemplateRegistry; dataModel/perks/worldPerkTemplateRegistry.py |
+| Content owners OPEN | colour_registry, texture_registry, tag_registry, intensity_level_registry, narrative_type_registry | **L:** World dict fields; public owner/contract требуется установить, общий «контент service» не предлагается |
+| Library attachment | library_pins | **L:** World list storage; dedicated attach/publish lifecycle, не свободный replace refs через settings |
+
+### Локации, строения и связи
+
+| Домен / owner | Настройка / actual field | Контракт и статус |
+|---|---|---|
+| Locations | location_type_registry | **P:** WorldLocationTypeRegistry; dataModel/locations/locationType/worldLocationTypeRegistry.py |
+| Settlements | city_size_registry | **P:** WorldSettlementSizeRegistry; dataModel/locations/settlement/settlement/worldSettlementSizeRegistry.py |
+| Settlements | settlement_specialization_registry | **P:** WorldSettlementSpecializationRegistry; тот же пакет settlement/settlement |
+| Settlements | location_mood_registry | **P:** WorldLocationMoodRegistry; тот же пакет; наличие WorldSlice отдельно сверять с SQL/bundle projection, не считать каждую slice SQL колонкой |
+| Districts | district_template_registry | **P:** WorldDistrictTemplateRegistry; dataModel/locations/settlement/district/worldDistrictTemplateRegistry.py |
+| Districts | district_zone_preference | **P:** WorldDistrictZonePreference; dataModel/locations/settlement/district/worldDistrictZonePreference.py |
+| Structures / Barriers | barrier_template_registry | **P:** WorldBarrierTemplateRegistry; dataModel/locations/structure/barrier/worldBarrierTemplateRegistry.py |
+| Structures / Rooms | room_type_registry | **P:** WorldRoomTypeRegistry; dataModel/locations/structure/room/worldRoomTypeRegistry.py |
+| Structures / purpose libraries | purpose_pack_registry; purpose_packs | **P:** WorldPurposePackRegistry; WorldPurposePacks; dataModel/locations/structure/enums/buildingPurpose; два разных контракта, не один произвольный list |
+| Roads | road_settings | **P:** WorldRoadSettings с RoadSettingsEntry; dataModel/roads/worldRoadSettings.py; wire dump_by_alias, это registry-list несмотря на имя Settings |
+| Connections | connection_type_registry | **P:** WorldConnectionTypeRegistry; dataModel/connections/connectionType/worldConnectionTypeRegistry.py |
+| Transitions | transition_type_registry | **P:** WorldTransitionTypeRegistry; dataModel/locations/transitions/worldTransitionTypeRegistry.py. Коррекция R2: не относить автоматически к Roads |
+| Cells / Locations / Roads (owners OPEN) | cell_state_registry, danger_level_registry, location_state_registry, road_type_registry | **L:** World dict fields; нужны отдельные typed boundaries |
+
+### Character / gameplay: legacy storage, не готовые settings API
+
+Для следующих строк actual source — `backend/app/db/models/world.py`. Поиск direct consumers по именам ряда полей в application не установил owning public settings methods. Поэтому названия доменов здесь **proposal по назначению**, не подтверждение готовой реализации. Перед freeze обязательны consumers/ref lifecycle и owning POJO; raw storage type приведён честно.
+
+| Домен / owner proposal | Настройка / actual field | Контракт и статус |
+|---|---|---|
+| Character stats / skills / resistance | stat_schema, skill_schema, resist_schema | **L:** dict; concrete schema settings contracts OPEN |
+| Stats / Actions | derived_formulas, action_formulas, action_registry | **L:** dict/dict/list; formula validation и action references принадлежат owners |
+| Inventory | slots, weight_enabled, volume_enabled, overload_penalty_formula | **L:** dict/bool/bool/optional str; Inventory settings contract OPEN |
+| Combat | combat_settings | **L:** dict; Combat settings contract OPEN |
+| Health / Wounds | hp_enabled, faint_threshold, faint_check_formula, wounds_enabled, wound_death_formula, wound_type_registry | **L:** bool/float/optional str/bool/optional str/dict; Health settings contract OPEN |
+| Needs (Time consumer, ownership OPEN) | sleep_penalty_formula | **L:** optional str; не приписывать Time clock settings |
+| Character anatomy | body_schema_registry, muscle_tables, constitution_tables | **L:** dict; owner typed registry contracts OPEN |
+| NPC | npc_target_type_registry, npc_needs_registry, npc_goal_type_registry | **L:** dict; NPC settings contracts OPEN |
+| Character traits / respawn | character_trait_registry, respawn_type_registry | **L:** dict; два owning policies, не единый mutation |
+| Factions | faction_relation_type_registry | **L:** dict; faction registry contract OPEN |
+| Character extension schemas | player_fields, npc_fields | **L:** dict; custom declaration не разрешает arbitrary settings field |
+| Migration / character evolution | stat_conflict_mode, stat_migrations, registry_migrations, trait_change_log_threshold | **L:** str/dict/dict/float; typed migration operations, не обычный replace без effects |
+
+### Отдельно: настройки приложения и параметры вычисления
+
+| Owner / scope | Настройка | Контракт / решение |
+|---|---|---|
+| App LLM / chat | provider base URLs/API keys, llm_streaming, max_tokens, language, repair_iterations/mode, max_passes, system_role_providers | core/appSettings.py + core/settingsService.py; transport SettingsUpdate и ChatSettings — existing DTO, не World POJO. Два existing URL контракта сохранять |
+| App logging | log_level | LogLevel + SettingsService; процесс, не мир |
+| Planning process resources | planning.cache, planning.execution | PlanningRuntimeSettings(CachePolicy, PlanningExecutionPolicy); dataModel/planning/policy/planningRuntimeSettings.py; container/worldData.planning_resources читает app_settings.planning. Не включать в WorldSettings |
+| Generator invocation | free_cores, parallel_workers override, scope/tiles/grade stages | Request/operation inputs; не автоматически persisted settings; отдельно от World scalar worker caps |
+| Designed-water internal policy | plate generation, field selection/composition, continental noise policies | dataModel/terrain/designedWater/settings/*.py; наличие Settings в пути не доказывает world-editable contract. Не выставлять наружу без owning operation/schema decision |
+
+### Что этот перечень устанавливает
+
+Проверены WORLD_SLICES (все 36 declarations), World row fields, ключевые scalar/blob POJO, worldRow accessors, legacy WorldService pipeline, process planning source и текущий Time §28. Перечень разделяет существующие типы, legacy storage и будущие contracts; он не объявляет законченной проверку всех gameplay consumers или всех вложенных policy полей. Полные вложенные поля/defaults остаются в linked POJO, не копируются во второй registry.
+
+Для каждой P строки следующий документальный шаг — exact owner public method Input/Output/Error и factory; для L — сначала owning contract/consumer evidence; для D Time — ссылаться на результат owning freeze, не создавать конкурирующий контракт. Общий обязательный внешний путь для всех будущих world settings operations: app/api → engine DAG → пользовательская нода → owner public method. Apply/publication не выводится автоматически из наличия POJO. Изменён только API-1; межплановые правки не выполнялись.
+
+### Приёмка исключения служебных полей (2026-11-02)
+
+Пользователь согласовал исключение из произвольного settings update: `world_uid`, `created_at`, `current_tick`, `terrain_pack_path`, `terrain_pack_hash`, `terrain_pack_version`, `schema_version`, `world_map_version`. Поля могут возвращаться при чтении как metadata. Их запись принадлежит соответствующим операциям создания, продвижения времени, миграции или публикации, а не generic settings mutation. Согласование относится к этой границе; оно не означает приёмки остальных OPEN contracts, разрешения кода или cutover.
+
+### Решения пользователя: первый срез и ownership g (2026-11-02)
+
+- Первым срезом принят **Climate**: публичные settings contracts для WorldClimateScalars, WorldClimateZoneRegistry и WorldWeatherTypeRegistry. Следующий допустимый шаг — документально исследовать и описать exact public methods, Input/Output/Error, factories, consumers, revision/security и effects. Это выбор среза, не приёмка его ещё не подготовленных контрактов и не разрешение реализации.
+- Владельцем настройки **g принят Physics**. Actual storage/data contract пока остаётся в WorldTerrainScalars; это выявленный ownership debt, не выполненный перенос. Пользователь самостоятельно отметит упущение в Physics. API-1 не меняет Physics-план или production types. Владение elevation_lapse_rate и magma_band_thickness остаётся отдельным OPEN вопросом.
+- Предложение ограничить первую версию только секциями с существующими POJO пока **не принято**: пользователь подтвердил пункты 1 и 2, но не пункт 3. Legacy-секции остаются в inventory с собственными contract gates.
+
+### Дополнительные поля: ownership по actual consumers; legacy scope (2026-11-02)
+
+**Принято пользователем:** legacy `dict`-секции в текущем виде не поддерживаем новым settings API. Строки L в R4 остаются инвентарём предстоящей переработки, а не обязательством сделать compatibility adapters или raw passthrough. Их подключение возможно после новых owning typed contracts. Это не команда удалить действующие legacy routes/storage сейчас: удаление относится к отдельно разрешённой переработке/cutover. Сам формат JSON object не запрещён: existing typed blob POJO (например WorldHydrology) остаются в scope. Секции Time/World проектируются по своему новому контракту, а не через поддержку старого calendar dict.
+
+| Поле | Actual evidence | Рекомендуемый владелец и target contract |
+|---|---|---|
+| elevation_lapse_rate | WorldTerrainScalars хранит optional float; canonical_defaults/resolved_elevation_lapse_rate дают 0.65. generators/climate/climateGeneratorService.py:162–167 читает через terrain_scalars, считает `round(base - lapse * (z / 100))`, затем clamp и rainfall. docs/tz_climate.md:916 и project_data_storage_tz.md:2600–2606 задают °C на 100 m, допускают отрицательное и нулевое значение | **Climate**, а не Physics/Terrain: это параметр модели изменения температуры с высотой. Предлагается включить в WorldClimateScalars и Climate public settings contract; перенести единственный default/resolution policy вместе с полем. Terrain поставляет высоту, не владеет climate lapse policy. Включить этот ownership debt в первый Climate design slice |
+| magma_band_thickness | WorldTerrainScalars: optional int. generators/terrain/passes/columnFillPass.py:31–35 трактует None и <=0 как отсутствие; :77–78 включает только при closed_planet_grid; :159–170 создаёт указанное число z-слоёв ниже solid. docs/tz_terrain_generation.md:627,704 описывают геометрию magma band | **Terrain**: настройка генерации подземных слоёв, не физическая температура/вязкость магмы. Retain WorldTerrainScalars как existing owner POJO; public Terrain prepare описывает consequences для колонок/Pack и проверяет topology applicability. Physics/material properties не перемещаются сюда |
+
+Рекомендации ownership выведены из source, **не отмечены пользовательской приёмкой**. Для g уже принято Physics; эти два поля не следует механически переносить вместе с g.
+
+**Contract gaps для Climate lapse:** сохранить возможность negative/zero, единицы °C/100 m и единственный default; определить finite-value validation. Отличать SQL NULL-as-absence от explicit null в authored payload по resolver policy. Текущий optional type и fallback не являются автоматически утверждённой reset semantics нового API. Read возвращает resolved setting с publication source; prepare пересчитывает candidate/объявляет climate consequences без записи и самостоятельного rebake. Исключить повторную регистрацию одного wire key одновременно в Terrain и Climate; обновление WorldSlice projection, worldRow consumers и import/default parity — один будущий согласованный migration slice. Никаких DDL/URL изменений из этого исследования не следует.
+
+**Contract gaps для magma thickness:** сейчас отрицательное значение молча выключает слой, а POJO не задаёт minimum. Target proposal: None/0 — отсутствие слоя по явно принятой owner policy; положительное целое — число z-слоёв; отрицательное — structured validation error, не silent reset. Это изменение legacy validation semantics требует отдельной приёмки. Связь с closed_planet_grid и новым topology mode должна быть проверена в Terrain contract: пока actual code использует legacy bool, нельзя заявлять их эквивалентность. Apply требует accepted Terrain/Pack lifecycle, не вызова column fill из settings route.
+
+**Межплановые предложения, без правок:** Climate — ownership/default/resolver migration elevation_lapse_rate; Terrain — magma validation и topology applicability. Physics-план пользователь уточняет для g самостоятельно. Следующий документальный Climate срез включает lapse proposal вместе с существующими скалярами/реестрами. Ноды, код, production contracts и publication не менялись.
+
+### Приёмка ownership и единая необходящаяся settings semantics (2026-11-02)
+
+**Принято пользователем:** elevation_lapse_rate принадлежит Climate; перенос поля вместе с единственным default/resolver policy включается в документальный Climate slice. Magma_band_thickness пока остаётся Terrain; будущий владелец — геология, поддомен рельефа. Это не согласование изменения negative-value semantics magma: последнее уточнение пользователя подтверждало сохранение текущего положения до будущего домена.
+
+**Принято общее правило для всех новых публичных settings contracts:** missing в partial update не меняет поле; explicit null допустим только согласно owning POJO policy и не означает универсальный reset; reset — отдельный typed intent, разрешённый лишь там, где owner поддерживает его. Create/whole-section replace используют full-model правила, а не patch missing semantics. Invalid не исправляется default. Поведение едино для transport/DAG/debug/import и внутренних callers при изменении тех же настроек. Пользователь отдельно потребовал отсутствие возможности обхода. Это целевой gate, а не уже обеспеченное свойство текущего legacy кода.
+
+**Предложенный пользователем подход:** наследовать публичные настройки от общего интерфейса с этой семантикой. Интерфейс без реализации недостаточен: Protocol/ABC описывает форму методов, но не обеспечивает вызов validation и не закрывает прямой repository writer. Конкретная конструкция ниже — design proposal для проверки на Climate, не production class freeze.
+
+- Общий typed public interface и общий implementation skeleton для preparation. Public entry фиксирует последовательность: принять intent с сохранённым presence → применить existing resolver/merge → проверить полный candidate → вызвать owning checks/consequences → вернуть typed prepared result. Domain extension points не переопределяют presence/reset semantics. Exact generics/signatures/files должны быть представлены на Climate B gate; не добавлять новый field registry или policy engine.
+- Реализация общих semantics переиспользует resolve/WorldSlice/owning annotation policies. Defaults, null applicability и reset eligibility принадлежат конкретным POJO/owner contracts. Общий механизм не перечисляет домены, не вычисляет effects, не читает чужие repositories, не вызывает DAG и не публикует состояние. Это не WorldSettingsService.
+- Typed intent сохраняет различие absent/value/null/reset до resolver. Запрещены defaults в transport, `exclude_none` или заполнение missing до owner boundary. Unknown fields и неподдержанный reset отклоняются структурированно. Reset не задаётся arbitrary string field path. Registry replacement и nested blob patch сохраняют явно объявленные owner semantics.
+- Наследование/final-аннотация не являются security barrier в Python. Повторно используемый skeleton должен сопровождаться закрытием writer/caller boundary: routes → engine DAG → пользовательские ноды → public owner operations; никаких альтернативных update helpers с raw dict. Согласованный acceptance path заново проверяет actor/base и candidate invariants через тот же механизм; произвольный caller-created prepared object не является разрешением записи.
+- Snapshot/domain handlers остаются единственным принятым runtime acceptance path; settings preparation не получает произвольный commit callback. Import/create/restore/migration имеют собственный lifecycle, но не получают права обходить owning invariants или менять missing/null semantics под видом helper. Exact applicability для исторических schema versions фиксируется их owning contract; текущие defaults не должны молча переписывать историю.
+
+**Доказательство отсутствия поддерживаемого обхода — обязательный gate:** inventory всех writers/callers выбранных полей (HTTP, debug, import, CLI, DAG, внутренние services); отсутствие direct writes вне принятого acceptance path после cutover; dependency/architecture checks для запрещённых imports/calls; contract tests по каждому concrete public implementation на missing/null/reset, неизвестные поля, invalid без default, no-write preview, stale/forged prepared result и atomic failure. Проверять вложенные paths, а не только наследование. Все новые реализации обязаны проходить одну conformance suite с owner-specific допустимыми/недопустимыми значениями. Это гарантия поддерживаемых application paths, не обещание защитить БД от произвольного привилегированного SQL.
+
+Legacy dict-секции не адаптируются в новый API. Существующий legacy WorldService не становится допустимым fallback для перенесённой настройки: в атомарном cutover выбранного поля закрываются все его обходные writers, сохраняя неперенесённые области до их отдельных работ. До этой проверки gate остаётся OPEN, даже если новый интерфейс и его tests готовы.
+
+Следующий допустимый шаг: на Climate документально предъявить concrete interface/skeleton/owner implementation и exact I/O/Error, reuse existing resolver, все writer seams и conformance criteria. Ноды пишет пользователь; код, bindings, правила, другие планы и production contracts сейчас не изменяются.
+
+**Приёмка подхода пользователем (2026-11-02):** согласованы общий public interface + общая реализация missing/null/reset через existing resolver, owning POJO defaults/validation, запрет переопределения общей семантики и закрытие альтернативных writers с общей conformance suite. Это приёмка архитектурного подхода, а не exact signatures/files или доказательство уже обеспеченной защиты от обхода. Concrete design проверяется на Climate; прежний документальный stop boundary сохраняется.
