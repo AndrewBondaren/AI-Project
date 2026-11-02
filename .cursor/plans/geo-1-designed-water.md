@@ -14455,3 +14455,425 @@ POJO/validators/API/versions/source refs, полного fine P2 caller inventor
 storage budgets и surface-top compatibility продолжается как документационный
 scope. Это не приёмка всего GEO-SPATIAL-CONTRACT/SP-1/SP-P0, не разрешение producer
 code и не запуск G10-A cutover. Acceptance остаётся за пользователем.
+
+## EF-1 — exact freeze Task11 A / canonical open water (2026-11-02)
+
+**ПРЕДЪЯВЛЕН НА ПРИЁМКУ, НЕ ПРИНЯТ.** Актуальный документальный проект по
+A/R1/G1/Z заменяет предварительные source/payload proposals выше. Producer/POJO/
+fixtures/registration не изменены, G10-A не начат. SP-1 §14/14.7 сверены как
+непринятый shared проект. GEN-DAG draft-контракты/планы/node ports не использованы:
+ниже доменные операции на existing planning types, без NodeContract/RequiredOutput.
+
+### EF-1.1. Evidence и найденный контур участников
+
+HEAD `d4da7b8f` + working tree; статическое чтение и поиск PlacementBatch/V2,
+PreparedPlacement/V2, PlacementSession.start, prepare_designed_water,
+prepare_procedural_designed_water, prepare_competitor, FineTerrainZRun,
+hydrology_by_cell и z_water_level по backend/app и backend/tests. Runtime не
+запускался; отсутствие dynamic/external callers не доказано отрицательным rg.
+Пути далее от `backend/app/`.
+
+- `application/worldData/generators/terrain/designedWater/preparation/proceduralDesignPreparation.py:prepare_procedural_designed_water`
+  → ProceduralSourceAdmissionJob.resolve / CapturedProceduralWaterInputs.capture
+  → designPreparation.prepare_designed_water → WaterDesignUniverse.capture →
+  PlacementSession.start/run. Water headers идут в ReadyWaterDesignJob.prepare,
+  остальные — в переданный prepare_competitor(admission), затем session.submit.
+- Callers public preparation найдены в geo1 integration/typing tests и wrapper.
+  **Production non-water callback не найден.** Test callbacks готовят competitors
+  и supports. Нельзя объявить mountain/settlement/region adapters подключёнными
+  production участниками. Контракт охватывает каждый header batch.objects;
+  concrete production roster предъявляется на G10-A, а не выдумывается здесь.
+- Другой V2 entry: `hydrology/boundaries/boundaryPlanner.py` через
+  BoundaryPreparationJob и AttachedCoastlinePreparer.prepare_boundary — отдельная
+  DEPENDENT fine session на final Hydrology snapshot с accepted supports.
+- Production `planning/composition/planProviders.py:register_world_plan_providers`
+  → PC WaterPlacementPlanProvider.build → run_prepared_water_placement →
+  prepare_water_placements → legacy PlacementBatch/resolve_placements.
+  run_water_placement_pass — другой legacy entry. Это не общая V2 session.
+- GeoWorldPlanProviders/GEO_SURFACE_BINDINGS/GeoSurfacePlanBundle — declarations,
+  не доказательство registration. GeoHydrologyFinalPlanProvider.build вызывает
+  legacy assemble, не publish_fine. Native publication имеет wrapper
+  HydrologyFactsAssembler.publish_fine; tests не доказывают production join.
+
+### EF-1.2. Fine P2: exact geometry/constraints/area/validator migration
+
+| Existing definition | Target / callers / disposition |
+|---|---|
+| dataModel/placement/batch.py:PlacementBatchV2 | Добавить required coordinate_space: Literal[CoordinateSpace.WORLD_FINE_GRID]. topology уже fine; PRE_RELIEF accepted=() сохраняется; snapshot_revision=exact W.output_fingerprint. WaterDesignUniverse, ProceduralSourceAdmissionJob, BoundaryPreparationJob constructors меняются вместе. Legacy PlacementBatch не переинтерпретируется |
+| dataModel/placement/prepared.py:PreparedPlacementV2 | Добавить такой же required marker. original_area: existing OriginalArea, fine-cell², positive finite float с целым значением ≤2**53 для exact representation; original discrete geometry union до конкуренции, не surviving area/сумма overlapping alternatives. Все adapters/callbacks используют одинаковые единицы |
+| dataModel/placement/result.py:PlacementBatchResultV2 | Добавить required coordinate_space и topology — exact echo batch; existing results/diagnostics/world/snapshot поля reuse. PlacementSession.finish, BoundaryResultAssembler, fine publication, surfaceManifest меняются вместе |
+| application/worldData/placement/lifecycle/session.py | start/submit проверяют marker, header/decision equality, canonical candidate cells и accepted supports в одном frame; finish echoes frame. Mixed coarse/fine reject до competition, не implicit scaling. Disabled/unresolved не получают fake geometry |
+| placement/geometry.py; constraints.py:check_candidate | Algorithms collides/contains/supports/connected/shared_boundary/separated reuse. XY fine indices; min_xy — пустые fine cells, min_z — пустые Z cells; footprint Z inclusive, supports: child.z_min=support.z_max+1. Обе стороны separation в одинаковых единицах |
+| placement/dependencies.py:DependencyQueue | Сохранить order (-specificity,-original_area,uid), policy priority/causality. Не масштабировать только water area. Support reevaluation не меняет resolved priority |
+| dataModel/terrain/designedWater/input.py:WaterDesignInput/variants | pre_hydrology: PlanEnvelope[FineSurfaceWindow] вместо TerrainPlan; topology=W.topology. Validators exact W/world/scope/coverage/recipe, без повторного fine_topology над fine frame |
+| dataModel/terrain/designedWater/fields/field.py:ContinentalField | samples: tuple[tuple[FineXY,ContinentalFieldValue],...] вместо SurfaceGridCoord; row-major unique, coords ровно W.surface_z. Existing recipes/seed channels reuse |
+| terrain/designedWater/fields/noiseFieldGenerator.py; plateFieldGenerator.py:build | Fine centers (x+.5,y+.5), убрать .gx/.gy и S. sample/layout math reuse, memo fine row. ContinentalFieldComposer сохраняет aligned coords |
+| terrain/designedWater/preparation/placementPreparation.py | procedural ranking fine samples; weight=1 fine²; убрать full-coarse-cell filter/S². required/allowed fine; quantized score/tie/prefix policy reuse. bind_admission требует fine |
+| dataModel/terrain/designedWater/preparation/result.py; geometry/waterDesignConstraints.py | Preparation.coordinate_space Literal fine; constraints добавить required fine marker, allowed/required frozenset[FineXY], required⊆allowed. original_area=float(unique original cells). SampledFloorProfile.space=fine; FieldFloorProfile.recipe.topology=W.topology |
+| preparation/designUniverse.py; designPreparation.py | pre_hydrology argument/field FineSurfaceWindow envelope; capture проверяет W proof/full coverage/frame/batch snapshot. RegionCoverage уже fine, повтор fine_topology(batch.topology,S) убрать |
+| coverage/waterCoverageAllocation.py | fine_bounds=batch.topology.bounds напрямую; authored from_cells fine, без повтор S². RegionCoverageMeasure union/subtract/area и budget policy reuse |
+| placement/adapters/water.py:prepare_authored_water_geometry | Coarse helper оставить legacy; native helper EF-1.3 сохраняет точные authored basin/lake/coastline geometry на fine frame, не coarse mask expansion |
+| preparation/coastlineConstraintPreparer.py | Fine source line/anchors/raster; убрать project_water_source(...,S)/fine_to_grid; required strip через topology neighbors. CoastlineWaterSourceAdapter переходит на native helper |
+| preparation/proceduralWaterSourceAdapter.py:CapturedProceduralWaterInputs; proceduralDesignPreparation.py; hydrology/sources/proceduralSourceAdmission.py | pre_hydrology FineSurfaceWindow. GeoWaterPlacementInput.topology остаётся author/coarse setting; fine_topology(inputs.topology,S) один раз для batch/W/recipe. resolve сравнивает batch с fine topology, не inputs.topology напрямую |
+
+Non-water contract остаётся `Callable[[PlacementAdmissionInput],PreparedPlacementV2]`:
+header/decision exact; geometry/shape/separations уже fine; capture bound к W.
+Missing marker или непроверенный W binding — failure. Никакого fictitious competitor
+registry. Settlement packing/RegionRasterizer вне этой session не мигрируют молча.
+
+### EF-1.3. Capture, native transport, publication и версии
+
+`GeoWaterPlacementPlan` в dataModel/terrain/planning/waterPlacementPlan.py перестаёт
+наследовать WaterPlacementPlan: coarse consistent_sources и legacy records не подходят.
+Exact required fields: coordinate_space: Literal[WORLD_FINE_GRID]; topology: WorldTopology;
+batch: PlacementBatchResultV2; basin_specs: tuple[BasinSpec,...];
+metadata: tuple[WaterSourceMetadata,...];
+source_decisions: tuple[tuple[EntityUid,WaterDesignDecision],...]; budget: WaterCoverageBudget|None.
+Outcomes из batch, не копия поля. Records ResolvedWaterPlacement отсутствуют.
+WaterPlacementPlan PC сохраняется отдельно. Все target fields strict/immutable,
+extra=forbid, без defaults. Validators: marker/topology batch==plan; decisions/metadata
+sorted unique; water UIDs subset batch, каждый имеет один outcome; resolved water
+UIDs точно basin_specs; non-water outcomes сохраняются без water metadata. Accepted
+spec footprint точно accepted footprint.cells; level/kind/liquid/source UID совпадают
+с metadata. Metadata включает accepted и не содержит sources вне water decisions.
+
+New domain entry, не engine node:
+`application/worldData/generators/terrain/designedWater/planning/nativePlacement.py`:
+`NativeWaterPlacementJob.publish(*, batch: PlacementBatchV2,
+before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef,
+regions: PlanEnvelope[TerrainRegionPlan], expected_regions: PlanRef,
+inputs: GeoWaterPlacementInput, seed_root: EntityUid,
+water_intents: tuple[PlacementIntent,...], world_context: ResolvedWaterGenerationContext,
+coverage_requests: tuple[BodyCoverageRequest,...], authored_geometry: tuple[AuthoredWaterGeometry,...],
+prepare_input: Callable[[PlacementAdmissionInput,WaterCoverageBudget|None],WaterStrategyInput],
+prepare_competitor: Callable[[PlacementAdmissionInput],PreparedPlacementV2],
+competitor_geometry: tuple[CapturedPlacementGeometry,...],
+strategies: DesignedWaterStrategyFactory, reevaluate_support: SupportReevaluation|None,
+control: PlanBuildControl) -> PlanEnvelope[GeoWaterPlacementPlan]`.
+Все arguments required; selection_policy=inputs.selection_policy. Вызывает existing
+prepare_designed_water, формирует BasinSpec только из accepted designs. Immutable
+settings/intents/geometry/seed/context/requests и exact dependencies входят в input
+proof; callbacks/jobs не сериализуются и не заменяют source proof. Каждый input
+проверяется against captured W/region/header/settings. Второго placement нет.
+
+`CapturedPlacementGeometry` — новый immutable record в existing
+dataModel/placement/prepared.py (без нового файла): coordinate_space: Literal[CoordinateSpace.WORLD_FINE_GRID],
+pre_hydrology_ref: PlanRef, intent: PlacementIntent, original_area: OriginalArea,
+candidates: tuple[PlacementCandidate,...], все required. Geometry уже вычислена
+профильным owner, без admission decision; готовность по supports остаётся session.
+Record валидирует nonempty unique candidates, area bounds EF-1.2, intent movement
+rules; entry сверяет W.ref/header/frame и полноту по non-water batch headers.
+Tuple sorted unique region_uid; terminal disabled/unresolved headers не требуют
+geometry, но extra чужие records запрещены. Это immutable input для fingerprint:
+batch/admissions, competitor_geometry и все прочие captured arguments включены.
+Callback prepare_competitor может лишь связать эту geometry с текущим ready decision:
+returned intent/area/candidates обязаны точно совпасть с captured record. Новая
+geometry из callback отклоняется. Так callback не скрывает spatial input от hash;
+policy reevaluation остаётся existing bound policy operation, не source geometry.
+
+Native helper:
+`application/worldData/placement/adapters/waterGeometry/nativeGeometry.py`:
+`prepare_native_water_geometry(request: AuthoredWaterGeometryRequest) -> AuthoredWaterGeometry`.
+Request.pre_hydrology FineSurfaceWindow, topology=W.topology; остальные fields reuse,
+результат fine. Existing coarse helper сохраняет TerrainPlan request boundary:
+выделить LegacyAuthoredWaterGeometryRequest с прежними полями в existing
+dataModel/terrain/designedWater/geometry/authoredGeometry.py; coarse helper принимает
+только этот тип. Native AuthoredWaterGeometryRequest fields: source: AuthoredWaterSource,
+pre_hydrology: PlanEnvelope[FineSurfaceWindow], topology: WorldTopology,
+grid: SurfaceGridSettings, seed_root: EntityUid, anchors: tuple[WaterAnchorInput,...],
+seas: HydrologySeasPolicy, z_min: FineZ; все required. Native validators whole fine
+coverage/frame/anchors/world/ref, без .bbox coarse validation. Native result
+AuthoredWaterGeometry требует fine marker. Native helper не вызывает coarse
+project_water_source. Existing tests coarse helper переводятся на explicit legacy
+request; native tests — на W, не на duck-typed TerrainPlan.
+
+Capture graph: surfacePlanningCapture.py → SurfacePlanningView/GeoSurfacePlanningView
+→ SurfacePlanningAssembler → PlanRegistry/dependency reader → providers → bundles
+→ SurfacePlanningEntry.prepare_captured. PC registration сохраняется до G10-A.
+Geo capture держит coarse world setting и W раздельно, не relabel topology.
+Geo bundle/SurfacePlanningAssembler.prepare_geo/providers перевозят native batch целиком, не legacy records.
+
+Terrain-owned exact spec writer:
+`application/worldData/generators/terrain/designedWater/planning/basinSpecs.py`,
+`NativeBasinSpecJob.build(*, designs: tuple[WaterDesignPreparation,...],
+placement: PlacementBatchResultV2) -> tuple[BasinSpec,...]`.
+NativeWaterPlacementJob вызывает его после session.finish. Writer выбирает только
+resolved water outcomes по source_uid, проверяет выбранный candidate_uid и exact
+footprint; metadata/floor_z/floor_profile берёт из того же design. BasinSpec fields
+source_uid/kind/liquid/z_water_level/floor_z/bands/footprint/floor_profile
+заполняются явно: metadata.source_uid/body_kind/liquid/level, design.floor_z,
+metadata.bands, accepted.footprint.cells, design.floor_profile. Parent field у
+existing BasinSpec отсутствует; не добавлять его ради этого writer.
+Ни reselection, ни carve/fill, ни высоты из live World. Результат sorted source_uid;
+missing/mismatched design → PlanBuildFailure, disabled sources spec не получают.
+Existing hydrology/basinSpecFactory.py:basin_specs остаётся legacy records adapter.
+
+FineWaterPublicationJob.publish target placement argument:
+`PlanEnvelope[GeoWaterPlacementPlan]`, expected_placement PlanRef. Использует .batch,
+specs==payload.basin_specs; нельзя фабриковать отдельный envelope из .batch.
+Остальные параметры сохраняются. F dependency WATER_PLACEMENT — этот же P2.ref.
+admit_result/final publication/query version/dependency checks меняются атомарно.
+
+| Version owner | Предложенный exact migration set |
+|---|---|
+| surface.geo.water_placement | schema2/algorithm1/cache2 → schema3/algorithm2/cache3; deps PRE_WATER_SURFACE=W.ref и TERRAIN_REGIONS=regions.ref, C отсутствует |
+| hydrology.fine_water | schema1/algorithm2 → schema1/algorithm3; FineWaterResult reuse, changed fine P2 admission; deps W/P2 |
+| hydrology.native_final | schema1/algorithm1 → schema1/algorithm2 после native join; deps F/W/routes/river |
+| hydrology.canonical_open_water | новый schema1/algorithm1, domain source preparation, не physical solve |
+| surfacePlanBindings.py impacted GEO downstream | dependency versions обновить транзитивно; impacted GEO algorithm1→2. PC metadata не менять |
+| surfaceManifest.py / SurfaceEnvelopeCodec | Changed V2, FineXY field, independent GeoWaterPlacementPlan и canonical records/envelope регистрируются existing codec; старые записи invalidate/rebuild. Numeric type IDs резервирует codec owner при implementation, не GEN draft |
+| PRE_WATER_WINDOW / NATURAL_TERRAIN_CONTRACT / native routes/river | Existing metadata сохраняются, если их payload/algorithm неизменны. Смена dependency refs сама по себе не новый solver |
+
+Эти values — target, не действующая registration. Pack schema/codec — SP-P0.
+
+Registration boundary: existing `_declare_geo`/SurfacePlanBinding.upstream
+принимает SurfacePlanSlot, а PRE_WATER_SURFACE сейчас только PlanSlot. Нельзя
+вставить W в этот tuple без изменения типа или объявить старый TERRAIN_BASE=W.
+Для native water использовать existing RegisteredPlanContract с explicit
+PlanDependencyContract tuple (PRE_WATER_SURFACE, PRE_WATER_WINDOW metadata;
+TERRAIN_REGIONS, geo regions metadata), через отдельную native binding в
+planProviders.py, не inference через `_declare_geo`. Metadata/cache values — таблица
+выше; `_geo_bindings` water declaration не используется как dependency declaration
+нового native operation. Все downstream handles получают тот же native water ref.
+PC `_binding`/register_world_plan_providers остаются без смены; их включение на
+новые handles — отдельная atomic G10-A операция. Это не новый engine registry и
+не использование draft GEN contracts. Exact public native job и data transport
+заморожены выше; production provider factory/entry activation не объявлены готовыми.
+
+### EF-1.4. Canonical R1/G1 source и read payload
+
+Все новые records — BaseModel(frozen=True,strict=True,extra=forbid,
+revalidate_instances=always), collections tuple, поля required без defaults.
+Строгие integer validators исключают bool/float/string у FineX/Y/Z aliases.
+Nested existing models проверяются отдельно: outer ConfigDict не исправляет
+extra=ignore/coercion WaterBody/WorldTopology. Готовый topology frame проверяется
+без расширения bounds/implicit normalization, как требует проект SP-1 §14.7.
+
+| New Hydrology declaration | Exact required fields |
+|---|---|
+| WaterMembershipRun | y: FineY; x0: FineX; x1: FineX; body_uid: EntityUid. Interval [x0,x1), x0<x1 |
+| CanonicalOpenWaterSource | space: Literal[CoordinateSpace.WORLD_FINE_GRID]; bed: FineSurfaceWindow; z_min: FineZ; z_max: FineZ; wet_runs: tuple[WaterMembershipRun,...]; bodies: tuple[WaterBody,...]; unions: tuple[PhysicalWaterUnion,...]; source_mapping: SourceBodyMapping; shore_rows: tuple[tuple[FineXY,MapCellHydrology],...] |
+| WaterVolumeRun | y: FineY; x0: FineX; x1: FineX; z0: FineZ; z1: FineZ; body_uid: EntityUid. Volume [x0,x1)×[y,y+1)×[z0,z1), positive extents |
+| WaterWindowFacts | runs: tuple[WaterVolumeRun,...]; bodies: tuple[WaterBody,...]; unions: tuple[PhysicalWaterUnion,...]; unknown_boxes: tuple[SpatialBox,...] |
+
+Canonical source — `PlanEnvelope[CanonicalOpenWaterSource]`, metadata
+`hydrology.canonical_open_water` schema1/algorithm1. **Именно его ref — final domain
+source для bootstrap Spatial read**, вместо предварительно предложенного выше
+native_final.ref. Native final сохраняется upstream proof, не переименовывается.
+Так логический canonical output и его hash имеют собственный проверяемый identity;
+это derived encoding уже принятых фактов, не второй solver/placement.
+Payload не копирует provenance. Envelope.dependencies — exact семь PlanDependency
+slots, sorted UTF-8: `native_final`, existing `fine_water`, `pre_water_surface`,
+`prepared_natural`, `water_placement`, `hydrology_routes`, `river_relief`.
+Значения — полные refs входных envelopes; metadata identities — existing constants.
+Refs не заменяются output_fingerprint/snapshot_uid. PREPARED_NATURAL использует
+фактический existing slot из preparedTerrain.py; literal при реализации сверять
+с этим constant, а не вводить alias другого slot.
+
+**Source validators:** bed.coverage — exact observed XY domain; bed.surface_z —
+готовое final bed **всех observed cells**, включая dry, не только wet geometry.
+z_min≤z_max; z_min≤bed_z≤z_max; effective levels внутри [z_min,z_max]. Поддержанный
+vertical scope [z_min,z_max+1). FineSurfaceWindow.complete_surface/protection reuse.
+bed.protected_cells сохраняет admitted W.protected_cells. Final geometry — exact
+post-water window с river.fine_surface_z overlay, сверенным с native final actual
+geometry/delta; не upsample/clamp и не вычисление по неприкреплённой base recipe.
+
+Wet runs sorted (y,x0), disjoint, same-body adjacent runs слиты; seam не создаёт
+interval за canonical bounds. Каждая wet cell внутри observed domain, body существует,
+bed_z<effective level. Membership берётся из resolved materialized open water и
+сверяется с final open-water facts; из одного bed<level его выводить запрещено.
+SHORE/RIVER_BED в wet_runs не входят. Bodies/unions sorted unique; member/child refs
+существуют, нет union cycles; уровни/parent relationships согласованы с принятыми
+facts. Material membership сверяется с captured inputs.liquid_keys.
+SourceBodyMapping сохраняется, включая explicit empty dry source entries; это не
+coverage proof за пределами observation domain. shore_rows — exact final SHORE
+rows, canonical unique row-major внутри coverage; не liquid. River actual geometry
+и refs сохранены, river liquid volume остаётся отдельным SP-H2 scope.
+
+**Payload изменён относительно первоначального WaterColumnFact:** clipped XYZ spans
+вместо полной колонки с bed/level за пределами query. Runs sorted
+(y,x0,z0,x1,z1,body_uid), без volume overlap; adjacent X spans с одинаковыми
+z0/z1/body сливаются, но не через незапрошенные промежутки. unknown_boxes sorted
+по SP-1 order, disjoint, clipped к query union, не пересекают known water.
+Bodies/union ancestry — metadata для возвращённых spans, не дополнительный volume.
+Таблицы замкнуты по member/child/parent refs возвращённых unions; необходимые
+body members без spans допустимы как reference metadata, без добавления geometry.
+Body level может лежать за Z окна: это metadata; совместимость такой трактовки
+с SP-1 postcondition предъявляется на joint review, не принимается молча.
+
+### EF-1.5. Exact domain APIs, admission и errors
+
+Новый `application/worldData/generators/hydrology/query/sourcePreparation.py`:
+`CanonicalWaterSourceJob.prepare(*, final: PlanEnvelope[GeoHydrologyPlan], expected_final: PlanRef,
+water: PlanEnvelope[FineWaterResult], expected_water: PlanRef,
+before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef,
+natural: PlanEnvelope[PreparedNaturalTerrain], expected_natural: PlanRef,
+placement: PlanEnvelope[GeoWaterPlacementPlan], expected_placement: PlanRef,
+routes: PlanEnvelope[GeoHydrologyRoutesPlan], expected_routes: PlanRef,
+river: PlanEnvelope[RiverReliefPlan], expected_river: PlanRef,
+inputs: GeoHydrologyPlanInput, control: PlanBuildControl)
+-> PlanEnvelope[CanonicalOpenWaterSource]`.
+Все arguments required. Проверяет exact graph, формирует G1/R1, не запускает
+fill/routes/placement/publication повторно. Metadata declaration принадлежит этому
+файлу; registration canonical types — surfaceManifest. Input fingerprint по existing
+operation: contract/world/scope/immutable inputs/seven dependencies; output fingerprint
+payload/dependencies/diagnostics по existing canonical manifest.
+
+Admission до index preparation: полное ref equality, world/scope, metadata versions,
+реальные output fingerprints, ERROR diagnostics; граф W→natural+climate/terrain;
+P2→W+regions; F→W+P2; routes→F; river→F+routes;
+native final→F+W+routes+river. Regions ref retained внутри P2 dependency graph,
+не подменяется snapshot_uid. Existing captured-input fingerprint checks сохраняются.
+Полностью dry source тоже публикуется явно, не как отсутствующий artifact.
+
+Новый `query/preparedOpenWaterReader.py:PreparedOpenWaterReader`:
+`__init__(source: PlanEnvelope[CanonicalOpenWaterSource], *, expected_source: PlanRef,
+control: PlanBuildControl) -> None` — однократная strict admission и immutable
+row index preparation;
+`async read_window(self, request: SpatialReadRequest) -> SpatialReadResult[WaterWindowFacts]`.
+Это bootstrap reader: request.revision=source.ref. WorldPublicationRef в этой
+реализации → DOMAIN_REJECTED, не fallback. Pack implementation того же protocol,
+его constructor/IO/pin — external SP-3/SP-P0 freeze: неподтверждённый Pack/Snapshot
+admission port здесь не выдумывается.
+
+Read сверяет frame/ref, затем domain intersection. Known domain — bed.coverage ×
+[z_min,z_max+1); unknown — точное дополнение внутри query union. Wet interval
+[bed+1,level+1) clip к каждому query box, далее exact WaterVolumeRun grouping.
+REQUIRED при unknown → SOURCE_INCOMPLETE без partial payload; PREVIEW допускает
+unknown_boxes и issues. Known-dry success: runs=(), bodies=(), unions=(),
+unknown_boxes=(), issues=(), но source_refs не пусты. Dry означает отсутствие
+**open water**, не всех жидкостей/groundwater/river. SourceRefs стабильны между
+окнами: bootstrap=(canonical source.ref,), Pack=(root ArtifactRef,); shards не
+добавляются в provenance списка каждого окна.
+
+Invalid record/request → existing Pydantic ValidationError; preparation failure
+→ PlanBuildFailure(tuple[FieldPathError,...]). Новый domain StrEnum
+WaterSourceIssueCode в source.py (не второй shared failure enum):
+INVALID_FRAME=water_source_invalid_frame; REVISION_MISMATCH=water_source_revision_mismatch;
+INCOMPLETE=water_source_incomplete; INVALID_FACT=water_source_invalid_fact;
+RESOURCE_LIMIT=water_source_resource_limit. Используется как FieldPathError.code,
+path начинается (hydrology,canonical_open_water,...). Existing cancellation
+propagates; programming defects не маскируются.
+
+Shared failure mapping по proposed SP-1: frame→FRAME_MISMATCH;
+ref/mixed graph/stale index→REVISION_MISMATCH; format→UNSUPPORTED_FORMAT;
+missing root/shard→SOURCE_MISSING; bad hash/invariants→SOURCE_CORRUPT;
+scope unknown→SOURCE_INCOMPLETE; wrong revision kind/domain→DOMAIN_REJECTED;
+budget→RESOURCE_LIMIT. Missing/corrupt/stale — Failure и в PREVIEW. Порядок первого
+неуспешного этапа по SP-1 §14.7; aggregate REQUIRED ERROR один на request, не cell.
+Reader не исправляет geometry conflict/level и не выполняет fill/patch.
+
+### EF-1.6. Z convention и проверенные terrain consumers
+
+| Definition → caller | AS-IS / target disposition |
+|---|---|
+| terrain/passes/columnFillPass.py:run_column_fill → TerrainGeneratorService → TerrainBatchOrchestrator.generate_chunk_cells_sync | Solid range(z_bottom,z_top+1), hydrology stamp только z==z_top. При canonical z_top=bed это ground cell, не water volume. Solid fill сохраняется |
+| dataModel/hydrology/mapCellHydrology.py → columnFillPass/final facts | Surface-top metadata; open-water role нормализует liquid_candidate=True, SHORE=False. Bool на bed metadata не означает жидкий bed voxel; не заменяет canonical volume |
+| columnFillPass RIVER_BED branch | Может ставить terrain=liquid_body на bed. Legacy river rendering, не open-water volume convention; сохранить отдельный AS-IS scope до SP-H2, не распространять на ocean/lake |
+| worldPack/wire/fineTerrainChunkWire.py:FineTerrainZRun.cells | Inclusive z0/z1, сортирует inverted bounds. Не reuse как strict SpatialBox; корректный run [a,b] конвертируется в [a,b+1) owning adapter, wire semantics сохраняются |
+| pack/read/mapCellToFineTerrainWire.py:_compress_z_runs/_surface_cell | Contiguous inclusive terrain runs, surface=max(cell.z). Не добавлять water MapCells выше bed в тот же terrain список: сломаются высота/facing/grade |
+| pack/read/terrainContributions.py; packFineTerrainReadFacade.py | Раскрывают/передают inclusive terrain runs. Сохраняются; water media отдельным typed payload через SP-M/SP-R composition, не сменой run semantics |
+| pack/refine/fine/chunk/fineChunkPersist.py:_note_surface_z | Запоминает max cell.z; сохраняется terrain writer. Water volume не поднимает stored terrain surface до level |
+| materialize/terrain/terrainBatchOrchestrator.py:build_tile_surface_state | AS-IS z_band clamp/hills могут изменить bed. SP-4 накладывает exact G1 final geometry после noncanonical background операций и проверяет coherence до water reader activation |
+
+Пример bed=−2, level=0: ground включает −2; water cells −1 и 0,
+Spatial interval [−1,1). bed=level недопустим для wet. Даже bed<level без resolved
+membership не даёт воду. При level=z_max exclusive boundary z_max+1 допустима,
+это не дополнительная world cell. Z не умножается на S.
+Проверенные terrain consumers не содержат canonical liquid XYZ; совместимость
+означает явное разделение solid и medium, а не выполненный cutover.
+
+### EF-1.7. Exact file/import map и reuse
+
+| Proposed new path от backend/app | Declarations / imports |
+|---|---|
+| dataModel/hydrology/query/__init__.py | Пустой marker |
+| dataModel/hydrology/query/source.py | WaterMembershipRun, CanonicalOpenWaterSource, WaterSourceIssueCode; pydantic/enum/typing и existing coordinates/identity/body/union/mapping/FineSurfaceWindow/MapCellHydrology/immutable validation |
+| dataModel/hydrology/query/window.py | WaterVolumeRun, WaterWindowFacts; pydantic/typing, coordinates/identity/body/union и proposed spatial.query.window.SpatialBox |
+| application/worldData/generators/hydrology/query/sourcePreparation.py | CanonicalWaterSourceJob; source records, planning fingerprints/control, existing admission and final geometry types; no engine/storage imports |
+| application/worldData/generators/hydrology/query/preparedOpenWaterReader.py | PreparedOpenWaterReader; bisect/index, domain source/window и proposed spatial.read.request/result/failure; no fill/routes/publication calls из read |
+| application/worldData/generators/terrain/designedWater/planning/__init__.py; nativePlacement.py | Пустой marker + NativeWaterPlacementJob; existing preparation jobs/models, fingerprints/control; no GEN imports |
+| application/worldData/generators/terrain/designedWater/planning/basinSpecs.py | NativeBasinSpecJob; existing WaterDesignPreparation, PlacementBatchResultV2/ResolvedPlacementV2, BasinSpec, PlanBuildFailure/FieldPathError; no World/SQL/legacy record imports |
+| application/worldData/placement/adapters/waterGeometry/__init__.py; nativeGeometry.py | Пустой marker + prepare_native_water_geometry; existing raster/topology algorithms и native request/result |
+
+Reuse: FineSurfaceWindow (complete G1/coverage/protection), RegionCoverage/CoverageSpan
+(XY observations, не generic XYZ coverage), WaterBody/PhysicalWaterUnion/
+SourceBodyMapping, PlanEnvelope/PlanRef/PlanDependency, WorldTopology/fine_topology,
+FineXY/Z, FieldPathError/PlanBuildFailure. Нет WaterBodyV2/universal material fact/
+Spatial service. Новые run records нужны для exact ownership и clipped liquid
+spans; MapCellHydrology их не заменяет. source.py не импортирует window.py/shared
+Spatial: canonical facts не зависят от projection. Shared Spatial не импортирует
+Hydrology. Existing __init__ не получает eager re-exports, исключить import cycles.
+
+Proposed counts: новый dataModel/hydrology/query — 3 файла; новый terrain designedWater/
+planning — 3; новый adapters/waterGeometry — 2; existing hydrology application/query
+nativeFinalWaterQuery.py сохраняется +2 новых файла (всего 3 без package marker).
+Перед implementation повторить counts с __init__.py; не нарушать локальные лимиты.
+Existing переполненные каталоги не получают новые files мимо этой композиции.
+Фактические direct .py counts на проверке: application hydrology/query 1→3;
+dataModel/placement 7→7 (WARN, новые declarations в prepared.py);
+application designedWater/preparation 10→10 (новые files туда запрещены);
+dataModel designedWater/geometry 3→3. Новые packages counts включают __init__.py.
+AST-проверка 16 ключевых existing symbols в 8 файлах: missing=0. Это проверка
+существования definitions, не runtime/caller completeness proof.
+
+### EF-1.8. HSP dispositions и шаги переключения
+
+| ID | Exact disposition / gate |
+|---|---|
+| HSP-01 | NativeWaterPlacementJob → FineWaterPublicationJob → routes/river → NativeFinalPublicationJob → CanonicalWaterSourceJob — target production graph. GeoHydrologyFinalPlanProvider.build и PC registry legacy до atomic G10-A. Не удалять общий hydrologyFactsAssembler.py с native wrappers |
+| HSP-02 | SP-4 заменяет water use fine_hydro_for_tile на typed payload. HydrologyWorkingFields.from_plan/fine_z_for_tile/SurfaceWorkingMaps сохраняются для geometry/соседей до G1 mapping; source builder не читает request working maps |
+| HSP-03 | merge_hydro_hard_corridor удаляется из fine water verdict в SP-4; hydro_mask_from_parent temporary policy input landcover/hills, не SoT. Эти policy operations не вправе переписывать canonical final bed |
+| HSP-04 | SP-M проектирует background geometry/landcover/hills → canonical G1 overlay/admission → water projection → composition. Async read до sync compute, immutable payload передаётся в compute_rect/generate_chunk_cells_sync. fineTilePrep/fineChunkCompute/fineChunkPersist сохраняют terrain responsibilities; exact L2 method split принимает SP-M |
+| HSP-05 | NativeFinalWaterQuery.water_at остаётся XY diagnostics/tests. PreparedOpenWaterReader — отдельный bootstrap XYZ API; не переименовывать native XY в Pack reader |
+| HSP-06 | FineWaterPublicationJob.publish/admit_result и NativeFinalPublicationJob.publish сохраняются с новым native transport/version checks. HydrologyFactsAssembler.publish_fine wrapper сохраняется. SP-P3I получает admitted canonical envelope, не запускает solve; publication и read activation отдельно |
+| HSP-07 | ClimatePackBakeOrchestrator fine_z_for_tile — geometry, оставить до exact G1 source replacement. SupportSources/LandcoverObservations/hydrology.contribute — coarse ecology projections, сохранить с canonical-derived upstream. not-hydro known-dry bug отдельного consumer не оправдывает unknown в source |
+| HSP-08 | L0 world_map_hydro_role_from_cell/coarseOpenWater/bake остаются downstream approximations. Source switch G10-A не делает L0 fine coverage proof |
+| HSP-09 | merge_fine_hydro_for_tile / apply_declared_fine_river_carves cleanup только после import/dynamic closure; tests сохранять по смыслу river geometry, не подключать helpers в reader |
+| HSP-10 | resolve_water_levels/materialize_water/labelled_level_fill остаются bootstrap algorithms. Retained source хранит resolved ownership; window read никогда не повторяет solve |
+
+Порядок: domain EF-1 + joint SP-1 boundary review → separate GEO exact implementation
+scope/G10-A/SP-H → SP-P0/P1 и compact source build/publication SP-P3I/P3W/P3 по
+своим transport gates → SP-3 base Pack reader → SP-M/SP-4 L2 activation.
+SP-M можно проектировать параллельно; SP-4 не prerequisite G10-A. Runtime отдельно
+SP-3S/SP-4R; river volume SP-H2. Ни одной внешней приёмки этот порядок не объявляет.
+
+### EF-1.9. Стоимость, Spatial handoff и границы приёмки
+
+Full fine preparation допустима: Ω(N) terrain evidence плюс heap-based solve;
+не обещать O(N) всего solver. R1 encoding O(W), G1 assembly/validation O(N+river edits).
+Retained worst case O(N+R+B), R может быть Θ(W). Row index готовится один раз;
+warm window read обходит relevant rows/leaves/decoded shards + output, не world.
+Disjoint boxes не оправдывают scan всего промежутка между ними. Cold full admission
+отделён от warm read. Numeric IO/RAM/time/shard budgets — SP-P0/SP-3; нет измерений
+и обещаний миллисекунд/байтов. RESOURCE_LIMIT не допускает silent truncate.
+
+Сверка с proposed SP-1: fine canonical half-open windows/caller seam split,
+single async read, immutable T, REQUIRED/PREVIEW, direct refs и Failure mapping
+совместимы с §14. Bootstrap revision теперь canonical envelope.ref, не upstream
+native_final.ref; Pack provenance=root ArtifactRef, удерживающий exact graph.
+Pack pin=WorldPublicationRef(pack_hash!=None); root membership/pin/overlay/Q01
+остаются внешними gates, готовый existing port не заявлен. Source refs не меняются
+от набора shards/окон, latest не подменяет retained pin.
+
+**Совместный review должен подтвердить:** metadata tables за геометрическими
+границами clipped spans, strict nested frame validation по SP-1 §14.7 и domain
+unknown semantics. SP-1 НЕ принят этим документом. Его изменения требуют нового
+compatibility review EF-1, не молчаливого adapter. SP-P0 root schema/codec/numeric
+type IDs/shards/budgets, SP-3 Pack IO/pin constructor, SP-M exact implementation
+methods — отдельные owning scopes, не поля, скрытые под generic dict в EF-1.
+
+**Предъявляется:** exact domain records/APIs/errors/source graph и fine P2
+geometry/constraint/area/capture/transport/version migration, Z caller audit и
+legacy dispositions. Runtime closure/implementation acceptance не предъявляются
+как выполненные. Приёмка пользователем EF-1 не является автоматической приёмкой
+SP-1/SP-P0 или разрешением producer code/G10-A cutover.
+
+Будущие acceptance cases: reject mixed frames/double S/wrong W; все участники
+fine и одинаковый area order; supports/dependencies/overlaps/separations;
+fine authored boundary/island reservation; real preparation→P2→F→routes/river→
+final→canonical source без synthetic outcomes; narrow channel/isolated depression/
+spill/merge/seam/sphere; negative Z и exact G1; dry/unknown/missing/corrupt;
+union reads equivalence; cold replay/bounded warm reads; terrain max-z остаётся
+bed, не water level; no L0-as-truth/working-map source. Сейчас это спецификация
+проверок, не отчёт об их прохождении.

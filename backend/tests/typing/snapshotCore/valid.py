@@ -288,3 +288,24 @@ def history_provenance_projection(metadata: SnapshotEnvelope, base: SnapshotEnve
     validate_receipt_provenance(metadata, receipts, base, metadata.operation_id)
     row = encode_history_row(metadata, world, codec)
     return decode_history_row(asdict(row), metadata.ref, codec)
+
+
+from app.db.repositories.sqlite.artifacts.access.artifactScope import SqliteArtifactScope
+from app.dataModel.identity.uid import EntityUid
+
+
+async def artifact_scope_capabilities(commits: SqlitePublicationCommitStore,
+                                      access: ScopedSqliteAccess, ref: ArtifactRef,
+                                      publication: CommitScope, operation_id: EntityUid) -> None:
+    from typing import assert_type
+    helper = SqliteArtifactScope(commits, access)
+    assert_type(helper.commits, SqlitePublicationCommitStore)
+    assert_type(helper.access, ScopedSqliteAccess)
+    async with helper.guard(ref):
+        async with helper.transaction(operation_id) as write:
+            assert_type(write, CommitScope)
+        async with helper.read_scope() as read:
+            assert_type(read, CommitReadScope)
+    async with helper.bind(publication):
+        async with helper.transaction(operation_id) as borrowed:
+            assert_type(borrowed, CommitScope)

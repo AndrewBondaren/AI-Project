@@ -36,6 +36,8 @@ GEN-DAG-1 владеет **всеми конкретными** Input/Output **н
 
 ## GEN-NODE-JOINT-REVIEW — совместный проект новой карты и написание нод (решение мастера 2026-11-02)
 
+**GEN-START-POLICY — отдельный планируемый срез:** [GEN-DAG-NODE-DEPENDENCY §6](./gen-dag-node-dependency.md#6-gen-start-policy--реализация-полного-механизма-и-интеграция-с-dag) фиксирует хранение start_location_policy в worlds, typed validation/полную замену blob, world API/settings UI, bundle validation/remap и parent/child integration. Это план реализации до contract/file freeze, без разрешения кода/cutover; города включают city и underground_city по ответу пользователя.
+
 **Рабочий реестр подтверждённых нод:** [GEN-DAG-NODE-DEPENDENCY](./gen-dag-node-dependency.md). Начат 2026-11-02 по поручению пользователя с `check_scene`: первое место в сценариях session scene, смысловые Input/Output/Error и подробная ответственность. Статусы подтверждённых решений и предлагаемых контрактных деталей разделены в реестре; его создание не принимает весь граф и не разрешает код/cutover.
 
 **Правило процесса ПРИНЯТО мастером; конкретный TO-BE граф и контракты НЕ ПРИНЯТЫ.** Это обязательная часть GEN-P0/GEN-CONTRACTS и per-node acceptance, **не отдельная вершина** WORLD-PLAN-GRAPH-1. Агент может самостоятельно провести read-only аудит, но **не вправе самостоятельно проектировать окончательную оркестрацию и писать/менять конкретные production-ноды**. Мастер участвует в разработке графа и каждой ноды: сложные междоменные контракты требуют его контроля, а агент может ошибочно перенести границы публичных pipelines и создать скрытый orchestration path.
