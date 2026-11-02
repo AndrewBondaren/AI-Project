@@ -14653,7 +14653,7 @@ extra=ignore/coercion WaterBody/WorldTopology. Готовый topology frame п�
 |---|---|
 | WaterMembershipRun | y: FineY; x0: FineX; x1: FineX; body_uid: EntityUid. Interval [x0,x1), x0<x1 |
 | CanonicalOpenWaterSource | space: Literal[CoordinateSpace.WORLD_FINE_GRID]; bed: FineSurfaceWindow; z_min: FineZ; z_max: FineZ; wet_runs: tuple[WaterMembershipRun,...]; bodies: tuple[WaterBody,...]; unions: tuple[PhysicalWaterUnion,...]; source_mapping: SourceBodyMapping; shore_rows: tuple[tuple[FineXY,MapCellHydrology],...] |
-| WaterVolumeRun | y: FineY; x0: FineX; x1: FineX; z0: FineZ; z1: FineZ; body_uid: EntityUid. Volume [x0,x1)×[y,y+1)×[z0,z1), positive extents |
+| WaterVolumeRun | y: FineY; x0: FineX; x1: FineX; z0: FineZ; z1: FineZ; bed_z: FineZ; level_z: FineZ; body_uid: EntityUid. Occupancy [x0,x1)×[y,y+1)×[z0,z1); bed_z/level_z — исходные physical boundaries всех колонок run, не clipping boundaries |
 | WaterWindowFacts | runs: tuple[WaterVolumeRun,...]; bodies: tuple[WaterBody,...]; unions: tuple[PhysicalWaterUnion,...]; unknown_boxes: tuple[SpatialBox,...] |
 
 Canonical source — `PlanEnvelope[CanonicalOpenWaterSource]`, metadata
@@ -14690,16 +14690,21 @@ coverage proof за пределами observation domain. shore_rows — exact 
 rows, canonical unique row-major внутри coverage; не liquid. River actual geometry
 и refs сохранены, river liquid volume остаётся отдельным SP-H2 scope.
 
-**Payload изменён относительно первоначального WaterColumnFact:** clipped XYZ spans
-вместо полной колонки с bed/level за пределами query. Runs sorted
-(y,x0,z0,x1,z1,body_uid), без volume overlap; adjacent X spans с одинаковыми
-z0/z1/body сливаются, но не через незапрошенные промежутки. unknown_boxes sorted
+**Payload по принятому F1:** clipped XYZ occupancy spans сохраняют исходные
+physical bed_z/level_z, даже за пределами query; clipping их не меняет.
+WaterWindowFacts.runs включает оба вида границ явно, без нового read API.
+bed_z < level_z; bed_z+1 <= z0 < z1 <= level_z+1. level_z равен effective level
+body table, bed_z равен exact G1 sample каждой колонки этого run.
+Runs sorted (y,x0,z0,x1,z1,body_uid,bed_z,level_z), без volume overlap;
+adjacent X spans с одинаковыми z0/z1/body/bed_z/level_z сливаются, но не через
+незапрошенные промежутки и не через изменение physical bed. unknown_boxes sorted
 по SP-1 order, disjoint, clipped к query union, не пересекают known water.
 Bodies/union ancestry — metadata для возвращённых spans, не дополнительный volume.
 Таблицы замкнуты по member/child/parent refs возвращённых unions; необходимые
 body members без spans допустимы как reference metadata, без добавления geometry.
-Body level может лежать за Z окна: это metadata; совместимость такой трактовки
-с SP-1 postcondition предъявляется на joint review, не принимается молча.
+Physical bed/level и body metadata могут лежать за Z окна по принятому SP1-F1;
+occupancy/absence утверждается только внутри request union. Это согласование
+с принятой частной семантикой F1, не самостоятельная приёмка общего SP-1/EF-1.
 
 ### EF-1.5. Exact domain APIs, admission и errors
 
@@ -14738,7 +14743,9 @@ admission port здесь не выдумывается.
 
 Read сверяет frame/ref, затем domain intersection. Known domain — bed.coverage ×
 [z_min,z_max+1); unknown — точное дополнение внутри query union. Wet interval
-[bed+1,level+1) clip к каждому query box, далее exact WaterVolumeRun grouping.
+[bed+1,level+1) clip к query union, далее exact WaterVolumeRun grouping с сохранением
+необрезанных bed_z/level_z. При bed=3,level=10 и окне [7,9): z0=7,z1=9,
+bed_z=3,level_z=10; vertical disjoint boxes не заполняют промежутки.
 REQUIRED при unknown → SOURCE_INCOMPLETE без partial payload; PREVIEW допускает
 unknown_boxes и issues. Known-dry success: runs=(), bodies=(), unions=(),
 unknown_boxes=(), issues=(), но source_refs не пусты. Dry означает отсутствие
@@ -14759,8 +14766,20 @@ Shared failure mapping по proposed SP-1: frame→FRAME_MISMATCH;
 ref/mixed graph/stale index→REVISION_MISMATCH; format→UNSUPPORTED_FORMAT;
 missing root/shard→SOURCE_MISSING; bad hash/invariants→SOURCE_CORRUPT;
 scope unknown→SOURCE_INCOMPLETE; wrong revision kind/domain→DOMAIN_REJECTED;
-budget→RESOURCE_LIMIT. Missing/corrupt/stale — Failure и в PREVIEW. Порядок первого
-неуспешного этапа по SP-1 §14.7; aggregate REQUIRED ERROR один на request, не cell.
+budget→RESOURCE_LIMIT; временная недоступность storage/prepared source→SOURCE_UNAVAILABLE.
+Missing/corrupt/stale — Failure и в PREVIEW. По принятому F3 результат:
+`SpatialReadFailure(request=request, errors: tuple[SpatialReadError,...])`,
+errors required/nonempty; каждый SpatialReadError содержит required
+reason: SpatialReadFailureReason и issue: FieldPathError. Полей failure.reason/
+failure.issues и primary reason нет. Сохранять **все фактически обнаруженные**
+ошибки, включая одинаковый reason с разными paths. Независимые проверки могут
+дать несколько ошибок; невозможность дальнейшего безопасного decode/admission
+не требует зависимых проверок. Их непроведённые результаты не объявляются ошибками.
+Стабильный порядок: фиксированный порядок проверок frame/ref header, затем canonical
+row/shard/box traversal и порядок invariant checks; порядок не означает severity
+или выбор главной причины. Уже найденные ошибки не теряются при ранней остановке.
+Не нужен полный scan ради дополнительных ошибок. Aggregate REQUIRED ERROR один
+на request с полным errors, не cell; Failure не содержит partial payload.
 Reader не исправляет geometry conflict/level и не выполняет fill/patch.
 
 ### EF-1.6. Z convention и проверенные terrain consumers
@@ -14832,9 +14851,14 @@ AST-проверка 16 ключевых existing symbols в 8 файлах: mis
 | HSP-09 | merge_fine_hydro_for_tile / apply_declared_fine_river_carves cleanup только после import/dynamic closure; tests сохранять по смыслу river geometry, не подключать helpers в reader |
 | HSP-10 | resolve_water_levels/materialize_water/labelled_level_fill остаются bootstrap algorithms. Retained source хранит resolved ownership; window read никогда не повторяет solve |
 
-Порядок: domain EF-1 + joint SP-1 boundary review → separate GEO exact implementation
-scope/G10-A/SP-H → SP-P0/P1 и compact source build/publication SP-P3I/P3W/P3 по
-своим transport gates → SP-3 base Pack reader → SP-M/SP-4 L2 activation.
+После совместного согласования EF-1/SP-1 boundary — независимые ветки:
+GEO exact implementation scope → G10-A/SP-H по собственным gates;
+storage SP-P0/P1 — по собственным gates, **без prerequisite G10-A/SP-H**.
+SP-P0 может проектироваться параллельно; его зависимая приёмка требует совместного
+контракта, не реализации producer. Ветки сходятся при передаче accepted source в
+SP-P3I и последующих SP-P3W/P3 по transport/publication gates; затем SP-3 base Pack
+reader и SP-M/SP-4 L2 activation. Source integration gate не становится входом в
+storage design/format preparation.
 SP-M можно проектировать параллельно; SP-4 не prerequisite G10-A. Runtime отдельно
 SP-3S/SP-4R; river volume SP-H2. Ни одной внешней приёмки этот порядок не объявляет.
 
@@ -14856,9 +14880,9 @@ Pack pin=WorldPublicationRef(pack_hash!=None); root membership/pin/overlay/Q01
 остаются внешними gates, готовый existing port не заявлен. Source refs не меняются
 от набора shards/окон, latest не подменяет retained pin.
 
-**Совместный review должен подтвердить:** metadata tables за геометрическими
-границами clipped spans, strict nested frame validation по SP-1 §14.7 и domain
-unknown semantics. SP-1 НЕ принят этим документом. Его изменения требуют нового
+**Результат joint review — EF-1.10 ниже:** metadata/physical boundaries за окном
+допустимы по принятому F1; F2/F3 применяются к проекту EF-1 явно. Domain payload
+и общий SP-1 остаются на приёмке. Их изменения требуют нового
 compatibility review EF-1, не молчаливого adapter. SP-P0 root schema/codec/numeric
 type IDs/shards/budgets, SP-3 Pack IO/pin constructor, SP-M exact implementation
 methods — отдельные owning scopes, не поля, скрытые под generic dict в EF-1.
@@ -14877,3 +14901,136 @@ spill/merge/seam/sphere; negative Z и exact G1; dry/unknown/missing/corrupt;
 union reads equivalence; cold replay/bounded warm reads; terrain max-z остаётся
 bed, не water level; no L0-as-truth/working-map source. Сейчас это спецификация
 проверок, не отчёт об их прохождении.
+
+### EF-1.10. Совместное ревью актуальных GEO EF-1 / Spatial SP-1 (2026-11-02)
+
+**Документальная сверка выполнена; обновлённый пакет НА ПРИЁМКЕ.** Проверены
+фактические EF-1.1–1.9 и SP-1 §14.1–14.10, включая принятые пользователем F1/F2/F3;
+HEAD `75106c0b` + working tree. GEN-DAG draft не читался и не использовался.
+Старые положения §14.7 о primary/first-failed precedence заменены F3, а не являются
+действующей альтернативой. Исправления внесены в EF-1.4/1.5/1.8/1.9 и shared
+указатели. Общая приёмка SP-1/EF-1/GEO-SPATIAL-CONTRACT не объявлена.
+
+**Definitions и caller evidence, помимо имён:** FineX/Y/Z — runtime int NewType,
+не runtime unit proof; WorldBounds допускает coercion/extra=ignore,
+WorldTopology.resolve_bounds вызывает even_width. PlanRef содержит полный PlanKey
+и 32-byte output_fingerprint; WorldPublicationRef.coherent_refs проверяет
+world/head/gameplay fields, не IO/ancestry. ArtifactRef содержит content hash/format,
+но не world/pin. FieldPathError — frozen dataclass с optional code/context.
+FineSurfaceWindow.complete_surface проверяет exact coverage row-major и canonical
+cells, но не доказывает physical wet connectivity. WaterBody.z_water_level —
+physical level, defaults/extra=ignore требуют отдельного nested admission.
+
+NativeFinalWaterQuery.__init__ проверяет output proofs/dependencies и покрытие,
+water_at возвращает UID также для RIVER_BED, поэтому не заменяет liquid XYZ.
+run_column_fill создаёт solid до z_top включительно, hydrology только на top;
+mapCellToFineTerrainWire._compress_z_runs и terrainContributions.fine_terrain_contribution
+сохраняют inclusive Z. _surface_cell/column_surface выбирают max Z; water MapCells
+в terrain list изменили бы physical surface. Эти реальные consumers подтверждают
+разделение solid/medium из EF-1.6, но не готовность их SP-4 migration.
+Proposed shared spatial/query/read и hydrology/query data records в коде пока
+отсутствуют: строгие validators и API ниже — спецификация, не выполненный тест.
+
+**F2 — точное доменное дополнение к validators EF-1.4/1.5:**
+
+- Перед shared nested validation проверять actual CoordinateSpace.WORLD_FINE_GRID,
+  SpatialReadMode, PlanRef|WorldPublicationRef и source_refs PlanRef|ArtifactRef.
+  Равная строка, dict и forged model_construct/model_copy не обходят повторную
+  проверку всех полей. Invalid in-process request → ValidationError до read;
+  валидный request с другим source frame/ref → typed Failure, не ValidationError.
+- CanonicalOpenWaterSource.space и fine P2 markers аналогично проверяют actual
+  CoordinateSpace member до Literal validation. Все x/y/z/bounds — type(v) is int;
+  strict outer ConfigDict не заменяет обход existing nested records. Source/expected
+  refs — actual PlanRef с полной revalidation; comparison/unique по полному equality,
+  не hash(ref), одному UID или одному fingerprint.
+- Source bed.topology и request.window.topology проверяются как готовые
+  WorldTopology/WorldBounds с actual WorldTopologyMode, ordered strict-int bounds
+  и even SPHERE width до nested normalization. Затем сравнить весь frame с source.
+  fine_topology применяется один раз при capture; reader не lift/wrap/clamp.
+  Ранее legacy-нормализованный raw input восстановить нельзя: его decoding
+  принадлежит owning caller boundary, а не новому read method.
+- WaterMembershipRun/WaterVolumeRun/body tables проверяются transitive immutable,
+  actual enum/material/UID types по existing definitions и exact domain invariants.
+  SpatialReadError.reason — actual shared enum, issue — existing FieldPathError,
+  не dict. Отсутствующие в wire значения не достраиваются reader из defaults.
+
+**Нормализация occupancy/unknown:** WaterWindowFacts.runs утверждают только
+пересечение resolved membership с query union; bed_z/level_z не обрезаются.
+При разном bed соседние X columns — разные runs, даже если clipping сделал z0/z1
+одинаковыми. Для одной колонки соседние Z fragments объединяются только если union
+действительно содержит весь объединяемый interval. Unknown — domain-owned точное
+дополнение known scope, не отсутствие sparse record; PREVIEW unknown имеет issues,
+REQUIRED — Failure. В valid response implicit dry = request union минус wet и
+unknown; только open-water scope. Invalid/corrupt record не выдаётся unknown box.
+Детерминированная форма unknown: one-row boxes (y1=y0+1), maximal Z intervals
+для каждой X column, затем maximal adjacent X intervals с одинаковым Z interval;
+sort по SP-1 window order. Это bounded domain projection, не generic coverage solver.
+Если output слишком велик — RESOURCE_LIMIT, не truncation. Union equivalence
+сравнивает occupancy/unknown и physical facts после нормализации; не простую
+конкатенацию metadata tables или byte equality wrappers разных request_id.
+
+**F3 — примеры и граница продолжения проверок:** ready source позволяет независимо
+обнаружить wrong frame и wrong source ref — обе ошибки сохраняются. Если shard
+недоступен, ошибку его checksum/bed нельзя объявить: данные не были проверены.
+Если два доступных shards уже дали разные corrupt paths, обе записи остаются.
+Unsupported format не требует unsafe decode ради новых ошибок. Проверки с
+недоказанными предпосылками пропускаются; массив содержит только реально найденное,
+без primary reason, полного scan или искусственного SOURCE_INCOMPLETE поверх
+SOURCE_MISSING. Slice.issues — preview diagnostics; Failure.errors — typed errors,
+это разные поля разных вариантов результата. Constructor/preparation failures
+до valid read остаются existing PlanBuildFailure/ValidationError, не fake Failure
+без SpatialReadRequest. Cancellation/shutdown/defects не ловятся как domain absence.
+
+**Files/imports:** shared SpatialReadError живёт в proposed
+dataModel/spatial/read/failure.py рядом с Failure/Reason; семь shared файлов SP-1
+не увеличиваются. Hydrology source.py не импортирует read models, window.py
+импортирует SpatialBox; PreparedOpenWaterReader импортирует shared request/result/
+failure (включая SpatialReadError), доменные records и existing refs. Shared слой
+не импортирует Hydrology, storage или engine. Physical поля добавлены в existing
+proposed WaterVolumeRun, без нового POJO/метода/mode. В surfaceManifest подлежат
+registration только canonical source records/envelope и native planning transport;
+WaterVolumeRun/WaterWindowFacts/SpatialSlice — in-process projections, не authoritative
+Pack window schema и не новый retained source. Numeric codec IDs остаются SP-P0/
+codec owner. Existing refs/wires сохраняют свои fields и версии.
+
+### EF-1.11. Единый перечень контрактов и оставшихся blockers на приёмку
+
+«Сведено» ниже означает непротиворечивый совместный проект, а не автоматическую
+приёмку пользователем. Приняты только явно записанные направления A/R1/G1/Z и
+частные решения F1/F2/F3; остальные scopes ждут своих owners.
+
+| Контракт / статус сверки | Нормативное место и оставшийся gate |
+|---|---|
+| A fine P2, R1 exact membership, G1 exact final bed, canonical geometry priority, дорогая preparation | Принятые решения GEO §§7–10. Exact migration EF-1.2/1.3 ещё на приёмке; production roster/capture и отсутствие mixed units доказать при G10-A |
+| F1 physical interval + clipped occupancy | F1 принят SP-1 §14.9; WaterVolumeRun теперь содержит bed_z/level_z отдельно от z0/z1. Domain поля/grouping/closure EF-1.4/1.10 на приёмке |
+| F2 typed in-process inputs / strict nested frame | F2 принят §14.10; before checks и domain supplements EF-1.10 сведены. Реализации validators ещё нет; transport decode не входит в shared reader |
+| F3 all discovered typed errors | F3 принят §14.10; EF-1.5/1.10 сведены к errors tuple, без primary/выдуманных проверок. Новый shared Error остаётся внутри общего SP-1 проекта |
+| WaterWindowFacts / unknown / dry / Z | EF-1.4/1.5/1.10: body metadata closure, exact physical bed/level, clipped spans, known-domain complement, preview diagnostics. Domain freeze требует явной приёмки EF-1; river-volume отдельно |
+| Topology / source refs / revisions | Shared §14.2/14.4 и GEO EF-1.4/1.5: ready fine frame, canonical envelope.ref bootstrap, root ArtifactRef Pack, WorldPublicationRef pin. Source graph и new source contract на приёмке; root/pin/overlay не доказываются наличием POJO |
+| Files/imports/reuse | Shared §14.5 + GEO EF-1.7/1.10: seven shared files, domain source/read separated, existing refs/windows/body facts reuse. No new generic solver/service. Code/codec registration не выполнены |
+| Storage/producer dependency | EF-1.8 исправлен: после joint contract review GEO producer и SP-P0/P1 идут независимо по своим gates. SP-P3I требует accepted source + storage prerequisites; это не prerequisite SP-P0/P1 |
+| Existing terrain / L2 consumers | EF-1.6/HSP-02…08: inclusive terrain остаётся, water medium отдельно, G1 не clamp-ится. Exact decomposition/async-to-sync composition — SP-M, activation/cold replay — SP-4 после собственных gates |
+
+**Оставшиеся blockers, разделённые по scope:**
+
+1. **Приёмка данного пакета:** пользователь принимает общий SP-1 отдельно от
+   EF-1 и совместного GEO-SPATIAL-CONTRACT. Принятые F1/F2/F3 не закрывают эти три
+   результата. Исправленные domain fields/ref identity/errors здесь предъявлены,
+   а не объявлены принятыми.
+2. **Storage implementation/acceptance:** SP-P0 root format/schema/codec/IDs,
+   shards/index, numerical budgets и migrations; SP-P1 по своим gates. G10-A не
+   prerequisite их design/preparation. Это отдельные downstream contracts, не
+   причина сохранять primary reason или откладывать joint review.
+3. **Producer join:** concrete production participant roster, owning captures,
+   explicit native bindings/versions и реальный prepare→P2→F→final→canonical source
+   при G10-A/SP-H. Callback/test fixture не production proof.
+4. **Read/materialization:** SP-3 exact Pack reader IO/admission pin и SP-M exact
+   L2 decomposition, затем SP-4 cold-Pack consumer evidence. Bootstrap reader
+   не выдаётся за реализованный Pack/runtime reader.
+5. **Отдельные последующие scopes:** runtime Snapshot overlay/Q01/SP-3S/SP-4R,
+   river-volume SP-H2 и gameplay composition. Они не скрытые prerequisites
+   open-water domain review или SP-P0/P1; их отсутствие не маскируется dry.
+
+Проверка этого review: статическое чтение definitions/callers и documentary diff;
+новые runtime/tests не запускались. Численные budgets и dynamic caller closure
+не доказаны. Код и GEN-DAG draft не изменены/не использованы.

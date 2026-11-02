@@ -521,6 +521,20 @@ AS-IS `jsonValidation.facade.merge_world_patch` deep-merges JSON blobs. Запл
 
 ### 6.5. Интеграция с select_start_location
 
+**URL ЗАФИКСИРОВАН пользователем: существующий `POST ${API_URL}/chat/stream`** (backend route `POST /chat/stream`). Один и тот же URL используется для первоначального запроса, следующих шагов выбора и продолжения/resume. Не создавать отдельные endpoints select-start-location/world-entry и не менять URL текущего chat flow.
+
+**Обязательная target маршрутизация endpoint → ноды (уточнение пользователя):** `chat_stream → ChatService/typed engine entry binding → DAG → initialize_world_entry → select_start_location` для стартового flow. Endpoint должен доводить запрос до исполнения/продолжения этих нод, а не только читать сохранённый response или обращаться к отдельному legacy selection service. Первоначальную стартовую ветку DAG выбирает по check_world_entry; продолжение незавершённого выбора адресуется тому же parent/child interaction, не запускает начальный список заново. После завершённого входа тот же endpoint обслуживает обычный scene/action DAG.
+
+HTTP route не вызывает node.execute напрямую и не сам выбирает порядок внутренних операций: исполнение, lifecycle и публикация результатов остаются у engine DAG. Parent/child entry binding обязан явно связывать входящий запрос с initialize_world_entry/select_start_location; его точные типы и runtime files требуют freeze. Прежняя маршрутизация через legacy intent_detection/check_scene для выбора старта — только AS-IS evidence, не target binding.
+
+Acceptance маршрутизации: первый стартовый POST реально активирует parent/child через DAG; POST с выбранным UID продолжает ту же ноду выбора; её terminal location result поступает родителю; API возвращает output текущего шага через existing response binding. Не допускаются второй selection pipeline в handler/service и прямой вызов concrete-ноды мимо runtime. Это требование реализации на будущем едином cutover, не утверждение уже изменённого endpoint.
+
+Подтверждено `frontend/src/api/chatApi.js::streamChat` и `backend/app/api/routes/chat.py::chat_stream`. Сохраняется request envelope: session_id, message, request_id, resume, llm_provider, model, meta; при выборе UID локации передаётся в message, как сейчас. Новый request_id относится к новому запросу; session_id связывает interaction. World/player identities берутся сервером из сохранённой сессии, не из доверия клиентскому meta.
+
+Ответ остаётся SSE `ResultEvent(response=...)` с текущими structured payload: select_child для выдачи вариантов и существующий scene_ready для соответствующего UI-шага. Не менять смысл scene_ready на доказательство load completion: это отдельный контракт родителя. HTTP handler маршрутизирует запрос в engine; поднода формирует typed response и обрабатывает flow через binding, а не вызывает собственный HTTP API. Target interaction state между запросами ещё требует runtime freeze.
+
+API настроек мира GET/PUT /worlds/{world_uid} служит редактированию политики мастером, не заменяет chat endpoint выбора игрока.
+
 Настройка — обязательный domain Input подноды. Не передавать raw World/dict в execute и не принимать policy из клиентского message/meta.
 
 Proposed binding lifecycle:
@@ -569,3 +583,119 @@ Direct file counts на 2026-11-02 (включая __init__, до → после
 - Нет прямых SQL writes из нод, скрытых generation pipelines, policy-induced terrain rebuild или подмены RepairPatchApplier на Snapshot.
 
 Это запланированные проверки. Они не выполнены и не означают GEN-P0/production acceptance; происхождение функциональных acceptance tests проверяется по owning GEN-plan.
+
+
+## 7. Загрузка игрока — первый подробный разбор, НЕ ПРИНЯТ
+
+Предложенное имя: `load_player_into_world`. Это стадия внутри initialize_world_entry после terminal результата select_start_location. Пользователь запросил разбор Input и внутренней ответственности; границы/состав здесь предложены, не авторизованы к реализации.
+
+### 7.1. Input facts
+
+| Факт | Источник | Обязательность |
+|---|---|---|
+| world_uid | Проверенный session context | Обязателен |
+| player/character identity | Проверенный session context | Обязателен; разграничение player vs character пока OPEN |
+| session_id | Текущая сессия | Обязателен |
+| start_location: StartLocationView | Terminal Output select_start_location | Обязательна non-null, относится к world_uid |
+| Load operation identity / persisted interaction identity | Parent/runtime binding | Обязательна для retry/resume; не случайный новый HTTP request_id для каждого повтора |
+| Expected publication / согласованный world-read context | World domain read | Обязателен для coherent load; reuse WorldPublicationRef при принятом binding |
+| Bounded load requirements / policy | World/engine settings по domain contract | Обязательны для определения готовности; существующий SceneVolumePolicy — кандидат reuse, не весь контракт игровой сцены |
+
+Input не содержит всемирный список cells, полный SQL World, raw repository handles или fabricated spawn=(0,0,0). Registry/domain dependencies внедряются через bindings. Стартовая policy не должна заново выбирать другую локацию внутри загрузки; выбор должен быть проверен на актуальность, а устаревший возвращён DAG как stale-selection outcome. Нужно согласовать точку фиксации выбора относительно параллельного редактирования policy.
+
+### 7.2. Предлагаемая работа стадии
+
+1. Проверить world/player/session identities, принадлежность start_location миру и актуальность выбранной location. Для mobile location использовать актуальные anchor facts, не старые координаты из кнопки.
+2. Получить разрешённую точку появления через публичную доменную операцию позиции/входа. Location anchor не равен player position. Для indoor учитывать entry/level; точный spawn contract и owner OPEN. Нет допустимой позиции — declared error, без произвольного нулевого fallback.
+3. По позиции и принятым требованиям определить bounded окно. Это не весь город, не весь мир и не граница leaf NamedLocation. Размеры/LOD берутся из согласованной policy, без чисел, придуманных в ноде.
+4. Прочитать готовность необходимых domain facts. Готовые данные переиспользуются; missing detail отличается от corruption/read failure. Не считать отсутствие SQL water cells отсутствием воды.
+5. При необходимости DAG явно оркестрирует подготовку missing terrain/detail/settlement и принятую publication. Нет скрытого вызова bake_pack или generator pipeline из одной load-обёртки. Конкретные узлы/подграф этой подготовки требуют следующего совместного разбора.
+6. Получить согласованное окно через public reads на принятой публикации, проверить возможность размещения персонажа. Набор обязательных facts (например, collision/support/media/body constraints) не frozen: не объявлять все типы персонажей пригодными для любой точки.
+7. Подготовить/применить размещение персонажа и scene binding через owning operations. World effects идут согласованным Snapshot-путём; session bookkeeping классифицируется отдельно. Не выполнять произвольные repository writes из ноды.
+8. Подтвердить применённое размещение и доступность обязательного состояния. Если «загрузка» включает client readiness, требуется отдельный ответ/подтверждение через существующий chat flow; это OPEN и не подменяется server scene_ready.
+9. Вернуть parent load result. Только затем фиксировать started для того же world/player/session с согласованной idempotency/recovery policy; точное объединение placement и started bookkeeping в UOW ещё не выбрано.
+
+Шаги 2/5/7 имеют самостоятельные domain results/effects. Поэтому вся стадия пока рассматривается как видимая композиция DAG, а не доказанная атомарная concrete-нода. Если оставляем load_player_into_world одной публичной нодой, сначала совместно принять её parent/child lifecycle и явные зависимости; завернуть orchestration в generator service запрещено.
+
+### 7.3. Предлагаемый terminal Output
+
+- Проверенные world/player/session identities.
+- start_location: StartLocationView — выбранное место старта; не путать с текущей optional NamedLocation привязкой после движения.
+- Resolved player position, coordinate space и optional resolved level/location refs по domain position contract.
+- Scene identity/ref и evidence её binding, не обязательная копия всей карты.
+- World publication/ref, на которой обязательные факты и применённое размещение согласованы.
+- Load completion receipt для данного operation identity. Его точный POJO и критерий server/client completion OPEN.
+
+Успешный Output означает фактически завершённую загрузку по согласованному критерию, не «задание поставлено в очередь». Неполная загрузка не даёт terminal success. Промежуточный progress и API response принадлежат runtime/response binding. Started flag — следующий effect, не предположение по наличию выбранной location.
+
+### 7.4. Error / повторные попытки
+
+Предлагаемые различимые errors: invalid identities; stale/rejected selection; missing spatial placement; no valid spawn; mandatory domain facts missing; corrupt/stale read; preparation/publication failure; placement conflict. Ошибка проверки не превращается в fallback geometry или первый запуск заново. Отмена не даёт подтверждения загрузки; recovery после уже выполненного placement использует operation identity/receipt, а не повторяет spawn вслепую.
+
+### 7.5. AS-IS ограничения
+
+EntryRefineOrchestrator.refine_from_entry выполняет scene-volume refine и path corridor по anchor_x/y, принимает optional location_uid. Это подготовка детализации, не завершённое размещение игрока. Debug refine route дополнительно schedules background и finalize pack; этот путь не принимается автоматически как runtime load operation.
+
+Legacy SceneStartLocationSelect пишет SessionScene с level_uid=None и actors=[] и возвращает scene_ready. Это не доказательство ready world position. В Player есть system_location: str|None, но проверенная модель не содержит строгий XYZ position contract; его нельзя выдумать при связывании ноды.
+
+Первое решение для совместного обсуждения: что является завершением загрузки (authoritative server placement либо также client acknowledgement), и какая операция выдаёт пригодную spawn position. После этого уточнить POJO и граф внутри стадии.
+
+
+## 8. Отдельные ноды проверки состояния мира перед загрузкой
+
+**Решение пользователя 2026-11-02:** проверять наличие/готовность light_bake, full_bake и отдельно detailed_bake (L2) у start_location. **Каждая проверка — отдельная нода.** Эти проверки вынесены из внутренней логики load_player_into_world (§7). Имена ниже предложены для закрепления, смысл разделения подтверждён.
+
+### 8.1. check_light_bake
+
+- Назначение: проверить готовность L0/light данных мира в явно объявленном scope.
+- Input: world_uid; pinned world publication/ref; требуемый scope покрытия. Light bake может быть partial: требование полного мира не выводится из имени ноды.
+- Domain read: публичный Pack/readiness contract; manifest и проверка доступности refs принадлежат этому домену, DAG не открывает zst/файлы самостоятельно.
+- Output facts: world/publication identity; проверенный scope; наличие L0, полнота требуемого покрытия и пригодность данных; отсутствующее покрытие/refs и provenance. Exact POJO OPEN.
+- Effects: нет; не запускает light bake, repair или publication.
+
+### 8.2. check_full_bake
+
+- Назначение: отдельно проверить результат/полноту full bake согласно принятому контракту этого job, включая обязательную settlement topology там, где она требуется.
+- Input: world_uid; та же pinned publication/ref; scope и критерии полноты full job.
+- Domain reads: public Pack readiness и public settlement topology readiness. Наличие topology должно быть проверено по её owning revision contract, не выведено из наличия manifest.
+- Output facts: world/publication identity; полнота L0 для full scope; readiness обязательной topology; отсутствующие результаты и provenance. Exact POJO OPEN.
+- Effects: нет; не запускает full bake или plan_topology.
+
+### 8.3. check_start_location_l2
+
+- Назначение: отдельно проверить detailed terrain L2 выбранной start_location.
+- Input: world_uid; start_location: StartLocationView из завершённого select_start_location; та же pinned publication/ref; требуемый location volume/LOD по domain contract.
+- Domain read: public location terrain readiness. Для district/building/room разрешение owning terrain scope выполняет домен; нельзя выдумать обязательный l.{leaf_uid}.terrain blob для любого leaf.
+- Output facts: проверенная start_location identity; resolved terrain scope; наличие/полнота/актуальность L2, missing detail и provenance. Exact POJO OPEN.
+- Effects: нет; не вызывает detailed bake/refine, C11 и Snapshot.
+- L2 terrain readiness не доказывает готовность settlement structures/interiors. Если они необходимы, отдельные проверки обсуждаются отдельно, не добавляются скрыто внутрь этой проверки.
+
+### 8.4. Общие правила результатов и deps
+
+- Нормально отсутствующий/неполный bake — успешный диагностический Output с отсутствием/неполнотой, не fabrication ready и не автоматический запуск bake.
+- Corrupt/stale/mismatched/read-failure — различимые ошибки по согласованному domain contract; не выдавать за отсутствие данных с автоматическим rebake.
+- Только manifest.bake_mode недостаточно: в текущем коде это режим последнего L0 bake (light/full), не история выполнения всех jobs и не доказательство L2. Default light в wire-модели не доказывает наличие L0.
+- AS-IS evidence: WorldPackManifest.tiles содержит world_map_path/hash; location_terrain_entries — location_uid, territory_volume, terrain_path/hash; settlement_structure_entries отдельно содержит status/packed districts. WorldPackMetadata path/hash сами по себе не доказывают completeness/актуальность.
+- Все проверки должны относиться к согласованному состоянию/публикации. После подготовки/commit недостающего повторная проверка использует новое принятое состояние.
+- Между тремя проверками не вводится последовательность только из-за названий bake режимов. Независимые read checks на одной публикации могут выполняться параллельно; L2 check требует terminal выбранную start_location. Exact RequiredOutput/order dependencies согласуются с public readiness APIs.
+- DAG получает три самостоятельных результата и выбирает дальнейшие операции. Какие неполноты блокируют старт и допускается ли локальная готовность вместо глобального full-world completeness — ещё требуется явно согласовать; автоматически запускать full-world bake при входе игрока запрещено.
+
+### 8.5. Влияние на стадию загрузки
+
+Родитель initialize_world_entry организует выбранную location и отдельные readiness checks. load_player_into_world получает их согласованные outputs как prerequisites (exact scope/requiredness ещё уточняется). Он не содержит второй реализации этих проверок и не организует скрытый bake pipeline. Перед effect применения позиции допустима проверка актуальности pinned prerequisites через domain guard; это consistency guard, не повторный readiness orchestrator.
+
+Промежуточная карта обязательного разделения (не полная frozen orchestration):
+
+```mermaid
+flowchart TD
+    W["World/publication input"] --> L["check_light_bake"]
+    W --> F["check_full_bake"]
+    W --> D["check_start_location_l2"]
+    S["select_start_location: terminal location"] --> D
+    L --> G["DAG: решение о готовности/необходимых операциях"]
+    F --> G
+    D --> G
+    G -->|"Согласованные prerequisites выполнены"| P["load_player_into_world"]
+```
+
+W/G — обозначения inputs/policy, не новые ноды. Все показанные стрелки в проверки и из них — данные. Ноды фактического bake/доподготовки и publication пока не показаны как будто уже принятые. Exact Input/Output/Error POJO и readiness owners — следующий совместный шаг; код не менялся.
