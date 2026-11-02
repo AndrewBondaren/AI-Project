@@ -1,6 +1,6 @@
-# WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1
+# WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME
 
-**Статус:** архитектурная карта межплановых gates, v6.8 (2026-11-02), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.9 (2026-11-02), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Назначение:** показать зависимости **конкретных этапов**, а не объявлять один большой план prerequisite другого. Нормативный источник контрактов, статусов и доказательств приёмки — **соответствующий owning-план**; эта карта не вводит новые API, владельцев, типы, численные budgets, путь хранения, обязательный глобальный порядок и не меняет его решение. При конфликте сначала исправить и согласовать owning-план, затем синхронизировать эту карту.
 
@@ -14,6 +14,8 @@
 | [DAG-TYPING-1](./dag-typing-1.md) — `.cursor/plans/dag-typing-1.md` | Общая typed инфраструктура `NodeContract`, OutputRef, runtime, NodeRegistry, parallelism: **A1–A3 implemented/verified**, **B1–B3 не завершены**, B зависит от конкретной интеграции GEN-DAG-1. |
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | **Совместный дизайн нового production DAG**, точные Input/Output/Error POJO, factories, публичные domain operations и единый cutover. Старые 15 ID — AS-IS inventory, **все legacy concrete-ноды под удаление, кроме перерабатываемой `check_scene`**; нет 1:1 миграции. **GEN-NODE-JOINT-REVIEW** обязателен с мастером: Mermaid-карта зависимостей, решения keep/split публичных pipelines и per-node contracts до кода. **DRAFT/DEFERRED**: GEO-1, необходимые Patch/Snapshot gates и concrete contracts/приёмка OPEN. |
 | [PHYSICS-1](./physics-spatial-dynamics.md) — `.cursor/plans/physics-spatial-dynamics.md` | **Owning план PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-HANDOFF/PH-PUBLISH**: DAG-node-only trigger, FAR/MEDIUM/NEAR через DAG+settings, **Grade/SQL только bounded NEAR (FAR/MEDIUM — без Grade)**; фоновая aggregate и локальная подробная стратегии; typed input/output, изменения только через domain-owned operations → Patch/Snapshot. Материалы — отдельный mutable-property owner и внешний контракт, не внутренний поддомен Physics; Physics формирует effects, DAG маршрутизирует Materials/domain change. PH-0 принят статически; направления P1.6, D1–D5 P2.10, SI/scope P2.11 и public pipelines boundary P2.12 приняты; полный PH-ARCH **OPEN**, exact freeze и runtime **OPEN**. В §5 выделены будущие water-first acceptance aliases `PH-AGG-RUNTIME`, `PH-LOCAL-RUNTIME`, `PH-GAMEPLAY-E2E`; это **не implementation steps** и не prerequisite GEO/Pack/GEN initial cutover. |
+
+**Новый owning-трек:** [Time](./time-domain.md) — world clock values, intervals, pure conversions, coherent reads и preparation. Calendar/settings/epochs принадлежат World, стоимость действий — Actions, выбор операций — DAG, commit/restore/branch — Snapshot. **RESEARCHED PROPOSAL; частные решения приняты, общий API/foreign freeze OPEN.** Этапы, статусы и реестр зависимостей Time — §10; это часть общего графа, не отдельный план реализации.
 
 **Дополнительные внешние контракты (не равны самостоятельным новым задачам SPATIAL):** [World Pack storage](../../docs/tz_world_pack_storage.md), [World Snapshot](../../docs/tz_world_snapshot.md), [World Source Versioning](./world-source-versioning.md). Их owners должны принимать staged immutable publication, source revisions и runtime apply в своих треках. Архивные WS-0/WS-4 **не gate и не SoT**.
 
@@ -650,3 +652,104 @@ Snapshot REV-1: повторное review PASS, 25 tests OK / Pyright 0/50 по 
 **Предел проверки:** static source trace и owning evidence; runtime/полная suite/Mermaid render не выполнялись. GRAPH-AC и LEGACY-AC не закрыты. Hard-edge registry сохранён: новые принятые требования не дают оснований придумывать concrete GEN/Physics binding edges.
 
 Проверка v6.8: извлечены 85 hard edges / 57 вершин; topological traversal прошёл для базового реестра и отдельно для каждой из двух cutover-альтернатив. В bootstrap Mermaid добавлено ранее отсутствовавшее прямое SP-P0 → SP-P3I из реестра (транзитивно оно уже следовало через P1). Нового prerequisite нет.
+
+## 10. Time в общем графе — v6.9, 2026-11-02
+
+Источник: [time-domain.md §§1, 8, 10–18](./time-domain.md), включая текущие незакоммиченные owning-уточнения. Time-план координатором не изменялся. Историческое «Time — внешний owner» теперь имеет конкретный owning-план, но не означает готовый runtime port. Приоритет при последующих изменениях — последние owning-записи.
+
+### 10.1. Ответственность, выполнение и приёмка
+
+**Исследовано:** source/writer ledger, proposed публичные API/POJO/file map, coherent capture, OperationLedger reuse, lifecycle walkthrough и storage seam. §18 различает prepare, transaction-local append и durable Snapshot acceptance: `TimeStateAppended` не public accepted receipt, domain writer не имеет commit/rollback. Это документальное evidence, не исполнявшиеся tests или implemented ports.
+
+**Явно принято у owner:** время принадлежит миру и не течёт само без действий; signed int64 seconds + nanos 0..999999999; час=60 минут, минута=60 секунд; hours/day — World setting, default 24. Замена старого hourly-tick baseline разрешена, migration ещё OPEN. Игровое действие имеет положительную длительность от Actions, technical zero допустим. World owns calendar/epochs/versioning; Gregorian default и once-captured UTC+0 start при отсутствии стандартного start, explicit start обязателен для custom calendar. UI показывает точное world time отдельно от turn. A4: изменение hours/day через version/anchor с сохранением допустимой даты/времени, иначе explicit re-anchor. Ни одно из этих решений не принимает целиком A1/A2/A3/A5 или production bindings.
+
+**Открыто:** exact wire/overflow/errors, calendar grammar и foreign start/date schemas, coherent state/init binding, atomic time+effects acceptance, action-duration/turn presentation contracts и legacy writer migration. `World.calendar:dict` подлежит removal по принятому решению только в будущем согласованном cutover; generic World update/import не становится допустимым clock writer. Старые current_tick значения не переинтерпретируются молча.
+
+### 10.2. Статусная таблица Time (часть общего реестра)
+
+TIME-Tn — aliases существующих Tn owning §8, не новые implementation steps. Стрелка означает prerequisite результата; обсуждение внешней границы может идти раньше. T3 разделён на arithmetic/calendar gates только для точности зависимостей.
+
+| Gate | Входы | Фактический статус / следующий допустимый шаг |
+|---|---|---|
+| TIME-T0 | Источники/actual callers | Исследован §§3/14; full migration closure OPEN. Уточнять writer/consumer ledger, не объявлять отсутствующие callers удалёнными |
+| TIME-T1 | TIME-T0 + пользовательские решения | Основные representation/units решения приняты §1; wire/bounds/migration не frozen. Не пересогласовывать принятую точность |
+| TIME-T2 | TIME-T0 + принятый World ownership/N+1 | Calendar foreign proposal §15; exact World schema/start/epoch contract OPEN. Согласовать у World owner |
+| TIME-T3A | TIME-T1 | Arithmetic portion T3: proposed point/duration/interval/pure operations §§10–11; A1 на приёмке, не implementation |
+| TIME-T3C | TIME-T3A, TIME-T2 | Calendar projection portion T3: exact foreign projection I/O/E OPEN; не блокирует чистую arithmetic |
+| TIME-T4 | TIME-T3A + применимые Snapshot ref/read contracts | Coherent current/historical reads/preparation proposal §§14/18. Закрыть Time state/source binding; calendar reads дополнительно требуют TIME-T3C |
+| TIME-T5 | TIME-T4 + joint Snapshot acceptance contract | Proposal: atomic time+effects, reuse SNAPSHOT_APPLY/OperationLedger, init/branch и unknown outcome. Concrete handler/storage/init и recovery error translation OPEN |
+| TIME-T6 | TIME-T2, TIME-T3C, TIME-T4, TIME-T5 | Walkthrough §12 написаны; итоговое exact review после закрытия применимых contracts ещё OPEN. Наличие walkthrough не runtime proof |
+| TIME-T7 | TIME-T6 + явная пользовательская приёмка | Общая архитектурная приёмка OPEN; отдельные A1–A5 decisions не равны whole freeze. Даже T7 не разрешает код автоматически |
+
+### 10.3. Диаграмма и реестр рёбер
+
+Сплошные рёбра ниже — внутренний документальный порядок owning §8. Пунктир — конкретное external agreement/consumer handoff, **не** утверждённый executable binding и не whole-plan prerequisite. Read-only проектирование всех seams доступно сейчас.
+
+```mermaid
+flowchart TD
+    T0["TIME-T0 audit"] --> T1["TIME-T1 units/representation"]
+    T0 --> T2["TIME-T2 World calendar proposal"]
+    T1 --> T3A["TIME-T3A pure arithmetic"]
+    T3A --> T3C["TIME-T3C calendar projection"]
+    T2 --> T3C
+    T3A --> T4["TIME-T4 coherent reads/prepare"]
+    T4 --> T5["TIME-T5 acceptance/handoff"]
+    T2 --> T6["TIME-T6 complete contract review"]
+    T3C --> T6
+    T4 --> T6
+    T5 --> T6
+    T6 --> T7["TIME-T7 user acceptance"]
+    W["World: exact calendar/start/version"] -.-> T2
+    S["Snapshot: pinned state/init/commit seam"] -.-> T4
+    S -.-> T5
+    A["Actions: typed duration semantics"] -.-> T5
+    T3A -.-> PH["Physics: exact Time foreign types"]
+    T4 -.-> PH
+    T4 -.-> GEN["GEN: concrete Time read/prepare binding"]
+    T5 -.-> GEN
+```
+
+| From | To |
+|---|---|
+| TIME-T0 | TIME-T1 |
+| TIME-T0 | TIME-T2 |
+| TIME-T1 | TIME-T3A |
+| TIME-T3A | TIME-T3C |
+| TIME-T2 | TIME-T3C |
+| TIME-T3A | TIME-T4 |
+| TIME-T4 | TIME-T5 |
+| TIME-T2 | TIME-T6 |
+| TIME-T3C | TIME-T6 |
+| TIME-T4 | TIME-T6 |
+| TIME-T5 | TIME-T6 |
+| TIME-T6 | TIME-T7 |
+
+Этот дополнительный реестр расширяет §5. External arrows не включаются в hard-edge count до принятия конкретных контрактов и точных downstream gates. Не добавлять `TIME-T7 → весь PH-ARCH/GEN`, `Snapshot DONE → TIME-T0` или `GEN-CUTOVER → Time design`.
+
+### 10.4. Конкретные внешние handoffs и runtime gates
+
+| Owner / получатель | Что требуется передать / граница |
+|---|---|
+| World → Time calendar operations | Validated versioned calendar/start/epoch definitions, POJO-first defaults, historical version binding. Time не читает raw dict и не выбирает fallback calendar. Отсутствие grammar блокирует projection freeze, не arithmetic |
+| Snapshot → TIME-T4/T5 | Coherent Time state read в pinned scope, initial state без искусственного snapshot turn, branch rebinding, bound append/history и atomic apply. Existing refs/ledger — reuse; не готовый Time integration. Не подменять водным SN-APPLY-HANDLER или полным SN-B-2 |
+| Actions → advance consumer | Prepared положительная duration игрового действия; стоимость/классификация остаётся Actions. Technical zero Physics/edit не запрещается этим правилом. Общий Actions DONE не нужен pure Time API |
+| Time → Physics external agreement B/C | Accepted point/interval/capture semantics, seconds conversion и capture=start; затем actual runtime read evidence перед dependent activation. Calendar grammar не prerequisite Physics duration. Draft Time types пока не разрешённые imports |
+| Time → GEN | Public read/prepare contracts; same-base time section и domain effects передаются Snapshot. Exact invocation/operation identities согласуются отдельно; не добавлены NodeIds/CALL edges. Time не содержит dispatcher, scheduler или чужие CRUD |
+| Time/World → consumer migrations | Explicit disposition current_tick, increment_tick, generic World writers/bundle и per-tick Regions/Needs/Rest rates. Legacy removal после verified conversion/caller closure, не по наличию нового файла |
+
+Runtime acceptance позднее требует **конкретных** ready Time state/read/handler + применимой Snapshot composition, adopted consumer contracts и отдельного code authorization. Проверки: precision roundtrip/overflow, concurrent advances, retry/unknown commit, cancellation, branch/restore/calendar history, atomic time+effects+применимая continuation и отсутствие hidden writers. Эти future proofs не маркируются DONE по T6 или tests другого owner.
+
+### 10.5. Матрица параллельности и следующая команда
+
+| Можно параллельно | Условие / stop boundary |
+|---|---|
+| TIME-T3A core review и TIME-T2 World calendar design | Общие принятые units сохраняются; один writer Time-плана. Calendar grammar не блокирует core arithmetic |
+| World calendar agreement и Snapshot Time state/init/acceptance agreement | Раздельные owner files, обмен exact evidence. Snapshot не владеет календарной арифметикой, Time не владеет commit |
+| Time/Physics foreign review и совместный GEN design | Не объявлять draft accepted, не начинать dependent bindings; numerical Physics laws и Time state writer не смешивать |
+| Time design и GEO/Spatial/GEN-BAKE-READ base path | Time не новый prerequisite initial bake/root/base reads. Runtime time-dependent consumers получают свои local gates |
+
+Файловые пересечения будущей реализации: World model/settings/resolver/bundle; Snapshot section registry/composition; Physics source contracts; GEN call contracts. Для каждого общего файла один owning writer, соседние агенты предъявляют contract requests. Сейчас меняется только эта карта; незавершённый time-domain.md сохраняется.
+
+**Команда Time owner:** «Продолжи time-domain.md §§17–18: предъяви A1/A2/A3/A5, не переоткрывая принятые §1/A4; закрой по отдельным slices World calendar projection и Snapshot state/init/acceptance agreements. Различай public prepare, internal bound append и durable accepted result. Уточни exact errors/imports и legacy migration; затем T6 review/T7 приёмка. Pure arithmetic не ждёт calendar grammar или полного Physics/GEN/Snapshot. Stop: документальный freeze proposal, без кода/DDL/ports/nodes/cutover; межплановые изменения отдельными предложениями».
+
+**Проверка v6.9:** общий hard-edge реестр §5 + §10.3: 97 рёбер / 66 вершин; базовый граф и обе отдельные cutover-альтернативы ацикличны. Все 9 новых Time aliases имеют статусные строки; 12 внутренних рёбер отражены в Mermaid. External handoffs остаются пунктирными contract requirements. Mermaid render и runtime не проверялись; GRAPH-AC остаётся OPEN.
