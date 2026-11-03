@@ -237,6 +237,7 @@ class GeoHydrologyRoutesPlan(BaseModel):
 
     model_config = HydrologyPlan.model_config
 
+    # GEO-LEGACY-62: Remove base and the PC model_config reference; rebind coherent_sources.
     base: HydrologyRoutesPlan
     source_mapping: SourceBodyMapping
     classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...]

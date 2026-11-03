@@ -51,6 +51,7 @@ class SurfacePlanningAssembler(Generic[P]):
             inputs=inputs, dependencies=deps)
         return self._service.get_or_build(contract, request, reader, wait=wait)
 
+    # GEO-LEGACY-54: Retire PC prepare and its captured bundle helper; keep prepare_geo.
     def prepare(self: SurfacePlanningAssembler[WorldPlanProviders], view: SurfacePlanningView, *,
                 wait: PlanWaitControl) -> SurfacePlanBundle | None:
         wait.raise_if_cancelled()

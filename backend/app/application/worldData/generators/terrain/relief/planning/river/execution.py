@@ -20,6 +20,7 @@ class NativeRiverReliefJob:
         control.raise_if_shutdown()
         window = water[0]
         rows = window.surface_z
+        # GEO-LEGACY-64: Read fine routes and pre-river samples directly from native routes.
         base = routes.base
         for cell, z in base.fine_base_surface_z:
             control.raise_if_shutdown()

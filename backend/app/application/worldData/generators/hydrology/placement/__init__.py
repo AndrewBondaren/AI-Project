@@ -1,5 +1,6 @@
 """Declared water placement pass modules (HY-12/3b)."""
 
+# GEO-LEGACY-52: Retire both eager imports and all PC water pass exports.
 from app.application.worldData.generators.hydrology.placement.projectDeclaredHydrology import (
     project_declared_hydrology,
 )

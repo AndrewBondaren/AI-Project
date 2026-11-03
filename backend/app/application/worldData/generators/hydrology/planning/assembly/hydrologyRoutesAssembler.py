@@ -48,6 +48,7 @@ class HydrologyRoutesAssembler:
         control.raise_if_shutdown()
         paint = self._paint.project(rivers=inputs.declared_rivers, coastlines=inputs.coastlines,
             lakes=inputs.declared_lakes, anchors=inputs.anchors)
+        # GEO-LEGACY-61: Replace the PC base constructor while preserving native route evidence.
         payload = GeoHydrologyRoutesPlan(base=HydrologyRoutesPlan(
             coarse_open_water=projected.payload.coarse_open_water, water_bodies=projected.payload.water_bodies,
             physical_unions=projected.payload.physical_unions, coarse_routes=coarse.payload.routes,

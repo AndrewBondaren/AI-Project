@@ -61,6 +61,7 @@ def surface_plan_binding(slot: SurfacePlanSlot) -> SurfacePlanBinding:
     return next(binding for binding in PC_SURFACE_BINDINGS if binding.slot is slot)
 
 
+# GEO-LEGACY-59: Version changed GEO payload/cache contracts and dependent refs at cutover.
 def _declare_geo(slot: SurfacePlanSlot, upstream: tuple[SurfacePlanBinding, ...]) -> SurfacePlanBinding:
     ordered = tuple(sorted(upstream, key=lambda binding: binding.slot.value.encode("utf-8")))
     return SurfacePlanBinding(slot, tuple(binding.slot for binding in ordered), PlanContractMetadata(

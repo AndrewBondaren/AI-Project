@@ -46,6 +46,7 @@ class HydrologyGeneratorService:
     River-bed elevation is applied through the relief writer after planning.
     """
 
+    # GEO-LEGACY-55: Retire direct assembly, missing-input/specs fallback and flag rereads.
     def apply(self, world: World, locations: list[NamedLocation], heightmap: SurfaceHeightmap, *,
               nodes: list[ConnectionNode] | None = None, edges: list[ConnectionEdge] | None = None,
               scopes: frozenset[HydrologyScope] | None = None,

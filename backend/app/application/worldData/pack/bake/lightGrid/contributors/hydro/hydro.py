@@ -25,6 +25,7 @@ class HydroContributor:
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         world_uid = ctx.world.world_uid
+        # GEO-LEGACY-67: Rebind the retained L0 paint projection at final layout cutover.
         declared = ctx.require_surface_bundle().hydrology.payload.declared_paint
         # Order: corridors → basins/coast → coarse SEA/LAKE (skip existing RIVER).
         rivers = apply_declared_rivers(compose, ctx, declared)

@@ -65,6 +65,7 @@ def hydro_mask_from_parent(
     return out
 
 
+# GEO-LEGACY-69: Remove the parent-mask fallback from the fine water verdict at SP-4.
 def merge_hydro_hard_corridor(
     parent: ParentLightTile,
     sparse_fine_hydro: Mapping[tuple[int, int], MapCellHydrology] | None,

@@ -291,6 +291,7 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     # GEO-LEGACY-47: Retire PC water IDs; version the changed GEO payload separately.
     (27, _MWaterPlacementInput, CanonicalTypeKind.RECORD),
     (28, _MResolutionMode, CanonicalTypeKind.ENUM),
+    # GEO-LEGACY-58: Retire incompatible policy/routes/final IDs at layout change; see I9.3.
     (29, _MHydrologySeasPolicy, CanonicalTypeKind.RECORD),
     (30, _MHydrologyBands, CanonicalTypeKind.RECORD),
     (31, _MHydrologyShoreDefaults, CanonicalTypeKind.RECORD),

@@ -56,6 +56,7 @@ class PlateFieldGenerator:
         except (ValueError, OverflowError) as error:
             raise self._failure("layout", error) from error
 
+    # GEO-LEGACY-57: Replace coarse cell centers with fine W coordinates; keep layout and sample.
     def build(self, input: PlateWaterDesignInput | PlateNoiseWaterDesignInput) -> ContinentalField:
         if not isinstance(input, (PlateWaterDesignInput, PlateNoiseWaterDesignInput)):
             raise TypeError("plate field requires a typed plate input")

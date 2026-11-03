@@ -34,6 +34,7 @@ def apply_coarse_open_water(
     z_applied = 0
 
     coarse_z_map: dict[tuple[int, int], int] = {(ref.gx, ref.gy): z for ref, z in planning.coarse_surface_z}
+    # GEO-LEGACY-66: Consume the canonical-derived L0 projection (HSP-08).
     coarse_hydro = {(int(ref.gx), int(ref.gy)): hydro for ref, hydro in planning.coarse_hydro}
     # Final post-river envelope only.
 

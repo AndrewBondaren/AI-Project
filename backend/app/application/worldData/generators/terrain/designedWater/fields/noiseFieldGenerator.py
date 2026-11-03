@@ -18,6 +18,7 @@ type _LatticeMemo = dict[tuple[int, tuple[int, ...]], float]
 class NoiseFieldGenerator:
     """One sampler for planning and fine floor evaluation, without selection or Z writes."""
 
+    # GEO-LEGACY-56: Replace coarse cell centers with fine W sample coordinates; keep sample.
     def build(self, input: NoiseWaterDesignInput | PlateNoiseWaterDesignInput) -> ContinentalField:
         if not isinstance(input, (NoiseWaterDesignInput, PlateNoiseWaterDesignInput)):
             raise TypeError("noise field requires a typed noise input")

@@ -13,6 +13,7 @@ class SurfaceEnvelopeCodec[T]:
     envelope_type: type[PlanEnvelope[T]]
     manifest: CanonicalSchemaManifest
 
+    # GEO-LEGACY-60: Reject stale object layouts on cache hits as well as old wire bytes.
     def validate(self, value: object) -> PlanEnvelope[T]:
         # The engine builds a generic envelope. Admit its complete object graph,
         # then bind T before canonical encoding checks every nested field.

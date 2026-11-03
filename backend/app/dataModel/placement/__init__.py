@@ -3,6 +3,7 @@
 from importlib import import_module
 from typing import TYPE_CHECKING
 
+# GEO-LEGACY-53: Remove V1 names from TYPE_CHECKING, __all__ and __getattr__.
 if TYPE_CHECKING:
     from app.dataModel.placement.batch import PlacementBatch
     from app.dataModel.placement.common import (

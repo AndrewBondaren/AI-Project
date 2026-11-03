@@ -138,6 +138,7 @@ class TerrainBatchOrchestrator:
             surface_z=fine_z,
         )
         tile_sparse_hydro = working.hydrology.fine_hydro_for_tile(GridX(tile_gx), GridY(tile_gy))
+        # GEO-LEGACY-68: Retire L0 corridor authority and parent-band clamping for canonical fine bed.
         tile_hydro = merge_hydro_hard_corridor(parent_light, tile_sparse_hydro)
         n_eff = run_gap_analysis(world, heightmap)
         return TileSurfaceState(

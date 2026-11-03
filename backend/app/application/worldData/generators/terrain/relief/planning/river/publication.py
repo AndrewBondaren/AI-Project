@@ -51,6 +51,7 @@ class NativeRiverReliefPublicationJob:
         water = FineWaterPublicationJob.admit_result(water, expected_water=expected_water,
             world_uid=world_uid, inputs=routing_inputs, control=control)
         materialized = water.payload[1].materialized
+        # GEO-LEGACY-63: Rebind body and union identity checks to the native routes payload.
         if (routes.payload.base.water_bodies != materialized.bodies
                 or routes.payload.base.physical_unions != water.payload[1].physical_unions
                 or routes.payload.source_mapping != materialized.source_mapping):

@@ -22,6 +22,7 @@ class NativeFinalFactsJob:
         control.raise_if_shutdown()
         window, assembled = water
         source = assembled.materialized
+        # GEO-LEGACY-65: Replace PC routes/final layout accesses; retain receiver, bed and union checks.
         if (routes.base.water_bodies != source.bodies or routes.base.physical_unions != assembled.physical_unions
                 or routes.source_mapping != source.source_mapping or river.coarse_beds):
             raise ValueError("native final requires canonical water identities and fine-only actual beds")
