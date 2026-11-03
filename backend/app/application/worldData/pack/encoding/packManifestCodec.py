@@ -58,8 +58,12 @@ def encode_legacy_manifest(manifest: WorldPackManifest) -> bytes:
 
 def _require_pojo_tree(value: object, annotation: object) -> None:
     """Check each record against the field type used by the V2 serializer."""
-    if isinstance(value, RegistryKey) and len(value) == 0:
-        raise ValueError("empty V2 registry key")
+    if isinstance(value, RegistryKey):
+        # The JSON reader reconstructs exactly RegistryKey, including for branded fields.
+        if type(value) is not RegistryKey:
+            raise ValueError("unexpected V2 registry key subclass")
+        if not value:
+            raise ValueError("empty V2 registry key")
     if isinstance(value, str):
         str.encode(value, "utf-8")
     elif isinstance(value, int) and value.bit_length() > 63:

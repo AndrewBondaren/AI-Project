@@ -2,6 +2,7 @@
 import hashlib
 import json
 import sys
+from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -29,6 +30,23 @@ def descriptor():
 
 
 class ManifestVersionsTests(TestCase):
+    def test_registry_key_preserves_region_identity(self):
+        class Terrain(RegistryKey, Enum):
+            FOREST = "forest"
+
+        candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[]))
+        for key in (Terrain.FOREST, RegistryKey("forest")):
+            candidate.wilderness_region_entries[:] = [WildernessRegionEntry(
+                region_uid="r", entry_type=key, current_type=RegistryKey("forest"),
+                bbox=RegionIndexBounds(x_min=0, y_min=0, x_max=0, y_max=0), status=WildernessRegionStatus.DECLARED)]
+            if key is Terrain.FOREST:
+                with patch.object(WorldPackManifest, "model_dump_json", side_effect=AssertionError), self.assertRaises(ValueError):
+                    encode_candidate_manifest(candidate)
+            else:
+                restored = decode_manifest(encode_candidate_manifest(candidate))
+                self.assertIs(type(restored.wilderness_region_entries[0].entry_type), RegistryKey)
+                self.assertEqual(restored, candidate)
+
     def test_candidate_checks_both_json_integer_readers_before_serialization(self):
         candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[]))
         original_limit = sys.get_int_max_str_digits()
