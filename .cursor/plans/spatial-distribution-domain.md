@@ -4354,3 +4354,80 @@ WorldPackWriter проверяет on-disk и injected manifest до ensure_dirs
 **REV-2.** Dispatcher проверяет JSON-синтаксис, дубликаты ключей и версию. Ветка V2 передаёт исходные bytes строгой схеме WorldPackManifestV2 с общими декларациями полей; декодер возвращает прежний внутренний WorldPackManifest. Ручная замена raw["spatial_roots"] убрана. Неизвестный ключ верхнего уровня V2 отклоняется; V1 сохраняет прежнюю политику extra=ignore. Парные пробы проверяют world_map_cells="12", tile.gx=true и строковую координату вложенного TerritoryVolume. V2 отказывает во всех трёх случаях, V1 читает прежние представления. Для V2 дополнительно проверены числовые значения и JSON → типизированные вложенные записи wilderness/spatial → JSON → POJO.
 
 До исправления две регрессии дали шесть FAIL. Финальный прогон команды §15.48 с добавлением `tests.test_location_territory_volumes` — **97 тестов OK**. Адресный Pyright с `pyrightconfig.cascade.json` по packManifestCodec.py, worldPackManifest.py и territoryVolume.py — **0 ошибок и предупреждений**. Следующий gate — повторное независимое ревью P1-D.
+
+### 15.53. Повторное независимое ревью P1-D на edc082b7
+
+**CHANGES REQUIRED.** Исходные контрпримеры REV-1 и REV-2 теперь отклоняются. Парные тесты подтвердили сохранение прежнего чтения V1 и строгий отказ V2 для строкового числа, bool в tile.gx и строки в координате TerritoryVolume.
+
+**P1-D-REV-3 · P2 · Candidate encoder молча теряет поля вложенного подкласса.** В [packManifestCodec.py, _require_pojo_tree и encode_candidate_manifest](../../backend/app/application/worldData/pack/encoding/packManifestCodec.py#L62) каждая запись проверяется по её фактическому классу, а сериализация родителя использует объявленный тип элемента. Воспроизведение через публичные функции:
+
+```python
+class ExtendedTile(TileManifestEntry):
+    marker: str
+
+m = decode_manifest(b'{"world_uid":"w","pack_version":"2.0.0","spatial_roots":[]}')
+m.tiles.append(ExtendedTile(gx=1, gy=0, marker="keep"))
+wire = encode_candidate_manifest(m)
+```
+
+Для типизированного V2 и round-trip §15.51–15.52 ожидается отказ до выдачи bytes для поля вне wire-схемы. Фактически encoder возвращает 727 байтов без marker, decoder успешно читает их, но полученный manifest не равен m. Для закрытия проверить отказ на этом входе и равенство всей записи на штатном TileManifestEntry с chunk.
+
+Команда §15.48 с добавлением tests.test_location_territory_volumes дала **97 тестов OK за 3,348 с** после повтора с доступом к временным каталогам Windows. Первый запуск упёрся в WinError 5. Дополнительная проба выше выполнена независимо от регрессионного модуля. Граница ревью — P1-D.
+
+### 15.54. Повторная проверка P1-D по контрпримерам §15.51
+
+**CHANGES REQUIRED.** REV-1 и REV-2 закрыты по своим критериям §15.51. REV-3 из §15.53 подтверждён независимо. Открыт REV-4 на штатном вложенном POJO. Пользовательская приёмка P1-D остаётся отдельным решением.
+
+Сверены `git diff 09fd51ee..edc082b7` для manifest codec, моделей, guards и регрессий, индекс, рабочий diff и `git ls-files --others --exclude-standard`. Реализация P1-D находится в HEAD edc082b7. Незакоммиченный §15.53 уже присутствовал до ревью. Дополнительных untracked-файлов на момент проверки не обнаружено.
+
+**P1-D-REV-1 — PASS.** Исходный manifest получен через decode_manifest из V2 с descriptor, tile (1,0) и chunk (2,3). Для каждой пробы manifest прочитан заново. Вокруг encode_candidate_manifest установлен `patch.object(WorldPackManifest, "model_dump_json", side_effect=AssertionError)`. Результаты:
+
+| Подмена | Где получен отказ | Вызовы model_dump_json |
+|---|---|---:|
+| tile.chunks.append(42) | strict model_validate TileManifestEntry | 0 |
+| model_copy tile.gx="bad" | strict model_validate TileManifestEntry | 0 |
+| model_copy chunk.cx=True | strict model_validate ChunkRef | 0 |
+| dict вместо SpatialDomainRootRef | проверка типа descriptor, packManifestCodec.py:78–79 | 0 |
+| dict вместо ArtifactRef | обход дерева, packManifestCodec.py:58–59 | 0 |
+| dict вместо tile | тот же обход | 0 |
+
+На исходном входе `decode_manifest(encode_candidate_manifest(m)) == m`. Проверенные фактические типы — WorldPackManifest, tuple, SpatialDomainRootRef, ArtifactRef, SpatialDatasetKind и ArtifactKind. Значения enum — HYDROLOGY_OPEN_WATER и BLOB.
+
+**P1-D-REV-2 — PASS.** Через публичный decoder отдельно поданы world_map_cells="12", tiles[0].gx=true и location_terrain_entries[0].territory_volume.x1="1". V2 отказал соответственно на world_map_cells, tiles.0.gx и location_terrain_entries.0.territory_volume. Те же документы с JSON-числами 12, 1 и 1 прочитаны. V1 принял все шесть входов. Для каждого его encode_legacy_manifest совпал побайтно с результатом прежнего пути json.loads → WorldPackManifest.model_validate → model_dump_json(indent=2) с декларацией manifest из git show 09fd51ee. Неизвестный верхний ключ отклонён V2 и проигнорирован V1. В V2 missing/null spatial_roots дали отказ модели, вложенный повтор gx отклонён с «duplicate manifest key: gx».
+
+**Граница JSON.** packManifestCodec.py:13–38 декодирует UTF-8, запрещает duplicate key на любой глубине и не-JSON константы, проверяет объект верхнего уровня и выбирает версию. Dispatcher сохраняет специальный запрет на присутствие spatial_roots в V1. В V2 исходные bytes получает WorldPackManifestV2.model_validate_json(strict=True, context=TerritoryVolume.STRICT_BOUNDS). Общие поля, типы, порядок и уникальность корней объявлены в worldPackManifest.py, V2 требует literal версии, обязательный tuple корней и запрещает extra верхнего уровня. TerritoryVolume проверяет точный int до нормализации координат в своем before-validator. Dispatcher не перебирает вложенные поля и не исправляет raw. Строгая проверка vars(admitted) возвращает внутренний WorldPackManifest.
+
+**Открытые замечания**
+
+1. **P1-D-REV-3 · P2 · packManifestCodec.py:66,81.** Минимальный вход — пустой V2 с world_uid="w", в tiles которого добавлен ExtendedTile(gx=1, gy=0, marker="keep") из §15.53. Ожидается отказ до сериализации для типа, поле которого wire-схема не сохраняет. Проверка по фактическому классу проходит. Сериализация родителя выдаёт 727 байтов без marker, последующее decode даёт неравную запись. Независимо подтверждено на непустом manifest с chunk и descriptor (1207 байтов, тот же результат). Критерий закрытия — отказ до model_dump_json на подклассе с дополнительным полем и равенство штатного tile с chunk после round-trip.
+2. **P1-D-REV-4 · P1 · packManifestCodec.py:66–69,80–81; registryKey.py:37–46.** Минимальная подмена — в допустимой строке wilderness_region_entries передать entry_type=RegistryKey(""). Достаточно штатного конструктора без model_copy. Воспроизводимый вход для encode_candidate_manifest:
+   ```python
+   m = decode_manifest(b'{"world_uid":"w","pack_version":"2.0.0","spatial_roots":[]}')
+   m.wilderness_region_entries.append(WildernessRegionEntry(
+       region_uid="r", entry_type=RegistryKey(""), current_type=RegistryKey("forest"),
+       bbox=RegionIndexBounds(x_min=0, y_min=0, x_max=1, y_max=1),
+       status=WildernessRegionStatus.DECLARED))
+   wire = encode_candidate_manifest(m)
+   decode_manifest(wire)
+   ```
+   Ожидается отказ encoder до model_dump_json. Фактически Python-ветка схемы RegistryKey принимает готовый экземпляр без проверки длины. Encoder выдаёт 817 байтов с пустой строкой, JSON-ветка той же схемы при чтении требует min_length=1 и отказывает на wilderness_region_entries.0.entry_type (string_too_short). Получается кандидат, который публичный V2 reader не может прочитать. Критерий закрытия — отказ для пустого брендированного ключа до вызова сериализатора и равенство при round-trip для непустых entry_type/current_type.
+
+**Фактический прогон.** Из backend:
+```powershell
+../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_manifest_versions tests.spatial_pack.test_bounded_decode tests.spatial_pack.test_pack_codec tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema tests.test_world_pack_writer_reader tests.test_region_coverage_contract tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec tests.test_location_territory_volumes
+```
+После WinError 5 на sandbox temp повтор с доступом к временным каталогам Windows дал **97 тестов OK за 3,398 с**. Проверки legacy writer/store подтвердили отказ для injected V2 до создания каталога, а при уже существующем V2 head — до ensure_dirs/temp, изменения counters/hash и замены файла. Bytes head сохранились. Для V1 сохранён документ без spatial_roots и прежний SHA-256 от отсортированного компактного JSON с content_hash=null.
+
+Из корня выполнено:
+```powershell
+node_modules/.bin/pyright.cmd -p pyrightconfig.cascade.json backend/app/application/worldData/pack/encoding/packManifestCodec.py backend/app/dataModel/worldPack/meta/worldPackManifest.py backend/app/dataModel/worldPack/wire/territoryVolume.py
+```
+**0 ошибок, 0 предупреждений.** Вывод ограничен manifest dispatch, admission и legacy guards P1-D. Удаление V1, publication, lifetime fencing и cutover вне проверки.
+
+### 15.55. Основание для строгой типизации manifest V2 и отказа от manifest V1
+
+**Требование к V2 (§15.49).** Для каждого manifest `m`, принятого candidate encoder, публичный decoder должен восстановить равную типизированную запись: `decode_manifest(encode_candidate_manifest(m)) == m`. До сериализации проверяются ограничения значений и представимость всех полей вложенных POJO в объявленной схеме V2.
+
+Основание — два контрпримера §15.54, прошедшие при чистом адресном Pyright. В REV-4 готовый экземпляр `RegistryKey("")` имеет ожидаемый Python-тип, но при чтении wire-схема отвергает пустую строку. В REV-3 экземпляр подкласса совместим с `TileManifestEntry`, но при записи по объявленной схеме теряет поле `marker`. Поэтому приёмка требует симметричных проверок записи и чтения, отказа до сериализации в обоих случаях и проверки равенства всей записи после round-trip на допустимом входе.
+
+**Связь с SP-P-V1-REMOVE (§15.50).** Параллельная поддержка manifest V1 сохраняет вторую политику чтения: например, V1 принимает `world_map_cells="12"` и `tile.gx=true`, тогда как V2 требует JSON-числа. Пока доступен legacy-вход, строгий контракт V2 действует только для части паков. Это усиливает основание завершить переход на единый типизированный manifest V2 и затем явно отвергать V1 и отсутствующую версию на всех действующих входах. REV-3 и REV-4 требуют самостоятельного исправления в V2. Удаление manifest V1 выполняется отдельным шагом после закрытия условий §15.50.

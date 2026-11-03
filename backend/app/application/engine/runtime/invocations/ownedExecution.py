@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
-from app.application.engine.contracts.invocation.executionStore import Claim, ExecutionStore
+from app.application.engine.contracts.invocation.executionStore import Claim, ExecutionStore, OwnershipConflict
+from app.application.engine.contracts.invocation.inputWait import InputConflict
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
-from app.dataModel.engine.dag.invocations.record import InvocationGraph
+from app.dataModel.engine.dag.invocations.record import InvocationGraph, InvocationStatus
 
 
 @dataclass
@@ -14,12 +15,27 @@ class OwnedExecution:
     lease_seconds: int
 
     async def save(self) -> None:
-        await self.store.renew(self.claim, self.lease_seconds)
-        status = "COMPLETED" if self.graph.response is not None else self.graph.records[self.graph.root].status.value
-        if self.graph.waiting_for_input:
-            status = "WAITING_INPUT"
-        if self.graph.cancellation is not None:
-            status = "CANCELLED"
-        elif self.graph.failure is not None:
-            status = "FAILED"
-        self.revision = await self.store.checkpoint(self.claim, self.revision, status, CheckpointCodec.encode(self.graph))
+        while True:
+            await self.store.renew(self.claim, self.lease_seconds)
+            try:
+                self.revision = await self.store.checkpoint(
+                    self.claim, self.revision, self.graph.checkpoint_status(), CheckpointCodec.encode(self.graph),
+                )
+                return
+            except OwnershipConflict:
+                saved = await self.store.load(self.claim.execution_id)
+                if saved.revision <= self.revision:
+                    raise
+                # Only a child cancellation can advance the revision while we still own this fence.
+                await self.store.renew(self.claim, self.lease_seconds)
+                latest = InvocationGraph.model_validate_json(saved.blob)
+                cancelled = [wait for wait in latest.waits.values() if wait.accepted is None
+                             and latest.records[wait.invocation_id].status == InvocationStatus.CANCELLED
+                             and self.graph.records[wait.invocation_id].status != InvocationStatus.CANCELLED]
+                if len(cancelled) != saved.revision - self.revision:
+                    raise
+                for wait in cancelled:
+                    if self.graph.waits[wait.wait_id].accepted is not None:
+                        raise InputConflict("child wait was cancelled") from None
+                    self.graph.cancel_wait(self.graph.records[wait.invocation_id])
+                self.revision = saved.revision

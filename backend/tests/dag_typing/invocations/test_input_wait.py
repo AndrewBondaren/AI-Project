@@ -10,6 +10,7 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException
 from app.application.engine.contracts.invocation.executionStore import OwnershipConflict, RestoreFailure
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
+from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
 
 from app.application.engine.contracts.invocation.inputWait import (
     Failed, InputConflict, InputReceived, InputWaitContract, ResumeInput, Waiting, WaitInput, WaitSpec,
@@ -174,6 +175,92 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
             result = await engine(third).resume(KEY, max_passes=1, options=OPTIONS)
             self.assertEqual(result.data, f.Text(text="cancelled/count=4"))
             self.assertEqual((await f.SQLiteExecutionStore(third).load(KEY)).status, "COMPLETED")
+
+    async def test_cancel_waiting_child_while_sibling_holds_execution_lease(self):
+        entered, finish = asyncio.Event(), asyncio.Event()
+        original_start = f.FormatCaller.start
+        starts = []
+
+        async def blocked_start(node, input):
+            starts.append(input)
+            entered.set()
+            await finish.wait()
+            return await original_start(node, input)
+
+        def engine(store, session="a"):
+            return f.runtime(entry=AskAndFormat, store=store, counter=Ask, counter_wait=CHOICE, interaction=Session(session))
+
+        with closing(sqlite3.connect(self.path)) as first, closing(sqlite3.connect(self.path)) as second:
+            owner, client = f.SQLiteExecutionStore(first), f.SQLiteExecutionStore(second)
+            wait_id = WaitId("pick")
+            with patch.object(f.FormatCaller, "start", blocked_start):
+                task = asyncio.create_task(engine(owner).run(KEY, f.TaskType.INTENT_DETECTION, max_passes=1, options=OPTIONS))
+                try:
+                    await asyncio.wait_for(entered.wait(), 10)
+                    before = await client.load(KEY)
+                    graph = f.InvocationGraph.model_validate_json(before.blob)
+                    child = graph.waits[wait_id].invocation_id
+                    self.assertEqual(graph.records[child].status, "WAITING_INPUT")
+                    sibling = next(r for r in graph.records.values() if r.node_id == f.FORMAT.node_id)
+                    self.assertEqual(sibling.status, "RUNNING")
+                    with self.assertRaises(PermissionError):
+                        await engine(client, "foreign").cancel_waiting_child(KEY, wait_id, expected_revision=3)
+                    self.assertEqual(await client.load(KEY), before)
+                    await engine(client).cancel_waiting_child(KEY, wait_id, expected_revision=3)
+                    cancelled = await client.load(KEY)
+                    updated = f.InvocationGraph.model_validate_json(cancelled.blob)
+                    self.assertEqual(updated.records[child].status, "CANCELLED")
+                    self.assertEqual(updated.records[sibling.invocation_id], sibling)
+                    with self.assertRaises(OwnershipConflict):
+                        await client.claim(KEY, "intruder", 1)
+                    await engine(client).cancel_waiting_child(KEY, wait_id, expected_revision=3)
+                    with self.assertRaises(InputConflict):
+                        await engine(client).accept_input(KEY, ResumeInput[f.Count](wait_id=wait_id, request_id="late",
+                                                          expected_revision=3, payload=f.Count(value=7)))
+                    self.assertEqual(await client.load(KEY), cancelled)
+                    finish.set()
+                    result = await asyncio.wait_for(task, 10)
+                finally:
+                    finish.set()
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+            self.assertEqual(starts, [f.Count(value=4)])
+            self.assertEqual(result.data, f.Text(text="cancelled/count=4"))
+            self.assertEqual((await client.load(KEY)).status, "COMPLETED")
+
+    async def test_cancellation_wins_race_with_quiescence_or_input_receipt(self):
+        for boundary in ("quiescence", "receipt"):
+            with self.subTest(boundary=boundary):
+                store = MemoryExecutionStore()
+                engine = f.runtime(entry=AskAndFormat, store=store, counter=Ask, counter_wait=CHOICE, interaction=Session("a"))
+                client = f.runtime(entry=AskAndFormat, store=store, counter=Ask, counter_wait=CHOICE, interaction=Session("a"))
+                wait_id = WaitId("pick")
+                checkpoint = store.checkpoint
+                cancellations = []
+
+                async def cancel_before_write(claim, revision, status, blob):
+                    graph = f.InvocationGraph.model_validate_json(blob)
+                    wait = graph.waits.get(wait_id)
+                    if not cancellations and wait is not None and (
+                        (boundary == "quiescence" and graph.waiting_for_input)
+                        or (boundary == "receipt" and wait.accepted is not None)
+                    ):
+                        await client.cancel_waiting_child(KEY, wait_id, expected_revision=3)
+                        cancellations.append(wait_id)
+                    return await checkpoint(claim, revision, status, blob)
+
+                with patch.object(store, "checkpoint", cancel_before_write):
+                    result = await engine.run(KEY, f.TaskType.INTENT_DETECTION, max_passes=1, options=OPTIONS)
+                    if boundary == "receipt":
+                        self.assertIsInstance(result, Waiting)
+                        request = ResumeInput[f.Count](wait_id=wait_id, request_id="race", expected_revision=3, payload=f.Count(value=7))
+                        with self.assertRaises(InputConflict):
+                            await engine.accept_input(KEY, request)
+                        saved = f.InvocationGraph.model_validate_json((await store.load(KEY)).blob)
+                        self.assertIsNone(saved.waits[wait_id].accepted)
+                        result = await engine.resume(KEY, max_passes=1, options=OPTIONS)
+                self.assertEqual(cancellations, [wait_id])
+                self.assertEqual(result.data, f.Text(text="cancelled/count=4"))
 
     async def test_restart_after_accept_before_continuation(self):
         request = ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="first", expected_revision=3, payload=f.Count(value=7))

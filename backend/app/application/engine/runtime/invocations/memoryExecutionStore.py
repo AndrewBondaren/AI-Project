@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from time import monotonic
 
 from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, OwnershipConflict
-from app.dataModel.engine.dag.identity import ExecutionId
+from app.dataModel.engine.dag.identity import ExecutionId, WaitId
 
 
 @dataclass
@@ -52,6 +52,13 @@ class MemoryExecutionStore:
         if seconds <= 0:
             raise ValueError("lease duration must be positive")
         entry.lease_until = monotonic() + seconds
+
+    async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:
+        entry = self._entries[execution_id]
+        if entry.snapshot.revision != revision:
+            return False
+        entry.snapshot = entry.snapshot.with_cancelled_child(wait_id)
+        return True
 
     async def cancel(self, execution_id: ExecutionId, revision: int, blob: bytes) -> bool:
         entry = self._entries[execution_id]

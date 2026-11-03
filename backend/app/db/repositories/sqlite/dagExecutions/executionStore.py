@@ -4,7 +4,7 @@ from hashlib import sha256
 from app.application.engine.contracts.invocation.executionStore import (
     Checkpoint, Claim, OwnershipConflict, RestoreFailure,
 )
-from app.dataModel.engine.dag.identity import ExecutionId
+from app.dataModel.engine.dag.identity import ExecutionId, WaitId
 
 
 class SQLiteExecutionStore:
@@ -58,6 +58,19 @@ class SQLiteExecutionStore:
             if cursor.rowcount != 1:
                 raise OwnershipConflict(claim.execution_id)
         return revision + 1
+
+    async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:
+        with self._transaction():
+            saved = await self.load(execution_id)
+            if saved.revision != revision:
+                return False
+            updated = saved.with_cancelled_child(wait_id)
+            cursor = self.db.execute(
+                "UPDATE dag_executions SET revision=revision+1,status=?,checkpoint_blob=?,checksum=? "
+                "WHERE execution_id=? AND revision=?",
+                (updated.status, updated.blob, sha256(updated.blob).hexdigest(), execution_id, revision),
+            )
+            return cursor.rowcount == 1
 
     async def cancel(self, execution_id: ExecutionId, revision: int, blob: bytes) -> bool:
         with self._transaction():

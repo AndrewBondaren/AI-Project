@@ -110,6 +110,8 @@ class DAGExecutor:
                     if root.status not in terminal and InputWaitCoordinator.waiting(graph, coordinator.plan).pending:
                         graph.waiting_for_input = True
                         await owned.save()
+                        if not graph.waiting_for_input:
+                            continue  # A concurrent child cancellation opened a join during the save.
                         break
                     if root.status not in terminal:
                         raise ValueError("invocation graph has no runnable step")

@@ -155,7 +155,15 @@ class DAGEngine(Generic[O, S]):
 
     async def accept_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U]) -> InputReceipt:
         settings = self._interaction_settings()
-        claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+        try:
+            claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+        except OwnershipConflict:
+            saved = await settings.store.load(execution_id)
+            graph, _ = self._interaction_graph(execution_id, settings, saved)
+            wait = graph.waits.get(request.wait_id)
+            if wait is not None and wait.accepted is None and graph.records[wait.invocation_id].status == InvocationStatus.CANCELLED:
+                raise InputConflict("child wait was cancelled") from None
+            raise
         try:
             saved = await settings.store.load(execution_id)
             graph, plan = self._interaction_graph(execution_id, settings, saved)
@@ -179,8 +187,7 @@ class DAGEngine(Generic[O, S]):
         """Cancel the child bound to this wait. Resume drives the caller's join."""
         TypeAdapter[int](Ordinal).validate_python(expected_revision)
         settings = self._interaction_settings()
-        claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
-        try:
+        while True:
             saved = await settings.store.load(execution_id)
             graph, _ = self._interaction_graph(execution_id, settings, saved)
             wait = graph.waits.get(wait_id)
@@ -194,12 +201,8 @@ class DAGEngine(Generic[O, S]):
                 return
             if child.status != InvocationStatus.WAITING_INPUT:
                 raise InputConflict("child is not waiting for input")
-            child.status = InvocationStatus.CANCELLED
-            if graph.join_complete(graph.records[child.caller_invocation_id]):
-                graph.waiting_for_input = False
-            await OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds).save()
-        finally:
-            await settings.store.release(claim)
+            if await settings.store.cancel_child(execution_id, saved.revision, wait_id):
+                return
 
     async def cancel_execution(self, execution_id: ExecutionId) -> None:
         settings = self._interaction_settings()

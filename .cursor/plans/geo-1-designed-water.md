@@ -15806,3 +15806,7 @@ Admission ревизий, exact fine P2, diagnostics/fingerprints и публи�
 Реализация предъявлена на независимое ревью. Вход `prepare_native_water_geometry(request: AuthoredWaterGeometryRequest)` по EF-1.3 содержит декларацию в авторских fine XY, anchors и полное окно W. Request проверяет совпадение topology, полное покрытие, нижнюю границу высот, уникальность anchors и world/scope зависимостей. Ревизионный admission самого W выполняет I5.1 у вызывающей стороны. Результат — `AuthoredWaterGeometry` с WORLD_FINE_GRID, исходным W.ref, точной областью резервирования и, для озера, rim_level из высот W. Условия CAP_REACHED и DEGENERATE_RING сохраняют существующие notices.
 
 Для действующих coarse callers выделен LegacyAuthoredWaterGeometryRequest с прежним TerrainPlan. Только legacy entry выполняет project_water_source и перевод anchors в coarse XY; после выбора frame обе ветки используют один rasterizer. Интеграция с native WaterDesignInput и стратегиями, процедурные поля и pre-relief placement остаются отдельными шагами. Footprint этого среза ещё не свидетельствует о принятом placement или wet membership.
+
+#### I9.2. Приёмка GEO-I9.1 (2026-11-03)
+
+Пользователь подтвердил, что независимое ревью прошло без замечаний, и принял GEO-I9.1. Принято построение authored footprint бассейна, озера и береговой линии в WORLD_FINE_GRID на полном окне W до placement, включая вычисление rim_level озера по высотам W.

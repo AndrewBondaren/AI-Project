@@ -89,6 +89,22 @@ class InvocationGraph(BaseModel):
     registry: tuple[RegisteredContract, ...]
     records: dict[InvocationId, InvocationRecord]
 
+    def checkpoint_status(self) -> str:
+        if self.cancellation is not None:
+            return "CANCELLED"
+        if self.failure is not None:
+            return "FAILED"
+        if self.response is not None:
+            return "COMPLETED"
+        return "WAITING_INPUT" if self.waiting_for_input else self.records[self.root].status.value
+
+    def cancel_wait(self, child: InvocationRecord) -> None:
+        if child.caller_invocation_id is None or child.status != InvocationStatus.WAITING_INPUT:
+            raise ValueError("cancellation requires a child waiting for input")
+        child.status = InvocationStatus.CANCELLED
+        if self.join_complete(self.records[child.caller_invocation_id]):
+            self.waiting_for_input = False
+
     def join_complete(self, caller: InvocationRecord) -> bool:
         return caller.status == InvocationStatus.WAITING_CALLS and all(
             child.status in (InvocationStatus.SUCCEEDED, InvocationStatus.FAILED, InvocationStatus.CANCELLED)

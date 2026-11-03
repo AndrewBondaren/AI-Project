@@ -316,3 +316,21 @@ revision 2
 **Критерий закрытия:** предоставить согласованный writer-путь отмены WAITING_INPUT invocation с сохранением caller/siblings, отключением этого wait и durable checkpoint; restart закрывает join с `CallCancelled`, поздний ответ отклоняется без изменения checkpoint. Сохранить работающую отмену execution и дочернюю отмену из RUNNING. Нужна регрессия через предоставленный API, а не только ручная подмена статуса.
 
 Полный прогон §9: **370 тестов OK за 54,863 с**, включая положительные и точные отрицательные проверки Pyright, restart/CAS/fencing и REV-6. Scoped `git diff --check` прошёл. Тестовые процессы и временные БД использовались вне sandbox из-за Windows asyncio socketpair; backend не запускался. Инструментальный журнал реализации другого агента по-прежнему не предоставлен: соблюдение `apply_patch` в его работе не установлено. Оставшаяся граница: production auth/policy — R7; отдельная отмена ожидающего child — открытая REV-9. Весь crash matrix R6/publication не входит в R5.
+
+## 15. Ревью исправления REV-9 на `edc082b7` от 2026-11-03
+
+**CHANGES REQUIRED. Исходный сценарий REV-9 закрыт; открыта REV-10 (P2): отмена ожидающего child при активном owner.** Проверены только изменения R5; посторонние изменения коммита исключены. Production-код при ревью не менялся.
+
+**REV-9 — CLOSED для исходного quiescent-сценария.** Публичный `cancel_waiting_child` отменяет child, сохраняет caller/siblings и checkpoint; новый engine с новым SQLite-соединением восстанавливает join и возвращает `cancelled/count=4`. Повтор отмены идемпотентен, поздний input отклоняется без изменения checkpoint. Проверки чужой сессии, stale revision и запрета отмены уже принятого wait проходят. Отмена из RUNNING и REV-7/8 продолжают проходить. Независимая проба с двумя WAITING_INPUT children подтвердила оба варианта: отменить первый, после restart получить Waiting только для второго и ответить ему; отменить оба и завершить caller с двумя CallCancelled. Повтор отмены после terminal response не меняет checkpoint.
+
+### REV-10 · P2 · R5 · cancel_waiting_child требует свободного execution lease
+
+**Файл:** [dagEngine.py:182](../../backend/app/application/engine/runtime/dagEngine.py#L182).
+
+**Минимальное воспроизведение.** На fixture `AskAndFormat` с workers=1 задержать `FormatCaller.start` на `asyncio.Event`. Через публичный `run` дождаться входа Format в start; второе SQLite-соединение читает `pipeline=WAITING_CALLS`, `count=WAITING_INPUT`, `format=RUNNING`. Через новый engine вызвать `cancel_waiting_child(execution_id, "pick", expected_revision=3)` с правильной сессией.
+
+**Ожидалось:** отмена ожидающего child принимается/передаётся владельцу execution, сохраняя работающего sibling; caller после join получает `CallCancelled`. **Фактически:** попытка `store.claim` получает `OwnershipConflict`, checkpoint не меняется, намерение отмены не сохраняется. После освобождения Format первый run возвращает `Waiting`; только после release execution lease та же отмена проходит, а resume возвращает `cancelled/count=4`. Следовательно новый API работает лишь после quiescence всего execution, хотя целевой child уже находится в WAITING_INPUT. Длительная соседняя ветка блокирует его отмену аналогично прежней REV-7 для execution.
+
+**Критерий закрытия:** доставлять запрос отдельной отмены WAITING_INPUT child при активном owner без отмены sibling и без обхода fencing/CAS. Добавить двухсоединительную регрессию с заблокированным активным sibling; owner наблюдает отмену child, sibling завершается штатно, join содержит CallCancelled, поздний input отклоняется. Сохранить quiescent/restart/idempotent сценарии REV-9.
+
+Полный набор по §9: **372 теста OK за 65,040 с**, включая положительные и точные отрицательные проверки Pyright. Scoped `git diff HEAD^ HEAD --check` прошёл. Проверки выполнены вне sandbox из-за Windows asyncio socketpair, backend не запускался. В этом раунде проверены новые engine/соединения после отмены; настоящий kill процесса и исторические checkpoints из §14 повторно не запускались. Production auth/policy остаётся интеграцией R7. Журнал инструментальных вызовов автора исправления отсутствует; способ внесения правок по diff не устанавливался.
