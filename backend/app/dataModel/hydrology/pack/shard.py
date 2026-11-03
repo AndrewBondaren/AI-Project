@@ -5,15 +5,34 @@ from pydantic import StrictInt, model_validator
 
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.hydrology.pack.root import TILE_SIDE, _PackRecord, require_source_ref
+from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.encoding.decodeLimits import CollectionLimit, RecordLimits
+from app.dataModel.hydrology.pack.profile import TILE_CELLS, TILE_SIDE
+from app.dataModel.hydrology.pack.root import _PackRecord, require_source_ref
 from app.dataModel.hydrology.query.source import WaterMembershipRun
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.spatial.grid.coordinateTypes import FineXY
-from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow, SurfaceSamples
+from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan, RegionCoverage
+from app.dataModel.topology.worldTopology import Coord
+
+
+COVERAGE_LIMITS = RecordLimits(RegionCoverage, (
+    CollectionLimit(tuple[CoverageSpan, ...],
+                    ref=FieldRef(lambda: RegionCoverage, lambda coverage: coverage.spans),
+                    minimum=1, maximum=TILE_CELLS),
+))
+BED_LIMITS = RecordLimits(FineSurfaceWindow, (
+    CollectionLimit(SurfaceSamples,
+                    ref=FieldRef(lambda: FineSurfaceWindow, lambda bed: bed.surface_z),
+                    minimum=1, maximum=TILE_CELLS),
+    CollectionLimit(frozenset[Coord],
+                    ref=FieldRef(lambda: FineSurfaceWindow, lambda bed: bed.protected_cells),
+                    maximum=TILE_CELLS),
+))
 
 
 class HydrologyPackShard(_PackRecord):
-    _collection_limits = (("wet_runs", TILE_SIDE**2), ("shore_rows", TILE_SIDE**2))
     source_ref: PlanRef
     tx: StrictInt
     ty: StrictInt
@@ -25,9 +44,10 @@ class HydrologyPackShard(_PackRecord):
     def _tile(self) -> Self:
         require_source_ref(self.source_ref)
         spans = self.bed.coverage.spans
-        if not spans or any(len(rows) > TILE_SIDE**2 for rows in (
-                self.bed.surface_z, self.bed.protected_cells, spans, self.wet_runs, self.shore_rows)):
-            raise ValueError("empty or oversized shard")
+        for record, limits in ((self.bed.coverage, COVERAGE_LIMITS), (self.bed, BED_LIMITS)):
+            for rule in limits.collections:
+                if not rule.admits(len(rule.ref.select(record))):
+                    raise ValueError(f"invalid shard collection: {rule.bound.field}")
         for row in spans:
             if (row.y // TILE_SIDE != self.ty or row.x0 // TILE_SIDE != self.tx
                     or (row.x1 - 1) // TILE_SIDE != self.tx):
@@ -53,3 +73,13 @@ class HydrologyPackShard(_PackRecord):
             if cell not in observed or cell in wet or fact.role is not HydrologyCellRole.SHORE or fact.liquid_candidate is not False:
                 raise ValueError("invalid observed shore")
         return self
+
+
+HydrologyPackShard.collection_limits = (
+    CollectionLimit(tuple[WaterMembershipRun, ...],
+                    ref=FieldRef(lambda: HydrologyPackShard, lambda shard: shard.wet_runs),
+                    maximum=TILE_CELLS),
+    CollectionLimit(tuple[tuple[FineXY, MapCellHydrology], ...],
+                    ref=FieldRef(lambda: HydrologyPackShard, lambda shard: shard.shore_rows),
+                    maximum=TILE_CELLS),
+)

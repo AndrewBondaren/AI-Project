@@ -5,6 +5,9 @@ from typing import ClassVar, Self
 from pydantic import BaseModel, ConfigDict, StrictInt, TypeAdapter, model_validator
 
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
+from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.encoding.decodeLimits import CollectionLimit
+from app.dataModel.hydrology.pack.profile import FORMAT_VERSION, MAX_CONTAINER_ITEMS, SHARD_V1, TILE_SIDE
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.waterBody import WaterBody
@@ -44,7 +47,6 @@ _DEPENDENCIES: tuple[PlanDependencyContract, ...] = (
         slot=PlanSlot("water_placement"), contract_id=RegistryKey[PlanContractRegistry]("surface.geo.water_placement"),
         schema_version=SchemaVersion(2), algorithm_version=AlgorithmVersion(1)),
 )
-TILE_SIDE = 64
 
 
 def require_source_ref(ref: PlanRef) -> None:
@@ -85,7 +87,7 @@ def _validate_nested(value):
 
 class _PackRecord(BaseModel):
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid", revalidate_instances="always")
-    _collection_limits: ClassVar[tuple[tuple[str, int], ...]] = ()
+    collection_limits: ClassVar[tuple[CollectionLimit, ...]] = ()
 
     @model_validator(mode="wrap")
     @classmethod
@@ -93,9 +95,10 @@ class _PackRecord(BaseModel):
         raw = vars(value) if isinstance(value, cls) else value
         if not isinstance(raw, dict) or raw.keys() != cls.model_fields.keys():
             raise ValueError("expected complete storage record")
-        for name, limit in cls._collection_limits:
-            if type(raw[name]) is not tuple or len(raw[name]) > limit:
-                raise ValueError(f"invalid storage collection: {name}")
+        for rule in cls.collection_limits:
+            items = raw[rule.bound.field]
+            if type(items) is not tuple or not rule.admits(len(items)):
+                raise ValueError(f"invalid storage collection: {rule.bound.field}")
         for field in raw.values():
             validate_immutable(field)
             _validate_nested(field)
@@ -113,8 +116,8 @@ class HydrologyShardRef(_PackRecord):
     @model_validator(mode="after")
     def _shard_descriptor(self) -> Self:
         ref = self.artifact
-        if (ref.kind is not ArtifactKind.BLOB or ref.format_key != "hydrology.open_water.shard.tlv"
-                or ref.format_version != 1 or ref.row_count is not None or not 0 < ref.nbytes <= 4 * 1024**2):
+        if (ref.kind is not ArtifactKind.BLOB or ref.format_key != SHARD_V1.key
+                or ref.format_version != FORMAT_VERSION or ref.row_count is not None or not 0 < ref.nbytes <= SHARD_V1.max_bytes):
             raise ValueError("invalid open-water shard descriptor")
         return self
 
@@ -127,7 +130,6 @@ def _ordered_ids(values):
 
 
 class HydrologyPackRoot(_PackRecord):
-    _collection_limits = (("dependencies", 7), ("shards", 65536))
     source_ref: PlanRef
     dependencies: tuple[PlanDependency, ...]
     diagnostics: tuple[PlanDiagnostic, ...]
@@ -174,7 +176,7 @@ class HydrologyPackRoot(_PackRecord):
         for uid, union in unions.items():
             _ordered_ids(union.member_uids)
             _ordered_ids(union.child_system_uids)
-            parent = unions.get(union.parent_system_uid)
+            parent = unions.get(union.parent_system_uid) if union.parent_system_uid is not None else None
             if union.parent_system_uid is not None and (parent is None or uid not in parent.child_system_uids
                                                         or union.z_water_level != parent.z_water_level):
                 raise ValueError("inconsistent physical parent")
@@ -185,7 +187,7 @@ class HydrologyPackRoot(_PackRecord):
                 if parent.water_system_uid in visited:
                     raise ValueError("physical union cycle")
                 visited.add(parent.water_system_uid)
-                parent = unions.get(parent.parent_system_uid)
+                parent = unions.get(parent.parent_system_uid) if parent.parent_system_uid is not None else None
         for uid, body in bodies.items():
             parent_uid = body.parent_system_uid
             while parent_uid is not None:
@@ -198,3 +200,13 @@ class HydrologyPackRoot(_PackRecord):
             raise ValueError("inconsistent physical membership")
         if any(uid not in bodies for entry in self.source_mapping.entries for uid in entry.body_uids):
             raise ValueError("unresolved source mapping body")
+
+
+HydrologyPackRoot.collection_limits = (
+    CollectionLimit(tuple[PlanDependency, ...],
+                    ref=FieldRef(lambda: HydrologyPackRoot, lambda root: root.dependencies),
+                    minimum=len(_DEPENDENCIES), maximum=len(_DEPENDENCIES)),
+    CollectionLimit(tuple[HydrologyShardRef, ...],
+                    ref=FieldRef(lambda: HydrologyPackRoot, lambda root: root.shards),
+                    maximum=MAX_CONTAINER_ITEMS),
+)

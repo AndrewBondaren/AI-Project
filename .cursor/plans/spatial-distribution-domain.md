@@ -4190,3 +4190,45 @@ candidate = m.model_copy(update={"entries": entries})
 **SP-P1-B принят пользователем.** Основание — решение «Закрыто, приемку прошел» после независимого ревью §15.41. Замечания SP-P1-B-REV-1…7 закрыты. Приняты storage records root/shard, ссылки на shards, schema lock V1 (38 типов и 16 aliases) и проверка отдельных записей в памяти.
 
 В §15.41 зафиксированы 56 прошедших тестов и 21 отказ на повреждённых bindings до encode. Следующий шаг по §15.20 — SP-P1-C, bounded decoder и codec root/shard. Реализация этого шага требует отдельной команды.
+
+### 15.43. SP-P1-C — bounded canonical decode и Hydrology codecs (2026-11-03)
+
+**P1-C реализован и предъявлен на пользовательскую приёмку.** Основание — приёмка P1-B в §15.42 и команда «Следующий шаг делай».
+
+В application/encoding/boundedCanonicalDecode.py добавлен decode_bounded(encoded, expected, manifest, *, limits). Первый проход читает заголовки относительно границ родительского TLV, проверяет точные tags, ID/enum, имена и порядок полей, типы вложенных значений, длины коллекций и полное потребление входа. Счётчики включают служебные tuple wrappers, type IDs и имена полей. Второй проход по тем же immutable bytes с теми же ограничениями создаёт вложенные модели. Decoder сравнивает результат обратного encode с исходными bytes. Оба прохода используют смещения и memoryview. Чтение scalar TLV переиспользует private helper из canonicalCodec.py.
+
+В hydrology/encoding/packCodec.py доступны encode_root, decode_root, encode_shard и decode_shard. Encode проверяет исходный record, кодирует existing TLV v1 и проверяет готовое представление по caps перед возвратом. Decode проверяет exact format version, storage lock, bounded representation и admission восстановленного record, включая diagnostics P1-A. В packFormats.py находятся ROOT_FORMAT и SHARD_FORMAT, оба ArtifactFormatContract[bytes] для version 1. UnsupportedPackFormat позволяет вызывающей стороне отдельно распознать неподдержанную версию. Число непосредственных файлов application/encoding 2→3, hydrology/encoding 3→5, tests/spatial_pack 3→5.
+
+**Регрессии.** Новые test_bounded_decode.py и test_pack_codec.py проверяют exact-bound и cap+1 для bytes/nodes/depth/width, field cap, malformed/truncated TLV, trailing bytes, duplicate/omitted/extra fields, неверный ID/enum, nonminimal integers и noncanonical sets. Запрещающая заглушка на PlanRef.model_validate подтверждает отказ до первого вложенного record при позднем structural defect. Проверены strict version dispatch и exact top-level, bytes contracts, неизвестный diagnostic и отказ oversized encoding без обрезания. Контрольные wire SHA-256 малого root (7518 bytes) и shard (1913 bytes) совпали с P1-B.
+
+Тестовый oracle кодирует/декодирует три tile по x=-1/0/63/64, соединяет adjacent coverage и same-body runs, сохраняет разрыв, dry/shore/protection и explicit empty mapping entry. Сравниваются полное source envelope и пересчитанный existing output_fingerprint. Пробы с отсутствующим либо чужим shard, overlap и неизвестным body дают отказ на соответствующей границе oracle.
+
+**Замеры одного локального in-memory прогона.** Полный shard 64×64 со всеми SHORE и protected — 2 262 498 bytes / 189 360 nodes. Первый и повторный decode заняли 0,939 и 0,919 с. Два одновременных decode одного shard в двух threads заняли 1,801 с суммарно. Для root из records() с расширенным x_max и уникальными tx=0…N−1, ty=-1 максимальный N в этом профиле составил 14 155 (7 310 729 bytes / 524 265 nodes). Decode занял 3,948 и 3,907 с. N=14 156 (7 311 245 bytes / 524 302 nodes) дал отказ по nodes за 0,539 с. В отдельных прогонах tracemalloc включался после создания входных bytes: peak Python allocations 10,38 MiB для полного shard, 40,71 MiB для принятого root и 0,068 MiB для отвергнутого root. Эти измерения характеризуют конкретные fixtures и локальный процесс. Input bytes, RSS и производственный IO в метрику heap не входят. Encoder применяет byte cap к готовому TLV, его временные аллокации измерением декодера не покрыты.
+
+Из backend выполнено:
+```text
+../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_pack_codec tests.spatial_pack.test_bounded_decode tests.spatial_pack.test_storage_schema tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec
+71 tests OK (3.307s)
+```
+
+Проверенная граница — принятие/отказ для целой записи в памяти. Проверку потока bytes против ArtifactRef выполняет будущий P2R. Manifest V1/V2 dispatch и legacy guards относятся к P1-D. Переход к P1-D требует отдельной команды после приёмки P1-C.
+
+### 15.44. Владелец ключей и лимитов формата V1
+
+По замечанию пользователя о повторяющихся литералах ключи root/shard, версия, размеры, бюджеты узлов и параметры tile объявлены в dataModel/hydrology/pack/profile.py. packFormats получает типизированный OpenWaterArtifactV1, HydrologyShardRef использует тот же ключ и предел размера. Количество клеток вычисляется из стороны tile, а точное количество dependencies — из списка контрактов.
+
+Именованные правила CollectionLimit и RecordLimits находятся в dataModel/encoding/decodeLimits.py. Для shard правила связывают размеры коллекций с полями конкретных моделей. При создании RecordLimits имена сверяются с model_fields. Валидация records и pre-model scan читают общие правила. Generic decoder получает все бюджеты от владельца формата. Direct counts после добавления двух файлов — dataModel/encoding 3 и dataModel/hydrology/pack 4.
+
+Прогон шести модулей из §15.43 — **71 тест OK**. Golden root/shard и проверки предельных значений прошли. P1-C предъявлен на приёмку с этим уточнением.
+
+Уточнение §15.44. Все семь CollectionLimit задают поле через FieldRef с селектором атрибута POJO. RecordLimits проверяет владельца и аннотацию tuple/frozenset при связывании профиля. Имя для чтения raw/wire выводится через bind_field. Регрессия проверяет исчезнувшее поле, скаляр и ссылку на другую модель. Повторный прогон шести модулей §15.43 — 72 теста OK. Пользовательская приёмка P1-C отдельна.
+
+### 15.45. Типизированная привязка полей и стабильность TLV V1
+
+**Архитектурный инвариант.** Внутренние контракты между типизированными компонентами используют типобезопасную ссылку на поле POJO, когда она доступна. Строковые идентификаторы допустимы на границах сериализации, внешних API и реестров. На входе их связывают с типизированными сущностями до передачи в доменную логику. Для прямого атрибута модели используются существующие `FieldRef` и `bind_field`.
+
+Семь правил ограничений задают ожидаемый параметризованный тип коллекции первым аргументом. Селектор должен возвращать тот же тип. При создании CollectionLimit привязка проверяет прямой атрибут и сравнивает его полную аннотацию с ожидаемой, включая вложенные элементы. RecordLimits проверяет владельца. Структурный проход проверяет элементы входного TLV по аннотации POJO до создания доменных объектов.
+
+На границе хранения `packSchema._V1_WIRE_FIELDS` явно фиксирует упорядоченные текстовые идентификаторы полей каждой записи manifest по её type ID. Действующее отображение V1 требует совпадения с именами POJO. Encode и decode проходят эту проверку до обработки артефакта. Переименование требует отдельного решения об отображении или версии. Регрессия меняет `HydrologyPackRoot.shards` на `tiles` в метаданных и обновляет shape hash в тестовом процессе. Обе операции отказывают по wire binding ID 60001. После восстановления метаданных сохранённые байты читаются и воспроизводятся точно.
+
+Проверка шести модулей §15.43 — **74 теста OK**, включая golden root/shard. Адресный Pyright с `pyrightconfig.cascade.json` для decodeLimits.py, root.py и shard.py — 0 ошибок. Для `backend/tests/typing/spatial_pack_limits_invalid.py` — три ожидаемых reportArgumentType (скаляр, неверный контейнер, неверный элемент). P1-C предъявлен повторно, пользовательская приёмка остаётся отдельным решением.

@@ -10,11 +10,14 @@ from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 
 
+SurfaceSamples = tuple[tuple[FineXY, Annotated[FineZ, Field(strict=True)]], ...]
+
+
 class FineSurfaceWindow(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     coverage: RegionCoverage
-    surface_z: tuple[tuple[FineXY, Annotated[FineZ, Field(strict=True)]], ...]
+    surface_z: SurfaceSamples
     topology: WorldTopology
     protected_cells: frozenset[Coord]
 

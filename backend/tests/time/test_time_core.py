@@ -19,9 +19,9 @@ from app.dataModel.time.storage.initial import InitialTimeFacts
 from app.dataModel.time.storage.state import PublicationTimeState, StoredTimeState, TimeClockState
 from app.dataModel.time.values.interval import TimeInterval
 from app.dataModel.time.values.point import MAX_SECONDS, TimePoint
-from app.dataModel.world.calendar.enums.rules import CalendarPredicateKind
+from app.dataModel.world.calendar.enums.rules import CalendarConversionKind, CalendarPredicateKind, CalendarWeekMode
 from app.dataModel.world.calendar.rules.predicates import CalendarCondition, YearModuloPredicate, YearRangePredicate
-from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded, CalendarInvalid
+from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded, CalendarInvalid, CalendarTimeOverflow
 from app.dataModel.world.calendar.projection.request import CalendarBudget, CalendarProjectionInput, CalendarResolveInput, CalendarVersionRef, ValidateCalendarInput
 from app.dataModel.world.calendar.projection.result import CalendarProjection
 from app.dataModel.world.settings.timeOperations.changes import HoursChange, SettingsPreparationBase
@@ -106,7 +106,8 @@ def festival_condition(first: int = 1, last: int = 1, *, modulo: YearModuloPredi
     return CalendarCondition(all_of=(years,) if modulo is None else (years, modulo), none_of=())
 
 
-def custom_settings(condition: CalendarCondition | None = None) -> WorldTimeSettings:
+def custom_settings(condition: CalendarCondition | None = None, *,
+                    week_mode: CalendarWeekMode = CalendarWeekMode.CONTINUOUS) -> WorldTimeSettings:
     if condition is None:
         condition = festival_condition()
     span = dict(span="month", days=2, counts_in_week=True, season=None)
@@ -117,7 +118,7 @@ def custom_settings(condition: CalendarCondition | None = None) -> WorldTimeSett
                                           (("month","month"), ("festival","intercalary"))]),
                       seasons=dict(entries=[]), periods=dict(entries=[dict(system_period="day", display_period="Day", from_hour=0)]),
                       weekdays=dict(entries=[dict(system_weekday=k, display_weekday=k) for k in ("a","b","c")]),
-                      base_year=[span], rules=[insert], week_mode="continuous", week_anchor_index=0, week_anchor_ordinal=0)
+                      base_year=[span], rules=[insert], week_mode=week_mode, week_anchor_index=0, week_anchor_ordinal=0)
     anchor = dict(coordinate_seconds=0, coordinate_nanoseconds=0, origin=dict(date=dict(year=0, span="month", day=1),
                   time=dict(hour=0, minute=0, second=0, nanoseconds=0)))
     return WorldTimeSettings.model_validate_json(json.dumps(dict(hours_per_day=10, selected="custom",
@@ -125,6 +126,53 @@ def custom_settings(condition: CalendarCondition | None = None) -> WorldTimeSett
 
 
 class CalendarTests(unittest.TestCase):
+    def test_projection_and_resolution_match_day_by_day_calendar(self):
+        from app.dataModel.world.calendar.dates.date import CalendarDate
+
+        multiple_three = YearModuloPredicate(kind=CalendarPredicateKind.YEAR_MODULO, modulus=3, residue=0, offset=0)
+        multiple_five = YearModuloPredicate(kind=CalendarPredicateKind.YEAR_MODULO, modulus=5, residue=0, offset=0)
+        years = YearRangePredicate(kind=CalendarPredicateKind.YEAR_RANGE, first=-17, last=12)
+        settings = custom_settings(CalendarCondition(all_of=(years, multiple_three), none_of=(multiple_five,)),
+                                   week_mode=CalendarWeekMode.RESET_AT_YEAR)
+        resolved = self.resolved.model_copy(update={"settings": settings})
+        # Enumerate dates directly; year zero's first day is the coordinate origin.
+        dates = []
+        for year in range(-25, 26):
+            dates.extend((year, "month", day, weekday) for day, weekday in ((1, "a"), (2, "b")))
+            if -17 <= year <= 12 and year % 3 == 0 and year % 5 != 0:
+                dates.append((year, "festival", 1, None))
+        zero = dates.index((0, "month", 1, "a"))
+        budget = CalendarBudget(max_year_patterns=17, max_rule_checks=17)
+        projector = make_calendar_projector()
+        for ordinal, (year, span, day, weekday) in enumerate(dates, start=-zero):
+            with self.subTest(year=year, span=span, day=day):
+                expected_point = point(ordinal * settings.hours_per_day * 3600, 1)
+                expected_date = CalendarDate(year=year, span=RegistryKey(span), day=day)
+                request = CalendarProjectionInput(point=expected_point, capture=self.clock, resolved=resolved,
+                                                  calendar=settings.selected, budget=budget)
+                projected = projector.project(request)
+                self.assertIsInstance(projected, CalendarProjection)
+                self.assertEqual((projected.date, projected.weekday), (expected_date, weekday))
+                self.assertEqual(projected.time.nanoseconds, 1)
+                reverse = CalendarResolveInput(resolved=resolved, scope=self.clock.point.scope, date=expected_date,
+                                               time=projected.time, calendar=settings.selected, budget=budget)
+                self.assertEqual(projector.resolve(reverse).point, expected_point)
+        for insufficient in (CalendarBudget(max_year_patterns=16, max_rule_checks=17),
+                             CalendarBudget(max_year_patterns=17, max_rule_checks=16)):
+            self.assertIsInstance(projector.project(request.model_copy(update={"budget": insufficient})), CalendarBudgetExceeded)
+            self.assertIsInstance(projector.resolve(reverse.model_copy(update={"budget": insufficient})), CalendarBudgetExceeded)
+
+    def test_resolve_one_nanosecond_beyond_each_limit(self):
+        projector = make_calendar_projector()
+        for edge, nanos in ((point(MAX_SECONDS, 999999999), 0), (point(-MAX_SECONDS-1, 0), 999999999)):
+            projected = self.project(edge)
+            # Neither endpoint falls on an hour/minute boundary in this fixture.
+            second = projected.time.second + (1 if edge.seconds > 0 else -1)
+            outside = projected.time.model_copy(update={"second": second, "nanoseconds": nanos})
+            request = CalendarResolveInput(resolved=self.resolved, calendar=self.capture.settings.selected,
+                                          scope=edge.scope, date=projected.date, time=outside, budget=self.budget)
+            self.assertEqual(projector.resolve(request), CalendarTimeOverflow(operation=CalendarConversionKind.RESOLVE))
+
     def setUp(self):
         settings = custom_settings()
         self.clock = TimeCapture(publication=publication(), point=point())
@@ -412,6 +460,16 @@ class WorldOperationTests(unittest.TestCase):
         self.assertIsInstance(self.projector.project(request), CalendarSourceMismatch)
 
 class AdmissionTests(unittest.TestCase):
+    def test_unknown_calendar_rule_tag_is_rejected(self):
+        payload = custom_settings().model_dump(mode="json")
+        entry, = payload["calendars"]["entries"]
+        rule, = entry["definition"]["rules"]
+        rule["kind"] = "unknown_edit"
+        with self.assertRaises(ValidationError) as rejected:
+            WorldTimeSettings.model_validate_json(json.dumps(payload))
+        self.assertIn((("calendars", "entries", 0, "definition", "rules", 0), "union_tag_invalid"),
+                      [(issue["loc"], issue["type"]) for issue in rejected.exception.errors()])
+
     def test_registry_identity_and_policy(self):
         from typing import get_type_hints
         from app.dataModel.registryKey import registry_key_target

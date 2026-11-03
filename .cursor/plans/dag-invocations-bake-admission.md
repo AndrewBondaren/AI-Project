@@ -260,3 +260,37 @@ revision 2
 | `replay` без prior outputs | SUCCEEDED, тот же terminal | Checkpoint совпадает с сохранённым после `correct`, ревизия 2 |
 
 Полный прогон по команде §9: **363 теста OK за 38,133 с** (19 модулей `dag_typing`), включая [регрессию REV-6](../../backend/tests/dag_typing/invocations/test_world_calls.py#L396). Scoped `git diff --check` прошёл. Вердикт относится к R1–R4; граница deployment для существующей БД описана в §9.
+
+## 13. Независимое ревью R5 WAIT_INPUT от 2026-11-03
+
+**CHANGES REQUIRED. Открыты REV-7 (P1) и REV-8 (P2).** Проверен 21 файл R5 на `bbefa875` по §5 и приёмке R5, включая четыре добавленных файла: `contracts/invocation/inputWait.py`, `runtime/invocations/inputWaitCoordinator.py`, `dataModel/engine/dag/invocations/inputWait.py`, `tests/dag_typing/invocations/test_input_wait.py`. На момент начала ревью эти файлы уже tracked в коммите, рабочее дерево было чистым. Остальные изменения вне scope. Код при ревью не менялся.
+
+### REV-7 · P1 · R5 · Отмена execution недоступна при активном владельце lease
+
+**Минимальное воспроизведение.** Через публичный `DAGEngine.run` запустить fixture `Ask`, задержав `start` на `asyncio.Event`. После входа в `start` через новый engine и второе соединение того же SQLite-файла вызвать `cancel_execution`. Затем освободить `start` и отправить ответ через `accept_input`.
+
+**Ожидалось:** запрос отмены достигает активного владельца, execution прекращается, поздний input отклоняется. **Фактически:** `cancel_execution` выбрасывает `OwnershipConflict` при попытке захватить lease; намерение отмены не сохраняется. Первый engine возвращает `Waiting`, а последующий `accept_input` принимает ответ и возвращает receipt ревизии 4. При постоянно продлеваемом lease отмена этим API недоступна. Отдельная проба с предварительно захваченным lease также показала `OwnershipConflict` и неизменный checkpoint. [dagEngine.py:141](../../backend/app/application/engine/runtime/dagEngine.py#L141) · [cancel_execution:186](../../backend/app/application/engine/runtime/dagEngine.py#L186)
+
+**Критерий закрытия:** отмена активного execution принимается и наблюдается владельцем без нарушения fencing. После её применения непубликованные invocation прекращаются, поздний input отклоняется. Добавить двухсоединительную регрессию с живым owner; сохранить отказ stale owner после takeover.
+
+### REV-8 · P2 · R5 · Accepted-input checkpoint допускает отсутствие continuation
+
+**Минимальное воспроизведение.** Выполнить `run → Waiting → accept_input`. До запуска continuation удалить у ожидавшей invocation `continuation` и `state_contract`, сохранив accepted input и receipt. Записать повреждённый checkpoint через store с корректной checksum. Через новый engine вызвать публичный `resume`.
+
+**Ожидалось:** `RestoreFailure` до запуска пользовательского кода. **Фактически:** `CheckpointCodec.decode` принимает checkpoint. Executor повторно вызывает `start` вместо `resume(state, InputReceived)`; fixture завершается `InputConflict("undeclared input contract or reused wait id")`. Для произвольной ноды это также допускает повторение эффектов `start`. Проверка наличия continuation выполнена только для pending wait, но отсутствует для accepted input, чей следующий step ещё должен исполняться. [inputWaitCoordinator.py:105](../../backend/app/application/engine/runtime/invocations/inputWaitCoordinator.py#L105) · [dagExecutor.py:151](../../backend/app/application/engine/runtime/dag/dagExecutor.py#L151)
+
+**Критерий закрытия:** восстановление отвергает accepted-input checkpoint без необходимого continuation/state contract до исполнения ноды. Регрессия должна сохранить штатный restart после receipt и до continuation, а также повторное чтение завершённого execution.
+
+### Проверки и границы ревью R5
+
+- При одном worker ожидающий child освобождает слот, готовая соседняя ветка завершается, caller остаётся на join ALL. `Waiting` возвращается без terminal output.
+- HTTP fixture возвращает промежуточный ответ, затем новый engine и новое SQLite-соединение доставляют payload в типизированный `InputReceived` нужного continuation. Unknown wait, stale revision, чужая session и запрещённый payload отклоняются без изменения checkpoint; отдельные пробы чужих world/player также дали `PermissionError` без изменения checkpoint. Точный повтор возвращает прежний receipt, другой payload конфликтует.
+- Restart после WAIT_INPUT и отдельно после receipt проходит при пересоздании engine/соединения. Конкурентная доставка через два соединения сохранила один receipt; оба вызова получили одинаковый receipt.
+- Отмена quiescent execution и отказ позднему ответу проходят. Существующая проверка дочерней отмены сохраняет `CallCancelled` в join; WAIT_INPUT остаётся отдельным состоянием.
+- Форма checkpoint R4 без новых полей восстанавливается. Регрессия REV-6 для чужого `DependencyRead` в prior_outputs проходит.
+
+Полный набор по команде §9: **367 тестов OK за 51,761 с** (20 модулей), включая положительные и точные отрицательные проверки Pyright. Первый прогон: 367 тестов за 49,305 с, один `OwnershipConflict` в `test_slow_effect_retains_lease`. Отдельный повтор обоих lease-тестов прошёл (2 теста за 8,860 с), затем прошёл повторный полный набор. Причина единичного сбоя не установлена. В sandbox создание Windows asyncio loop зависало в `socketpair` до исполнения тестов; завершённые прогоны и asyncio-пробы выполнены вне sandbox. Scoped `git diff --check` прошёл.
+
+**Правило apply_patch.** [.agents/skills/implement-plan/SKILL.md:51](../../.agents/skills/implement-plan/SKILL.md#L51) требует каждую ручную правку, включая создание и удаление файлов, выполнять инструментом `apply_patch`; запись через Python/PowerShell/другой shell запрещена, просмотр diff обязателен отдельно. Соблюдение в прошлой реализации **не установлено**: журнал её инструментальных вызовов в предоставленном контексте отсутствовал. Сам diff способ редактирования не доказывает.
+
+**Непроверенные сценарии:** настоящий kill/restart процесса вместо пересоздания engine/соединения; исторические checkpoint-файлы R1–R4 вместо совместимой формы; отмена уже ожидающего child при сохранении работающего caller; production authentication/policy adapter за пределами тестового binding. Вердикт относится к R5, не к R6–R7.

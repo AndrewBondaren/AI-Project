@@ -146,6 +146,36 @@ def _tuple(value: object) -> tuple:
     return value
 
 
+def _decode_scalar(tag: int, body: bytes | memoryview) -> object:
+    if tag == 0:
+        if body:
+            raise CanonicalEncodingError("invalid null")
+        return None
+    if tag == 1:
+        if body not in (b"\x00", b"\x01"):
+            raise CanonicalEncodingError("invalid boolean")
+        return body == b"\x01"
+    if tag == 2:
+        if len(body) < 2 or body[0] not in (0, 1) or (len(body) > 2 and body[1] == 0):
+            raise CanonicalEncodingError("nonminimal canonical integer")
+        magnitude = int.from_bytes(body[1:], "big")
+        if body[0] == 1 and magnitude == 0:
+            raise CanonicalEncodingError("negative integer zero")
+        return -magnitude if body[0] else magnitude
+    if tag == 3:
+        if len(body) != 8:
+            raise CanonicalEncodingError("invalid float width")
+        value = unpack(">d", body)[0]
+        if not isfinite(value) or (value == 0 and body != pack(">d", 0.0)):
+            raise CanonicalEncodingError("noncanonical float")
+        return value
+    if tag == 4:
+        return bytes(body).decode("utf-8", errors="strict")
+    if tag == 5:
+        return bytes(body)
+    raise CanonicalEncodingError("unknown canonical scalar tag")
+
+
 def _decode_one(encoded: bytes, manifest: CanonicalSchemaManifest) -> tuple[object, int]:
     if len(encoded) < 9:
         raise CanonicalEncodingError("truncated canonical header")
@@ -154,32 +184,8 @@ def _decode_one(encoded: bytes, manifest: CanonicalSchemaManifest) -> tuple[obje
     if end > len(encoded):
         raise CanonicalEncodingError("truncated canonical value")
     body = encoded[9:end]
-    if tag == 0:
-        if body:
-            raise CanonicalEncodingError("invalid null")
-        return None, end
-    if tag == 1:
-        if body not in (b"\x00", b"\x01"):
-            raise CanonicalEncodingError("invalid boolean")
-        return body == b"\x01", end
-    if tag == 2:
-        if len(body) < 2 or body[0] not in (0, 1) or (len(body) > 2 and body[1] == 0):
-            raise CanonicalEncodingError("nonminimal canonical integer")
-        magnitude = int.from_bytes(body[1:], "big")
-        if body[0] == 1 and magnitude == 0:
-            raise CanonicalEncodingError("negative integer zero")
-        return -magnitude if body[0] else magnitude, end
-    if tag == 3:
-        if len(body) != 8:
-            raise CanonicalEncodingError("invalid float width")
-        value = unpack(">d", body)[0]
-        if not isfinite(value) or (value == 0 and body != pack(">d", 0.0)):
-            raise CanonicalEncodingError("noncanonical float")
-        return value, end
-    if tag == 4:
-        return body.decode("utf-8", errors="strict"), end
-    if tag == 5:
-        return body, end
+    if tag <= 5:
+        return _decode_scalar(tag, body), end
     if tag in (8, 9):
         values: list[object] = []
         parts: list[bytes] = []

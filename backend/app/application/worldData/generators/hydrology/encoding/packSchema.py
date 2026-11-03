@@ -30,6 +30,38 @@ OPEN_WATER_PACK_SCHEMA_V1 = CanonicalSchemaManifest(entries=tuple(sorted((
       for i, t in _STORAGE)), key=lambda entry: entry.type_id)))
 
 
+# Stable ordered TLV field identifiers. V1 binds each identifier to the same POJO name.
+_V1_WIRE_FIELDS = {
+    53: ('mode', 'bounds'),
+    55: ('x_min', 'x_max', 'y_min', 'y_max'),
+    94: ('key', 'output_fingerprint'),
+    95: ('world_uid', 'scope', 'contract_id', 'schema_version', 'algorithm_version', 'input_fingerprint'),
+    96: ('kind',),
+    98: ('kind', 'region_uid'),
+    101: ('slot', 'ref'),
+    105: ('issue', 'disposition'),
+    106: ('path', 'message', 'schema_id', 'code', 'reference', 'runtime_context'),
+    107: ('reason', 'domain', 'world_uid', 'requested_template_uid', 'owner_pack_uid', 'dependency_pack_uid', 'consumer', 'selected_default'),
+    109: ('world_uid', 'snapshot_uid', 'content_revision', 'source_uid', 'body_uids', 'cell', 'face', 'fallback_action', 'fallback_reason'),
+    150: ('liquid_candidate', 'role', 'deepening_index', 'connection_edge_uid', 'shore_kind', 'water_body_uid', 'z_water_level', 'river_drainage'),
+    152: ('river_uid', 'river_type', 'receiver_uid', 'receiver_kind', 'receiver_cell'),
+    153: ('water_body_uid', 'location_uid', 'kind', 'liquid', 'declared_level', 'z_water_level', 'declared_basin_uid', 'parent_system_uid'),
+    154: ('water_system_uid', 'member_uids', 'child_system_uids', 'z_water_level', 'parent_system_uid'),
+    226: ('entries',),
+    227: ('source_uid', 'body_uids'),
+    238: ('region_uid', 'spans'),
+    239: ('y', 'x0', 'x1'),
+    283: ('coverage', 'surface_z', 'topology', 'protected_cells'),
+    60001: ('source_ref', 'dependencies', 'diagnostics', 'topology', 'coverage_region_uid', 'z_min', 'z_max', 'bodies', 'unions', 'source_mapping', 'shards'),
+    60002: ('tx', 'ty', 'artifact'),
+    60003: ('source_ref', 'tx', 'ty', 'bed', 'wet_runs', 'shore_rows'),
+    60004: ('y', 'x0', 'x1', 'body_uid'),
+    60005: ('kind', 'format_key', 'format_version', 'content_hash', 'nbytes', 'row_count'),
+    60007: ('space', 'bed', 'z_min', 'z_max', 'wet_runs', 'bodies', 'unions', 'source_mapping', 'shore_rows'),
+    60008: ('ref', 'dependencies', 'payload', 'diagnostics'),
+}
+
+
 def _shape(owner):
     name = owner.__module__ + "." + owner.__name__
     if issubclass(owner, Enum):
@@ -93,6 +125,13 @@ def require_pack_schema_v1() -> None:
         raise CanonicalEncodingError(f"open-water storage v1 binding drift: {exc}") from exc
     if len(entries) != len(expected) or {e.type_id: (e.python_type, e.kind) for e in entries} != expected:
         raise CanonicalEncodingError("open-water storage v1 binding drift")
+    for entry in entries:
+        if entry.kind is CanonicalTypeKind.RECORD:
+            owner = entry.python_type
+            names = tuple(owner.model_fields) if issubclass(owner, BaseModel) else tuple(
+                field.name for field in dataclasses.fields(owner))
+            if names != _V1_WIRE_FIELDS.get(entry.type_id):
+                raise CanonicalEncodingError(f"open-water v1 wire field binding drift: {entry.type_id}")
     records, aliases = _closure()
     if records != {owner for owner, _ in expected.values()} or len(aliases) != 16:
         raise CanonicalEncodingError("open-water storage v1 closure drift")
