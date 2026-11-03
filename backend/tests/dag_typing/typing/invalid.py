@@ -218,6 +218,14 @@ async def wrong_engine(
     print(wrong)
 
 
+from app.application.engine.contracts.invocation.inputWait import InputReceived, InputWaitContract
+
+
+def wrong_wait(contract: InputWaitContract[NodeInput, NodeInput], event: InputReceived[NodeInput]) -> None:
+    output: LeafOutput = event.get(contract)  # expect: reportAssignmentType
+    print(output)
+
+
 def wrong_validation() -> None:
     wrong: tuple[CompositeOutput | None, ValidationResult] = ContractValidator().validate(LeafOutput(value=1), LeafOutput)  # expect: reportAssignmentType
     wrong_callback = RecordingValidator[CompositeOutput](ValidationResult(status=ValidationStatus.OK))

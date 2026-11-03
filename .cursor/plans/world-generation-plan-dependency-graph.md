@@ -203,7 +203,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SP-1 | SP-R0 |
 | SP-M | SP-R0 |
 | SP-P0 | SP-P1 |
-| SP-P1 | SP-P0 | P1-A принят пользователем (§15.29) | P1-B по отдельной команде | REV-1…3 закрыты. |
+| SP-P1 | SP-P2R |
 | SP-P1 | SP-P2W |
 | SN-STAGE | SP-P2W |
 | SP-P2R | SP-P2 |
@@ -361,7 +361,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SP-H | G10-A | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-M | SP-1 | ПРИНЯТ ДОКУМЕНТАЛЬНО | SP-R0 design доступен; SP-4 code не разрешён | §§16.9–16.16: G1/context/result/protected-domain boundary; implementation evidence OPEN. |
 | SP-P0 | SP-1, GEO-SPATIAL-CONTRACT | DESIGN ПРИНЯТ | SP-P1 preflight доступен; код требует отдельного разрешения | §§15.17–15.19: 33/38 types, narrow diagnostic admission; parser/cold/retention evidence впереди. |
-| SP-P1 | SP-P0 | Частично реализован | Повторное предъявление P1-A | §15.26, alias identity и diagnostic disposition. |
+| SP-P1 | SP-P0 | P1-A принят, P1-B реализован (§15.30) | Далее P1-C после P1-B по §15.20 | Проверки root/shard выполняются в памяти. |
 | SP-P2 | SP-P2R, SP-P2W | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P2R | SP-P1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P2W | SP-P1, SN-STAGE | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
@@ -503,7 +503,7 @@ print('PASS:', len(edges), 'edges; base and separate cutover alternatives')
 
 | Когда / стартовый gate | Какие конкретные работы можно вести независимо | Где обязательная синхронизация / что ещё запрещено |
 |---|---|---|
-| **Сейчас** | GEO-I4.1 на ревью, Snapshot D на повторное ревью, Spatial P1-A принят, DAG REV-6 открыт. | Распределение работ в §12.1. |
+| **Сейчас** | GEO-I6.1, Spatial P1-B и изолированное ядро Time имеют реализацию. | Очередь по планам в §12.1. |
 | **После приёмки Snapshot 4C2-R/H** | Snapshot **4C2-O** как **один** собственный атомарный code step может идти одновременно с GEO контрактной/кодовой веткой и независимыми SPATIAL SP-0/1/P0 работами (при их собственных gates). | `4C3` не стартует до принятого `4C2-O`. Внутри Snapshot правило «один подшаг за заход» сохраняется, **4C2-O и 4C3 не параллелить**. |
 | **После SPATIAL SP-0/1/P0 и принятия exact Pack format/POJO** | `SP-P1` (после собственного P0), затем `SP-P2R` (после P1) может разрабатываться независимо от **GEO G10-A** и последовательной ветки Snapshot `4C3+`; кодовые steps только по отдельным разрешениям. | `SP-P2W` дополнительно ждёт **SN-STAGE**; `SP-P3I` ждёт `SP-H/GEO G10-A` и `SP-P1`. Нельзя начать их из-за одного наличия generic contract. |
 | **После GEO-SPATIAL-CONTRACT, GEO G10-A/SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2 и принятого PACK-ENTRY-CONTRACT; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
@@ -813,25 +813,24 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | I3.1 принят. Реализация I4.1 и тесты в `87bbfb08`. При сверке графа canonical_source 29/29, height_delta 21/21, final_publication 6/6. | Независимое ревью сборки payload. Решение пользователя по I4.1 ещё не зафиксировано. |
+| [GEO](./geo-1-designed-water.md) | I4.1 и I5.1 приняты (§I4.3, §I5.3). В `ac950ea1` есть CapturedPlacementGeometry и тесты I6.1. | Далее привязка fine-геометрии water и competitors к W/header (§I6.1). |
 | [Snapshot](./world-domain-patches-snapshots.md) | A/B/C приняты. После CHANGES REQUIRED исправлен тест GC/reserve (`cd6746a7`). По отчёту 5 focused OK, suite 162 (1 skip). | Повторное ревью исправления, затем решение пользователя по D. Concrete 4C3 / полный 4D1 остаются на предъявлении. |
-| [Spatial](./spatial-distribution-domain.md) | §15.29 фиксирует пользовательскую приёмку P1-A после REV-3, 42 теста OK по §15.28. | Для старта P1-B нужна отдельная команда пользователя (§15.20). |
-| [Time](./time-domain.md) | §46 фиксирует приёмку календарной модели N+1, World settings через DAG, immutable state/history и atomic Snapshot acceptance. §47 фиксирует TIME-LOG, включая согласованные события и маршрут | Сверить собственные IDs/DTO/SQL и готовность конкретного core-среза. Внешние bindings относятся к соответствующей интеграции. ActionCore отложен. Логирование требует будущей проверки фактической доставки |
+| [Spatial](./spatial-distribution-domain.md) | P1-A принят. P1-B повторно предъявлен (§15.31). Сверены 7/7 producer contracts, исправлен допуск незарегистрированного вложенного типа. По отчёту 49 тестов OK. | P1-C после принятого P1-B по §15.20. |
+| [Time](./time-domain.md) | T3-A, pure T3-C и подготовка T4 реализованы. В отчёте core проверены календарная реформа и обе границы нестандартных суток. | Для production T4 нужен SN-TIME-READ и Time reader, для T5 — SN-TIME-APPLY и handler. Создание ветки отдельно ждёт SN-TIME-BRANCH (§48). |
 | [Physics](./physics-spatial-dynamics.md) | P3.9–11 приняты F1–F3, typed group output и карта/порядок P3.5/P3.7. P3.15 приняты S1–S4 для settings. P3.16 добавляет PH-LOG | Проработать внешний контракт B и затем closure C. Для PH-LOG согласовать event matrix, correlation и регистрацию маршрута. После общей архитектуры возможен water kernel proposal |
 | [API-1](./api-1-transport-boundary.md) | Пользователь выбрал путь API → engine DAG → пользовательская нода → public domain operation. По Climate C1 предъявлена карточка с открытыми schema/revision/security и writer boundaries | Согласовать C1-schema и guarded update/acceptance. Domain contracts можно проектировать до пользовательских нод |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
-| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Повторное ревью R1–R4 на `7e4ea620`, §11. REV-2/5 закрыты, REV-6 (P1) воспроизведён при 362 зелёных тестах. CHANGES REQUIRED. | Исправить приём чужого DependencyRead до сохранения checkpoint. Пользовательские bindings и durable bake admission имеют отдельные gates. |
+| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Повторное ревью R1–R4 PASS, REV-1…6 закрыты, 363 теста по отчёту. | Deployment и durable bake admission имеют отдельные условия. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
 
 ### 12.1. Параллельная работа по текущим срезам
 
-| Исполнитель | Задание и граница файлов | Условие завершения |
-|---|---|---|
-| GEO, независимое ревью | I4.1, sourceAssembly и test_source_assembly по критериям owning-плана. | Verdict по сборке payload, затем решение пользователя. Стоп до envelope и Pack wiring. |
-| Spatial, по отдельной команде | P1-B по allowlist §15.20, pack root/shard, packSchema и test_storage_schema. | 38 bindings, строгая вложенная валидация, refs/caps/order. Стоп до parser, builder и IO. |
-| Snapshot, повторное независимое ревью | Проверить тест GC/reserve на `cd6746a7`, trace двух соединений и отрицательную пробу с delete после COMMIT. Отдельная временная БД. | Verdict по исправлению D. Полный process crash takeover остаётся за пределами среза. |
-| DAG, исправление REV-6 | invocationCoordinator и focused invocation tests. Проверить execution и dependency_bindings до записи prior output. | Первый неверный ввод отклонён, корректный повтор с тем же execution успешен, следующая доставка восстанавливает terminal. Стоп на повторном ревью R1–R4. |
+| План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
+|---|---|---|---|
+| GEO | I6.1, код в ветке | Исходная fine-геометрия участника и площадь до конкуренции. | GEO: связать capture с W/header, затем согласованно перевести оба placement entry и consumers. |
+| Spatial | P1-B, реализован | Root/shard и проверка storage schema V1 в памяти. | P1-C: ограниченный декодер после P1-B (§15.20), затем P1-D. |
+| Time | T3-A / T3-C, подготовка T4 | Арифметика, календарь, чтение закреплённого состояния через тестовые источники. | T4 ждёт SN-TIME-READ, T5 ждёт SN-TIME-APPLY, branch отдельно ждёт SN-TIME-BRANCH. |
 
-Time и API-1 продолжаются у пользователя. Контракты SN-TIME-READ/APPLY/BRANCH можно изучать параллельно в режиме чтения; изменения Snapshot owning-плана координирует один исполнитель. GEN-BAKE-READ ждёт решения по D1–D7. Эта матрица обновляет очередь работ и сохраняет реестр рёбер.
+У трёх срезов раздельные рабочие файлы. Snapshot D остаётся на повторном ревью. API-1 ведёт пользователь. В очереди проектирования GEN-BAKE-READ после решения по D1–D7 идут R1 (согласование owners) и R2 (точные slots/projections) по операциям.

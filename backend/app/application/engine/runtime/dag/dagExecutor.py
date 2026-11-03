@@ -15,6 +15,7 @@ from app.application.engine.contracts.invocation.executionOptions import Invocat
 from app.application.engine.contracts.invocation.nodeStep import Complete
 from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
 from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
+from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 from app.application.engine.runtime.invocations.stepEffect import StepEffect
 from app.application.engine.runtime.invocations.ownedExecution import OwnedExecution
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
@@ -106,6 +107,10 @@ class DAGExecutor:
                     for record in ready:
                         active[asyncio.create_task(self._invocation_step(coordinator, record))] = record.identity()
                 if not active:
+                    if root.status not in terminal and InputWaitCoordinator.waiting(graph, coordinator.plan).pending:
+                        graph.waiting_for_input = True
+                        await owned.save()
+                        break
                     if root.status not in terminal:
                         raise ValueError("invocation graph has no runnable step")
                     await owned.save()
@@ -146,7 +151,8 @@ class DAGExecutor:
             resumable = cast(ResumablePythonNode[BaseModel, BaseModel, NodeError, BaseModel], node)
             state = (contract.continuation.state_type.model_validate_json(record.continuation)
                      if record.continuation is not None else None)
-            event = coordinator.event(record) if state is not None else None
+            event = (InputWaitCoordinator.event(coordinator.graph, plan, record) or coordinator.event(record)
+                     if state is not None else None)
             return await self._runner.run_resumable(resumable, view, record.identity(), reg, prepared, state, event,
                                                     coordinator.graph.pass_number, record.invocation_id == coordinator.graph.root)
         raise TypeError("unsupported invocation binding")
@@ -230,9 +236,11 @@ class DAGExecutor:
                 graph = CheckpointCodec.decode(saved.blob, plan)
             else:
                 graph = durable.graph
-                coordinator = InvocationCoordinator(plan, graph, options.invocation_limit)
+                coordinator = InvocationCoordinator(plan, graph, options.invocation_limit, options.interaction)
                 coordinator.bind_published(tuple(earlier))
                 await self._schedule_invocations(coordinator, durable, options.workers)
+            if graph.waiting_for_input:
+                return LevelDecision.WAIT_INPUT
             prior = {item.invocation_id: item for item in state.catalog.current_outputs}
             for level, nodes in enumerate(levels):
                 traces: list[ExecutionTrace] = []

@@ -142,6 +142,12 @@ class GraphCompiler:
             node = nodes[node_id].node
             combined.add(node_id, *node.deps)
             continuation = registration.contract.continuation
+            wait = registration.contract.input_wait
+            if wait is not None:
+                if continuation is None or not isinstance(node, ResumablePythonNode):
+                    raise TypeError("WAIT_INPUT requires a resumable node and continuation")
+                wait.input_type.model_json_schema()
+                wait.intermediate_type.model_json_schema()
             if continuation is not None:
                 continuation.state_type.model_json_schema()
                 if not continuation.state_type.model_config.get("frozen"):

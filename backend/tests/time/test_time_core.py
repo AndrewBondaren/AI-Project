@@ -280,6 +280,34 @@ class WorldOperationTests(unittest.TestCase):
         removed = pipeline.prepare_calendar_remove(CalendarRemove(base=self.next_base(selected), calendar=key, replacement=self.key))
         self.assertEqual(removed.after, self.base.capture.settings)
 
+    def test_conflicting_year_edits_report_rule_and_preserve_settings(self):
+        from app.application.worldData.timeSettings.factory import make_calendar_settings_pipeline
+        from app.dataModel.world.calendar.enums.rules import CalendarEditKind
+        from app.dataModel.world.calendar.rules.edits import RemoveSpanRule, ReplaceSpanRule
+        from app.dataModel.world.settings.timeOperations.changes import CalendarUpdate
+        from app.dataModel.world.settings.timeOperations.results import SettingsInvalid
+
+        settings = self.base.capture.settings
+        before = settings.model_copy(deep=True)
+        entry = settings.calendars.entry_for(self.key)
+        insert, = entry.definition.rules
+        remove = RemoveSpanRule(kind=CalendarEditKind.REMOVE_SPAN, condition=insert.condition, span=insert.value.span)
+        replace = ReplaceSpanRule(kind=CalendarEditKind.REPLACE_SPAN, condition=insert.condition, value=insert.value)
+        pipeline = make_calendar_settings_pipeline(self.validator, self.projector)
+        for conflict in (remove, replace):
+            with self.subTest(kind=conflict.kind):
+                definition = entry.definition.model_copy(update={"rules": (insert, remove, conflict)})
+                candidate = entry.model_copy(update={"definition": definition})
+                registry = type(settings.calendars)(entries=(candidate,))
+                validation = self.validator.validate(ValidateCalendarInput(
+                    settings=settings.model_copy(update={"calendars": registry}), budget=self.base.budget))
+                self.assertIsInstance(validation, CalendarInvalid)
+                self.assertEqual(validation.issues[0].path, ("calendars", "entries", 0, "definition", "rules", 2))
+                result = pipeline.prepare_calendar_update(CalendarUpdate(base=self.base, entry=candidate))
+                self.assertIsInstance(result, SettingsInvalid)
+                self.assertEqual(result.issues, validation.issues)
+                self.assertEqual(self.base.capture.settings, before)
+
     def test_epoch_operations(self):
         from app.application.worldData.timeSettings.factory import make_epoch_settings_pipeline
         from app.dataModel.world.calendar.epochs.epoch import WorldCalendarEpoch
@@ -423,3 +451,31 @@ class InitializationTests(unittest.TestCase):
         authored = AuthoredTimeSettingsInput(kind=CalendarInitializationKind.AUTHORED, settings=custom_settings())
         result = self.prepare(authored, "2026-11-03T18:20:00.000000Z")
         self.assertEqual(result.settings, authored.settings)
+
+    def test_one_second_across_hour_boundary_in_custom_length_days(self):
+        from app.dataModel.world.calendar.enums.rules import CalendarInitializationKind
+        from app.dataModel.world.settings.timeOperations.initial import StandardTimeSettingsInput
+
+        clock = TimeCapture(point=point(), publication=publication())
+        projector = make_calendar_projector()
+        budget = CalendarBudget(max_year_patterns=400, max_rule_checks=800)
+        for hours, utc, day, hour in (
+            (10, "1970-01-01T09:59:59.000000Z", 2, 0),
+            (30, "1970-01-01T23:59:59.000000Z", 1, 24),
+        ):
+            with self.subTest(hours_per_day=hours):
+                standard = StandardTimeSettingsInput(kind=CalendarInitializationKind.STANDARD, hours_per_day=hours)
+                settings = self.prepare(standard, utc).settings
+                key = settings.selected
+                version = CalendarVersionRef(calendar_key=key, publication=clock.publication)
+                capture = TimeSettingsCapture(source=clock.publication, settings=settings, versions=(version,))
+                resolved = WorldCalendarResolver.resolve_at(ResolveCalendarAt(capture=capture, calendar=key))
+                result = projector.project(CalendarProjectionInput(
+                    point=point(1), capture=clock, calendar=key, resolved=resolved, budget=budget))
+                self.assertIsInstance(result, CalendarProjection)
+                self.assertEqual((result.date.year, result.date.span, result.date.day), (1970, "january", day))
+                self.assertEqual((result.time.hour, result.time.minute, result.time.second, result.time.nanoseconds),
+                                 (hour, 0, 0, 0))
+                reverse = CalendarResolveInput(resolved=resolved, calendar=key, scope=clock.point.scope,
+                                               date=result.date, time=result.time, budget=budget)
+                self.assertEqual(projector.resolve(reverse).point, point(1))

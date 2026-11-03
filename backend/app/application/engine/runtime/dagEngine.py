@@ -8,6 +8,10 @@ from typing import Annotated, Generic, TypeVar
 
 from pydantic import BaseModel, Field, TypeAdapter
 
+from app.application.engine.contracts.invocation.inputWait import Failed, ResumeInput
+from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
+from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
+from app.dataModel.engine.dag.invocations.record import InvocationStatus
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.invocation.executionStore import RestoreFailure
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
@@ -16,7 +20,7 @@ from app.application.engine.runtime.invocations.ownedExecution import OwnedExecu
 from app.application.engine.runtime.invocations.sessionFrame import SessionFrame
 from app.dataModel.engine.dag.invocations.record import InvocationGraph
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
-from app.application.engine.contracts.executionBindings import ExecutionCursor, LifecycleBinding, PassStage, ResolveResult
+from app.application.engine.contracts.executionBindings import ExecutionCursor, ExecutionResult, InputDelivery, LifecycleBinding, PassStage, ResolveResult
 from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
 from app.application.engine.diagnostics.events import LifecycleDiagnostic
 from app.application.engine.registration.nodeRegistry import NodeRegistry
@@ -61,7 +65,7 @@ class DAGEngine(Generic[O, S]):
     async def run(
         self, execution_id: ExecutionId, task_type: TaskType, *, max_passes: int, options: LLMExecutionOptions,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, cancellation: CancellationRequest | None = None,
-    ) -> ResolveResult[O]:
+    ) -> ExecutionResult[O]:
         self._enter(execution_id, max_passes)
         try:
             options.__post_init__()
@@ -75,6 +79,10 @@ class DAGEngine(Generic[O, S]):
             if invocation_options is not None and plan.invocation_root is not None:
                 graph = InvocationCoordinator.create(plan, execution_id, revision, plan.invocation_root,
                                                      invocation_options.invocation_limit, None).graph
+                if invocation_options.interaction is not None:
+                    graph.interaction_owner = invocation_options.interaction.owner
+                elif any(c.input_wait for c in graph.registry):
+                    raise ValueError("WAIT_INPUT requires an application interaction binding")
                 graph.session = self._snapshots.encode(state, self._registry)
                 await invocation_options.store.create(execution_id, CheckpointCodec.encode(graph))
                 state.release()
@@ -87,7 +95,7 @@ class DAGEngine(Generic[O, S]):
     async def resume(
         self, execution_id: ExecutionId, *, max_passes: int, options: LLMExecutionOptions,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, cancellation: CancellationRequest | None = None,
-    ) -> ResolveResult[O]:
+    ) -> ExecutionResult[O]:
         self._enter(execution_id, max_passes)
         state: ExecutionState | None = None
         try:
@@ -124,18 +132,74 @@ class DAGEngine(Generic[O, S]):
                 state.release()
             self._active.discard(execution_id)
 
+    async def _input_command[U: BaseModel](
+        self, execution_id: ExecutionId, request: ResumeInput[U] | None,
+    ) -> InputReceipt | None:
+        settings = self._executor.invocation_options
+        if settings is None or settings.interaction is None:
+            raise PermissionError("authenticated interaction binding required")
+        claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+        try:
+            saved = await settings.store.load(execution_id)
+            header = InvocationGraph.model_validate_json(saved.blob)
+            InputWaitCoordinator.check_owner(header, settings.interaction)
+            if header.execution_id != execution_id or header.session is None:
+                raise RestoreFailure("invalid interaction execution")
+            frame = SessionFrame.model_validate_json(header.session)
+            if frame.cursor is None:
+                raise RestoreFailure("missing lifecycle cursor")
+            revision, plan = self._binding.compile(frame.cursor.task_type, frame.metadata.pass_number)
+            graph = CheckpointCodec.decode(saved.blob, plan)
+            if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
+                raise RestoreFailure("durable plan changed")
+            owned = OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds)
+            if request is not None:
+                receipt, fresh = InputWaitCoordinator.accept(graph, plan, request, settings.interaction)
+                if fresh:
+                    await owned.save()
+                return receipt
+            if graph.response is None and graph.failure is None and graph.cancellation is None:
+                for record in graph.records.values():
+                    if record.status not in (InvocationStatus.SUCCEEDED, InvocationStatus.FAILED, InvocationStatus.CANCELLED):
+                        record.status = InvocationStatus.CANCELLED
+                graph.waiting_for_input = False
+                graph.cancellation = "execution cancelled"
+                await owned.save()
+            return None
+        finally:
+            await settings.store.release(claim)
+
+    async def accept_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U]) -> InputReceipt:
+        receipt = await self._input_command(execution_id, request)
+        if receipt is None:
+            raise RuntimeError("input has no receipt")
+        return receipt
+
+    async def resume_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U], *,
+                                         max_passes: int, options: LLMExecutionOptions) -> InputDelivery[O]:
+        TypeAdapter(Annotated[int, Field(strict=True, gt=0)]).validate_python(max_passes)
+        options.__post_init__()
+        receipt = await self.accept_input(execution_id, request)
+        result = await self.resume(execution_id, max_passes=max_passes, options=options)
+        return InputDelivery(receipt, result)
+
+    async def cancel_execution(self, execution_id: ExecutionId) -> None:
+        await self._input_command(execution_id, None)
+
     async def _restore_durable(
         self, execution_id: ExecutionId, settings: InvocationOptions, max_passes: int, options: LLMExecutionOptions,
         confirmed: Mapping[str, DomainRevision] | None, cancellation: CancellationRequest | None,
         requested_task: TaskType | None = None,
-    ) -> ResolveResult[O]:
+    ) -> ExecutionResult[O]:
         claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
-        async def drive_claimed() -> ResolveResult[O]:
+        async def drive_claimed() -> ExecutionResult[O]:
             saved = await settings.store.load(execution_id)
             try:
                 header = InvocationGraph.model_validate_json(saved.blob)
                 if header.session is None or header.execution_id != execution_id:
                     raise ValueError("execution has no lifecycle checkpoint")
+                if header.interaction_owner is not None:
+                    InputWaitCoordinator.check_owner(header, settings.interaction)
                 frame = SessionFrame.model_validate_json(header.session)
                 if frame.cursor is None or frame.metadata.pass_number >= max_passes:
                     raise ValueError("invalid durable lifecycle cursor")
@@ -145,6 +209,10 @@ class DAGEngine(Generic[O, S]):
                 graph = await CheckpointCodec.restore(saved.blob, plan)
                 if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
                     raise ValueError("durable plan changed")
+                if graph.cancellation is not None or graph.failure is not None:
+                    return Failed(graph.cancellation or graph.failure or "execution failed")
+                if graph.waiting_for_input:
+                    return InputWaitCoordinator.waiting(graph, plan)
                 if graph.response is not None:
                     return TypeAdapter[ResolveResult[O]](ResolveResult[self._binding.response_type]).validate_json(graph.response)
                 state = await self._snapshots.decode(header.session, self._registry)
@@ -169,7 +237,7 @@ class DAGEngine(Generic[O, S]):
         self, state: ExecutionState, plan: ExecutionPlan, max_passes: int, options: LLMExecutionOptions,
         confirmed: Mapping[str, DomainRevision] | None, cancellation: CancellationRequest | None,
         durable: OwnedExecution | None = None,
-    ) -> ResolveResult[O]:
+    ) -> ExecutionResult[O]:
         try:
             self._prepare_reuse(state, confirmed)
             while True:
@@ -193,9 +261,18 @@ class DAGEngine(Generic[O, S]):
                             plan, state, phase, revision, pass_number=state.pass_number, durable=durable,
                             confirmed_domain_revisions=confirmed, cancellation=cancellation, invalidate_reuse=False,
                         )
+                    if decision == LevelDecision.WAIT_INPUT:
+                        if durable is None:
+                            raise RuntimeError("input wait requires durable execution")
+                        return InputWaitCoordinator.waiting(durable.graph, plan)
                     if decision == LevelDecision.CANCEL:
                         raise asyncio.CancelledError
                     if decision == LevelDecision.FAIL:
+                        if durable is not None and durable.graph.interaction_owner is not None:
+                            root = durable.graph.records[durable.graph.root]
+                            durable.graph.failure = root.diagnostics[-1].message if root.diagnostics else "DAG pass failed"
+                            await durable.save()
+                            return Failed(durable.graph.failure)
                         raise RuntimeError("DAG pass failed")
                     next_stage = {PassStage.PRE_LLM: PassStage.LLM, PassStage.LLM: PassStage.POST_LLM,
                                   PassStage.POST_LLM: PassStage.TRANSITION}[stage]
@@ -236,6 +313,10 @@ class DAGEngine(Generic[O, S]):
                     )
                     cancellation_checkpoint()
                     if durable is not None:
+                        if durable.graph.interaction_owner is not None and not result.ok:
+                            durable.graph.failure = result.error or "response resolution failed"
+                            await durable.save()
+                            return Failed(durable.graph.failure)
                         durable.graph.response = TypeAdapter[ResolveResult[O]](
                             ResolveResult[self._binding.response_type],
                         ).dump_json(result).decode()

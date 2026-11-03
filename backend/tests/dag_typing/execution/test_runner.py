@@ -373,7 +373,7 @@ class OutcomeTests(unittest.TestCase):
         outcome = NodeOutcome(**common, status=NodeStatus.FAILED)
         with self.assertRaises(FrozenInstanceError):
             outcome.status = NodeStatus.SUCCESS
-        self.assertEqual({item.value for item in LevelDecision}, {"continue", "cancel", "fail", "replan"})
+        self.assertEqual({item.value for item in LevelDecision}, {"continue", "cancel", "fail", "replan", "wait_input"})
 
     def test_import_does_not_load_legacy_production_nodes(self):
         root = Path(__file__).resolve().parents[4]

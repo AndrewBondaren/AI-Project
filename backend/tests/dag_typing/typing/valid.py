@@ -3,9 +3,11 @@
 from app.application.engine.contracts.invocation.nodeStep import Call, CallGroup, NodeStep
 from app.application.engine.contracts.invocation.callTarget import CallTarget
 from app.application.engine.contracts.invocation.resumeEvent import CallFailure, CallResults, CallSuccess
-from app.dataModel.engine.dag.identity import CallKey
+from app.application.engine.contracts.invocation.inputWait import InputReceived, InputWaitContract, WaitInput, WaitSpec
+from app.dataModel.engine.dag.identity import CallKey, WaitId
 from typing import Never
 from typing import assert_type
+from app.application.engine.contracts.executionBindings import ExecutionResult
 
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 
@@ -296,11 +298,16 @@ async def verify_engine(
     engine: DAGEngine[LeafOutput, CompositeOutput], options: LLMExecutionOptions,
     hooks: LifecycleBinding[LeafOutput], view: DAGReadView, state: ExecutionState,
 ) -> None:
-    assert_type(await engine.run(ExecutionId("e1"), TaskType.SCENE_INIT, max_passes=3, options=options), ResolveResult[LeafOutput])
-    assert_type(await engine.resume(ExecutionId("e1"), max_passes=3, options=options), ResolveResult[LeafOutput])
+    assert_type(await engine.run(ExecutionId("e1"), TaskType.SCENE_INIT, max_passes=3, options=options), ExecutionResult[LeafOutput])
+    assert_type(await engine.resume(ExecutionId("e1"), max_passes=3, options=options), ExecutionResult[LeafOutput])
     assert_type(ResponseResolver(LeafOutput).resolve(hooks, view), ResolveResult[LeafOutput])
     assert_type(state.set_cursor(ExecutionCursor(TaskType.SCENE_INIT, PassStage.LLM)), None)
     assert_type(state.cursor, ExecutionCursor | None)
+
+
+def typed_wait(contract: InputWaitContract[NodeInput, NodeInput], state: NodeInput, event: InputReceived[BaseModel]) -> NodeStep[LeafOutput, NodeInput]:
+    assert_type(event.get(contract), NodeInput)
+    return WaitInput(WaitSpec(WaitId("w"), contract, "ref", state, 0), state)
 
 
 def single_step(target: CallTarget[NodeInput, LeafOutput, TestNodeError], state: NodeInput) -> NodeStep[LeafOutput, NodeInput]:

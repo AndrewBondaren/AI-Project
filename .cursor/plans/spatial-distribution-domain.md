@@ -4054,3 +4054,70 @@ cutover и P1-B не начинались. Time/API-1 и чужие измене
 ```
 
 Проверенная граница — admission отдельной записи в памяти. Для подтверждения соответствия конкретного shard выбранной записи root требуются обе записи и проверенные bytes. Структурные ограничения TLV до создания моделей и безопасное декодирование входных байтов относятся к P1-C. Полноту partition и соответствие исходному producer envelope проверяет P3I.
+
+### 15.31. Повторное предъявление SP-P1-B (2026-11-03)
+
+Семь записей _DEPENDENCIES теперь представлены PlanDependencyContract. Проверка каждой записи методом accepts на metadata фактического producer дала 7 совпадений из 7. Проверки порядка slots и общего world/scope сохранены.
+
+При проверке вложенных значений выявлено расхождение между admission и encoder. Подкласс DerivedBody(WaterBody) с теми же полями в root.bodies проходил require_pack_record_v1. Encoder отказывал при поиске точного класса в V1 manifest. Проверка admission теперь обходит значения и сверяет конкретные классы вложенных records и enums с принятым manifest. Регрессия test_admission_rejects_unregistered_nested_body_class до исправления воспроизвела пропущенный отказ. После исправления четыре модуля тестов из §15.30 прошли полностью — 49 tests OK. SP-P1-B предъявлен на пользовательскую приёмку.
+
+### 15.32. Независимое ревью SP-P1-B (2026-11-03)
+
+**CHANGES REQUIRED.** Исправление подклассов из §15.31 подтверждено. Открыты две ошибки admission данных и одна ошибка проверки schema drift. Проверено рабочее дерево поверх `9654051f`: накопленный diff от `17804a96` включает `pack/{__init__.py,root.py,shard.py}`, `encoding/packSchema.py` и `test_storage_schema.py`, в том числе незакоммиченные поправки в последних двух файлах. SP-P1-A принят согласно §15.29. Пользовательская приёмка P1-B остаётся отдельным решением.
+
+#### Открытые находки
+
+1. **SP-P1-B-REV-1 · P1 · Принятый root записывается, но не читается.** Взять `r, _ = records()` из test_storage_schema, создать `body = WaterBody(**(vars(r.bodies[0]) | {"liquid": RegistryKey("")}))`, затем `candidate = HydrologyPackRoot(**(vars(r) | {"bodies": (body,)}))`. Достаточно штатных конструкторов. `require_pack_record_v1(candidate)` возвращает None, encode выдаёт 7513 байтов, decode этих байтов как HydrologyPackRoot с тем же manifest выдаёт CanonicalEncodingError на WaterBody.liquid. Уже созданный RegistryKey проходит instance-ветку проверки, тогда как после TLV decode пустая строка попадает под min_length=1. По §§15.18.2, 15.20.3–4 и 15.30 ожидается отказ при admission до выдачи непригодной для replay записи. Критерий закрытия — отклонить пустой брендированный ключ при admission, сохранить round-trip допустимого ключа. [root.py, _validate_nested:75–81](../../backend/app/dataModel/hydrology/pack/root.py#L75) · [packSchema.py, require_pack_record_v1:108–116](../../backend/app/application/worldData/generators/hydrology/encoding/packSchema.py#L108) · [registryKey.py:36–46](../../backend/app/dataModel/registryKey.py#L36)
+2. **SP-P1-B-REV-2 · P2 · Строка, непредставимая в TLV UTF-8, проходит admission.** В том же примере заменить единственное поле body на `location_uid=chr(0xD800)`, оставив исходный liquid. Конструкторы и require_pack_record_v1 успешно завершаются. Первый же encode возвращает CanonicalEncodingError с причиной `surrogates not allowed`. Для storage V1 по §§15.18.2, 15.20.3 и требованию соответствия admission и encoder в §15.31 ожидается отказ на границе записи. Критерий закрытия — отвергнуть одиночный surrogate до encode, сохранив обычный Unicode без преобразования. [packSchema.py, _require_registered_values и require_pack_record_v1:93–116](../../backend/app/application/worldData/generators/hydrology/encoding/packSchema.py#L93) · [canonicalCodec.py:70](../../backend/app/application/encoding/canonicalCodec.py#L70)
+3. **SP-P1-B-REV-3 · P2 · Проверка lock не завершается при рекурсивной подмене storage alias.** В отдельном процессе объявить `type FormatVersion = int | tuple[FormatVersion, ...]`, временно заменить `ArtifactRef.model_fields["format_version"].annotation` на него и вызвать require_pack_schema_v1. По §§15.18.2, 15.20.1 и 15.23 смена определения должна дать CanonicalEncodingError. Фактически _closure снова ставит target уже посещённого объекта в очередь. Проба через sys.settrace остановила обход после **2000** раскрытий одного объекта FormatVersion; до проверки определения выполнение не дошло. Критерий закрытия — конечный отказ для этого входа при сохранении отдельного отказа для разных объектов с одинаковым именем. [packSchema.py, _closure:43–55](../../backend/app/application/worldData/generators/hydrology/encoding/packSchema.py#L43)
+
+#### Независимая сверка lock и producers
+
+Обход по recipe §15.14.1 запущен в памяти от `PlanEnvelope[CanonicalOpenWaterSource]`, HydrologyPackRoot и HydrologyPackShard. Для ожидаемых значений использованы §15.13, пять storage ID из §15.18.2 и реальные объявления. Сравнение с pack manifest выполнено после построения ожидаемого набора. Совпали все **38 ID → class/kind** (27 records, 11 enums). Для 35 записей воспроизведены signatures таблицы §15.13, включая порядок полей, defaults/factory, metadata и enum wire values. Для остальных трёх сверены порядок, восстановленные аннотации, strict metadata и обязательность каждого поля по §15.13.1. Storage additions — **60001 HydrologyPackRoot, 60002 HydrologyShardRef, 60003 HydrologyPackShard, 60005 ArtifactRef** (records) и **60006 ArtifactKind** (enum). Совпали имена и определения всех 16 aliases. Добавления к 14 source aliases — ArtifactFormatKey и FormatVersion.
+
+Одноимённый `FineXY = str` в shore_rows вызвал отказ schema lock. После добавления постороннего binding в общий SURFACE_MANIFEST и повторного импорта sourceSchema и packSchema состав V1 остался прежним; проверка V1 прошла.
+
+Для каждого slot сопоставлены поля **и их runtime-типы** с metadata конкретного producer: PlanDependencyContract, slot — str (PlanSlot), contract_id — RegistryKey, обе версии — int (SchemaVersion и AlgorithmVersion). Ниже фактический порядок; accepts вернул True во всех семи случаях.
+
+| Slot | Producer declaration | contract_id | schema / algorithm |
+|---|---|---|---|
+| fine_water | FINE_WATER_CONTRACT | hydrology.fine_water | 1 / 2 |
+| hydrology_routes | NATIVE_ROUTES_CONTRACT | hydrology.native_routes | 1 / 1 |
+| native_final | NATIVE_FINAL | hydrology.native_final | 1 / 1 |
+| pre_water_surface | PRE_WATER_WINDOW | terrain.pre_water_window | 1 / 2 |
+| prepared_natural | NATURAL_TERRAIN_CONTRACT | terrain.prepared_natural | 1 / 1 |
+| river_relief | NATIVE_RIVER_RELIEF | terrain.native_river_relief | 1 / 1 |
+| water_placement | geo_surface_plan_binding(WATER_PLACEMENT).metadata | surface.geo.water_placement | 2 / 1 |
+
+Пропуск, дубликат и обратный порядок отклонены root. Замена contract_id, schema_version или algorithm_version у каждой зависимости отклонена и методом accepts, и на границе root. Чужие world и scope проходят accepts (он сравнивает metadata), затем отклоняются root. Для этой сверки refs построены с metadata перечисленных producers; значения fingerprints в fixtures не удостоверяют происхождение конкретного envelope.
+
+#### Record admission и пределы проверки
+
+- На малых root и shard после успешного admission проверены равенство **целой записи** при decode и равенство байтов повторного encode. Прошли пустой каталог, каталог в порядке (ty,tx) с отрицательной координатой, shard на ty=-1 с wet runs, полностью dry shard с сохранённым observed bed и наблюдаемый SHORE вне wet. Обратный порядок каталога, дубликаты tiles, выход wet/shore за coverage и SHORE внутри wet отклонены.
+- Для HydrologyShardRef проверены BLOB, format key/version, row_count=None, границы размера 1 и 4194304 байта; 0 и 4194305 отклонены. Негативы с model_copy/model_construct охватывают повреждённые ref, вложенные поля и неверные scalar/container types. Для root проверены согласованное членство body в union и отказы при неверном membership, цикле, расхождении effective level и ссылке mapping на отсутствующий body.
+- Повтор §15.31 с запрещающей заглушкой на CanonicalCodec.encode: DerivedBody в root.bodies и незарегистрированный подкласс MapCellHydrology в shard.shore_rows дали CanonicalEncodingError до encode. Чужой StrEnum со значением `"shore"` отклонён при валидации shard. В root отдельно воспроизведены отказы P1-A для reference, runtime_context, enum вместо строки message, неизвестного code и недопустимой пары code/disposition.
+- Одна запись подтверждает локальные ограничения каталога, таблиц либо наблюдаемого tile. Для сопоставления tx/ty, source_ref, topology, coverage_region_uid, ссылок на bodies и высот shard с root нужны обе записи. Для проверки hash/nbytes нужны фактические bytes. Полнота partition, соответствие исходному bed и семи конкретным refs требуют исходного producer envelope. Ревью не проверяло P1-C, bounded parser/IO, builder, publication или cutover.
+
+Команда из `backend`: `../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_storage_schema tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec` — **49 тестов OK за 0,179 с**. Три контрпримера выше проверены отдельно от штатного набора.
+
+### 15.33. Исправление SP-P1-B-REV-1…3 и повторное предъявление (2026-11-03)
+
+**Все три контрпримера §15.32 воспроизведены до правки.** Регрессии REV-1 и REV-2 показали, что admission пропускал повреждённые значения. Для REV-3 изолированный процесс превысил лимит теста в 8 секунд.
+
+- **REV-1.** Обход исходных значений при admission отвергает пустой RegistryKey до записи TLV. Тест использует штатный конструктор WaterBody и отдельно проверяет round-trip непустого ключа fresh-water.
+- **REV-2.** При том же обходе строковые значения проверяются на представимость в строгом UTF-8. Одиночный surrogate в location_uid даёт CanonicalEncodingError. Запись с кириллицей и символом вне BMP проходит admission и round-trip с полным равенством root.
+- **REV-3.** Обход closure раскрывает каждый объект alias один раз. Повторное посещение того же объекта завершает текущую ветвь, другое определение с уже встреченным именем даёт отказ. Подмена FormatVersion рекурсивным типом теперь завершается CanonicalEncodingError при проверке lock. Регрессия запускает подмену в отдельном процессе с тайм-аутом.
+
+Из backend повторена команда четырёх модулей из §15.32. Результат — **52 теста OK (1,127 с)**, включая прежний случай коллизии FineXY. Изменения реализации относятся к проверке storage-записи в памяти и обходу schema lock. **SP-P1-B предъявлен на повторную пользовательскую приёмку.**
+
+### 15.34. Независимое повторное ревью SP-P1-B (2026-11-03)
+
+**PASS.** Все три замечания §15.32 закрыты в рабочем дереве поверх `9654051f`. Повторное ревью охватило изменения `packSchema.py` и `test_storage_schema.py` и проверило причины отказа отдельными пробами.
+
+| Замечание | Проверенный результат |
+|---|---|
+| REV-1 | Root с `WaterBody.liquid=RegistryKey("")`, собранный штатными конструкторами, получил `CanonicalEncodingError("empty storage registry key")` при вызове `require_pack_record_v1`. Запрещающая заглушка на `CanonicalCodec.encode` не сработала. |
+| REV-2 | По одному старшему и младшему одиночному surrogate в `WaterBody.location_uid` дали `CanonicalEncodingError` с причиной `surrogates not allowed` до encode. Root с непустым ключом `fresh-water` и символом U+1F30A прошёл admission. После encode→decode совпала целая запись, после повторного encode совпали байты. Такой же round-trip прошёл для исходного малого shard. |
+| REV-3 | Рекурсивная подмена `ArtifactRef.format_version` завершилась отказом `open-water storage v1 artifact alias drift`. Отдельная подмена `FineXY` другим alias того же имени завершилась отказом `storage alias collision: FineXY`. После снятия обеих подмен проверка исходного lock прошла. |
+
+Из `backend` выполнена команда `../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_storage_schema tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec`. **52 теста OK за 1,129 с.** Полная сверка roster и producer metadata зафиксирована в §15.32. В этом проходе повторно проверялись исправления и регрессии на границе admission отдельной записи в памяти. Пользовательская приёмка P1-B остаётся отдельным решением.

@@ -8,6 +8,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 
+from app.application.engine.contracts.invocation.inputWait import InputWaitContract
 from app.application.engine.contracts.invocation.callTarget import CallTarget, TargetSignature
 from app.application.engine.contracts.invocation.continuationContract import ContinuationContract
 from app.application.engine.contracts.outputRef import OptionalOutput, RequiredOutput
@@ -67,6 +68,7 @@ class NodeContract(Generic[I, O, E]):
     error_types: tuple[type[E], ...] = field(kw_only=True)
     calls: tuple[TargetSignature, ...] = field(default=(), kw_only=True)
     continuation: ContinuationContract[BaseModel] | None = field(default=None, kw_only=True)
+    input_wait: InputWaitContract[BaseModel, BaseModel] | None = field(default=None, kw_only=True)
     retry_policy: Callable[[E, int], bool] | None = field(default=None, kw_only=True)
     error_policy: Callable[[E], "GateSignal | None"] | None = field(default=None, kw_only=True)
     lifecycle: OutputLifecycle[O] | None = None

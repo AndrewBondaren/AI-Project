@@ -1,6 +1,6 @@
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from app.dataModel.world.calendar.definitions.definition import CalendarEntry
+from app.dataModel.world.calendar.definitions.definition import CalendarDefinition, CalendarEntry
 from app.dataModel.world.calendar.definitions.registry import WorldCalendarRegistry
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded, CalendarInvalid
 from app.dataModel.world.calendar.projection.request import CalendarBudget, ValidateCalendarInput
@@ -11,8 +11,7 @@ from .ordinal import CalendarIndex
 from .rules import ExhaustedBudget, InvalidCalendar, Work
 
 
-def validate_entry(entry: CalendarEntry, hours: int, work: Work) -> CalendarIndex:
-    definition = entry.definition
+def _validate_definition(definition: CalendarDefinition, hours: int, work: Work) -> CalendarIndex:
     spans = {s.system_span for s in definition.spans.entries}
     seasons = {s.system_season for s in definition.seasons.entries}
     base = definition.base_year
@@ -35,9 +34,16 @@ def validate_entry(entry: CalendarEntry, hours: int, work: Work) -> CalendarInde
         raise InvalidCalendar(("periods",), "invalid period boundaries")
     if definition.week_anchor_index >= max(1, len(definition.weekdays.entries)):
         raise InvalidCalendar(("week_anchor_index",), "invalid weekday anchor")
+    return CalendarIndex(definition, work)
+
+
+def validate_entry(entry: CalendarEntry, hours: int, work: Work) -> CalendarIndex:
+    try:
+        index = _validate_definition(entry.definition, hours, work)
+    except InvalidCalendar as error:
+        raise InvalidCalendar(("definition", *error.path), str(error)) from error
     if entry.anchor.origin.time.hour >= hours:
         raise InvalidCalendar(("anchor", "origin", "time"), "hour outside day")
-    index = CalendarIndex(definition, work)
     try:
         index.ordinal(entry.anchor.origin.date)
     except InvalidCalendar as error:

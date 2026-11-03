@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, TypeAdapter
 
+from app.application.engine.contracts.invocation.inputWait import WaitInput
 from app.application.engine.contracts.invocation.callTarget import CallTarget, TargetSignature
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.identity import CallKey, CallKeyValue
@@ -54,4 +55,4 @@ class CallGroup[S: BaseModel]:
             raise ValueError("call group requires nonempty requests with distinct keys")
 
 
-type NodeStep[O: BaseModel, S: BaseModel] = Complete[O] | SuspendedCall[S] | CallGroup[S]
+type NodeStep[O: BaseModel, S: BaseModel] = Complete[O] | SuspendedCall[S] | CallGroup[S] | WaitInput[S, BaseModel, BaseModel]

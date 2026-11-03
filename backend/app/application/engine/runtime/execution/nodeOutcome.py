@@ -20,6 +20,7 @@ E = TypeVar("E", bound=NodeError)
 
 
 class LevelDecision(StrEnum):
+    WAIT_INPUT = "wait_input"
     CONTINUE = "continue"
     CANCEL = "cancel"
     FAIL = "fail"

@@ -8,6 +8,8 @@ from pydantic import BaseModel, TypeAdapter
 
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 
+from app.application.engine.contracts.invocation.inputWait import Failed, Waiting
+from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
 from app.application.engine.contracts.dagReadView import DAGReadView
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
@@ -29,6 +31,16 @@ class ResolveResult(Generic[O]):
     ok: bool
     data: O | None = None
     error: str | None = None
+
+
+type Completed[T: BaseModel] = ResolveResult[T]
+type ExecutionResult[T: BaseModel] = Completed[T] | Waiting[BaseModel] | Failed
+
+
+@dataclass(frozen=True)
+class InputDelivery[T: BaseModel]:
+    receipt: InputReceipt
+    result: ExecutionResult[T]
 
 
 class ResponseBinding(Protocol[O]):

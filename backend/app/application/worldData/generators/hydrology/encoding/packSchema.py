@@ -48,9 +48,12 @@ def _closure():
     while pending:
         owner = pending.pop()
         if isinstance(owner, (typing.NewType, typing.TypeAliasType)):
-            existing = aliases.setdefault(owner.__name__, owner)
-            if existing is not owner:
-                raise CanonicalEncodingError(f"storage alias collision: {owner.__name__}")
+            existing = aliases.get(owner.__name__)
+            if existing is not None:
+                if existing is not owner:
+                    raise CanonicalEncodingError(f"storage alias collision: {owner.__name__}")
+                continue
+            aliases[owner.__name__] = owner
             pending.append(owner.__value__ if isinstance(owner, typing.TypeAliasType) else owner.__supertype__)
         elif isinstance(owner, Enum):
             pending.append(type(owner))
@@ -90,12 +93,33 @@ def require_pack_schema_v1() -> None:
         raise CanonicalEncodingError("open-water storage v1 artifact alias drift")
 
 
+def _require_wire_values(value, owners: frozenset[type]) -> None:
+    if isinstance(value, (tuple, frozenset)):
+        for child in value:
+            _require_wire_values(child, owners)
+    elif isinstance(value, (BaseModel, Enum)) or dataclasses.is_dataclass(value):
+        if type(value) not in owners:
+            raise CanonicalEncodingError(f"unregistered storage v1 type: {type(value).__qualname__}")
+        if isinstance(value, BaseModel):
+            for name in type(value).model_fields:
+                _require_wire_values(getattr(value, name), owners)
+        elif dataclasses.is_dataclass(value):
+            for field in dataclasses.fields(value):
+                _require_wire_values(getattr(value, field.name), owners)
+    elif isinstance(value, str):
+        # TLV reconstructs RegistryKey from plain text, which requires min_length=1.
+        if isinstance(value, RegistryKey) and not value:
+            raise CanonicalEncodingError("empty storage registry key")
+        value.encode("utf-8", errors="strict")
+
+
 def require_pack_record_v1(record: HydrologyPackRoot | HydrologyPackShard) -> None:
     require_pack_schema_v1()
     if type(record) not in (HydrologyPackRoot, HydrologyPackShard):
         raise CanonicalEncodingError("expected exact open-water storage root or shard")
     try:
         type(record).model_validate(record, strict=True)
+        _require_wire_values(record, frozenset(e.python_type for e in OPEN_WATER_PACK_SCHEMA_V1.entries))
         if isinstance(record, HydrologyPackRoot):
             require_source_diagnostics_v1(record.diagnostics)
     except (ValueError, TypeError, AttributeError) as exc:

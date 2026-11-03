@@ -15753,3 +15753,20 @@ Admission ревизий, exact fine P2, diagnostics/fingerprints и публи�
 **Граница следующего изменения.** I6.1 даёт typed capture port, но не меняет формат действующих batch/prepared/result и не обещает, что текущий coarse producer выдаёт fine geometry. После него native preparation должна получить исходные fine клетки у владельцев water и competitors, связать capture с W/header и сверить результат callback. Обязательные markers batch/prepared/result и echo topology в finish переводятся вместе с обоими реальными entry (PRE_RELIEF и DEPENDENT), codec/version changes и их consumers по EF-1.2–1.3. При этом проверяются равные единицы original_area для всех участников и tie-break общей очереди. Spatial source lock и G10-A I6.1 не затрагивает.
 
 **Команда на реализацию:** Реализуй только GEO-I6.1: CapturedPlacementGeometry и focused tests в указанных файлах. Проверь отрицательные случаи и существующий placement lifecycle, покажи diff инструментом и предъяви результат на независимое ревью.
+
+#### I6.2. Независимое ревью GEO-I6.1 (2026-11-03)
+
+**Вердикт: PASS.** Дефектов в границах контракта захваченной геометрии не обнаружено. Ревью начато с diff и проверки untracked: целевые файлы без изменений, новых неотслеживаемых файлов нет; в дереве присутствовали изменения других срезов. Реализация и тесты при ревью не редактировались.
+
+Из `backend` с добавлением `backend/tests` в `PYTHONPATH` выполнен `python -B -m unittest tests.geo1.contracts.test_captured_placement_geometry tests.geo1.contracts.test_placement_lifecycle test_placement_resolver -v`. Результат: captured geometry — **3/3 OK**, placement lifecycle — **29/29 OK**, placement resolver — **18/18 OK**, всего **50/50 OK**.
+
+- `prepared.py:43–48`: ровно пять обязательных полей, frozen strict record, непустой tuple кандидатов. Полный PlanRef, геометрия, Z и порядок кандидатов сохраняются.
+- `prepared.py:53`: требуется actual enum WORLD_FINE_GRID; отсутствующий, строковый и coarse marker отвергаются.
+- `prepared.py:60–62`: int `2**53` принимается и сохраняется точным float; int `2**53+1` отвергается сравнением до преобразования во float. Bool, строка, дробь, ноль, отрицательные значения, NaN и бесконечности дают ValidationError.
+- `prepared.py:66–72`: согласованы world_uid intent и W, проверены уникальность candidate_uid и правила absolute movement. Перекрывающиеся альтернативы сохраняют переданную owner исходную площадь 3.0 и порядок, без суммирования площадей кандидатов.
+
+Дополнительно выполнены **42 негативные пробы** через конструктор и `model_copy(update=...)` с последующим `model_validate`: невалидные площади, markers, потерянный/чужой ref, пустые/list/повторные candidates и запрещённая absolute alternative отвергаются. Повторная валидация корректного record сохраняет значения. Замечаний, требующих исправления, нет.
+
+#### I6.3. Приёмка GEO-I6.1 (2026-11-03)
+
+**Приёмка GEO-I6.1 прошла** по поручению пользователя зафиксировать приёмку при чистом независимом ревью. Основание — PASS в §I6.2, 50/50 тестов и дополнительные негативные пробы. Принят контракт CapturedPlacementGeometry. Сопоставление с expected W revision, проверка координат по topology и подключение к placement session остаются следующим шагом; общий P2 cutover и G10-A этим решением не закрываются.

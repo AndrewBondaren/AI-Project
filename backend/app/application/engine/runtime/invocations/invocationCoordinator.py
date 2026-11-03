@@ -1,4 +1,6 @@
 from time import time
+from app.application.engine.contracts.invocation.inputWait import InteractionPort, WaitInput
+from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 
 from pydantic import BaseModel
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
@@ -22,12 +24,13 @@ from app.dataModel.engine.dag.records import OutputRecord
 
 
 class InvocationCoordinator:
-    def __init__(self, plan: ExecutionPlan, graph: InvocationGraph, limit: int):
+    def __init__(self, plan: ExecutionPlan, graph: InvocationGraph, limit: int, interaction: InteractionPort | None = None):
         if limit < 1:
             raise ValueError("invocation limit must be positive")
         self.plan = plan
         self.graph = graph
         self.limit = limit
+        self.interaction = interaction
         for record in graph.records.values():
             registration = plan.registrations.get(record.node_id)
             if not registration or (registration.contract.contract_id, registration.contract.version) != (
@@ -191,8 +194,13 @@ class InvocationCoordinator:
             return
         if contract.continuation is None:
             raise TypeError("undeclared invocation outcome")
-        requests = outcome.requests if isinstance(outcome, CallGroup) else (outcome,)
         state = self.encode(outcome.state, contract.continuation.state_type)
+        if isinstance(outcome, WaitInput):
+            InputWaitCoordinator.open(self.graph, parent, outcome.wait_spec, contract.input_wait, self.interaction)
+            parent.state_contract = (contract.continuation.contract_id, contract.continuation.version)
+            parent.continuation = state
+            return
+        requests = outcome.requests if isinstance(outcome, CallGroup) else (outcome,)
         existing_calls = {child.call_key: child for child in self.children(parent, parent.step_index)}
         if existing_calls and (set(existing_calls) != {r.key for r in requests} or state != parent.continuation):
             raise ValueError("conflicting replay of CALL group")

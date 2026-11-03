@@ -1,6 +1,7 @@
 from app.dataModel.engine.dag.identity import CallKey, InvocationId
 
 from app.application.engine.contracts.invocation.executionStore import RestoreFailure
+from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
 from app.dataModel.engine.dag.invocations.record import InvocationGraph, InvocationStatus, RegisteredContract
 
@@ -9,6 +10,7 @@ class CheckpointCodec:
     @staticmethod
     def registry(plan: ExecutionPlan) -> tuple[RegisteredContract, ...]:
         return tuple(RegisteredContract(node_id=node, contract_id=c.contract_id, version=c.version,
+                                       input_wait=(c.input_wait.contract_id, c.input_wait.version) if c.input_wait else None,
                                        continuation=(c.continuation.contract_id, c.continuation.version)
                                        if c.continuation else None)
                      for node in sorted(plan.registrations) for c in (plan.registrations[node].contract,))
@@ -85,6 +87,7 @@ class CheckpointCodec:
                     raise ValueError("cross-instance dependency binding")
                 if tuple(dep.node_id for dep in dependencies) != plan.nodes[record.node_id].node.deps:
                     raise ValueError("dependency bindings changed")
+            InputWaitCoordinator.validate(graph, plan)
             return graph
         except (ValueError, KeyError, IndexError) as exc:
             raise RestoreFailure("invalid invocation checkpoint") from exc

@@ -1,4 +1,7 @@
 """Storage representations tested entirely in memory."""
+import subprocess
+import sys
+from textwrap import dedent
 from unittest import TestCase
 from unittest.mock import patch
 from typing import TypeAliasType
@@ -14,6 +17,8 @@ from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
 from app.dataModel.hydrology.pack.root import HydrologyPackRoot, HydrologyShardRef
 from app.dataModel.hydrology.pack.shard import HydrologyPackShard
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
 from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.surfacePlanning.surfacePlanBindings import geo_surface_plan_binding
@@ -54,6 +59,57 @@ def records():
 
 
 class StorageSchemaTests(TestCase):
+    def test_branded_liquid_key_requires_nonempty_wire_string(self):
+        root, _ = records()
+        for name in ("", "fresh-water"):
+            body = WaterBody(**(vars(root.bodies[0]) | {"liquid": RegistryKey(name)}))
+            candidate = HydrologyPackRoot(**(vars(root) | {"bodies": (body,)}))
+            if not name:
+                with self.assertRaises(CanonicalEncodingError):
+                    packSchema.require_pack_record_v1(candidate)
+            else:
+                packSchema.require_pack_record_v1(candidate)
+                manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+                self.assertEqual(candidate, decode(encode(candidate, manifest), HydrologyPackRoot, manifest))
+
+    def test_storage_strings_require_lossless_utf8(self):
+        root, _ = records()
+        for text in (chr(0xD800), "озеро🌊"):
+            body = WaterBody(**(vars(root.bodies[0]) | {"location_uid": text}))
+            candidate = HydrologyPackRoot(**(vars(root) | {"bodies": (body,)}))
+            if text == chr(0xD800):
+                with self.assertRaises(CanonicalEncodingError):
+                    packSchema.require_pack_record_v1(candidate)
+            else:
+                packSchema.require_pack_record_v1(candidate)
+                manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+                self.assertEqual(candidate, decode(encode(candidate, manifest), HydrologyPackRoot, manifest))
+
+    def test_recursive_storage_alias_drift_terminates(self):
+        script = dedent("""
+            from unittest.mock import patch
+            from app.application.worldData.generators.hydrology.encoding import packSchema as schema
+            type FormatVersion = int | tuple[FormatVersion, ...]
+            with patch.object(schema.ArtifactRef.model_fields['format_version'], 'annotation', FormatVersion):
+                try:
+                    schema.require_pack_schema_v1()
+                except schema.CanonicalEncodingError:
+                    pass
+                else:
+                    raise AssertionError('recursive alias admitted')
+        """)
+        subprocess.run([sys.executable, "-B", "-c", script], timeout=8, check=True)
+
+    def test_admission_rejects_unregistered_nested_body_class(self):
+        class DerivedBody(WaterBody):
+            pass
+
+        root, _ = records()
+        body = DerivedBody(**vars(root.bodies[0]))
+        candidate = root.model_copy(update={"bodies": (body,)})
+        with self.assertRaises(CanonicalEncodingError):
+            packSchema.require_pack_record_v1(candidate)
+
     def test_roster_and_exact_storage_shapes(self):
         root, shard = records()
         for item in (root, shard):

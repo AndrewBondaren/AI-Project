@@ -3,6 +3,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
+from app.application.engine.contracts.invocation.inputWait import InputReceived
 from app.application.engine.contracts.invocation.callTarget import CallTarget, TargetSignature
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.identity import CallKey, ExecutionIdentity
@@ -58,4 +59,4 @@ class CallResults:
         raise KeyError(key)
 
 
-type ResumeEvent = CallResults
+type ResumeEvent = CallResults | InputReceived[BaseModel]

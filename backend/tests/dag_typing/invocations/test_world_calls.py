@@ -183,7 +183,8 @@ class Merge(Source):
         return Payload()
 
 
-def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300):
+def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300,
+            interaction=None, counter_wait=None):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -199,13 +200,14 @@ def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, 
         continuation = ContinuationContract(ContractId(f"{cls.id}.state"), ContractVersion("1"), state_type) if calls else None
         contract = NodeContract(declaration.input_type, declaration.output_type, declaration.contract_id,
                                 declaration.version, (), calls=calls, continuation=continuation, error_types=declaration.error_types,
-                                retry_policy=retry_policy if cls is transform else None)
+                                retry_policy=retry_policy if cls is transform else None,
+                                input_wait=counter_wait if cls is counter else None)
         register = registry.register_resumable if calls else registry.register_python
         register(cls, FakeExecutor, contract)
         bindings.nodes[cls.id] = cls(deps=(Merge.id,)) if diamond and cls is transform else cls()
     compiler = GraphCompiler(registry, bindings, compile_rules=lambda rules: (), evaluate_rules=lambda *_: True)
     compiler.precompile()
-    config = InvocationOptions(store, workers=1, invocation_limit=16, lease_seconds=lease_seconds) if store else None
+    config = InvocationOptions(store, workers=1, invocation_limit=16, lease_seconds=lease_seconds, interaction=interaction) if store else None
     executor = DAGExecutor(NodeRunner(ContractValidator(), NodeValidator()), {FakeExecutor: FakeExecutor()},
                            invocation_options=config)
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)

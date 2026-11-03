@@ -6,12 +6,15 @@ from app.dataModel.engine.dag.identity import (
     CallKey, ContractIdValue, ContractVersionValue, ExecutionIdValue, ExecutionIdentity,
     InvocationId, NodeIdValue, PlanInstanceId, PlanRevisionValue,
 )
+from app.dataModel.engine.dag.invocations.inputWait import InteractionOwner, SavedWait
+from app.dataModel.engine.dag.identity import WaitId
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence
 
 
 class InvocationStatus(StrEnum):
     READY = "READY"
     RUNNING = "RUNNING"
+    WAITING_INPUT = "WAITING_INPUT"
     WAITING_CALLS = "WAITING_CALLS"
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
@@ -67,6 +70,7 @@ class RegisteredContract(BaseModel):
     contract_id: ContractIdValue
     version: ContractVersionValue
     continuation: tuple[ContractIdValue, ContractVersionValue] | None
+    input_wait: tuple[ContractIdValue, ContractVersionValue] | None = None
 
 
 class InvocationGraph(BaseModel):
@@ -76,6 +80,11 @@ class InvocationGraph(BaseModel):
     root: InvocationId
     session: str | None = None
     response: str | None = None
+    interaction_owner: InteractionOwner | None = None
+    waits: dict[WaitId, SavedWait] = Field(default_factory=dict[WaitId, SavedWait])
+    cancellation: str | None = None
+    failure: str | None = None
+    waiting_for_input: bool = False
     pass_number: int = Field(default=0, ge=0)
     registry: tuple[RegisteredContract, ...]
     records: dict[InvocationId, InvocationRecord]
