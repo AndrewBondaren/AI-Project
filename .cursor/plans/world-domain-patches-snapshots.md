@@ -2616,7 +2616,7 @@ Concrete 4C3 adapters в checkout отсутствуют: SQL integration и п�
 | DB-FIELDS-1A | **DONE / ПРИНЯТ**, 2026-11-02, typed row boundary и первые три consumers | Остальные шаги DB-FIELDS-1, который остаётся OPEN |
 | 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
 | 4D1 / 4D1-L | **ПРИНЯТ**, 2026-11-02, реализация через существующие ports и LEASE_RELEASED logging follow-up | Concrete 4C3 integration, проверка фактического lock/claim ownership и интеграционная приёмка полного 4D1 gate |
-| 4C3 | **4C3-A ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-02; 4C3-B ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-03, REV-1 CLOSED / RE-REVIEW PASS**, handoff amendment принят; C НА ПОВТОРНОМ РЕВЬЮ ПОСЛЕ ИСПРАВЛЕНИЙ REV-1…3, D НЕ НАЧАТ, безопасное ограничение recovery сохраняется | Полный crash takeover OPEN вне 4C3; concrete lifecycle integration и полный 4D1 gate не закрыты |
+| 4C3 | **4C3-A ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-02; 4C3-B ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-03, REV-1 CLOSED / RE-REVIEW PASS**, handoff amendment принят; C НА ПОВТОРНОМ РЕВЬЮ ПОСЛЕ ИСПРАВЛЕНИЯ REV-4, D НЕ НАЧАТ, безопасное ограничение recovery сохраняется | Полный crash takeover OPEN вне 4C3; concrete lifecycle integration и полный 4D1 gate не закрыты |
 | 4D2 | **НЕ НАЧАТ / BLOCKED** | Нужны принятые SN-CORE и полный 4D1 integration gate; никакой Snapshot.apply реализации эта запись не подтверждает |
 
 **SN-CORE, SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN** до своих реальных producer/consumer evidence. Отдельная приёмка выполненных компонентов не разрешает пропустить 4C3, изменить установленный порядок будущих шагов или считать 4D2 начатым.
@@ -2833,3 +2833,46 @@ Evidence гонок получено на отдельных соединени�
 - Из backend `../.venv/Scripts/python.exe -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 156 tests, OK (1 skipped), 104.607 s, включая positive 0 / negative 50 EXPECT.
 - Из корня `node node_modules/pyright/index.js -p backend/tests/typing/snapshotCore/pyrightconfig.valid.json backend/app/db/repositories/sqlite/artifacts/leaseStore.py backend/app/db/repositories/sqlite/artifacts/operationArtifacts.py backend/app/db/repositories/sqlite/snapshotCore/commitScope.py backend/app/db/repositories/sqlite/snapshotCore/operations/operationStore.py backend/app/db/guardedConnection.py` — 0 errors, 0 warnings.
 - `git diff --check --` по шести перечисленным файлам среза — PASS. Общий diff также содержит сторонние whitespace-замечания в файлах time, вне этого исправления.
+
+#### Повторное независимое ревью 4C3-C — 2026-11-03
+
+**CHANGES REQUIRED. REV-1…3 закрыты. Приёмку 4C3-C блокирует 4C3-C-REV-4 (P1).**
+
+| Закрытая находка | Что подтвердил повторный прогон |
+|---|---|
+| REV-1 | После отказа вложенного cancel implicit transaction caller осталась открытой. Caller выполнил COMMIT, независимое соединение прочитало `pending`. [test_leases.py:280](../../backend/tests/snapshotCore/storage/artifacts/test_leases.py#L280) |
+| REV-2 | При активном hold публичный record_terminal отказал до вставки. Уже сохранённый противоречивый cancelled terminal вызвал PublicationInfrastructureError при чтении в каждой из двух фаз cancel и через OperationLedger.recover. Второе соединение подтвердило сохранность hold. [test_leases.py:297](../../backend/tests/snapshotCore/storage/artifacts/test_leases.py#L297) |
+| REV-3 | Для повреждённого persisted descriptor с `nbytes=-1` вызовы recover, cancel и повторный open_operation вернули PublicationInfrastructureError. Невалидный входной fence по-прежнему дал ValueError. [test_leases.py:341](../../backend/tests/snapshotCore/storage/artifacts/test_leases.py#L341) |
+
+**4C3-C-REV-4 · P1 · OPEN. Повторная отмена acquire оставляет SQLite write lock после возврата CancelledError.** После первого Task.cancel() GuardedConnection._execute ожидает pending без shield. Вторая отмена прерывает ожидание, пока SQLite worker ещё выполняет BEGIN IMMEDIATE. Coordinator видит `in_transaction == False` и освобождает gate. После снятия конкурирующего lock отложенный BEGIN открывает транзакцию на соединении A. [guardedConnection.py:53–61](../../backend/app/db/guardedConnection.py#L53) · [commitScope.py:47–53](../../backend/app/db/repositories/sqlite/snapshotCore/commitScope.py#L47) · [leaseStore.py:95](../../backend/app/db/repositories/sqlite/artifacts/leaseStore.py#L95)
+
+1. На двух независимых соединениях с одним временным файлом SQLite открыть operation и зарезервировать один ref на A. На B удерживать write transaction.
+2. Запустить writer на A в отдельной задаче. Через SQLite trace дождаться входа worker в BEGIN IMMEDIATE. Пока B держит lock, дважды вызвать Task.cancel(), передав управление event loop между вызовами.
+3. В пробе caller получил CancelledError ещё до освобождения lock на B. После завершения транзакции B соединение A перешло в `in_transaction == True`. На A recover вернул `PublicationInfrastructureError("publication requires a fresh transaction")`. На B чтение показало открытый admission, один hold и ноль активных claims. При `busy_timeout=150` мс вызов cancel на B вернул `OperationalError("database is locked")`.
+
+**Критерий закрытия.** Даже при повторной отмене удерживать gate до ответа SQLite worker. Если BEGIN выполнился, завершить rollback до возврата CancelledError. В двухсоединительной регрессии убедиться, что writer body не исполнился, claim отсутствует, recover на A успешен и B может открыть write transaction без ручного rollback на A. Поправка укладывается в действующие port, DTO и DDL.
+
+В повторном ревью из backend выполнены `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.artifacts.test_leases` (13 тестов, OK, 19,742 с) и `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` (156 тестов, OK, 1 skipped, 93,123 с, включая typing gate). Адресный Pyright по пяти файлам реализации из блока выше — 0 errors, 0 warnings. Scoped `git diff --check` прошёл. REV-4 воспроизведён реальными отменами задачи во время BEGIN acquire. Штатный тест с двумя отменами проверяет ожидание release. Аварийное завершение процесса не моделировалось.
+
+#### Исправление 4C3-C-REV-4 — 2026-11-03
+
+**Исправление предъявлено на повторное ревью.** В `backend/app/db/guardedConnection.py` повторная отмена ожидания больше не отменяет задачу с поставленной в очередь SQLite-командой. Gate удерживается до ответа worker. При успешном BEGIN coordinator видит открытую transaction и дожидается rollback до передачи CancelledError caller. Тот же механизм ожидания используется для implicit rollback внутри GuardedConnection.
+
+В `backend/tests/snapshotCore/storage/artifacts/test_leases.py` добавлен `test_twice_cancelled_writer_waits_for_blocked_begin_and_rollback`. Независимое соединение B удерживает write lock. SQLite trace на A подтверждает вход в BEGIN IMMEDIATE, затем тест реально вызывает Task.cancel() дважды. До исправления проверка упала на открытой transaction A после отмены. После исправления writer body не исполнен, writer facts отсутствуют, A возвращает исходную запись через recover, B входит в новый write UOW без ручного rollback на A. Это проверка отмены живой задачи на временной БД. Crash/restart не моделировался.
+
+- Из backend `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.artifacts.test_leases` — 14 tests OK, 19.529 s.
+- Из backend `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 157 tests, OK (1 skipped), 92.167 s, включая Pyright positive 0 / negative 50 EXPECT.
+- Из корня адресная команда Pyright по пяти файлам из блока REV-1…3 — 0 errors, 0 warnings.
+- `git diff --check -- backend/app/db/guardedConnection.py backend/tests/snapshotCore/storage/artifacts/test_leases.py .cursor/plans/world-domain-patches-snapshots.md` — PASS.
+
+## Контракты Snapshot для интеграции Time (2026-11-03)
+
+Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.
+
+| Gate | Обязательство Snapshot и передача владельцу Time | Проверка для закрытия integration gate |
+|---|---|---|
+| SN-TIME-READ | В одном read scope разрешить закреплённую публикацию или конкретный исторический snapshot в точную ссылку на принятое состояние. Для начальной публикации с head=None определить связь с initial state. Time читает значение по этой ссылке. | После появления Q чтение закреплённой P по-прежнему даёт время P. Отдельные случаи — исходный мир, исторический snapshot и отсутствующее обязательное состояние с явным отказом. |
+| SN-TIME-APPLY | Согласовать передачу назначенной target WorldPublicationRef обработчику в том же CommitScope, где CAS принимает эту публикацию. Предложение Time §37 — поле SnapshotApplyContext.next_publication. Проверить согласованность world, timeline, assigned head и expected base, а также порядок записи FK. | Handler и CAS используют одну target identity. При конфликте CAS изменения времени и сопутствующие эффекты откатываются вместе. При retry с прежним operation_id ledger возвращает принятый результат без повторного продвижения. |
+| SN-TIME-BRANCH | Определить публичный контракт создания ветки, его OperationKind и сохраняемый terminal outcome. По ним Snapshot восстанавливает результат и передаёт новому timeline время точки ветвления. | Crash после commit до ответа и повтор с прежним ID возвращают ту же ветку и тот же исходный момент. История родителя сохраняется. |
+
+Исходная граница видна в [SnapshotApplyContext](../../backend/app/application/worldSnapshot/contracts/context.py), [SQLite CAS](../../backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py) и [OperationKind](../../backend/app/dataModel/artifacts/lifecycle/operation/kinds.py). Следующий документальный шаг Snapshot owner — согласовать сигнатуры и показать вызовы от read/apply/branch до хранилища и ledger. Владельцу Time передаются утверждённые контракты и затем отдельное integration evidence.

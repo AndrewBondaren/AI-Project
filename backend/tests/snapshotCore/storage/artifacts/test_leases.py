@@ -354,3 +354,50 @@ class ConcreteLeaseTests(unittest.TestCase):
                 await unsafe_update(second[0], "artifact_catalog", "artifact_id", reservation.artifact_id, "nbytes", old)
                 await leases.assert_writable(lease)
         run_async(check())
+
+    def test_twice_cancelled_writer_waits_for_blocked_begin_and_rollback(self):
+        import asyncio
+        import threading
+
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                leases, catalog, _ = self.stores(first)
+                lease = await preparing(first)
+                reservation = await catalog.reserve(lease, descriptor())
+                before = await leases.recover(lease.operation_id)
+                conn = first[0].conn
+                begin_started = threading.Event()
+
+                def trace(statement):
+                    if statement == "BEGIN IMMEDIATE":
+                        begin_started.set()
+
+                async def write():
+                    async with leases.writer(reservation):
+                        self.fail("cancelled writer entered body")
+
+                await conn.set_trace_callback(trace)
+                try:
+                    async with second[1].transaction("blocker"):
+                        writer = asyncio.create_task(write())
+                        async with asyncio.timeout(3):
+                            while not begin_started.is_set():
+                                await asyncio.sleep(.001)
+                        writer.cancel()
+                        await asyncio.sleep(0)
+                        writer.cancel()
+                        # Leave B locked while A processes the second cancellation.
+                        await asyncio.sleep(0)
+                        returned_before_unlock = writer.done()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await asyncio.wait_for(writer, 3)
+                finally:
+                    await conn.set_trace_callback(None)
+                self.assertFalse(returned_before_unlock)
+                self.assertFalse(conn.in_transaction)
+                self.assertEqual(await leases.recover(lease.operation_id), before)
+                async with second[1].transaction("probe") as scope:
+                    facts = await second[2]._access.one(scope,
+                        "SELECT COUNT(*) AS n FROM artifact_writer_claims WHERE operation_id=?", (lease.operation_id,))
+                    self.assertEqual(facts["n"], 0)
+        run_async(check())

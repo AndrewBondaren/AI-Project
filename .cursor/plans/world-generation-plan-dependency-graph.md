@@ -704,8 +704,11 @@ flowchart TD
     T5 --> T6
     T6 --> T7["TIME-T7 user acceptance"]
     W["World: exact calendar/start/version"] -.-> T2
-    S["Snapshot: pinned state/init/commit seam"] -.-> T4
-    S -.-> T5
+    SR["SN-TIME-READ: pinned state"] -.-> RD["T4 production read"]
+    SW["SN-TIME-APPLY: target publication + atomic commit"] -.-> WR["T5 production apply"]
+    SB["SN-TIME-BRANCH: durable branch outcome"] -.-> BR["Time: создание ветки"]
+    T4 -.-> RD
+    T5 -.-> WR
     A["Actions: typed duration semantics"] -.-> AC["Интеграция игрового действия с продвижением времени"]
     T3A -.-> PH["Physics: exact Time foreign types"]
     T4 -.-> PH
@@ -735,7 +738,9 @@ flowchart TD
 | Owner / получатель | Что требуется передать / граница |
 |---|---|
 | World → Time calendar operations | Validated versioned calendar/start/epoch definitions, POJO-first defaults, historical version binding. Time не читает raw dict и не выбирает fallback calendar. Отсутствие grammar блокирует projection freeze, не arithmetic |
-| Snapshot → TIME-T4/T5 | Coherent Time state read в pinned scope, initial state без искусственного snapshot turn, branch rebinding, bound append/history и atomic apply. Existing refs/ledger — reuse; не готовый Time integration. Не подменять водным SN-APPLY-HANDLER или полным SN-B-2 |
+| SN-TIME-READ → production read T4 | Snapshot разрешает закреплённое состояние в одном read scope, Time читает clock по точной ссылке. OPEN |
+| SN-TIME-APPLY → production apply T5 | Handler получает target publication, Snapshot атомарно принимает Time и эффекты. OPEN |
+| SN-TIME-BRANCH → создание ветки | Durable OperationKind/outcome и восстановление результата при retry нужны только branch-сценарию. OPEN. Критерии всех трёх gates — [Snapshot](./world-domain-patches-snapshots.md) и [Time §48](./time-domain.md) |
 | Actions → advance consumer | Prepared положительная duration игрового действия; стоимость/классификация остаётся Actions. Technical zero Physics/edit не запрещается этим правилом. Общий Actions DONE не нужен pure Time API |
 | Time → Physics external agreement B/C | Accepted point/interval/capture semantics, seconds conversion и capture=start; затем actual runtime read evidence перед dependent activation. Calendar grammar не prerequisite Physics duration. Draft Time types пока не разрешённые imports |
 | Time → GEN | Public read/prepare contracts; same-base time section и domain effects передаются Snapshot. Exact invocation/operation identities согласуются отдельно; не добавлены NodeIds/CALL edges. Time не содержит dispatcher, scheduler или чужие CRUD |

@@ -44,24 +44,30 @@ class GuardedConnection(aiosqlite.Connection):
     def owns_transaction(self) -> bool:
         return self._owner is asyncio.current_task() and self._has_transaction()
 
+    async def _worker_result(self, fn, *args, **kwargs):
+        pending = asyncio.create_task(super()._execute(fn, *args, **kwargs))
+        try:
+            return await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            # Cancelling the waiter cannot stop queued SQLite work. Even a
+            # second cancellation must leave the gate held until it settles.
+            while not pending.done():
+                try:
+                    await asyncio.wait((pending,))
+                except asyncio.CancelledError:
+                    continue
+            if not pending.cancelled():
+                pending.exception()
+            raise
+
     async def _execute(self, fn, *args, **kwargs):
         # aiosqlite routes SQL, cursor fetches and commit through this seam.
         await self._acquire()
         try:
-            pending = asyncio.create_task(super()._execute(fn, *args, **kwargs))
-            try:
-                return await asyncio.shield(pending)
-            except asyncio.CancelledError:
-                # Cancellation cannot interrupt SQLite's worker. Wait until
-                # its statement completes before rollback or gate release.
-                try:
-                    await pending
-                except Exception:
-                    pass
-                raise
+            return await self._worker_result(fn, *args, **kwargs)
         except BaseException:
             if not self._explicit and self._has_transaction():
-                await super()._execute(self._conn.rollback)
+                await self._worker_result(self._conn.rollback)
             raise
         finally:
             if not self._explicit and not self._has_transaction():
