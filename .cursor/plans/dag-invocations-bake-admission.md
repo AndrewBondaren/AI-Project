@@ -166,3 +166,20 @@ $mods = rg --files tests/dag_typing -g 'test_*.py' | ForEach-Object { ($_ -repla
 **Критерий закрытия.** Принимать результаты только от допустимых узлов предыдущих фаз с соответствующим контрактом. Конфликтующая запись для root должна вызвать отказ. Следующий обычный повторный вызов должен вернуть сохранённое `"joined"`; проверить его совпадение с checkpoint. Сохранить прохождение PRE→POST из REV-1.
 
 В этом ревью полный прогон по команде §9 дал **360 тестов OK за 21,970 с** (19 модулей). Scoped `git diff --check` по исправлению прошёл. Оба открытых контрпримера воспроизведены отдельно от штатного набора.
+
+## 11. Повторное ревью R1–R4 на `7e4ea620` от 2026-11-03
+
+**CHANGES REQUIRED. REV-2 и REV-5 закрыты по критериям §10. Единственная открытая находка — REV-6 (P1).**
+
+- **REV-2 — CLOSED.** При lease в 1 секунду и `apply_effects` длительностью 2,2 секунды первый run завершился успешно. Второе SQLite-соединение прочитало статус COMPLETED, а resume вернул тот же ответ при счётчике эффектов 1. Дополнительная проба подтвердила семантику renew: после expiry прежний владелец может продлить тот же fence до takeover; после takeover его renew получает OwnershipConflict. [executionStore.py:62–71](../../backend/app/db/repositories/sqlite/dagExecutions/executionStore.py#L62)
+- **REV-5 — CLOSED.** Попытки передать завершённый root в prior_outputs отклонены как с правильным, так и с чужим контрактом. Обычная повторная доставка вернула сохранённое `"joined"`; checkpoint совпал с исходным. [test_world_calls.py:423–445](../../backend/tests/dag_typing/invocations/test_world_calls.py#L423)
+
+### REV-6 · P1 · R2/R4 · OPEN · Чужой DependencyRead в prior_outputs делает checkpoint невосстановимым
+
+1. На MemoryExecutionStore собрать план `Pre → Post` с invocation root `Post`. У `Pre` нет зависимостей. Штатным конструктором создать для него OutputRecord с правильными identity, типом результата, contract_id и version. В reads передать один обязательный DependencyRead с результатом из того же execution, но с invocation_id `call-9/foreign`, который отсутствует в dependency_bindings узла `Pre`.
+2. Передать запись в `run_invocation(..., prior_outputs=(output,))`. Первый вызов вернул SUCCEEDED и сохранил checkpoint ревизии 2. При привязке проверяются узел и контракт, затем `record.reads = output.reads` переносит чужую ссылку в граф. [invocationCoordinator.py:75–102](../../backend/app/application/engine/runtime/invocations/invocationCoordinator.py#L75)
+3. Повторить вызов для того же execution ID без prior_outputs. Вместо сохранённого результата caller получил `RestoreFailure("invalid invocation checkpoint")` с причиной `foreign dependency read`: restore проверяет принадлежность результата к dependency_bindings. [checkpointCodec.py:81–85](../../backend/app/application/engine/runtime/invocations/checkpointCodec.py#L81)
+
+**Критерий закрытия.** При привязке prior_outputs проверять принадлежность каждого непустого `reads[].result` к execution и dependency_bindings принимающего узла до сохранения результата. Регрессия должна получить отказ уже при первом вызове, затем успешно продолжить тот же execution с корректным prior output и прочитать сохранённый terminal при повторной доставке.
+
+В независимом ревью полный прогон по команде §9 дал **362 теста OK за 34,934 с** (19 модулей). Scoped `git diff --check` прошёл. Контрпример REV-6 воспроизведён отдельно от штатного набора.
