@@ -442,12 +442,18 @@ class SqliteBlobLifecycleTests(unittest.TestCase):
                         if not release.wait(8):
                             raise TimeoutError("delete was never released")
                         sync(parent)
-                    def trace(statement):
+                    gc_boundaries = []
+                    def trace_gc(statement):
+                        if statement in ("BEGIN IMMEDIATE", "COMMIT", "ROLLBACK"):
+                            gc_boundaries.append(statement)
+
+                    def trace_reserve(statement):
                         if statement == "BEGIN IMMEDIATE":
                             reserving.set()
                     with patch.object(a.backend, "_sync_directory", blocked_sync):
+                        await first[0].conn.set_trace_callback(trace_gc)
+                        await second[0].conn.set_trace_callback(trace_reserve)
                         gc = asyncio.create_task(a.service.collect("gc", (ref,)))
-                        await second[0].conn.set_trace_callback(trace)
                         try:
                             async with asyncio.timeout(5):
                                 while not deleting.is_set():
@@ -455,12 +461,18 @@ class SqliteBlobLifecycleTests(unittest.TestCase):
                                 reserve = asyncio.create_task(b.service.reserve(new, ref))
                                 while not reserving.is_set():
                                     await asyncio.sleep(.002)
-                            self.assertFalse(reserve.done())
+                            # Sample A while its filesystem worker is paused and B has entered BEGIN.
+                            boundaries_during_delete = tuple(gc_boundaries)
+                            gc_transaction_open = first[0].conn.in_transaction
                         finally:
                             release.set()
                         self.assertEqual((await gc).deleted, (ref,))
                         await reserve
+                        await first[0].conn.set_trace_callback(None)
                         await second[0].conn.set_trace_callback(None)
+                        self.assertEqual(boundaries_during_delete, ("BEGIN IMMEDIATE",))
+                        self.assertTrue(gc_transaction_open)
+                        self.assertEqual(gc_boundaries, ["BEGIN IMMEDIATE", "COMMIT"])
                 async with live_database(path, seed=False) as restarted:
                     c = SqliteBlobFixture(restarted)
                     self.assertFalse(await c.catalog.is_sealed(ref))

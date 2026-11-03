@@ -2893,6 +2893,19 @@ Evidence гонок получено на отдельных соединени�
 - `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 162 теста, OK (1 skipped), 123.663 s, включая Pyright positive 0 / negative 50 EXPECT.
 - Из корня `git diff --check -- .cursor/plans/world-domain-patches-snapshots.md backend/tests/snapshotCore/storage/artifacts/test_staging.py` — PASS.
 
+#### 4C3-D — исправление по независимому ревью GC/reserve, 2026-11-03
+
+Исходный вердикт CHANGES REQUIRED: на проверенной реализации GC держал write transaction правильно, но тест пропускал перенос физического delete за COMMIT. Исправление предъявлено на повторное ревью.
+
+В `backend/tests/snapshotCore/storage/artifacts/test_staging.py` тест регистрирует SQLite trace обоих соединений до запуска GC. После входа B в BEGIN IMMEDIATE и до разблокировки BLOB worker тест снимает последовательность границ GC на A и значение A.in_transaction. В этот момент ожидаются только BEGIN IMMEDIATE и открытая транзакция. После завершения GC ожидается ровно один COMMIT. Сохранены проверки после переоткрытия БД и повторного seal.
+
+Отрицательная проба: в отдельном Python-процессе из backend через `../.venv/Scripts/python.exe -B -` скопирован в память collect с единственной перестановкой: registry.delete после выхода из guard, перед GC_DELETED. Тот же тест завершился ожидаемым AssertionError: при паузе worker SQLite trace A уже содержал (BEGIN IMMEDIATE, COMMIT). Изменены только регрессия и этот план.
+
+Проверки итогового дерева из backend:
+- `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.artifacts.test_staging.SqliteBlobLifecycleTests` — 5 OK, 23.081 s.
+- `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 162 теста, OK (1 skipped), 109.338 s, включая typing gate.
+- Из корня `git diff --check -- .cursor/plans/world-domain-patches-snapshots.md backend/tests/snapshotCore/storage/artifacts/test_staging.py` — PASS.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.
