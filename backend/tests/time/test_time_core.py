@@ -140,6 +140,23 @@ class CalendarTests(unittest.TestCase):
         self.assertIsNone(self.project(point(144000)).weekday)
         self.assertEqual(self.project(point(180000)).weekday, "b")
 
+    def test_budget_for_modulo_restricted_to_one_year(self):
+        data = self.capture.settings.model_dump(mode="json")
+        condition = data["calendars"]["entries"][0]["definition"]["rules"][0]["condition"]
+        condition["all_of"].append(dict(kind="year_modulo", modulus=10**30, residue=1, offset=0))
+        settings = WorldTimeSettings.model_validate_json(json.dumps(data))
+        budget = CalendarBudget(max_rule_checks=3, max_year_patterns=3)
+        request = CalendarProjectionInput(
+            point=point(144000), capture=self.clock, calendar=settings.selected,
+            resolved=self.resolved.model_copy(update={"settings": settings}), budget=budget,
+        )
+        result = make_calendar_projector().project(request)
+        self.assertIsInstance(result, CalendarProjection)
+        self.assertEqual((result.date.year, result.date.span), (1, "festival"))
+        insufficient = CalendarBudget(max_rule_checks=3, max_year_patterns=2)
+        self.assertIsInstance(make_calendar_projector().project(request.model_copy(update={"budget": insufficient})),
+                              CalendarBudgetExceeded)
+
     def test_year_regions_match_independent_day_count(self):
         from app.application.time.calendar.ordinal import CalendarIndex
         from app.application.time.calendar.rules import Work

@@ -86,6 +86,8 @@ class InvocationCoordinator:
             contract = self.plan.registrations[record.node_id].contract
             if (output.contract_id, output.contract_version) != (contract.contract_id, contract.version):
                 raise RestoreFailure("prior-phase output contract mismatch")
+            if not record.accepts_reads(output.reads):
+                raise RestoreFailure("foreign dependency read in prior-phase output")
             terminal = self.encode(output.output, contract.output_type)
             if record.status == Status.SUCCEEDED:
                 if (record.identity() != identity or record.terminal != terminal or

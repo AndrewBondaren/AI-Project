@@ -1,6 +1,6 @@
 from bisect import bisect_right
 from dataclasses import dataclass
-from itertools import accumulate, pairwise
+from itertools import accumulate, chain, pairwise
 from math import lcm
 
 from app.dataModel.world.calendar.dates.date import CalendarDate
@@ -8,7 +8,28 @@ from app.dataModel.world.calendar.definitions.definition import CalendarDefiniti
 from app.dataModel.world.calendar.enums.rules import CalendarNumbering
 from app.dataModel.world.calendar.rules.edits import CalendarSpan
 from app.dataModel.world.calendar.rules.predicates import YearModuloPredicate, YearRangePredicate
-from .rules import ExhaustedBudget, InvalidCalendar, Work, year_shape
+from .rules import ExhaustedBudget, InvalidCalendar, Work, matches, year_shape
+
+
+def _region_size(definition: CalendarDefinition, low: int | None, high: int | None, remaining: int) -> int:
+    # Range predicates have constant truth between consecutive boundaries.
+    sample = low if low is not None else (high - 1 if high is not None else 0)
+    width = high - low if high is not None and low is not None else None
+    period = 1
+    for rule in definition.rules:
+        condition = rule.condition
+        if any(isinstance(p, YearRangePredicate) and not matches(p, sample) for p in condition.all_of):
+            continue
+        if any(isinstance(p, YearRangePredicate) and matches(p, sample) for p in condition.none_of):
+            continue
+        for predicate in chain(condition.all_of, condition.none_of):
+            if isinstance(predicate, YearModuloPredicate):
+                period = lcm(period, predicate.modulus)
+                if width is not None and width <= period:
+                    return width
+                if period > remaining:
+                    raise ExhaustedBudget
+    return period
 
 
 @dataclass
@@ -35,25 +56,20 @@ class CalendarIndex:
     def __init__(self, definition: CalendarDefinition, work: Work):
         self.definition = definition
         boundaries: set[int] = set()
-        period = 1
         for rule in definition.rules:
-            for predicate in (*rule.condition.all_of, *rule.condition.none_of):
+            for predicate in chain(rule.condition.all_of, rule.condition.none_of):
                 if isinstance(predicate, YearRangePredicate):
                     boundaries.update((predicate.first, predicate.last + 1))
-                elif isinstance(predicate, YearModuloPredicate):
-                    period = lcm(period, predicate.modulus)
-                    if period > work.patterns:
-                        raise ExhaustedBudget
         self.starts = sorted(boundaries)
         self.regions: list[Region] = []
         for low, high in pairwise([None, *self.starts, None]):
-            size = period if low is None or high is None else min(period, high - low)
+            size = _region_size(definition, low, high, work.patterns)
             work.patterns -= size
             if work.patterns < 0:
                 raise ExhaustedBudget
             origin = low if low is not None else 0
             if low is None and high is not None:
-                origin = high - period
+                origin = high - size
             shapes = tuple(year_shape(definition, y, work) for y in range(origin, origin + size))
             days = tuple(accumulate((sum(s.days for s in row) for row in shapes), initial=0))
             weeks = tuple(accumulate((sum(s.days for s in row if s.counts_in_week) for row in shapes), initial=0))

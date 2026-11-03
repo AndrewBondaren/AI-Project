@@ -15675,3 +15675,47 @@ GEO-I3.1 завершён по решению пользователя «Ок, �
 **Следующий gate.** Публикация envelope потребует exact fine P2, проверки refs и captured fingerprints по EF-1.5 и admission diagnostics до вычисления source output_fingerprint. I4.1 можно проверить до этих работ. Изменение Spatial lock, Pack wiring и G10-A не нужны.
 
 **Команда на реализацию:** Реализуй только GEO-I4.1: build_source_payload и focused tests в двух указанных файлах. Используй I1, I2.1 и I3.1 через их существующие API. Запусти три указанные группы тестов и предъяви результат на независимое ревью.
+
+#### I4.2. Независимое ревью GEO-I4.1 (2026-11-03)
+
+**Вердикт: PASS. Ошибок в границах сборки payload из уже допущенных входов не обнаружено.** Это результат независимого ревью; пользовательская приёмка I4.1 этим разделом не фиксируется.
+
+Ревью начато с `git diff` и `git ls-files --others --exclude-standard`: целевые файлы отслеживаются и не имеют diff, новых неотслеживаемых файлов нет. Реализация и тесты не редактировались.
+
+Самостоятельно выполнены из `backend` команды `python -B -m unittest discover -s tests/geo1/<group> -v`: `canonical_source` — **29/29 OK**, `height_delta` — **21/21 OK**, `final_publication` — **6/6 OK**.
+
+- `sourceAssembly.py:22,38–40`: captured fine frame проверяется; I2 получает W/F.post/H/R/N и captured z_min/z_max, I3 получает те же F/N и bed от I2. В I1 переданы все обязательные поля.
+- `sourceAssembly.py:27–36,47–51`: полное равенство bodies/unions/mapping между F/H/N, включая поля тела помимо UID/уровня; тело без wet-клеток и explicit empty body_uids сохраняются. Жидкость вне inputs.liquid_keys отвергается.
+- `sourceAssembly.py:42–45`: на native publication fixture клетка (9,11) имеет исходный SHORE с body lake, после river overlay — RIVER_BED с body river; в shore_rows отсутствует. Все 15 оставшихся финальных береговых записей сохранены целиком и в порядке (y,x), что дополнительно сверено напрямую с final.sparse_fine_hydro.
+- Dry fixture сохраняет полный observed bed и возвращает пустые wet_runs/shore_rows/bodies/unions.
+
+**Достижение проверок негативными тестами.** Трассировка вызовов тестов подтвердила отказ внутри build_source_payload: bodies — строка 28, unions — 30, mapping — 32, captured frame — 23, liquid membership — 36. Оба неверных final SHORE достигают конструктора CanonicalOpenWaterSource на строке 47 и дают ожидаемый ValidationError (неизвестное тело / клетка вне observed bed). Ошибки подготовки фикстур за отказ не засчитывались.
+
+**Дополнительные пробы без изменения файлов.** После `SourceAssemblyTests.setUpClass(); t = SourceAssemblyTests()` вызов `t.build(final=replace(t.final, fine_z_overrides=()))` даёт ошибку I2 `native final height delta disagrees with water and river geometry`. Удаление строки (10,10) из final.sparse_fine_hydro через replace и передача в t.build даёт ошибку I3 `fine water and native final open-water facts disagree`. Подмена каждого делегата исключением-сентинелом подтвердила передачу того же экземпляра исключения. Control, бросающий InterruptedError при вызове из build_source_payload на строке 43 либо 52, подтверждает отмену во время собственного обхода и перед возвратом без выдачи payload.
+
+Admission ревизий, exact fine P2, diagnostics/fingerprints и публикация envelope остаются следующим срезом; Spatial lock, Pack wiring и G10-A этим PASS не аттестованы.
+
+#### I4.3. Приёмка GEO-I4.1 (2026-11-03)
+
+Пользователь принял GEO-I4.1 после независимого PASS в §I4.2. Принятый результат — сборка полного CanonicalOpenWaterSource из допущенных payloads. Независимый прогон трёх групп — 56/56.
+
+### GEO-I5.1. Fine P2 — привязка pre-relief batch к W и regions (план к реализации)
+
+**Первый результат** — точная пара зависимостей для будущего NativeWaterPlacementJob.publish (§EF-1.3). Её можно проверить до миграции геометрии и до запуска конкуренции. Функция получает оба envelope и два независимо предоставленных expected refs. Только сравнение с hash из batch потеряло бы PlanKey W; snapshot_uid региона вообще не содержит revision.
+
+**Текущая граница.** prepare_designed_water → WaterDesignUniverse.capture получает pre_hydrology как PlanEnvelope[TerrainPlan], а regions как голый TerrainRegionPlan. Capture сравнивает batch.snapshot_revision с coarse terrain output, проверяет bbox, затем поднимает batch.topology для проверки region spans. Передать туда W под прежней аннотацией нельзя. В surfacePlanBindings._geo_bindings WATER_PLACEMENT объявлен с TERRAIN_BASE + TERRAIN_REGIONS. На другой стороне FineWaterPublicationJob.publish получает PlacementBatchResultV2 и отдельные specs; проверка соответствия каждого переданного footprint оставляет открытым вопрос о полном наборе resolved water outcomes. I5.1 обеспечивает входное ребро общего placement. За выпуск specs будет отвечать terrain-owned NativeBasinSpecJob после session.finish.
+
+**Контракт.** Новый модуль `backend/app/application/worldData/generators/terrain/designedWater/preparation/nativePlacementDependencies.py`. Одна операция `admit_native_placement_dependencies(*, batch: PlacementBatchV2, before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef, regions: PlanEnvelope[TerrainRegionPlan], expected_regions: PlanRef, inputs: GeoWaterPlacementInput, control: PlanBuildControl) -> tuple[PlanDependency, PlanDependency]`. Будущий прямой caller — вход NativeWaterPlacementJob.publish до вызова prepare_designed_water; для данного среза прямой caller — focused test. Источник expected refs в production — владелец frozen planning graph.
+
+1. При входе проверить shutdown. Использовать строгую валидацию batch и типизированных envelopes, существующие SURFACE_MANIFEST, input_fingerprint/output_fingerprint. Требовать full ref equality для обоих входов, metadata W = PRE_WATER_WINDOW, metadata regions = geo_surface_plan_binding(TERRAIN_REGIONS).metadata, общий world/scope, batch.world_uid и regions.payload.snapshot.world_uid того же мира. Проверить actual output proof на payload/dependencies/diagnostics каждого входа. ERROR disposition любого входа даёт PlanBuildFailure с исходными issues.
+2. W должен иметь ровно climate_base, terrain_base и PREPARED_NATURAL по контрактам их владельцев с теми же world/scope; проверить ключ W по формуле PreWaterTerrainWindowJob.prepare (captured operand = W.coverage). У regions сейчас dependencies=() по GEO binding. Author inputs региона и natural payload не переданы: здесь проверяются ожидаемый ref и output, повторное построение этих источников не входит в контракт.
+3. Требовать PRE_RELIEF, accepted=(), batch.snapshot_revision == before.ref.output_fingerprint и batch.snapshot_uid == regions.payload.snapshot.snapshot_uid. Вывести fine_topology(inputs.topology, inputs.grid.fine_span) один раз; W и batch.topology должны совпасть с этим frame. W.complete_surface гарантирует уникальные canonical rows по spans; для этой операции дополнительно требуется полное покрытие bounds и все высоты внутри inputs.z_min..inputs.z_max. Все region coverage spans уже fine: проверить y и полуинтервалы [x0,x1) по bounds W без масштабирования. Region UID и area проверяет TerrainRegionPlan.
+4. Вернуть ровно два PlanDependency по UTF-8 порядку slots PRE_WATER_SURFACE и TERRAIN_REGIONS с исходными полными refs. Нарушение identity/proof/phase/frame/coverage — ValueError; ошибки валидации и отмена доходят до caller. Проверять shutdown во время собственных проходов по высотам/spans и перед возвратом. Функция не публикует P2 и не запускает session.
+
+**Ограничение текущего V2.** PlacementBatchV2 пока не несёт required coordinate_space. Совпадение topology, даже при fine_span=1, не доказывает единицы candidates или original_area. В этом срезе проверяется привязка входных ревизий и численного frame. До первого production caller обязательны синхронная миграция batch/prepared/result/session по EF-1.2 и проверка actual WORLD_FINE_GRID marker. Не добавлять optional marker/default или локальную копию batch ради теста.
+
+**Проверка.** Второй файл — `backend/tests/geo1/integration/test_native_placement_dependencies.py`. Использовать опубликованный W из fine_water fixture, typed regions envelope с действующим GEO metadata и output proof, и PRE_RELIEF batch. Сверить оба полных ref и порядок slots. Отдельными случаями проверить stale expected ref каждого входа (в том числе другой key при том же hash), tampered output, подменённый W input proof, чужой scope/world/contract, ошибочные dependency slots, перепутанные snapshot UID/revision, ERROR на каждом входе с корректным hash, coarse batch, повторно поднятый frame, partial W с корректным proof, высоту вне z, region span вне W, отмену. Для случая отказа на конкретном ребре пересчитывать предшествующие proofs так, чтобы тест доходил до нужной ветки. Запустить geo1/integration и geo1/fine_water.
+
+**После I5.1.** Остаются общий fine frame/area и подготовка геометрии всех участников, единый resolved batch, точная биекция water outcomes ↔ specs и переход потребителя F на весь GeoWaterPlacementPlan. Только затем можно замкнуть семь зависимостей source envelope и провести diagnostics admission до output_fingerprint. Версии, registration и G10-A этот срез не переключает.
+
+**Команда на реализацию:** Реализуй только GEO-I5.1 по этому разделу — admit_native_placement_dependencies и focused tests в двух указанных файлах. Запусти geo1/integration и geo1/fine_water, покажи diff инструментом и предъяви результат на независимое ревью.

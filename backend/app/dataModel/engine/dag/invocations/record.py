@@ -46,6 +46,11 @@ class InvocationRecord(BaseModel):
     reads: tuple[DependencyRead, ...] = ()
     domain_reads: tuple[DomainReadEvidence, ...] = ()
 
+    def accepts_reads(self, reads: tuple[DependencyRead, ...]) -> bool:
+        return all(read.result is None or (
+            read.result.execution_id == self.execution_id and read.result.invocation_id in self.dependency_bindings
+        ) for read in reads)
+
     def terminal_payload(self) -> str:
         if self.terminal is None:
             raise ValueError("missing terminal payload")

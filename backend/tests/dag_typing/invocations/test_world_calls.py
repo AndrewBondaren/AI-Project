@@ -393,6 +393,49 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                                               workers=1, invocation_limit=2, prior_outputs=(foreign,))
         self.assertEqual(saved, await store.load(execution))
 
+    async def test_foreign_prior_read_rejected_before_checkpoint(self):
+        from app.application.engine.contracts.invocation.executionStore import RestoreFailure
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        from app.dataModel.engine.dag.executionPhase import ExecutionPhase
+        from app.dataModel.engine.dag.identity import ExecutionIdentity, InvocationId
+        from app.dataModel.engine.dag.records import DependencyRead, OutputRecord
+
+        registry, bindings = NodeRegistry(), GraphBindings()
+        for node in (Source(), Left(deps=(Source.id,), phase=ExecutionPhase.POST_LLM)):
+            contract = NodeContract(Payload, Payload, ContractId(node.id), ContractVersion("1"), (), error_types=())
+            registry.register_python(type(node), FakeExecutor, contract)
+            bindings.nodes[node.id] = node
+        compiler = GraphCompiler(registry, bindings, compile_rules=lambda _: (), evaluate_rules=lambda *_: True)
+        compiler.precompile()
+        plan = compiler.compile(GraphRuleState(), invocation_root=Left.id)
+        executor, _ = runtime()
+        store = MemoryExecutionStore()
+        execution, revision = ExecutionId("prior-read"), PlanRevision("1")
+        args = (plan, execution, Left.id, revision, store)
+        options = dict(owner="test", workers=1, invocation_limit=2)
+        source = ExecutionIdentity(execution_id=execution, node_id=Source.id, invocation_id=InvocationId("root/source"),
+                                   attempt=1, plan_revision=revision)
+        foreign = ExecutionIdentity(execution_id=execution, node_id=NodeId("foreign"),
+                                    invocation_id=InvocationId("call-9/foreign"), attempt=1, plan_revision=revision)
+        read = DependencyRead(producer=foreign.node_id, contract_id=ContractId("foreign"),
+                              contract_version=ContractVersion("1"), required=True, result=foreign)
+
+        def prior(reads):
+            return OutputRecord[Payload](identity=source, contract_id=ContractId(Source.id),
+                                         contract_version=ContractVersion("1"), output=Payload(), reads=reads)
+
+        with self.assertRaisesRegex(RestoreFailure, "foreign dependency read"):
+            await executor.run_invocation(*args, prior_outputs=(prior((read,)),), **options)
+        initial = await store.load(execution)
+        self.assertEqual(initial.revision, 0)
+        self.assertEqual(InvocationGraph.model_validate_json(initial.blob).records[source.invocation_id].reads, ())
+        correct = await executor.run_invocation(*args, prior_outputs=(prior(()),), **options)
+        self.assertEqual(correct.status, "SUCCEEDED")
+        saved = await store.load(execution)
+        replay = await executor.run_invocation(*args, **options)
+        self.assertEqual(replay, correct)
+        self.assertEqual(await store.load(execution), saved)
+
     async def test_slow_effect_retains_lease(self):
         await self.check_slow_effect(2)
 

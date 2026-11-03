@@ -12,6 +12,8 @@ T4, дополнение §§20/34: реализован `PublicationTimeState(p
 
 T5, сверка по коду: [SnapshotApplyContext](../../backend/app/application/worldSnapshot/contracts/context.py) передаёт назначенный snapshot и scope, но ещё не передаёт назначенную publication обработчику. Параметр `next_publication` уже есть на [CAS порту](../../backend/app/application/worldSnapshot/storage/publicationStore.py). В [OperationKind](../../backend/app/dataModel/artifacts/lifecycle/operation/kinds.py) отсутствует категория branch. До совместного контракта §§34/37/44 остаются открыты атомарное сохранение Time + effects, повтор после unknown commit и durable branch outcome.
 
+T3-C, §29.3: календарный индекс рассчитывает период отдельно в каждой области YEAR_RANGE. Проверена проекция разовой вставки с modulus 10^30 при бюджете в три класса годов; при двух классах возвращается CalendarBudgetExceeded. Прогон Time: 16 тестов, Pyright для application/time и dataModel/time без ошибок.
+
 <details><summary>Изменённые файлы ядра</summary>
 
 Документы: `docs/tz_time.md`, `docs/project_data_storage_tz.md`, `.cursor/plans/time-domain.md`. В перечисленных пакетах добавлены также файлы `__init__.py`.

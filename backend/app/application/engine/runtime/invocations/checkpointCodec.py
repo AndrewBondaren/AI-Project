@@ -79,10 +79,8 @@ class CheckpointCodec:
                 ):
                     raise ValueError("empty persisted join")
                 dependencies = tuple(graph.records[k] for k in record.dependency_bindings)
-                for read in record.reads:
-                    if read.result is not None and (read.result.execution_id != graph.execution_id or
-                                                    read.result.invocation_id not in record.dependency_bindings):
-                        raise ValueError("foreign dependency read")
+                if not record.accepts_reads(record.reads):
+                    raise ValueError("foreign dependency read")
                 if any(dep.plan_instance_id != record.plan_instance_id for dep in dependencies):
                     raise ValueError("cross-instance dependency binding")
                 if tuple(dep.node_id for dep in dependencies) != plan.nodes[record.node_id].node.deps:

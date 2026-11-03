@@ -183,3 +183,80 @@ $mods = rg --files tests/dag_typing -g 'test_*.py' | ForEach-Object { ($_ -repla
 **Критерий закрытия.** При привязке prior_outputs проверять принадлежность каждого непустого `reads[].result` к execution и dependency_bindings принимающего узла до сохранения результата. Регрессия должна получить отказ уже при первом вызове, затем успешно продолжить тот же execution с корректным prior output и прочитать сохранённый terminal при повторной доставке.
 
 В независимом ревью полный прогон по команде §9 дал **362 теста OK за 34,934 с** (19 модулей). Scoped `git diff --check` прошёл. Контрпример REV-6 воспроизведён отдельно от штатного набора.
+
+#### Запускаемый пример REV-6 на `cd6746a7`
+
+Из `backend` в PowerShell выполнить блок целиком. В нём `Source` — PRE-узел без зависимостей, `Left` — POST-корень. Все три вызова используют один store и один execution ID; между первым и вторым вызовом меняется только поле `reads` переданного результата.
+
+```powershell
+@'
+from tests.dag_typing.invocations import test_world_calls as f
+from tests.snapshotCore.support.fixtures import run_async
+from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+from app.application.engine.contracts.invocation.executionStore import RestoreFailure
+from app.dataModel.engine.dag.executionPhase import ExecutionPhase
+from app.dataModel.engine.dag.identity import ExecutionIdentity
+from app.dataModel.engine.dag.records import DependencyRead, OutputRecord
+
+async def probe():
+    registry, bindings = f.NodeRegistry(), f.GraphBindings()
+    for node, deps, phase in ((f.Source, (), ExecutionPhase.PRE_LLM),
+                              (f.Left, (f.Source.id,), ExecutionPhase.POST_LLM)):
+        contract = f.NodeContract(f.Payload, f.Payload, f.ContractId(node.id),
+                                  f.ContractVersion("1"), (), error_types=())
+        registry.register_python(node, f.FakeExecutor, contract)
+        bindings.nodes[node.id] = node(deps=deps, phase=phase)
+    compiler = f.GraphCompiler(registry, bindings, compile_rules=lambda _: (),
+                               evaluate_rules=lambda *_: True)
+    compiler.precompile()
+    plan = compiler.compile(f.GraphRuleState(), invocation_root=f.Left.id)
+    executor, _ = f.runtime()
+    store = MemoryExecutionStore()
+    execution = f.ExecutionId("probe")
+    def identity(node, invocation):
+        return ExecutionIdentity(execution_id=execution, node_id=node, invocation_id=invocation,
+                                 attempt=1, plan_revision="1")
+    foreign = DependencyRead(producer="foreign", contract_id="foreign", contract_version="1",
+                             required=True, result=identity("foreign", "call-9/foreign"))
+    def prior(reads):
+        return OutputRecord[f.Payload](identity=identity(f.Source.id, "root/" + f.Source.id),
+                                       contract_id=f.Source.id, contract_version="1",
+                                       output=f.Payload(), reads=reads)
+    for label, rows in (("foreign", (prior((foreign,)),)), ("correct", (prior(()),)), ("replay", ())):
+        try:
+            result = await executor.run_invocation(plan, execution, f.Left.id, f.PlanRevision("1"),
+                                                   store, owner="a", workers=1, invocation_limit=2,
+                                                   prior_outputs=rows)
+            print(label, result.status)
+        except RestoreFailure as exc:
+            print(label, type(exc).__name__, exc.__cause__)
+    print("revision", (await store.load(execution)).revision)
+
+run_async(probe())
+'@ | ../.venv/Scripts/python.exe -B -
+```
+
+Фактический вывод на `cd6746a7`:
+
+```text
+foreign SUCCEEDED
+correct RestoreFailure foreign dependency read
+replay RestoreFailure foreign dependency read
+revision 2
+```
+
+После исправления ожидается отказ на `foreign` до записи чужого read, затем `correct SUCCEEDED` и `replay SUCCEEDED` с тем же terminal. На этом коммите полный прогон §9 дал 362 теста OK за 36,385 с.
+
+## 12. Итог независимого ревью R1–R4 от 2026-11-03
+
+**PASS. REV-6 закрыта. Все находки REV-1…6 закрыты.** Проверено рабочее дерево с исправлением поверх `cd6746a7`. При привязке prior output и при восстановлении checkpoint применяется одно условие: для каждого непустого `read.result` execution ID совпадает с execution ID узла, а invocation ID входит в его `dependency_bindings`. При привязке отказ происходит до изменения записи. [bind_published](../../backend/app/application/engine/runtime/invocations/invocationCoordinator.py#L89) · [accepts_reads](../../backend/app/dataModel/engine/dag/invocations/record.py#L49) · [restore](../../backend/app/application/engine/runtime/invocations/checkpointCodec.py#L82)
+
+Пример §11 повторён на MemoryExecutionStore и на временной SQLite БД с новым соединением перед каждым вызовом. Результаты для одного execution ID:
+
+| Вызов | Результат для caller | Сохранённый checkpoint |
+|---|---|---|
+| `foreign` с чужим DependencyRead | RestoreFailure | Ревизия 0, чужой read не записан |
+| `correct` с исправленным prior output | SUCCEEDED | Terminal сохранён на ревизии 2 |
+| `replay` без prior outputs | SUCCEEDED, тот же terminal | Checkpoint совпадает с сохранённым после `correct`, ревизия 2 |
+
+Полный прогон по команде §9: **363 теста OK за 38,133 с** (19 модулей `dag_typing`), включая [регрессию REV-6](../../backend/tests/dag_typing/invocations/test_world_calls.py#L396). Scoped `git diff --check` прошёл. Вердикт относится к R1–R4; граница deployment для существующей БД описана в §9.
