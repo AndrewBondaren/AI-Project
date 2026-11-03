@@ -4232,3 +4232,60 @@ candidate = m.model_copy(update={"entries": entries})
 На границе хранения `packSchema._V1_WIRE_FIELDS` явно фиксирует упорядоченные текстовые идентификаторы полей каждой записи manifest по её type ID. Действующее отображение V1 требует совпадения с именами POJO. Encode и decode проходят эту проверку до обработки артефакта. Переименование требует отдельного решения об отображении или версии. Регрессия меняет `HydrologyPackRoot.shards` на `tiles` в метаданных и обновляет shape hash в тестовом процессе. Обе операции отказывают по wire binding ID 60001. После восстановления метаданных сохранённые байты читаются и воспроизводятся точно.
 
 Проверка шести модулей §15.43 — **74 теста OK**, включая golden root/shard. Адресный Pyright с `pyrightconfig.cascade.json` для decodeLimits.py, root.py и shard.py — 0 ошибок. Для `backend/tests/typing/spatial_pack_limits_invalid.py` — три ожидаемых reportArgumentType (скаляр, неверный контейнер, неверный элемент). P1-C предъявлен повторно, пользовательская приёмка остаётся отдельным решением.
+
+### 15.46. Независимое ревью контрактов SP-P1-C (2026-11-03)
+
+**PASS.** В проверенной границе целой записи V1 в памяти замечаний к контрактам данных не выявлено. Пользовательская приёмка P1-C остаётся отдельным решением.
+
+**База сравнения.** Приняты source lock P1-A и storage lock P1-B (§§15.41–15.42). Проверены `git diff 7922cf8b HEAD`, `git status --short -uall` и `git ls-files --others --exclude-standard`. На момент ревью HEAD — `f330d087`, рабочий и индексный diff пусты, untracked-файлов нет. Файлы P1-C, включая negative typing fixture, уже вошли в HEAD. Source golden взяты из прежнего test_source_schema.py, storage digest проверены отдельно от source fingerprint.
+
+**Семь CollectionLimit.** В таблице селектор показан с аргументом lambda. Интервалы включают обе границы. A — wrap validator `_PackRecord._strict_fields` (root.py:98–101), который читает raw по `rule.bound.field` и отвергает иной контейнер или длину до handler. B — after validator `HydrologyPackShard._tile` (shard.py:47–50), который читает уже типизированное вложенное поле через `rule.ref.select(record)` и отвергает длину. Для каждой строки D — отдельный структурный отказ в decoder.
+
+| Объявление | POJO | Селектор | Полная форма | Размер | Admission / scan |
+|---|---|---|---|---:|---|
+| root.py:206–208 | HydrologyPackRoot | root.dependencies | tuple[PlanDependency, ...] | 7…7, len(_DEPENDENCIES) | A / D |
+| root.py:209–211 | HydrologyPackRoot | root.shards | tuple[HydrologyShardRef, ...] | 0…65536 | A / D |
+| shard.py:21–23 | RegionCoverage | coverage.spans | tuple[CoverageSpan, ...] | 1…4096 | B / D |
+| shard.py:26–28 | FineSurfaceWindow | bed.surface_z | SurfaceSamples = tuple[tuple[FineXY, Annotated[FineZ, Field(strict=True)]], ...] | 1…4096 | B / D |
+| shard.py:29–31 | FineSurfaceWindow | bed.protected_cells | frozenset[Coord], Coord = tuple[int, int] | 0…4096 | B / D |
+| shard.py:79–81 | HydrologyPackShard | shard.wet_runs | tuple[WaterMembershipRun, ...] | 0…4096 | A / D |
+| shard.py:82–84 | HydrologyPackShard | shard.shore_rows | tuple[tuple[FineXY, MapCellHydrology], ...] | 0…4096 | A / D |
+
+FineXY обозначает пару FineX, FineY. packCodec.py:13–15 передаёт обе root-привязки в профиль root и три группы shard-привязок в профиль shard. В boundedCanonicalDecode.py:56–57, 167–171 D находит границы по паре (owner, выведенное имя), а тип получает из аннотации поля. На строках 89–103 проверяется tag, 112–115 отвергают лишний элемент до его чтения и рекурсивно проверяют тип разрешённого элемента, 125–126 отвергают недобор. Одновременно действуют бюджеты depth/width/nodes/bytes. 65536 — предел количества shards по одному правилу.
+
+**Связывание и runtime.** Все семь правил используют существующие FieldRef и bind_field. bind_field исполняет селектор на probe, требует один прямой атрибут и проверяет его наличие в model_fields. Строковых копий селекторов в правилах нет. В test_bounded_decode.py:33–48 воспроизведены следующие отказы до чтения записи.
+
+- `shard.missing` — bind_field выдаёт «no such field» при создании CollectionLimit. `shard.tx` — decodeLimits.py:21–22 отвергает скаляр.
+- Для root.shards ожидания `frozenset[HydrologyShardRef]`, `tuple[PlanRef, ...]` и `tuple[HydrologyShardRef]` дают «collection type mismatch» на decodeLimits.py:23–24 при создании правила.
+- Правильное правило root.shards внутри RecordLimits(HydrologyPackShard, …) даёт «bounded field belongs to» в RecordLimits.__post_init__ при сборке профиля.
+
+**Статическая проверка.** Из корня выполнены команды
+
+```powershell
+node_modules/.bin/pyright.cmd -p pyrightconfig.cascade.json backend/app/dataModel/encoding/decodeLimits.py backend/app/dataModel/hydrology/pack/root.py backend/app/dataModel/hydrology/pack/shard.py
+node_modules/.bin/pyright.cmd -p pyrightconfig.cascade.json backend/tests/typing/spatial_pack_limits_invalid.py
+```
+
+Первая вернула код 0, без ошибок и предупреждений. Вторая вернула код 1 и ровно три reportArgumentType из-за инвариантного параметра результата FieldRef. На 7:38 получен StrictInt при ожидаемом tuple[int, ...], на 8:52 — tuple[WaterMembershipRun, ...] при ожидаемом frozenset[WaterMembershipRun], на 9:38 — тот же tuple при ожидаемом tuple[int, ...].
+
+**Wire lock.** В отдельном Python-процессе изменённые модули app загружены из `git show 7922cf8b:backend/<path>`. После require_pack_schema_v1() из принятого manifest независимо собран словарь для всех RECORD по type_id с tuple(model_fields) либо именами dataclasses.fields в исходном порядке. Сравнение целых словарей с текущим _V1_WIRE_FIELDS дало равенство всех 27 записей, без лишних ключей. Сверенные ID — 53, 55, 94, 95, 96, 98, 101, 105, 106, 107, 109, 150, 152, 153, 154, 226, 227, 238, 239, 283, 60001–60005, 60007, 60008. Остальные 11 bindings — enums. TLV хранит упорядоченные пары (текстовое имя, значение). Поэтому таблица packSchema.py:34–62 фиксирует литералы формата, canonicalCodec кодирует имена POJO, а reader сверяет входное имя с ожидаемым на boundedCanonicalDecode.py:167–171.
+
+Публичные encode_root/encode_shard проверяют верхний тип и через require_pack_record_v1 → require_pack_schema_v1 проверяют lock до encode, затем проверяют готовые bytes. decode_root/decode_shard проверяют version → schema lock → bounded decode → admission. Временные подмены __pydantic_fields__ и соответствующего _STORAGE_SHAPES в процессе проверки дали следующие результаты.
+
+- `shards → tiles` у HydrologyPackRoot с обновлённым shape hash — «wire field binding drift: 60001». Тест на сохранённых bytes и отдельная проба всех четырёх entry points с запрещающими mock на packCodec.encode и packCodec.decode_bounded прошли. Счётчики вызовов обоих mock равны нулю.
+- Обратный порядок полей вложенного HydrologyShardRef, с обновлённым shape hash ID 60002, дал «wire field binding drift: 60002» во всех четырёх операциях с теми же нулевыми счётчиками. В обеих пробах отказ на packSchema.py:133–134. Обновлялся только hash имитируемой модели внутри patch.
+
+**Независимые свидетельства.** Из backend выполнено
+
+```powershell
+../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_pack_codec tests.spatial_pack.test_bounded_decode tests.spatial_pack.test_storage_schema tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec
+```
+
+**74 теста OK, 3,454 с.** Дополнительные in-memory пробы выполнялись через `../.venv/Scripts/python.exe -B -` из backend.
+
+1. Source output_fingerprint после восстановления envelope совпал с прежними golden для wet `5245f47920fff9a15d4fe176fdc3e1a6c1e65289178b0c5645624a1d4f35ff2d` и dry `4721b77c9f3bb65f8f33ea768c3e4f785020ef565f352c062c4034e28cb84a1b` (test_source_schema.py:129–141). Для отдельного трёхтайлового fixture oracle восстановил payload и воспроизвёл fingerprint источника из payload, dependencies и diagnostics (test_pack_codec.py:50–124).
+2. SHA-256 публичного encode для records() совпал с контрольными значениями — root, 7518 байтов, `ef55146133c7271a635a006aa8d3667511d12bfe4bf114e52a74460cc9caadef`; shard, 1913 байтов, `efc45c2be06b296c3190f3128aa657abda3858d978b2de5448d9eae0f68bb308`.
+3. Для каждого артефакта отдельно проверены равенство записи после decode и прямое равенство bytes после encode → decode(version=1) → encode. Эталоны сохранены.
+4. Минимальная замена в допустимом root — `decode_root(raw_root(records()[0], shards=(42,)), 1)`. Размер tuple равен одному, TLV элемента имеет tag int. При перехвате _Reader.run с запретом build=True зарегистрирован единственный вызов build=False и получен CanonicalEncodingError «wrong canonical field type or tag». Конструкторы доменных записей доступны только из ветви build=True на boundedCanonicalDecode.py:176–177. Тесты отдельно воспроизвели повреждения roster, enum, позднего scalar и cap+1.
+
+Граница ревью — контракты данных и целые in-memory артефакты P1-C. Время и heap нагрузочных профилей §15.43 в данном прогоне не измерялись. Transport/IO, publication, bindings узлов, cutover, P1-D, Time и API-1 вне проверки.

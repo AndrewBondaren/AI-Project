@@ -108,6 +108,10 @@ class InputWaitCoordinator:
                         or wait.step_index >= record.step_index):
                     raise ValueError("invalid persisted input receipt")
                 requests.add(receipt.request_id)
+                if (record.step_index == wait.step_index + 1
+                        and record.status in (InvocationStatus.READY, InvocationStatus.RUNNING)
+                        and record.continuation is None):
+                    raise ValueError("accepted input has no continuation")
                 contract.input_type.model_validate_json(wait.accepted.payload)
             elif record.status != InvocationStatus.CANCELLED or graph.cancellation is None:
                 if wait.step_index != record.step_index or record.continuation is None:

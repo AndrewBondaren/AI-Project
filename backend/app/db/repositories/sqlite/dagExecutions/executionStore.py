@@ -59,6 +59,15 @@ class SQLiteExecutionStore:
                 raise OwnershipConflict(claim.execution_id)
         return revision + 1
 
+    async def cancel(self, execution_id: ExecutionId, revision: int, blob: bytes) -> bool:
+        with self._transaction():
+            cursor = self.db.execute(
+                "UPDATE dag_executions SET revision=revision+1,status='CANCELLED',checkpoint_blob=?,checksum=?,"
+                "fence=fence+1,owner_id=NULL,lease_until=NULL WHERE execution_id=? AND revision=?",
+                (blob, sha256(blob).hexdigest(), execution_id, revision),
+            )
+            return cursor.rowcount == 1
+
     async def renew(self, claim: Claim, seconds: int) -> None:
         if seconds <= 0:
             raise ValueError("lease duration must be positive")

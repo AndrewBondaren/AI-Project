@@ -15785,6 +15785,10 @@ Admission ревизий, exact fine P2, diagnostics/fingerprints и публи�
 
 Теперь submit_captured_competitor сравнивает исходную площадь callback с capture до revalidation. Конструктор PreparedPlacementV2 также отклоняет потерю точности при преобразовании целого в float: это закрывает путь, когда callback сам конструирует модель до возврата. Регрессия `test_callback_area_cannot_round_to_captured_area` проверяет оба пути, пустую очередь и сохранённый offer после каждого отказа, затем успешный retry с точным `2**53`.
 
+#### I7.3. Повторный PASS по P2 и приёмка GEO-I7.1 (2026-11-03)
+
+Пользователь принял GEO-I7.1 после независимой проверки исправления §I7.2. При площади callback `2**53+1` оба пути (model_copy и обычный конструктор) завершились отказом до session.submit: ноль вызовов, очередь пуста, offer сохранён. После каждого отказа передача точного `2**53` в той же сессии прошла с одним вызовом submit. Независимый прогон geo1/integration — 175/175. Замечание P2 закрыто.
+
 ### GEO-I8.1. Проверка полного competitor_geometry перед стартом native placement
 
 Реализация предъявлена на независимое ревью. После admission batch/W/regions по I5.1 caller передаёт тот же batch и W, expected_before, water_intents, competitor_geometry, reevaluate_support и control в `start_native_placement_session`. Water ownership устанавливается по тем же intent/header и уникальным source/region UID, что в WaterDesignUniverse.capture. Входной tuple геометрии должен быть строго упорядочен по region_uid. Для всех non-water READY и WAITING_SUPPORT запись обязательна, включая участников, ещё не получивших support. Для принадлежащего batch терминального DISABLED/UNRESOLVED участника запись допустима, но необязательна; при наличии проверяется полностью. Запись для water или отсутствующего header отклоняется.

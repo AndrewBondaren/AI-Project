@@ -53,5 +53,15 @@ class MemoryExecutionStore:
             raise ValueError("lease duration must be positive")
         entry.lease_until = monotonic() + seconds
 
+    async def cancel(self, execution_id: ExecutionId, revision: int, blob: bytes) -> bool:
+        entry = self._entries[execution_id]
+        if entry.snapshot.revision != revision:
+            return False
+        entry.snapshot = Checkpoint(revision + 1, "CANCELLED", blob)
+        entry.fence += 1
+        entry.owner = None
+        entry.lease_until = 0
+        return True
+
     async def release(self, claim: Claim) -> None:
         self._owned(claim).owner = None

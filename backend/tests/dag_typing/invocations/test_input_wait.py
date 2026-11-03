@@ -1,11 +1,14 @@
+import asyncio
 import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException
+from app.application.engine.contracts.invocation.executionStore import OwnershipConflict, RestoreFailure
 
 from app.application.engine.contracts.invocation.inputWait import (
     Failed, InputConflict, InputReceived, InputWaitContract, ResumeInput, Waiting, WaitInput, WaitSpec,
@@ -148,3 +151,64 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(InputConflict):
                 await engine.accept_input(KEY, ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="late",
                                           expected_revision=3, payload=f.Count(value=2)))
+
+    async def test_cancel_active_execution_from_second_connection(self):
+        started, stopped = asyncio.Event(), asyncio.Event()
+
+        async def blocked_start(node, input):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+        with closing(sqlite3.connect(self.path)) as first, closing(sqlite3.connect(self.path)) as second:
+            with patch.object(Ask, "start", blocked_start):
+                task = asyncio.create_task(self.start(first))
+                try:
+                    await asyncio.wait_for(started.wait(), 5)
+                    engine = self.engine(second)
+                    with self.assertRaises(PermissionError):
+                        await self.engine(second, "foreign").cancel_execution(KEY)
+                    await engine.cancel_execution(KEY)
+                    with self.assertRaises(InputConflict):
+                        await engine.accept_input(KEY, ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="late",
+                                                  expected_revision=3, payload=f.Count(value=2)))
+                    self.assertIsInstance(await asyncio.wait_for(task, 5), Failed)
+                    self.assertTrue(stopped.is_set())
+                finally:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+            graph = f.InvocationGraph.model_validate_json((await f.SQLiteExecutionStore(second).load(KEY)).blob)
+            self.assertTrue(all(r.status == "CANCELLED" for r in graph.records.values()))
+
+    async def test_cancel_revokes_stale_claim_and_preserves_terminal_checkpoint(self):
+        with closing(sqlite3.connect(self.path)) as first, closing(sqlite3.connect(self.path)) as second:
+            await self.start(first)
+            store = f.SQLiteExecutionStore(first)
+            stale = await store.claim(KEY, "old", 30)
+            before = await store.load(KEY)
+            await self.engine(second).cancel_execution(KEY)
+            cancelled = await store.load(KEY)
+            self.assertFalse(await store.cancel(KEY, before.revision, before.blob))
+            with self.assertRaises(OwnershipConflict):
+                await store.checkpoint(stale, cancelled.revision, before.status, before.blob)
+            self.assertEqual(await store.load(KEY), cancelled)
+
+    async def test_restore_rejects_accepted_input_without_continuation_before_dispatch(self):
+        with closing(sqlite3.connect(self.path)) as first:
+            await self.start(first)
+            await self.engine(first).accept_input(KEY, ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="first",
+                                                expected_revision=3, payload=f.Count(value=7)))
+            store = f.SQLiteExecutionStore(first)
+            saved = await store.load(KEY)
+            graph = f.InvocationGraph.model_validate_json(saved.blob)
+            record = graph.records[graph.waits[WaitId("pick")].invocation_id]
+            record.continuation = record.state_contract = None
+            claim = await store.claim(KEY, "damage", 30)
+            await store.checkpoint(claim, saved.revision, saved.status, graph.model_dump_json().encode())
+            await store.release(claim)
+        with closing(sqlite3.connect(self.path)) as second, patch.object(Ask, "start") as start:
+            with self.assertRaises(RestoreFailure):
+                await self.engine(second).resume(KEY, max_passes=1, options=OPTIONS)
+            start.assert_not_called()
