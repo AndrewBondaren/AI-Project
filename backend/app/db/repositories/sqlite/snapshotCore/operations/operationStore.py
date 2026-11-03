@@ -83,6 +83,8 @@ class SqliteOperationStore:
         terminal = await self._access.one_row(scope, PublicationOutcomeRow, "SELECT * FROM publication_outcomes WHERE operation_id=?", (operation_id,))
         refs = await self._artifacts.read(scope.read_scope if isinstance(scope, CommitScope) else scope, operation_id)
         result = None if terminal is None else self._codec.decode(terminal)
+        if isinstance(result, OperationCancelled) and refs:
+            raise PublicationInfrastructureError("cancelled operation still has active artifact holds")
         if result is not None:
             await self._evidence.check(scope, result)
         return OperationRecord(operation_id=row.operation_id, world_uid=row.world_uid, kind=_wire(OperationKind, row.kind),
@@ -138,6 +140,8 @@ class SqliteOperationStore:
             if record.terminal != outcome:
                 raise ValueError("terminal identity cannot be overwritten")
             return
+        if isinstance(outcome, OperationCancelled) and record.leased_artifacts:
+            raise ValueError("cancellation requires release of operation holds")
         if not isinstance(outcome, OperationCancelled) and record.phase is not OperationPhase.APPLYING:
             raise ValueError("publication outcome requires a claimed applying operation")
         OperationRecord.model_validate({**record.model_dump(), "phase": OperationPhase.TERMINAL, "terminal": outcome}, strict=True)

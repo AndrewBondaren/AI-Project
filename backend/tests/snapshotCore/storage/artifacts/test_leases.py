@@ -276,3 +276,81 @@ class ConcreteLeaseTests(unittest.TestCase):
                     await peer.assert_writable(lease)
                 self.assertEqual((await peer.cancel("prepare", 1)).leased_artifacts, ())
         run_async(check())
+
+    def test_implicit_caller_update_survives_rejected_cancel(self):
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                leases, _, _ = self.stores(first)
+                await leases.open_operation("probe", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                conn = first[0].conn
+                await conn.execute("UPDATE worlds SET name='pending' WHERE world_uid='w1'")
+                with self.assertRaises(PublicationInfrastructureError):
+                    await leases.cancel("probe", 1)
+                self.assertTrue(conn.in_transaction)
+                await conn.commit()
+                async with second[0].conn.execute("SELECT name FROM worlds WHERE world_uid='w1'") as cursor:
+                    self.assertEqual((await cursor.fetchone())[0], "pending")
+                await leases.assert_writable(await leases.open_operation(
+                    "probe", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64))
+        run_async(check())
+
+    def test_cancelled_terminal_requires_released_holds_on_write_and_both_cancel_reads(self):
+        from unittest.mock import patch
+        from app.application.publication.service.operationLedger import OperationLedger
+        from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                leases, catalog, _ = self.stores(first)
+                lease = await preparing(first)
+                ref = descriptor()
+                await sealed(first, catalog, lease, ref)
+                await leases.finish_preparation(lease, (ref,))
+                op = lease.operation_id
+                outcome = OperationCancelled(operation_id=op, reason=FieldPathError(path=(), message="cancelled"))
+                operations = second[-1]
+                async with second[1].transaction(op) as scope:
+                    with self.assertRaises(ValueError):
+                        await operations.record_terminal(scope, outcome)
+                self.assertIsNone((await first[-1].read(op)).terminal)
+
+                # Replay a persisted outcome from before the write-side check
+                # between cancel's two transactions, using an independent writer.
+                read_writers = leases._catalog._writers
+                async def inject_terminal(scope, operation_id):
+                    async with second[1].transaction(op) as write:
+                        previous = await operations._event(op, write)
+                        await operations._access.insert(write, operations._codec.encode(outcome))
+                        await operations._access.insert(write, PublicationOperationEventRow("legacy-terminal",
+                            op, previous.event_id, previous.event_seq + 1, "terminal", lease.fence))
+                    return await read_writers(scope, operation_id)
+
+                with patch.object(leases._catalog, "_writers", inject_terminal):
+                    with self.assertRaisesRegex(PublicationInfrastructureError, "active artifact holds"):
+                        await leases.cancel(op, lease.fence)
+                with self.assertRaisesRegex(PublicationInfrastructureError, "active artifact holds"):
+                    await leases.cancel(op, lease.fence)
+                with self.assertRaisesRegex(PublicationInfrastructureError, "active artifact holds"):
+                    await OperationLedger(first[-1], leases).recover(op)
+                # Raw facts remain observable even if typed terminal hydration fails closed.
+                async with second[1].read_scope() as scope:
+                    self.assertEqual(await operations._artifacts.read(scope, op), (ref,))
+        run_async(check())
+
+    def test_corrupt_held_descriptor_is_infrastructure_failure(self):
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                leases, catalog, _ = self.stores(first)
+                args = ("probe", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                lease = await leases.open_operation(*args)
+                reservation = await catalog.reserve(lease, descriptor())
+                old = await unsafe_update(second[0], "artifact_catalog", "artifact_id", reservation.artifact_id, "nbytes", -1)
+                for call, params in ((leases.recover, ("probe",)), (leases.cancel, ("probe", 1)), (leases.open_operation, args)):
+                    with self.subTest(call=call.__name__), self.assertRaises(PublicationInfrastructureError):
+                        await call(*params)
+                with self.assertRaises(ValueError):
+                    await leases.cancel("probe", True)
+                await unsafe_update(second[0], "artifact_catalog", "artifact_id", reservation.artifact_id, "nbytes", old)
+                await leases.assert_writable(lease)
+        run_async(check())

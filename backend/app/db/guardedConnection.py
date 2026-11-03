@@ -40,6 +40,10 @@ class GuardedConnection(aiosqlite.Connection):
     def owns_unit_of_work(self) -> bool:
         return self._explicit and self._owner is asyncio.current_task()
 
+    @property
+    def owns_transaction(self) -> bool:
+        return self._owner is asyncio.current_task() and self._has_transaction()
+
     async def _execute(self, fn, *args, **kwargs):
         # aiosqlite routes SQL, cursor fetches and commit through this seam.
         await self._acquire()

@@ -1,7 +1,10 @@
 """Read-only active operation artifact holds; no writer or lifecycle policy."""
 
+from pydantic import TypeAdapter
+
+from app.application.publication.errors import PublicationInfrastructureError
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope
-from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind
+from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind, ArtifactFormatKey
 from app.dataModel.identity.uid import EntityUid
 from app.db.models.artifacts.catalogRows import ArtifactCatalogRow
 from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
@@ -21,7 +24,11 @@ class SqliteOperationArtifacts:
         refs = []
         for artifact in held:
             _values(uids=(artifact.artifact_id,))
-            refs.append(ArtifactRef(kind=_wire(ArtifactKind, artifact.kind), format_key=artifact.format_key,
-                format_version=artifact.format_version, content_hash=artifact.content_hash,
-                nbytes=artifact.nbytes, row_count=artifact.row_count))
+            try:
+                refs.append(ArtifactRef(kind=_wire(ArtifactKind, artifact.kind),
+                    format_key=TypeAdapter(ArtifactFormatKey).validate_python(artifact.format_key, strict=True),
+                    format_version=artifact.format_version, content_hash=artifact.content_hash,
+                    nbytes=artifact.nbytes, row_count=artifact.row_count))
+            except (ValueError, TypeError) as error:
+                raise PublicationInfrastructureError("invalid persisted operation artifact descriptor") from error
         return tuple(refs)

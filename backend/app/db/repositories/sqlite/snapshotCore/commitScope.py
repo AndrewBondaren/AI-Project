@@ -33,13 +33,15 @@ class SqlitePublicationCommitStore:
         conn = self._db.main_conn
         if not isinstance(conn, GuardedConnection):
             raise PublicationInfrastructureError("expected the existing GuardedConnection")
-        if conn.owns_unit_of_work:
+        if conn.owns_unit_of_work or conn.owns_transaction:
             raise PublicationInfrastructureError("nested/ambient publication transaction is forbidden")
         async with conn.unit_of_work():
             # A queued caller must recheck quarantine after acquiring the gate.
             self.registry.assert_available()
             if conn is not self._db.main_conn:
                 raise PublicationInfrastructureError("database connection changed while waiting")
+            if conn.in_transaction:
+                raise PublicationInfrastructureError("publication requires a fresh transaction")
             try:
                 try:
                     await self.driver.begin(conn, write=write)

@@ -8,6 +8,10 @@
 Прямые API (§§10–11, 20, 29–30, 36, 38) проверены для арифметики, advance, bind/rebind, календарной валидации, project/resolve, World resolver и восьми операций подготовки настроек. Time/World readers делегируют закреплённым source ports. Фабрики соединяют зависимости; Time готовит только proposal, World проверяет candidate, выбор операций остаётся у DAG.
 Проверки: 14 unittest ядра, compileall, Pyright по четырём пакетам (0 ошибок). Отдельно 7 существующих тестов canonical encoding. Чтение проверено с тестовыми источниками. T5/интеграция ожидают контрактов §45; registration и emitter §47 остаются интеграционными. prepare_initial проверен для AUTHORED и STANDARD: русские подписи, понедельник, обычные сезоны по месяцам и четыре периода. Перевод по языку пользователя вне Time. Для STANDARD с 1–3 часами политика отдельно OPEN (SettingsInvalid).
 
+T4, дополнение §§20/34: реализован `PublicationTimeState(publication, state)`. Headless publication и унаследованный head покрыты тестом, как и отказы для другого мира, неактивной ветки и незапущенного gameplay. 15 тестов Time прошли, Pyright на dataModel/time и application/time без ошибок. Production-чтение под CommitReadScope остаётся открытым.
+
+T5, сверка по коду: [SnapshotApplyContext](../../backend/app/application/worldSnapshot/contracts/context.py) передаёт назначенный snapshot и scope, но ещё не передаёт назначенную publication обработчику. Параметр `next_publication` уже есть на [CAS порту](../../backend/app/application/worldSnapshot/storage/publicationStore.py). В [OperationKind](../../backend/app/dataModel/artifacts/lifecycle/operation/kinds.py) отсутствует категория branch. До совместного контракта §§34/37/44 остаются открыты атомарное сохранение Time + effects, повтор после unknown commit и durable branch outcome.
+
 <details><summary>Изменённые файлы ядра</summary>
 
 Документы: `docs/tz_time.md`, `docs/project_data_storage_tz.md`, `.cursor/plans/time-domain.md`. В перечисленных пакетах добавлены также файлы `__init__.py`.

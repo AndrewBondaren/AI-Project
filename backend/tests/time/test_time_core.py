@@ -16,7 +16,7 @@ from app.dataModel.time.operations.lifecycle import BindInitialTime, RebindBranc
 from app.dataModel.time.reads.capture import TimeCapture
 from app.dataModel.time.results.errors import TimeAdvanceMustBePositive, TimeIntervalReversed, TimeRangeOverflow, TimeScopeMismatch
 from app.dataModel.time.storage.initial import InitialTimeFacts
-from app.dataModel.time.storage.state import StoredTimeState
+from app.dataModel.time.storage.state import PublicationTimeState, StoredTimeState, TimeClockState
 from app.dataModel.time.values.interval import TimeInterval
 from app.dataModel.time.values.point import MAX_SECONDS, TimePoint
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded, CalendarInvalid
@@ -43,6 +43,21 @@ def publication():
 
 
 class TimeCoreTests(unittest.TestCase):
+    def test_publication_state_tracks_active_branch_before_first_snapshot(self):
+        state = TimeClockState(point=point())
+        inherited = publication()
+        headless = inherited.model_copy(update={"snapshot_head": None})
+        for source in (headless, inherited):
+            bound = PublicationTimeState(publication=source, state=state)
+            self.assertEqual(bound.state.point, point())
+        for source in (
+            headless.model_copy(update={"world_uid": "another"}),
+            headless.model_copy(update={"gameplay_started": False}),
+            inherited.model_copy(update={"active_timeline_id": "other"}),
+        ):
+            with self.assertRaises(ValidationError):
+                PublicationTimeState(publication=source, state=state)
+
     def test_arithmetic(self):
         one = TimeConversions.from_seconds(SecondsInput(seconds=0, nanoseconds=1)).duration
         start = point(-1, 999999999)
