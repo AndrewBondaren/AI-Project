@@ -148,3 +148,21 @@ $mods = rg --files tests/dag_typing -g 'test_*.py' | ForEach-Object { ($_ -repla
 Четыре контрпримера проверены отдельно от штатного набора. При повторном предъявлении приложить результат каждой новой регрессии и полного прогона.
 
 **Отдельная проверка deployment.** На БД со схемой до R4 и уже применённой migration version 1 штатный `apply_migrations()` пропускает `0001_initial.sql`. Вызов `store.load` завершился `OperationalError: no such table: dag_executions`. По действующей политике локальная схема обновляется через recreate. Проверенный restart относится к БД, где таблица уже создана. Обновление существующей БД с сохранением данных остаётся отдельным deployment gate по §7. [database.py:66–86](../../backend/app/db/database.py#L66) · [0001_initial.sql:1966](../../backend/app/db/migrations/0001_initial.sql#L1966)
+
+## 10. Повторное ревью R1–R4 на `c3427f36` от 2026-11-03
+
+**CHANGES REQUIRED. Открыты два P1: REV-2 и новая REV-5.** REV-1 закрыта на исходном PRE→POST: журнал одного pass содержит `pre, post`, а POST читает опубликованный PRE output. REV-3 закрыта: все пять пишущих методов SQLite store отказали при активной транзакции caller, и второе соединение увидело запись только после caller commit. REV-4 закрыта: возвращённый родителю diagnostic_ref разрешился в сохранённую диагностику с указанием отказавшего prerequisite. [Регрессии §9](../../backend/tests/dag_typing/invocations/test_world_calls.py#L341)
+
+### REV-2 · P1 · R4 · OPEN для lease в одну секунду
+
+Регрессия с `lease_seconds=2` прошла. Для воспроизведения оставшегося случая взять тот же SQLite-сценарий с двумя соединениями, установить допустимое `lease_seconds=1` и задержку `apply_effects` 2,2 с. Без конкурирующего владельца первый `run` выполнил эффект и вернул `OwnershipConflict`; второе соединение прочитало `response=None`. Последующий `resume` увеличил счётчик эффектов до 2, снова вернул `OwnershipConflict` и не сохранил ответ. До смены целой секунды продление записывает прежний `unixepoch()+1`, а после смены секунды условие `lease_until > unixepoch()` уже ложно. [executionStore.py:43](../../backend/app/db/repositories/sqlite/dagExecutions/executionStore.py#L43) · [executionStore.py:67–68](../../backend/app/db/repositories/sqlite/dagExecutions/executionStore.py#L67) · [dagEngine.py:158–160](../../backend/app/application/engine/runtime/dagEngine.py#L158)
+
+**Критерий закрытия.** При lease в 1 секунду и hook длительностью 2,2 с живой owner завершает run. Второе соединение видит terminal response и возвращает тот же ответ через resume при счётчике эффектов 1. Сохранить проверку fencing после действительного takeover.
+
+### REV-5 · P1 · R2/R3 · OPEN · Подмена terminal root через prior_outputs
+
+На fixture `Group` с MemoryExecutionStore первый `run_invocation` сохранил `detailed_ref="joined"`. Повторить вызов с тем же execution ID, передав в `prior_outputs` запись с адресом завершённого root, чужими `contract_id/version` и значением `detailed_ref="forged"`. Caller получил `"forged"`, хотя независимое чтение checkpoint из того же store вернуло `"joined"`. При восстановлении `bind_published` допускает root в набор результатов предыдущей фазы и перезаписывает его terminal в памяти до возврата. [dagExecutor.py:84–88](../../backend/app/application/engine/runtime/dag/dagExecutor.py#L84) · [invocationCoordinator.py:75–89](../../backend/app/application/engine/runtime/invocations/invocationCoordinator.py#L75)
+
+**Критерий закрытия.** Принимать результаты только от допустимых узлов предыдущих фаз с соответствующим контрактом. Конфликтующая запись для root должна вызвать отказ. Следующий обычный повторный вызов должен вернуть сохранённое `"joined"`; проверить его совпадение с checkpoint. Сохранить прохождение PRE→POST из REV-1.
+
+В этом ревью полный прогон по команде §9 дал **360 тестов OK за 21,970 с** (19 модулей). Scoped `git diff --check` по исправлению прошёл. Оба открытых контрпримера воспроизведены отдельно от штатного набора.

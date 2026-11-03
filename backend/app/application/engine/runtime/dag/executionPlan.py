@@ -43,6 +43,19 @@ class ExecutionPlan:
         levels = self.pre_llm_levels + tuple(level for group in self.llm_groups for level in group.levels) + self.post_llm_levels
         return frozenset(node for level in levels for node in level)
 
+    def prior_phase_dependencies(self, root: NodeId) -> tuple[NodeId, ...]:
+        if not any(root in level for level in self.post_llm_levels):
+            return ()
+        dependencies: set[NodeId] = set()
+        pending = list(self.nodes[root].node.deps)
+        while pending:
+            node = pending.pop()
+            if node not in dependencies:
+                dependencies.add(node)
+                pending.extend(self.nodes[node].node.deps)
+        levels = self.pre_llm_levels + tuple(level for group in self.llm_groups for level in group.levels)
+        return tuple(node for level in levels for node in level if node in dependencies)
+
     def get[I: BaseModel, O: BaseModel, E: NodeError](
         self, node_id: NodeId, contract: NodeContract[I, O, E],
     ) -> CompiledNode[I, O, E]:

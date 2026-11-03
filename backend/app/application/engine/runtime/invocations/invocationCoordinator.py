@@ -74,14 +74,27 @@ class InvocationCoordinator:
 
     def bind_published(self, outputs: tuple[OutputRecord[BaseModel], ...]) -> None:
         root = self.graph.records[self.graph.root]
+        if not outputs:
+            return
+        allowed = set(self.plan.prior_phase_dependencies(root.node_id))
         for output in outputs:
             identity = output.identity
-            record = self.graph.records[identity.invocation_id]
-            if (identity.execution_id != self.graph.execution_id or record.plan_instance_id != root.plan_instance_id
-                    or record.node_id != identity.node_id):
-                raise RestoreFailure("prior-phase output belongs to another invocation")
+            record = self.graph.records.get(identity.invocation_id)
+            if (record is None or record.node_id not in allowed or identity.execution_id != self.graph.execution_id
+                    or record.plan_instance_id != root.plan_instance_id or record.node_id != identity.node_id):
+                raise RestoreFailure("output is not from a prior-phase dependency of this root")
             contract = self.plan.registrations[record.node_id].contract
-            record.terminal = self.encode(output.output, contract.output_type)
+            if (output.contract_id, output.contract_version) != (contract.contract_id, contract.version):
+                raise RestoreFailure("prior-phase output contract mismatch")
+            terminal = self.encode(output.output, contract.output_type)
+            if record.status == Status.SUCCEEDED:
+                if (record.identity() != identity or record.terminal != terminal or
+                        record.reads != output.reads or record.domain_reads != output.domain_reads):
+                    raise RestoreFailure("conflicting prior-phase output")
+                continue
+            if record.status != Status.READY:
+                raise RestoreFailure("prior-phase invocation cannot accept a published result")
+            record.terminal = terminal
             record.plan_revision = identity.plan_revision
             record.attempt_counter = identity.attempt
             record.reads = output.reads

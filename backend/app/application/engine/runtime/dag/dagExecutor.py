@@ -213,16 +213,12 @@ class DAGExecutor:
         if root is None or options is None:
             raise ValueError("invocation plan requires execution options")
         catalog = state.catalog.capture()
-        earlier_levels = plan.pre_llm_levels if phase == ExecutionPhase.POST_LLM else ()
-        if phase == ExecutionPhase.POST_LLM:
-            earlier_levels += tuple(level for group in plan.llm_groups for level in group.levels)
         earlier: list[OutputRecord[BaseModel]] = []
-        for level in earlier_levels:
-            for node in level:
-                prior_output = catalog.record(node, plan.registrations[node].contract)
-                if prior_output is None:
-                    raise RestoreFailure(f"missing prior-phase output for '{node}'")
-                earlier.append(prior_output)
+        for node in plan.prior_phase_dependencies(root):
+            prior_output = catalog.record(node, plan.registrations[node].contract)
+            if prior_output is None:
+                raise RestoreFailure(f"missing prior-phase output for '{node}'")
+            earlier.append(prior_output)
         state.begin_phase(revision, pass_number)
         try:
             if durable is None:

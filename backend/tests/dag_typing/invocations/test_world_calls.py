@@ -370,7 +370,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         store = MemoryExecutionStore()
         executor = DAGExecutor(NodeRunner(ContractValidator(), NodeValidator()), {FakeExecutor: FakeExecutor()},
                                invocation_options=InvocationOptions(store, workers=1, invocation_limit=2))
-        engine = DAGEngine(executor, None, registry, Hooks(compiler.compile(GraphRuleState(), invocation_root=Post.id)),
+        plan = compiler.compile(GraphRuleState(), invocation_root=Post.id)
+        engine = DAGEngine(executor, None, registry, Hooks(plan),
                            None, ExecutionSnapshotService(), SnapshotStore())
         result = await engine.run(ExecutionId("mixed"), TaskType.INTENT_DETECTION, max_passes=1,
                                   options=LLMExecutionOptions(player_message="", language="ru", repair_iterations=0,
@@ -378,7 +379,27 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.ok)
         self.assertEqual(seen, ["pre", "post"])
 
+        from app.application.engine.contracts.invocation.executionStore import RestoreFailure
+        from app.dataModel.engine.dag.records import OutputRecord
+        execution = ExecutionId("mixed")
+        saved = await store.load(execution)
+        graph = InvocationGraph.model_validate_json(saved.blob)
+        prior = next(record for record in graph.records.values() if record.node_id == Pre.id)
+        for contract_id, version in ((ContractId("other"), prior.version), (prior.contract_id, ContractVersion("99"))):
+            foreign = OutputRecord[Payload](identity=prior.identity(), contract_id=contract_id, contract_version=version,
+                                            output=Payload())
+            with self.subTest(contract_id=contract_id, version=version), self.assertRaises(RestoreFailure):
+                await executor.run_invocation(plan, execution, Post.id, graph.revision, store, owner="test",
+                                              workers=1, invocation_limit=2, prior_outputs=(foreign,))
+        self.assertEqual(saved, await store.load(execution))
+
     async def test_slow_effect_retains_lease(self):
+        await self.check_slow_effect(2)
+
+    async def test_slow_effect_retains_one_second_lease(self):
+        await self.check_slow_effect(1)
+
+    async def check_slow_effect(self, lease_seconds):
         from unittest.mock import patch
         calls = []
         async def slow_effect(hooks, view):
@@ -393,11 +414,34 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 key = ExecutionId("lease")
                 options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
                 with patch.object(EntryHooks, "apply_effects", slow_effect):
-                    result = await runtime(store=SQLiteExecutionStore(a), lease_seconds=2).run(
+                    result = await runtime(store=SQLiteExecutionStore(a), lease_seconds=lease_seconds).run(
                         key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
                     self.assertEqual((await SQLiteExecutionStore(b).load(key)).status, "COMPLETED")
                     self.assertEqual(result, await runtime(store=SQLiteExecutionStore(b)).resume(key, max_passes=1, options=options))
                 self.assertEqual(calls, [1])
+
+    async def test_prior_outputs_cannot_replace_terminal_root(self):
+        from app.application.engine.contracts.invocation.executionStore import RestoreFailure
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        from app.dataModel.engine.dag.records import OutputRecord
+
+        store = MemoryExecutionStore()
+        executor, plan = runtime(Group)
+        execution = ExecutionId("protected-root")
+        args = (plan, execution, Group.id, PlanRevision("1"), store)
+        options = dict(owner="test", workers=1, invocation_limit=4)
+        root = await executor.run_invocation(*args, **options)
+        saved = await store.load(execution)
+        for contract_id, version in ((root.contract_id, root.version), (ContractId("foreign"), ContractVersion("99"))):
+            forged = OutputRecord[Detailed](identity=root.identity(), contract_id=contract_id, contract_version=version,
+                                            output=Detailed(detailed_ref="forged"))
+            with self.subTest(contract=contract_id), self.assertRaises(RestoreFailure):
+                await executor.run_invocation(*args, prior_outputs=(forged,), **options)
+        replay = await executor.run_invocation(*args, **options)
+        self.assertEqual(Detailed.model_validate_json(replay.terminal).detailed_ref, "joined")
+        checkpoint = InvocationGraph.model_validate_json((await store.load(execution)).blob)
+        self.assertEqual(replay, checkpoint.records[checkpoint.root])
+        self.assertEqual(saved, await store.load(execution))
 
     async def test_store_preserves_caller_transaction(self):
         from contextlib import closing
@@ -613,6 +657,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 with first:
                     first.execute("UPDATE dag_executions SET lease_until=unixepoch()-1 WHERE execution_id=?", (key,))
                 active = await b.claim(key, "b", 60)
+                with self.assertRaises(OwnershipConflict):
+                    await a.renew(stale, 60)
                 saved = await b.load(key)
                 with self.assertRaises(OwnershipConflict):
                     await a.checkpoint(stale, saved.revision, saved.status, saved.blob)

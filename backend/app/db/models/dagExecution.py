@@ -11,7 +11,7 @@ class DagExecution:
     revision: int
     owner_id: str | None
     fence: int
-    lease_until: int | None
+    lease_until: float | None
     status: str
     checkpoint_blob: bytes
     checksum: str

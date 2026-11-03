@@ -1969,7 +1969,7 @@ CREATE TABLE IF NOT EXISTS dag_executions (
     revision INTEGER NOT NULL CHECK (revision >= 0),
     owner_id TEXT,
     fence INTEGER NOT NULL CHECK (fence >= 0),
-    lease_until INTEGER,
+    lease_until REAL,
     status TEXT NOT NULL,
     checkpoint_blob BLOB NOT NULL,
     checksum TEXT NOT NULL

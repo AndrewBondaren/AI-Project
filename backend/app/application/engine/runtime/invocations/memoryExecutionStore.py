@@ -51,8 +51,6 @@ class MemoryExecutionStore:
         entry = self._owned(claim)
         if seconds <= 0:
             raise ValueError("lease duration must be positive")
-        if entry.lease_until <= monotonic():
-            raise OwnershipConflict(claim.execution_id)
         entry.lease_until = monotonic() + seconds
 
     async def release(self, claim: Claim) -> None:
