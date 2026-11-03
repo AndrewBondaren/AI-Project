@@ -1,0 +1,117 @@
+# DAG invocation runtime и bake admission
+
+Дата: 2026-11-03. Delivery plan к [GEN §§4/18](gen-dag-node-dependency.md). Scope: проектирование; production code этим документом не изменён. Решения о поведении приняты пользователем; ниже фиксируется техническая декомпозиция. Первый срез R1–R4 имеет определённый контракт и может реализовываться на тестовых Python-нодах. Подключение родителей GEN возможно только после R5–R7 и их domain-contract gates. Параллельные самостоятельные full/light bake одного мира отменены.
+
+## 1. Проверенные ограничения исходного кода
+
+| Файл от backend/app | AS-IS и необходимое изменение |
+|---|---|
+| `dataModel/engine/dag/identity.py` | ExecutionIdentity.result_key = execution/node/attempt; добавить invocation, сохранить node как provenance |
+| `application/engine/runtime/dag/context/dagContext.py` | counters/open/current/errors индексируются NodeId, второй открытый attempt того же NodeId запрещён; перевод на invocation |
+| `application/engine/runtime/dag/executionState.py` | statuses/attempt_passes по NodeId; переход на invocation, отдельная адресация plan instance |
+| `application/engine/contracts/outputRef.py` | producer NodeId + typed Output; сохраняется как декларация, при binding разрешается в конкретный invocation |
+| `application/engine/runtime/graphs/graphCompiler.py` | статический граф определений; добавить проверку calls, не превращая calls в deps |
+| `application/engine/runtime/dag/dagExecutor.py` | исполнение Python уровнями; готовые invocation должны возвращаться в этот scheduler после CALL |
+| `application/engine/runtime/execution/nodeRunner.py` | terminal outcome и глобальная gate/error policy; failure вызываемого child сначала доставляется caller |
+| `application/cancellation/typed/sessionSnapshot.py` | snapshot запрещает RUNNING; schema индексирована NodeId; нужен versioned durable checkpoint |
+| `application/cancellation/typed/snapshotStore.py` | обычный dict в памяти; restart durability отсутствует |
+| `application/engine/runtime/dagEngine.py` | snapshot на cancellation, RESPONSE удаляет snapshot; WAIT_INPUT должен сохранять execution |
+| `application/publication/service/operationLedger.py`, `contracts/operationStore.py` | publication claim/terminal в CommitScope, не compute admission |
+| `dataModel/artifacts/lifecycle/operation/kinds.py`, `db/migrations/0001_initial.sql` | publication kinds только snapshot_apply/pack_activation/gameplay_start; нельзя объявить existing ledger готовым bake registry |
+
+Нормативный predecessor: `docs/tz_engine_node_context.md`, `.cursor/plans/dag-typing-1.md`. Перед изменением production-контрактов R1 синхронизирует ТЗ. Не менять одноимённые legacy graphs/execution классы вместо target `runtime/`.
+
+## 2. Identity, область данных и lifecycle
+
+В `identity.py`: InvocationId, PlanInstanceId, CallKey, WaitId — строгие отдельные типы идентификаторов; ordinal/revision — целые неотрицательные типы, attempt > 0. ExecutionIdentity = execution_id, invocation_id, node_id, attempt, plan_revision. result_key = (execution_id, invocation_id, attempt).
+
+InvocationRecord: execution_id, invocation_id, node_id, plan_instance_id, caller_invocation_id?, caller_step?, call_key?, contract_id/version, input, continuation?, step_index, status, attempt_counter, dependency_bindings, terminal?. Input/continuation/terminal сериализуются только через зарегистрированный versioned codec соответствующего POJO. Не pickle и не произвольный import path из persisted JSON. Payload boundary может быть bytes; в API ноды нет Any/dict с произвольным содержимым.
+
+InvocationStatus: READY → RUNNING → SUCCEEDED | FAILED | CANCELLED | WAITING_CALLS | WAITING_INPUT | WAITING_OPERATION. WAITING_* не terminal Output и не NodeStatus.BLOCKED. WAITING_CALLS → READY после terminal всех children; WAITING_INPUT/OPERATION → READY после принятого события. Узел может проходить несколько continuation steps. Attempt — запуск одного step; retry увеличивает attempt, но не step_index или invocation_id. Переход на следующий step фиксируется вместе с потреблением события; replay восстанавливает тот же step.
+
+Уникальность dispatch: (execution_id, caller_invocation_id, caller_step, call_key). Идентификатор child выделяется при первой фиксации dispatch; повторный такой dispatch возвращает существующий child. Иной Input/target под тем же ключом — runtime contract violation, не новый вызов.
+
+PlanInstance — экземпляр статического closure зависимостей target. Root plan получает один instance; каждый CALL — новый. Внутри instance одному NodeId соответствует один invocation, общие deps diamond-графа исполняются один раз. RequiredOutput разрешается только через dependency_bindings этого instance. Cross-instance данные передаются явно через CALL Input/RETURN; implicit latest-by-NodeId запрещён. Для callee explicit Input заменяет prepare_input; для его статических prerequisite nodes сохраняется prepare_input(read_view). Порядковые deps и declared reads продолжают исполняться/проверяться в local instance. В R1–R4 cross-phase CALL и LLM callee запрещены compile validation; существующий root PRE/LLM/POST flow сохраняется.
+
+Повторный pass root использует прежние invocation для прежнего логического root plan; это re-execution/reuse, не новый CALL. Изменение root plan membership регистрируется как новый plan instance с явными binding, а не переносом outputs по NodeId. Invalidation следует фактическим DependencyRead с identity, не всем совпадающим NodeId разных instances. Reuse между независимыми calls в первой версии отсутствует; bake dedup находится на другом уровне.
+
+## 3. API ноды и компиляция
+
+Новые immutable контракты в `contracts/invocation/`:
+
+- `callTarget.py`: CallTarget[I,O,E](node_id, contract_id, version, input_type, output_type, error_types). NodeContract.calls — tuple targets, по умолчанию пустой.
+- `nodeStep.py`: Complete[O](output), Call[I,O,E,S](key,target,input,state), CallGroup[S](requests,state), WaitInput[S,U](wait_spec,state), WaitOperation[S](operation_ref,state). Call — sugar для группы из одного элемента; join всегда ALL.
+- `resumeEvent.py`: CallSuccess[O], CallFailure[E], CallCancelled, CallRuntimeFailure с typed diagnostic reference; CallResults предоставляет `get(key,target)` с проверкой target и возвращает типизированный union. InputReceived[U] и OperationCompleted — отдельные события. Не представлять undeclared exception как выдуманный domain E.
+- `continuationContract.py`: ContinuationContract[S](contract_id,version,state_type) и InputWaitContract[U](contract_id,version,input_type). В NodeContract они optional; обязательны при соответствующих outcomes.
+
+Новый `nodeTypes/resumablePythonNode.py`: ResumablePythonNode[I,O,E,S] наследует общий BaseNode; `start(input:I) -> NodeStep[O,S]`, `resume(state:S,event:ResumeEvent) -> NodeStep[O,S]`. Существующий PythonNode.execute(I)->O не ломается: runtime нормализует O в Complete. Результат generic event читается через typed target accessor; pyright positive/negative fixtures проверяют отсутствие смешения I/O/E разных targets. LLM node не получает этот API в первом срезе.
+
+Compiler проверяет declaration/runtime target equality, регистрацию и contract versions, сериализуемый state, уникальные call keys группы, nonempty group, допустимую фазу. В первой версии rejects циклы графа calls и объединённого графа calls/deps: рекурсивные workflow не нужны этому flow. Runtime также проверяет фактически возвращённые targets и лимит числа invocation из execution options (обязательное положительное значение), чтобы статически acyclic graph не допускал бесконечную цепочку continuation calls.
+
+Child declared failure после исчерпания принятой retry policy становится CallFailure; siblings продолжаются. После всех terminal children родитель получает результаты и решает, вернуть собственный E или продолжить. Child не вызывает глобальный REPLAN раньше caller. Root failure/error_policy сохраняет прежний binding. Runtime contract corruption останавливает execution с диагностикой; это не domain failure.
+
+## 4. Scheduler и надёжная фиксация
+
+`runtime/invocations/invocationCoordinator.py` — единственный writer invocation transitions. `dagExecutor.py` остаётся исполнителем; второй executor не создаётся. Worker выполняет один start/resume step и освобождает слот после outcome. WAIT не удерживает semaphore. READY queue включает независимые invocation и их prerequisite closures. Общий worker limit на execution, без отдельного неограниченного лимита children.
+
+После CALL атомарный checkpoint содержит parent state + WAITING_CALLS + список children/keys. Только затем children допускаются к запуску. После завершения child checkpoint содержит terminal и готовность parent, если закрыт join. Перед resume фиксируется потребляемый event/step; completion нового step фиксирует его эффект над runtime state. Crash может повторить Python step: гарантируется однократное принятие RETURN, а не exactly-once произвольного внешнего эффекта. Доменным writes обязательно stable operation id.
+
+Durable store: новый `contracts/invocation/executionStore.py`, async load/create/claim/checkpoint/release. Checkpoint CAS по revision и fencing token владельца execution. В первой версии один coordinator владеет execution; параллелизм workers внутри него. Ownership lease защищает от двух HTTP/resume workers; stale coordinator не может сохранить checkpoint. Смена владельца после expiry увеличивает fence. Lease timestamps определяет DB adapter, не часы клиента.
+
+DB таблица `dag_executions`: execution_id PK, schema_version, revision, owner_id?, fence, lease_until?, status, checkpoint_blob, checksum. Checkpoint содержит весь immutable invocation graph, catalog, cursor, typed extension, pending/consumed events. CAS write одной строки обеспечивает согласованность parent/children. Terminal сохраняется для duplicate delivery, RESPONSE больше не удаляет durable запись немедленно; retention cleanup вне первого среза. Memory store остаётся test adapter той же семантики, не production гарантия.
+
+Checkpoint сохраняется coordinator на каждой принятой границе step; работающие workers представлены persisted READY/in-flight metadata без сериализации coroutine. После crash незавершённый step повторяется с новым attempt; in-memory SessionSnapshot invariant «нет RUNNING» сохраняется для quiescent export, durable envelope явно различает recoverable in-flight и terminal. Нельзя просто разрешить RUNNING старому snapshot validator.
+
+Schema v2: неподдерживаемые старые durable envelopes отклоняются до restore; существующие v1 memory snapshots не объявляются переживающими deploy. Existing static nodes проходят общий invocation path; parallel legacy runtime ради совместимости не создаётся. Registry/plan/continuation version mismatch — typed restore failure без автоматической генерации.
+
+## 5. WAIT_INPUT и cancellation (после core)
+
+WaitSpec: wait_id, input contract/version, trusted interaction binding reference, expected interaction revision, intermediate response POJO. Persisted binding хранит world/player/session identities и invocation/step; эти поля устанавливает application, не входящий UID. ResumeInput: wait_id, request_id, expected_revision, typed payload, authenticated context. Adapter проверяет session ownership и policy evidence; store атомарно потребляет одно событие и повышает revision. Duplicate request_id с тем же payload возвращает прежний receipt; с другим — conflict. Stale/out-of-order/чужой session request отклоняется без изменения execution.
+
+DAGEngine result union: Completed[O], Waiting[IntermediateResponse], Failed[diagnostic]. Waiting сохраняет durable execution, закрывает HTTP без terminal domain Output. Другие READY задачи execution могут завершиться до quiescent Waiting; новый HTTP запрос resume загружает и claims execution. Cancel execution прекращает его непубликованные child invocations и отключает operation waiters; это не WAIT_INPUT. Node-level cancellation является CallCancelled в join. Explicit cancellation bake operation — отдельный domain API, не cancellation caller.
+
+## 6. Bake admission и ownership
+
+Владелец compute admission: новый `application/worldData/bakeOperations/`, POJO `dataModel/world/bakeOperation/`, SQL adapter `db/repositories/sqlite/bakeOperations/`. Это отдельная compute responsibility, не копия publication ledger: существующие publication transactions/holders остаются у `application/publication` и snapshotCore. Compute record хранит ссылку на publication operation, если она создаётся. Не расширять generic DAG model полями world/seed.
+
+BakeRequest: world_uid, BakeKind(LIGHT,FULL,DETAILED), canonical scope, source_revision, preparation_contract_version, parameters_fingerprint. Canonical encoding — versioned typed JSON с сортировкой object keys, без сортировки семантически ordered arrays; digest SHA-256 от всех перечисленных полей. Domain request builder обязан включать seed и все влияющие настройки в fingerprint. Concrete builders проходят отдельную приёмку R7; универсальный hash произвольного HTTP body запрещён.
+
+BakeAdmission = Started(operation_ref,owner_token) | Joined(operation_ref) | BakeConflict(active_operation_ref). Актуальный готовый результат читается доменным readiness read до compute admission; после захвата повторная проверка предотвращает redundant compute после гонки. Доступ к refs проверяет application authorization.
+
+Таблицы: `bake_operations` (operation_id PK, world_uid FK, kind, fingerprint, request_blob/version, status, owner_id, fence, lease_until, result/error envelope, publication_operation_id nullable); `bake_world_claims` (world_uid PK, operation_id UNIQUE FK); `bake_waiters` (operation_id,execution_id,invocation_id,step_index,delivery_status; composite UNIQUE). SQLite admission — короткая BEGIN IMMEDIATE transaction: проверить world claim; equivalent → JOIN; другой fingerprint → BakeConflict; пусто → insert operation + claim. Работа внутри транзакции не исполняется. Автоматической очереди нет; lease expiry не делает мир свободным, а разрешает recover того же operation.
+
+Operation states: PENDING/RUNNING/PUBLISHING/RECOVERY_REQUIRED/SUCCEEDED/FAILED/CANCELLED. Незавершённая операция сохраняет claim. Worker recovery claims operation с новым fence; heartbeat продлевает lease условно по owner/fence. Fencing проверяется в транзакции каждой видимой изменяющей записи/публикации. Подготовка пишет только operation-owned staging; если существующий bake пишет live данные раньше публикации, R7 обязан сначала дать guarded write boundary — запуск без неё запрещён.
+
+Terminal result и освобождение world claim фиксируются атомарно с publication evidence либо после доказуемого rollback. Неизвестный исход commit → RECOVERY_REQUIRED, claim удерживается до чтения authoritative publication result. Existing publication ledger terminal используется как evidence, повторная публикация вслепую запрещена. Старый worker не имеет права ни публиковать, ни удалять новый claim.
+
+Worker запускается application service lifecycle независимо от HTTP task. DB PENDING records — восстанавливаемая очередь уже принятых операций, не очередь конфликтующих bake. Waiters получают terminal через периодическое чтение durable record; notification — лишь ускорение, её потеря не теряет RETURN. Доставка имеет key(operation_id,invocation_id,step_index); caller checkpoint deduplicates её. Это избегает требования одной распределённой транзакции между DAG checkpoint и bake store. При потере ack повторяется subscribe/delivery с теми же ключами.
+
+Отмена waiter удаляет/помечает только subscription. Даже без waiters worker завершает bake и публикацию. Полный cancellation execution не убивает этот worker. Full/light/detailed одного мира не выполняются как самостоятельные операции одновременно; внутренние tasks наследуют operation id/fence. Bake разных миров допускается параллельно.
+
+## 7. File map и порядок поставки
+
+Все пути ниже относительно backend/app, tests — backend/tests. В каждом шаге перед edit сверить actual usages и локальные инструкции; не добавлять все файлы заранее. Новые подпапки ограничивают ответственность, существующие большие каталоги не реструктурировать попутно.
+
+| Шаг | Изменения | Exit criterion |
+|---|---|---|
+| R1 Identity/contracts | `dataModel/engine/dag/identity.py`, новые `invocations/{record,state,event}.py`; `contracts/invocation/{callTarget,nodeStep,resumeEvent,continuationContract,executionStore}.py`; nodeContract, новый resumablePythonNode; docs/tz_engine_node_context | exact typed contracts из §§2–3, static positive/negative typing; без production caller |
+| R2 Compiler/catalog | runtime/graphs/graphCompiler, registration validation; runtime/dag/context/{dagContext,dagReadView,catalogSnapshot,resultInvalidation}; executionState, records, traces/diagnostics, snapshotMetadata; новый invocations/planInstance.py | два одинаковых NodeId изолированы, local deps diamond исполняется один раз; запрещены cross-instance implicit reads |
+| R3 Scheduler | новый runtime/invocations/invocationCoordinator; runtime/execution/{nodeRunner,nodeOutcome,pythonNodeExecutor}, contracts/pythonExecutor; dagExecutor, executionPlan, dagEngine | два последовательных CALL и join ALL, error/cancel result routing, workers=1 без deadlock; static DAG regression |
+| R4 Durable recovery | новый runtime/invocations/checkpointCodec; runtime/dag/lifecycle/executionSnapshotService, cancellation/typed/sessionSnapshot; новый db/repositories/sqlite/dagExecutions/executionStore; SQL schema и memory adapter | restart в каждом окне CALL/RETURN, CAS/lease и duplicate dispatch; первый core-срез завершён |
+| R5 User wait | новые runtime/invocations/inputWaitCoordinator и contracts/invocation/inputWait; executionBindings/dagEngine; typed application interaction binding | HTTP wait/resume без cancellation; stale/duplicate/foreign-session checks на test adapter |
+| R6 Bake service | новые bakeOperation/{request,record,admission}.py; bakeOperations/{service,store,worker}.py; sqlite/bakeOperations/{operationStore,waiterStore}.py; SQL | два независимых DB connections: один compute, equivalent join, full/light/detailed conflict, detached waiter, worker recovery/fence |
+| R7 Concrete integration | domain request builders, public bake write/publication boundaries, DI registration, concrete GEN bindings после domain POJO freeze | реальный bake защищён на всех writes; два world_creation calls дают корректные accepted_base/detailed results; API interaction/load contracts приняты |
+
+SQL: schema definitions в существующем `db/migrations/0001_initial.sql` синхронизируются с repository policy; если в целевом deployment уже применяется incremental migration, добавляется штатная upgrade migration без reset пользовательской БД. Это deployment check R4/R6, не разрешение удалить данные. DI wiring делается по реально используемому target composition, не legacy import redirect.
+
+Первый срез R1–R4: Python-only test nodes, вызовы в одной фазе; WAIT_INPUT, bake service и production parents не входят в его критерий готовности. Это ограничение scope, не скрытый stub поддерживаемого API. Декларации WAIT outcomes вводятся в R5, хотя их целевая модель определена здесь.
+
+## 8. Проверки и завершение
+
+Добавить `tests/dag_typing/invocations/` с contract/compiler, repeated calls, parallel join, error/cancel, dispatch/return replay, scoped reads и recovery tests. Extend existing `typing/valid.py`, `invalid.py` и configs; run existing `tests/dag_typing` целиком после R4, включая LLM group и pass/replan regression. Тесты storage используют отдельный temporary SQLite file и два соединения, а restart — новый coordinator/store instance с тем же файлом, не reuse dict.
+
+Crash matrix: до/после CALL checkpoint; во время child step; после terminal child до parent resume; после resume эффекта до checkpoint; stale owner после lease takeover; после publication commit до delivery. Для внешнего эффекта проверяется operation idempotency, а не ложная гарантия единственного вызова Python функции.
+
+R6 acceptance: full+equivalent full → один operation; full+light/full+ detailed/detailed+другой scope → BakeConflict; другой мир → параллельно; отказ от всех waiters не прекращает worker; unknown publication commit не освобождает claim. Group acceptance: child error не отменяет siblings, parent видит весь набор результатов.
+
+План первого core-среза готов к реализации после чтения этого документа и текущих repository instructions, без нового продуктового выбора. Production acceptance всего GEN остаётся заблокирована R5–R7 и существующими доменными gates. Не объявлять completed по одним contract tests: нужны migration существующего catalog и restart evidence. Измерение ускорения full/light вне scope и отменено пользователем.

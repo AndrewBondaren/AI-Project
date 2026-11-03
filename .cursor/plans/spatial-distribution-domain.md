@@ -2886,7 +2886,7 @@ CanonicalOpenWaterSource producer ещё не подключён production appl
 
 #### 15.18.2. Пересчитанная transitive closure и lock
 
-Повторён actual model_fields/dataclass/get_type_hints/alias traversal из §15.14.1 **без** цикла добавления всех enum SURFACE_MANIFEST. RegistryKey registry marker остаётся phantom. Abstract StrEnum и TypeVars не wire records. Точный source snapshot — **33 registered types: 23 records + 10 enums**, **16 aliases**; storage snapshot — **38 registered types: 27 records + 11 enums**. Union source+ArtifactRef даёт 35 types; добавление трёх storage records даёт 38. Прежние 86/89 не использовать. Count декларативный: optional field branches перечислены транзитивно даже если текущий semantic admission требует None; регистрация формы сама по себе не разрешает concrete diagnostic value.
+Повторён actual model_fields/dataclass/get_type_hints/alias traversal из §15.14.1 **без** цикла добавления всех enum SURFACE_MANIFEST. RegistryKey registry marker остаётся phantom. Abstract StrEnum и TypeVars не wire records. Точный source snapshot — **33 registered types: 23 records + 10 enums**, **14 source aliases**; storage snapshot — **38 registered types: 27 records + 11 enums**, **16 storage aliases** (исправление атрибуции SP-P1-DEBT-1, §15.23). Union source+ArtifactRef даёт 35 types; добавление трёх storage records даёт 38. Прежние 86/89 не использовать. Count декларативный: optional field branches перечислены транзитивно даже если текущий semantic admission требует None; регистрация формы сама по себе не разрешает concrete diagnostic value.
 
 **Исчерпывающий source ID roster:** 23,41,53,54,55,80,94,95,96,97,98,101,105,106,107,108,109,110,111,119,150,151,152,153,154,226,227,238,239,283,60004,60007,60008.
 
@@ -3647,7 +3647,7 @@ surfaceManifest.py=de00a1…d7b2d. Это проверка неизменнос�
 Следовательно принятые ordered fields/defaults/metadata/aliases §15.13 для узкого
 roster §15.18.2 сохраняются. Lock не обновлён. Полный широкий inventory не возвращён
 в admission. При реализации обязательно machine-readable сравнение именно closure:
-source 33 (23 records/10 enums), storage 38 (27/11), 16 source aliases; не проверять
+source 33 (23 records/10 enums), storage 38 (27/11), 14 source aliases / 16 storage aliases (§15.23); не проверять
 только число bindings или SHA одного manifest. RuntimeIssueContext generic parameters,
 phantom RegistryKey marker и Annotated metadata не получают самостоятельных IDs.
 
@@ -3819,3 +3819,164 @@ slice — их перечисленные parser/guard/producer/IO/lifetime proo
 > diff, не обновляй lock. Не создавай storage POJO/ports, producer, manifest wiring,
 > publication, node bindings или cutover. Выполни адресные проверки A и предъяви
 > результат на пользовательскую приёмку; P1-B не начинать.
+
+### 15.21. SP-P1-A: остановка на расхождении alias lock (2026-11-02)
+
+Пользователь командой «Делай» разрешил только P1-A и helper API §15.20.2.
+Before-edit проверка: 61/61 файловых SHA baseline совпали. Повторный traversal
+actual annotations по recipe §15.14 выявил ошибку принятого **source alias count**:
+
+| Closure | Concrete registered types | Aliases |
+|---|---|---|
+| PlanEnvelope[CanonicalOpenWaterSource] | 33 | **14** |
+| Source/envelope + ArtifactRef | 35 | **16** |
+
+Два добавленных alias — ArtifactFormatKey и FormatVersion — достижимы через
+ArtifactRef, которого в source graph нет. Они принадлежат storage closure.
+Source aliases: AlgorithmVersion, EntityUid, FineX, FineXY, FineY, FineZ,
+InputFingerprint, MaterialKey, OutputFingerprint, PlanContractId, PlanScope,
+PlanSlot, RevisionHex, SchemaVersion. Abstract StrEnum не concrete registered type.
+
+Concrete counterexample: запуск recipe без walk(ArtifactRef) даёт 14 aliases;
+добавление walk(ArtifactRef) даёт ровно два перечисленных выше. Сравнение всех
+33 source shape digests с exact таблицей §15.13 прошло; все 14 alias definitions
+также присутствуют в принятой таблице без изменений. Это ошибка атрибуции count
+в §§15.18.2/15.20, не изменение current source declarations или TLV IDs.
+
+Варианты: (1) искусственно добавить artifact aliases в source lock — отклоняется,
+поскольку это не source transitive closure; (2) исправить документальную атрибуцию
+на source14/storage16, сохранив все shapes, IDs33/38 и wire — **предлагается**.
+Owner: Spatial SP-P0/P1 schema lock. Принятый lock молча не обновлён: требуется
+пользовательское согласование именно этой поправки, не повторная приёмка всего P0.
+
+**STOP по явному условию команды P1-A «при drift остановись».** Production файлы
+и tests не созданы: подготовка остановилась до записи на несовпадении count16.
+Runtime tests не запускались; выполнены read-only hash/shape/alias probes.
+Чужие изменения Time/API-1 сохранены. После согласования source14/storage16
+продолжить только P1-A по прежнему allowlist, не P1-B.
+
+### 15.22. SP-P1-DEBT-1 — смешение source/storage alias closure
+
+Дата: 2026-11-02. Статус: **FIX VERIFIED (§15.23); предъявлен на пользовательскую приёмку**. Исторический implementation blocker P1-A устранён в scope поправки alias attribution.
+Тип: техдолг достоверности schema lock и implementation preflight.
+Owner: Spatial SP-P0/P1 schema/codec. Основание: пользователь поручил зафиксировать
+разобранную проблему как техдолг. Эта запись не исправляет и не переутверждает lock,
+не разрешает продолжение реализации. Отдельный параллельный план не создаётся.
+
+**Проблема.** В §15.18.2 source snapshot ошибочно приписаны 16 aliases;
+§15.20.1 повторяет это как проверенный source count. Actual source closure содержит
+14 aliases. Число 16 относится к объединению source/envelope + ArtifactRef.
+Это внутреннее противоречие документа, **не drift текущего дерева** относительно
+принятых файловых baseline. Термин «drift» в описании остановки §15.21 относится
+к срабатыванию защитного условия; причина остановки — ошибочная атрибуция lock.
+
+**Причина и пропущенный контроль.** Recipe §15.14 выполняет
+`for t in [PlanEnvelope[CanonicalOpenWaterSource], ArtifactRef]: walk(t)` с общим
+накопителем aliases. При сужении roster в §15.18.2 source types33 и union types35
+разделены, но совокупный alias count16 оставлен у source. В preflight §15.20
+ассистент подтвердил неизменность 61 файловых SHA и перенёс ошибочный count,
+не выполнив независимый source-only traversal. Неизменность файлов не доказывает
+корректность вывода о достижимости. Проверка closure в preflight была неполной.
+
+**Воспроизведённое evidence.** Повторный read-only запуск traversal из recipe:
+
+| Корни обхода | Concrete registered types | Aliases |
+|---|---|---|
+| PlanEnvelope[CanonicalOpenWaterSource] | 33 | 14 |
+| Тот же source + ArtifactRef | 35 | 16 |
+
+Разность alias sets ровно `{ArtifactFormatKey, FormatVersion}`:
+`ArtifactRef.format_key → ArtifactFormatKey`,
+`ArtifactRef.format_version → FormatVersion`. Source graph не содержит ArtifactRef.
+Точные source aliases перечислены в §15.21. Все 33 source shape digests сверены
+с таблицей §15.13; определения 14 aliases ей соответствуют. 61/61 файловых SHA
+совпали. Storage records ещё не реализованы; числа 38 types и storage16 остаются
+проектным closure, который необходимо независимо проверить по их exact shapes.
+Runtime codec/tests этим probe не доказаны.
+
+**Риск.** Ориентация на общий count может включить storage-only зависимости в source
+schema либо скрыть недостающий reachable alias. Автоматическая регенерация lock
+превратила бы ошибку проверки в молчаливое изменение принятого контракта. Свидетельств
+изменения wire/ID assignment или production data из-за этой ошибки нет: P1-A
+остановлен до записи production файлов и тестов.
+
+**Предлагаемое устранение, ещё не принято.** Раздельно фиксировать exact source и
+storage alias sets, definitions и корни traversal; для каждого alias сохранять
+проверяемую цепочку достижимости. Исправить атрибуцию source14/storage16 только после
+подтверждения независимой проверки и явного согласования поправки. Не добавлять
+ArtifactRef/его aliases в source ради достижения старого числа16. Не менять IDs,
+wire fields/defaults, producer diagnostic admission или общий ArtifactRef.
+
+**Критерии закрытия:**
+
+1. Воспроизвести независимые source/storage traversals с отдельными накопителями;
+   предъявить exact set difference и проверить proposed storage shapes, а не только
+   source+ArtifactRef intermediate union.
+2. Проверить ID→type, ordered fields/defaults/metadata, enum values и alias definitions
+   раздельно для каждого closure; никакого latest manifest merge. Any other discrepancy
+   исследовать отдельно, не списывать автоматически на ту же ошибку.
+3. Согласовать адресную поправку §§15.18.2/15.20.1 с пользователем, сохранить историю
+   причины и границы: исправление описания не переоткрывает весь принятый SP-P0.
+4. При разрешённом продолжении P1-A добавить regression exact source alias set и
+   negative cases missing/extra/changed alias; storage checks — в своём P1-B scope.
+   Проверка только cardinality или SHA файлов недостаточна.
+5. Предъявить evidence исправления и отдельный verdict. Не закрывать долг фактом
+   переноса в этот раздел или успешной генерацией нового baseline.
+
+**Stop boundary:** до согласованного устранения P1-A не продолжать. P1-B, production
+producer/ports/publication/node bindings/cutover не начинать. Этот blocker не означает
+необходимость завершить весь GEO/Snapshot/Spatial/GEN. Time/API-1 не затронуты.
+
+
+### 15.23. SP-P1-DEBT-1 исправление и P1-A implementation evidence (2026-11-02)
+
+Основание: после разбора причины и фиксации долга пользователь поручил «Фиксим».
+Разрешённое исправление — source/storage alias attribution; продолжается только
+ранее разрешённый P1-A. P1-B и последующие шаги не разрешены.
+
+**Независимая сверка:** два отдельных traversal state/накопителя. Первый от
+PlanEnvelope[CanonicalOpenWaterSource] дал 33 concrete types / 14 aliases. Второй
+от source envelope + disposable proposed HydrologyPackRoot/HydrologyPackShard
+дал 38 concrete types / 16 aliases. Proposed records использовали exact EntityUid,
+FineZ, FineXY и остальные annotations §15.13, а не str/int replacements старого
+sizing probe. Disposable classes не записывались в production.
+Разность exact alias sets: ArtifactFormatKey/FormatVersion; путь через
+root.shards[].artifact.format_key/format_version. Source root их не достигает.
+FineXY/FineZ/EntityUid из storage shapes уже присутствуют в source closure.
+
+Все 33 source ordered shape signatures совпали с принятым §15.13; все 14 source
+alias definitions совпали с исходной таблицей. Поэтому исправлены только ошибочные
+source count/атрибуция в §§15.18.2/15.20.1. ID assignment, source33/storage38,
+wire fields/defaults/enum values и diagnostic admission не изменены. История ошибки
+§§15.21–15.22 сохранена; прежние STOP/OPEN там описывают состояние до этой записи.
+
+**P1-A реализован:** новые sourceSchema.py и empty __init__.py в
+backend/app/application/worldData/generators/hydrology/encoding; новые
+backend/tests/spatial_pack/{__init__.py,test_source_schema.py}. Direct counts 0→2
+в каждой папке. Literal 33 bindings не импортируют latest SURFACE_MANIFEST.
+Private shape hashes фиксируют qualified name + ordered fields/defaults/metadata/
+enum values из принятой таблицы; literal alias lock содержит exact 14 definitions.
+require_source_schema_v1 проверяет actual closure, bindings и shapes/aliases;
+require_source_diagnostics_v1 отказывает reference/runtime_context, проверяет
+immutable diagnostic graph existing canonical encoder и не преобразует данные.
+Отказ — CanonicalEncodingError. Нового producer, fingerprint algorithm или registry нет.
+
+Проверки exact alias sets (а не только count), extra/missing/changed alias,
+actual NewType definition mutation, ID/field-order/default/annotation/enum drift,
+source+envelope dry/wet round-trip, fixed SHA-256 wire и output fingerprint vectors,
+влияние payload/dependency/diagnostic/disposition на fingerprint, real water/river
+message shapes, unknown и globally registered enum contexts, reference и malformed
+immutable graph. Refusal не удаляет и не заменяет diagnostic context. Generic helper
+не выводит достоверность disposition из code string; producer truth остаётся owner.
+
+**Validation:** из backend команда `../.venv/Scripts/python.exe -m unittest
+ tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models
+ tests.planning.encoding.test_canonical_codec` — **39 tests OK (0.118s)**. Scoped `git diff --check` — PASS.
+Golden fingerprints — existing output_fingerprint, не artifact content hash;
+полные bytes проверяются round-trip equality и fixed wire SHA-256. Это small-fixture
+codec evidence, не bounded parser/IO/heap/cold/publication proof.
+
+**Verdict: исправление долга и P1-A предъявлены на приёмку**, не пользовательская
+приёмка по факту тестов. Production caller wiring не менялось. Storage POJO/ports,
+bounded parser, manifest wiring, root builder, publication, node bindings, consumer
+cutover и P1-B не начинались. Time/API-1 и чужие изменения сохранены.

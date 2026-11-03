@@ -628,3 +628,113 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 Следующий допустимый шаг: на Climate документально предъявить concrete interface/skeleton/owner implementation и exact I/O/Error, reuse existing resolver, все writer seams и conformance criteria. Ноды пишет пользователь; код, bindings, правила, другие планы и production contracts сейчас не изменяются.
 
 **Приёмка подхода пользователем (2026-11-02):** согласованы общий public interface + общая реализация missing/null/reset через existing resolver, owning POJO defaults/validation, запрет переопределения общей семантики и закрытие альтернативных writers с общей conformance suite. Это приёмка архитектурного подхода, а не exact signatures/files или доказательство уже обеспеченной защиты от обхода. Concrete design проверяется на Climate; прежний документальный stop boundary сохраняется.
+
+## API-1-C1 — конкретный Climate settings contract proposal (2026-11-02)
+
+**Статус:** DOCUMENT PROPOSAL, exact foreign publication/security seams OPEN; реализация и ноды не разрешены. Первый срез — Climate, включая принятый перенос elevation_lapse_rate. Данный раздел уточняет generic templates R2/R3 и не объявляет их placeholders existing types.
+
+### Проверенные actual contracts и существенные findings
+
+- `WorldClimateScalars` содержит десять scalar/nested полей; будущий одиннадцатый — elevation_lapse_rate из Terrain. `SeasonTempOffsets` содержит winter/spring/summer/autumn. DefaultWhenMissing и nullable типы уже заданы owning POJO. `canonical_defaults()` даёт peak -40/45 и offsets -12/0/8/-4, тогда как missing при обычном создании модели даёт peak None и offsets 0. **Reset не может произвольно выбирать между этими источниками.**
+- `ClimateZoneEntry`: system_climate и пять optional int полей base_temperature, typical_elevation_z, base_rainfall, temperature_variance, rainfall_variance. `WorldClimateZoneRegistry` — RootModel списка, canonical_defaults и canonical_engine различаются. Existing `registry.profile_for` дополняет nullable entry полями enum/fallback profile; неизвестный ключ может привести к temperate fallback. Это отдельная effective-profile semantics, не повод «исправлять» неверную ссылку на write.
+- `WeatherTypeEntry`: system_weather, display_weather, temp_min/max, rainfall_min, priority, travel_modifier, need_modifiers, glossary_ref. WorldWeatherTypeRegistry.sorted_by_priority лишь сортирует; наличие entry_for не доказывает unique keys или обязательность clear. Требования unique/reference/fallback должны быть явно закреплены owner validation.
+- Scalar/entry модели имеют extra="ignore"; resolve._patch_fields наследует это. Запрет неизвестных полей нового settings API **не обеспечен** текущими POJO. Требуется общий shape guard по существующей model schema (включая nested fields/aliases), без ручного второго каталога полей. Открытые maps вроде need_modifiers нельзя принимать за неизвестные POJO attributes.
+- WorldClimateScalars.resolve_peak_bounds меняет местами обратные границы. Новый write proposal должен отклонять invalid peak pair, а не молча переставлять. Это proposed изменение validation, не уже принятое пользователем поведение.
+- `SourcePublicationGuard.require_fresh` существует, но сравнивает SurfacePlanningView с повторным capture world/locations/mountain templates. Его нельзя переименовать в готовую settings revision: coverage Climate/weather/material refs и атомарность settings acceptance этим не доказаны.
+
+### Конкретные public methods и typed payloads
+
+Все имена ниже proposed. Existing public dedicated Climate settings API отсутствует; existing get/update — WorldService, existing typed reads — worldRow.climate_scalars/climate_zones/weather_types. Новый public owner interface **IClimateSettings**; implementation **ClimateSettings**, с отдельным preparation pipeline **ClimateSettingsPreparePipeline**. Общий механизм фиксирует preparation semantics, не реализует Climate policy.
+
+| Метод | Input | Output | Domain errors |
+|---|---|---|---|
+| `read(request: ReadClimateSettings)` | world_uid:EntityUid; source: accepted publication selector; trusted actor context | ClimateSettingsView: source revision + authored ClimateSettingsState | WorldNotFound, Forbidden, SourceUnavailable/Conflict, InvalidStoredSettings |
+| `prepare_initial(request: PrepareInitialClimateSettings)` | world_uid; initialization context/actor; concrete complete ClimateSettingsState | PreparedClimateSettings со candidate/consequences; без записи | InvalidClimateSettings, InvalidReference, Forbidden, UnsupportedLifecycle |
+| `prepare_change(request: PrepareClimateSettingsChange)` | world_uid; expected revision; actor; operation_id; nonempty tuple[ClimateChange]; validate_only:bool | ClimateSettingsPreview при validate_only, иначе PreparedClimateSettings; оба без writes | те же + RevisionConflict, DuplicateChange, UnsupportedChange |
+
+`ClimateSettingsState` — строго `scalars:WorldClimateScalars`, `zones:WorldClimateZoneRegistry`, `weather:WorldWeatherTypeRegistry`. Это агрегат одного owning domain, не World bag. Read не называется полностью effective: nullable authored fields могут требовать runtime fallback. Effective profiles, если понадобятся клиенту, должны быть отдельным typed результатом существующего climate resolve; не materialize defaults в storage при чтении. Initial input уже полный POJO: absent/default interpretation выполняет тот же public boundary до construction; API не подставляет значения. Standalone delete Climate settings и generic commit method не предлагаются.
+
+**Closed ClimateChange union**, discriminator — отдельный закрытый enum ClimateChangeKind, не str dispatch:
+
+| Variant | Concrete payload / semantics |
+|---|---|
+| PatchClimateScalars | typed присутствующие поля одиннадцати scalar settings; отсутствующие остаются неизменными; SeasonTempOffsets patch сохраняет отсутствующие seasons |
+| ReplaceClimateZoneRegistry | WorldClimateZoneRegistry; полная замена authored списка |
+| UpsertClimateZone | ClimateZoneEntry; полная запись по system_climate, не неявный entry patch |
+| RemoveClimateZone | RegistryKey[WorldClimateZoneRegistry]; отсутствие ключа → structured not-found, не silent success |
+| ReplaceWeatherTypeRegistry | WorldWeatherTypeRegistry; полная замена authored списка |
+| UpsertWeatherType | WeatherTypeEntry; полная запись по system_weather |
+| RemoveWeatherType | RegistryKey[WorldWeatherTypeRegistry] |
+
+Reset **не входит в первый Climate union**: общий контракт различает его и отвергает unsupported reset, но owner ещё не выбрал import defaults versus canonical preset. Это сохраняет принятое «reset только где owner поддерживает», не подменяет reset=null. В дальнейшем отдельный concrete ResetClimate… intent потребует explicit owner semantics/приёмки. Whole scalar replacement также не нужен для первого update среза; initial отдельно от patch.
+
+**Presence representation proposal:** общий `FieldChange[T] = Keep | SetValue[T]`, оба variants с закрытым discriminator, без default T=None. Для nullable поля T включает None; omission декодируется в Keep, explicit null — SetValue(None). PatchClimateScalars имеет ровно owning поля и typed FieldChange соответствующего field type; season offsets — отдельный typed nested patch. Patch shape/schema должна выводиться из owning model либо проверяться на точное соответствие ей при contract validation; ограничения не копируются в transport. Это не runtime field policy registry. Exact механизм derivation требует технического design review: не выдавать существующий resolve_patch(dict) за уже существующий typed patch POJO.
+
+Не допускаются две записи одного scalar/registry key в одной команде, replace и entry operations одного registry вместе; DuplicateChange вместо зависимости результата от порядка. Изменение scalar default_climate_zone и upsert соответствующей зоны допускается в одной команде, validation — по итоговому candidate. Climate+Materials batch не входит в этот single-owner union.
+
+**Output shape:** ClimateSettingsPreview(source, candidate:ClimateSettingsState, issues:tuple[FieldPathError,...], consequences:ClimateConsequences); PreparedClimateSettings дополнительно carries operation_id и fingerprint исходного intent. Ошибочный candidate не возвращается как валидный prepared result. Эти outcomes не publication receipts и не авторизация commit. Idempotent accepted receipt принадлежит acceptance, не pure prepare. Возвращаемые mutable RootModel lists должны быть изолированы от исходного capture; frozen внешняя оболочка сама по себе не гарантирует deep immutability.
+
+**Error union proposal:** ClimateSettingsFailure с closed ClimateSettingsErrorCode = WORLD_NOT_FOUND, FORBIDDEN, SOURCE_UNAVAILABLE, REVISION_CONFLICT, INVALID_SETTINGS, INVALID_REFERENCE, ENTRY_NOT_FOUND, DUPLICATE_CHANGE, UNSUPPORTED_CHANGE, UNSUPPORTED_LIFECYCLE; issues — existing tuple[FieldPathError,...]. InvalidStoredSettings использует INVALID_SETTINGS с source context, не default repair. Infrastructure IO/cancellation/unknown acceptance outcome не маскируются domain validation. HTTP mapping отдельно; новые HTTP codes/URLs этим не вводятся.
+
+### Общая реализация и Climate ownership
+
+Proposed общий `ISettingsPreparation[Request,Result]` и implementation skeleton `SettingsPreparationPipeline` в `application/settingsContracts/preparation.py`. Общие presence types — `dataModel/settingsContracts/presence.py`. Это техническая инфраструктура, **не** сервис WorldSettings и не registry всех owners. Сам public Climate интерфейс остаётся owner-owned; наследование skeleton распространяется на preparation, не навязывает CRUD read классу фиктивные mutation methods.
+
+Фиксированная последовательность: shape/presence check → verified source/actor → owner intent application на detached candidate через existing resolve_patch/resolve_model → owner final validation/references → owner consequences → common typed outcome. Missing/null не интерпретируются повторно owner hooks. Skeleton не знает Climate поля/defaults и не выбирает чужие операции. Read использует тот же schema resolve, но не preparation и не repair. Инициализация имеет full-model policy; PATCH — partial policy. Validate_only меняет outcome, не ослабляет validation.
+
+Concrete Climate hooks:
+
+- Разрешить поля существующего WorldClimateScalars + elevation_lapse_rate; значения nullable проходят existing annotation policy. Для lapse finite float, включая zero/negative; единица °C/100 m. Default остаётся 0.65 у Climate POJO после accepted migration.
+- Проверить peak ordering на effective bounds без silent swap; finite влияние/модификаторы; proposed worker cap None или положительное целое. Не выдавать эти новые constraints за уже принятые изменения.
+- Unique system_climate/system_weather, default_climate_zone существует в допустимом resolved registry; precipitation_liquid — существующий liquid material по typed material contract. Проверить ссылки из accepted dependent state до удаления зоны. Registry fallback policy (engine entries, custom entries, clear) должна быть принята по owner schema; нельзя использовать fallback_profile для сокрытия invalid write.
+- Need/glossary references weather entries проверяются через согласованный typed captured dependency, не новый lookup по строке в общем helper. Пока точные reference contracts не установлены, weather write freeze OPEN; scalar read/prepare design от этого не обязан ждать весь gameplay domain.
+
+### Effects и минимальный source/acceptance seam
+
+ClimateConsequences proposed: typed признаки `climate_surface_changed`, `runtime_weather_rules_changed`, `execution_policy_changed` плюс точный dependency/read fingerprint; это owner output, не список исполняемых задач. Execution cap alone не означает rebuild physical map. Zones/default/poles/lapse/peak/season/precipitation требуют проверки зависимых climate plans, temperatures/rainfall/landcover; weather registry — runtime weather consumers. Concrete invalidation applicability определяет принятый Climate/Pack lifecycle; общая инфраструктура не превращает признаки в команды.
+
+Foreign requests для freeze (не новые production ports):
+
+1. Source loader возвращает один согласованный capture: world UID, lifecycle, ClimateState, material/reference inputs, base settings revision и версии всех read dependencies. Не смешивать World SQL latest и unrelated Pack hash. Existing SourcePublicationGuard — reuse candidate, coverage надо доказать.
+2. Trusted authorization capability для read/prepare/acceptance; identity из запроса не доказательство прав. Не проектировать actor bool.
+3. Acceptance перепроверяет revision/authority/candidate в одной UOW, записывает operation receipt и применяет owner consequences через applicable domain handlers. До gameplay — согласованный World/Pack publication; runtime — Snapshot acceptance. API и preparation не получают repo writer. Нельзя пометить подготовленный результат «accepted» до этой границы.
+
+Ни один из этих foreign types не подменяется `str` или `Any` ради компилируемого интерфейса. Поэтому таблица public methods конкретизирует owner shape, но общий contract freeze остаётся OPEN по точным source/authority types. Ноды пользователя зависят от принятого public freeze, а не наоборот.
+
+### Class / factory / file / import map
+
+| Existing | Target proposal | Disposition |
+|---|---|---|
+| dataModel/climate/worldClimateScalars.py, climateZone/*, weatherType/* | Сохранить owning POJO; перенести lapse из terrain/worldTerrainScalars.py в Climate | retain + targeted replace; один WorldSlice key owner, без второго default |
+| WorldService.get_by_id/update/prepare_import | application/worldData/climate/settings/contracts.py: IClimateSettings; settings.py: ClimateSettings; preparePipeline.py: ClimateSettingsPreparePipeline | новые owner public методы; legacy не fallback перенесённой операции |
+| Нет settings command/result POJO | dataModel/climate/settings/{commands,state,results,errors}.py | proposed Climate-only closed types; imports existing POJO/RegistryKey/FieldPathError |
+| resolve.py, worldSlices.py, worldSliceMerge.py | retain resolver/schema inventory; application/settingsContracts/preparation.py + dataModel/settingsContracts/presence.py | common skeleton, без Climate imports, domain tables/defaults |
+| core/container/worldData.py | factory `climate_settings()->IClimateSettings`, явная сборка capture/security dependencies | composition only; exact injected foreign contracts OPEN |
+| app/api routes | transport → согласованный engine invocation; пользовательская нода → IClimateSettings | retain URLs до приёмки; route не импортирует concrete pipeline/repo |
+
+Domain public interface не импортирует app/api или engine nodes. Общий skeleton не импортирует concrete Climate; dependency injection связывает owner implementation. Snapshot handler imports public owner validation/prepared contract, не вызывает route. Exact filenames — proposed, не уже созданные файлы.
+
+### Реальные writers и обходы: обязательная closure
+
+| Existing path | Риск / действие при Climate cutover |
+|---|---|
+| worlds.update → WorldService._update/_save; create/import_from_json → repo create/upsert | Generic World write принимает Climate поля. После перехода маршрутизировать выбранную операцию на accepted path; запретить Climate bypass в старом update, initial/import проводить через тот же owner validation |
+| WorldBundleService._prepare_bundle → normalize_world + WorldService.prepare_import; далее copy import | Existing pure preparation не заменяет settings acceptance. Проверить final copy/import writer и initialization lifecycle до cutover; не запретить корректный import просто из-за другого входа |
+| WorldService.repair_defaults → ensure_world_climate_defaults → repo.update | Скрытый Climate/Materials rewrite; не вызывать из новых read/prepare. После cutover отдельная принятая repair operation либо удалить обход; silent repair не validation |
+| raceService._ensure_registry/_unbind_registry; worldPerkService аналогично → _worlds.update(World) | **Whole-row lost update:** даже чужая registry mutation может перезаписать Climate stale values. Запрет только climate-specific routes недостаточен. Нужна атомарная защищённая partial write ownership либо общий guarded row revision для всех таких writers |
+| templateLibrary/packs/write/writeExecutor.py → _worlds.update(World) | Тот же whole-row overwrite риск; inclusion в writer closure, не перенос библиотечных алгоритмов в Climate |
+| SqliteWorldRepository.update → BaseRepository.save; upsert → INSERT OR REPLACE | Нет expected revision; потенциальная запись всей строки. Repository boundary и acceptance должны исключить незаметное изменение защищённых Climate columns любым caller; интерфейс/final не решает это |
+
+Этот список — подтверждённые пути, не заявление полного SQL audit. До cutover обязательны поиск всех SQL UPDATE/INSERT/REPLACE worlds и aliases repo methods, проверка bundle-copy/finalizers/migrations/scripts. Общий guarded storage seam не содержит domain validation/defaults; ownership protected write-set извлекается из существующего WorldSlice/schema после согласования revision mechanics, не заводится второй field registry. Legacy других областей не переписывается под видом Climate, но возможность затереть Climate ими должна быть закрыта до принятия cutover.
+
+### Атомарные документальные/будущие migration этапы
+
+1. **C1-schema:** согласовать patch representation и ошибки, lapse ownership (уже принято), новые constraints peak/workers/registry policy (ещё proposal), отсутствие reset в первом union. Acceptance: field-by-field presence/null matrix на actual POJO; canonical versus import defaults не смешиваются.
+2. **C1-read/prepare:** замкнуть exact source/authority и common skeleton design; initial/update/preview проходят один resolver. Gate: no repair/write/task/version allocation; invalid не превращается в candidate. Не ждать весь Time или весь GEN.
+3. **C1-storage:** доказать CAS/read-set/partial write seam на World строке, включая чужие full-row writers; prepared forgery и race сценарии закрыты. Это ограниченный World storage prerequisite, не требование завершить весь Snapshot.
+4. **C1-acceptance:** согласованные Climate consequences + применимые Pack/Snapshot handlers + пользовательская DAG-нода. Unsupported lifecycle отказывается явно. Node design/implementation принадлежит пользователю.
+5. **C1-cutover:** только отдельной командой; replacement invocation, migration lapse ownership и закрытие bypass атомарны по выбранной операции. Existing URL parity отдельно; нет fallback legacy writer. Weather/references можно выделить в следующий срез, не объявляя весь domain write готовым.
+
+**Conformance scenarios:** omitted scalar не меняется; explicit null сохраняет/отклоняет owning policy; unsupported reset отказ; unknown nested season отказ; malformed registry не canonical fallback; defaults при initial и patch различаются намеренно; duplicate commands отказ; zone add + default switch валидируются вместе; удаление используемой зоны отказ; concurrent material ref change конфликт; preview не repair; stale race/perk row не затирает Climate; forged prepared result не acceptance authority; no-op не создаёт ненужный publication (точная receipt policy foreign); failure до commit сохраняет старую publication, unknown outcome после commit разрешается по operation identity.
+
+**Verdict:** исследованный owner-specific proposal готов к обсуждению, не CODE-READY. Найдены blockers к «необходящемуся» контракту: ignored unknown fields, неоднозначный reset default, missing settings-wide revision/authority, full-row writers чужих доменов и незамкнутый weather/reference lifecycle. Следующий допустимый шаг — принять конкретные C1-schema решения и закрыть exact foreign seams документально. Межплановые предложения: World storage guarded updates; Climate owning validation/default migration; Snapshot applicable acceptance. Другие планы/rules, production POJO/ports, nodes/bindings, URLs и код не изменены.

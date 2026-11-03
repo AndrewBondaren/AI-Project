@@ -255,9 +255,11 @@ SP-R2 не принимается этим документом: `check_scene` �
 
 Вывод: **cancel/resume не принимается как ожидание ответа игрока**. Нельзя симулировать отмену ради каждого select_child; держать HTTP/coroutine открытым до клика тоже не предлагается.
 
-### 4.2. Что нужно совместно утвердить до кода
+### 4.2. Контракты lifecycle и порядок реализации
 
-1. Execution model: настоящая resumable composite-node семантика в engine либо композиция нескольких завершённых executions с persisted application interaction. Это альтернативы для обсуждения, не два разрешённых production пути. Вторая требует явно согласовать, что parent — логическая операция, а не незавершённый runtime NodeOutcome.
+Техническая детализация и file map: [DAG invocation runtime и bake admission](dag-invocations-bake-admission.md). Первый core-срез R1–R4 определён для реализации на тестовых Python-нодах; R5–R7 закрывают HTTP wait, bake admission и concrete integration. Упоминания OPEN ниже относятся к ещё не реализованным bindings/доменным контрактам, а не к повторному выбору execution model.
+
+1. Execution model: resumable invocation внутри одного execution, с persisted continuation и отдельным WAIT_INPUT. Композиция нескольких завершённых executions для этого flow не выбирается.
 2. Typed interaction state: identities, stage выбора/загрузки, parent/child identity, выбранная location, policy/source evidence, version и operation id; exact поля/owner/storage/POJO OPEN.
 3. Штатный intermediate API response, terminal child result и terminal parent result; их response binding и условия публикации. Один и тот же POST /chat/stream; UID приходит в message, как сейчас.
 4. Correlation входящего запроса с interaction, защита от чужой сессии, duplicate/retry/stale/out-of-order clicks, concurrent requests, restart recovery и отличие user wait от cancellation.
@@ -287,12 +289,12 @@ Owner — generic DAG runtime / DAG-TYPING-1, затем concrete bindings GEN. 
 
 ### 4.3.1. Принятое решение: invocation runtime и параллельные CALL
 
-**Согласовано пользователем; реализация OPEN.** Этот раздел фиксирует выбор модели и уточняет OPEN формулировки §§4.2–4.3. Exact Python API, POJO и storage schema ещё проектируются; приведённые имена новых сущностей — проектные.
+**Согласовано пользователем; реализация OPEN.** Этот раздел фиксирует выбор модели и уточняет OPEN формулировки §§4.2–4.3. Целевые API, POJO, storage и этапы определены в [delivery plan](dag-invocations-bake-admission.md); это план изменений, не описание уже существующего runtime.
 
 - Один execution содержит самостоятельные invocation. `node_id` — определение ноды; `invocation_id` — конкретный вызов; `attempt` — попытка этого вызова. Ключ результата: `execution_id + invocation_id + attempt`. Запись вызова сохраняет node_id, caller_invocation_id, Input и continuation. Retry сохраняет invocation_id, новый CALL получает новый. State, scheduling, reads, publication, reuse и snapshots учитывают invocation scope.
 - `NodeContract.calls` объявляет допустимые типизированные targets с Input/Output/Error; компилятор проверяет регистрацию и совместимость. Декларация не запускает callee, не создаёт статическую deps и не меняет родство. Нода возвращает CALL с target, Input и сериализуемым continuation-состоянием; runtime доставляет Success/Failure в типизированное продолжение caller. Python coroutine не сохраняется, прямой callee.execute из родителя не используется.
 - Создание вызова и перевод caller в ожидание сохраняются согласованно. Duplicate dispatch не создаёт второй invocation; duplicate RETURN не продолжает caller повторно. Restart восстанавливает исходный вызов и его адресата. Идемпотентность внешних эффектов обеспечивается отдельно через стабильную доменную operation identity.
-- Группа CALL поддерживает параллельное исполнение существующим scheduler с общим лимитом. Первая версия — join ALL; результаты сопоставляются со стабильными ключами запросов, а не порядком завершения. Exact error/cancellation policy группы требуется закрепить до реализации. Ожидающий caller освобождает worker slot, чтобы дочерние вызовы могли исполняться. Независимые deps внутри каждого invocation также допускают параллелизм.
+- Группа CALL поддерживает параллельное исполнение существующим scheduler с общим лимитом. Первая версия — join ALL; результаты сопоставляются со стабильными ключами запросов, а не порядком завершения. Ошибка или отмена отдельного child доставляется как его typed result после завершения остальных; родитель решает, продолжать ли работу. Отмена execution прекращает его invocations, но лишь отсоединяет waiters самостоятельной bake-операции. Ожидающий caller освобождает worker slot, чтобы дочерние вызовы могли исполняться. Независимые deps внутри каждого invocation также допускают параллелизм.
 - Два invocation одной ноды могут выполняться одновременно; состояние вызова не хранится в изменяемом self экземпляра ноды. В стартовом flow light/full и detailed последовательны из-за зависимости по accepted_base.
 - WAIT_INPUT — самостоятельное сохраняемое ожидание, не cancellation. HTTP завершается промежуточным ответом; следующий запрос по проверенной correlation продолжает тот же execution/invocation. Exact API binding и сохранение interaction остаются задачами §4.2.
 
@@ -309,7 +311,7 @@ Owner — generic DAG runtime / DAG-TYPING-1, затем concrete bindings GEN. 
 3. Конфликтующие записи блокируются отдельно от эквивалентности: различные параметры не разрешают одновременную перезапись одного мира. Неэквивалентный конфликтующий запрос получает типизированный BakeConflict; автоматическая очередь не вводится. Exact область конфликтов определяется доменом bake.
 4. Отмена одного ожидающего invocation отсоединяет его, не отменяя операцию, нужную другим. Согласовано пользователем: если ожидающих больше нет, bake продолжается до завершения и публикации; явная отмена самой операции — отдельное действие.
 5. Recovery worker опирается на persisted operation state и lease. Просроченный worker лишается права публикации через проверку действующего владения (fencing); одного истечения lease без защиты записи недостаточно.
-6. DAG runtime отвечает за вызовы/ожидание/RETURN. Сервис bake отвечает за эквивалентность, конфликты, operation ownership, идемпотентность эффектов и публикацию. Реестр не размещается в памяти ноды. Exact путь сервиса и схема БД уточняются по существующим domain/storage boundaries перед кодом.
+6. DAG runtime отвечает за вызовы/ожидание/RETURN. Сервис bake отвечает за эквивалентность, конфликты, operation ownership, идемпотентность эффектов и публикацию. Реестр не размещается в памяти ноды. Целевые paths, SQL tables и граница с existing publication ledger определены в delivery plan §§6–7; concrete domain request builders и write boundaries проходят приёмку R7.
 
 Приёмка: два одновременных эквивалентных запроса из разных executions/workers запускают один bake и получают один operation result; неэквивалентный конфликт отклоняется; отмена одного waiter не прерывает другого; после падения worker операция восстанавливается, а старый владелец не может опубликовать результат. Присоединение определено для выполняемой операции; reuse уже завершённого bake требует отдельной проверки актуальности результата.
 

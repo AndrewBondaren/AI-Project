@@ -814,7 +814,7 @@ Create/update различны: create при существующем key — S
 
 Initialization определяется только §33: PrepareInitialSettings содержит tagged authored input и budget. Прежняя resolved-only сигнатура удалена из активной таблицы; её нельзя использовать как альтернативный API.
 
-Owner World public interface **IWorldTimeSettings**: методы таблицы; реализации fixed preparation pipelines не выбирают другие операции. Factory **make_world_time_settings(reader:IWorldTimeSettingsSource)->IWorldTimeSettings** — явный binding; exact persistence читатель использует Snapshot scopes. Preparation methods synchronous/pure; reads async. Classes/paths в §31. Initial/root publication и acceptance World settings change используют World/Snapshot handler, не Time.advance. Exact heterogeneous section union принадлежит caller; этот API не вводит его произвольно.
+Owner World public interface **IWorldTimeSettings**: методы таблицы; реализации fixed preparation pipelines не выбирают другие операции. Прежняя aggregate factory **SUPERSEDED**: активные отдельные factories и dependencies перечислены в §38; persistence читатель использует Snapshot scopes. Preparation methods synchronous/pure; reads async. Classes/paths в §31. Initial/root publication и acceptance World settings change используют World/Snapshot handler, не Time.advance. Exact heterogeneous section union принадлежит caller; этот API не вводит его произвольно.
 
 
 ## 31. Единая candidate file map и порядок freeze
@@ -983,9 +983,191 @@ CalendarBudget уже присутствует в preparation, но standalone t
 ### 36.4. Неполноты, которые нельзя объявить исправленными именованием
 
 - CalendarVersionRef привязан к publication; readonly POJO не делает version действительной. Source ports должны получить actual implementation proof при integration; нужны rejection tests forged/stale refs.
-- World settings acceptance ещё не имеет здесь concrete World section/handler/storage transaction contract. PreparedTimeSettingsChange — подготовка, не применённая настройка. Это **OPEN World integration binding**, не Time writer и не закрытый полный CRUD lifecycle. Public preparation API можно принимать отдельно; production settings mutation нельзя.
+- World settings acceptance ещё не имеет здесь concrete World section/handler/storage transaction contract. PreparedTimeSettingsChange — подготовка, не применённая настройка. World section/storage binding предложен в §37, с явным внешним prerequisite next_publication; не Time writer и не доказанная production integration. Public preparation API можно принимать отдельно; production settings mutation нельзя.
 - InitialClockBinding/BranchClockBinding требуют внешнего gameplay/branch authorization и assigned refs. Их поля не заменяют Snapshot guard; branch external ledger/result contract остаётся OPEN.
-- Generic IWorldTimeSettings из §30 — интерфейс операций, не описанная универсальная dispatcher implementation. Фабрика требует явных bindings каждой фиксированной операции; конструирование всех pipelines по одному reader без dependencies не считать достаточной DI map. Exact per-class factory signatures — остающийся **core composition freeze gap**.
-- Default/nullable policies пока указаны полностью только у settings initial boundary; перед accepted freeze каждого authored leaf §29 требуется полевая policy matrix (StrictOnWire/DefaultWhenMissing и missing/null/empty), без догадок из Python optional. Отсутствие default означает required, но это должно быть отражено в owning annotations. Это **calendar schema admission freeze gap**, не разрешение defaults в consumers.
+- Generic IWorldTimeSettings из §30 — интерфейс операций, не описанная универсальная dispatcher implementation. Фабрика требует явных bindings каждой фиксированной операции; конструирование всех pipelines по одному reader без dependencies не считать достаточной DI map. Pure/domain factory signatures уточнены в §38; handler encoding integration остаётся отдельным prerequisite.
+- Default/nullable policies пока указаны полностью только у settings initial boundary; перед accepted freeze каждого authored leaf §29 требуется полевая policy matrix (StrictOnWire/DefaultWhenMissing и missing/null/empty), без догадок из Python optional. Отсутствие default означает required, но это должно быть отражено в owning annotations. Полевая matrix добавлена в §39; это не разрешение defaults в consumers.
 
 Verdict данного review: конкретные data-flow ошибки исправлены, неявные source/validation bindings раскрыты; **полный POJO/contract freeze ещё не PASS** из-за перечисленных точных gaps. Review не подменяет пользовательскую приёмку и не даёт права закрывать World/Snapshot foreign contracts вымышленными типами.
+
+## 37. World settings acceptance — точный предложенный binding
+
+Этот раздел — proposal внешнему World owner внутри разрешённого документа. Не означает наличия production handler. Использует existing DomainSectionHandler, SectionApplyReceipt, CommitScope и IDomainCommitBinding; не вводит отдельный commit.
+
+### 37.1. Runtime section/state
+
+`dataModel/world/settings/timePublication/section.py`: **WorldTimeSettingsSection(DomainSection[PreparedTimeSettingsChange])**, ровно один patch. Existing SectionHeader, section key регистрируется в PatchSectionRegistry; proposed key=`world_time_settings`, format_version=1. Time clock section отдельно, proposed key=`time_clock`, format_version=1. Оба keys — SectionKey, не свободные строки в consumers; collision проверяется при composition. Canonical numeric manifest IDs не назначаются здесь произвольно: reservation отдельным encoding integration gate, а не выбор в коде доменной модели.
+
+`timePublication/state.py`: **StoredWorldTimeSettings(ref:SectionStateRef, settings:WorldTimeSettings, versions:tuple[CalendarVersionRef,...])**. Ref только WorldSnapshotRef; section key соответствует handler; versions покрывают все calendar keys ровно один раз. Version witness включает часы/epoch/anchor, влияющие на projection; изменение часов обновляет версии всех calendars. Для неизменённых calendars при частичном update version сохраняется. Принятую version publication назначает Snapshot acceptance, не preparation.
+
+`timePublication/append.py`: **WorldSettingsAppend(operation_id:EntityUid, snapshot:WorldSnapshotRef, target:WorldPublicationRef, proposal:PreparedTimeSettingsChange)**; **WorldSettingsAppended(state_ref:SectionStateRef, history_ref:SectionHistoryRef)**; **WorldSettingsAppendConflict(expected:WorldPublicationRef, observed:WorldPublicationRef)**. Target snapshot_head=snapshot, same world, operation IDs совпадают. PreparedTimeSettingsChange.before сравнивается с фактическим pinned accepted settings; поддельный before не является CAS evidence.
+
+`application/worldData/timeSettings/storage/statePort.py`:
+
+- async **IWorldSettingsStateReader.read(ref:SectionStateRef, scope:CommitReadScope) → StoredWorldTimeSettings | None**;
+- async **IBoundWorldSettingsWriter.append(WorldSettingsAppend) → WorldSettingsAppended | WorldSettingsAppendConflict**;
+- sync **IWorldSettingsCommitBinding.bind(scope:CommitScope) → IBoundWorldSettingsWriter**.
+
+`application/worldData/timeSettings/integration/sectionHandler.py`: **WorldTimeSettingsSectionHandler** specializes DomainSectionHandler[WorldTimeSettingsSection]. Exact validate/apply/encode/decode signatures — existing interface с этим concrete S. Validate читает accepted settings и Time state через explicit scoped ports, проверяет expected/base/effective_at и candidate. Apply использует assigned snapshot/target publication context и bound writer; receipt.changed содержит PatchRef(operation_id,contract.key,0), state/history refs, artifacts=() только для row-only backend. Writer не коммитит; Snapshot атомарно принимает World settings и прочие effects.
+
+**Внешний context prerequisite:** existing SnapshotApplyContext не содержит target WorldPublicationRef. Нужно либо передать его явно в typed World handler binding, либо расширить общий context владельцем Snapshot. Предлагается конкретное расширение **SnapshotApplyContext.next_publication:WorldPublicationRef**, согласованное с assigned world_snapshot и expected_world. Это requirement к owner, не объявление уже существующего поля. До его принятия этот handler integration BLOCKED; нельзя reconstruct target publication ID внутри домена.
+
+### 37.2. Headless settings binding
+
+`timePublication/lifecycle.py`: **InitialSettingsBinding(operation_id:EntityUid, expected:WorldPublicationRef, target:WorldPublicationRef, prepared:PreparedInitialSettings)** и **BranchSettingsBinding(operation_id:EntityUid, expected:WorldPublicationRef, target:WorldPublicationRef, source:HistoricalTimeSettingsCapture)**. Same-world/operation checks; target started; initial head=None; branch target.head=source.source и target.active_timeline_id новая ветка. Snapshot подтверждает ancestry. **PublicationWorldSettings(publication:WorldPublicationRef, settings:WorldTimeSettings, versions:tuple[CalendarVersionRef,...])** — read state для headless/pinned-parent publication.
+
+`storage/lifecyclePort.py`: **IBoundWorldSettingsLifecycleWriter.append_initial(InitialSettingsBinding)** и **append_branch(BranchSettingsBinding)**, оба async → **WorldSettingsBindingStored(publication:WorldPublicationRef) | WorldSettingsAppendConflict**; **IWorldSettingsLifecycleBinding.bind(CommitScope) → IBoundWorldSettingsLifecycleWriter** sync; **IWorldSettingsPublicationReader.read(WorldPublicationRef,CommitReadScope) → PublicationWorldSettings | None** async. WorldSettingsBindingStored объявлен в timePublication/lifecycle.py. Source settings immutable, branch не пересчитывает origin/now. Контракт target.ref назначает lifecycle owner. Root facts/settings clock пишутся вместе в общем scope (§34).
+
+Отказ validation → existing SectionRefused с typed FieldPathError; budget exhaustion → явный отказ до append, не частичная запись. **Acceptance budget** — обязательный CalendarBudget, внедрённый в handler factory, не persisted setting и не неограниченный default. Claimed operation outcome/retry остаётся Publication ledger. Calendar clock не сдвигается при settings-only change.
+
+File counts: timePublication section/state/append/lifecycle + init = 5; application storage statePort/lifecyclePort + init = 3; integration sectionHandler + init = 2. Все paths World-owned. Concrete SQL schema/adapter freeze отдельно до storage реализации; runtime state не хранится в legacy calendar dict.
+
+## 38. Явная DI-композиция без универсального dispatcher
+
+Фабрика `make_world_time_settings(reader)->IWorldTimeSettings` из §30 **SUPERSEDED**: скрывала необходимые pure dependencies. IWorldTimeSettings остаётся инвентарём typed методов, не обязательной mega-facade. DAG composition получает отдельные конкретные операции:
+
+| Factory (sync) | Результат / методы |
+|---|---|
+| make_time_reader(source:ITimeReadSource) | TimeReader; read_current/read_historical §11 |
+| make_time_advance_pipeline() | ITimeAdvancePipeline; prepare_advance §11, pure |
+| make_calendar_projector() | CalendarProjector; project/resolve §29.4, pure |
+| make_calendar_validator() | CalendarValidator; validate §36.3, pure |
+| make_world_settings_reader(source:IWorldTimeSettingsSource) | WorldTimeSettingsReader; две read signatures §36.2 |
+| make_calendar_settings_pipeline(validator:CalendarValidator,projector:CalendarProjector) | WorldCalendarSettingsPipeline; prepare_calendar_create/update/select/remove, exact requests/results §30 |
+| make_epoch_settings_pipeline(validator:CalendarValidator) | WorldEpochSettingsPipeline; prepare_epoch_create/update/remove §30 |
+| make_hours_settings_pipeline(validator:CalendarValidator,projector:CalendarProjector) | WorldHoursSettingsPipeline; prepare_hours_change §30 |
+| make_initial_settings_pipeline(validator:CalendarValidator) | WorldInitialTimeSettingsPipeline; prepare_initial §33 |
+
+Каждый метод — фиксированная public operation; несколько методов одного typed класса не разрешают execute(kind,payload) и взаимные вызовы чужих CRUD. Общие pure validation/calculation helpers допустимы. Канонические defaults — owning POJO factory, не factory DI defaults. WorldCalendarResolver.resolve_at — pure static operation reader.py, не требует service lookup. Factories находятся в существующих proposed composition/factory.py (Time) и timeSettings/factory.py (World), counts не меняются.
+
+Handler DI — отдельная integration factory, не DAG operation. **make_time_section_handler(contract:SectionContract[TimeAdvanceSection], reader:ITimeStateReader, publication_reader:ITimePublicationStateReader, binding:ITimeCommitBinding) → TimeSectionHandler**; publication reader обязателен для состояния до первого snapshot. **make_world_settings_section_handler(contract:SectionContract[WorldTimeSettingsSection], reader:IWorldSettingsStateReader, publication_reader:IWorldSettingsPublicationReader, clock_reader:ITimeStateReader, clock_publication_reader:ITimePublicationStateReader, binding:IWorldSettingsCommitBinding, validator:CalendarValidator, projector:CalendarProjector, budget:CalendarBudget) → WorldTimeSettingsSectionHandler**. Все зависимости типизированы; reader'ы работают только под supplied scope. Кодирование использует existing canonical codec через явный encoding binding, **его точная сигнатура остаётся encoding integration prerequisite**, не скрытый global import. Handler contract manifest/version обязан быть зарегистрирован до активации; class existence не доказывает codec readiness.
+
+## 39. Полевая policy matrix календарного authored input
+
+Матрица относится к **всем** полям §29.2/§33, не оставляет неявных defaults. Поля runtime request/result/capture/receipt не являются authored settings: они strict required, extra-forbid; nullable только там, где явно указан None. Wire enum operations tagged concrete Literal, enum constraints сохраняются.
+
+| Группа полей | Missing / null / empty / policy |
+|---|---|
+| WorldTimeSettings.hours_per_day; StandardTimeSettingsInput.hours_per_day | Missing→24, null invalid, strict positive int; DefaultWhenMissing |
+| StandardTimeSettingsInput.origin | Missing/explicit null→штатный capture-current sentinel; DefaultWhenMissing[CalendarOrigin|None]=None. Только STANDARD |
+| Все остальные поля settings/definitions/entries/rules/origins/epochs и AuthoredTimeSettingsInput.settings | StrictOnWire; missing invalid. Никаких defaults из предполагаемого «обычного» календаря |
+| CalendarSpan.season; InsertSpanRule.after | Required nullable: missing invalid, null означает нет сезона / вставку в начало. Non-null RegistryKey membership обязательно |
+| Enum поля numbering/week_mode/role; initialization.kind и rule/predicate.kind | Required, strict closed value; null/unknown invalid; Literal-discriminator с enum member, не arbitrary str |
+| description | Required Text; пустая строка допустима как отсутствие описания, null invalid |
+| display_* | Required Text непустой после проверки whitespace; null/empty invalid; не использовать label как key |
+| system_* и refs | Required typed RegistryKey, непустой snake_case; null только у двух явно nullable полей выше; actual membership REF-W |
+| calendars.entries / definition.base_year / spans.entries / periods.entries | Required nonempty tuples; null invalid; unique IDs/occurrences |
+| weekdays.entries / seasons.entries / epochs.entries / rules / condition.all_of / condition.none_of | Required tuples; empty допустимо по §29 semantics, null invalid |
+| Integer/boolean fields | Required strict type/range, null invalid; bool не int; никакого numeric-string coerce в domain |
+
+Registry wrappers имеют единственное required entries, не root-list с неявным преобразованием. CalendarEntry.definition/anchor required, origin.date/time required; `AuthoredTimeSettingsInput` не принимает missing custom start. WorldTimeSettings.selected обязан существовать. Registry tuple ordering сохраняется для правил/месяцев/недели; no sort по именам во время normalize. Unknown extra fields отвергаются; N+1 означает новые **entries**, не непредусмотренные поля payload.
+
+Для patch preparation omission не означает reset/default: runtime Update requests содержат полный typed entry или конкретный scalar change (§30). Generic JSON patch должен быть разрешён World boundary в полный validated candidate до этих операций. Нет скрытого partial dict в Time API. Serialized I64 transport policy §29.3 не распространяется автоматически на calendar arbitrary Int — **для всех целочисленных transport fields** требуется единый lossless codec policy; предлагается decimal-string wire для integer quantities, JSON numbers для bounded enum-independent small fields только по explicit schema. До transport freeze нельзя считать HTTP контракт закрытым этим Python POJO.
+
+## 40. Результат уточнения трёх блоков
+
+На уровне proposal закрыты: World settings section/state/lifecycle schemas и scoped acceptance ports (§37), pure/domain DI map (§38), authored missing/null/empty/default matrix (§39). Матрица не выдаёт новые defaults за принятые пользователем. Поддельные capture/refs не становятся trusted через constructor; acceptance readers подтверждают их под scope.
+
+Оставшиеся **явные integration prerequisites**, а не неявное применение POJO: SnapshotApplyContext.next_publication owner approval; branch public outcome/operation kind; canonical codec binding/schema IDs; lossless transport encoding; concrete SQL storage slice. Их нельзя изобрести внутри core реализации. ActionCore по-прежнему deferred, legacy migration после core. **Blanket CODE-READY/PASS не выставляется**, но эти зависимости теперь названы на уровне конкретных полей/портов и не скрыты в DI/defaults.
+
+## 41. Encoding bindings без отдельного механизма Time
+
+Evidence: [canonicalCodec.py](../../backend/app/application/encoding/canonicalCodec.py) уже кодирует integer как sign+magnitude произвольной длины, проверяет frozen models и registered concrete types; [schemaManifest.py](../../backend/app/dataModel/encoding/schemaManifest.py) задаёт explicit type identities; [SnapshotEnvelopeCodec](../../backend/app/application/worldSnapshot/encoding/snapshotCodec.py) показывает reuse canonical encode/decode и проверку version/type. SnapshotEnvelopeCodec кодирует metadata, не Time payload: его нельзя использовать как domain state codec.
+
+### 41.1. Exact proposed domain codecs
+
+Новые concrete wrappers используют existing canonical functions; новый сериализатор не создаётся. Ошибки всех wrappers — existing CanonicalEncodingError для invalid/noncanonical bytes, unsupported version/root type; cancellation не перехватывается. Никаких object/Any в public domain signatures.
+
+| Класс / файл относительно backend/app | Методы |
+|---|---|
+| TimeSectionCodec / application/time/encoding/sectionCodec.py | encode(TimeAdvanceSection)→bytes; decode(payload:bytes,version:FormatVersion)→TimeAdvanceSection |
+| TimeStateCodec / application/time/encoding/stateCodec.py | encode(TimeClockState)→bytes; decode(payload:bytes,version:FormatVersion)→TimeClockState |
+| WorldTimeSettingsSectionCodec / application/worldData/timeSettings/encoding/sectionCodec.py | encode(WorldTimeSettingsSection)→bytes; decode(payload:bytes,version:FormatVersion)→WorldTimeSettingsSection |
+| WorldTimeSettingsStateCodec / application/worldData/timeSettings/encoding/stateCodec.py | encode(WorldTimeSettings)→bytes; decode(payload:bytes,version:FormatVersion)→WorldTimeSettings |
+
+Each constructor `(manifest:CanonicalSchemaManifest)`; supported version ровно 1, не default coercion. После decode — exact root type и owning POJO structural validation, затем semantic validation на соответствующей boundary с typed dependencies/budget. Byte equality re-encode проверяется existing canonical mechanism/owner wrapper; не доверять произвольному pickle/import-by-name.
+
+Manifest files: application/time/encoding/manifest.py и application/worldData/timeSettings/encoding/manifest.py. Обе encoding leaf папки sectionCodec/stateCodec/manifest/init = 4 файла. Time manifest включает transitive Time values/capture/proposal/section + существующие shared identity/publication records. World manifest включает World settings/rules/enums и transitive Time/shared records. Merge через existing merge_manifests, не копировать shared entries с новыми IDs. Manifest должен закрыть все reachable serialized types, включая enum discriminators. Schema IDs и numeric type IDs — разные сущности.
+
+**Handler factory уточнение §38:** make_time_section_handler получает обязательный `codec:TimeSectionCodec`; make_world_settings_section_handler — `codec:WorldTimeSettingsSectionCodec`. Handler.encode/decode делегируют только этому codec. State codecs внедряются в concrete storage adapters при их freeze. SectionContract.manifest обязан совпадать с merged codec manifest по identities; mismatch останавливает composition до запуска DAG.
+
+Numeric type-id reservation не закрывается подстановкой диапазона наугад. Отдельный атомарный encoding registry шаг должен предъявить полный список type→ID и проверить collisions по всем manifests до codec implementation. Изолированная pure arithmetic не зависит от этой registration; persisted/public serialized operations зависят. Это точная граница readiness, а не скрытый TODO в codec constructor.
+
+### 41.2. Transport contract, отдельный от canonical storage
+
+Все application/calendar integers остаются strict int. Для **новых** Time/settings JSON DTO предлагается единая однозначная policy: все integer quantity/index/year/budget fields — canonical decimal strings; enums — строковые enum values; bool — JSON bool; tuple — JSON array; refs — структурированные DTO existing owners. Negative zero, leading plus, leading zeros кроме `0`, exponent/fraction и whitespace отвергаются. Bounds проверяет owning POJO после lossless parse. Existing shared refs не переопределяются целиком этим правилом: их transport schema переиспользуется владельцем API.
+
+Это **новый DTO proposal**, не молчаливое изменение existing world import number encoding. Existing endpoints/URLs требуют API-1 compatibility review; старый импорт сначала проходит явно версионированный adapter/migration contract. Новый codec не обходит общий settings resolver и не создаёт raw dict public API. Конкретные endpoint DTO и adapters принадлежат app/api, фиксируются после GEN invocation binding; Time/domain signatures не получают FastAPI/HTTP dependencies.
+
+Проверки будущего encoding slice: min/max I64; arbitrary календарный year больше JS safe integer; nanosecond roundtrip; strict zero/negative-zero; unknown enum/version; manifest collision/missing type; capture/proposal fingerprint stability; decoded payload не trusted acceptance evidence. Это ещё не выполненные runtime tests.
+
+## 42. Актуальные gates после encoding review
+
+На уровне документа определены точные codec classes, signatures, injection и reuse shared serialization. Техдолг остаётся после core. Следующие внешние/регистрационные задачи не превращаются в новый Time механизм:
+
+1. Encoding IDs: отдельный проверенный manifest reservation до serialized core implementation.
+2. Snapshot: owner принимает next_publication context и branch outcome/operation-kind contract; внутренние Time/World payloads уже описаны.
+3. API/GEN: lossless DTO compatibility и exact node invocation принимаются совместно; никаких concrete nodes/routes в этом задании.
+4. Storage: отдельный DDL/model/adapter freeze по текущим правилам до storage реализации.
+
+User acceptance остаётся отдельным gate для предложенных calendar grammar/defaults/API. Текущий документ — reviewable specification, а не доказательство полной production готовности. Новые enum/POJO definitions и runtime registration не создавались.
+
+## 43. Encoding reservation proposal
+
+Поиск числовых литералов 31000–31199 в backend/app, plans и docs не дал совпадений на момент проверки. Это ограниченное collision evidence, не глобальное резервирование registry. Предлагаются следующие **стабильные** IDs для persisted roots и их transitive dependencies; номера не вычислять из позиции класса в списке при реализации.
+
+| ID | Concrete type |
+|---|---|
+| 31000–31006 | По порядку: CalendarPredicateKind=31000, CalendarEditKind=31001, CalendarWeekMode=31002, CalendarNumbering=31003, CalendarSpanRole=31004, CalendarInitializationKind=31005, CalendarConversionKind=31006 |
+| 31100–31106 | TimePoint=31100, TimeDuration=31101, TimeInterval=31102, TimeCapture=31103, TimeAdvanceProposal=31104, TimeAdvanceSection=31105, TimeClockState=31106 |
+| 31110–31117 | SpanEntry=31110, CalendarSpanRegistry=31111, WeekdayEntry=31112, CalendarWeekdayRegistry=31113, SeasonEntry=31114, CalendarSeasonRegistry=31115, PeriodEntry=31116, CalendarPeriodRegistry=31117 |
+| 31118–31125 | CalendarSpan=31118, AlwaysPredicate=31119, YearModuloPredicate=31120, YearRangePredicate=31121, CalendarCondition=31122, InsertSpanRule=31123, ReplaceSpanRule=31124, RemoveSpanRule=31125 |
+| 31126–31135 | CalendarDefinition=31126, CalendarEntry=31127, WorldCalendarRegistry=31128, CalendarDate=31129, CalendarClockTime=31130, CalendarOrigin=31131, CalendarAnchor=31132, WorldCalendarEpoch=31133, WorldCalendarEpochRegistry=31134, WorldTimeSettings=31135 |
+| 31136–31138 | PreparedTimeSettingsChange=31136, WorldTimeSettingsSection=31137, CalendarVersionRef=31138 |
+
+Existing shared WorldPublicationRef/WorldSnapshotRef/SectionHeader and their dependencies retain existing IDs; no re-registration under 31xxx. IDs 31000–31006 ENUM, listed 311xx RECORD. Admission-only requests/results без durable encoding не требуют ID только потому, что являются POJO; при persist в DAG runtime owning registry отдельно должен перечислить их, не сериализовать незарегистрированное значение. State rows versions tuple сериализуется с manifest, содержащим CalendarVersionRef и shared refs. Merge-manifest collision и missing reachable type проверки обязательны до codec implementation. Зарезервированные номера считаются предложенными до принятия common registry owner.
+
+## 44. Storage design candidate — без DDL реализации
+
+Проверены existing WorldPublicationRow/WorldSnapshotRow и composite owner FKs в 0001_initial.sql. Domain storage использует immutable записи и ссылки, а не UPDATE worlds.calendar/current_tick. Ниже **предлагаемые таблицы**, код SQL не создаётся.
+
+Общий layout для четырёх snapshot row families (`time_snapshot_states`, `time_snapshot_history`, `world_time_settings_snapshot_states`, `world_time_settings_snapshot_history`): ключ snapshot_id TEXT PK; world_uid TEXT; operation_id TEXT; format_version INTEGER>0; payload BLOB canonical; checksum TEXT 64 lowercase hex. Composite FK (world_uid,snapshot_id)→world_snapshots, (world_uid,operation_id)→publication_operations; NOT NULL везде. State payload — TimeClockState/WorldTimeSettings; history payload — соответствующая concrete section. Settings state дополнительно versions BLOB (canonical tuple[CalendarVersionRef,...]), а не ещё одна копия WorldTimeSettings. Snapshot+operation ownership сверяется с metadata row; append в едином CommitScope.
+
+Headless/branch bindings: `time_publication_states` и `world_time_settings_publication_states`, аналогичные колонки, но publication_id вместо snapshot_id и composite FK (world_uid,publication_id)→world_publications. Payload types те же; settings versions BLOB. Привязка timeline выводится из typed state/target publication и проверяется на write/read; column shadow clock не вводится. Все records immutable; UPDATE/REPLACE запрещены. Delete только в существующем retained-history cleanup lifecycle после проверки refs; Time не предоставляет публичный delete.
+
+Порядок ссылок в transaction: coordinator сохраняет assigned parent metadata/publication row до domain binding либо использует согласованные deferred FK; нельзя делать преждевременный отдельный commit ради FK. Конкретный вариант должен быть принят Snapshot storage owner, поскольку compare_append ранее выполнялся после append; этот план не утверждает текущий порядок совместимым без изменения. Atomicity proof включает rollback обеих записей и unknown commit outcome. Это integration constraint, не скрытая операция домена.
+
+Row classes: `db/models/time/stateRows.py` — TimeSnapshotStateRow/TimePublicationStateRow; `db/models/time/historyRows.py` — TimeSnapshotHistoryRow (folder + init=3). `db/models/worldTimeSettings/stateRows.py` — WorldTimeSettingsSnapshotStateRow/WorldTimeSettingsPublicationStateRow; `historyRows.py` — WorldTimeSettingsSnapshotHistoryRow (+init=3). Fields соответствуют колонкам выше, db wire types str/int/bytes допустимы только здесь. Adapter: `db/repositories/sqlite/time/stateStore.py` и `db/repositories/sqlite/worldTimeSettings/stateStore.py`, по init+module=2. Existing scoped access/commit coordinator внедряются, не используются отдельные connections.
+
+Этот layout — полный reviewable candidate, не production proof. До реализации storage slice требует согласованных FK ordering/retention hooks и DDL/model sync в 0001_initial.sql. Нет отдельной 0002 migration; legacy migration отдельным этапом после core.
+
+## 45. Межвладельческий handoff без новых DAG nodes
+
+Snapshot owner получает конкретный change request: next_publication в SnapshotApplyContext (§37), target validation и durable branch result/OperationKind extension (§34), FK ordering (§44). Time не определяет весь branch action protocol: player transfer/authorization/holders принадлежат внешним владельцам, и эти поля нельзя заменить пустым tuple ради закрытого union. До принятия external extension branch integration остаётся BLOCKED; pure rebind/core не блокируются.
+
+API/GEN owner получает inventory §11/30/33, lossless transport policy §41 и обязательные source refs. Нужны concrete invocation mapping и DTOs для выбранных операций; существующие NodeIds/родство/CALL не назначаются автоматически. Пользователь явно запретил concrete nodes в этом scope, поэтому их отсутствие — stop boundary, не забытая часть реализации. Production API нельзя объявить готовым только по наличию Python interface.
+
+**Пакет для пользовательского review теперь включает:** календарное ТЗ, public settings API, Time/World acceptance proposals, DI, полевые политики, codec type-ID proposal и storage row layout. Remaining gates — пользовательская приёмка и принятие конкретных изменений внешними owners; runtime implementation/verification не выполнялись. Прежние формулировки «type IDs/storage layout ещё не предъявлены» уточняются §§43–44: теперь они предложены, но не утверждены.
+
+## 46. Приёмка архитектурных пунктов и граница core / integration
+
+**Явная приёмка пользователя:**
+
+1. Time не публикует изменения самостоятельно; DAG собирает Time proposal и domain effects, Snapshot принимает атомарно.
+2. Публичные операции World time/calendar settings выполняются через DAG; typed POJO, версии, миграция удаляемого World.calendar dict.
+3. Предложенная календарная модель N+1 над закрытыми engine enums: ALWAYS/YEAR_MODULO/YEAR_RANGE, INSERT/REPLACE/REMOVE_SPAN, CONTINUOUS/RESET_AT_YEAR, ASTRONOMICAL/NO_YEAR_ZERO, MONTH/INTERCALARY; версии/anchors для реформ. Принятие относится к предъявленной модели, не обещанию любой неизвестной вычислительной семантики.
+4. Immutable snapshot-bound и publication-bound Time/settings state/history, общая transaction boundary без отдельного Time publisher/journal.
+
+**Уточнение пользователя:** зависимости других доменов не блокируют разработку ядра. Они блокируют только использующий их integration/cutover slice. Ранние blanket формулировки «нужна приёмка календарной модели/архитектуры 1–4» заменены этой записью. Приёмка этих пунктов не означает автоматического утверждения всех числовых type IDs, DTO деталей или SQL constraints и не является просьбой начать код в текущем документальном scope.
+
+| Область | Допустимая readiness boundary |
+|---|---|
+| Core Time values/arithmetic/intervals/conversions | Можно готовить к изолированной реализации по принятым собственным контрактам; не ждать Snapshot/GEN/actionCore DONE |
+| Calendar rules/validation/projection и World settings pure preparation | Принята архитектурная модель; разработка независима от production storage и concrete DAG nodes. Собственные точные I/O/E и policies обязательны |
+| Domain public interfaces и contract adapters | Разрабатываются против явных ports; test doubles не выдают себя за готовую external integration |
+| Snapshot next_publication/branch lifecycle/FK ordering | Внешние prerequisites соответствующих persistence/integration операций, не blanket blocker core |
+| API/GEN DTO/invocation/node bindings | Внешние integration prerequisites; не блокируют pure core/domain operations |
+| Numeric codec IDs и concrete storage layout | Отдельный encoding/storage slice; его freeze нужен до реализации именно этого slice |
+| Legacy debt и actionCore | Debt после core; actionCore DEFERRED, как уже принято |
+
+Итог: **архитектурные пункты 1–4 приняты; core и external integration имеют раздельные gates**. Возможные собственные противоречия схем core надо исправлять до затронутого кода, но нельзя использовать внешнюю незавершённость как причину откладывать независимое ядро. Production готовность и runtime proofs этим решением не объявляются.
