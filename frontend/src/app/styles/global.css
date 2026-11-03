@@ -1,0 +1,8 @@
+@layer base {
+  html, body, #root { height: 100%; width: 100%; }
+  body { @apply bg-background font-sans text-sm leading-relaxed text-foreground antialiased; color-scheme: dark; }
+  button, [role="button"], select { cursor: pointer; }
+  button:disabled, select:disabled { cursor: not-allowed; }
+  :focus-visible { outline: 2px solid #bcbcbc; outline-offset: 4px; }
+  * { scrollbar-width: thin; scrollbar-color: #6b6b6b #181818; }
+}

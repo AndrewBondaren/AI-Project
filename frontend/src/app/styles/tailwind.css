@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Comfortaa:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "./global.css";
+
+@theme {
+  --font-sans: 'Comfortaa', 'Segoe UI', sans-serif;
+  --font-display: 'Cinzel Decorative', Georgia, serif;
+  --color-background: #181818;
+  --color-panel: #111111;
+  --color-raised: #202020;
+  --color-foreground: #e8e8e8;
+  --color-muted: #9b9b9b;
+  --color-faint: #777777;
+  --color-line: #d0d0d040;
+  --color-line-hover: #d0d0d099;
+  --color-accent: #c8c8c8;
+  --color-danger: #ef6868;
+}
