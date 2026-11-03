@@ -4036,3 +4036,21 @@ cutover и P1-B не начинались. Time/API-1 и чужие измене
 **SP-P1-A принят пользователем.** Решение «принято через приемку» относится к реализации, повторно предъявленной в §15.28. Приняты source schema V1 с 33 bindings и 14 source aliases, проверки schema lock и diagnostic admission. SP-P1-DEBT-1 и замечания SP-P1-A-REV-1, REV-2 и REV-3 закрыты. Результат адресного прогона при предъявлении — 42 теста OK (§15.28).
 
 Для перехода к реализации SP-P1-B требуется отдельная команда пользователя согласно §15.20.
+
+### 15.30. SP-P1-B — storage records и проверка схемы (2026-11-03)
+
+**SP-P1-B реализован и предъявлен на пользовательскую приёмку.** Основание — приёмка A в §15.29 и последующая команда пользователя «Делай».
+
+В backend/app/dataModel/hydrology/pack добавлены пустой __init__.py, root.py (HydrologyPackRoot, HydrologyShardRef) и shard.py (HydrologyPackShard). Records проверяют исходные типы вложенных данных, полноту полей, ограничения каталога и tile. Root проверяет семь dependency slots в каноническом порядке, contract/schema/algorithm каждой зависимости, общий world/scope, иерархию физических тел и соответствие source mapping. Shard проверяет непустое наблюдаемое покрытие, принадлежность tile по floor, canonical wet runs и упорядоченные SHORE за пределами wet membership. Dry shard сохраняет bed. Дескриптор принимает BLOB shard v1 размером от 1 байта до 4 MiB.
+
+В backend/app/application/worldData/generators/hydrology/encoding/packSchema.py зафиксированы storage manifest и две in-process проверки. require_pack_schema_v1 проверяет исходный source lock, пять дополнительных bindings, формы и достижимость 38 типов и 16 aliases. require_pack_record_v1 принимает точный тип root или shard и повторяет admission P1-A для diagnostics корня. 61 файловый SHA baseline совпал. Direct counts с markers составляют pack 0→3, hydrology/encoding 2→3, tests/spatial_pack 2→3.
+
+В backend/tests/spatial_pack/test_storage_schema.py fixtures берут metadata из реальных GEO declarations. У fine_water и pre_water_surface algorithm=2, у surface.geo.water_placement schema=2. Проверки включают round-trip двух малых записей через existing canonical TLV, storage-only shape drift, коллизию FineXY, чужой world, неверную revision, неполные/подменённые поля, ошибку union ancestry, descriptor size/format/version, отрицательную tile coordinate, dry bed и превышение collection caps.
+
+Из backend выполнено:
+```text
+../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_storage_schema tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec
+48 tests OK (0.176s)
+```
+
+Проверенная граница — admission отдельной записи в памяти. Для подтверждения соответствия конкретного shard выбранной записи root требуются обе записи и проверенные bytes. Структурные ограничения TLV до создания моделей и безопасное декодирование входных байтов относятся к P1-C. Полноту partition и соответствие исходному producer envelope проверяет P3I.

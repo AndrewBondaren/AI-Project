@@ -15719,3 +15719,37 @@ Admission ревизий, exact fine P2, diagnostics/fingerprints и публи�
 **После I5.1.** Остаются общий fine frame/area и подготовка геометрии всех участников, единый resolved batch, точная биекция water outcomes ↔ specs и переход потребителя F на весь GeoWaterPlacementPlan. Только затем можно замкнуть семь зависимостей source envelope и провести diagnostics admission до output_fingerprint. Версии, registration и G10-A этот срез не переключает.
 
 **Команда на реализацию:** Реализуй только GEO-I5.1 по этому разделу — admit_native_placement_dependencies и focused tests в двух указанных файлах. Запусти geo1/integration и geo1/fine_water, покажи diff инструментом и предъяви результат на независимое ревью.
+
+#### I5.2. Независимое ревью GEO-I5.1 (2026-11-03)
+
+**Вердикт: PASS.** Дефектов в границах привязки входных ревизий и численного fine frame не обнаружено. Этот раздел фиксирует результат ревью, а не пользовательскую приёмку I5.1.
+
+Ревью начато с diff целевых файлов и owning-плана, проверки staged diff и списка untracked: рабочее дерево было чистым, неотслеживаемых файлов не было. Реализация и тесты при ревью не редактировались.
+
+Из `backend` с добавлением `backend/tests` в `PYTHONPATH` самостоятельно выполнены `python -B -m unittest discover -s tests/geo1/integration -v` — **165/165 OK** и `python -B -m unittest discover -s tests/geo1/fine_water -v` — **18/18 OK**.
+
+**Сверка с владельцами.** В `nativePlacementDependencies.py:37–58` проверены строгая валидация batch и типизированных envelopes, полные expected PlanRef, metadata PRE_WATER_WINDOW и GEO TERRAIN_REGIONS, общий world/scope и output proof по payload/dependencies/diagnostics. ERROR каждого входа с корректным output hash достигает PlanBuildFailure с исходными issues. В строках 61–73 проверены ровно climate_base, terrain_base и PREPARED_NATURAL с metadata владельцев и общими world/scope. Формула input_fingerprint W совпадает с PreWaterTerrainWindowJob.prepare: metadata, world, scope, W.coverage и полный tuple upstream dependencies; у regions требуется dependencies=().
+
+**Batch и frame.** Строки 75–82 независимо связывают snapshot_revision с W.ref.output_fingerprint и snapshot_uid с UID снимка регионов; требуют PRE_RELIEF и accepted=(). Дополнительная проба с обёрткой fine_topology подтвердила ровно один переход из captured topology. Строки 83–94 требуют полное покрытие W, включительные границы Z и fine spans [x0,x1) без масштабирования. На корректно переподписанном W приняты высоты ровно z_min=-500 и z_max=8000. Верхние и нижние выходы region spans за bounds отвергнуты. Возвращаются ровно pre_water_surface и terrain_regions в этом порядке с исходными полными refs.
+
+**Достижение негативных проверок.** Трассировка focused tests подтвердила фактические места отказа в nativePlacementDependencies.py: другой PlanKey при прежнем output hash — строка 48; неверный output proof — 54; ERROR каждого входа с пересчитанным hash — 58; неверный input proof W — 73; partial W с корректными предшествующими proofs — 85; высота вне Z — 89; region span вне bounds с корректным proof — 94. Ошибки подготовки фикстур за отказ не засчитывались. Отмена подтверждена во время обхода высот (строка 87) и дополнительной пробой во время обхода region spans (строка 92).
+
+Единицы геометрии кандидатов, production wiring и общий P2 cutover остаются последующими срезами. Ограничение V2 без required coordinate_space сохраняется; этот PASS его не закрывает.
+
+#### I5.3. Приёмка GEO-I5.1 (2026-11-03)
+
+Пользователь принял GEO-I5.1 после независимого PASS в §I5.2. Приняты привязка batch к двум полным ревизиям и проверка численного fine frame. Независимый прогон — 165/165 integration и 18/18 fine_water.
+
+### GEO-I6.1. Fine P2 — захваченная геометрия участника (§EF-1.3)
+
+**Почему переход начинается до session.submit.** У двух действующих конструкторов PreparedPlacementV2 разные единицы. AttachedCoastlinePreparer использует длину набора fine cells; BoundaryPreparationJob строит DEPENDENT batch на fine_topology. В pre-relief ветке placementPreparation.bind_admission явно требует WORLD_SURFACE_GRID, а prepare записывает original_area=float(len(cells)) в этой coarse сетке. PlacementSession.submit проверяет header/decision и передаёт число в DependencyQueue, где приоритет равен (-specificity,-original_area,uid). Маркировка обоих готовых результатов как fine изменила бы смысл сравнения площадей. Сначала нужен неизменяемый вход владельца геометрии, привязанный к W.
+
+**Изолированный контракт.** Добавить в существующий `backend/app/dataModel/placement/prepared.py` ровно record `CapturedPlacementGeometry` по EF-1.3. Пять required полей: `coordinate_space: Literal[CoordinateSpace.WORLD_FINE_GRID]`, `pre_hydrology_ref: PlanRef`, `intent: PlacementIntent`, `original_area: OriginalArea`, `candidates: tuple[PlacementCandidate, ...]`. Вход — готовая исходная геометрия от профильного owner; выход — frozen strict record без policy decision. Будущий потребитель — аргумент competitor_geometry у NativeWaterPlacementJob.publish. Сегодня прямой caller — focused tests. Готовность admission и выбор winning candidate принадлежат session.
+
+- Проверять actual enum до Literal coercion и точное числовое значение original_area до преобразования во float (исключить bool, дробь, nonfinite, ≤0 и >2**53, в том числе целое 2**53+1, округляемое во float). После validation сохраняется OriginalArea. Единица — одна клетка WORLD_FINE_GRID по XY. Owner вычисляет площадь исходной дискретной геометрии до конкуренции. Пара альтернатив с общей областью не даёт основания суммировать их площади.
+- Требовать непустой tuple candidates, уникальные candidate_uid, соблюдение absolute movement policy, согласованность world_uid между intent.identity и W.ref.key. Сохранить полный PlanRef, геометрию, Z и порядок предпочтений. Невалидное значение — ValidationError до передачи в queue. Сравнение с expected W.ref, проверка canonical coordinates относительно конкретного W.topology и принадлежности к batch header требуют внешних входов и выполняются при binding.
+- Второй файл — `backend/tests/geo1/contracts/test_captured_placement_geometry.py`. Проверить обычный record, повторную validation, альтернативы с перекрытием и неизменность площади, верхнюю точную границу чисел. Отрицательные случаи: отсутствующий/строковый/coarse marker, потерянный ref, чужой world, нарушение правил для площади, пустые/повторные candidates, запрещённая absolute alternative. Проверить отказ и при повторной валидации подменённого model_copy. Запустить focused tests и существующие placement lifecycle/constraints tests с backend/tests в PYTHONPATH.
+
+**Граница следующего изменения.** I6.1 даёт typed capture port, но не меняет формат действующих batch/prepared/result и не обещает, что текущий coarse producer выдаёт fine geometry. После него native preparation должна получить исходные fine клетки у владельцев water и competitors, связать capture с W/header и сверить результат callback. Обязательные markers batch/prepared/result и echo topology в finish переводятся вместе с обоими реальными entry (PRE_RELIEF и DEPENDENT), codec/version changes и их consumers по EF-1.2–1.3. При этом проверяются равные единицы original_area для всех участников и tie-break общей очереди. Spatial source lock и G10-A I6.1 не затрагивает.
+
+**Команда на реализацию:** Реализуй только GEO-I6.1: CapturedPlacementGeometry и focused tests в указанных файлах. Проверь отрицательные случаи и существующий placement lifecycle, покажи diff инструментом и предъяви результат на независимое ревью.

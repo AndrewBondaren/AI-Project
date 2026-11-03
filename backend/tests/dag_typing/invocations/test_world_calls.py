@@ -42,87 +42,53 @@ class Payload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class NamedTarget(Payload):
-    world_uid: str
-    location_uid: str
+class Count(Payload):
+    value: int
 
 
-PORT = NamedTarget(world_uid="fixture-world", location_uid="port")
+class Text(Payload):
+    text: str
 
 
-class BaseReceipt(Payload):
-    publication: str
-    source: Literal["found_light", "published_full"] = "published_full"
-    scope: NamedTarget = PORT
-    artifact_ref: str = "full/world-17"
-    completion_receipt: str = "published/17"
+class PipelineState(Payload):
+    waiting_for: Literal["count", "format"]
 
 
-class Selection(Payload):
-    location: NamedTarget
-    interaction_id: str
-    session_uid: str
-    accepted_base: BaseReceipt
+class TransformRequest(Payload):
+    operation: Literal["count", "format"]
+    value: str
 
 
-class Detailed(Payload):
-    detailed_ref: str
-
-
-class EntryState(Payload):
-    waiting_for: Literal["selection", "load"]
-
-
-class LoadRequest(Payload):
-    selection: Selection
-    player_uid: str
-    operation_id: str
-
-
-class Loaded(Payload):
-    start_location: NamedTarget
-    detailed: Detailed
-    resolved_position: tuple[int, int, int]
-    completion_receipt: str
-
-
-class WorldRequest(Payload):
-    stage: Literal["light/full", "detailed"]
-    location: str
-    accepted_base: BaseReceipt | None = None
-
-
-class WorldResult(RootModel[BaseReceipt | Detailed]):
+class TransformResult(RootModel[Count | Text]):
     model_config = ConfigDict(frozen=True)
 
 
 def target(name, input_type, output_type):
     return CallTarget(NodeId(name), ContractId(name), ContractVersion("1"), input_type, output_type,
-                      (TestNodeError,) if name == "world_creation" else ())
+                      (TestNodeError,) if name == "transform" else ())
 
 
-WORLD = target("world_creation", WorldRequest, WorldResult)
-SELECT = target("select_start_location", Payload, Selection)
-LOAD = target("load_player_into_world", LoadRequest, Loaded)
-KEY = CallKey("world")
+TRANSFORM = target("transform", TransformRequest, TransformResult)
+COUNT = target("count", Payload, Count)
+FORMAT = target("format", Count, Text)
+KEY = CallKey("transform")
 
 
 @dataclass(frozen=True, kw_only=True)
-class World(PythonNode[WorldRequest, WorldResult, TestNodeError]):
-    id: NodeId = WORLD.node_id
+class Transform(PythonNode[TransformRequest, TransformResult, TestNodeError]):
+    id: NodeId = TRANSFORM.node_id
 
     async def prepare_input(self, view):
         raise AssertionError("called target requires explicit input")
 
     async def execute(self, input):
-        if input.location == "failed":
+        if input.value == "failed":
             raise PythonNodeError(TestNodeError(item_id=1))
-        if input.location == "cancelled":
+        if input.value == "cancelled":
             raise asyncio.CancelledError
-        if input.stage == "light/full":
-            return WorldResult(BaseReceipt(publication="full-17"))
-        assert input.accepted_base == BaseReceipt(publication="full-17")
-        return WorldResult(Detailed(detailed_ref=input.location + "/detail-18"))
+        if input.operation == "count":
+            return TransformResult(Count(value=len(input.value)))
+        return TransformResult(Text(text=f"count={input.value}"))
 
 
 class Workflow(ResumablePythonNode):
@@ -131,63 +97,59 @@ class Workflow(ResumablePythonNode):
 
 
 @dataclass(frozen=True, kw_only=True)
-class Select(Workflow):
-    id: NodeId = SELECT.node_id
+class CountCaller(Workflow):
+    id: NodeId = COUNT.node_id
 
     async def start(self, input):
-        return Call(KEY, WORLD, WorldRequest(stage="light/full", location="port"), input)
+        return Call(KEY, TRANSFORM, TransformRequest(operation="count", value="hello"), input)
 
     async def resume(self, state, event):
-        result = event.get(KEY, WORLD)
-        assert isinstance(result, CallSuccess) and isinstance(result.output.root, BaseReceipt)
-        return Complete(Selection(location=PORT, accepted_base=result.output.root,
-                                  interaction_id="selection-1", session_uid="session-1"))
+        result = event.get(KEY, TRANSFORM)
+        assert isinstance(result, CallSuccess) and isinstance(result.output.root, Count)
+        return Complete(result.output.root)
 
 
 @dataclass(frozen=True, kw_only=True)
-class Load(Workflow):
-    id: NodeId = LOAD.node_id
+class FormatCaller(Workflow):
+    id: NodeId = FORMAT.node_id
 
     async def start(self, input):
-        return Call(KEY, WORLD, WorldRequest(stage="detailed", location=input.selection.location.location_uid,
-                                             accepted_base=input.selection.accepted_base), input)
+        return Call(KEY, TRANSFORM, TransformRequest(operation="format", value=str(input.value)), Payload())
 
     async def resume(self, state, event):
-        result = event.get(KEY, WORLD)
-        assert isinstance(result, CallSuccess) and isinstance(result.output.root, Detailed)
-        return Complete(Loaded(start_location=state.selection.location, detailed=result.output.root,
-                               resolved_position=(12, 7, 0), completion_receipt=state.operation_id))
+        result = event.get(KEY, TRANSFORM)
+        assert isinstance(result, CallSuccess) and isinstance(result.output.root, Text)
+        return Complete(result.output.root)
 
 
 @dataclass(frozen=True, kw_only=True)
-class Entry(Workflow):
-    id: NodeId = NodeId("initialize_world_entry")
+class Pipeline(Workflow):
+    id: NodeId = NodeId("pipeline")
 
     async def start(self, input):
-        return Call(CallKey("select"), SELECT, input, EntryState(waiting_for="selection"))
+        return Call(CallKey("count"), COUNT, input, PipelineState(waiting_for="count"))
 
     async def resume(self, state, event):
-        if state.waiting_for == "selection":
-            result = event.get(CallKey("select"), SELECT)
+        if state.waiting_for == "count":
+            result = event.get(CallKey("count"), COUNT)
             assert isinstance(result, CallSuccess)
-            return Call(CallKey("load"), LOAD, LoadRequest(selection=result.output, player_uid="player-1",
-                                                          operation_id="load-17"), EntryState(waiting_for="load"))
-        result = event.get(CallKey("load"), LOAD)
+            return Call(CallKey("format"), FORMAT, result.output, PipelineState(waiting_for="format"))
+        result = event.get(CallKey("format"), FORMAT)
         assert isinstance(result, CallSuccess)
         return Complete(result.output)
 
 
 @dataclass(frozen=True, kw_only=True)
-class Group(Entry):
+class Group(Pipeline):
     async def start(self, input):
-        return CallGroup(tuple(CallRequest(CallKey(name), WORLD, WorldRequest(stage="light/full", location=name))
+        return CallGroup(tuple(CallRequest(CallKey(name), TRANSFORM, TransformRequest(operation="count", value=name))
                                for name in ("failed", "cancelled", "ok")), Payload())
 
     async def resume(self, state, event):
-        assert isinstance(event.get(CallKey("failed"), WORLD), CallFailure)
-        assert isinstance(event.get(CallKey("cancelled"), WORLD), CallCancelled)
-        assert isinstance(event.get(CallKey("ok"), WORLD), CallSuccess)
-        return Complete(Detailed(detailed_ref="joined"))
+        assert isinstance(event.get(CallKey("failed"), TRANSFORM), CallFailure)
+        assert isinstance(event.get(CallKey("cancelled"), TRANSFORM), CallCancelled)
+        assert isinstance(event.get(CallKey("ok"), TRANSFORM), CallSuccess)
+        return Complete(Text(text="joined"))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -221,7 +183,7 @@ class Merge(Source):
         return Payload()
 
 
-def runtime(entry=Entry, store=None, world=World, retry_policy=None, diamond=False, select=Select, lease_seconds=300):
+def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -230,17 +192,17 @@ def runtime(entry=Entry, store=None, world=World, retry_policy=None, diamond=Fal
             registry.register_python(cls, FakeExecutor, contract)
             bindings.nodes[cls.id] = cls(deps=deps)
     for cls, declaration, calls in (
-        (entry, target(entry.id, Payload, Detailed if entry is Group else Loaded), (WORLD,) if entry is Group else (SELECT, LOAD)),
-        (select, SELECT, (WORLD,)), (Load, LOAD, (WORLD,)), (world, WORLD, ()),
+        (entry, target(entry.id, Payload, Text), (TRANSFORM,) if entry is Group else (COUNT, FORMAT)),
+        (counter, COUNT, (TRANSFORM,)), (FormatCaller, FORMAT, (TRANSFORM,)), (transform, TRANSFORM, ()),
     ):
-        state_type = {Load: LoadRequest, Entry: EntryState}.get(cls, Payload)
+        state_type = PipelineState if cls is Pipeline else Payload
         continuation = ContinuationContract(ContractId(f"{cls.id}.state"), ContractVersion("1"), state_type) if calls else None
         contract = NodeContract(declaration.input_type, declaration.output_type, declaration.contract_id,
                                 declaration.version, (), calls=calls, continuation=continuation, error_types=declaration.error_types,
-                                retry_policy=retry_policy if cls is world else None)
+                                retry_policy=retry_policy if cls is transform else None)
         register = registry.register_resumable if calls else registry.register_python
         register(cls, FakeExecutor, contract)
-        bindings.nodes[cls.id] = cls(deps=(Merge.id,)) if diamond and cls is world else cls()
+        bindings.nodes[cls.id] = cls(deps=(Merge.id,)) if diamond and cls is transform else cls()
     compiler = GraphCompiler(registry, bindings, compile_rules=lambda rules: (), evaluate_rules=lambda *_: True)
     compiler.precompile()
     config = InvocationOptions(store, workers=1, invocation_limit=16, lease_seconds=lease_seconds) if store else None
@@ -248,14 +210,14 @@ def runtime(entry=Entry, store=None, world=World, retry_policy=None, diamond=Fal
                            invocation_options=config)
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)
     if store is not None:
-        return DAGEngine(executor, None, registry, EntryHooks(plan), None, ExecutionSnapshotService(), SnapshotStore())
+        return DAGEngine(executor, None, registry, PipelineHooks(plan), None, ExecutionSnapshotService(), SnapshotStore())
     return executor, plan
 
 
-class EntryHooks:
+class PipelineHooks:
     consumer = NodeId("result")
-    reads = (RequiredOutput(OutputRef(Entry.id, Loaded)),)
-    response_type = Loaded
+    reads = (RequiredOutput(OutputRef(Pipeline.id, Text)),)
+    response_type = Text
 
     def __init__(self, plan):
         self.plan = plan
@@ -300,15 +262,15 @@ class CompilerTests(unittest.TestCase):
         for kind in ("version", "cross-phase", "mixed-cycle", "unknown"):
             with self.subTest(kind=kind):
                 registry, bindings = NodeRegistry(), GraphBindings()
-                declared = replace(WORLD, version=ContractVersion("2")) if kind == "version" else WORLD
+                declared = replace(TRANSFORM, version=ContractVersion("2")) if kind == "version" else TRANSFORM
                 calls = (replace(declared, node_id=NodeId("unknown")),) if kind == "unknown" else (declared,)
-                continuation = ContinuationContract(ContractId("select.state"), ContractVersion("1"), Payload)
-                registry.register_resumable(Select, FakeExecutor, NodeContract(Payload, Selection, SELECT.contract_id,
-                    SELECT.version, (), error_types=(), calls=calls, continuation=continuation))
-                registry.register_python(World, FakeExecutor, NodeContract(WorldRequest, WorldResult, WORLD.contract_id,
-                    WORLD.version, (), error_types=WORLD.error_types))
-                bindings.nodes[Select.id] = Select()
-                bindings.nodes[World.id] = World(deps=(Select.id,) if kind == "mixed-cycle" else (),
+                continuation = ContinuationContract(ContractId("count.state"), ContractVersion("1"), Payload)
+                registry.register_resumable(CountCaller, FakeExecutor, NodeContract(Payload, Count, COUNT.contract_id,
+                    COUNT.version, (), error_types=(), calls=calls, continuation=continuation))
+                registry.register_python(Transform, FakeExecutor, NodeContract(TransformRequest, TransformResult, TRANSFORM.contract_id,
+                    TRANSFORM.version, (), error_types=TRANSFORM.error_types))
+                bindings.nodes[CountCaller.id] = CountCaller()
+                bindings.nodes[Transform.id] = Transform(deps=(CountCaller.id,) if kind == "mixed-cycle" else (),
                     phase=ExecutionPhase.POST_LLM if kind == "cross-phase" else ExecutionPhase.PRE_LLM)
                 compiler = GraphCompiler(registry, bindings, compile_rules=lambda _: (), evaluate_rules=lambda *_: True)
                 with self.assertRaises((ValueError, TypeError)):
@@ -318,20 +280,20 @@ class CompilerTests(unittest.TestCase):
         from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
         from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
         from app.application.engine.contracts.invocation.executionStore import RestoreFailure
-        request = WORLD.request(KEY, WorldRequest(stage="light/full", location="port"))
+        request = TRANSFORM.request(KEY, TransformRequest(operation="count", value="hello"))
         for requests in ((), (request, request)):
             with self.subTest(requests=requests), self.assertRaises(ValueError):
                 CallGroup(requests, Payload())
         _, plan = runtime()
-        coordinator = InvocationCoordinator.create(plan, ExecutionId("restore"), PlanRevision("1"), Entry.id, 5, None)
+        coordinator = InvocationCoordinator.create(plan, ExecutionId("restore"), PlanRevision("1"), Pipeline.id, 5, None)
         coordinator.graph.records[coordinator.graph.root].version = ContractVersion("unknown")
         with self.assertRaises(RestoreFailure):
             CheckpointCodec.decode(CheckpointCodec.encode(coordinator.graph), plan)
 
 
-class FailOnceWorld(World):
+class FailOnceTransform(Transform):
     async def execute(self, input):
-        if input.stage == "light/full" and not getattr(self, "attempted", False):
+        if input.operation == "count" and not getattr(self, "attempted", False):
             object.__setattr__(self, "attempted", True)
             raise PythonNodeError(TestNodeError(item_id=1))
         return await super().execute(input)
@@ -363,7 +325,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             bindings.nodes[node.id] = node
         compiler = GraphCompiler(registry, bindings, compile_rules=lambda _: (), evaluate_rules=lambda *_: True)
         compiler.precompile()
-        class Hooks(EntryHooks):
+        class Hooks(PipelineHooks):
             response_type = Payload
             reads = (RequiredOutput(OutputRef(Post.id, Payload)),)
 
@@ -456,7 +418,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 a.executescript(schema)
                 key = ExecutionId("lease")
                 options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
-                with patch.object(EntryHooks, "apply_effects", slow_effect):
+                with patch.object(PipelineHooks, "apply_effects", slow_effect):
                     result = await runtime(store=SQLiteExecutionStore(a), lease_seconds=lease_seconds).run(
                         key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
                     self.assertEqual((await SQLiteExecutionStore(b).load(key)).status, "COMPLETED")
@@ -476,12 +438,12 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         root = await executor.run_invocation(*args, **options)
         saved = await store.load(execution)
         for contract_id, version in ((root.contract_id, root.version), (ContractId("foreign"), ContractVersion("99"))):
-            forged = OutputRecord[Detailed](identity=root.identity(), contract_id=contract_id, contract_version=version,
-                                            output=Detailed(detailed_ref="forged"))
+            forged = OutputRecord[Text](identity=root.identity(), contract_id=contract_id, contract_version=version,
+                                            output=Text(text="forged"))
             with self.subTest(contract=contract_id), self.assertRaises(RestoreFailure):
                 await executor.run_invocation(*args, prior_outputs=(forged,), **options)
         replay = await executor.run_invocation(*args, **options)
-        self.assertEqual(Detailed.model_validate_json(replay.terminal).detailed_ref, "joined")
+        self.assertEqual(Text.model_validate_json(replay.terminal).text, "joined")
         checkpoint = InvocationGraph.model_validate_json((await store.load(execution)).blob)
         self.assertEqual(replay, checkpoint.records[checkpoint.root])
         self.assertEqual(saved, await store.load(execution))
@@ -518,20 +480,19 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         from app.application.engine.contracts.invocation.resumeEvent import CallRuntimeFailure
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
         refs = []
-        class Capture(Select):
+        class Capture(CountCaller):
             async def resume(self, state, event):
-                result = event.get(KEY, WORLD)
+                result = event.get(KEY, TRANSFORM)
                 assert isinstance(result, CallRuntimeFailure)
                 refs.append(result.diagnostic_ref)
-                return Complete(Selection(location=PORT, accepted_base=BaseReceipt(publication="full-17"),
-                                          interaction_id="selection-1", session_uid="session-1"))
+                return Complete(Count(value=0))
         async def fail(node, input):
             raise RuntimeError("merge failed")
         store = MemoryExecutionStore()
-        executor, plan = runtime(select=Capture, diamond=True)
+        executor, plan = runtime(counter=Capture, diamond=True)
         key = ExecutionId("diagnostic")
         with patch.object(Merge, "execute", fail):
-            await executor.run_invocation(plan, key, Select.id, PlanRevision("1"), store,
+            await executor.run_invocation(plan, key, CountCaller.id, PlanRevision("1"), store,
                                           owner="test", workers=1, invocation_limit=8)
         graph = InvocationGraph.model_validate_json((await store.load(key)).blob)
         self.assertEqual(len(refs), 1)
@@ -542,19 +503,19 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "effects.sqlite"
-            class SelectWithEffect(Select):
+            class CountWithEffect(CountCaller):
                 async def resume(self, state, event):
                     result = await super().resume(state, event)
                     from contextlib import closing
                     with closing(sqlite3.connect(path)) as conn, conn:
                         conn.execute("INSERT INTO attempts VALUES (1)")
-                        conn.execute("INSERT OR IGNORE INTO effects VALUES (?)", ("selection/full-17",))
+                        conn.execute("INSERT OR IGNORE INTO effects VALUES (?)", ("count/hello",))
                     return result
 
             class BeforeCommit(SQLiteExecutionStore):
                 async def checkpoint(self, claim, revision, status, blob):
                     graph = InvocationGraph.model_validate_json(blob)
-                    if any(r.node_id == SELECT.node_id and r.status == "SUCCEEDED" for r in graph.records.values()):
+                    if any(r.node_id == COUNT.node_id and r.status == "SUCCEEDED" for r in graph.records.values()):
                         raise Crash
                     return await super().checkpoint(claim, revision, status, blob)
 
@@ -562,15 +523,15 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             try:
                 db.executescript("BEGIN;\n" + schema + "\nCREATE TABLE attempts(n INTEGER);"
                                  "CREATE TABLE effects(operation_id TEXT PRIMARY KEY); COMMIT;")
-                executor, plan = runtime(select=SelectWithEffect)
-                args = (ExecutionId("effects"), Entry.id, PlanRevision("1"))
+                executor, plan = runtime(counter=CountWithEffect)
+                args = (ExecutionId("effects"), Pipeline.id, PlanRevision("1"))
                 with self.assertRaises(Crash):
                     await executor.run_invocation(plan, *args, BeforeCommit(db), owner="first", workers=1, invocation_limit=5)
             finally:
                 db.close()
             db = sqlite3.connect(path)
             try:
-                executor, plan = runtime(select=SelectWithEffect)
+                executor, plan = runtime(counter=CountWithEffect)
                 root = await executor.run_invocation(plan, *args, SQLiteExecutionStore(db), owner="next",
                                                      workers=1, invocation_limit=5)
                 self.assertEqual(root.status, "SUCCEEDED")
@@ -583,27 +544,27 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
         barrier = asyncio.Event()
         entries = []
-        class ParallelWorld(World):
+        class ParallelTransform(Transform):
             async def execute(self, input):
-                entries.append(input.location)
+                entries.append(input.value)
                 if len(entries) == 2:
                     barrier.set()
                 await asyncio.wait_for(barrier.wait(), timeout=2)
                 return await super().execute(input)
 
-        executor, plan = runtime(Group, world=ParallelWorld)
+        executor, plan = runtime(Group, transform=ParallelTransform)
         result = await executor.run_invocation(plan, ExecutionId("parallel"), Group.id, PlanRevision("1"),
                                                MemoryExecutionStore(), owner="test", workers=2, invocation_limit=4)
-        self.assertEqual(Detailed.model_validate_json(result.terminal).detailed_ref, "joined")
+        self.assertEqual(Text.model_validate_json(result.terminal).text, "joined")
 
     async def test_diamond_is_local_to_each_call(self):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
         store = MemoryExecutionStore()
         executor, plan = runtime(diamond=True)
         key = ExecutionId("diamond")
-        result = await executor.run_invocation(plan, key, Entry.id, PlanRevision("1"), store,
+        result = await executor.run_invocation(plan, key, Pipeline.id, PlanRevision("1"), store,
                                                owner="test", workers=2, invocation_limit=13)
-        self.assertEqual(Loaded.model_validate_json(result.terminal).detailed.detailed_ref, "port/detail-18")
+        self.assertEqual(Text.model_validate_json(result.terminal).text, "count=5")
         graph = InvocationGraph.model_validate_json((await store.load(key)).blob)
         sources = [r for r in graph.records.values() if r.node_id == Source.id]
         merges = [r for r in graph.records.values() if r.node_id == Merge.id]
@@ -622,15 +583,15 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_same_key_replay_is_idempotent_and_changed_input_is_rejected(self):
         from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
         _, plan = runtime()
-        coordinator = InvocationCoordinator.create(plan, ExecutionId("dispatch"), PlanRevision("1"), Select.id, 8, Payload())
+        coordinator = InvocationCoordinator.create(plan, ExecutionId("dispatch"), PlanRevision("1"), CountCaller.id, 8, Payload())
         record = coordinator.graph.records[coordinator.graph.root]
-        step = await Select().start(Payload())
+        step = await CountCaller().start(Payload())
         coordinator.begin(record)
         coordinator.accept(record, step)
         original = coordinator.graph.model_dump_json()
         coordinator.accept(record, step)
         self.assertEqual(coordinator.graph.model_dump_json(), original)
-        conflict = Call(KEY, WORLD, WorldRequest(stage="light/full", location="other"), Payload())
+        conflict = Call(KEY, TRANSFORM, TransformRequest(operation="count", value="other"), Payload())
         with self.assertRaises(ValueError):
             coordinator.accept(record, conflict)
         self.assertEqual(coordinator.graph.model_dump_json(), original)
@@ -638,12 +599,12 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_retry_same_invocation(self):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
         store = MemoryExecutionStore()
-        executor, plan = runtime(world=FailOnceWorld, retry_policy=lambda error, attempt: attempt == 1)
-        result = await executor.run_invocation(plan, ExecutionId("retry"), Entry.id, PlanRevision("1"), store,
+        executor, plan = runtime(transform=FailOnceTransform, retry_policy=lambda error, attempt: attempt == 1)
+        result = await executor.run_invocation(plan, ExecutionId("retry"), Pipeline.id, PlanRevision("1"), store,
                                                owner="test", workers=1, invocation_limit=5)
-        self.assertEqual(Loaded.model_validate_json(result.terminal).detailed, Detailed(detailed_ref="port/detail-18"))
+        self.assertEqual(Text.model_validate_json(result.terminal), Text(text="count=5"))
         graph = InvocationGraph.model_validate_json((await store.load(ExecutionId("retry"))).blob)
-        calls = [r for r in graph.records.values() if r.node_id == WORLD.node_id]
+        calls = [r for r in graph.records.values() if r.node_id == TRANSFORM.node_id]
         self.assertEqual([(r.step_index, r.attempt_counter) for r in calls], [(0, 2), (0, 1)])
         self.assertNotEqual(calls[0].invocation_id, calls[1].invocation_id)
 
@@ -672,8 +633,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                     db.execute("UPDATE dag_executions SET lease_until=unixepoch()-1")
                 engine = runtime(store=store)
                 result = await engine.resume(execution, max_passes=1, options=options)
-                self.assertEqual(result.data, Loaded(start_location=PORT, detailed=Detailed(detailed_ref="port/detail-18"),
-                                                     resolved_position=(12, 7, 0), completion_receipt="load-17"))
+                self.assertEqual(result.data, Text(text="count=5"))
                 saved = await store.load(execution)
                 duplicate = await runtime(store=store).resume(execution, max_passes=1, options=options)
                 self.assertEqual(result, duplicate)
@@ -693,7 +653,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 executor, plan = runtime(Group)
                 result = await executor.run_invocation(plan, key, Group.id, PlanRevision("1"), a,
                                                        owner="worker", workers=1, invocation_limit=4)
-                self.assertEqual(Detailed.model_validate_json(result.terminal).detailed_ref, "joined")
+                self.assertEqual(Text.model_validate_json(result.terminal).text, "joined")
                 stale = await a.claim(key, "a", 60)
                 with self.assertRaises(OwnershipConflict):
                     await b.claim(key, "b", 60)
@@ -723,7 +683,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                     store = InterruptedStore(db)
                     store.stop_at = stop_at
                     executor, plan = runtime()
-                    args = (ExecutionId("flow"), Entry.id, PlanRevision("1"))
+                    args = (ExecutionId("flow"), Pipeline.id, PlanRevision("1"))
                     options = dict(owner="worker", workers=1, invocation_limit=10)
                     with self.assertRaises(Crash):
                         await executor.run_invocation(plan, *args, store, **options)
@@ -739,9 +699,9 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                         db.execute("UPDATE dag_executions SET lease_until=unixepoch()-1")
                     executor, plan = runtime()
                     root = await executor.run_invocation(plan, *args, store, **options)
-                    self.assertEqual(Loaded.model_validate_json(root.terminal).detailed.detailed_ref, "port/detail-18")
+                    self.assertEqual(Text.model_validate_json(root.terminal).text, "count=5")
                     after = InvocationGraph.model_validate_json((await store.load(args[0])).blob)
-                    calls = [r for r in after.records.values() if r.node_id == WORLD.node_id]
+                    calls = [r for r in after.records.values() if r.node_id == TRANSFORM.node_id]
                     self.assertEqual(len({r.invocation_id for r in calls}), 2)
                     for key, old in before.records.items():
                         if old.status == "RUNNING":

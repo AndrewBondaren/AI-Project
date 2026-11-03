@@ -1,0 +1,183 @@
+"""Immutable open-water v1 catalog, provenance and domain tables."""
+from dataclasses import fields, is_dataclass
+from typing import ClassVar, Self
+
+from pydantic import BaseModel, ConfigDict, StrictInt, TypeAdapter, model_validator
+
+from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
+from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
+from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.identity.uid import EntityUid
+from app.dataModel.planning.contracts.planDependency import PlanDependency
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.spatial.grid.coordinateTypes import FineZ
+from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.validation.immutableValue import validate_immutable
+
+
+# Contract revisions captured by storage v1, in canonical slot order.
+_DEPENDENCIES = (
+    ("fine_water", "hydrology.fine_water", 1, 2),
+    ("hydrology_routes", "hydrology.native_routes", 1, 1),
+    ("native_final", "hydrology.native_final", 1, 1),
+    ("pre_water_surface", "terrain.pre_water_window", 1, 2),
+    ("prepared_natural", "terrain.prepared_natural", 1, 1),
+    ("river_relief", "terrain.native_river_relief", 1, 1),
+    ("water_placement", "surface.geo.water_placement", 2, 1),
+)
+TILE_SIDE = 64
+
+
+def require_source_ref(ref: PlanRef) -> None:
+    key = ref.key
+    if (key.contract_id, key.schema_version, key.algorithm_version) != ("hydrology.canonical_open_water", 1, 1):
+        raise ValueError("unsupported open-water source revision")
+
+
+def _exact(original, admitted):
+    """Detect nested coercion, including bool/int and StrEnum/str equality."""
+    if type(original) is not type(admitted) or original != admitted:
+        raise ValueError("storage field changed under strict admission")
+    if isinstance(original, BaseModel):
+        for name in type(original).model_fields:
+            _exact(getattr(original, name), getattr(admitted, name))
+    elif is_dataclass(original):
+        for field in fields(original):
+            _exact(getattr(original, field.name), getattr(admitted, field.name))
+    elif isinstance(original, tuple):
+        for before, after in zip(original, admitted, strict=True):
+            _exact(before, after)
+    elif isinstance(original, frozenset):
+        counterparts = {item: item for item in admitted}
+        for item in original:
+            _exact(item, counterparts[item])
+
+
+def _validate_nested(value):
+    if isinstance(value, BaseModel):
+        for child in vars(value).values():
+            _validate_nested(child)
+        # Legacy models may trust an instance, including a forged model_copy.
+        _exact(value, type(value).model_validate(vars(value), strict=True))
+    elif isinstance(value, (tuple, frozenset)):
+        for child in value:
+            _validate_nested(child)
+
+
+class _PackRecord(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid", revalidate_instances="always")
+    _collection_limits: ClassVar[tuple[tuple[str, int], ...]] = ()
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _strict_fields(cls, value, handler):
+        raw = vars(value) if isinstance(value, cls) else value
+        if not isinstance(raw, dict) or raw.keys() != cls.model_fields.keys():
+            raise ValueError("expected complete storage record")
+        for name, limit in cls._collection_limits:
+            if type(raw[name]) is not tuple or len(raw[name]) > limit:
+                raise ValueError(f"invalid storage collection: {name}")
+        for field in raw.values():
+            validate_immutable(field)
+            _validate_nested(field)
+        admitted = handler(raw)
+        for name, field in raw.items():
+            _exact(field, getattr(admitted, name))
+        return admitted
+
+
+class HydrologyShardRef(_PackRecord):
+    tx: StrictInt
+    ty: StrictInt
+    artifact: ArtifactRef
+
+    @model_validator(mode="after")
+    def _shard_descriptor(self) -> Self:
+        ref = self.artifact
+        if (ref.kind is not ArtifactKind.BLOB or ref.format_key != "hydrology.open_water.shard.tlv"
+                or ref.format_version != 1 or ref.row_count is not None or not 0 < ref.nbytes <= 4 * 1024**2):
+            raise ValueError("invalid open-water shard descriptor")
+        return self
+
+
+def _ordered_ids(values):
+    if values != tuple(sorted(set(values))):
+        raise ValueError("physical IDs must be unique and sorted")
+    for uid in values:
+        TypeAdapter(EntityUid).validate_python(uid, strict=True)
+
+
+class HydrologyPackRoot(_PackRecord):
+    _collection_limits = (("dependencies", 7), ("shards", 65536))
+    source_ref: PlanRef
+    dependencies: tuple[PlanDependency, ...]
+    diagnostics: tuple[PlanDiagnostic, ...]
+    topology: WorldTopology
+    coverage_region_uid: EntityUid
+    z_min: FineZ
+    z_max: FineZ
+    bodies: tuple[WaterBody, ...]
+    unions: tuple[PhysicalWaterUnion, ...]
+    source_mapping: SourceBodyMapping
+    shards: tuple[HydrologyShardRef, ...]
+
+    @model_validator(mode="after")
+    def _catalog(self) -> Self:
+        require_source_ref(self.source_ref)
+        if self.z_min > self.z_max:
+            raise ValueError("invalid catalog extent")
+        actual = []
+        for dependency in self.dependencies:
+            key = dependency.ref.key
+            if (key.world_uid, key.scope) != (self.source_ref.key.world_uid, self.source_ref.key.scope):
+                raise ValueError("dependency belongs to a different world or scope")
+            actual.append((dependency.slot, key.contract_id, key.schema_version, key.algorithm_version))
+        if tuple(actual) != _DEPENDENCIES:
+            raise ValueError("unexpected open-water dependency slots or revisions")
+        bounds = self.topology.bounds
+        tiles = tuple((row.ty, row.tx) for row in self.shards)
+        if tiles != tuple(sorted(set(tiles))) or any(
+                not bounds.x_min // TILE_SIDE <= tx <= bounds.x_max // TILE_SIDE
+                or not bounds.y_min // TILE_SIDE <= ty <= bounds.y_max // TILE_SIDE for ty, tx in tiles):
+            raise ValueError("shard tiles must be unique, ordered and intersect the frame")
+        self._physical_tables()
+        return self
+
+    def _physical_tables(self) -> None:
+        _ordered_ids(tuple(body.water_body_uid for body in self.bodies))
+        _ordered_ids(tuple(union.water_system_uid for union in self.unions))
+        bodies = {body.water_body_uid: body for body in self.bodies}
+        unions = {union.water_system_uid: union for union in self.unions}
+        members = {uid: set() for uid in unions}
+        for fact in (*self.bodies, *self.unions):
+            if not self.z_min <= fact.z_water_level <= self.z_max:
+                raise ValueError("effective level exceeds source scope")
+        for uid, union in unions.items():
+            _ordered_ids(union.member_uids)
+            _ordered_ids(union.child_system_uids)
+            parent = unions.get(union.parent_system_uid)
+            if union.parent_system_uid is not None and (parent is None or uid not in parent.child_system_uids
+                                                        or union.z_water_level != parent.z_water_level):
+                raise ValueError("inconsistent physical parent")
+            if any(child not in unions or unions[child].parent_system_uid != uid for child in union.child_system_uids):
+                raise ValueError("inconsistent physical children")
+            visited = {uid}
+            while parent is not None:
+                if parent.water_system_uid in visited:
+                    raise ValueError("physical union cycle")
+                visited.add(parent.water_system_uid)
+                parent = unions.get(parent.parent_system_uid)
+        for uid, body in bodies.items():
+            parent_uid = body.parent_system_uid
+            while parent_uid is not None:
+                parent = unions.get(parent_uid)
+                if parent is None or body.z_water_level != parent.z_water_level:
+                    raise ValueError("inconsistent body ancestry")
+                members[parent_uid].add(uid)
+                parent_uid = parent.parent_system_uid
+        if any(members[uid] != set(union.member_uids) for uid, union in unions.items()):
+            raise ValueError("inconsistent physical membership")
+        if any(uid not in bodies for entry in self.source_mapping.entries for uid in entry.body_uids):
+            raise ValueError("unresolved source mapping body")

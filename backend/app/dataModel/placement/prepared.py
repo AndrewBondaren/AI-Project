@@ -1,9 +1,9 @@
 """Adapter-prepared geometry and pre-carve facts, without carve or resolution."""
 
 from enum import Enum
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import StrictEnumOnWire, StrictOnWire
 from app.dataModel.placement.common import (
@@ -11,6 +11,8 @@ from app.dataModel.placement.common import (
     PlacementText, PlacementUid, Specificity, WaterPresence,
 )
 from app.dataModel.placement.intent import PlacementIntent
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.policy.policyDecision import ObjectAdmissionDecision
 from app.dataModel.policy.policyEnums import PolicyState
 
@@ -33,6 +35,42 @@ class PlacementCandidate(PlacementModel):
     candidate_uid: StrictOnWire[PlacementUid]
     preference: StrictOnWire[NonNegativeInt]
     footprint: StrictOnWire[PlacementFootprint]
+
+
+class CapturedPlacementGeometry(PlacementModel):
+    """Fine geometry supplied by the owner before placement admission."""
+
+    model_config = {**PlacementModel.model_config, "strict": True}
+    coordinate_space: Literal[CoordinateSpace.WORLD_FINE_GRID]
+    pre_hydrology_ref: PlanRef
+    intent: PlacementIntent
+    original_area: OriginalArea
+    candidates: tuple[PlacementCandidate, ...] = Field(min_length=1)
+
+    @field_validator("coordinate_space", mode="before")
+    @classmethod
+    def fine_frame(cls, value: object) -> CoordinateSpace:
+        if value is not CoordinateSpace.WORLD_FINE_GRID:
+            raise ValueError("captured placement geometry requires world fine grid")
+        return value
+
+    @field_validator("original_area", mode="before")
+    @classmethod
+    def discrete_area(cls, value: object) -> float:
+        if type(value) not in (int, float) or not 0 < value <= 2**53 or not float(value).is_integer():
+            raise ValueError("original area must be an exact positive fine cell count up to 2**53")
+        return float(value)
+
+    @model_validator(mode="after")
+    def consistent_capture(self) -> Self:
+        if self.intent.identity.world_uid != self.pre_hydrology_ref.key.world_uid:
+            raise ValueError("captured intent and pre-water revision must belong to the same world")
+        if len({c.candidate_uid for c in self.candidates}) != len(self.candidates):
+            raise ValueError("duplicate placement candidate_uid")
+        if (self.intent.mode is PlacementMode.ABSOLUTE and self.intent.absolute_movement is AbsoluteMovement.FORBID
+                and len(self.candidates) > 1):
+            raise ValueError("absolute alternatives require explicit_candidates movement policy")
+        return self
 
 
 class CoastlinePlacementFact(PlacementModel):

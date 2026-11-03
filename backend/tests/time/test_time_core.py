@@ -19,6 +19,8 @@ from app.dataModel.time.storage.initial import InitialTimeFacts
 from app.dataModel.time.storage.state import PublicationTimeState, StoredTimeState, TimeClockState
 from app.dataModel.time.values.interval import TimeInterval
 from app.dataModel.time.values.point import MAX_SECONDS, TimePoint
+from app.dataModel.world.calendar.enums.rules import CalendarPredicateKind
+from app.dataModel.world.calendar.rules.predicates import CalendarCondition, YearModuloPredicate, YearRangePredicate
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded, CalendarInvalid
 from app.dataModel.world.calendar.projection.request import CalendarBudget, CalendarProjectionInput, CalendarResolveInput, CalendarVersionRef, ValidateCalendarInput
 from app.dataModel.world.calendar.projection.result import CalendarProjection
@@ -99,9 +101,16 @@ class TimeCoreTests(unittest.TestCase):
         self.assertEqual(rebound.point, point(timeline="branch"))
 
 
-def custom_settings():
+def festival_condition(first: int = 1, last: int = 1, *, modulo: YearModuloPredicate | None = None) -> CalendarCondition:
+    years = YearRangePredicate(kind=CalendarPredicateKind.YEAR_RANGE, first=first, last=last)
+    return CalendarCondition(all_of=(years,) if modulo is None else (years, modulo), none_of=())
+
+
+def custom_settings(condition: CalendarCondition | None = None) -> WorldTimeSettings:
+    if condition is None:
+        condition = festival_condition()
     span = dict(span="month", days=2, counts_in_week=True, season=None)
-    insert = dict(kind="insert_span", condition=dict(all_of=[dict(kind="year_range", first=1, last=1)], none_of=[]),
+    insert = dict(kind="insert_span", condition=condition.model_dump(mode="json"),
                   after="month", value=dict(span="festival", days=1, counts_in_week=False, season=None))
     definition = dict(system_calendar="custom", display_calendar="Custom", description="", numbering="astronomical",
                       spans=dict(entries=[dict(system_span=k, display_span=k, role=r) for k,r in
@@ -141,10 +150,8 @@ class CalendarTests(unittest.TestCase):
         self.assertEqual(self.project(point(180000)).weekday, "b")
 
     def test_budget_for_modulo_restricted_to_one_year(self):
-        data = self.capture.settings.model_dump(mode="json")
-        condition = data["calendars"]["entries"][0]["definition"]["rules"][0]["condition"]
-        condition["all_of"].append(dict(kind="year_modulo", modulus=10**30, residue=1, offset=0))
-        settings = WorldTimeSettings.model_validate_json(json.dumps(data))
+        modulo = YearModuloPredicate(kind=CalendarPredicateKind.YEAR_MODULO, modulus=10**30, residue=1, offset=0)
+        settings = custom_settings(festival_condition(modulo=modulo))
         budget = CalendarBudget(max_rule_checks=3, max_year_patterns=3)
         request = CalendarProjectionInput(
             point=point(144000), capture=self.clock, calendar=settings.selected,
@@ -161,14 +168,11 @@ class CalendarTests(unittest.TestCase):
         from app.application.time.calendar.ordinal import CalendarIndex
         from app.application.time.calendar.rules import Work
         from app.dataModel.world.calendar.dates.date import CalendarDate
-        from app.dataModel.world.calendar.definitions.definition import CalendarDefinition
-        definition = self.capture.settings.calendars.entries[0].definition.model_dump(mode="json")
-        edit = definition["rules"][0]
-        edit["condition"]["all_of"] = [
-            dict(kind="year_range", first=-17, last=12),
-            dict(kind="year_modulo", modulus=3, residue=1, offset=2),
-        ]
-        index = CalendarIndex(CalendarDefinition.model_validate_json(json.dumps(definition)), Work(100, 100))
+        modulo = YearModuloPredicate(kind=CalendarPredicateKind.YEAR_MODULO, modulus=3, residue=1, offset=2)
+        settings = custom_settings(festival_condition(first=-17, last=12, modulo=modulo))
+        entry = settings.calendars.entry_for(settings.selected)
+        self.assertIsNotNone(entry)
+        index = CalendarIndex(entry.definition, Work(100, 100))
         def length(year):
             return 2 + int(-17 <= year <= 12 and (year - 2) % 3 == 1)
         start = -sum(length(y) for y in range(-25, 0))

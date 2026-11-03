@@ -1,0 +1,147 @@
+"""Storage representations tested entirely in memory."""
+from unittest import TestCase
+from unittest.mock import patch
+from typing import TypeAliasType
+
+from app.application.encoding.canonicalCodec import CanonicalEncodingError, decode, encode
+from app.application.worldData.generators.hydrology.encoding import packSchema
+from app.application.worldData.generators.hydrology.planning.assembly.final.publication import NATIVE_FINAL
+from app.application.worldData.generators.hydrology.planning.assembly.nativeRoutesPublication import NATIVE_ROUTES_CONTRACT
+from app.application.worldData.generators.hydrology.water.planning.fine.publication import FINE_WATER_CONTRACT
+from app.application.worldData.generators.terrain.planning.preWater.terrainWindowJob import PRE_WATER_WINDOW
+from app.application.worldData.generators.terrain.relief.planning.river.publication import NATIVE_RIVER_RELIEF
+from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
+from app.dataModel.hydrology.pack.root import HydrologyPackRoot, HydrologyShardRef
+from app.dataModel.hydrology.pack.shard import HydrologyPackShard
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
+from app.dataModel.planning.contracts.planDependency import PlanDependency
+from app.dataModel.surfacePlanning.surfacePlanBindings import geo_surface_plan_binding
+from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
+from app.dataModel.terrain.planning.natural.preparedTerrain import NATURAL_TERRAIN_CONTRACT
+from tests.geo1.canonical_source.test_source_models import source, union
+from tests.spatial_pack.test_source_schema import diagnostics, ref
+
+
+def dependencies():
+    metadata = (
+        ("fine_water", FINE_WATER_CONTRACT), ("hydrology_routes", NATIVE_ROUTES_CONTRACT),
+        ("native_final", NATIVE_FINAL), ("pre_water_surface", PRE_WATER_WINDOW),
+        ("prepared_natural", NATURAL_TERRAIN_CONTRACT), ("river_relief", NATIVE_RIVER_RELIEF),
+        ("water_placement", geo_surface_plan_binding(SurfacePlanSlot.WATER_PLACEMENT).metadata),
+    )
+    result = []
+    for slot, contract in metadata:
+        base = ref(contract.id)
+        key = base.key.model_copy(update=dict(schema_version=contract.schema_version,
+                                              algorithm_version=contract.algorithm_version))
+        result.append(PlanDependency(slot=slot, ref=base.model_copy(update={"key": key})))
+    return tuple(result)
+
+
+def records():
+    data = source()
+    artifact = ArtifactRef(kind=ArtifactKind.BLOB, format_key="hydrology.open_water.shard.tlv",
+                           format_version=1, content_hash="a" * 64, nbytes=100)
+    descriptor = HydrologyShardRef(tx=0, ty=-1, artifact=artifact)
+    root = HydrologyPackRoot(source_ref=ref(), dependencies=dependencies(), diagnostics=diagnostics(),
+                             topology=data.bed.topology, coverage_region_uid=data.bed.coverage.region_uid,
+                             z_min=data.z_min, z_max=data.z_max, bodies=data.bodies, unions=data.unions,
+                             source_mapping=data.source_mapping, shards=(descriptor,))
+    shard = HydrologyPackShard(source_ref=root.source_ref, tx=0, ty=-1, bed=data.bed,
+                               wet_runs=data.wet_runs, shore_rows=data.shore_rows)
+    return root, shard
+
+
+class StorageSchemaTests(TestCase):
+    def test_roster_and_exact_storage_shapes(self):
+        root, shard = records()
+        for item in (root, shard):
+            packSchema.require_pack_record_v1(item)
+            manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+            wire = encode(item, manifest)
+            self.assertEqual(decode(wire, type(item), manifest), item)
+        source_entries = packSchema.OPEN_WATER_SOURCE_SCHEMA_V1.entries
+        storage = {e.type_id: e.python_type for e in packSchema.OPEN_WATER_PACK_SCHEMA_V1.entries}
+        for entry in source_entries:
+            self.assertIs(storage.pop(entry.type_id), entry.python_type)
+        self.assertEqual(storage, {60001: HydrologyPackRoot, 60002: HydrologyShardRef, 60003: HydrologyPackShard,
+                                   60005: ArtifactRef, 60006: ArtifactKind})
+        _, aliases = packSchema._closure()
+        self.assertEqual(set(aliases), {
+            "AlgorithmVersion", "EntityUid", "FineX", "FineXY", "FineY", "FineZ", "InputFingerprint",
+            "MaterialKey", "OutputFingerprint", "PlanContractId", "PlanScope", "PlanSlot", "RevisionHex",
+            "SchemaVersion", "ArtifactFormatKey", "FormatVersion"})
+        replaced = tuple[tuple[TypeAliasType("FineXY", str), MapCellHydrology], ...]
+        with patch.object(HydrologyPackShard.model_fields["shore_rows"], "annotation", replaced):
+            with self.assertRaises(CanonicalEncodingError):
+                packSchema.require_pack_schema_v1()
+        self.assertEqual(tuple(HydrologyPackRoot.model_fields), (
+            "source_ref", "dependencies", "diagnostics", "topology", "coverage_region_uid", "z_min", "z_max",
+            "bodies", "unions", "source_mapping", "shards"))
+        self.assertEqual(tuple(HydrologyPackShard.model_fields), ("source_ref", "tx", "ty", "bed", "wet_runs", "shore_rows"))
+        with patch.object(HydrologyShardRef.model_fields["tx"], "default", 0):
+            with self.assertRaisesRegex(CanonicalEncodingError, "shape drift"):
+                packSchema.require_pack_schema_v1()
+        with self.assertRaises(CanonicalEncodingError):
+            packSchema.require_pack_record_v1(root.source_ref)
+
+    def test_v1_descriptor_limits(self):
+        root, _ = records()
+        row = root.shards[0]
+        for changes in (dict(kind=ArtifactKind.SQL_ROWS, row_count=1), dict(row_count=0),
+                        dict(format_version=2), dict(format_key="hydrology.open_water.root.tlv"),
+                        dict(nbytes=0), dict(nbytes=4194305), dict(nbytes=True)):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                HydrologyShardRef(tx=0, ty=-1, artifact=row.artifact.model_copy(update=changes))
+        HydrologyShardRef(tx=0, ty=-1, artifact=row.artifact.model_copy(update={"nbytes": 4194304}))
+
+    def test_invalid_catalog_and_strict_nested_graph(self):
+        root, _ = records()
+        dep = root.dependencies[0]
+        for changes in (dict(shards=root.shards * 2), dict(dependencies=root.dependencies[::-1]),
+                        dict(shards=root.shards * 65537),
+                        dict(shards=(root.shards[0].model_copy(update={"ty": 0}),)),
+                        dict(dependencies=(PlanDependency(slot=dep.slot, ref=ref(dep.slot)),) + root.dependencies[1:]),
+                        dict(z_min=True), dict(bodies=[]), dict(bodies=()), dict(source_ref=ref("hydrology.native_final")),
+                        dict(bodies=(root.bodies[0].model_copy(update={"z_water_level": True}),)),
+                        dict(topology=root.topology.model_dump()), dict(source_mapping=None), dict(extra=1)):
+            with self.subTest(fields=tuple(changes)), self.assertRaises(ValueError):
+                HydrologyPackRoot(**(vars(root) | changes))
+        values = dict(vars(root))
+        del values["diagnostics"]
+        with self.assertRaises(ValueError):
+            HydrologyPackRoot(**values)
+
+    def test_local_observation_and_tile_bounds(self):
+        root, shard = records()
+        run = shard.wet_runs[0]
+        dry = HydrologyPackShard(**(vars(shard) | {"wet_runs": ()}))
+        self.assertTrue(dry.bed.surface_z)
+        self.assertEqual(HydrologyPackRoot(**(vars(root) | {"shards": ()})).shards, ())
+        for changes in (dict(tx=True), dict(ty=0), dict(wet_runs=[run]), dict(wet_runs=(run, run)),
+                        dict(wet_runs=(run.model_copy(update={"x1": 2**40}),)), dict(wet_runs=(run,) * 4097)):
+            with self.subTest(fields=tuple(changes)), self.assertRaises(ValueError):
+                HydrologyPackShard(**(vars(shard) | changes))
+
+    def test_catalog_physical_ancestry_and_world_binding(self):
+        root, _ = records()
+        lake = root.bodies[0].model_copy(update={"parent_system_uid": "basin"})
+        valid = vars(root) | {"bodies": (lake,), "unions": (union("basin"),)}
+        HydrologyPackRoot(**valid)
+        for invalid in (union("basin", members=()), union("basin", parent="basin", children=("basin",)),
+                        union("basin", level=1)):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                HydrologyPackRoot(**(valid | {"unions": (invalid,)}))
+        first = root.dependencies[0]
+        other = first.ref.model_copy(update={"key": first.ref.key.model_copy(update={"world_uid": "other"})})
+        with self.assertRaises(ValueError):
+            HydrologyPackRoot(**(valid | {"dependencies": (first.model_copy(update={"ref": other}),)
+                                           + root.dependencies[1:]}))
+
+    def test_diagnostics_use_source_v1_admission(self):
+        root, _ = records()
+        issue = root.diagnostics[0]
+        changed = issue.model_copy(update={"disposition": PlanDiagnosticDisposition.ERROR})
+        with self.assertRaises(CanonicalEncodingError):
+            packSchema.require_pack_record_v1(root.model_copy(update={"diagnostics": (changed,)}))
