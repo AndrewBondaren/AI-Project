@@ -78,6 +78,7 @@ def _geo_bindings() -> tuple[SurfacePlanBinding, ...]:
     regions = _declare_geo(S.TERRAIN_REGIONS, ())
     water = _declare_geo(S.WATER_PLACEMENT, (terrain, regions))
     relief = _declare_geo(S.RELIEF, (base, terrain, water))
+    # GEO-LEGACY-90: Bind routes, river and final to native metadata and exact dependency slots.
     routes = _declare_geo(S.HYDROLOGY_ROUTES, (relief, water))
     river = _declare_geo(S.RIVER_RELIEF, (relief, routes))
     final = _declare_geo(S.HYDROLOGY, (relief, routes, river, water))

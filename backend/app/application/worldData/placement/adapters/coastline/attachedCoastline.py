@@ -25,6 +25,7 @@ class PreparedCoastlineBoundary:
 class AttachedCoastlinePreparer:
     """Structural join only; BoundaryGeometry owns all raster/association work."""
 
+    # GEO-LEGACY-95: Remove the PC hydrology bound and import; accept the canonical boundary snapshot.
     def prepare_boundary[H: HydrologyPlan](self, source: DeclaredCoastline, accepted_water: BoundaryWaterSnapshot[H],
                          admission: PlacementAdmissionInput) -> PreparedCoastlineBoundary:
         if not isinstance(source, DeclaredCoastline) or not isinstance(accepted_water, BoundaryWaterSnapshot):

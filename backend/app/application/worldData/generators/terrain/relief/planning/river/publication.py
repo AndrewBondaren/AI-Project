@@ -21,6 +21,7 @@ from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverRe
 from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan
 
 
+# GEO-LEGACY-93: Return admitted river build facts to the registered publisher; version the input proof.
 NATIVE_RIVER_RELIEF = PlanContractMetadata(id=RegistryKey[PlanContractRegistry]("terrain.native_river_relief"),
     schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1))
 

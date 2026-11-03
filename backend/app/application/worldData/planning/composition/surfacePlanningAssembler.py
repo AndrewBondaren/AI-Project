@@ -87,6 +87,7 @@ class SurfacePlanningAssembler(Generic[P]):
             climate_base=base, terrain_base=terrain, water_placement=water, relief=relief,
             hydrology_routes=routes, river_relief=river, hydrology=final, climate_local=local)
 
+    # GEO-LEGACY-92: Request the native stages from the same captured view and retain their exact refs.
     def prepare_geo(self: SurfacePlanningAssembler[GeoWorldPlanProviders],
                     view: GeoSurfacePlanningView | NoExtentSurfacePlanningView, *,
                     wait: PlanWaitControl) -> GeoSurfacePlanBundle | None:

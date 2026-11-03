@@ -70,6 +70,7 @@ class GeoSurfacePlanBundle(BaseModel):
     terrain_regions: PlanEnvelope[TerrainRegionPlan]
     water_placement: PlanEnvelope[GeoWaterPlacementPlan]
     relief: PlanEnvelope[ReliefPlan]
+    # GEO-LEGACY-94: Validate the native phase refs, including the fine water and pre-water inputs.
     hydrology_routes: PlanEnvelope[GeoHydrologyRoutesPlan]
     river_relief: PlanEnvelope[RiverReliefPlan]
     hydrology: PlanEnvelope[GeoHydrologyPlan]

@@ -90,6 +90,7 @@ class WorldPlanProviders:
 
 
 @dataclass(frozen=True)
+# GEO-LEGACY-91: Register the native handles with their actual captured input types.
 class GeoWorldPlanProviders:
     climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan]
     terrain_base: RegisteredPlanContract[TerrainBaseInput, TerrainPlan]

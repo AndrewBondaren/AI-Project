@@ -67,6 +67,7 @@ class ClimateBasePlanProvider:
         return result
 
 
+# GEO-LEGACY-96: Bind the registered native final and pass its revision-bound coarse heights.
 class ClimateLocalPlanProvider[H: HydrologyPlan]:
     def __init__(self, climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
                  hydrology: RegisteredPlanContract[HydrologyFinalInput, H]) -> None:
