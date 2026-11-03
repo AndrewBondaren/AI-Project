@@ -1,10 +1,11 @@
-"""Application lifecycle tests; controlled storage ports plus the real BLOB backend."""
+"""Application lifecycle with controlled ports and with SQLite-backed BLOB storage."""
 
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import AsyncMock, create_autospec, patch
 
@@ -15,7 +16,7 @@ from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.application.artifacts.staging.artifactStaging import ArtifactStagingService, TypedArtifactStager
 from app.application.publication.contracts.operationStore import IOperationStore
-from app.application.publication.errors import PublicationInfrastructureError, UnknownCommitOutcome
+from app.application.publication.errors import OperationBusyError, PublicationInfrastructureError, UnknownCommitOutcome
 from app.application.publication.service.operationLedger import OperationLedger
 from app.dataModel.artifacts.lifecycle.holders import OperationHolder, ArtifactRetentionHolder
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingReservation
@@ -29,7 +30,9 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
 from tests.snapshotCore.support.fakeSection import FakePrepared
-from tests.snapshotCore.support.fixtures import run_async
+from tests.snapshotCore.support.artifactFixtures import adapters, descriptor
+from tests.snapshotCore.support.fixtures import live_database, live_started, run_async
+from app.db.repositories.sqlite.artifacts.leaseStore import SqliteArtifactLeases
 
 
 class LifecycleFixture:
@@ -341,4 +344,220 @@ class ArtifactStagingTests(unittest.TestCase):
                 result = await self.service.cancel("op", 1)
             self.assertIsInstance(result.terminal, OperationCancelled)
             self.assertEqual(result.phase, OperationPhase.TERMINAL)
+        run_async(check())
+
+
+class SqliteBlobFixture:
+    """Compose production adapters against the fixture database and its BLOB directory."""
+    def __init__(self, bundle):
+        self.catalog, self.holders = adapters(bundle)
+        self.leases = SqliteArtifactLeases(self.catalog._scopes, bundle[-1], bundle[-1]._artifacts)
+        contract = ArtifactFormatContract(key=RegistryKey[ArtifactFormatRegistry]("test.blob"),
+            kind=ArtifactKind.BLOB, supported_versions=frozenset({1}), content_model=bytes,
+            encode=lambda data: data, decode=lambda data, version: data)
+        self.backend = ContentAddressedBlobBackend(Path(bundle[0].path).parent / "artifacts", contract, self.leases)
+        registry = ArtifactFormatRegistryBinding()
+        registry.register(contract, self.backend)
+        log = ArtifactLifecycleLog()
+        self.ledger = OperationLedger(bundle[-1], self.leases)
+        gc = ArtifactGarbageCollector(registry, self.catalog, self.holders, log)
+        self.service = ArtifactStagingService(registry, self.catalog, self.leases, self.holders, gc, self.ledger, log)
+        self.stager = TypedArtifactStager(contract, 1, registry, self.service)
+
+    async def open(self, op):
+        return await self.service.open_operation(op, "w1", OperationKind.PACK_ACTIVATION, "a" * 64)
+
+
+class SqliteBlobLifecycleTests(unittest.TestCase):
+    def test_cancel_drains_repeatedly_cancelled_placement_before_gc(self):
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                a, b = SqliteBlobFixture(first), SqliteBlobFixture(second)
+                lease = await a.open("op")
+                ref = descriptor()
+                entered, release = threading.Event(), threading.Event()
+                place = a.backend._place
+                def blocked_place(temp, target):
+                    entered.set()
+                    if not release.wait(8):
+                        raise TimeoutError("placement was never released")
+                    place(temp, target)
+
+                with patch.object(a.backend, "_place", blocked_place):
+                    stage = asyncio.create_task(a.stager.stage(lease, b"data"))
+                    try:
+                        async with asyncio.timeout(5):
+                            while not entered.is_set():
+                                await asyncio.sleep(.002)
+                        cancel = asyncio.create_task(b.service.cancel("op", 1))
+                        async with asyncio.timeout(5):
+                            while True:
+                                try:
+                                    await a.leases.assert_writable(lease)
+                                except ValueError:
+                                    break
+                                await asyncio.sleep(.002)
+                        stage.cancel()
+                        await asyncio.sleep(0)
+                        stage.cancel()
+                        async with second[1].read_scope() as scope:
+                            self.assertEqual(len(await b.catalog._writers(scope, "op")), 1)
+                        self.assertEqual((await b.service.collect("gc", (ref,))).retained, (ref,))
+                        self.assertFalse(cancel.done())
+                        self.assertFalse(stage.done())
+                    finally:
+                        release.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await stage
+                result = await asyncio.wait_for(cancel, 5)
+                self.assertIsInstance(result.terminal, OperationCancelled)
+                self.assertEqual(result.leased_artifacts, ())
+                await b.backend.verify(ref)
+                self.assertFalse(await b.catalog.is_sealed(ref))
+                self.assertEqual((await b.service.collect("gc", (ref,))).deleted, (ref,))
+                self.assertFalse(b.backend._path(ref).exists())
+        run_async(check())
+
+    def test_gc_serializes_physical_delete_with_reserve_and_restart(self):
+        async def check():
+            root = Path(__file__).resolve().parents[4] / ".tmp_snapshot_core"
+            root.mkdir(exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=root) as directory:
+                path = str(Path(directory) / "test.db")
+                async with live_database(path) as first:
+                    a = SqliteBlobFixture(first)
+                    lease = await a.open("old")
+                    ref = await a.stager.stage(lease, b"data")
+                    await a.service.finish_preparation(lease, (ref,))
+                async with live_database(path, seed=False) as first, live_database(path, seed=False) as second:
+                    a, b = SqliteBlobFixture(first), SqliteBlobFixture(second)
+                    self.assertEqual((await a.service.recover("old")).phase, OperationPhase.READY)
+                    await a.service.verify(ref, OperationHolder(lease=lease))
+                    await a.service.cancel("old", 1)
+                    new = await b.open("new")
+                    deleting, release, reserving = threading.Event(), threading.Event(), threading.Event()
+                    sync = a.backend._sync_directory
+                    def blocked_sync(parent):
+                        deleting.set()
+                        if not release.wait(8):
+                            raise TimeoutError("delete was never released")
+                        sync(parent)
+                    def trace(statement):
+                        if statement == "BEGIN IMMEDIATE":
+                            reserving.set()
+                    with patch.object(a.backend, "_sync_directory", blocked_sync):
+                        gc = asyncio.create_task(a.service.collect("gc", (ref,)))
+                        await second[0].conn.set_trace_callback(trace)
+                        try:
+                            async with asyncio.timeout(5):
+                                while not deleting.is_set():
+                                    await asyncio.sleep(.002)
+                                reserve = asyncio.create_task(b.service.reserve(new, ref))
+                                while not reserving.is_set():
+                                    await asyncio.sleep(.002)
+                            self.assertFalse(reserve.done())
+                        finally:
+                            release.set()
+                        self.assertEqual((await gc).deleted, (ref,))
+                        await reserve
+                        await second[0].conn.set_trace_callback(None)
+                async with live_database(path, seed=False) as restarted:
+                    c = SqliteBlobFixture(restarted)
+                    self.assertFalse(await c.catalog.is_sealed(ref))
+                    with self.assertRaises(FileNotFoundError):
+                        await c.backend.verify(ref)
+                    self.assertTrue(await c.holders.is_held(ref, OperationHolder(lease=new)))
+                    self.assertEqual(await c.stager.stage(new, b"data"), ref)
+                    await c.service.verify(ref, OperationHolder(lease=new))
+        run_async(check())
+
+    def test_ready_inactive_handoff_obeys_outer_rollback_and_retention(self):
+        from app.dataModel.worldSnapshot.results.publication import PackActivationDisposition, PackActivationResult
+
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                a, b = SqliteBlobFixture(first), SqliteBlobFixture(second)
+                active = await live_started(first)
+                lease = await a.open("pack")
+                ref = await a.stager.stage(lease, b"data")
+                manifest = await a.stager.stage(lease, b"manifest")
+                await a.service.finish_preparation(lease, (ref, manifest))
+                await a.ledger.claim_publication(lease.kind, "pack", "w1", "a" * 64, "b" * 64)
+                with self.assertRaises(OperationBusyError):
+                    await b.service.recover("pack")
+                retained = ArtifactRetentionHolder(artifact=manifest)
+                await a.holders.acquire(ref, retained)
+                inactive = PackActivationResult(operation_id="pack", request_fingerprint="b" * 64,
+                    manifest=manifest, disposition=PackActivationDisposition.READY_INACTIVE, publication=active)
+                with self.assertRaisesRegex(RuntimeError, "abort handoff"):
+                    async with first[1].transaction("pack") as scope:
+                        await a.holders.handoff(scope, lease, (), (ref,))
+                        await a.ledger.record_terminal(scope, inactive)
+                        raise RuntimeError("abort handoff")
+                await b.service.verify(ref, OperationHolder(lease=lease))
+                async with first[1].transaction("pack") as scope:
+                    await a.holders.handoff(scope, lease, (), (ref,))
+                    await a.ledger.record_terminal(scope, inactive)
+                self.assertEqual((await b.service.recover("pack")).terminal, inactive)
+                self.assertEqual(await b.holders.holders(ref), (retained,))
+                self.assertEqual((await b.service.collect("gc", (ref,))).retained, (ref,))
+                await b.service.verify(ref, retained)
+        run_async(check())
+
+    def test_finish_lost_ack_quarantines_and_fresh_service_observes_durable_state(self):
+        async def check(command):
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                a, b = SqliteBlobFixture(first), SqliteBlobFixture(second)
+                lease = await a.open("op")
+                ref = await a.stager.stage(lease, b"data")
+                driver = first[1].driver
+                settle = getattr(driver, command)
+                async def lose_ack(conn):
+                    await settle(conn)
+                    raise OSError("ack lost")
+                with patch.object(driver, command, lose_ack):
+                    with self.assertRaises(UnknownCommitOutcome):
+                        await a.service.finish_preparation(lease, (ref,) if command == "commit" else ())
+                with self.assertRaises(UnknownCommitOutcome):
+                    await a.service.recover("op")
+                recovered = await b.service.recover("op")
+                self.assertEqual(recovered.phase, OperationPhase.READY if command == "commit" else OperationPhase.PREPARING)
+                self.assertEqual(recovered.leased_artifacts, (ref,))
+                await b.service.verify(ref, OperationHolder(lease=lease))
+        for command in ("commit", "rollback"):
+            with self.subTest(command=command):
+                run_async(check(command))
+
+    def test_recover_preserves_persisted_writer_and_cannot_take_over_publication(self):
+        from app.db.models.snapshotCore.operationRows import PublicationOperationEventRow
+        from tests.snapshotCore.support.artifactFixtures import writer_fact
+
+        async def check():
+            async with live_database() as first:
+                a = SqliteBlobFixture(first)
+                writer_lease = await a.open("writer")
+                reservation = await a.service.reserve(writer_lease, descriptor())
+                # Only the acquire is persisted. Recovery has no proof that its worker stopped.
+                await writer_fact(first, reservation)
+                lease = await a.open("publication")
+                ref = await a.stager.stage(lease, b"prepared")
+                await a.service.finish_preparation(lease, (ref,))
+                await a.ledger.claim_publication(lease.kind, "publication", "w1", "a" * 64, "b" * 64)
+                async with first[1].transaction("publication") as scope:
+                    event = await first[-1]._event("publication", scope)
+                    await first[2]._access.insert(scope, PublicationOperationEventRow("recovery", "publication",
+                        event.event_id, event.event_seq + 1, "recovery_required", lease.fence))
+                async with live_database(first[0].path, seed=False) as second:
+                    b = SqliteBlobFixture(second)
+                    waiting = await b.service.recover("writer")
+                    self.assertEqual((waiting.phase, waiting.fence, waiting.leased_artifacts),
+                        (OperationPhase.PREPARING, writer_lease.fence, (reservation.ref,)))
+                    async with second[1].read_scope() as scope:
+                        self.assertEqual(len(await b.catalog._writers(scope, "writer")), 1)
+                    with self.assertRaises(OperationBusyError):
+                        await b.service.recover("publication")
+                    record = await a.ledger.read("publication")
+                    self.assertEqual((record.phase, record.fence, record.leased_artifacts),
+                        (OperationPhase.RECOVERY_REQUIRED, lease.fence, (ref,)))
+                    await b.service.verify(ref, OperationHolder(lease=lease))
         run_async(check())

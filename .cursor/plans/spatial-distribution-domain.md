@@ -4001,3 +4001,38 @@ cutover и P1-B не начинались. Time/API-1 и чужие измене
 |---|---|---|
 | SP-P1-A-REV-1 · OPEN | Проверка schema lock пропускает подмену типа координаты в `shore_rows` на одноимённый alias `FineXY = str`, если исходный `FineXY` уже встречался в `bed`. | Регрессионный тест воспроизводит подмену аннотации из §15.24. Проверка принимает исходную схему и выдаёт `CanonicalEncodingError` для подмены до вычисления fingerprint. |
 | SP-P1-A-REV-2 · OPEN | Diagnostic admission принимает `WATER_PUDDLE / FALLBACK`, хотя producer выдаёт `WATER_PUDDLE / ERROR`. | По действующему §15.20.4 регрессионный тест предъявляет обе пары на границе admission. Подмена вызывает отказ до fingerprint с сохранением исходного diagnostic. Изменение самого требования подлежит отдельному решению владельца. |
+
+### 15.26. Повторное предъявление SP-P1-A после REV-1 и REV-2 (2026-11-03)
+
+**REV-1 и REV-2 — FIX VERIFIED. SP-P1-A предъявлен на повторную пользовательскую приёмку.** Статусы OPEN в §15.25 относятся к версии до исправления.
+
+1. REV-1. Обход хранит объект-владельца каждого имени для TypeAliasType и NewType. Повтор той же ссылки допустим. Второй объект с тем же именем вызывает CanonicalEncodingError. Тест test_reused_alias_name_cannot_hide_a_different_coordinate_type сначала принимает исходную схему, затем подменяет FineXY именно в shore_rows и проверяет отказ.
+2. REV-2. require_source_diagnostics_v1 сверяет код и фактический disposition с 14 парами producers из §15.18.1 до canonical encode. Неизвестная пара вызывает CanonicalEncodingError. Тест test_puddle_error_cannot_be_substituted_with_fallback принимает WATER_PUDDLE / ERROR, проверяет отказ для WATER_PUDDLE / FALLBACK и сохранность переданных issue и disposition.
+
+Обе регрессии запущены на исходной реализации: два FAIL с CanonicalEncodingError not raised. После исправления команда §15.23 дала **41 tests OK (0.123s)**, включая прежние golden, проверки source closure и отказы для reference/runtime_context. Evidence охватывает in-process source admission. Решение о приёмке P1-A остаётся за пользователем.
+
+### 15.27. Повторное независимое ревью SP-P1-A (2026-11-03)
+
+**CHANGES REQUIRED. REV-1 и REV-2 закрыты. Приёмку SP-P1-A блокирует SP-P1-A-REV-3 (P1, OPEN).** Подмена `FineXY` в `shore_rows` одноимённым alias с иным определением отклонена. Из 42 проверенных сочетаний 14 кодов §15.18.1 с тремя disposition приняты ровно 14 разрешённых пар.
+
+**SP-P1-A-REV-3.** Source admission принимает зарегистрированный `StrEnum` в строковых полях diagnostic. Для принятого значения можно вычислить fingerprint и записать полный envelope, который затем отвергает тот же V1 decoder. [sourceSchema.py:242–246](../../backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py#L242)
+
+1. Взять wet fixture из `tests.spatial_pack.test_source_schema` и её diagnostic `WATER_LEVEL_SPILL / FALLBACK`. Через `dataclasses.replace` заменить только `issue.message` на `PlanDiagnosticDisposition.NOTICE`, затем через `model_copy` подставить issue в diagnostic. Оба поля `reference` и `runtime_context` равны `None`.
+2. Передать кортеж из этого diagnostic в `require_source_diagnostics_v1`. Ожидается `CanonicalEncodingError` до вычисления fingerprint. Фактически admission завершился успешно, а `output_fingerprint` вернул `27b1f1bec9d05c29e35c5eeecf07be9ed6d602961838edfbea7d1a235c11b188`.
+3. Подставить diagnostics и полученный fingerprint в envelope fixture. Кодирование дало 7896 байтов. Декодирование этих байтов как `PlanEnvelope[CanonicalOpenWaterSource]` с тем же manifest завершилось ошибкой `CanonicalEncodingError: trailing bytes or noncanonical value`. Encoder записывает исходный enum с TLV-тегом enum. При чтении поле восстанавливается как строка, и проверка повторного кодирования выявляет различие. Отдельные пробы с enum в `issue.path[0]` и `issue.schema_id` также прошли admission и дали отказ при чтении diagnostic. [canonicalCodec.py:55–58](../../backend/app/application/encoding/canonicalCodec.py#L55) · [canonicalCodec.py:235–242](../../backend/app/application/encoding/canonicalCodec.py#L235)
+
+**Критерий закрытия.** На границе source admission проверить точные типы исходных значений по контракту `FieldPathError`: `str` для `message`, `str` для `schema_id` при значении, отличном от `None`, и `str` либо `int` для каждого элемента `path`. Регрессии должны получить `CanonicalEncodingError` до fingerprint при подстановке зарегистрированного enum в каждое из трёх мест и подтвердить сохранность исходного diagnostic. Поправка укладывается в действующие manifest и wire format.
+
+В независимом ревью из backend выполнена команда `../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_source_schema tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec` — **41 тест, OK, 0,117 с**, включая dry/wet golden-векторы. Scoped `git diff --check` прошёл. Контрпример REV-3 воспроизведён отдельно от штатного suite.
+
+### 15.28. SP-P1-A-REV-3 исправлен, P1-A повторно предъявлен (2026-11-03)
+
+При входе в require_source_diagnostics_v1 исходные message и schema_id при значении, отличном от None проверяются на точный тип str. Для path требуется tuple с элементами точного типа str или int. Проверки выполняются до canonical encode и возврата управления вызывающему коду для вычисления fingerprint.
+
+Регрессия test_diagnostic_rejects_enum_in_plain_scalar_fields поочерёдно подставляет PlanDiagnosticDisposition.NOTICE в message, schema_id и path[0] исходного WATER_LEVEL_SPILL / FALLBACK. До исправления все три случая завершились FAIL из-за пропущенного отказа. После исправления каждый вызывает CanonicalEncodingError и сохраняет исходный объект issue и значение поля. Адресный прогон из §15.27 дал **42 теста OK**, включая golden dry/wet. Исправление REV-3 и P1-A предъявлены на пользовательскую приёмку.
+
+### 15.29. Пользовательская приёмка SP-P1-A (2026-11-03)
+
+**SP-P1-A принят пользователем.** Решение «принято через приемку» относится к реализации, повторно предъявленной в §15.28. Приняты source schema V1 с 33 bindings и 14 source aliases, проверки schema lock и diagnostic admission. SP-P1-DEBT-1 и замечания SP-P1-A-REV-1, REV-2 и REV-3 закрыты. Результат адресного прогона при предъявлении — 42 теста OK (§15.28).
+
+Для перехода к реализации SP-P1-B требуется отдельная команда пользователя согласно §15.20.

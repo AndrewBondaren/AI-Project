@@ -2616,7 +2616,7 @@ Concrete 4C3 adapters в checkout отсутствуют: SQL integration и п�
 | DB-FIELDS-1A | **DONE / ПРИНЯТ**, 2026-11-02, typed row boundary и первые три consumers | Остальные шаги DB-FIELDS-1, который остаётся OPEN |
 | 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
 | 4D1 / 4D1-L | **ПРИНЯТ**, 2026-11-02, реализация через существующие ports и LEASE_RELEASED logging follow-up | Concrete 4C3 integration, проверка фактического lock/claim ownership и интеграционная приёмка полного 4D1 gate |
-| 4C3 | **4C3-A ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-02; 4C3-B ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-03, REV-1 CLOSED / RE-REVIEW PASS**, handoff amendment принят; C НА ПОВТОРНОМ РЕВЬЮ ПОСЛЕ ИСПРАВЛЕНИЯ REV-4, D НЕ НАЧАТ, безопасное ограничение recovery сохраняется | Полный crash takeover OPEN вне 4C3; concrete lifecycle integration и полный 4D1 gate не закрыты |
+| 4C3 | **4C3-A ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-02; 4C3-B ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-03, REV-1 CLOSED / RE-REVIEW PASS**, handoff amendment принят; C ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ, RE-REVIEW PASS / REV-1…4 CLOSED, D НА ПРИЁМКЕ, безопасное ограничение recovery сохраняется | Полный crash takeover OPEN вне 4C3; concrete lifecycle integration и полный 4D1 gate не закрыты |
 | 4D2 | **НЕ НАЧАТ / BLOCKED** | Нужны принятые SN-CORE и полный 4D1 integration gate; никакой Snapshot.apply реализации эта запись не подтверждает |
 
 **SN-CORE, SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN** до своих реальных producer/consumer evidence. Отдельная приёмка выполненных компонентов не разрешает пропустить 4C3, изменить установленный порядок будущих шагов или считать 4D2 начатым.
@@ -2864,6 +2864,34 @@ Evidence гонок получено на отдельных соединени�
 - Из backend `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 157 tests, OK (1 skipped), 92.167 s, включая Pyright positive 0 / negative 50 EXPECT.
 - Из корня адресная команда Pyright по пяти файлам из блока REV-1…3 — 0 errors, 0 warnings.
 - `git diff --check -- backend/app/db/guardedConnection.py backend/tests/snapshotCore/storage/artifacts/test_leases.py .cursor/plans/world-domain-patches-snapshots.md` — PASS.
+
+#### Независимое повторное ревью исправления 4C3-C-REV-4 — 2026-11-03
+
+**PASS. REV-4 закрыт. 4C3-C предъявлен пользователю на приёмку.** Проверена версия кода на HEAD `9f6705a2`. Независимый ревьюер проследил ожидание SQLite worker под gate и подтверждение rollback coordinator до возврата CancelledError. Новых блокирующих замечаний к исправлению нет. REV-1…3 закрыты предыдущим ревью.
+
+Из backend независимый ревьюер выполнил `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.artifacts.test_leases.ConcreteLeaseTests.test_twice_cancelled_writer_waits_for_blocked_begin_and_rollback` — 1 OK (0.907 s); `tests.snapshotCore.storage.publication.test_atomicity` — 12 OK (16.343 s). Два соединения подтвердили отсутствие входа в writer body и записей claim, завершение transaction на A, успешный recover и доступность записи на B. Crash/restart не моделировался.
+
+В этом же ревью основной агент выполнил из backend `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 157 tests, OK (1 skipped), 89.107 s, включая typing gate. Адресный Pyright по пяти файлам реализации (команда в блоке REV-1…3) — 0 errors, 0 warnings. Изменён только owning-план; scoped `git diff --check` — PASS.
+
+#### Приёмка 4C3-C и интеграционные проверки 4C3-D — 2026-11-03
+
+4C3-C принят пользователем после независимого PASS. Команда на следующий шаг разрешила 4C3-D. В `backend/tests/snapshotCore/storage/artifacts/test_staging.py` добавлены SqliteBlobFixture и пять регрессий. В fixture один SqliteArtifactScope на комплект catalog/holders/leases, реальные OperationLedger, registry, staging, GC и ContentAddressedBlobBackend. Независимые комплекты работают с одним временным SQLite-файлом и каталогом BLOB. Другой изменённый файл среза — этот owning-план.
+
+| Регрессия | Что наблюдал caller / независимое соединение |
+|---|---|
+| Cancel против worker в _place | B подтверждает закрытие admission, один активный SQL claim и удержание ref при GC. Две отмены staging-задачи не завершают writer до выхода физического worker. После release caller получает CancelledError, cancel возвращает OperationCancelled без holds. Физический BLOB доступен, SQL seal отсутствует, GC удаляет файл. |
+| GC против reserve, restart | После закрытия и открытия БД заново READY и sealed bytes доступны. При GC worker остановлен после unlink до завершения delete. SQLite trace подтверждает вход другого соединения в BEGIN IMMEDIATE; reserve ждёт до commit GC. После повторного открытия ref удержан новой операцией, sealed state и файл отсутствуют. Повторное staging восстанавливает проверяемый BLOB по тому же ref. |
+| Handoff и READY_INACTIVE | После finish и claim recover на B сообщает busy. Внешний rollback откатывает handoff и terminal вместе, на B проверяется исходный operation hold. После commit B получает исторический READY_INACTIVE, читает явный retention hold и проверяет содержимое; GC сохраняет файл. |
+| Потеря подтверждения finish | После реальных COMMIT и ROLLBACK driver выдаёт ошибку подтверждения. Caller получает UnknownCommitOutcome, дальнейшее чтение на A отвергнуто quarantine. На B видны READY либо PREPARING соответственно, исходный hold и проверяемый BLOB. |
+| Recovery без доказательства quiescence | На свежем соединении recover наблюдает PREPARING с прежним fence и hold; ранее сохранённый acquire остаётся активным. RECOVERY_REQUIRED возвращает OperationBusyError, прежний fence, hold и содержимое сохранены. |
+
+Пределы evidence: потеря acknowledgement инъецируется после выполнения SQL. Persisted acquire и RECOVERY_REQUIRED подготовлены как durable fixtures. Перезапуск проверен закрытием и повторным открытием соединений и пересозданием сервисов; аварийное завершение процесса не моделировалось. Production composition, crash takeover и 4D2 вне среза. Полный 4D1 integration и concrete 4C3 предъявляются на приёмку вместе с этим evidence.
+
+Проверки итогового дерева, из backend:
+
+- `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.artifacts.test_staging tests.snapshotCore.storage.artifacts.test_gc tests.snapshotCore.storage.artifacts.test_leases tests.snapshotCore.storage.artifacts.test_blob_backend tests.snapshotCore.storage.publication.test_atomicity tests.snapshotCore.lifecycle.test_capabilities` — 78 тестов, OK (1 skipped), 103.749 s.
+- `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 162 теста, OK (1 skipped), 123.663 s, включая Pyright positive 0 / negative 50 EXPECT.
+- Из корня `git diff --check -- .cursor/plans/world-domain-patches-snapshots.md backend/tests/snapshotCore/storage/artifacts/test_staging.py` — PASS.
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 

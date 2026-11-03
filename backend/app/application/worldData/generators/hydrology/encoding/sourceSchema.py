@@ -135,16 +135,19 @@ _ALIAS_LOCK = (
 
 def _snapshot():
     seen, aliases, shapes = set(), {}, {}
+    alias_owners = {}
 
     def walk(owner):
-        if isinstance(owner, typing.TypeAliasType):
-            if owner.__name__ not in aliases:
-                aliases[owner.__name__] = repr(owner.__value__)
-                walk(owner.__value__)
-            return
-        if hasattr(owner, "__supertype__"):
-            aliases[owner.__name__] = repr(owner.__supertype__)
-            walk(owner.__supertype__)
+        if isinstance(owner, (typing.TypeAliasType, typing.NewType)):
+            name = owner.__name__
+            if name in alias_owners:
+                if alias_owners[name] is not owner:
+                    raise CanonicalEncodingError(f"open-water source v1 alias collision: {name}")
+                return
+            alias_owners[name] = owner
+            target = owner.__value__ if isinstance(owner, typing.TypeAliasType) else owner.__supertype__
+            aliases[name] = repr(target)
+            walk(target)
             return
         if isinstance(owner, Enum):
             walk(type(owner))
@@ -206,6 +209,25 @@ def require_source_schema_v1() -> None:
         raise CanonicalEncodingError(str(exc)) from exc
 
 
+# Emitted code/disposition pairs frozen for source v1 in Spatial §15.18.1.
+_PRODUCER_DISPOSITIONS = {
+    "WATER_PUDDLE": PlanDiagnosticDisposition.ERROR,
+    "WATER_CANNOT_HOLD": PlanDiagnosticDisposition.ERROR,
+    "WATER_TERRAIN_UNRESOLVED": PlanDiagnosticDisposition.ERROR,
+    "WATER_NO_OCEAN_DEPRESSION": PlanDiagnosticDisposition.ERROR,
+    "WATER_KIND_MISMATCH": PlanDiagnosticDisposition.FALLBACK,
+    "WATER_LEVEL_SPILL": PlanDiagnosticDisposition.FALLBACK,
+    "WATER_LEVEL_SUPERSEDED": PlanDiagnosticDisposition.FALLBACK,
+    "WATER_WORLD_OCEAN": PlanDiagnosticDisposition.NOTICE,
+    "RIVER_REDIRECTED": PlanDiagnosticDisposition.FALLBACK,
+    "RIVER_INVALID_CONNECTION_TYPE": PlanDiagnosticDisposition.ERROR,
+    "RIVER_INVALID_SOURCE": PlanDiagnosticDisposition.ERROR,
+    "RIVER_TARGET_UNREACHABLE": PlanDiagnosticDisposition.ERROR,
+    "RIVER_NO_WATER_BODIES": PlanDiagnosticDisposition.ERROR,
+    "RIVER_NO_REACHABLE_WATER": PlanDiagnosticDisposition.ERROR,
+}
+
+
 def require_source_diagnostics_v1(diagnostics: tuple[PlanDiagnostic, ...]) -> None:
     """Validate unchanged producer diagnostics; optional branches are not admission."""
     require_source_schema_v1()
@@ -215,8 +237,18 @@ def require_source_diagnostics_v1(diagnostics: tuple[PlanDiagnostic, ...]) -> No
         for diagnostic in diagnostics:
             if type(diagnostic) is not PlanDiagnostic or type(diagnostic.issue) is not FieldPathError:
                 raise CanonicalEncodingError("unexpected source diagnostic record")
-            if diagnostic.issue.reference is not None or diagnostic.issue.runtime_context is not None:
+            issue = diagnostic.issue
+            if issue.reference is not None or issue.runtime_context is not None:
                 raise CanonicalEncodingError("unadmitted producer diagnostic context")
+            # TLV encodes enum subclasses with a different tag from plain scalars.
+            if type(issue.message) is not str or (issue.schema_id is not None and type(issue.schema_id) is not str):
+                raise CanonicalEncodingError("expected plain diagnostic message and optional schema ID")
+            if type(issue.path) is not tuple or any(type(part) not in (str, int) for part in issue.path):
+                raise CanonicalEncodingError("expected diagnostic path of plain strings and integers")
+            code = issue.code
+            if type(code) is not str or code not in _PRODUCER_DISPOSITIONS or (
+                    diagnostic.disposition is not _PRODUCER_DISPOSITIONS[code]):
+                raise CanonicalEncodingError(f"unadmitted producer diagnostic pair for {code!r}")
         CanonicalCodec(OPEN_WATER_SOURCE_SCHEMA_V1).encode(diagnostics)
     except (TypeError, ValueError, AttributeError) as exc:
         raise CanonicalEncodingError(str(exc)) from exc

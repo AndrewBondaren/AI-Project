@@ -2,6 +2,7 @@
 import dataclasses
 import hashlib
 from enum import StrEnum
+from typing import TypeAliasType
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -47,6 +48,35 @@ def envelope(dry=False):
 
 
 class SourceSchemaTests(TestCase):
+    def test_diagnostic_rejects_enum_in_plain_scalar_fields(self):
+        original = diagnostics()[0]
+        enum = PlanDiagnosticDisposition.NOTICE
+        for field, value in (('message', enum), ('schema_id', enum), ('path', (enum,))):
+            with self.subTest(field=field):
+                issue = dataclasses.replace(original.issue, **{field: value})
+                diagnostic = original.model_copy(update={'issue': issue})
+                with self.assertRaises(CanonicalEncodingError):
+                    schema.require_source_diagnostics_v1((diagnostic,))
+                self.assertIs(diagnostic.issue, issue)
+                self.assertIs(getattr(diagnostic.issue, field), value)
+
+    def test_reused_alias_name_cannot_hide_a_different_coordinate_type(self):
+        schema.require_source_schema_v1()
+        field = CanonicalOpenWaterSource.model_fields['shore_rows']
+        replaced = tuple[tuple[TypeAliasType('FineXY', str), schema.MapCellHydrology], ...]
+        with patch.object(field, 'annotation', replaced), self.assertRaises(CanonicalEncodingError):
+            schema.require_source_schema_v1()
+
+    def test_puddle_error_cannot_be_substituted_with_fallback(self):
+        error = PlanDiagnostic(issue=FieldPathError(path=('water',), message='puddle', code='WATER_PUDDLE'),
+                               disposition=PlanDiagnosticDisposition.ERROR)
+        schema.require_source_diagnostics_v1((error,))
+        changed = error.model_copy(update={'disposition': PlanDiagnosticDisposition.FALLBACK})
+        with self.assertRaises(CanonicalEncodingError):
+            schema.require_source_diagnostics_v1((changed,))
+        self.assertIs(changed.issue, error.issue)
+        self.assertIs(changed.disposition, PlanDiagnosticDisposition.FALLBACK)
+
     def test_exact_roster_and_alias_reachability(self):
         schema.require_source_schema_v1()
         self.assertEqual(tuple(e.type_id for e in schema.OPEN_WATER_SOURCE_SCHEMA_V1.entries),
